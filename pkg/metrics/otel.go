@@ -44,28 +44,38 @@ exporters:
   googlecloud:
     metric:
       prefix: "custom.googleapis.com/opencensus/config_sync/"
-      skip_create_descriptor: true
+      skip_create_descriptor: false
     retry_on_failure:
-      enabled: true
+      enabled: false
     sending_queue:
-      enabled: true
+      enabled: false
   googlecloud/kubernetes:
     metric:
       prefix: "kubernetes.io/internal/addons/config_sync/"
       skip_create_descriptor: false
     retry_on_failure:
-      enabled: true
+      enabled: false
     sending_queue:
-      enabled: true
+      enabled: false
 processors:
   batch:
-  # b/204120800: removing last_apply_timestamp from code is intractable since a lot of test code depends on it. Hence filtering it here
   filter/cloudmonitoring:
     metrics:
-      exclude:
-        match_type: strict
+      include:
+        match_type: regexp
         metric_names:
-          - last_apply_timestamp
+          - reconciler_errors
+          - pipeline_error_observed
+          - declared_resources
+          - apply_operations_total
+          - resource_fights_total
+          - internal_errors_total
+          - kcc_resource_count
+          - resource_count
+          - ready_resource_count
+          - cluster_scoped_resource_count
+          - resource_ns_count
+          - api_duration_seconds
   filter/kubernetes:
     metrics:
       include:
@@ -89,6 +99,7 @@ processors:
           - resource_override_count_total
           - git_sync_depth_override_count_total
           - no_ssl_verify_count_total
+          - kcc_resource_count
       exclude:
         match_type: strict
         metric_names:

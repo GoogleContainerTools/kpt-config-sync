@@ -1,0 +1,13 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1036: Configs MUST define a `metadata.name` that is shorter than 254 characters, consists of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character. Rename or remove the config:
+
+source: system/repo.yaml
+metadata.name: InvalidRepoName
+group: configmanagement.gke.io
+version: v1
+kind: Repo
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1036
+

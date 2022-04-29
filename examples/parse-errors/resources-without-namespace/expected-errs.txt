@@ -1,0 +1,16 @@
+Found issues: 2 error(s)
+
+
+[1] KNV1044: An Abstract Namespace directory with configs MUST have at least one Namespace subdirectory. To fix, do one of the following: add a Namespace directory below "invalid-abstract", add a Namespace config to "invalid-abstract", or remove the configs in "invalid-abstract":
+
+path: namespaces/invalid-abstract/
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1044
+
+
+[2] KNV1044: An Abstract Namespace directory with configs MUST have at least one Namespace subdirectory. To fix, do one of the following: add a Namespace directory below "invalid-abstract-namespace", add a Namespace config to "invalid-abstract-namespace", or remove the configs in "invalid-abstract-namespace":
+
+path: namespaces/valid-abstract/invalid-abstract-namespace/
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1044
+

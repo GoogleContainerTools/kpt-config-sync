@@ -1,0 +1,25 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "ResourceQuota",
+			"metadata": {
+				"annotations": {
+					"client.lifecycle.config.k8s.io/mutation": "ignore"
+				},
+				"name": "quota",
+				"namespace": "bookstore2"
+			},
+			"spec": {
+				"hard": {
+					"cpu": "200m",
+					"memory": "200Mi",
+					"pods": "1"
+				}
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

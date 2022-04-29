@@ -1,0 +1,173 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: config-management-monitoring
+  labels:
+    app: opentelemetry
+    component: otel-collector
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      opencensus:
+    exporters:
+      prometheus:
+        endpoint: :8675
+        namespace: config_sync
+    processors:
+      batch:
+    extensions:
+      health_check:
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [opencensus]
+          processors: [batch]
+          exporters: [prometheus]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: configmanagement.gke.io:otel-collector-psp
+  namespace: config-management-monitoring
+  labels:
+    component: otel-collector
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+rules:
+- apiGroups:
+  - policy
+  resources:
+  - podsecuritypolicies
+  resourceNames:
+  - acm-psp
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: configmanagement.gke.io:otel-collector-psp
+  namespace: config-management-monitoring
+  labels:
+    component: otel-collector
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: configmanagement.gke.io:otel-collector-psp
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: config-management-monitoring
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: config-management-monitoring
+  labels:
+    monitored: "true"
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  selector:
+    app: opentelemetry
+    component: otel-collector
+  ports:
+  - name: opencensus # Default endpoint for OpenCensus receiver.
+    port: 55678
+    protocol: TCP
+    targetPort: 55678
+  - name: metrics-default # Default endpoint for querying metrics.
+    port: 8888
+  - name: metrics # Prometheus exporter metrics.
+    port: 8675
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: config-management-monitoring
+  labels:
+    app: opentelemetry
+    component: otel-collector
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  selector:
+    matchLabels:
+      app: opentelemetry
+      component: otel-collector
+  minReadySeconds: 5
+  progressDeadlineSeconds: 120
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: opentelemetry
+        component: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+        command:
+        - /otelcontribcol
+        args:
+        - "--config=/conf/otel-collector-config.yaml"
+        resources:
+          limits:
+            cpu: 1
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 400Mi
+        ports:
+        - containerPort: 55678 # Default endpoint for OpenCensus receiver.
+        - containerPort: 8888  # Default endpoint for querying metrics.
+        - containerPort: 8675  # Prometheus exporter metrics.
+        volumeMounts:
+        - name: otel-collector-config-vol
+          mountPath: /conf
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+      volumes:
+      - name: otel-collector-config-vol
+        projected:
+          sources:
+          - configMap:
+              name: otel-collector
+          - configMap:
+              name: otel-collector-googlecloud
+              optional: true
+          - configMap:
+              name: otel-collector-custom
+              optional: true
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000

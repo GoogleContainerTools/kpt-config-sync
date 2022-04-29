@@ -1,0 +1,57 @@
+Found issues: 5 error(s)
+
+
+[1] KNV1040: This HierarchyConfig defines the APIResource "Unknown.unknown.group.com" which does not exist on cluster. Ensure the Group and Kind are spelled correctly and any required CRD exists on the cluster.
+
+source: system/invalid.yaml
+metadata.name: invalid
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1040
+
+
+[2] KNV1041: The "NamespaceConfig.configmanagement.gke.io" APIResource MUST NOT be declared in a HierarchyConfig:
+
+source: system/invalid.yaml
+metadata.name: invalid
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1041
+
+
+[3] KNV1046: This HierarchyConfig references the APIResource "CustomResourceDefinition.apiextensions.k8s.io" which has cluster scope. Cluster scoped objects are not permitted in HierarchyConfig.
+
+source: system/invalid.yaml
+metadata.name: invalid
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1046
+
+
+[4] KNV1046: This HierarchyConfig references the APIResource "NamespaceConfig.configmanagement.gke.io" which has cluster scope. Cluster scoped objects are not permitted in HierarchyConfig.
+
+source: system/invalid.yaml
+metadata.name: invalid
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1046
+
+
+[5] KNV1046: This HierarchyConfig references the APIResource "Sync.configmanagement.gke.io" which has cluster scope. Cluster scoped objects are not permitted in HierarchyConfig.
+
+source: system/invalid.yaml
+metadata.name: invalid
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1046
+

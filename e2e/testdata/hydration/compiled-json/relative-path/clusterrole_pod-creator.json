@@ -1,0 +1,33 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind": "ClusterRole",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "path: ../../base/pod-creator-clusterrole.yaml\n"
+				},
+				"labels": {
+					"environment": "dev"
+				},
+				"name": "pod-creator"
+			},
+			"rules": [
+				{
+					"apiGroups": [
+						""
+					],
+					"resources": [
+						"pods"
+					],
+					"verbs": [
+						"*"
+					]
+				}
+			]
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

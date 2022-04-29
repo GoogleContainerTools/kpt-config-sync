@@ -1,0 +1,18 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "ConfigMap",
+			"metadata": {
+				"annotations": {
+					"configmanagement.gke.io/managed": "disabled"
+				},
+				"name": "cm-disabled",
+				"namespace": "bookstore1"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

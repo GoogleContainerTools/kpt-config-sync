@@ -1,0 +1,17 @@
+# Dockerfile for the prow test environment
+
+# We'd use the kubekins-e2e straight away, but it's missing the 'kind' binary.
+
+# Ensure versions in this file match those in Makefile.prow. This is not
+# neccessarily a strict requirement since the versions passed in the Makefile
+# will override any defaults set here, however having the same versions set
+# between these two files will eliminate any confusion on what versions are
+# actually being used.
+
+ARG KUBEKINS="v20220204-29ea0e1be-1.22"
+
+FROM gcr.io/gke-test-infra/kubekins-e2e:${KUBEKINS}
+
+ARG KIND_RELEASE="v0.11.1"
+RUN wget -q -O /bin/kind https://kind.sigs.k8s.io/dl/${KIND_RELEASE}/kind-linux-amd64
+RUN chmod +x /bin/kind

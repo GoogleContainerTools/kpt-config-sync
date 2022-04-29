@@ -1,0 +1,13 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1027: Unsupported Repo spec.version: "0.0.0". Must use version "1.0.0"
+
+source: system/repo.yaml
+metadata.name: repo
+group: configmanagement.gke.io
+version: v1
+kind: Repo
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1027
+

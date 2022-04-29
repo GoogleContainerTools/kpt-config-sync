@@ -1,0 +1,12 @@
+name: "bats-core"
+description: "bats-core is a TAP-compliant testing framework for bash"
+
+third_party {
+  url {
+    type: GIT
+    value "https://github.com/bats-core/bats-core"
+  }
+  version: "v0.4.0"
+  last_upgrade_date { year: 2018 month: 5 day: 22 }
+  license_type: NOTICE
+}

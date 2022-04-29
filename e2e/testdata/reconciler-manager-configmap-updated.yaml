@@ -1,0 +1,227 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+ name: reconciler-manager-cm
+ namespace: config-management-system
+ labels:
+  configmanagement.gke.io/system: "true"
+  configmanagement.gke.io/arch: "csmr"
+data:
+ deployment.yaml: |
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: # this field will be assigned dynamically by the reconciler-manager
+    namespace: config-management-system
+    labels:
+      app: reconciler
+      configmanagement.gke.io/system: "true"
+      configmanagement.gke.io/arch: "csmr"
+  spec:
+    minReadySeconds: 10
+    replicas: 1
+    strategy:
+      type: Recreate
+    selector:
+      matchLabels:
+        app: reconciler
+    template:
+      metadata:
+        labels:
+          app: reconciler
+      spec:
+        serviceAccountName: # this field will be assigned dynamically by the reconciler-manager
+        containers:
+        - name: hydration-controller
+          image: gcr.io/config-management-release/hydration-controller:v1.9.1-rc.3
+          command:
+          - /hydration-controller
+          args:
+          - "--v=0"
+          - "--repo-root=/repo"
+          - "--source-root=source"
+          - "--hydrated-root=hydrated"
+          - "--source-link=rev"
+          - "--hydrated-link=rev"
+          volumeMounts:
+          - name: repo
+            mountPath: /repo
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+              - NET_RAW
+            runAsUser: 65533
+          resources:
+            limits:
+              cpu: "1"
+              memory: "300Mi"
+            requests:
+              cpu: "10m"
+              memory: "100Mi"
+        - name: reconciler
+          image: gcr.io/config-management-release/reconciler:v1.9.1-rc.3
+          command:
+          - /reconciler
+          args:
+          - "--v=0"
+          - "--repo-root=/repo"
+          - "--git-dir=/repo/source/rev"
+          - "--hydrated-root=/repo/hydrated"
+          - "--hydrated-link=rev"
+          volumeMounts:
+          - name: repo
+            mountPath: /repo
+            readOnly: true
+          resources:
+            limits:
+              cpu: "1"
+              memory: "300Mi"
+            requests:
+              cpu: "50m"
+              memory: "200Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - NET_RAW
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: git-sync
+          image: gcr.io/config-management-release/git-sync:v3.5.0-gke.0__linux_amd64
+          args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json", "--v=5"]
+          volumeMounts:
+          - name: repo
+            mountPath: /repo
+          - name: git-creds
+            mountPath: /etc/git-secret
+            readOnly: true
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+              - NET_RAW
+            runAsUser: 65533
+          resources:
+            limits:
+              cpu: "1"
+              memory: "200Mi"
+            requests:
+              cpu: "10m"
+              memory: "200Mi"
+        - name: oci-sync
+          image: gcr.io/config-management-release/oci-sync:v1.12.0-rc.1
+          args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
+          volumeMounts:
+          - name: repo
+            mountPath: /repo
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+              - NET_RAW
+            runAsUser: 65533
+          resources:
+            limits:
+              cpu: "1"
+              memory: "200Mi"
+            requests:
+              cpu: "10m"
+              memory: "200Mi"
+        - name: otel-agent
+          image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+          command:
+          - /otelcontribcol
+          args:
+          - "--config=/conf/otel-agent-config.yaml"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 500Mi
+            requests:
+              cpu: 10m
+              memory: 100Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - NET_RAW
+          ports:
+          - containerPort: 55678 # Default OpenCensus receiver port.
+            protocol: TCP
+          - containerPort: 8888  # Metrics.
+            protocol: TCP
+          volumeMounts:
+          - name: otel-agent-config-vol
+            mountPath: /conf
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133 # Health Check extension default port.
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133 # Health Check extension default port.
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        restartPolicy: Always
+        terminationGracePeriodSeconds: 30
+        dnsPolicy: ClusterFirst
+        schedulerName: default-scheduler
+        volumes:
+        - name: repo
+          emptyDir: {}
+        - name: git-creds
+          secret:
+            secretName: git-creds
+            defaultMode: 288
+        - name: otel-agent-config-vol
+          configMap:
+            name: otel-agent
+            defaultMode: 420
+        securityContext:
+          fsGroup: 65533
+          seccompProfile:
+            type: RuntimeDefault
+    revisionHistoryLimit: 10
+    progressDeadlineSeconds: 600

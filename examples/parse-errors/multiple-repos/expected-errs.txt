@@ -1,0 +1,19 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1030: A directory may declare at most one "apiVersion=configmanagement.gke.io/v1, kind=Repo" Resource:
+
+source: system/repo-2.yaml
+metadata.name: repo-2
+group: configmanagement.gke.io
+version: v1
+kind: Repo
+
+source: system/repo-2.yaml
+metadata.name: repo-2
+group: configmanagement.gke.io
+version: v1
+kind: Repo
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1030
+

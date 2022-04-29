@@ -1,0 +1,10 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1037: Resources of the below Kind may not be declared in clusterregistry/:
+
+source: clusterregistry/namespace.yaml
+group: 
+version: v1
+kind: Namespace
+

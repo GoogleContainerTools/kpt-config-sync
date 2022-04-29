@@ -1,0 +1,226 @@
+# Included by Makefile.
+# Rules related to building nomos and docker images.
+
+###################################
+# Build environment
+###################################
+
+# Pulls the cached builenv docker image from gcrio.
+pull-buildenv:
+	@docker image inspect $(BUILDENV_IMAGE) &> /dev/null \
+	|| docker pull $(BUILDENV_IMAGE)
+
+build-buildenv: build/buildenv/Dockerfile
+	@echo "+++ Creating the docker container for $(BUILDENV_IMAGE)"
+	@docker build $(DOCKER_BUILD_QUIET) build/buildenv -t $(BUILDENV_IMAGE)
+
+push-buildenv: build-buildenv
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@docker push $(BUILDENV_IMAGE)
+
+install-kustomize:
+	wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F$(KUSTOMIZE_VERSION)/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz -O /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz
+	tar -zxvf /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz -C /tmp
+	mv /tmp/kustomize $(BIN_DIR)/kustomize
+	rm /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz
+
+###################################
+# Docker images
+###################################
+
+.PHONY: build
+build: $(OUTPUT_DIR) pull-buildenv
+	@echo "+++ Build setup done"
+
+# NOTE: this rule depends on OUTPUT_DIR because buildenv needs those dirs to
+# exist in order to work.
+PLATFORMS := linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64
+build-cli: pull-buildenv buildenv-dirs
+	@echo "+++ Compiling Nomos binaries for $(PLATFORMS)"
+	@echo "+++ Compiling with VERSION: $(VERSION)"
+	@mkdir -p $(addprefix $(OUTPUT_DIR)/go/bin/,$(PLATFORMS))
+	@docker run $(DOCKER_RUN_ARGS) ./scripts/build.sh \
+		--version $(VERSION) \
+		$(PLATFORMS)
+
+# Creates a docker image for the specified nomos component.
+image-nomos: license
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@echo "+++ Building the nomos image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(NOMOS_IMAGE) \
+		-t $(NOMOS_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the Reconciler image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(RECONCILER_IMAGE) \
+		-t $(RECONCILER_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the Reconciler Manager image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(RECONCILER_MANAGER_IMAGE) \
+		-t $(RECONCILER_MANAGER_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the Admission Webhook image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(ADMISSION_WEBHOOK_IMAGE) \
+		-t $(ADMISSION_WEBHOOK_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the Hydration Controller image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(HYDRATION_CONTROLLER_IMAGE) \
+		-t $(HYDRATION_CONTROLLER_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the Hydration Controller image with shell"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
+		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo "+++ Building the OCI-sync image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(OCI_SYNC_IMAGE) \
+		-t $(OCI_SYNC_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
+
+
+# Pushes the specified component's docker image to gcr.io.
+push-to-gcr-nomos: image-nomos
+	@echo "+++ Pushing nomos image to gcr.io"
+	@echo "+++ Using account:"
+	gcloud config get-value account
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	docker push $(NOMOS_TAG)
+	docker push $(RECONCILER_TAG)
+	docker push $(RECONCILER_MANAGER_TAG)
+	docker push $(ADMISSION_WEBHOOK_TAG)
+	docker push $(HYDRATION_CONTROLLER_TAG)
+	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
+	docker push $(OCI_SYNC_TAG)
+
+###################################
+# Deployment generation
+###################################
+
+.PHONY: clean-deployments-dir
+__clean-deployments-dir:
+	rm -rf $(GEN_DEPLOYMENT_DIR)
+	$(MAKE) $(OUTPUT_DIR)
+
+.PHONY: generate-deployments
+generate-deployments: \
+		__clean-deployments-dir \
+		$(GEN_DEPLOYMENT_DIR)/git-importer.yaml \
+		$(GEN_DEPLOYMENT_DIR)/monitor.yaml \
+		$(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml \
+		$(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml \
+		$(GEN_DEPLOYMENT_DIR)/otel-collector.yaml \
+		$(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml
+	@echo "+++ Finished generating all yaml"
+
+# Generates the podspec yaml for the component specified.
+.PHONY: $(GEN_DEPLOYMENT_DIR)/git-importer.yaml
+$(GEN_DEPLOYMENT_DIR)/git-importer.yaml: manifests/templates/git-importer.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|IMAGE_NAME|$(NOMOS_TAG)|' < $< > $@
+
+.PHONY: $(GEN_DEPLOYMENT_DIR)/monitor.yaml
+$(GEN_DEPLOYMENT_DIR)/monitor.yaml: manifests/templates/monitor.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|IMAGE_NAME|$(NOMOS_TAG)|' < $< > $@
+
+.PHONY: $(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml
+$(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml: \
+		manifests/templates/reconciler-manager-configmap.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|' \
+		-e 's|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|' \
+		-e 's|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|' < $< > $@
+
+.PHONY: $(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml
+$(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml: \
+		manifests/templates/reconciler-manager.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|' < $< > $@
+
+.PHONY: $(GEN_DEPLOYMENT_DIR)/otel-collector.yaml
+$(GEN_DEPLOYMENT_DIR)/otel-collector.yaml: \
+		manifests/templates/otel-collector.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|IMAGE_NAME|$(OTEL_COLLECTOR_TAG)|' < $< > $@
+
+.PHONY: $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml
+$(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
+		manifests/templates/admission-webhook.yaml
+	@echo "+++ Generating yaml $@"
+	@mkdir -p $(dir $@)
+	@sed -e 's|IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|' < $< > $@
+
+###################################
+# nomos-manifest
+###################################
+
+# config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
+.PHONY: config-sync-manifest
+config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
+	@echo "+++ Preparing config-sync-manifest.yaml"
+	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
+	rm -rf $(OUTPUT_DIR)/manifests
+	rsync manifests/* .output/manifests/
+	@echo "++++ Add yaml files to config-sync-manifest.yaml"
+	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
+		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
+		$(OUTPUT_DIR)/manifests \
+		$(OUTPUT_DIR)/deployment
+
+# config-sync-manifest-e2e adds additional resources that are necessary for the e2e tests
+.PHONY: config-sync-manifest-e2e
+config-sync-manifest-e2e: config-sync-manifest
+	@echo "+++ Preparing config-sync-manifest-e2e.yaml"
+	sed -e "s|GIT_REPO_URL|git@test-git-server.config-management-system-test:/git-server/repos/config-management-system/root-sync|g" \
+		e2e/raw-nomos/manifests/mono-repo-configmaps.yaml > mono-repo-configmaps.copy.yaml
+	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
+		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest-e2e.yaml \
+		manifests/test-resources/00-namespace.yaml \
+		${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
+		mono-repo-configmaps.copy.yaml
+	rm mono-repo-configmaps.copy.yaml
+
+###################################
+# E2E Git Server
+###################################
+
+# NOTE: when updating the git-server version, update
+# test/manifests/templates/git-server.yaml to reflect the version change
+GIT_SERVER_DOCKER := $(OUTPUT_DIR)/git-server-docker
+GIT_SERVER_RELEASE := v1.0.0
+# Creates docker image for the test git-server from github source
+build-git-server:
+	@echo "+++ Building image for test git server"
+	@mkdir -p $(OUTPUT_DIR)
+	@rm -rf $(GIT_SERVER_DOCKER)
+	@git clone https://github.com/jkarlosb/git-server-docker.git $(GIT_SERVER_DOCKER)
+	@cd $(GIT_SERVER_DOCKER) && git checkout $(GIT_SERVER_RELEASE)
+	@docker build $(DOCKER_BUILD_QUIET) \
+			$(GIT_SERVER_DOCKER) \
+			-t gcr.io/stolos-dev/git-server:$(GIT_SERVER_RELEASE)
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@docker push gcr.io/stolos-dev/git-server:$(GIT_SERVER_RELEASE)

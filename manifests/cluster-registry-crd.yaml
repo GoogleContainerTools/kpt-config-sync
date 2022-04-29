@@ -1,0 +1,114 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is taken verbatim from:
+# https://github.com/kubernetes/cluster-registry/blob/master/cluster-registry-crd.yaml
+# If updating this file, please add this entire comment too.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    api: ""
+    kubebuilder.k8s.io: 1.0.3
+    configmanagement.gke.io/system: "true"
+  name: clusters.clusterregistry.k8s.io
+  annotations:
+    # According to this PR https://github.com/kubernetes/enhancements/pull/1111
+    # For group under k8s.io, this annotation is required to link to a PR where API is approved
+    "api-approved.kubernetes.io": "https://github.com/kubernetes-retired/cluster-registry/pull/269"
+spec:
+  preserveUnknownFields: false
+  group: clusterregistry.k8s.io
+  names:
+    kind: Cluster
+    plural: clusters
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                authInfo:
+                  type: object
+                  properties:
+                    controller:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                    user:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                kubernetesApiEndpoints:
+                  type: object
+                  properties:
+                    caBundle:
+                      format: byte
+                      type: string
+                    serverEndpoints:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          clientCIDR:
+                            type: string
+                          serverAddress:
+                            type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    required:
+                    - type
+                    - status
+                    type: object
+                    properties:
+                      lastHeartbeatTime:
+                        format: date-time
+                        type: string
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string

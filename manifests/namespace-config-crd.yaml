@@ -1,0 +1,152 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Custom Resource Definition for a NamespaceConfig
+# which is a resource containing information about
+# a cluster and the policies attached to it.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: namespaceconfigs.configmanagement.gke.io
+  labels:
+    configmanagement.gke.io/arch: "legacy"
+    configmanagement.gke.io/system: "true"
+spec:
+  preserveUnknownFields: false
+  group: configmanagement.gke.io
+  scope: Cluster
+  names:
+    plural: namespaceconfigs
+    singular: namespaceconfig
+    kind: NamespaceConfig
+    shortNames:
+    - nc
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            # NamespaceConfigSpec
+            type: object
+            properties:
+              token:
+                type: string
+              importTime: # metav1.Time
+                type: string
+                format: date-time
+                nullable: true
+              resources:
+                type: array
+                items:
+                  # GenericResources
+                  type: object
+                  required:
+                  - kind
+                  - versions
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    versions:
+                      type: array
+                      items:
+                        # GenericVersionResources
+                        type: object
+                        required:
+                        - objects
+                        - version
+                        properties:
+                          objects:
+                            type: array
+                            items:
+                              type: object # runtime.RawExtension
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          version:
+                            type: string
+                        # /GenericVersionResources
+                  # /GenericResources
+              deleteSyncedTime: # metaV1.Time
+                type: string
+                format: date-time
+                nullable: true
+            # /NamespaceConfigSpec
+          status:
+            # NamespaceConfigStatus
+            type: object
+            properties:
+              token:
+                type: string
+              syncErrors:
+                type: array
+                items:
+                  # NamespaceConfigSyncError
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    sourceName:
+                      type: string
+                    resourceName:
+                      type: string
+                    resourceKind:
+                      type: string
+                    resourceAPI:
+                      type: string
+                    errorMessage:
+                      type: string
+                  # /NamespaceConfigSyncError
+              syncTime: # metav1.Time
+                type: string
+                format: date-time
+                nullable: true
+              syncState:
+                type: string
+                enum:
+                - ""
+                - "synced"
+                - "stale"
+                - "error"
+              resourceConditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    groupVersion:
+                      type: string
+                    kind:
+                      type: string
+                    namespacedName:
+                      type: string
+                    resourceState:
+                      type: string
+                    token:
+                      type: string
+                    reconcilingReasons:
+                      type: array
+                      items:
+                        type: string
+                    errors:
+                      type: array
+                      items:
+                        type: string
+            # /NamespaceConfigStatus

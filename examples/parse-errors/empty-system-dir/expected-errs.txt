@@ -1,0 +1,9 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1017: The system/ directory must declare a Repo Resource.
+
+path: system/
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1017
+

@@ -1,0 +1,13 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1041: The "Namespace" APIResource MUST NOT be declared in a HierarchyConfig:
+
+source: system/config.yaml
+metadata.name: namespace
+group: configmanagement.gke.io
+version: v1
+kind: HierarchyConfig
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1041
+

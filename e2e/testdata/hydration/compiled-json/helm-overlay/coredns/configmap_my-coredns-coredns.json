@@ -1,0 +1,33 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"data": {
+				"Corefile": ".:53 {\n    errors\n    health {\n        lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n        pods insecure\n        fallthrough in-addr.arpa ip6.arpa\n        ttl 30\n    }\n    prometheus 0.0.0.0:9153\n    forward . /etc/resolv.conf\n    cache 30\n    loop\n    reload\n    loadbalance\n}"
+			},
+			"kind": "ConfigMap",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "configuredIn: base/kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n",
+					"hydration-tool": "kustomize"
+				},
+				"labels": {
+					"app.kubernetes.io/instance": "my-coredns",
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name": "coredns",
+					"helm.sh/chart": "coredns-1.16.4",
+					"k8s-app": "coredns",
+					"kubernetes.io/cluster-service": "true",
+					"kubernetes.io/name": "CoreDNS",
+					"team": "coredns",
+					"test-case": "hydration"
+				},
+				"name": "my-coredns-coredns",
+				"namespace": "coredns"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

@@ -1,0 +1,33 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind": "RoleBinding",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "path: base/rolebinding.yaml\n"
+				},
+				"labels": {
+					"test-case": "hydration"
+				},
+				"name": "tenant-admin-rolebinding",
+				"namespace": "tenant-a"
+			},
+			"roleRef": {
+				"apiGroup": "rbac.authorization.k8s.io",
+				"kind": "Role",
+				"name": "tenant-admin"
+			},
+			"subjects": [
+				{
+					"apiGroup": "rbac.authorization.k8s.io",
+					"kind": "Group",
+					"name": "tenant-a-admin@mydomain.com"
+				}
+			]
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

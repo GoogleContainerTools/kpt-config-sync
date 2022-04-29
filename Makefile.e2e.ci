@@ -1,0 +1,132 @@
+MOUNTED_SA_KEY_FILE ?= "/etc/prober-gcp-service-account/prober_runner_client_key.json"
+SA_KEY_FILE ?= "/tmp/prober_runner_client_key.json"
+SA_KEY_FILE_SECRET ?= "nomos-prober-runner-gcp-client-key"
+
+# Environment:
+#   E2E_FLAGS: flag passed into the test container
+#   TEST_E2E_RUN_FLAGS: flags passed to the e2e/e2e.sh script.
+#
+# The --gcp-prober-cred is mounted in as a Kubernetes secret at the path seen
+# below.
+#
+test-e2e-ci:
+	$(MAKE) $(E2E_PARAMS) \
+      E2E_FLAGS="\
+        --tap \
+		--create-ssh-key \
+        --gcp-prober-cred $(MOUNTED_SA_KEY_FILE) \
+		$(E2E_FLAGS) \
+     " \
+     TEST_E2E_RUN_FLAGS="\
+	    --hermetic \
+		--mounted-prober-cred $(MOUNTED_SA_KEY_FILE) \
+		$(TEST_E2E_RUN_FLAGS) \
+	 " \
+     test-e2e
+
+# Same target as above, except set up so that it can be ran from a local machine.
+# We must download the gcs prober credentials, as they will not be mounted in.
+test-e2e-ci-local:
+	$(MAKE) $(E2E_PARAMS) \
+	 E2E_FLAGS="\
+		--gcp-prober-cred /tmp/config/prober_runner_client_key.json \
+		$(E2E_FLAGS) \
+	 " \
+     TEST_E2E_RUN_FLAGS="\
+		--fetch-prober-cred \
+		--prober-cred-secret-project $(GCP_PROJECT) \
+		--prober-cred-secret $(SA_KEY_FILE_SECRET) \
+	 " \
+     test-e2e
+
+### Golang e2e tests targets running against a GKE cluster
+
+# Build a test docker container with gcloud and kubectl installed.
+__build-e2e-go-container:
+	@echo "+++ Building build/test-e2e-go/gke/Dockerfile nomos-gcloud-image"
+	@docker build . \
+	 	--network host \
+		-f build/test-e2e-go/gke/Dockerfile \
+		-t nomos-gcloud-image
+
+# Download the prober service account credentials from Google Secret Manager.
+__download_prober_creds:
+	@echo "++++ Getting latest secret for service account key file from ${GCP_PROJECT}/${SA_KEY_FILE_SECRET}, writing to ${SA_KEY_FILE}"
+	  gcloud secrets versions access latest \
+		--secret ${SA_KEY_FILE_SECRET} \
+		--project "${GCP_PROJECT}" \
+		> ${SA_KEY_FILE}
+
+GCP_CLUSTER ?= $(USER)-cluster-1
+GCP_ZONE ?= us-central1-a
+GKE_E2E_TIMEOUT ?= 6h
+
+# Run the golang e2e tests sequentially (--parallel 1) on a GKE cluster.
+# It requires a GKE cluster to be installed in `$(GCP_PROJECT)` and `$(GCP_ZONE)`/`$(GCP_REGION)`.
+# The cluster name should follow the pattern `$(USER)-cluster-1`.
+__docker-run-e2e-go-gke: push-to-gcr-nomos __build-e2e-go-container
+	@echo "+++ Running go e2e tests $(E2E_ARGS)"
+	@echo "GCP_PROJECT=$(GCP_PROJECT)"
+	@echo "GCP_CLUSTER=$(GCP_CLUSTER)"
+	@echo "GCP_ZONE=$(GCP_ZONE)"
+	@echo "GCP_REGION=$(GCP_REGION)"
+	@echo "GCR_PREFIX=$(GCR_PREFIX)"
+	@echo "ARTIFACTS=$(ARTIFACTS)"
+	@echo "GKE_E2E_TIMEOUT=$(GKE_E2E_TIMEOUT)"
+	@docker run \
+		-v $(PROBER_CREDS):$(SA_KEY_FILE) \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(ARTIFACTS):/logs/artifacts \
+		--env GCP_PROBER_CREDS=$(SA_KEY_FILE) \
+		--env GCP_PROJECT=$(GCP_PROJECT) \
+		--env GCP_CLUSTER=$(GCP_CLUSTER) \
+		--env GCP_ZONE=$(GCP_ZONE) \
+		--env GCP_REGION=$(GCP_REGION) \
+		--network=host \
+		nomos-gcloud-image \
+		./build/test-e2e-go/e2e.sh $(E2E_ARGS) \
+			--timeout $(GKE_E2E_TIMEOUT) \
+			--parallel 1 \
+			--p 1 \
+			--test-cluster=gke \
+			--image-prefix=gcr.io/$(GCR_PREFIX) \
+			--image-tag=$(LATEST_IMAGE_TAG)
+
+# The CI target that runs the golang e2e test on a GKE cluster in prow with various E2E_ARGS.
+# Examples:
+# 1. Run tests in mono-repo mode:
+#    make E2E_ARGS="--share-test-env" test-e2e-go-gke-ci
+# 2. Run tests in multi-repo mode:
+#    make E2E_ARGS="--share-test-env --multirepo" test-e2e-go-gke-ci
+# 3. Run tests in multi-repo mode with Bitbucket:
+#    make E2E_ARGS="--share-test-env --multirepo --git-provider=bitbucket" test-e2e-go-gke-ci
+# 4. Run tests in mono-repo mode with Bitbucket:
+#    make E2E_ARGS="--share-test-env --git-provider=bitbucket" test-e2e-go-gke-ci
+# 5. Run tests in multi-repo mode with KCC resources:
+#    make E2E_ARGS="--share-test-env --multirepo --kcc -run=TestKCC*" test-e2e-go-gke-ci
+# 6. Run the stress tests in multi-repo mode:
+#    make E2E_ARGS="--multirepo --stress -run=TestStress*" test-e2e-go-gke-ci
+test-e2e-go-gke-ci:
+	$(MAKE) E2E_ARGS="$(E2E_ARGS)" PROBER_CREDS=$(MOUNTED_SA_KEY_FILE) \
+		__docker-run-e2e-go-gke
+
+# The CI target that runs the golang e2e test for mono repo on a GKE cluster from a local machine with various E2E_ARGS.
+# Examples:
+# 1. Run tests in mono-repo mode:
+#    make E2E_ARGS="--share-test-env" test-e2e-go-gke-local
+# 2. Run tests in multi-repo mode:
+#    make E2E_ARGS="--share-test-env --multirepo" test-e2e-go-gke-local
+# 3. Run tests in multi-repo mode with Bitbucket:
+#    make E2E_ARGS="--share-test-env --multirepo --git-provider=bitbucket" test-e2e-go-gke-local
+# 4. Run tests in mono-repo mode with Bitbucket:
+#    make E2E_ARGS="--share-test-env --git-provider=bitbucket" test-e2e-go-gke-local
+# 5. Run tests in multi-repo mode with KCC resources:
+#    make E2E_ARGS="--share-test-env --multirepo --kcc -run=TestKCC*" test-e2e-go-gke-local
+# 6. Run the stress tests in multi-repo mode:
+#    make E2E_ARGS="--multirepo --stress -run=TestStress*" test-e2e-go-gke-local
+test-e2e-go-gke-local: __download_prober_creds
+	$(MAKE) E2E_ARGS="$(E2E_ARGS)" PROBER_CREDS=$(SA_KEY_FILE) __docker-run-e2e-go-gke
+
+# Manually rotate the prober's service account key.
+manual-rotate-prober-sa-key: __download_prober_creds
+	GCP_PROBER_CREDS=$(SA_KEY_FILE) ./scripts/prow/prober-runner-sa-key-rotate.sh

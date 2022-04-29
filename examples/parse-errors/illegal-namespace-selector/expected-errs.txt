@@ -1,0 +1,10 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1038: Resources of the below Kind may not be declared in namespaces/:
+
+source: namespaces/my-namespace/illegal-namespace-selector.yaml
+group: configmanagement.gke.io
+version: v1
+kind: NamespaceSelector
+

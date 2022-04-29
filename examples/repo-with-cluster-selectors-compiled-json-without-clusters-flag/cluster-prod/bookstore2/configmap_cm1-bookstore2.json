@@ -1,0 +1,15 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "ConfigMap",
+			"metadata": {
+				"name": "cm1-bookstore2",
+				"namespace": "bookstore2"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

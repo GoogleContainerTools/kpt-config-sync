@@ -1,0 +1,17 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "Namespace",
+			"metadata": {
+				"labels": {
+					"app": "bookstore1"
+				},
+				"name": "bookstore1"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

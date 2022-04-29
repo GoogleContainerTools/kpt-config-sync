@@ -1,0 +1,13 @@
+Found issues: 1 error(s)
+
+
+[1] KNV1024: Configs of this Kind may not be declared in the `system/` directory of the repo:
+
+source: system/namespace.yaml
+metadata.name: system
+group:
+version: v1
+kind: Namespace
+
+For more information, see https://cloud.google.com/anthos-config-management/docs/reference/errors#knv1024
+

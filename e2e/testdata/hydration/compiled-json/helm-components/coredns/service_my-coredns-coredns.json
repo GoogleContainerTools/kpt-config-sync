@@ -1,0 +1,49 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "Service",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
+				},
+				"labels": {
+					"app.kubernetes.io/instance": "my-coredns",
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name": "coredns",
+					"helm.sh/chart": "coredns-1.16.4",
+					"k8s-app": "coredns",
+					"kubernetes.io/cluster-service": "true",
+					"kubernetes.io/name": "CoreDNS",
+					"test-case": "hydration"
+				},
+				"name": "my-coredns-coredns",
+				"namespace": "coredns"
+			},
+			"spec": {
+				"ports": [
+					{
+						"name": "udp-53",
+						"port": 53,
+						"protocol": "UDP"
+					},
+					{
+						"name": "tcp-53",
+						"port": 53,
+						"protocol": "TCP"
+					}
+				],
+				"selector": {
+					"app.kubernetes.io/instance": "my-coredns",
+					"app.kubernetes.io/name": "coredns",
+					"k8s-app": "coredns",
+					"test-case": "hydration"
+				},
+				"type": "ClusterIP"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

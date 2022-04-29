@@ -1,0 +1,177 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: constrainttemplates.templates.gatekeeper.sh
+spec:
+  conversion:
+    strategy: None
+  group: templates.gatekeeper.sh
+  names:
+    kind: ConstraintTemplate
+    listKind: ConstraintTemplateList
+    plural: constrainttemplates
+    singular: constrainttemplate
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the v1.1.1-rc.4
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              crd:
+                properties:
+                  spec:
+                    properties:
+                      names:
+                        properties:
+                          kind:
+                            type: string
+                          listKind:
+                            type: string
+                          plural:
+                            type: string
+                          singular:
+                            type: string
+                        type: object
+                      validation:
+                        type: object
+                    type: object
+                type: object
+              targets:
+                items:
+                  properties:
+                    rego:
+                      type: string
+                    target:
+                      type: string
+                  type: object
+                type: array
+            type: object
+          status:
+            properties:
+              byPod:
+                items:
+                  properties:
+                    errors:
+                      items:
+                        properties:
+                          code:
+                            type: string
+                          location:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                        - code
+                        - message
+                        type: object
+                      type: array
+                    id:
+                      description: a unique identifier for the pod that wrote the status
+                      type: string
+                  type: object
+                type: array
+              created:
+                type: boolean
+            type: object
+  - name: v1alpha1
+    served: true
+    storage: false
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the v1.1.1-rc.4
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              crd:
+                properties:
+                  spec:
+                    properties:
+                      names:
+                        properties:
+                          kind:
+                            type: string
+                        type: object
+                      validation:
+                        type: object
+                    type: object
+                type: object
+              targets:
+                items:
+                  properties:
+                    rego:
+                      type: string
+                    target:
+                      type: string
+                  type: object
+                type: array
+            type: object
+          status:
+            properties:
+              byPod:
+                items:
+                  properties:
+                    errors:
+                      items:
+                        properties:
+                          code:
+                            type: string
+                          location:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                        - code
+                        - message
+                        type: object
+                      type: array
+                    id:
+                      description: a unique identifier for the pod that wrote the status
+                      type: string
+                  type: object
+                type: array
+              created:
+                type: boolean
+            type: object

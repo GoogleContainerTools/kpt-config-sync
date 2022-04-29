@@ -1,0 +1,48 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+images:
+  - name: postgres
+    newName: my-registry/my-postgres
+    newTag: v1
+  - name: nginx
+    newTag: 1.8.0
+  - name: my-demo-app
+    newName: my-app
+  - name: alpine
+    digest: sha256:24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+
+replicas:
+  - name: deployment-name
+    count: 5
+
+replacements:
+  - path: my-replacement.yaml
+  - source:
+      kind: Secret
+      name: my-secret
+    targets:
+      - select:
+          kind: Job
+        fieldPaths:
+          - spec.template.spec.containers.[name=hello].env.[name=SECRET_TOKEN].value
+      - select:
+          kind: StatefulSet
+        fieldPaths:
+          - spec.template.spec.containers.[name=hello].env.[name=SECRET_TOKEN].value
+
+resources:
+  - deployment.yaml
+  - resources.yaml
+  - job.yaml

@@ -1,0 +1,568 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+    control-plane: controller-manager
+  name: resource-group-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resourcegroups.kpt.dev
+spec:
+  group: kpt.dev
+  names:
+    kind: ResourceGroup
+    listKind: ResourceGroupList
+    plural: resourcegroups
+    singular: resourcegroup
+  preserveUnknownFields: false
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[0].status
+      name: Reconciling
+      type: string
+    - jsonPath: .status.conditions[1].status
+      name: Stalled
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ResourceGroup is the Schema for the resourcegroups API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of ResourceGroup
+            properties:
+              descriptor:
+                description: descriptor regroups the information and metadata about
+                  a resource group
+                properties:
+                  description:
+                    description: description is a brief description of a group of
+                      resources
+                    type: string
+                  links:
+                    description: links are a list of descriptive URLs intended to
+                      be used to surface additional information
+                    items:
+                      properties:
+                        description:
+                          description: description explains the purpose of the link
+                          type: string
+                        url:
+                          description: url is the URL of the link
+                          type: string
+                      required:
+                      - description
+                      - url
+                      type: object
+                    type: array
+                  revision:
+                    description: revision is an optional revision for a group of resources
+                    type: string
+                  type:
+                    description: type can contain prefix, such as Application/WordPress
+                      or Service/Spanner
+                    type: string
+                type: object
+              resources:
+                description: resources contains a list of resources that form the
+                  resource group
+                items:
+                  description: each item organizes and stores the identifying information
+                    for an object. This struct (as a string) is stored in a grouping
+                    object to keep track of sets of applied objects.
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              subgroups:
+                description: subgroups contains a list of sub groups that the current
+                  group includes.
+                items:
+                  description: Each item organizes and stores the identifying information
+                    for a ResourceGroup object. It includes name and namespace.
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  type: object
+                type: array
+            type: object
+          status:
+            description: status defines the observed state of ResourceGroup
+            properties:
+              conditions:
+                description: conditions lists the conditions of the current status
+                  for the group
+                items:
+                  properties:
+                    lastTransitionTime:
+                      description: last time the condition transit from one status
+                        to another
+                      format: date-time
+                      type: string
+                    message:
+                      description: human-readable message indicating details about
+                        last transition
+                      type: string
+                    reason:
+                      description: one-word CamelCase reason for the condition’s last
+                        transition
+                      type: string
+                    status:
+                      description: status of the condition
+                      type: string
+                    type:
+                      description: type of the condition
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: observedGeneration is the most recent generation observed.
+                  It corresponds to the Object's generation, which is updated on mutation
+                  by the API Server. Everytime the controller does a successful reconcile,
+                  it sets observedGeneration to match ResourceGroup.metadata.generation.
+                format: int64
+                type: integer
+              resourceStatuses:
+                description: resourceStatuses lists the status for each resource in
+                  the group
+                items:
+                  description: each item contains the status of a given resource uniquely
+                    identified by its group, kind, name and namespace.
+                  properties:
+                    actuation:
+                      description: actuation indicates whether actuation has been
+                        performed yet and how it went.
+                      type: string
+                    conditions:
+                      items:
+                        properties:
+                          lastTransitionTime:
+                            description: last time the condition transit from one
+                              status to another
+                            format: date-time
+                            type: string
+                          message:
+                            description: human-readable message indicating details
+                              about last transition
+                            type: string
+                          reason:
+                            description: one-word CamelCase reason for the condition’s
+                              last transition
+                            type: string
+                          status:
+                            description: status of the condition
+                            type: string
+                          type:
+                            description: type of the condition
+                            type: string
+                        required:
+                        - status
+                        - type
+                        type: object
+                      type: array
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    reconcile:
+                      description: reconcile indicates whether reconciliation has
+                        been performed yet and how it went.
+                      type: string
+                    sourceHash:
+                      type: string
+                    status:
+                      description: status describes the status of a resource.
+                      type: string
+                    strategy:
+                      description: strategy indicates the method of actuation (apply
+                        or delete) used or planned to be used.
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  - status
+                  type: object
+                type: array
+              subgroupStatuses:
+                description: subgroupStatuses lists the status for each subgroup.
+                items:
+                  description: Each item contains the status of a given group uniquely
+                    identified by its name and namespace.
+                  properties:
+                    conditions:
+                      items:
+                        properties:
+                          lastTransitionTime:
+                            description: last time the condition transit from one
+                              status to another
+                            format: date-time
+                            type: string
+                          message:
+                            description: human-readable message indicating details
+                              about last transition
+                            type: string
+                          reason:
+                            description: one-word CamelCase reason for the condition’s
+                              last transition
+                            type: string
+                          status:
+                            description: status of the condition
+                            type: string
+                          type:
+                            description: type of the condition
+                            type: string
+                        required:
+                        - status
+                        - type
+                        type: object
+                      type: array
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    status:
+                      description: status describes the status of a resource.
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  - status
+                  type: object
+                type: array
+            required:
+            - observedGeneration
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-sa
+  namespace: resource-group-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-leader-election-role
+  namespace: resource-group-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-manager-role
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kpt.dev
+  resources:
+  - resourcegroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kpt.dev
+  resources:
+  - resourcegroups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - policy
+  resourceNames:
+  - acm-psp
+  resources:
+  - podsecuritypolicies
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-leader-election-rolebinding
+  namespace: resource-group-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: resource-group-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: resource-group-sa
+  namespace: resource-group-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: resource-group-manager-role
+subjects:
+- kind: ServiceAccount
+  name: resource-group-sa
+  namespace: resource-group-system
+---
+apiVersion: v1
+data:
+  otel-agent-config.yaml: |
+    receivers:
+      opencensus:
+    exporters:
+      opencensus:
+        endpoint: otel-collector.config-management-monitoring:55678
+        tls:
+          insecure: true
+    processors:
+      batch:
+    extensions:
+      health_check:
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [opencensus]
+          processors: [batch]
+          exporters: [opencensus]
+kind: ConfigMap
+metadata:
+  labels:
+    app: opentelemetry
+    component: otel-agent
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+  name: resource-group-otel-agent
+  namespace: resource-group-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    configmanagement.gke.io/arch: "csmr"
+    configmanagement.gke.io/system: "true"
+    control-plane: controller-manager
+  name: resource-group-controller-manager
+  namespace: resource-group-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      configmanagement.gke.io/arch: "csmr"
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        configmanagement.gke.io/arch: "csmr"
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-addr=127.0.0.1:8080
+        - --enable-leader-election
+        command:
+        - /manager
+        image: gcr.io/config-management-release/resource-group-controller:v1.0.4
+        imagePullPolicy: Always
+        name: manager
+        resources:
+          limits:
+            cpu: 300m
+            memory: 500Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      - args:
+        - --config=/conf/otel-agent-config.yaml
+        command:
+        - /otelcontribcol
+        image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+        name: otel-agent
+        ports:
+        - containerPort: 55678
+        - containerPort: 8888
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+        resources:
+          limits:
+            cpu: 500m
+            memory: 500Mi
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /conf
+          name: otel-agent-config-vol
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: gcr.io/config-management-release/kube-rbac-proxy:v0.5.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      serviceAccountName: resource-group-sa
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - configMap:
+          name: resource-group-otel-agent
+        name: otel-agent-config-vol

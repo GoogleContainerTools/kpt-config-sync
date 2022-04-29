@@ -1,0 +1,18 @@
+*.swp
+*.iml
+
+# Build artifacts
+/certs
+/.output
+*terraform-bundle/
+.terraform
+
+# IDE
+/.idea
+/.vscode
+
+# Ignore unsued pulled-in contrib licenses since dep...
+# "Out of an abundance of caution, dep non-optionally preserves files that may have legal significance".
+vendor/github.com/docker/docker/contrib/
+
+LICENSES.txt

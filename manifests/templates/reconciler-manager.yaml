@@ -1,0 +1,97 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reconciler-manager
+  namespace: config-management-system
+  labels:
+    app: reconciler-manager
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: reconciler-manager
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: reconciler-manager
+    spec:
+      serviceAccountName: reconciler-manager
+      containers:
+      - command:
+        - /reconciler-manager
+        args:
+        - --enable-leader-election
+        image: IMAGE_NAME
+        name: reconciler-manager
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        volumeMounts:
+        - name: configs
+          mountPath: /deployment.yaml
+          subPath: deployment.yaml
+        envFrom:
+          - configMapRef:
+              name: reconciler-manager
+              optional: true  # Currently nothing mandatory in the ConfigMap
+      - name: otel-agent
+        image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+        command:
+        - /otelcontribcol
+        args:
+        - "--config=/conf/otel-agent-config.yaml"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 500Mi
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        ports:
+        - containerPort: 55678 # Default OpenCensus receiver port.
+        - containerPort: 8888  # Metrics.
+        volumeMounts:
+        - name: otel-agent-config-vol
+          mountPath: /conf
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: configs
+        configMap:
+          name: reconciler-manager-cm
+      - name: otel-agent-config-vol
+        configMap:
+          name: otel-agent

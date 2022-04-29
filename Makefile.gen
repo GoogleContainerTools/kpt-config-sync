@@ -1,0 +1,37 @@
+#!/usr/bin/make
+#
+# Copyright 2018 CSP Config Management Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+######################################################################
+
+.PHONY: clientgen
+clientgen:
+	@echo "+++ Generating clientgen directory"
+	./scripts/generate-clientset.sh
+
+
+# To regenerate api_resources_1_15.txt:
+# 1) Create a fresh 1.15 cluster that DOES NOT have ACM installed.
+# 2) Run the below command:
+# kubectl api-resources --verbs=create,list --no-headers | grep -P "[\w.]* {0,31}(true|false)\s+\w+$" -o > cmd/gen-core-scoper/api_resources_1_15.txt
+# 3) Repeat (1) and (2) for Kubernetes 1.18.
+#
+# Note that we only get resources where "create" and "list" verbs are defined, as ACM
+# cannot manage resources it can't create or list.
+.PHONY: gen-core-scoper
+gen-core-scoper:
+	@echo "+++ Generating core_scoper.go"
+	@echo "$(pwd)"
+	go run cmd/gen-core-scoper/main.go

@@ -1,0 +1,188 @@
+# e2e related build rules
+
+E2E_PARAMS := \
+	IMAGE_TAG=$(IMAGE_TAG) \
+	GCP_PROJECT=$(GCP_PROJECT) \
+	GCR_PREFIX=$(GCR_PREFIX) \
+
+# The directory for e2e test related files
+E2E_DIR := $(OUTPUT_DIR)/nomos
+
+E2E_VERSION := v1.0.2
+E2E_TEST_IMAGE := gcr.io/$(GCP_PROJECT)/e2e-tests:$(E2E_VERSION)
+
+# Create a staging directory for e2e
+.PHONY: e2e-staging
+e2e-staging: \
+	$(OUTPUT_DIR) \
+	config-sync-manifest-e2e \
+	$(wildcard ./e2e/*)
+	@echo "+++ Creating staging directory for e2e tests"
+	@rm -rf $(E2E_DIR)
+	@mkdir -p $(E2E_DIR)
+	@mkdir -p $(E2E_DIR)/third_party
+	@cp -r ./third_party/bats-core $(E2E_DIR)/third_party
+	@cp -r ./examples $(E2E_DIR)
+	@mkdir -p $(E2E_DIR)/scripts
+	@cp ./scripts/init-git-server.sh $(E2E_DIR)/scripts
+	@mkdir -p $(E2E_DIR)/test/manifests/templates
+	@cp ./test/manifests/templates/git-server.yaml $(E2E_DIR)/test/manifests/templates
+	@cp ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest-e2e.yaml $(E2E_DIR)
+	@cp -r ./e2e $(E2E_DIR)
+
+# Builds the e2e docker image and dependencies.
+image-e2e-tests: \
+		build/e2e-tests/Dockerfile \
+		build/e2e-tests/build.sh
+	@echo "+++ Building the e2e docker image"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@build/e2e-tests/build.sh \
+		-t $(E2E_TEST_IMAGE) \
+		$(DOCKER_BUILD_QUIET)
+	$(MAKE) build-cli VERSION=$(VERSION)
+
+
+GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
+
+__test-e2e-run:
+	@echo "+++ Running e2e tests: git"
+	@echo $(E2E_FLAGS)
+	@env GOTOPT2_BINARY="$(GOTOPT2_BINARY)" \
+		 e2e/e2e.sh \
+		--TEMP_OUTPUT_DIR "$(TEMP_OUTPUT_DIR)" \
+		--OUTPUT_DIR "$(OUTPUT_DIR)" \
+		--e2e-container="$(E2E_TEST_IMAGE)" \
+		$(TEST_E2E_RUN_FLAGS) \
+		-- \
+		$(E2E_FLAGS) \
+	    && echo "+++ git e2e tests completed" \
+	    || (echo "### e2e tests failed. Temp dir (with test output logs etc) are available in ${TEMP_OUTPUT_DIR}"; exit 1)
+
+e2e-image-all: image-e2e-tests e2e-staging
+
+push-e2e-tests: image-e2e-tests
+	docker push $(E2E_TEST_IMAGE)
+
+# Makes sure that E2E_TEST_IMAGE is available in the local docker cache.
+# The image takes a *long* time to rebuild, so we reuse a prebuilt one instead.
+ensure-image-e2e-tests:
+	@if ! docker image inspect $(E2E_TEST_IMAGE) > /dev/null; then \
+		docker image pull $(E2E_TEST_IMAGE); \
+	fi
+
+# Clean, ensure and run e2e tests for all importers.
+# Clean cluster after running.
+test-e2e-nobuild: push-to-gcr-nomos ensure-image-e2e-tests e2e-staging
+	$(MAKE) __test-e2e-run \
+		$(E2E_PARAMS) \
+		E2E_FLAGS="\
+			--preclean \
+			--setup \
+			--test \
+			--clean \
+			$(E2E_FLAGS)" \
+		TEST_E2E_RUN_FLAGS="$(TEST_E2E_RUN_FLAGS)"
+
+test-e2e-ephemeral:
+	$(MAKE) test-e2e-nobuild \
+		$(E2E_PARAMS) \
+		E2E_FLAGS="\
+			--timing \
+			--create-ssh-key \
+			--set-admin-role-binding=false \
+			$(E2E_FLAGS) \
+		" \
+		TEST_E2E_RUN_FLAGS="\
+			--hermetic \
+			--use-ephemeral-cluster \
+			$(TEST_E2E_RUN_FLAGS) \
+		"
+
+test-e2e: e2e-image-all
+	$(MAKE) __test-e2e-run $(E2E_PARAMS) E2E_FLAGS="\
+		--preclean \
+		--setup \
+		--test \
+		--clean \
+		$(E2E_FLAGS)"
+
+# This target is for working on specific tests
+test-e2e-dev: image-e2e-tests e2e-staging
+	$(MAKE) __test-e2e-run $(E2E_PARAMS) E2E_FLAGS="\
+		$(E2E_FLAGS)"
+
+# Runs nomos vet locally for example repos.
+# Requires kubeconfig set up properly with Nomos cluster.
+# This is now a duplicate of cli.bats from the e2e tests framework,
+# but can run locally without any of the setup.
+test-nomos-vet-local: build
+	@echo "Running test-nomos-vet-local..."
+	$(NOMOS_LOCAL) --validate vet --path=./examples/acme
+	$(NOMOS_LOCAL) vet --path=./examples/foo-corp-example/foo-corp
+
+	@rm -rf ./.output/tmp/empty
+	@mkdir ./.output/tmp/empty
+	@cd ./.output/tmp/empty && git init && git checkout -b main && $(NOMOS_LOCAL) init && $(NOMOS_LOCAL) vet
+
+include Makefile.e2e.ci
+
+# Builds a new nomos image and pushes it to the local Docker repository.
+# For use with the Go e2e tests. See e2e/doc.go.
+__push-local-image: image-nomos
+	@bash scripts/docker-registry.sh
+	@docker tag $(NOMOS_TAG) localhost:5000/nomos:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/nomos:$(LATEST_IMAGE_TAG)
+	@docker tag $(RECONCILER_TAG) localhost:5000/reconciler:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/reconciler:$(LATEST_IMAGE_TAG)
+	@docker tag $(HYDRATION_CONTROLLER_TAG) localhost:5000/hydration-controller:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/hydration-controller:$(LATEST_IMAGE_TAG)
+	@docker tag $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) localhost:5000/hydration-controller-with-shell:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/hydration-controller-with-shell:$(LATEST_IMAGE_TAG)
+	@docker tag $(RECONCILER_MANAGER_TAG) localhost:5000/reconciler-manager:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/reconciler-manager:$(LATEST_IMAGE_TAG)
+	@docker tag $(ADMISSION_WEBHOOK_TAG) localhost:5000/admission-webhook:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/admission-webhook:$(LATEST_IMAGE_TAG)
+	@docker tag $(OCI_SYNC_TAG) localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
+
+__install-nomos-local:
+	@GO111MODULE=on go install ./cmd/nomos/nomos.go
+
+# Runs the Go e2e tests
+# Rebuilds the nomos image, so use this when you're actively modifying the Nomos
+# code between test runs.
+test-e2e-go: __push-local-image __install-nomos-local test-e2e-go-nobuild
+
+# Runs the Go e2e tests without building a new Nomos image.
+# This doesn't rebuild the Nomos image, so you can modify test code and rerun
+# this without having to rebuild the image.
+test-e2e-go-nobuild:
+	@./scripts/e2e-go.sh --timeout 60m --image-tag=$(LATEST_IMAGE_TAG)
+
+# Go test target for Prow.
+# Separate from the above as we are still tuning how Prow runs tests.
+__test-e2e-go-nobuild-prow:
+	@./scripts/e2e-go.sh --timeout 60m --parallel 12 --image-tag=$(LATEST_IMAGE_TAG)
+
+# The target to be run by Prow for e2e tests.
+# Delete all kind clusters before tests to prevent leaking resources after
+# failed tests where cleanup is unsuccessful. This only deletes clusters in the
+# current Kind network, so other Prow jobs running in the same
+# Cluster/NodePool/etc. are unaffected.
+test-e2e-go-ephemeral: __push-local-image
+	@docker build . -f build/test-e2e-go/Dockerfile -t prow-image
+	# The .sock volume allows you to connect to the Docker daemon of the host.
+	# Part of the docker-in-docker pattern.
+	@docker run -v /var/run/docker.sock:/var/run/docker.sock --network="host" prow-image make __test-e2e-go-nobuild-prow
+test-e2e-go-ephemeral-mono-repo: __push-local-image
+	kind delete clusters --all
+	./scripts/e2e-go-ephemeral.sh --timeout 60m --parallel 18 --image-tag=$(LATEST_IMAGE_TAG)
+test-e2e-go-ephemeral-multi-repo: __push-local-image
+	kind delete clusters --all
+	./scripts/e2e-go-ephemeral.sh --multirepo --timeout 60m --parallel 18 --image-tag=$(LATEST_IMAGE_TAG)
+
+# Runs the Go e2e tests against multi-repo Config Sync.
+# Rebuilds the nomos image, so use this when you're actively modifying the Nomos
+# code between test runs.
+test-e2e-go-multirepo: __push-local-image __install-nomos-local
+	@GO111MODULE=on go test ./e2e/... --e2e --timeout 60m --multirepo --image-tag=$(LATEST_IMAGE_TAG)

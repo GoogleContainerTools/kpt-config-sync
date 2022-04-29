@@ -1,0 +1,20 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"kind": "Namespace",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "path: base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
+				},
+				"labels": {
+					"test-case": "hydration"
+				},
+				"name": "tenant-a"
+			}
+		}
+	],
+	"kind": "List",
+	"metadata": {}
+}

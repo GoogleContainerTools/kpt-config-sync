@@ -1,0 +1,130 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admission-webhook
+  namespace: config-management-system
+  labels:
+    app: admission-webhook
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: admission-webhook
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: admission-webhook
+    spec:
+      serviceAccountName: admission-webhook
+      containers:
+      - name: admission-webhook
+        command:
+        - /admission-webhook
+        image: IMAGE_NAME
+        ports:
+          - name: admission
+            containerPort: 10250
+            protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+          limits:
+            cpu: 200m
+            memory: 250Mi
+        volumeMounts:
+          - mountPath: /certs
+            name: cert
+            readOnly: true
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: admission-webhook-cert
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admission-webhook
+  namespace: config-management-system
+  labels:
+    app: admission-webhook
+    monitored: "true"
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  selector:
+    app: admission-webhook
+  ports:
+  - name: admission
+    port: 443
+    targetPort: admission
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admission-webhook
+  namespace: config-management-system
+  labels:
+    app: admission-webhook
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: configsync.gke.io:admission-webhook
+  labels:
+    app: admission-webhook
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # The admission webhook must be cluster-admin in order to deny requests to any
+  # object on the cluster.
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admission-webhook
+  namespace: config-management-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admission-webhook-cert
+  namespace: config-management-system
+  labels:
+    app: admission-webhook
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: admission-webhook.configsync.gke.io
+  labels:
+    app: admission-webhook
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"

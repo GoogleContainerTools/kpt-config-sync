@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog/klogr"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -40,27 +41,29 @@ import (
 var (
 	clusterName = flag.String(flags.clusterName, os.Getenv(reconcilermanager.ClusterNameKey),
 		"Cluster name to use for Cluster selection")
-	scope = flag.String("scope", os.Getenv("SCOPE"),
+	scope = flag.String("scope", os.Getenv(reconcilermanager.ScopeKey),
 		"Scope of the reconciler, either a namespace or ':root'.")
 	syncName = flag.String("sync-name", os.Getenv(reconcilermanager.SyncNameKey),
 		"Name of the RootSync or RepoSync object.")
 	reconcilerName = flag.String("reconciler-name", os.Getenv(reconcilermanager.ReconcilerNameKey),
 		"Name of the reconciler Deployment.")
 
-	// Git configuration flags. These values originate in the ConfigManagement and
-	// configure git-sync to clone the desired repository/reference we want.
-	gitRepo = flag.String("git-repo", os.Getenv("GIT_REPO"),
-		"The URL of the git repo being synced.")
-	gitBranch = flag.String("git-branch", os.Getenv("GIT_BRANCH"),
+	// source configuration flags. These values originate in the ConfigManagement and
+	// configure git-sync/oci-sync to clone the desired repository/reference we want.
+	sourceType = flag.String("source-type", os.Getenv(reconcilermanager.SourceTypeKey),
+		"The type of repo being synced, must be git or oci.")
+	sourceRepo = flag.String("source-repo", os.Getenv(reconcilermanager.SourceRepoKey),
+		"The URL of the git or OCI repo being synced.")
+	sourceBranch = flag.String("source-branch", os.Getenv(reconcilermanager.SourceBranchKey),
 		"The branch of the git repo being synced.")
-	gitRev = flag.String("git-rev", os.Getenv("GIT_REV"),
+	sourceRev = flag.String("source-rev", os.Getenv(reconcilermanager.SourceRevKey),
 		"The git reference we're syncing to in the git repo. Could be a specific commit.")
-	syncDir = flag.String("sync-dir", os.Getenv("POLICY_DIR"),
+	syncDir = flag.String("sync-dir", os.Getenv(reconcilermanager.SyncDirKey),
 		"The relative path of the root configuration directory within the repo.")
 
 	// Performance tuning flags.
-	gitDir = flag.String(flags.gitDir, "/repo/source/rev",
-		"The absolute path in the container running the reconciler to the clone of the git repo.")
+	sourceDir = flag.String(flags.sourceDir, "/repo/source/rev",
+		"The absolute path in the container running the reconciler to the clone of the source repo.")
 	repoRootDir = flag.String(flags.repoRootDir, "/repo",
 		"The absolute path in the container running the reconciler to the repo root directory.")
 	hydratedRootDir = flag.String(flags.hydratedRootDir, "/repo/hydrated",
@@ -71,7 +74,7 @@ var (
 		"fight-detection-threshold", 5.0,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
 	resyncPeriod = flag.Duration("resync-period", time.Hour,
-		"Period of time between forced re-syncs from Git (even without a new commit).")
+		"Period of time between forced re-syncs from source (even without a new commit).")
 	workers = flag.Int("workers", 1,
 		"Number of concurrent remediator workers to run at once.")
 	filesystemPollingPeriod = flag.Duration("filesystem-polling-period", controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
@@ -92,7 +95,7 @@ var (
 )
 
 var flags = struct {
-	gitDir           string
+	sourceDir        string
 	repoRootDir      string
 	hydratedRootDir  string
 	clusterName      string
@@ -101,7 +104,7 @@ var flags = struct {
 	reconcileTimeout string
 }{
 	repoRootDir:      "repo-root",
-	gitDir:           "git-dir",
+	sourceDir:        "source-dir",
 	hydratedRootDir:  "hydrated-root",
 	clusterName:      "cluster-name",
 	sourceFormat:     reconcilermanager.SourceFormat,
@@ -146,9 +149,9 @@ func main() {
 	// expected.
 	dir := strings.TrimPrefix(*syncDir, "/")
 	relSyncDir := cmpath.RelativeOS(dir)
-	absGitDir, err := cmpath.AbsoluteOS(*gitDir)
+	absSourceDir, err := cmpath.AbsoluteOS(*sourceDir)
 	if err != nil {
-		klog.Fatalf("%s must be an absolute path: %v", flags.gitDir, err)
+		klog.Fatalf("%s must be an absolute path: %v", flags.sourceDir, err)
 	}
 
 	err = declared.ValidateScope(*scope)
@@ -168,13 +171,14 @@ func main() {
 		ReconcilerScope:            declared.Scope(*scope),
 		ResyncPeriod:               *resyncPeriod,
 		FilesystemPollingFrequency: *filesystemPollingPeriod,
-		GitRoot:                    absGitDir,
+		SourceRoot:                 absSourceDir,
 		RepoRoot:                   absRepoRoot,
 		HydratedRoot:               *hydratedRootDir,
 		HydratedLink:               *hydratedLinkDir,
-		GitRev:                     *gitRev,
-		GitBranch:                  *gitBranch,
-		GitRepo:                    *gitRepo,
+		SourceRev:                  *sourceRev,
+		SourceBranch:               *sourceBranch,
+		SourceType:                 v1beta1.SourceType(*sourceType),
+		SourceRepo:                 *sourceRepo,
 		SyncDir:                    relSyncDir,
 		DiscoveryClient:            dc,
 		SyncName:                   *syncName,

@@ -56,12 +56,12 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Secret", `git secretType was set as "cookiefile" but cookie_file key is not present`)
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
 
 	nt.T.Log("Set auth type to token")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "token"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Secret", `git secretType was set as "token" but token key is not present`)
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `git secretType was set as "token" but token key is not present`)
 
 	nt.T.Log("Set auth type to none")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)

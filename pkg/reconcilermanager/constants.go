@@ -25,33 +25,29 @@ const (
 	// behavior.
 	SourceFormat = "source-format"
 
-	// ClusterNameKey is the OS env variable and ConfigMap key for the name
+	// ClusterNameKey is the OS env variable key for the name
 	// of the cluster.
 	ClusterNameKey = "CLUSTER_NAME"
 
-	// ScopeKey is the OS env variable and ConfigMap key for the scope of the
+	// ScopeKey is the OS env variable key for the scope of the
 	// reconciler and hydration controller.
 	ScopeKey = "SCOPE"
 
-	// SyncNameKey is the OS env variable and ConfigMap key for the name of
+	// SyncNameKey is the OS env variable key for the name of
 	// the RootSync or RepoSync object.
 	SyncNameKey = "SYNC_NAME"
 
-	// ReconcilerNameKey is the OS env variable and ConfigMap key for the name of
+	// ReconcilerNameKey is the OS env variable key for the name of
 	// the Reconciler Deployment.
 	ReconcilerNameKey = "RECONCILER_NAME"
 
-	// NamespaceNameKey is the OS env variable and ConfigMap key for the name of
+	// NamespaceNameKey is the OS env variable key for the name of
 	// the Reconciler's namespace
 	NamespaceNameKey = "NAMESPACE_NAME"
 
-	// SyncDirKey is the OS env variable and ConfigMap key for the sync directory
-	// read by the hydration controller.
+	// SyncDirKey is the OS env variable key for the sync directory
+	// read by the hydration controller and the reconciler.
 	SyncDirKey = "SYNC_DIR"
-
-	// PolicyDirKey is the OS env variable and ConfigMap key for the sync directory
-	// read by the reconciler.
-	PolicyDirKey = "POLICY_DIR"
 
 	// GitSync is the name of the git-sync container in reconciler pods.
 	GitSync = "git-sync"
@@ -78,14 +74,17 @@ const (
 )
 
 const (
-	// GitRepoKey is the OS env variable and ConfigMap key for the git repo URL.
-	GitRepoKey = "GIT_REPO"
+	// SourceTypeKey is the OS env variable key for the type of the source repo, must be git or oci.
+	SourceTypeKey = "SOURCE_TYPE"
 
-	// GitBranchKey is the OS env variable and ConfigMap key for the git branch name.
-	GitBranchKey = "GIT_BRANCH"
+	// SourceRepoKey is the OS env variable key for the git or OCI repo URL.
+	SourceRepoKey = "SOURCE_REPO"
 
-	// GitRevKey is the OS env variable and ConfigMap key for the git revision.
-	GitRevKey = "GIT_REV"
+	// SourceBranchKey is the OS env variable key for the git branch name. It doesn't apply to OCI.
+	SourceBranchKey = "SOURCE_BRANCH"
+
+	// SourceRevKey is the OS env variable key for the git revision. It doesn't apply to OCI.
+	SourceRevKey = "SOURCE_REV"
 )
 
 const (
@@ -96,4 +95,15 @@ const (
 	// HydrationPollingPeriod defines how often the hydration controller should
 	// poll the filesystem for rendering the DRY configs.
 	HydrationPollingPeriod = "HYDRATION_POLLING_PERIOD"
+)
+
+const (
+	// OciSyncImage is the OS env variable key for the OCI image URL.
+	OciSyncImage = "OCI_SYNC_IMAGE"
+
+	// OciSyncAuth is the OS env variable key for the OCI sync auth type.
+	OciSyncAuth = "OCI_SYNC_AUTH"
+
+	// OciSyncWait is the OS env variable key for the OCI sync wait period in seconds.
+	OciSyncWait = "OCI_SYNC_WAIT"
 )

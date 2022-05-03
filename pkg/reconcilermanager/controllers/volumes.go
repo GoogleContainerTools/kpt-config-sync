@@ -53,7 +53,7 @@ func filterVolumes(existing []corev1.Volume, authType, secretName string, member
 		updatedVolumes = append(updatedVolumes, volume)
 	}
 
-	if authType == configsync.GitSecretGCPServiceAccount && membership != nil {
+	if authType == configsync.AuthGCPServiceAccount && membership != nil {
 		updatedVolumes = append(updatedVolumes, corev1.Volume{
 			Name: gcpKSAVolumeName,
 			VolumeSource: corev1.VolumeSource{

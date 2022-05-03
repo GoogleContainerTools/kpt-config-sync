@@ -46,23 +46,23 @@ func validateSecretExist(ctx context.Context, secretRef, namespace string, c cli
 // validateSecretData verify secret data for the given auth type.
 func validateSecretData(auth string, secret *corev1.Secret) error {
 	switch auth {
-	case configsync.GitSecretSSH:
+	case configsync.AuthSSH:
 		if _, ok := secret.Data[GitSecretConfigKeySSH]; !ok {
 			return fmt.Errorf("git secretType was set as \"ssh\" but ssh key is not present in %v secret", secret.Name)
 		}
-	case configsync.GitSecretCookieFile:
+	case configsync.AuthCookieFile:
 		if _, ok := secret.Data[GitSecretConfigKeyCookieFile]; !ok {
 			return fmt.Errorf("git secretType was set as \"cookiefile\" but cookie_file key is not present in %v secret", secret.Name)
 		}
-	case configsync.GitSecretToken:
+	case configsync.AuthToken:
 		if _, ok := secret.Data[GitSecretConfigKeyToken]; !ok {
 			return fmt.Errorf("git secretType was set as \"token\" but token key is not present in %v secret", secret.Name)
 		}
 		if _, ok := secret.Data[GitSecretConfigKeyTokenUsername]; !ok {
 			return fmt.Errorf("git secretType was set as \"token\" but username key is not present in %v secret", secret.Name)
 		}
-	case configsync.GitSecretNone:
-	case configsync.GitSecretGCENode:
+	case configsync.AuthNone:
+	case configsync.AuthGCENode:
 	default:
 		return fmt.Errorf("git secretType is set to unsupported value: %q", auth)
 	}

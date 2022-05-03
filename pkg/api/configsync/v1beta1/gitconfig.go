@@ -16,7 +16,6 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // Git contains the configs which specify how to connect to and read from a Git
@@ -84,12 +83,4 @@ type SecretReference struct {
 	// name represents the secret name.
 	// +optional
 	Name string `json:"name,omitempty"`
-}
-
-// GetPeriodSecs returns the sync period defaulting to 15 if empty.
-func GetPeriodSecs(g *Git) float64 {
-	if g.Period.Duration == 0 {
-		return configsync.DefaultPeriodSecs
-	}
-	return g.Period.Duration.Seconds()
 }

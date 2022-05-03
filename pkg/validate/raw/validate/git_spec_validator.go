@@ -24,12 +24,12 @@ import (
 )
 
 var (
-	authSSH               = configsync.GitSecretSSH
-	authCookiefile        = configsync.GitSecretCookieFile
-	authGCENode           = configsync.GitSecretGCENode
-	authToken             = configsync.GitSecretToken
-	authNone              = configsync.GitSecretNone
-	authGCPServiceAccount = configsync.GitSecretGCPServiceAccount
+	authSSH               = configsync.AuthSSH
+	authCookiefile        = configsync.AuthCookieFile
+	authGCENode           = configsync.AuthGCENode
+	authToken             = configsync.AuthToken
+	authNone              = configsync.AuthNone
+	authGCPServiceAccount = configsync.AuthGCPServiceAccount
 )
 
 // gcpSASuffix specifies the default suffix used with gcp ServiceAccount email.

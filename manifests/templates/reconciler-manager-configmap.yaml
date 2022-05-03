@@ -84,7 +84,7 @@ data:
            args:
            - "--v=0"
            - "--repo-root=/repo"
-           - "--git-dir=/repo/source/rev"
+           - "--source-dir=/repo/source/rev"
            - "--hydrated-root=/repo/hydrated"
            - "--hydrated-link=rev"
            volumeMounts:

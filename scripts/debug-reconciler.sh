@@ -125,10 +125,10 @@ function run() {
 Configure IntelliJ to debug cmd/reconciler/main.go with the following params:
 
 Root Reconciler:
-  -git-dir ${repodir}/rev -scope ":root" -source-format [desired source format] -sync-dir [desired sync dir]
+  -source-dir ${repodir}/rev -scope ":root" -source-format [desired source format] -sync-dir [desired sync dir]
 
 Namespace Reconciler (bookinfo namespace)
-  -git-dir ${repodir}/rev -scope "bookinfo" -sync-dir [desired sync dir]
+  -source-dir ${repodir}/rev -scope "bookinfo" -sync-dir [desired sync dir]
 
 NOTE: not all flags are specified for reconciler, some annotations applied may be inaccurate.
 

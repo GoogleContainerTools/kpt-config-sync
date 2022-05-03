@@ -41,6 +41,7 @@ const (
 
 func repoSyncWithAuth(ns, name, auth string, opts ...core.MetaMutator) *v1beta1.RepoSync {
 	result := fake.RepoSyncObjectV1Beta1(ns, name, opts...)
+	result.Spec.SourceType = string(v1beta1.GitSource)
 	result.Spec.Git = &v1beta1.Git{
 		Auth:      auth,
 		SecretRef: v1beta1.SecretReference{Name: "ssh-key"},
@@ -121,8 +122,7 @@ func TestCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			secretName := ReconcilerResourceName(nsReconcilerName, namespaceKey)
-			err := upsertSecret(context.Background(), tc.reposync, tc.client, nsReconcilerName, secretName)
+			err := upsertSecret(context.Background(), tc.reposync, tc.client, nsReconcilerName)
 			if tc.wantError && err == nil {
 				t.Errorf("Create() got error: %q, want error", err)
 			} else if !tc.wantError && err != nil {

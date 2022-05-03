@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
@@ -33,25 +34,27 @@ import (
 
 // FileSource includes all settings to configure where a Parser reads files from.
 type FileSource struct {
-	// GitDir is the path to the symbolic link of the source repository.
-	GitDir cmpath.Absolute
+	// SourceDir is the path to the symbolic link of the source repository.
+	SourceDir cmpath.Absolute
 	// HydratedRoot is the path to the root of the hydrated directory.
 	HydratedRoot string
-	// RepoRoot is the absolute path to the parent directory of GitRoot and HydratedRoot.
+	// RepoRoot is the absolute path to the parent directory of SourceRoot and HydratedRoot.
 	RepoRoot cmpath.Absolute
 	// HydratedLink is the relative path to the symbolic link of the hydrated configs.
 	HydratedLink string
 	// SyncDir is the path to the directory of policies within the source repository.
 	SyncDir cmpath.Relative
-	// GitRepo is the source repo to sync.
-	GitRepo string
-	// GitBranch is the branch of the source repo to sync.
-	GitBranch string
-	// GitRev is the revision of the source repo to sync.
-	GitRev string
+	// SourceType is the type of the source repository, must be git or oci.
+	SourceType v1beta1.SourceType
+	// SourceRepo is the source repo to sync.
+	SourceRepo string
+	// SourceBranch is the branch of the source repo to sync.
+	SourceBranch string
+	// SourceRev is the revision of the source repo to sync.
+	SourceRev string
 }
 
-// files lists files in a repository and ensures the Git repository hasn't been
+// files lists files in a repository and ensures the source repository hasn't been
 // modified from HEAD.
 type files struct {
 	FileSource
@@ -61,7 +64,7 @@ type files struct {
 	currentSyncDir string
 }
 
-// sourceState contains all state read from the mounted Git repo.
+// sourceState contains all state read from the mounted source repo.
 type sourceState struct {
 	// commit is the commit read from the source of truth.
 	commit string
@@ -97,11 +100,11 @@ func (o *files) readConfigFiles(state *sourceState) status.Error {
 	return nil
 }
 
-func (o *files) gitContext() gitContext {
-	return gitContext{
-		Repo:   o.GitRepo,
-		Branch: o.GitBranch,
-		Rev:    o.GitRev,
+func (o *files) sourceContext() sourceContext {
+	return sourceContext{
+		Repo:   o.SourceRepo,
+		Branch: o.SourceBranch,
+		Rev:    o.SourceRev,
 	}
 }
 

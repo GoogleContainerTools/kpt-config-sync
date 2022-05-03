@@ -120,8 +120,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	reconcilerName := reconciler.RootReconcilerName(rs.Name)
 
-	// TODO: update the following validations based on rs.Spec.SourceType.
-	if err = validate.GitSpec(rs.Spec.Git, &rs); err != nil {
+	if err = r.validateSpec(ctx, &rs, log); err != nil {
 		log.Error(err, "RootSync failed validation")
 		rootsync.SetStalled(&rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
@@ -132,27 +131,23 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	containerEnvs := r.populateContainerEnvs(ctx, &rs, reconcilerName)
-
-	if err := r.validateRootSecret(ctx, &rs); err != nil {
-		log.Error(err, "RootSync failed Secret validation required for installation")
-		rootsync.SetStalled(&rs, "Secret", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		updateErr := r.updateStatus(ctx, &rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-	log.V(2).Info("secret found, proceeding with installation")
-
 	rootsyncLabelMap := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
 	}
 
 	// Overwrite reconciler pod ServiceAccount.
-	if err := r.upsertServiceAccount(ctx, reconcilerName, rs.Spec.Git.Auth, rs.Spec.Git.GCPServiceAccountEmail, rootsyncLabelMap, owRefs); err != nil {
+	var auth string
+	var gcpSAEmail string
+	switch v1beta1.SourceType(rs.Spec.SourceType) {
+	case v1beta1.GitSource:
+		auth = rs.Spec.Auth
+		gcpSAEmail = rs.Spec.GCPServiceAccountEmail
+	case v1beta1.OciSource:
+		auth = rs.Spec.Oci.Auth
+		gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
+	}
+	if err := r.upsertServiceAccount(ctx, reconcilerName, auth, gcpSAEmail, rootsyncLabelMap, owRefs); err != nil {
 		log.Error(err, "Failed to create/update Service Account")
 		rootsync.SetStalled(&rs, "ServiceAccount", err)
 		// Upsert errors should always trigger retry (return error),
@@ -181,6 +176,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, errors.Wrap(err, "ClusterRoleBinding reconcile failed")
 	}
 
+	containerEnvs := r.populateContainerEnvs(ctx, &rs, reconcilerName)
 	mut := r.mutationsFor(ctx, rs, containerEnvs)
 
 	// Upsert Root reconciler deployment.
@@ -227,7 +223,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		case statusFailed:
 			// statusFailed indicates that the deployment failed to reconcile. Update
 			// Reconciling status condition with appropriate message specifying the
-			// reason ffor failure.
+			// reason for failure.
 			rootsync.SetReconciling(&rs, "Deployment", result.message)
 			// Set Stalled condition with the deployment statusFailed.
 			rootsync.SetStalled(&rs, "Deployment", errors.New(string(result.status)))
@@ -256,7 +252,7 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RootSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RootSync)
-		if rs.Spec.Git.SecretRef.Name == "" {
+		if rs.Spec.Git == nil || rs.Spec.Git.SecretRef.Name == "" {
 			return nil
 		}
 		return []string{rs.Spec.Git.SecretRef.Name}
@@ -372,20 +368,53 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 }
 
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {
-	return map[string][]corev1.EnvVar{
-		reconcilermanager.GitSync: gitSyncEnvs(ctx, options{
+	result := map[string][]corev1.EnvVar{
+		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
+		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+	}
+	switch v1beta1.SourceType(rs.Spec.SourceType) {
+	case v1beta1.GitSource:
+		result[reconcilermanager.GitSync] = gitSyncEnvs(ctx, options{
 			ref:         rs.Spec.Git.Revision,
 			branch:      rs.Spec.Git.Branch,
 			repo:        rs.Spec.Git.Repo,
 			secretType:  rs.Spec.Git.Auth,
-			period:      v1beta1.GetPeriodSecs(rs.Spec.Git),
+			period:      v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
 			proxy:       rs.Spec.Proxy,
 			depth:       rs.Spec.Override.GitSyncDepth,
 			noSSLVerify: rs.Spec.Git.NoSSLVerify,
-		}),
-		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.Git, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.Git, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+		})
+	case v1beta1.OciSource:
+		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	}
+	return result
+}
+
+func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
+	switch v1beta1.SourceType(rs.Spec.SourceType) {
+	case v1beta1.GitSource:
+		return r.validateGitSpec(ctx, rs, log)
+	case v1beta1.OciSource:
+		// TODO : add validations for the oci spec
+	default:
+		err := fmt.Errorf("unknown sourceType %q. Must be %q or %q", rs.Spec.SourceType, v1beta1.GitSource, v1beta1.OciSource)
+		log.Error(err, "RootSync failed validation")
+		return err
+	}
+	return nil
+}
+
+func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
+	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
+		log.Error(err, "RootSync failed validation")
+		return err
+	}
+	if err := r.validateRootSecret(ctx, rs); err != nil {
+		log.Error(err, "RootSync failed Secret validation required for installation")
+		return err
+	}
+	log.V(2).Info("secret found, proceeding with installation")
+	return nil
 }
 
 func (r *RootSyncReconciler) validateNamespaceName(namespaceName string) error {
@@ -463,9 +492,21 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 		reconcilerName := reconciler.RootReconcilerName(rs.Name)
 
 		// Only inject the FWI credentials when the auth type is gcpserviceaccount and the membership info is available.
-		injectFWICreds := rs.Spec.Auth == configsync.GitSecretGCPServiceAccount && r.membership != nil
+		var auth string
+		var gcpSAEmail string
+		var secretRefName string
+		switch v1beta1.SourceType(rs.Spec.SourceType) {
+		case v1beta1.GitSource:
+			auth = rs.Spec.Auth
+			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
+			secretRefName = rs.Spec.SecretRef.Name
+		case v1beta1.OciSource:
+			auth = rs.Spec.Oci.Auth
+			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
+		}
+		injectFWICreds := auth == configsync.AuthGCPServiceAccount && r.membership != nil
 		if injectFWICreds {
-			if err := r.injectFleetWorkloadIdentityCredentials(&d.Spec.Template, rs.Spec.GCPServiceAccountEmail); err != nil {
+			if err := r.injectFleetWorkloadIdentityCredentials(&d.Spec.Template, gcpSAEmail); err != nil {
 				return err
 			}
 		}
@@ -487,7 +528,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 		// Secret reference is the name of the secret used by git-sync container to
 		// authenticate with the git repository using the authorization method specified
 		// in the RootSync CR.
-		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, rs.Spec.Auth, rs.Spec.SecretRef.Name, r.membership)
+		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, r.membership)
 
 		var updatedContainers []corev1.Container
 
@@ -506,37 +547,35 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 				}
 				mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 			case reconcilermanager.OciSync:
+				// Don't add the oci-sync container when sourceType is NOT oci.
 				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.OciSource {
 					addContainer = false
 				} else {
-					// TODO : Configure the oci-sync container with credentials.
-					addContainer = false
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					// TODO  Inject FWI credentials
+					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 				}
 			case reconcilermanager.GitSync:
+				// Don't add the git-sync container when sourceType is NOT git.
 				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.GitSource {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
-					container.VolumeMounts = volumeMounts(rs.Spec.Auth,
-						container.VolumeMounts)
+					container.VolumeMounts = volumeMounts(rs.Spec.Auth, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
 					secretName := rs.Spec.SecretRef.Name
 					if authTypeToken(rs.Spec.Auth) {
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
 					}
-					keys := GetKeys(ctx, r.client, rs.Spec.SecretRef.Name, rs.Namespace)
+					keys := GetKeys(ctx, r.client, secretName, rs.Namespace)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 				}
 			case metrics.OtelAgentName:
 				// The no-op case to avoid unknown container error after
 				// first-ever reconcile.
-			case GceNodeAskpassSidecarName:
-				// container gcenode-askpass-sidecar is added to the reconciler
-				// deployment when auth: gcenode or auth: gcpserveraccount.
-				configureGceNodeAskPass(&container, rs.Spec.GCPServiceAccountEmail, injectFWICreds)
 			default:
 				return errors.Errorf("unknown container in reconciler deployment template: %q", container.Name)
 			}
@@ -546,15 +585,14 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 		}
 
 		// Add container spec for the "gcenode-askpass-sidecar" (defined as
-		// a constant) to the reconciler Deployment when the `Auth` is "gcenode".
+		// a constant) to the reconciler Deployment when `.spec.sourceType` is `git`,
+		// and `.spec.git.auth` is either `gcenode` or `gcpserviceaccount`.
 		// The container is added first time when the reconciler deployment is created.
-		switch rs.Spec.Auth {
-		case configsync.GitSecretGCPServiceAccount, configsync.GitSecretGCENode:
-			if !containsGCENodeAskPassSidecar(updatedContainers) {
-				sidecar := gceNodeAskPassSidecar(rs.Spec.GCPServiceAccountEmail, injectFWICreds)
-				updatedContainers = append(updatedContainers, sidecar)
-			}
+		if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource &&
+			(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
+			updatedContainers = append(updatedContainers, gceNodeAskPassSidecar(gcpSAEmail, injectFWICreds))
 		}
+
 		templateSpec.Containers = updatedContainers
 		return nil
 	}

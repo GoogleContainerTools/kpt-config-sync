@@ -142,7 +142,7 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 	}
 
 	// Duplicated with namespace.go.
-	e := addAnnotationsAndLabels(objs, declared.RootReconciler, p.syncName, p.gitContext(), state.commit)
+	e := addAnnotationsAndLabels(objs, declared.RootReconciler, p.syncName, p.sourceContext(), state.commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err
@@ -192,11 +192,21 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 func setSourceStatus(source *v1beta1.SourceStatus, p Parser, newStatus sourceStatus, denominator int) {
 	cse := status.ToCSE(newStatus.errs)
 	source.Commit = newStatus.commit
-	source.Git = &v1beta1.GitStatus{
-		Repo:     p.options().GitRepo,
-		Revision: p.options().GitRev,
-		Branch:   p.options().GitBranch,
-		Dir:      p.options().SyncDir.SlashPath(),
+	switch p.options().SourceType {
+	case v1beta1.GitSource:
+		source.Git = &v1beta1.GitStatus{
+			Repo:     p.options().SourceRepo,
+			Revision: p.options().SourceRev,
+			Branch:   p.options().SourceBranch,
+			Dir:      p.options().SyncDir.SlashPath(),
+		}
+		source.Oci = nil
+	case v1beta1.OciSource:
+		source.Oci = &v1beta1.OciStatus{
+			Image: p.options().SourceRepo,
+			Dir:   p.options().SyncDir.SlashPath(),
+		}
+		source.Git = nil
 	}
 	errorSummary := &v1beta1.ErrorSummary{
 		TotalCount:                len(cse),
@@ -262,11 +272,21 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 func setRenderingStatus(rendering *v1beta1.RenderingStatus, p Parser, newStatus renderingStatus, denominator int) {
 	cse := status.ToCSE(newStatus.errs)
 	rendering.Commit = newStatus.commit
-	rendering.Git = &v1beta1.GitStatus{
-		Repo:     p.options().GitRepo,
-		Revision: p.options().GitRev,
-		Branch:   p.options().GitBranch,
-		Dir:      p.options().SyncDir.SlashPath(),
+	switch p.options().SourceType {
+	case v1beta1.GitSource:
+		rendering.Git = &v1beta1.GitStatus{
+			Repo:     p.options().SourceRepo,
+			Revision: p.options().SourceRev,
+			Branch:   p.options().SourceBranch,
+			Dir:      p.options().SyncDir.SlashPath(),
+		}
+		rendering.Oci = nil
+	case v1beta1.OciSource:
+		rendering.Oci = &v1beta1.OciStatus{
+			Image: p.options().SourceRepo,
+			Dir:   p.options().SyncDir.SlashPath(),
+		}
+		rendering.Git = nil
 	}
 	rendering.Message = newStatus.message
 	errorSummary := &v1beta1.ErrorSummary{
@@ -339,6 +359,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 func setSyncStatus(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncError, denominator int) {
 	syncStatus.Sync.Commit = syncStatus.Source.Commit
 	syncStatus.Sync.Git = syncStatus.Source.Git
+	syncStatus.Sync.Oci = syncStatus.Source.Oci
 	syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
 		TotalCount: len(syncErrs),
 		Truncated:  denominator != 1,

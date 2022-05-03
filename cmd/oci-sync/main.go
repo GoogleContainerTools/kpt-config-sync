@@ -28,21 +28,22 @@ import (
 	"k8s.io/klog/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/oci"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	utillog "kpt.dev/configsync/pkg/util/log"
 )
 
-var flImage = flag.String("image", envString("OCI_SYNC_IMAGE", ""),
+var flImage = flag.String("image", envString(reconcilermanager.OciSyncImage, ""),
 	"the OCI image repository for the package")
-var flAuth = flag.String("auth", envString("OCI_SYNC_AUTH", configsync.GitSecretNone),
+var flAuth = flag.String("auth", envString(reconcilermanager.OciSyncAuth, configsync.AuthNone),
 	fmt.Sprintf("the authentication type for access to the OCI package. Must be one of %s, %s, or %s. Defaults to %s",
-		configsync.GitSecretGCPServiceAccount, configsync.GitSecretGCENode, configsync.GitSecretNone, configsync.GitSecretNone))
+		configsync.AuthGCPServiceAccount, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
 var flRoot = flag.String("root", envString("OCI_SYNC_ROOT", envString("HOME", "")+"/oci"),
 	"the root directory for oci-sync operations, under which --dest will be created")
 var flDest = flag.String("dest", envString("OCI_SYNC_DEST", ""),
 	"the path (absolute or relative to --root) at which to create a symlink to the directory holding the retrieved files (defaults to the leaf dir of --image)")
 var flErrorFile = flag.String("error-file", envString("OCI_SYNC_ERROR_FILE", ""),
 	"the name of a file into which errors will be written under --root (defaults to \"\", disabling error reporting)")
-var flWait = flag.Float64("wait", envFloat("OCI_SYNC_WAIT", 1),
+var flWait = flag.Float64("wait", envFloat(reconcilermanager.OciSyncWait, 1),
 	"the number of seconds between syncs")
 var flSyncTimeout = flag.Int("timeout", envInt("OCI_SYNC_TIMEOUT", 120),
 	"the max number of seconds allowed for a complete sync")
@@ -126,9 +127,9 @@ func main() {
 
 	var auth authn.Authenticator
 	switch *flAuth {
-	case configsync.GitSecretNone:
+	case configsync.AuthNone:
 		auth = authn.Anonymous
-	case configsync.GitSecretGCPServiceAccount, configsync.GitSecretGCENode:
+	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
 		a, err := google.NewEnvAuthenticator()
 		if err != nil {
 			handleError(log, true, "ERROR: failed to get the authentication with type %q: %v", *flAuth, err)

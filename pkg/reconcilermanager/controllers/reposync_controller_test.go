@@ -51,7 +51,6 @@ import (
 )
 
 const (
-	auth               = "ssh"
 	branch             = "1.0.0"
 	gitRevision        = "1.0.0.rc.8"
 	gitUpdatedRevision = "1.1.0.rc.1"
@@ -121,6 +120,12 @@ func reposyncSecretType(auth string) func(*v1beta1.RepoSync) {
 	}
 }
 
+func reposyncOCIAuthType(auth string) func(*v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		rs.Spec.Oci.Auth = auth
+	}
+}
+
 func reposyncSecretRef(ref string) func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.Git.SecretRef = v1beta1.SecretReference{Name: ref}
@@ -165,6 +170,19 @@ func repoSync(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSyn
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: reposyncRepo,
 		Dir:  reposyncDir,
+	}
+	for _, opt := range opts {
+		opt(rs)
+	}
+	return rs
+}
+
+func repoSyncWithOCI(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
+	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{
+		Image: ociImage,
+		Dir:   reposyncDir,
 	}
 	for _, opt := range opts {
 		opt(rs)
@@ -245,10 +263,10 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth),
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH),
 		reposyncSecretRef(reposyncSSHKey), reposyncOverrideResources(overrideReconcilerAndGitSyncResourceLimits))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -342,9 +360,9 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -518,9 +536,9 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey), reposyncNoSSLVerify())
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncNoSSLVerify())
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -547,9 +565,9 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -631,9 +649,9 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey), reposyncOverrideGitSyncDepth(5))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideGitSyncDepth(5))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -660,9 +678,9 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -770,9 +788,9 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey), reposyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -799,9 +817,9 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -884,9 +902,9 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources with GCPServiceAccount auth type.
 	ctx := context.Background()
@@ -936,7 +954,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	t.Log("Resources successfully created")
 
 	// Test updating RepoSync resources with SSH auth type.
-	rs.Spec.Auth = secretAuth
+	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef.Name = reposyncSSHKey
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -961,7 +979,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Test updating RepoSync resources with None auth type.
-	rs.Spec.Auth = noneAuth
+	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = v1beta1.SecretReference{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -975,7 +993,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		noneMutator(),
+		containersWithRepoVolumeMutator(noneGitContainers()),
 		containerEnvMutator(repoContainerEnv),
 	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
@@ -990,9 +1008,9 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1043,25 +1061,25 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	parseDeployment = parsedDeployment
 
 	ns2 := "videoinfo"
-	rs1 := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs1 := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
 
-	rs2 := repoSync(ns2, configsync.RepoSyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretGCENode))
+	rs2 := repoSync(ns2, configsync.RepoSyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCENode))
 	reqNamespacedName2 := namespacedName(rs2.Name, rs2.Namespace)
 
-	rs3 := repoSync(ns2, "my-rs-3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
+	rs3 := repoSync(ns2, "my-rs-3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName3 := namespacedName(rs3.Name, rs3.Namespace)
 
-	rs4 := repoSync(reposyncNs, "my-rs-4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretCookieFile), reposyncSecretRef(reposyncCookie))
+	rs4 := repoSync(reposyncNs, "my-rs-4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthCookieFile), reposyncSecretRef(reposyncCookie))
 	secret4 := secretObjWithProxy(t, reposyncCookie, "cookie_file", core.Namespace(rs4.Namespace))
 	reqNamespacedName4 := namespacedName(rs4.Name, rs4.Namespace)
 
-	rs5 := repoSync(reposyncNs, "my-rs-5", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretToken), reposyncSecretRef(secretName))
+	rs5 := repoSync(reposyncNs, "my-rs-5", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName))
 	reqNamespacedName5 := namespacedName(rs5.Name, rs5.Namespace)
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 
-	fakeClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs1.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs1.Namespace)))
 
 	nsReconcilerName2 := reconciler.NsReconcilerName(rs2.Namespace, rs2.Name)
 	nsReconcilerName3 := reconciler.NsReconcilerName(rs3.Namespace, rs3.Name)
@@ -1494,9 +1512,9 @@ func validateGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.Clie
 
 func TestMapSecretToRepoSyncs(t *testing.T) {
 	testSecretName := "ssh-test"
-	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
-	rs2 := repoSync("ns1", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
-	rs3 := repoSync("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(testSecretName))
+	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	rs2 := repoSync("ns1", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	rs3 := repoSync("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(testSecretName))
 
 	ns1rs1ReconcilerName := reconciler.NsReconcilerName(rs1.Namespace, rs1.Name)
 	serviceAccountToken := ns1rs1ReconcilerName + "-token-p29b5"
@@ -1621,9 +1639,9 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 }
 
 func TestMapObjectToRepoSync(t *testing.T) {
-	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	ns1rs1ReconcilerName := reconciler.NsReconcilerName(rs1.Namespace, rs1.Name)
-	rs2 := repoSync("ns2", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(auth), reposyncSecretRef(reposyncSSHKey))
+	rs2 := repoSync("ns2", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rsRoleBindingName := RepoSyncPermissionsName()
 
 	testCases := []struct {
@@ -1745,9 +1763,9 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.GitSecretGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, secretAuth, core.Namespace(rs.Namespace)))
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
 	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
@@ -1781,7 +1799,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	t.Log("Resources successfully created")
 
 	// Test updating RepoSync resources with SSH auth type.
-	rs.Spec.Auth = secretAuth
+	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef.Name = reposyncSSHKey
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -1807,7 +1825,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Test updating RepoSync resources with None auth type.
-	rs.Spec.Auth = noneAuth
+	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = v1beta1.SecretReference{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -1821,7 +1839,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		noneMutator(),
+		containersWithRepoVolumeMutator(noneGitContainers()),
 		containerEnvMutator(repoContainerEnv),
 	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
@@ -1830,6 +1848,125 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRepoSyncWithOCI(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupNSReconciler(t, rs)
+
+	// Test creating Deployment resources with GCPServiceAccount auth type.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantNamespaces := map[string]struct{}{
+		rs.Namespace: {},
+	}
+
+	// compare namespaces.
+	if diff := cmp.Diff(testReconciler.namespaces, wantNamespaces, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("namespaces diff %s", diff)
+	}
+
+	label := map[string]string{
+		metadata.SyncNamespaceLabel: rs.Namespace,
+		metadata.SyncNameLabel:      rs.Name,
+	}
+
+	wantServiceAccount := fake.ServiceAccountObject(
+		nsReconcilerName,
+		core.Namespace(v1.NSConfigManagementSystem),
+		core.Labels(label),
+	)
+
+	repoContainerEnv := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	// compare ServiceAccount.
+	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantServiceAccount)], wantServiceAccount, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("ServiceAccount diff %s", diff)
+	}
+
+	// compare Deployment.
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Resources successfully created")
+
+	t.Log("Test updating RepoSync resources with gcenode auth type.")
+	rs.Spec.Oci.Auth = configsync.AuthGCENode
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// compare ServiceAccount.
+	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantServiceAccount)], wantServiceAccount, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("ServiceAccount diff %s", diff)
+	}
+
+	repoContainerEnv = testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	t.Log("Test updating RepoSync resources with gcpserviceaccount auth type.")
+	rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
+	rs.Spec.Oci.GCPServiceAccountEmail = gcpSAEmail
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	repoContainerEnv = testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerEnvMutator(repoContainerEnv),
+	)
+
+	wantServiceAccount = fake.ServiceAccountObject(
+		nsReconcilerName,
+		core.Namespace(v1.NSConfigManagementSystem),
+		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
+		core.Labels(label),
+	)
+	// compare ServiceAccount.
+	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantServiceAccount)], wantServiceAccount, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("ServiceAccount diff %s", diff)
+	}
+
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// TODO: add test for FWI
 }
 
 func validateServiceAccounts(wants map[core.ID]*corev1.ServiceAccount, fakeClient *syncerFake.Client) error {
@@ -1918,9 +2055,17 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeClient *synce
 		}
 
 		// Compare Containers.
-		if len(want.Spec.Template.Spec.Containers) != len(got.Spec.Template.Spec.Containers) {
-			return errors.Errorf("Unexpected Container count for %q, want %d, got %d", id,
-				len(want.Spec.Template.Spec.Containers), len(got.Spec.Template.Spec.Containers))
+		var wantContainerNames []string
+		var gotContainerNames []string
+		for _, i := range want.Spec.Template.Spec.Containers {
+			wantContainerNames = append(wantContainerNames, i.Name)
+		}
+		for _, j := range got.Spec.Template.Spec.Containers {
+			gotContainerNames = append(gotContainerNames, j.Name)
+		}
+		if diff := cmp.Diff(wantContainerNames, gotContainerNames, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
+			return errors.Errorf("Unexpected containers for %q, want %s, got %s", id,
+				wantContainerNames, gotContainerNames)
 		}
 		for _, i := range want.Spec.Template.Spec.Containers {
 			for _, j := range got.Spec.Template.Spec.Containers {
@@ -1951,9 +2096,17 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeClient *synce
 		}
 
 		// Compare Volumes
-		if len(want.Spec.Template.Spec.Volumes) != len(got.Spec.Template.Spec.Volumes) {
-			return errors.Errorf("Unexpected Volume count for %q, want %d, got %d", id,
-				len(want.Spec.Template.Spec.Volumes), len(got.Spec.Template.Spec.Volumes))
+		var wantVolumeNames []string
+		var gotVolumeNames []string
+		for _, i := range want.Spec.Template.Spec.Volumes {
+			wantVolumeNames = append(wantVolumeNames, i.Name)
+		}
+		for _, j := range got.Spec.Template.Spec.Volumes {
+			gotVolumeNames = append(gotVolumeNames, j.Name)
+		}
+		if diff := cmp.Diff(wantVolumeNames, gotVolumeNames, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
+			return errors.Errorf("Unexpected volumes for %q, want %s, got %s", id,
+				wantVolumeNames, gotVolumeNames)
 		}
 		for _, wantVolume := range want.Spec.Template.Spec.Volumes {
 			for _, gotVolume := range got.Spec.Template.Spec.Volumes {

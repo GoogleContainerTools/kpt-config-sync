@@ -101,7 +101,7 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 		}
 
 		// On error, display the full state of the RootSync to aid in debugging.
-		jsn, err := json.MarshalIndent(rs, "", "  ")
+		objJSON, err := json.MarshalIndent(rs, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -110,36 +110,14 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 		}
-
-		if rs.Status.Source.ErrorSummary != nil && rs.Status.Source.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.source contains %d errors:\n%s", rs.Status.Source.ErrorSummary.TotalCount, string(jsn))
-		}
-		if gitDir := rs.Status.Source.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, string(jsn))
-		}
-		if rs.Status.Sync.ErrorSummary != nil && rs.Status.Sync.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.sync contains %d errors:\n%s", rs.Status.Sync.ErrorSummary.TotalCount, string(jsn))
-		}
-		if gitDir := rs.Status.Sync.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, string(jsn))
-		}
-		if rs.Status.Rendering.ErrorSummary != nil && rs.Status.Rendering.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.rendering contains %d errors:\n%s", rs.Status.Rendering.ErrorSummary.TotalCount, string(jsn))
-		}
-		if gitDir := rs.Status.Rendering.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, string(jsn))
-		}
-		if message := rs.Status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-			return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, string(jsn))
-		}
-		return nil
+		return statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir, string(objJSON))
 	}
 }
 
@@ -153,7 +131,7 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 		}
 
 		// On error, display the full state of the RootSync to aid in debugging.
-		jsn, err := json.MarshalIndent(rs, "", "  ")
+		objJSON, err := json.MarshalIndent(rs, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -162,41 +140,20 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 		}
 
-		if rs.Status.Source.ErrorSummary != nil && rs.Status.Source.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.source contains %d errors:\n%s", rs.Status.Source.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Source.Commit; commit != sha1 {
-			return fmt.Errorf("status.source.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if rs.Status.Sync.ErrorSummary != nil && rs.Status.Sync.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.sync contains %d errors:\n%s", rs.Status.Sync.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Sync.Commit; commit != sha1 {
-			return fmt.Errorf("status.sync.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if rs.Status.Rendering.ErrorSummary != nil && rs.Status.Rendering.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.rendering contains %d errors:\n%s", rs.Status.Rendering.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Rendering.Commit; commit != sha1 {
-			return fmt.Errorf("status.rendering.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if message := rs.Status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-			return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, string(jsn))
-		}
-		if commit := rs.Status.LastSyncedCommit; commit != sha1 {
-			return fmt.Errorf("status.lastSyncedCommit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
+		if err = statusHasSyncCommitAndNoErrors(rs.Status.Status, sha1, string(objJSON)); err != nil {
+			return err
 		}
 		syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 		if syncingCondition != nil && syncingCondition.Commit != sha1 {
-			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s", syncingCondition.Commit, sha1, string(jsn))
+			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s", syncingCondition.Commit, sha1, string(objJSON))
 		}
 		return nil
 	}
@@ -211,7 +168,7 @@ func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
 
-		jsn, err := json.MarshalIndent(rs, "", "  ")
+		objJSON, err := json.MarshalIndent(rs, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -220,42 +177,85 @@ func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
-					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(jsn))
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
 			}
 		}
-
-		if rs.Status.Source.ErrorSummary != nil && rs.Status.Source.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.source contains %d errors:\n%s", rs.Status.Source.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Source.Commit; commit != sha1 {
-			return fmt.Errorf("status.source.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if rs.Status.Sync.ErrorSummary != nil && rs.Status.Sync.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.sync contains %d errors:\n%s", rs.Status.Sync.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Sync.Commit; commit != sha1 {
-			return fmt.Errorf("status.sync.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if rs.Status.Rendering.ErrorSummary != nil && rs.Status.Rendering.ErrorSummary.TotalCount > 0 {
-			return fmt.Errorf("status.rendering contains %d errors:\n%s", rs.Status.Rendering.ErrorSummary.TotalCount, string(jsn))
-		}
-		if commit := rs.Status.Rendering.Commit; commit != sha1 {
-			return fmt.Errorf("status.rendering.commit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
-		}
-		if message := rs.Status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-			return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, string(jsn))
-		}
-		if commit := rs.Status.LastSyncedCommit; commit != sha1 {
-			return fmt.Errorf("status.lastSyncedCommit %q does not match git revision %q:\n%s", commit, sha1, string(jsn))
+		if err = statusHasSyncCommitAndNoErrors(rs.Status.Status, sha1, string(objJSON)); err != nil {
+			return err
 		}
 		syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 		if syncingCondition != nil && syncingCondition.Commit != sha1 {
-			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s", syncingCondition.Commit, sha1, string(jsn))
+			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s", syncingCondition.Commit, sha1, string(objJSON))
 		}
 		return nil
 	}
+}
+
+func statusHasSyncCommitAndNoErrors(status v1beta1.Status, sha1, objJSON string) error {
+	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.source contains %d errors:\n%s", status.Source.ErrorSummary.TotalCount, objJSON)
+	}
+	if commit := status.Source.Commit; commit != sha1 {
+		return fmt.Errorf("status.source.commit %q does not match git revision %q:\n%s", commit, sha1, objJSON)
+	}
+	if status.Sync.ErrorSummary != nil && status.Sync.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.sync contains %d errors:\n%s", status.Sync.ErrorSummary.TotalCount, objJSON)
+	}
+	if commit := status.Sync.Commit; commit != sha1 {
+		return fmt.Errorf("status.sync.commit %q does not match git revision %q:\n%s", commit, sha1, objJSON)
+	}
+	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.rendering contains %d errors:\n%s", status.Rendering.ErrorSummary.TotalCount, objJSON)
+	}
+	if commit := status.Rendering.Commit; commit != sha1 {
+		return fmt.Errorf("status.rendering.commit %q does not match git revision %q:\n%s", commit, sha1, objJSON)
+	}
+	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
+		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, objJSON)
+	}
+	if commit := status.LastSyncedCommit; commit != sha1 {
+		return fmt.Errorf("status.lastSyncedCommit %q does not match commit hash %q:\n%s", commit, sha1, objJSON)
+	}
+	return nil
+}
+
+func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.SourceType, dir, objJSON string) error {
+	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.source contains %d errors:\n%s", status.Source.ErrorSummary.TotalCount, objJSON)
+	}
+	if sourceType == v1beta1.OciSource {
+		if ociDir := status.Source.Oci.Dir; ociDir != dir {
+			return fmt.Errorf("status.source.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
+		}
+	} else if gitDir := status.Source.Git.Dir; gitDir != dir {
+		return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+	}
+	if status.Sync.ErrorSummary != nil && status.Sync.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.sync contains %d errors:\n%s", status.Sync.ErrorSummary.TotalCount, objJSON)
+	}
+	if sourceType == v1beta1.OciSource {
+		if ociDir := status.Sync.Oci.Dir; ociDir != dir {
+			return fmt.Errorf("status.sync.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
+		}
+	} else if gitDir := status.Sync.Git.Dir; gitDir != dir {
+		return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+	}
+	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
+		return fmt.Errorf("status.rendering contains %d errors:\n%s", status.Rendering.ErrorSummary.TotalCount, objJSON)
+	}
+	if sourceType == v1beta1.OciSource {
+		if ociDir := status.Rendering.Oci.Dir; ociDir != dir {
+			return fmt.Errorf("status.rendering.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
+		}
+	} else if gitDir := status.Rendering.Git.Dir; gitDir != dir {
+		return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+	}
+	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
+		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, objJSON)
+	}
+	return nil
 }

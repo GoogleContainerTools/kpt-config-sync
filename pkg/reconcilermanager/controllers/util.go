@@ -15,6 +15,7 @@
 package controllers
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -31,9 +32,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// hydrationData returns configmap data for the hydration controller.
-func hydrationEnvs(gitConfig *v1beta1.Git, scope declared.Scope, reconcilerName, pollPeriod string) []corev1.EnvVar {
+// hydrationEnvs returns environment variables for the hydration controller.
+func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, scope declared.Scope, reconcilerName, pollPeriod string) []corev1.EnvVar {
 	var result []corev1.EnvVar
+	var syncDir string
+	if v1beta1.SourceType(sourceType) == v1beta1.OciSource {
+		syncDir = ociConfig.Dir
+	} else {
+		syncDir = gitConfig.Dir
+	}
+
 	result = append(result,
 		corev1.EnvVar{
 			Name:  reconcilermanager.ScopeKey,
@@ -49,7 +57,7 @@ func hydrationEnvs(gitConfig *v1beta1.Git, scope declared.Scope, reconcilerName,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SyncDirKey,
-			Value: gitConfig.Dir,
+			Value: syncDir,
 		},
 		// Add Hydration Polling Period.
 		corev1.EnvVar{
@@ -59,11 +67,32 @@ func hydrationEnvs(gitConfig *v1beta1.Git, scope declared.Scope, reconcilerName,
 	return result
 }
 
-// reconcilerData returns configmap data for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, gitConfig *v1beta1.Git, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
+// reconcilerEnvs returns environment variables for namespace reconciler.
+func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
+	}
+	var syncRepo string
+	var syncBranch string
+	var syncRevision string
+	var syncDir string
+	if v1beta1.SourceType(sourceType) == v1beta1.OciSource {
+		syncRepo = ociConfig.Image
+		syncDir = ociConfig.Dir
+	} else {
+		syncRepo = gitConfig.Repo
+		syncDir = gitConfig.Dir
+		if gitConfig.Branch != "" {
+			syncBranch = gitConfig.Branch
+		} else {
+			syncBranch = "master"
+		}
+		if gitConfig.Revision != "" {
+			syncRevision = gitConfig.Revision
+		} else {
+			syncRevision = "HEAD"
+		}
 	}
 
 	result = append(result,
@@ -88,12 +117,16 @@ func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScop
 			Value: string(reconcilerScope),
 		},
 		corev1.EnvVar{
-			Name:  reconcilermanager.PolicyDirKey,
-			Value: gitConfig.Dir,
+			Name:  reconcilermanager.SyncDirKey,
+			Value: syncDir,
 		},
 		corev1.EnvVar{
-			Name:  reconcilermanager.GitRepoKey,
-			Value: gitConfig.Repo,
+			Name:  reconcilermanager.SourceRepoKey,
+			Value: syncRepo,
+		},
+		corev1.EnvVar{
+			Name:  reconcilermanager.SourceTypeKey,
+			Value: sourceType,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.StatusMode,
@@ -109,37 +142,43 @@ func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScop
 			Value: pollPeriod,
 		})
 
-	if gitConfig.Branch != "" {
+	if syncBranch != "" {
 		result = append(result, corev1.EnvVar{
-			Name:  reconcilermanager.GitBranchKey,
-			Value: gitConfig.Branch,
-		})
-	} else {
-		result = append(result, corev1.EnvVar{
-			Name:  reconcilermanager.GitBranchKey,
-			Value: "master",
+			Name:  reconcilermanager.SourceBranchKey,
+			Value: syncBranch,
 		})
 	}
-	if gitConfig.Revision != "" {
+	if syncRevision != "" {
 		result = append(result, corev1.EnvVar{
-			Name:  reconcilermanager.GitRevKey,
-			Value: gitConfig.Revision,
-		})
-	} else {
-		result = append(result, corev1.EnvVar{
-			Name:  reconcilermanager.GitRevKey,
-			Value: "HEAD",
+			Name:  reconcilermanager.SourceRevKey,
+			Value: syncRevision,
 		})
 	}
 	return result
 }
 
-// sourceFormatData returns configmap for reconciler.
+// sourceFormatEnv returns the environment variable for SOURCE_FORMAT in the reconciler container.
 func sourceFormatEnv(format string) corev1.EnvVar {
 	return corev1.EnvVar{
 		Name:  filesystem.SourceFormatKey,
 		Value: format,
 	}
+}
+
+// ociSyncEnvs returns the environment variables for the oci-sync container.
+func ociSyncEnvs(image, auth string, period float64) []corev1.EnvVar {
+	var result []corev1.EnvVar
+	result = append(result, corev1.EnvVar{
+		Name:  reconcilermanager.OciSyncImage,
+		Value: image,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.OciSyncAuth,
+		Value: auth,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.OciSyncWait,
+		Value: fmt.Sprintf("%f", period),
+	})
+	return result
 }
 
 func ownerReference(kind, name string, uid types.UID) metav1.OwnerReference {

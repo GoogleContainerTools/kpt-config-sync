@@ -54,19 +54,19 @@ const (
 	DefaultReconcileTimeout = "5m"
 )
 
-// Git secret values
+// source auth types
 const (
-	// GitSecretGCENode indicates we will use gcenode for getting the git secret
-	GitSecretGCENode = "gcenode"
-	// GitSecretSSH indicates the secret is an ssh key
-	GitSecretSSH = "ssh"
-	// GitSecretCookieFile indicates the secret is a git cookiefile
-	GitSecretCookieFile = "cookiefile"
-	// GitSecretNone indicates the there is no authn token
-	GitSecretNone = "none"
-	// GitSecretToken indicates the secret is a username/password
-	GitSecretToken = "token"
-	// GitSecretGCPServiceAccount indicates the secret is a gcp service account
-	// when Workload Identity is enabled on a GKE cluster.
-	GitSecretGCPServiceAccount = "gcpserviceaccount"
+	// AuthGCENode indicates using gcenode to authenticate to Git or OCI.
+	AuthGCENode = "gcenode"
+	// AuthSSH indicates using an ssh key to authenticate to Git. It doesn't apply to OCI.
+	AuthSSH = "ssh"
+	// AuthCookieFile indicates using cookiefile to authenticate to Git. It doesn't apply to OCI.
+	AuthCookieFile = "cookiefile"
+	// AuthNone indicates no auth token is required for Git or OCI.
+	AuthNone = "none"
+	// AuthToken indicates using a username/password to authenticate to Git. It doesn't apply to OCI.
+	AuthToken = "token"
+	// AuthGCPServiceAccount indicates using a GCP service account to authenticate to
+	// Git or OCI when GKE Workload Identity or Fleet Workload Identity is enabled.
+	AuthGCPServiceAccount = "gcpserviceaccount"
 )

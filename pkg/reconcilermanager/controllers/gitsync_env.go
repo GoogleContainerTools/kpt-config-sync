@@ -120,7 +120,7 @@ func gitSyncHTTPSProxyEnv(secretRef string, keys map[string]bool) []corev1.EnvVa
 }
 
 func authTypeToken(secret string) bool {
-	return configsync.GitSecretToken == secret
+	return configsync.AuthToken == secret
 }
 
 func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
@@ -190,24 +190,24 @@ func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
 		})
 	}
 	switch opts.secretType {
-	case configsync.GitSecretGCENode, configsync.GitSecretGCPServiceAccount:
+	case configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		result = append(result, corev1.EnvVar{
 			Name:  "GIT_ASKPASS_URL",
 			Value: gceNodeAskpassURL,
 		})
-	case configsync.GitSecretSSH:
+	case configsync.AuthSSH:
 		result = append(result, corev1.EnvVar{
 			Name:  "GIT_SYNC_SSH",
 			Value: "true",
 		})
-	case configsync.GitSecretCookieFile:
+	case configsync.AuthCookieFile:
 		result = append(result, corev1.EnvVar{
 			Name:  "GIT_COOKIE_FILE",
 			Value: "true",
 		})
 
 		fallthrough
-	case GitSecretConfigKeyToken, "", configsync.GitSecretNone:
+	case GitSecretConfigKeyToken, "", configsync.AuthNone:
 		if opts.proxy != "" {
 			result = append(result, corev1.EnvVar{
 				Name:  "HTTPS_PROXY",

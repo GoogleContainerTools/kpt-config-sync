@@ -63,29 +63,31 @@ type Options struct {
 	SyncName string
 	// ReconcilerName is the name of the Reconciler Deployment.
 	ReconcilerName string
-	// ResyncPeriod is the period of time between forced re-sync from Git (even
+	// ResyncPeriod is the period of time between forced re-sync from source (even
 	// without a new commit).
 	ResyncPeriod time.Duration
-	// FilesystemPollingFrequency is how often to check the local git repository for
+	// FilesystemPollingFrequency is how often to check the local source repository for
 	// changes.
 	FilesystemPollingFrequency time.Duration
-	// GitRoot is the absolute path to the Git repository.
+	// SourceRoot is the absolute path to the source repository.
 	// Usually contains a symlink that must be resolved every time before parsing.
-	GitRoot cmpath.Absolute
+	SourceRoot cmpath.Absolute
 	// HydratedRoot is the absolute path to the hydrated configs.
 	// If hydration is not performed, it will be an empty path.
 	HydratedRoot string
-	// RepoRoot is the absolute path to the parent directory of GitRoot and HydratedRoot.
+	// RepoRoot is the absolute path to the parent directory of SourceRoot and HydratedRoot.
 	RepoRoot cmpath.Absolute
 	// HydratedLink is the relative path to the hydrated root.
 	// It is a symlink that links to the hydrated configs under the hydrated root dir.
 	HydratedLink string
-	// GitRev is the git revision being synced.
-	GitRev string
-	// GitBranch is the git branch being synced.
-	GitBranch string
-	// GitRepo is the git repo being synced.
-	GitRepo string
+	// SourceRev is the git revision being synced.
+	SourceRev string
+	// SourceBranch is the git branch being synced.
+	SourceBranch string
+	// SourceRepo is the git or OCI repo being synced.
+	SourceRepo string
+	// SourceType is the type of the source repository, must be git or oci.
+	SourceType v1beta1.SourceType
 	// SyncDir is the relative path to the configurations in the source.
 	SyncDir cmpath.Relative
 	// StatusMode controls the kpt applier to inject the actuation status data or not
@@ -182,14 +184,15 @@ func Run(opts Options) {
 	// Configure the Parser.
 	var parser parse.Parser
 	fs := parse.FileSource{
-		GitDir:       opts.GitRoot,
+		SourceDir:    opts.SourceRoot,
 		RepoRoot:     opts.RepoRoot,
 		HydratedRoot: opts.HydratedRoot,
 		HydratedLink: opts.HydratedLink,
 		SyncDir:      opts.SyncDir,
-		GitRepo:      opts.GitRepo,
-		GitBranch:    opts.GitBranch,
-		GitRev:       opts.GitRev,
+		SourceType:   opts.SourceType,
+		SourceRepo:   opts.SourceRepo,
+		SourceBranch: opts.SourceBranch,
+		SourceRev:    opts.SourceRev,
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,

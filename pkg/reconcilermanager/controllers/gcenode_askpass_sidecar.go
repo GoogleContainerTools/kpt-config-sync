@@ -95,14 +95,3 @@ func setSecurityContext() *corev1.SecurityContext {
 		},
 	}
 }
-
-// containsGCENodeAskPassSidecar checks whether gcenode-askpass-sidecar is
-// already present in templateSpec.Containers
-func containsGCENodeAskPassSidecar(cs []corev1.Container) bool {
-	for _, c := range cs {
-		if c.Name == GceNodeAskpassSidecarName {
-			return true
-		}
-	}
-	return false
-}

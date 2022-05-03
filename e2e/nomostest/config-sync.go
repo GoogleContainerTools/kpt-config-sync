@@ -659,8 +659,8 @@ func setReconcilerDebugMode(t testing.NTB, obj client.Object) {
 	lines := strings.Split(deploymentYAML, "\n")
 	found = false
 	for i, line := range lines {
-		// We want to set the debug flag immediately after setting the git-dir flag.
-		if strings.Contains(line, "- \"--git-dir=/repo/source/rev\"") {
+		// We want to set the debug flag immediately after setting the source-dir flag.
+		if strings.Contains(line, "- \"--source-dir=/repo/source/rev\"") {
 			// Standard Go "insert into slice" idiom.
 			lines = append(lines, "")
 			copy(lines[i+2:], lines[i+1:])

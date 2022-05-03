@@ -31,9 +31,9 @@ import (
 
 // upsertSecret creates or updates the secret in config-management-system
 // namespace using the existing secret in the reposync.namespace.
-func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string, secretName string) error {
-	// Secret is only created if auth is not 'none' or 'gcenode'.
-	if SkipForAuth(rs.Spec.Auth) {
+func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string) error {
+	// Secret is only created if sourceType is git and auth is not 'none', 'gcenode', or 'gcpserviceaccount'.
+	if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.GitSource || SkipForAuth(rs.Spec.Auth) {
 		return nil
 	}
 
@@ -50,6 +50,7 @@ func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, re
 	// existingsecret represent secret in config-management-system namespace.
 	existingsecret := &corev1.Secret{}
 
+	secretName := ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
 	if err := get(ctx, secretName, v1.NSConfigManagementSystem, existingsecret, c); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return errors.Wrapf(err,
@@ -135,7 +136,7 @@ func update(ctx context.Context, existingsecret *corev1.Secret, namespaceSecret 
 // 'gcpserviceaccount'.
 func SkipForAuth(auth string) bool {
 	switch auth {
-	case configsync.GitSecretNone, configsync.GitSecretGCENode, configsync.GitSecretGCPServiceAccount:
+	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		return true
 	default:
 		return false

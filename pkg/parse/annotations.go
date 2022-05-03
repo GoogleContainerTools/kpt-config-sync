@@ -26,18 +26,17 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 )
 
-// gitContext contains the fields which identify where a resource is being synced
-// from.
-type gitContext struct {
+// sourceContext contains the fields which identify where a resource is being synced from.
+type sourceContext struct {
 	Repo   string `json:"repo"`
-	Branch string `json:"branch"`
-	Rev    string `json:"rev"`
+	Branch string `json:"branch,omitempty"`
+	Rev    string `json:"rev,omitempty"`
 }
 
-func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncName string, gc gitContext, commitHash string) error {
-	gcVal, err := json.Marshal(gc)
+func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncName string, sc sourceContext, commitHash string) error {
+	gcVal, err := json.Marshal(sc)
 	if err != nil {
-		return fmt.Errorf("marshaling gitContext: %w", err)
+		return fmt.Errorf("marshaling sourceContext: %w", err)
 	}
 	var inventoryID string
 	if scope == declared.RootReconciler {

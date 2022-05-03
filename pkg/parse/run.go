@@ -70,7 +70,7 @@ func Run(ctx context.Context, p Parser) {
 			klog.Infof("It is time for a force-resync")
 			// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-			state.resetAllButGitState()
+			state.resetAllButSourceState()
 			run(ctx, p, triggerResync, state)
 
 		// it is time to re-import the configuration from the filesystem
@@ -83,7 +83,7 @@ func Run(ctx context.Context, p Parser) {
 			if opts.managementConflict() {
 				// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
 				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-				state.resetAllButGitState()
+				state.resetAllButSourceState()
 				trigger = triggerManagementConflict
 				// When conflict is detected, wait longer (same as the polling frequency) for the next retry.
 				time.Sleep(opts.pollingFrequency)
@@ -109,7 +109,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
-	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().GitDir, p.options().SyncDir, p.options().reconcilerName)
+	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
 
 	// If failed to fetch the source commit and directory, set `.status.source` to fail early.
 	// Otherwise, set `.status.rendering` before `.status.source` because the parser needs to

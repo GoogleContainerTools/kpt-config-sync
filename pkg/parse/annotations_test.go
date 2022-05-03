@@ -30,7 +30,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 		name       string
 		actual     []ast.FileObject
 		expected   []ast.FileObject
-		gc         gitContext
+		gc         sourceContext
 		commitHash string
 	}{
 		{
@@ -40,7 +40,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 		},
 		{
 			name: "nil annotation without env",
-			gc: gitContext{
+			gc: sourceContext{
 				Repo:   "git@github.com/foo",
 				Branch: "main",
 				Rev:    "HEAD",

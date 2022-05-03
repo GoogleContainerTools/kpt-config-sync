@@ -135,15 +135,15 @@ func (s *reconcilerState) resetCache() {
 	s.cache = cacheForCommit{}
 }
 
-// resetAllButGitState resets the whole cache except for the cached sourceState.
+// resetAllButSourceState resets the whole cache except for the cached sourceState.
 //
-// resetAllButGitState is called when:
+// resetAllButSourceState is called when:
 //   * a force-resync happens, or
 //   * one of the watchers noticed a management conflict.
-func (s *reconcilerState) resetAllButGitState() {
-	git := s.cache.source
+func (s *reconcilerState) resetAllButSourceState() {
+	source := s.cache.source
 	s.cache = cacheForCommit{}
-	s.cache.source = git
+	s.cache.source = source
 }
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.

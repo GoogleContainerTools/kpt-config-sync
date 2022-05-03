@@ -48,7 +48,7 @@ var (
 	hydratedLinkDir = flag.String("hydrated-link", "rev",
 		"the name of (a symlink to) the hydrated directory under --hydrated-root, which contains the hydrated configs")
 
-	syncDir = flag.String("sync-dir", os.Getenv("SYNC_DIR"),
+	syncDir = flag.String("sync-dir", os.Getenv(reconcilermanager.SyncDirKey),
 		"Relative path of the root directory within the repo.")
 
 	hydrationPollingPeriodStr = flag.String("polling-period", os.Getenv(reconcilermanager.HydrationPollingPeriod),

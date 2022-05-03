@@ -51,7 +51,7 @@ import (
 const (
 	rootSyncName       = "my-rs"
 	rootReconcilerName = "root-reconciler-my-rs"
-	nilGitContext      = `{"repo":"","branch":"","rev":""}`
+	nilGitContext      = `{"repo":""}`
 )
 
 type noOpRemediator struct {

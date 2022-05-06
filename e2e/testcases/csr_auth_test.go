@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -40,7 +38,7 @@ const (
 	syncBranch = "main"
 )
 
-// TestGCENode tests the `genode` auth type.
+// TestGCENode tests the `gcenode` auth type.
 // The test will run on a GKE cluster only with following pre-requisites:
 // 1. Workload Identity is NOT enabled
 // 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
@@ -56,14 +54,15 @@ func TestGCENode(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a CSR repo")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcenode", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
 		tenant, syncBranch, csrRepo))
+	nt.T.Cleanup(func() {
+		// Change the rs back so that it works in the shared test environment.
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}, "sourceFormat": "hierarchy"}}`, origRepoURL))
+	})
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateTenant(nt, string(declared.RootReconciler), tenant)
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
-
-	// Change the rs back so that it works in the shared test environment.
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}, "sourceFormat": "hierarchy"}}`, origRepoURL))
 }
 
 // TestWorkloadIdentity tests the `gcpserviceaccount` auth type with both GKE
@@ -141,7 +140,7 @@ func TestWorkloadIdentity(t *testing.T) {
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateTenant(nt, string(declared.RootReconciler), tenant)
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
 
 	nt.T.Log("Unregister the cluster from the fleet in the same project")
@@ -153,7 +152,7 @@ func TestWorkloadIdentity(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateTenant(nt, string(declared.RootReconciler), tenant)
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
 
 	nt.T.Log("Register the cluster to a fleet in a different project")
@@ -168,7 +167,7 @@ func TestWorkloadIdentity(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateTenant(nt, string(declared.RootReconciler), tenant)
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
 
 	nt.T.Log("Unregister the cluster from the fleet in a different project")
@@ -180,25 +179,8 @@ func TestWorkloadIdentity(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateTenant(nt, string(declared.RootReconciler), tenant)
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
-}
-
-// validateTenant validates if the tenant resources are created and managed by the reonciler.
-func validateTenant(nt *nomostest.NT, reconcilerName, tenant string) {
-	nt.T.Logf("Validate %s resources are created and managed by %s", tenant, reconcilerName)
-	if err := nt.Validate(tenant, "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerName)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("deny-all", tenant, &networkingv1.NetworkPolicy{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerName)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("tenant-admin", tenant, &rbacv1.Role{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerName)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("tenant-admin-rolebinding", tenant, &rbacv1.RoleBinding{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerName)); err != nil {
-		nt.T.Error(err)
-	}
 }
 
 // validateFWICredentials validates whether the reconciler Pod manifests includes
@@ -236,7 +218,7 @@ func fwiAnnotationAbsent(pod corev1.Pod) error {
 
 // unregisterCluster unregisters a cluster from a fleet.
 func unregisterCluster(fleetMembership, gcpProject, gkeURI string) error {
-	out, err := exec.Command("gcloud", "container", "hub", "memberships", "unregister", fleetMembership, "--project", gcpProject, "--gke-uri", gkeURI).CombinedOutput()
+	out, err := exec.Command("gcloud", "container", "hub", "memberships", "unregister", fleetMembership, "--quiet", "--project", gcpProject, "--gke-uri", gkeURI).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %v", string(out), err)
 	}

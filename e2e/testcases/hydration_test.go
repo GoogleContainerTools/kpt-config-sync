@@ -32,6 +32,7 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -63,24 +64,11 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus := "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
-	nt.T.Log("Validate resources are synced")
-	var expectedNamespaces = []string{"tenant-a", "tenant-b", "tenant-c"}
-	validateNamespaces(nt, expectedNamespaces, "path: base/namespace.yaml\n")
-	for _, ns := range expectedNamespaces {
-		if err := nt.Validate("deny-all", ns, &networkingv1.NetworkPolicy{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: base/networkpolicy.yaml\n")); err != nil {
-			nt.T.Error(err)
-		}
-		if err := nt.Validate("tenant-admin", ns, &rbacv1.Role{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: base/role.yaml\n")); err != nil {
-			nt.T.Error(err)
-		}
-		if err := nt.Validate("tenant-admin-rolebinding", ns, &rbacv1.RoleBinding{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: base/rolebinding.yaml\n")); err != nil {
-			nt.T.Error(err)
-		}
-	}
+	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml")
@@ -91,7 +79,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "ERROR"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected error: Kustomization should be missing.\n", err)
 	}
 
@@ -104,7 +92,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -117,7 +105,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "ERROR"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected error: Should fail to run kustomize build.\n", err)
 	}
 }
@@ -142,17 +130,11 @@ func TestHydrateHelmComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus := "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
-	nt.T.Log("Validate resources are synced")
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"), nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"), nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
-		nt.T.Fatal(err)
-	}
+	validateHelmComponents(nt, string(declared.RootReconciler))
 
 	nt.T.Log("Use a remote values.yaml file from a public repo")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
@@ -166,7 +148,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -183,7 +165,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 		expectedStatus = "SYNCED"
-		if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 			nt.T.Error(err)
 		}
 
@@ -198,7 +180,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 		expectedStatus = "SYNCED"
-		if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 			nt.T.Error(err)
 		}
 	}
@@ -234,7 +216,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus := "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -248,7 +230,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "ERROR"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected errors: kustomization should be invalid.\n", err)
 	}
 
@@ -261,7 +243,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus = "ERROR"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 	}
 
@@ -277,7 +259,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 		expectedStatus = "SYNCED"
-		if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 			nt.T.Error(err)
 		}
 
@@ -290,7 +272,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
 		expectedStatus = "ERROR"
-		if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 			nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 		}
 	}
@@ -386,7 +368,7 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
 	expectedStatus := "SYNCED"
-	if err := verifyRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -459,11 +441,60 @@ func getUpdatedRootSync(nt *nomostest.NT, name string, namespace string) *v1beta
 	return rs
 }
 
-// verifyRootSyncRepoState verifies the output from getRootSyncCommitStatusErrorSummary is as expected.
-func verifyRootSyncRepoState(expectedCommit string, commit string, expectedStatus string, status string, errorSummary string) error {
+// validateRootSyncRepoState verifies the output from getRootSyncCommitStatusErrorSummary is as expected.
+func validateRootSyncRepoState(expectedCommit string, commit string, expectedStatus string, status string, errorSummary string) error {
 	if expectedCommit != commit || expectedStatus != status {
 		return errors.Errorf("Error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v\n",
 			commit, status, errorSummary, expectedCommit, expectedStatus)
 	}
 	return nil
+}
+
+// validateAllTenants validates if resources for all tenants are rendered, created and managed by the reconciler.
+func validateAllTenants(nt *nomostest.NT, reconcilerScope, baseRelPath string, tenants ...string) {
+	nt.T.Logf("Validate resources are synced for all tenants %s", tenants)
+	validateNamespaces(nt, tenants, fmt.Sprintf("path: %s/namespace.yaml\n", baseRelPath))
+	for _, tenant := range tenants {
+		validateTenant(nt, reconcilerScope, tenant, baseRelPath)
+	}
+}
+
+// validateTenant validates if the tenant resources are created and managed by the reconciler.
+func validateTenant(nt *nomostest.NT, reconcilerScope, tenant, baseRelPath string) {
+	nt.T.Logf("Validate %s resources are created and managed by %s", tenant, reconcilerScope)
+	if err := nt.Validate(tenant, "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("deny-all", tenant, &networkingv1.NetworkPolicy{},
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/networkpolicy.yaml\n", baseRelPath)),
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("tenant-admin", tenant, &rbacv1.Role{},
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/role.yaml\n", baseRelPath)),
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("tenant-admin-rolebinding", tenant, &rbacv1.RoleBinding{},
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/rolebinding.yaml\n", baseRelPath)),
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
+}
+
+// validateHelmComponents validates if all resources are rendered, created and managed by the reconciler.
+func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
+	nt.T.Log("Validate resources are synced")
+	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+		containerImagePullPolicy("IfNotPresent"),
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx",
+		&appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"),
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		nt.T.Error(err)
+	}
 }

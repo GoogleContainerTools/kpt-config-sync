@@ -25,65 +25,65 @@ import (
 
 // pruneEventStats tracks the stats for all the PruneType events
 type pruneEventStats struct {
-	// errCount tracks the number of PruneType events including an error
-	errCount uint64
 	// eventByOp tracks the number of PruneType events including no error by PruneEventOperation
-	eventByOp map[event.PruneEventOperation]uint64
+	eventByOp map[event.PruneEventStatus]uint64
 }
 
 func (s pruneEventStats) string() string {
 	var strs []string
-	if s.errCount > 0 {
-		strs = append(strs, fmt.Sprintf("PruneEvent including an error: %d", s.errCount))
-	}
 	var keys []int
 	for k := range s.eventByOp {
 		keys = append(keys, int(k))
 	}
 	sort.Ints(keys)
+	total := uint64(0)
 	for _, k := range keys {
-		op := event.PruneEventOperation(k)
+		op := event.PruneEventStatus(k)
 		if s.eventByOp[op] > 0 {
-			strs = append(strs, fmt.Sprintf("PruneEvent events (OpType: %v): %d", op, s.eventByOp[op]))
+			total += s.eventByOp[op]
+			strs = append(strs, fmt.Sprintf("%s: %d", op, s.eventByOp[op]))
 		}
 	}
-	return strings.Join(strs, ", ")
+	if total == 0 {
+		return ""
+	}
+	return fmt.Sprintf("PruneEvents: %d (%s)", total, strings.Join(strs, ", "))
 }
 
 func (s pruneEventStats) empty() bool {
-	return s.errCount == 0 && len(s.eventByOp) == 0
+	return len(s.eventByOp) == 0
 }
 
 // applyEventStats tracks the stats for all the ApplyType events
 type applyEventStats struct {
-	// errCount tracks the number of ApplyType events including an error
-	errCount uint64
 	// eventByOp tracks the number of ApplyType events including no error by ApplyEventOperation
 	// Possible values: Created, Configured, Unchanged.
-	eventByOp map[event.ApplyEventOperation]uint64
+	eventByOp map[event.ApplyEventStatus]uint64
 }
 
 func (s applyEventStats) string() string {
 	var strs []string
-	if s.errCount > 0 {
-		strs = append(strs, fmt.Sprintf("ApplyEvent including an error: %d", s.errCount))
-	}
 	var keys []int
 	for k := range s.eventByOp {
 		keys = append(keys, int(k))
 	}
 	sort.Ints(keys)
+	total := uint64(0)
 	for _, k := range keys {
-		op := event.ApplyEventOperation(k)
+		op := event.ApplyEventStatus(k)
 		if s.eventByOp[op] > 0 {
-			strs = append(strs, fmt.Sprintf("ApplyEvent events (OpType: %v): %d", op, s.eventByOp[op]))
+			total += s.eventByOp[op]
+			strs = append(strs, fmt.Sprintf("%s: %d", op, s.eventByOp[op]))
 		}
 	}
-	return strings.Join(strs, ", ")
+	if total == 0 {
+		return ""
+	}
+	return fmt.Sprintf("ApplyEvents: %d (%s)", total, strings.Join(strs, ", "))
 }
 
 func (s applyEventStats) empty() bool {
-	return s.errCount == 0 && len(s.eventByOp) == 0
+	return len(s.eventByOp) == 0
 }
 
 // disabledObjStats tracks the stats for dsiabled objects
@@ -127,7 +127,7 @@ func (s applyStats) string() string {
 		strs = append(strs, s.disableObjs.string())
 	}
 	if s.errorTypeEvents > 0 {
-		strs = append(strs, fmt.Sprintf("ErrorType events: %d", s.errorTypeEvents))
+		strs = append(strs, fmt.Sprintf("ErrorEvents: %d", s.errorTypeEvents))
 	}
 	return strings.Join(strs, ", ")
 }
@@ -139,10 +139,10 @@ func (s applyStats) empty() bool {
 func newApplyStats() applyStats {
 	return applyStats{
 		applyEvent: applyEventStats{
-			eventByOp: map[event.ApplyEventOperation]uint64{},
+			eventByOp: map[event.ApplyEventStatus]uint64{},
 		},
 		pruneEvent: pruneEventStats{
-			eventByOp: map[event.PruneEventOperation]uint64{},
+			eventByOp: map[event.PruneEventStatus]uint64{},
 		},
 		objsReconciled: map[core.ID]struct{}{},
 	}

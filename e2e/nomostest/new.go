@@ -195,6 +195,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 			// print the logs for the previous container instances if they exist.
 			nt.testLogs(true)
 			nt.testPods()
+			nt.describeNotRunningTestPods()
 		}
 	})
 
@@ -344,6 +345,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 			// print the logs for the previous container instances if they exist.
 			nt.testLogs(true)
 			nt.testPods()
+			nt.describeNotRunningTestPods()
 		}
 	})
 

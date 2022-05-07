@@ -63,7 +63,7 @@ func (tc *TaskContext) SetGraph(g *graph.Graph) {
 
 // SendEvent sends an event on the event channel
 func (tc *TaskContext) SendEvent(e event.Event) {
-	klog.V(5).Infof("sending event: %s", e)
+	klog.V(3).Infof("Sending event: %v", e)
 	tc.eventChannel <- e
 }
 

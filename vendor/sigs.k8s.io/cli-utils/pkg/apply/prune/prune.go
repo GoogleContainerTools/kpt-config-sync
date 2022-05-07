@@ -13,6 +13,7 @@ package prune
 
 import (
 	"context"
+	"errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -108,25 +109,28 @@ func (p *Pruner) Prune(
 		}
 
 		// Check filters to see if we're prevented from pruning/deleting object.
-		var filtered bool
-		var reason string
-		var err error
+		var filterErr error
 		for _, pruneFilter := range pruneFilters {
-			klog.V(6).Infof("evaluating prune filter (object: %q, filter: %q)", id, pruneFilter.Name())
-			filtered, reason, err = pruneFilter.Filter(obj)
-			if err != nil {
-				if klog.V(5).Enabled() {
-					klog.Errorf("error during %s, (%s): %v", pruneFilter.Name(), id, err)
+			klog.V(6).Infof("prune filter evaluating (filter: %s, object: %s)", pruneFilter.Name(), id)
+			filterErr = pruneFilter.Filter(obj)
+			if filterErr != nil {
+				var fatalErr *filter.FatalError
+				if errors.As(filterErr, &fatalErr) {
+					if klog.V(5).Enabled() {
+						klog.Errorf("prune filter errored (filter: %s, object: %s): %v", pruneFilter.Name(), id, fatalErr.Err)
+					}
+					taskContext.SendEvent(eventFactory.CreateFailedEvent(id, fatalErr.Err))
+					taskContext.InventoryManager().AddFailedDelete(id)
+					break
 				}
-				taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
-				taskContext.InventoryManager().AddFailedDelete(id)
-				break
-			}
-			if filtered {
-				klog.V(4).Infof("prune skipped (object: %q, filter: %q): %v", id, pruneFilter.Name(), reason)
-				// If deletion was prevented, remove the inventory annotation.
-				if pruneFilter.Name() == filter.PreventRemoveFilterName {
+				klog.V(4).Infof("prune filtered (filter: %s, object: %s): %v", pruneFilter.Name(), id, filterErr)
+
+				// Remove the inventory annotation if deletion was prevented.
+				// This abandons the object so it won't be pruned by future applier runs.
+				var abandonErr *filter.AnnotationPreventedDeletionError
+				if errors.As(filterErr, &abandonErr) {
 					if !opts.DryRunStrategy.ClientOrServerDryRun() {
+						var err error
 						obj, err = p.removeInventoryAnnotation(obj)
 						if err != nil {
 							if klog.V(4).Enabled() {
@@ -135,21 +139,22 @@ func (p *Pruner) Prune(
 							taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
 							taskContext.InventoryManager().AddFailedDelete(id)
 							break
-						} else {
-							// Inventory annotation was successfully removed from the object.
-							// Register for removal from the inventory.
-							taskContext.AddAbandonedObject(id)
 						}
+						// Inventory annotation was successfully removed from the object.
+						// Register for removal from the inventory.
+						taskContext.AddAbandonedObject(id)
 					}
 				}
-				taskContext.SendEvent(eventFactory.CreateSkippedEvent(obj, reason))
+
+				taskContext.SendEvent(eventFactory.CreateSkippedEvent(obj, filterErr))
 				taskContext.InventoryManager().AddSkippedDelete(id)
 				break
 			}
 		}
-		if filtered || err != nil {
+		if filterErr != nil {
 			continue
 		}
+
 		// Filters passed--actually delete object if not dry run.
 		if !opts.DryRunStrategy.ClientOrServerDryRun() {
 			klog.V(4).Infof("deleting object (object: %q)", id)

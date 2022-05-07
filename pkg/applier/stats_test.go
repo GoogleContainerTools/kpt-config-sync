@@ -67,8 +67,7 @@ func TestPruneEventStats(t *testing.T) {
 		{
 			name: "empty pruneEventStats",
 			stats: pruneEventStats{
-				errCount:  0,
-				eventByOp: map[event.PruneEventOperation]uint64{},
+				eventByOp: map[event.PruneEventStatus]uint64{},
 			},
 			wantEmpty:  true,
 			wantString: "",
@@ -76,14 +75,14 @@ func TestPruneEventStats(t *testing.T) {
 		{
 			name: "non-empty pruneEventStats",
 			stats: pruneEventStats{
-				errCount: 1,
-				eventByOp: map[event.PruneEventOperation]uint64{
-					event.PruneSkipped: 4,
-					event.Pruned:       0,
+				eventByOp: map[event.PruneEventStatus]uint64{
+					event.PruneSkipped:    4,
+					event.PruneSuccessful: 0,
+					event.PruneFailed:     1,
 				},
 			},
 			wantEmpty:  false,
-			wantString: "PruneEvent including an error: 1, PruneEvent events (OpType: PruneSkipped): 4",
+			wantString: "PruneEvents: 5 (Skipped: 4, Failed: 1)",
 		},
 	}
 	for _, tc := range testcases {
@@ -110,8 +109,7 @@ func TestApplyEventStats(t *testing.T) {
 		{
 			name: "empty applyEventStats",
 			stats: applyEventStats{
-				errCount:  0,
-				eventByOp: map[event.ApplyEventOperation]uint64{},
+				eventByOp: map[event.ApplyEventStatus]uint64{},
 			},
 			wantEmpty:  true,
 			wantString: "",
@@ -119,14 +117,14 @@ func TestApplyEventStats(t *testing.T) {
 		{
 			name: "non-empty applyEventStats",
 			stats: applyEventStats{
-				errCount: 2,
-				eventByOp: map[event.ApplyEventOperation]uint64{
-					event.ServersideApplied: 4,
-					event.Created:           2,
+				eventByOp: map[event.ApplyEventStatus]uint64{
+					event.ApplySuccessful: 4,
+					event.ApplySkipped:    2,
+					event.ApplyFailed:     2,
 				},
 			},
 			wantEmpty:  false,
-			wantString: "ApplyEvent including an error: 2, ApplyEvent events (OpType: ServersideApplied): 4, ApplyEvent events (OpType: Created): 2",
+			wantString: "ApplyEvents: 8 (Successful: 4, Skipped: 2, Failed: 2)",
 		},
 	}
 	for _, tc := range testcases {
@@ -160,19 +158,20 @@ func TestApplyStats(t *testing.T) {
 			name: "non-empty applyStats",
 			stats: applyStats{
 				applyEvent: applyEventStats{
-					eventByOp: map[event.ApplyEventOperation]uint64{
-						event.Created:    1,
-						event.Configured: 2,
+					eventByOp: map[event.ApplyEventStatus]uint64{
+						event.ApplySuccessful: 1,
+						event.ApplySkipped:    2,
 					},
 				},
 				pruneEvent: pruneEventStats{
-					errCount:  3,
-					eventByOp: map[event.PruneEventOperation]uint64{},
+					eventByOp: map[event.PruneEventStatus]uint64{
+						event.PruneFailed: 3,
+					},
 				},
 				errorTypeEvents: 4,
 			},
 			wantEmpty:  false,
-			wantString: "ApplyEvent events (OpType: Created): 1, ApplyEvent events (OpType: Configured): 2, PruneEvent including an error: 3, ErrorType events: 4",
+			wantString: "ApplyEvents: 3 (Successful: 1, Skipped: 2), PruneEvents: 3 (Failed: 3), ErrorEvents: 4",
 		},
 	}
 	for _, tc := range testcases {

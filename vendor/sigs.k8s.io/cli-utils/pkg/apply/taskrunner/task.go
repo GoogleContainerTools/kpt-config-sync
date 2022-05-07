@@ -131,13 +131,13 @@ func (w *WaitTask) Start(taskContext *TaskContext) {
 	}()
 }
 
-func (w *WaitTask) sendEvent(taskContext *TaskContext, id object.ObjMetadata, op event.WaitEventOperation) {
+func (w *WaitTask) sendEvent(taskContext *TaskContext, id object.ObjMetadata, status event.WaitEventStatus) {
 	taskContext.SendEvent(event.Event{
 		Type: event.WaitType,
 		WaitEvent: event.WaitEvent{
 			GroupName:  w.Name(),
 			Identifier: id,
-			Operation:  op,
+			Status:     status,
 		},
 	})
 }
@@ -168,7 +168,7 @@ func (w *WaitTask) startInner(taskContext *TaskContext) {
 				// Object never applied or deleted!
 				klog.Errorf("Failed to mark object as successful reconcile: %v", err)
 			}
-			w.sendEvent(taskContext, id, event.Reconciled)
+			w.sendEvent(taskContext, id, event.ReconcileSuccessful)
 		default:
 			err := taskContext.InventoryManager().SetPendingReconcile(id)
 			if err != nil {
@@ -286,7 +286,7 @@ func (w *WaitTask) handleChangedUID(taskContext *TaskContext, id object.ObjMetad
 			// Object never applied or deleted!
 			klog.Errorf("Failed to mark object as successful reconcile: %v", err)
 		}
-		w.sendEvent(taskContext, id, event.Reconciled)
+		w.sendEvent(taskContext, id, event.ReconcileSuccessful)
 	case AllCurrent:
 		// Object deleted and recreated by another actor after apply.
 		// Treat as failure (unverifiable).
@@ -334,7 +334,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 				klog.Errorf("Failed to mark object as successful reconcile: %v", err)
 			}
 			w.pending = w.pending.Remove(id)
-			w.sendEvent(taskContext, id, event.Reconciled)
+			w.sendEvent(taskContext, id, event.ReconcileSuccessful)
 		case w.failedByID(taskContext, id):
 			// failed - remove from pending & send event
 			err := taskContext.InventoryManager().SetFailedReconcile(id)
@@ -367,7 +367,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 				klog.Errorf("Failed to mark object as successful reconcile: %v", err)
 			}
 			w.failed = w.failed.Remove(id)
-			w.sendEvent(taskContext, id, event.Reconciled)
+			w.sendEvent(taskContext, id, event.ReconcileSuccessful)
 		} else if !w.failedByID(taskContext, id) {
 			// If a resource is no longer reported as Failed and is not Reconciled,
 			// they should just go back to InProgress.

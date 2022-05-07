@@ -485,6 +485,7 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 	// Add the remeditor conflict errors before other sync errors for more visibility.
 	errs = append(errs, rs.Status.Sync.Errors...)
 	setSyncStatus(&rs.Status.Status, errs, denominator)
+
 	if err := client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {

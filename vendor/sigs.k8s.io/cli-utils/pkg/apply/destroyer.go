@@ -142,7 +142,7 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		}
 		deleteFilters := []filter.ValidationFilter{
 			filter.PreventRemoveFilter{},
-			filter.InventoryPolicyFilter{
+			filter.InventoryPolicyPruneFilter{
 				Inv:       invInfo,
 				InvPolicy: options.InventoryPolicy,
 			},

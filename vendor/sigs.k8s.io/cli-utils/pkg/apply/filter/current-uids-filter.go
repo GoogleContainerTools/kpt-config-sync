@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -22,13 +23,31 @@ func (cuf CurrentUIDFilter) Name() string {
 	return "CurrentUIDFilter"
 }
 
-// Filter returns true if the passed object should NOT be pruned (deleted)
-// because it has recently been applied.
-func (cuf CurrentUIDFilter) Filter(obj *unstructured.Unstructured) (bool, string, error) {
-	uid := string(obj.GetUID())
-	if cuf.CurrentUIDs.Has(uid) {
-		reason := fmt.Sprintf("resource just applied (UID: %q)", uid)
-		return true, reason, nil
+// Filter returns a ApplyPreventedDeletionError if the object prune/delete
+// should be skipped.
+func (cuf CurrentUIDFilter) Filter(obj *unstructured.Unstructured) error {
+	uid := obj.GetUID()
+	if cuf.CurrentUIDs.Has(string(uid)) {
+		return &ApplyPreventedDeletionError{UID: uid}
 	}
-	return false, "", nil
+	return nil
+}
+
+type ApplyPreventedDeletionError struct {
+	UID types.UID
+}
+
+func (e *ApplyPreventedDeletionError) Error() string {
+	return fmt.Sprintf("object just applied (UID: %q)", e.UID)
+}
+
+func (e *ApplyPreventedDeletionError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	tErr, ok := err.(*ApplyPreventedDeletionError)
+	if !ok {
+		return false
+	}
+	return e.UID == tErr.UID
 }

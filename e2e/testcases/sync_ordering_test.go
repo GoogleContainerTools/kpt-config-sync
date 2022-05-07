@@ -471,7 +471,8 @@ func TestSyncOrdering(t *testing.T) {
 		core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod3")))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod3 and pod4 (pod4 depends on pod3 and pod3 won't be reconciled)")
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependencies are not reconciled", false)
+	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode,
+		"skipped apply of Pod, bookstore/pod4: dependency apply reconcile timeout: bookstore_pod3__Pod", false)
 
 	_, err = nomostest.Retry(20, func() error {
 		pod3 := &corev1.Pod{}

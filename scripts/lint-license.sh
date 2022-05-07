@@ -17,11 +17,7 @@
 set -euo pipefail
 
 # TODO: Don't directly install things in scripts - do it in the image.
-# Remove the commit hash after https://github.com/google/go-licenses/issues/75 is fixed.
-go get github.com/google/go-licenses@8751804a5b801cba3064b9823a6e5b4767e1ecdc
-# go mod tidy after getting go-licenses so that it is installed, but not
-# declared as a project dependency.
-go mod tidy
+go install github.com/google/go-licenses@v1.2.0
 
 chmod -R +rwx .output
 

@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -216,14 +217,28 @@ func (c *Client) fromUnstructured(obj client.Object) (client.Object, error) {
 	return result.(client.Object), err
 }
 
+func validateCreateOptions(opts *client.CreateOptions) error {
+	if len(opts.DryRun) > 0 {
+		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
+			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+		}
+	}
+	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+	}
+	return nil
+}
+
 // Create implements client.Client.
 func (c *Client) Create(_ context.Context, obj client.Object, opts ...client.CreateOption) error {
-	if len(opts) > 0 {
-		jsn, _ := json.MarshalIndent(opts, "", "  ")
-		return errors.Errorf("fake.Client.Create does not yet support opts, but got: %+v", string(jsn))
+	createOpts := &client.CreateOptions{}
+	createOpts.ApplyOptions(opts)
+	err := validateCreateOptions(createOpts)
+	if err != nil {
+		return err
 	}
 
-	obj, err := c.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	obj, err = c.fromUnstructured(obj.DeepCopyObject().(client.Object))
 	if err != nil {
 		return err
 	}
@@ -313,14 +328,28 @@ func (c *Client) updateObjectStatus(obj client.Object, status map[string]interfa
 	return c.fromUnstructured(updated)
 }
 
+func validateUpdateOptions(opts *client.UpdateOptions) error {
+	if len(opts.DryRun) > 0 {
+		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
+			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+		}
+	}
+	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+	}
+	return nil
+}
+
 // Update implements client.Client. It does not update the status field.
 func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	if len(opts) > 0 {
-		jsn, _ := json.MarshalIndent(opts, "", "  ")
-		return errors.Errorf("fake.Client.Update does not yet support opts, but got: %v", string(jsn))
+	updateOpts := &client.UpdateOptions{}
+	updateOpts.ApplyOptions(opts)
+	err := validateUpdateOptions(updateOpts)
+	if err != nil {
+		return err
 	}
 
-	obj, err := c.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	obj, err = c.fromUnstructured(obj.DeepCopyObject().(client.Object))
 	if err != nil {
 		return err
 	}
@@ -336,6 +365,10 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 	if err != nil {
 		return err
 	}
+	if len(updateOpts.DryRun) > 0 {
+		// don't merge or store the result
+		return nil
+	}
 	if hasStatus {
 		u, err := c.updateObjectStatus(obj, oldStatus)
 		if err != nil {
@@ -350,10 +383,21 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 }
 
 // Patch implements client.Client.
-func (c *Client) Patch(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
+func (c *Client) Patch(ctx context.Context, obj client.Object, _ client.Patch, opts ...client.PatchOption) error {
 	// Currently re-using the Update implementation for Patch since it fits the use-case where this is used for unit tests.
 	// Please use this with caution for your use-case.
-	return c.Update(ctx, obj)
+	var updateOpts []client.UpdateOption
+	for _, opt := range opts {
+		if uOpt, ok := opt.(client.UpdateOption); ok {
+			updateOpts = append(updateOpts, uOpt)
+		} else if opt == client.ForceOwnership {
+			// Ignore, for now.
+			// TODO: Simulate FieldManagement and Force updates.
+		} else {
+			return errors.Errorf("invalid patch option: %+v", opt)
+		}
+	}
+	return c.Update(ctx, obj, updateOpts...)
 }
 
 // DeleteAllOf implements client.Client.
@@ -363,12 +407,14 @@ func (c *Client) DeleteAllOf(_ context.Context, _ client.Object, _ ...client.Del
 
 // Update implements client.StatusWriter. It only updates the status field.
 func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	if len(opts) > 0 {
-		jsn, _ := json.MarshalIndent(opts, "", "  ")
-		return errors.Errorf("fake.StatusWriter.Update does not yet support opts, but got: %v", string(jsn))
+	updateOpts := &client.UpdateOptions{}
+	updateOpts.ApplyOptions(opts)
+	err := validateUpdateOptions(updateOpts)
+	if err != nil {
+		return err
 	}
 
-	obj, err := s.Client.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	obj, err = s.Client.fromUnstructured(obj.DeepCopyObject().(client.Object))
 	if err != nil {
 		return err
 	}
@@ -385,6 +431,11 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 		return err
 	}
 	if hasStatus {
+		if len(updateOpts.DryRun) > 0 {
+			// don't merge or store the result
+			return nil
+		}
+
 		u, err := s.Client.updateObjectStatus(s.Client.Objects[id], newStatus)
 		if err != nil {
 			return err

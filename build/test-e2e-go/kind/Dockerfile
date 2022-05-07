@@ -26,7 +26,7 @@ ENV KUBERNETES_ENV=KIND
 # We're running tests within kind v0.11.1 clusters.
 # If you upgrade the version, you also need to update the special kubekins-with-Kind
 # images we use in the test-infra repository. See Makefile.prow.
-RUN go get sigs.k8s.io/kind@v0.11.1
+RUN go install sigs.k8s.io/kind@v0.11.1
 
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client diffutils
@@ -57,7 +57,7 @@ RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomiz
   rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
 
 # Get go-junit-report.
-RUN go get -u github.com/jstemmer/go-junit-report
+RUN go install github.com/jstemmer/go-junit-report@v1.0.0
 
 # Steps after here can't be cached since they touch the local filesystem.
 

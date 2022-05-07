@@ -16,9 +16,11 @@ package applier
 
 import (
 	"fmt"
+	"strings"
 
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 )
 
 // ApplierErrorCode is the error code for apply failures.
@@ -31,10 +33,17 @@ func Error(err error) status.Error {
 	return applierErrorBuilder.Wrap(err).Build()
 }
 
-// ErrorForResource indicates that the applier filed to apply
+// ErrorForResource indicates that the applier failed to apply
 // the given resource.
 func ErrorForResource(err error, id core.ID) status.Error {
 	return applierErrorBuilder.Wrap(fmt.Errorf("failed to apply %v: %w", id, err)).Build()
+}
+
+// SkipErrorForResource indicates that the applier skipped apply or delete of
+// the given resource.
+func SkipErrorForResource(err error, id core.ID, strategy actuation.ActuationStrategy) status.Error {
+	return applierErrorBuilder.Wrap(fmt.Errorf("skipped %s of %v: %w",
+		strings.ToLower(strategy.String()), id, err)).Build()
 }
 
 func largeResourceGroupError(err error, id core.ID) status.Error {

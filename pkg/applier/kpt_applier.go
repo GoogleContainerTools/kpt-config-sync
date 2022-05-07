@@ -38,12 +38,13 @@ import (
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	"kpt.dev/configsync/pkg/util"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
+	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
-	"sigs.k8s.io/cli-utils/pkg/object/dependson"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -162,85 +163,88 @@ func NewRootApplier(c client.Client, cfg *rest.Config, syncName, statusMode stri
 	return a, nil
 }
 
-func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEventStats, objsReconciled map[core.ID]struct{}, cache map[core.ID]client.Object, unknownTypeResources map[core.ID]struct{}) status.Error {
+func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEventStats, unknownTypeResources map[core.ID]struct{}) status.Error {
 	id := idFrom(e.Identifier)
-	if e.Error != nil {
-		stats.errCount++
+	klog.V(4).Infof("apply %v for object: %v", e.Status, id)
+	stats.eventByOp[e.Status]++
+
+	switch e.Status {
+	case event.ApplyPending:
+		// ignore
+		return nil
+
+	case event.ApplySuccessful:
+		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
+		return nil
+
+	case event.ApplyFailed:
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
 			return ErrorForResource(e.Error, id)
-		case *inventory.InventoryOverlapError:
-			// TODO: return ManagementConflictError with the conflicting manager if
-			// cli-utils supports reporting the conflicting manager in InventoryOverlapError.
-			return KptManagementConflictError(cache[id])
 		default:
-			// The default case covers other reason for failed applying a resource.
 			return ErrorForResource(e.Error, id)
 		}
-	}
 
-	if e.Operation == event.Unchanged {
-		if err := handleSkipEvent(e.Resource, id, objsReconciled); err != nil {
-			stats.errCount++
-			return err
-		}
-		klog.V(7).Infof("applied [op: %v] resource %v", e.Operation, id)
-	} else {
-		klog.V(4).Infof("applied [op: %v] resource %v", e.Operation, id)
-		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
-		stats.eventByOp[e.Operation]++
+	case event.ApplySkipped:
+		// Skip event always includes an error with the reason
+		return handleApplySkippedEvent(e.Resource, id, e.Error)
+
+	default:
+		return ErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
-	return nil
 }
 
 func processWaitEvent(e event.WaitEvent, objReconciled map[core.ID]struct{}) {
 	id := idFrom(e.Identifier)
-	if e.Operation == event.Reconciled {
+	if e.Status == event.ReconcileSuccessful {
 		objReconciled[id] = struct{}{}
 	}
 }
 
-// handleSkipEvent translates from skipped event into resource error.
-// It is only used to catch the skipped apply/prune operation due to dependencies are not ready.
-func handleSkipEvent(obj *unstructured.Unstructured, id core.ID, objsReconciled map[core.ID]struct{}) status.Error {
-	if obj == nil {
-		return nil
-	}
-	dependsOnStr := core.GetAnnotation(obj, dependson.Annotation)
-	if dependsOnStr == "" {
-		return nil
+// handleApplySkippedEvent translates from apply skipped event into resource error.
+func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+	var depErr *filter.DependencyPreventedActuationError
+	if errors.As(err, &depErr) {
+		return SkipErrorForResource(err, id, depErr.Strategy)
 	}
 
-	deps, err := dependson.ParseDependencySet(dependsOnStr)
-	if err != nil {
-		return ErrorForResource(err, id)
+	var depMismatchErr *filter.DependencyActuationMismatchError
+	if errors.As(err, &depMismatchErr) {
+		return SkipErrorForResource(err, id, depMismatchErr.Strategy)
 	}
 
-	unReconciled := []core.ID{}
-	for _, dep := range deps {
-		if _, found := objsReconciled[idFrom(dep)]; !found {
-			unReconciled = append(unReconciled, idFrom(dep))
-		}
+	var policyErr *inventory.PolicyPreventedActuationError
+	if errors.As(err, &policyErr) {
+		// TODO: return ManagementConflictError with the conflicting manager if
+		// cli-utils supports reporting the conflicting manager in
+		// PolicyPreventedActuationError.
+		// return SkipErrorForResource(err, id, policyErr.Strategy)
+		return KptManagementConflictError(obj)
 	}
-	if len(unReconciled) > 0 {
-		klog.Errorf("dependencies of %v are not ready: %v", id, unReconciled)
-		return ErrorForResource(fmt.Errorf("dependencies are not reconciled: %v", unReconciled), id)
-	}
-	return nil
+
+	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
-func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEventStats, objsReconciled map[core.ID]struct{}, cs *clientSet) status.Error {
-	if e.Error != nil {
-		id := idFrom(e.Identifier)
-		stats.errCount++
-		return ErrorForResource(e.Error, id)
-	}
-
+func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEventStats, cs *clientSet) status.Error {
 	id := idFrom(e.Identifier)
-	if e.Operation == event.PruneSkipped {
-		klog.V(4).Infof("skipped pruning resource %v", id)
-		if e.Object != nil && e.Object.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind() && differ.SpecialNamespaces[e.Object.GetName()] {
+	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
+	stats.eventByOp[e.Status]++
+
+	switch e.Status {
+	case event.PrunePending:
+		// ignore
+		return nil
+
+	case event.PruneSuccessful:
+		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		return nil
+
+	case event.PruneFailed:
+		return ErrorForResource(e.Error, id)
+
+	case event.PruneSkipped:
+		if isNamespace(e.Object) && differ.SpecialNamespaces[e.Object.GetName()] {
 			// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 			err := cs.disableObject(ctx, e.Object)
 			if err != nil {
@@ -250,13 +254,55 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEven
 			}
 			klog.V(4).Infof("removed the Config Sync metadata from %v (which is a special namespace)", id)
 		}
-		// TODO: handle the skip prune events due to dependency
-	} else {
-		klog.V(4).Infof("pruned resource %v", id)
-		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
-		stats.eventByOp[e.Operation]++
+		// Skip event always includes an error with the reason
+		return handlePruneSkippedEvent(e.Object, id, e.Error)
+
+	default:
+		return ErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
-	return nil
+}
+
+// handlePruneSkippedEvent translates from prune skipped event into resource error.
+func handlePruneSkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+	var depErr *filter.DependencyPreventedActuationError
+	if errors.As(err, &depErr) {
+		return SkipErrorForResource(err, id, depErr.Strategy)
+	}
+
+	var depMismatchErr *filter.DependencyActuationMismatchError
+	if errors.As(err, &depMismatchErr) {
+		return SkipErrorForResource(err, id, depMismatchErr.Strategy)
+	}
+
+	var applyDeleteErr *filter.ApplyPreventedDeletionError
+	if errors.As(err, &applyDeleteErr) {
+		return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+	}
+
+	var policyErr *inventory.PolicyPreventedActuationError
+	if errors.As(err, &policyErr) {
+		// For prunes, this is desired behavior, not a fatal error.
+		klog.Infof("Resource object removed from inventory,  but not deleted: %v: %v", id, err)
+		return nil
+	}
+
+	var namespaceErr *filter.NamespaceInUseError
+	if errors.As(err, &namespaceErr) {
+		return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+	}
+
+	var abandonErr *filter.AnnotationPreventedDeletionError
+	if errors.As(err, &abandonErr) {
+		// For prunes, this is desired behavior, not a fatal error.
+		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
+		return nil
+	}
+
+	return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+}
+
+func isNamespace(obj *unstructured.Unstructured) bool {
+	return obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind()
 }
 
 func handleMetrics(ctx context.Context, operation string, err error, gvk schema.GroupVersionKind) {
@@ -287,7 +333,7 @@ func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 }
 
 // sync triggers a kpt live apply library call to apply a set of resources.
-func (a *Applier) sync(ctx context.Context, objs []client.Object, cache map[core.ID]client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	cs, err := a.clientSetFunc(a.client, a.clientConfig, a.statusMode)
 	if err != nil {
 		return nil, Error(err)
@@ -363,23 +409,22 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object, cache map[core
 			logEvent := event.ApplyEvent{
 				GroupName:  e.ApplyEvent.GroupName,
 				Identifier: e.ApplyEvent.Identifier,
-				Operation:  e.ApplyEvent.Operation,
+				Status:     e.ApplyEvent.Status,
 				// nil Resource to reduce log noise
 				Error: e.ApplyEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processApplyEvent(ctx, e.ApplyEvent, &stats.applyEvent, stats.objsReconciled, cache, unknownTypeResources))
+			a.errs = status.Append(a.errs, processApplyEvent(ctx, e.ApplyEvent, &stats.applyEvent, unknownTypeResources))
 		case event.PruneType:
 			logEvent := event.PruneEvent{
 				GroupName:  e.PruneEvent.GroupName,
 				Identifier: e.PruneEvent.Identifier,
-				Operation:  e.PruneEvent.Operation,
+				Status:     e.PruneEvent.Status,
 				// nil Resource to reduce log noise
-				Reason: e.PruneEvent.Reason,
-				Error:  e.PruneEvent.Error,
+				Error: e.PruneEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processPruneEvent(ctx, e.PruneEvent, &stats.pruneEvent, stats.objsReconciled, cs))
+			a.errs = status.Append(a.errs, processPruneEvent(ctx, e.PruneEvent, &stats.pruneEvent, cs))
 		default:
 			klog.V(4).Infof("skipped %v event", e.Type)
 		}
@@ -429,12 +474,6 @@ func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (m
 		a.syncing = false
 	}()
 
-	// Create the new cache showing the new declared resource.
-	newCache := make(map[core.ID]client.Object)
-	for _, desired := range desiredResource {
-		newCache[core.IDOf(desired)] = desired
-	}
-
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
@@ -446,7 +485,7 @@ func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (m
 	// in a previous cycle (eg ignore an error about a CR so that we can apply the
 	// CRD, then a future cycle is able to apply the CR).
 	// TODO: Here and elsewhere, pass the MultiError as a parameter.
-	return a.sync(ctx, desiredResource, newCache)
+	return a.sync(ctx, desiredResource)
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.

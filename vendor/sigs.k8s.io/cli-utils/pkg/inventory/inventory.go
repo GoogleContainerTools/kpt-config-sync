@@ -92,7 +92,7 @@ func ValidateNoInventory(objs object.UnstructuredSet) error {
 	if len(invs) == 0 {
 		return nil
 	}
-	return MultipleInventoryObjError{
+	return &MultipleInventoryObjError{
 		InventoryObjectTemplates: invs,
 	}
 }
@@ -117,7 +117,7 @@ func SplitUnstructureds(objs object.UnstructuredSet) (*unstructured.Unstructured
 	if len(invs) == 1 {
 		inv = invs[0]
 	} else if len(invs) > 1 {
-		err = MultipleInventoryObjError{
+		err = &MultipleInventoryObjError{
 			InventoryObjectTemplates: invs,
 		}
 	}

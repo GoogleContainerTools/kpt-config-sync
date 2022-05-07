@@ -56,7 +56,7 @@ COPY --from=gcloud-install /usr/bin/kubectl /opt/gcloud/google-cloud-sdk/bin/kub
 ENV PATH /opt/gcloud/google-cloud-sdk/bin:$PATH
 
 # Get go-junit-report
-RUN go get -u github.com/jstemmer/go-junit-report
+RUN go install github.com/jstemmer/go-junit-report@v1.0.0
 
 # Steps after here can't be cached since they touch the local filesystem.
 

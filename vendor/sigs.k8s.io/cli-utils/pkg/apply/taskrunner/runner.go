@@ -163,7 +163,7 @@ func (tsr *TaskStatusRunner) Run(
 				ActionGroupEvent: event.ActionGroupEvent{
 					GroupName: currentTask.Name(),
 					Action:    currentTask.Action(),
-					Type:      event.Finished,
+					Status:    event.Finished,
 				},
 			})
 			if msg.Err != nil {
@@ -212,7 +212,7 @@ func nextTask(taskQueue chan Task, taskContext *TaskContext) (Task, bool) {
 		ActionGroupEvent: event.ActionGroupEvent{
 			GroupName: tsk.Name(),
 			Action:    tsk.Action(),
-			Type:      event.Started,
+			Status:    event.Started,
 		},
 	})
 

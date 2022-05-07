@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 )
 
 // Policy defines if an inventory object can take over
@@ -93,44 +94,49 @@ func IDMatch(inv Info, obj *unstructured.Unstructured) IDMatchStatus {
 }
 
 func CanApply(inv Info, obj *unstructured.Unstructured, policy Policy) (bool, error) {
-	if obj == nil {
-		return true, nil
-	}
 	matchStatus := IDMatch(inv, obj)
 	switch matchStatus {
 	case Empty:
 		if policy != PolicyMustMatch {
 			return true, nil
 		}
-		err := fmt.Errorf("can't adopt an object without the annotation %s", OwningInventoryKey)
-		return false, NewNeedAdoptionError(err)
 	case Match:
 		return true, nil
 	case NoMatch:
 		if policy == PolicyAdoptAll {
 			return true, nil
 		}
-		err := fmt.Errorf("can't apply the resource since its annotation %s is a different inventory object", OwningInventoryKey)
-		return false, NewInventoryOverlapError(err)
+	default:
+		return false, fmt.Errorf("invalid inventory policy: %v", policy)
 	}
-	// shouldn't reach here
-	return false, nil
+	return false, &PolicyPreventedActuationError{
+		Strategy: actuation.ActuationStrategyApply,
+		Policy:   policy,
+		Status:   matchStatus,
+	}
 }
 
-func CanPrune(inv Info, obj *unstructured.Unstructured, policy Policy) bool {
-	if obj == nil {
-		return false
-	}
+func CanPrune(inv Info, obj *unstructured.Unstructured, policy Policy) (bool, error) {
 	matchStatus := IDMatch(inv, obj)
 	switch matchStatus {
 	case Empty:
-		return policy == PolicyAdoptIfNoInventory || policy == PolicyAdoptAll
+		if policy == PolicyAdoptIfNoInventory || policy == PolicyAdoptAll {
+			return true, nil
+		}
 	case Match:
-		return true
+		return true, nil
 	case NoMatch:
-		return policy == PolicyAdoptAll
+		if policy == PolicyAdoptAll {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("invalid inventory policy: %v", policy)
 	}
-	return false
+	return false, &PolicyPreventedActuationError{
+		Strategy: actuation.ActuationStrategyDelete,
+		Policy:   policy,
+		Status:   matchStatus,
+	}
 }
 
 func AddInventoryIDAnnotation(obj *unstructured.Unstructured, inv Info) {

@@ -31,35 +31,27 @@ func (ipaf InventoryPolicyApplyFilter) Name() string {
 	return "InventoryPolicyApplyFilter"
 }
 
-// Filter returns true if the passed object should be filtered (NOT applied) and
-// a filter reason string; false otherwise. Returns an error if one occurred
-// during the filter calculation
-func (ipaf InventoryPolicyApplyFilter) Filter(obj *unstructured.Unstructured) (bool, string, error) {
-	if obj == nil {
-		return true, "missing object", nil
-	}
+// Filter returns an inventory.PolicyPreventedActuationError if the object
+// apply should be skipped.
+func (ipaf InventoryPolicyApplyFilter) Filter(obj *unstructured.Unstructured) error {
+	// optimization to avoid unnecessary API calls
 	if ipaf.InvPolicy == inventory.PolicyAdoptAll {
-		return false, "", nil
+		return nil
 	}
 	// Object must be retrieved from the cluster to get the inventory id.
 	clusterObj, err := ipaf.getObject(object.UnstructuredToObjMetadata(obj))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// This simply means the object hasn't been created yet.
-			return false, "", nil
+			return nil
 		}
-		return true, "", err
+		return NewFatalError(fmt.Errorf("failed to get current object from cluster: %w", err))
 	}
-	// Check the inventory id "match" and the adopt policy to determine
-	// if an object should be applied.
-	canApply, err := inventory.CanApply(ipaf.Inv, clusterObj, ipaf.InvPolicy)
-	if !canApply {
-		invMatch := inventory.IDMatch(ipaf.Inv, clusterObj)
-		reason := fmt.Sprintf("inventory policy prevented apply (inventoryIDMatchStatus: %q, inventoryPolicy: %q)",
-			invMatch, ipaf.InvPolicy)
-		return true, reason, err
+	_, err = inventory.CanApply(ipaf.Inv, clusterObj, ipaf.InvPolicy)
+	if err != nil {
+		return err
 	}
-	return false, "", nil
+	return nil
 }
 
 // getObject retrieves the passed object from the cluster, or an error if one occurred.

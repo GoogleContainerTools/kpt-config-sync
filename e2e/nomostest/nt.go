@@ -775,10 +775,10 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	// log you want easier.
 	cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
 	if err != nil {
-		nt.T.Logf("failed to run %q: %v", cmd, err)
+		nt.T.Logf("failed to run %q: %v\n%s", cmd, err, out)
 		return
 	}
-	nt.T.Logf("%s\n%s", cmd, string(out))
+	nt.T.Logf("%s\n%s", cmd, out)
 }
 
 // testLogs print the logs for the current container instances when `previousPodLog` is false.
@@ -820,6 +820,35 @@ func (nt *NT) testPods() {
 	nt.T.Logf("kubectl get pods -n %s: \n%s", configmanagement.ControllerNamespace, string(out))
 	if err != nil {
 		nt.T.Log("error running `kubectl get pods`:", err)
+	}
+}
+
+func (nt *NT) describeNotRunningTestPods() {
+	cmPods := &corev1.PodList{}
+	if err := nt.List(cmPods, client.InNamespace(configmanagement.ControllerNamespace)); err != nil {
+		nt.T.Fatal(err)
+		return
+	}
+
+	for _, pod := range cmPods.Items {
+		ready := false
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == "Ready" {
+				ready = (condition.Status == "True")
+				break
+			}
+		}
+		// Only describe pods that are NOT ready.
+		if !ready {
+			args := []string{"describe", "pod", pod.GetName(), "-n", pod.GetNamespace()}
+			cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
+			out, err := nt.Kubectl(args...)
+			if err != nil {
+				nt.T.Logf("error running `%s`: %s\n%s", cmd, err, out)
+				continue
+			}
+			nt.T.Logf("%s\n%s", cmd, out)
+		}
 	}
 }
 

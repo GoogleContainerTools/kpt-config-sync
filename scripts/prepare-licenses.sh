@@ -27,7 +27,7 @@ licenseRegex="\(LICEN\(S\|C\)E\|COPYING\|README\|NOTICE\)"
 licenses="${tmp}"/LICENSES.txt
 
 # Ensure the vendor directory only includes the project's build dependencies.
-go mod tidy
+go mod tidy -compat=1.17
 go mod vendor
 find vendor/ -regex ".*/${licenseRegex}" > "${licenses}"
 sort "${licenses}" -dufo "${licenses}"

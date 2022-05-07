@@ -28,16 +28,34 @@ func (lnf LocalNamespacesFilter) Name() string {
 	return "LocalNamespacesFilter"
 }
 
-// Filter returns true if the passed object should NOT be pruned (deleted)
-// because the it is a namespace that objects still reside in; otherwise
-// returns false. This filter should not be added to the list of filters
-// for "destroying", since every object is being delete. Never returns an error.
-func (lnf LocalNamespacesFilter) Filter(obj *unstructured.Unstructured) (bool, string, error) {
+// Filter returns a NamespaceInUseError if the object prune/delete should be
+// skipped.
+func (lnf LocalNamespacesFilter) Filter(obj *unstructured.Unstructured) error {
 	id := object.UnstructuredToObjMetadata(obj)
 	if id.GroupKind == namespaceGK &&
 		lnf.LocalNamespaces.Has(id.Name) {
-		reason := fmt.Sprintf("namespace still in use (namespace: %q)", id.Name)
-		return true, reason, nil
+		return &NamespaceInUseError{
+			Namespace: id.Name,
+		}
 	}
-	return false, "", nil
+	return nil
+}
+
+type NamespaceInUseError struct {
+	Namespace string
+}
+
+func (e *NamespaceInUseError) Error() string {
+	return fmt.Sprintf("namespace still in use: %s", e.Namespace)
+}
+
+func (e *NamespaceInUseError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	tErr, ok := err.(*NamespaceInUseError)
+	if !ok {
+		return false
+	}
+	return e.Namespace == tErr.Namespace
 }

@@ -44,15 +44,15 @@ ENV CGO_ENABLED=0
 
 # tap2junit converts TAP testing output to jUnit
 # v0.0.4
-RUN go get github.com/filmil/tap2junit/cmd/tap2junit@afa095c33668ed9abcaeaee5cf0f27f67e96908c
+RUN go install github.com/filmil/tap2junit/cmd/tap2junit@afa095c33668ed9abcaeaee5cf0f27f67e96908c
 
 # gotopt2 parses command line options
 # v0.1.2
-RUN go get github.com/filmil/gotopt2/cmd/gotopt2@v0.1.2
+RUN go install github.com/filmil/gotopt2/cmd/gotopt2@v0.1.2
 
 # kind can run kubernetes clusters in docker
 # v0.10.0
-RUN go get sigs.k8s.io/kind@v0.10.0
+RUN go install sigs.k8s.io/kind@v0.10.0
 
 # Build intermediate image for gcloud / kubectl
 FROM marketplace.gcr.io/google/ubuntu1804 as gcloud-install

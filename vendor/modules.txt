@@ -944,7 +944,7 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# sigs.k8s.io/cli-utils v0.29.4
+# sigs.k8s.io/cli-utils v0.30.0
 ## explicit; go 1.17
 sigs.k8s.io/cli-utils/pkg/apis/actuation
 sigs.k8s.io/cli-utils/pkg/apply

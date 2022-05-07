@@ -53,6 +53,12 @@ func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, 
 		return nil
 	}
 
+	// Ensure the scheme used by the client knows about ValidatingWebhookConfiguration.
+	err = admissionv1.AddToScheme(c.Scheme())
+	if err != nil {
+		return status.InternalWrap(err)
+	}
+
 	oldCfg := &admissionv1.ValidatingWebhookConfiguration{}
 	err = c.Get(ctx, client.ObjectKey{Name: Name}, oldCfg)
 	switch {

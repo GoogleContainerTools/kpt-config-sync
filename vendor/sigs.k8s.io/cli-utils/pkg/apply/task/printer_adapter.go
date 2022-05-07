@@ -27,9 +27,9 @@ type KubectlPrinterAdapter struct {
 // resourcePrinterImpl implements the ResourcePrinter interface. But
 // instead of printing, it emits information on the provided channel.
 type resourcePrinterImpl struct {
-	applyOperation event.ApplyEventOperation
-	ch             chan<- event.Event
-	groupName      string
+	applyStatus event.ApplyEventStatus
+	ch          chan<- event.Event
+	groupName   string
 }
 
 // PrintObj takes the provided object and operation and emits
@@ -44,7 +44,7 @@ func (r *resourcePrinterImpl) PrintObj(obj runtime.Object, _ io.Writer) error {
 		ApplyEvent: event.ApplyEvent{
 			GroupName:  r.groupName,
 			Identifier: id,
-			Operation:  r.applyOperation,
+			Status:     r.applyStatus,
 			Resource:   obj.(*unstructured.Unstructured),
 		},
 	}
@@ -57,26 +57,26 @@ type toPrinterFunc func(string) (printers.ResourcePrinter, error)
 // is the type required by the ApplyOptions.
 func (p *KubectlPrinterAdapter) toPrinterFunc() toPrinterFunc {
 	return func(operation string) (printers.ResourcePrinter, error) {
-		applyOperation, err := operationToApplyOperationConst(operation)
+		applyStatus, err := kubectlOperationToApplyStatus(operation)
 		return &resourcePrinterImpl{
-			ch:             p.ch,
-			applyOperation: applyOperation,
-			groupName:      p.groupName,
+			ch:          p.ch,
+			applyStatus: applyStatus,
+			groupName:   p.groupName,
 		}, err
 	}
 }
 
-func operationToApplyOperationConst(operation string) (event.ApplyEventOperation, error) {
+func kubectlOperationToApplyStatus(operation string) (event.ApplyEventStatus, error) {
 	switch operation {
 	case "serverside-applied":
-		return event.ServersideApplied, nil
+		return event.ApplySuccessful, nil
 	case "created":
-		return event.Created, nil
+		return event.ApplySuccessful, nil
 	case "unchanged":
-		return event.Unchanged, nil
+		return event.ApplySuccessful, nil
 	case "configured":
-		return event.Configured, nil
+		return event.ApplySuccessful, nil
 	default:
-		return event.ApplyEventOperation(0), fmt.Errorf("unknown operation %s", operation)
+		return event.ApplyEventStatus(0), fmt.Errorf("unknown operation %s", operation)
 	}
 }

@@ -336,7 +336,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Remove the declaration from the Namespace repo %s", configsync.RootSyncName)
+	nt.T.Logf("Remove the Role from the Namespace repo %s", repoSyncNN)
 	nt.NonRootRepos[repoSyncNN].Remove(podRoleFilePath)
 	nt.NonRootRepos[repoSyncNN].CommitAndPush("remove conflicting pod role from Namespace repo")
 	nt.WaitForRepoSyncs()

@@ -107,11 +107,12 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err = r.validateNamespaceName(req.NamespacedName.Namespace); err != nil {
 		log.Error(err, "RepoSync namespace name failed validation")
 		reposync.SetStalled(&rs, "Validation", err)
-		// We intentionally overwrite the previous error here since we do not want
-		// to return it to the controller runtime.
-		err = r.updateStatus(ctx, &rs, log)
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		updateErr := r.updateStatus(ctx, &rs)
+		// Use the validation error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, err
+		return controllerruntime.Result{}, updateErr
 	}
 
 	r.namespaces[req.Namespace] = struct{}{}
@@ -121,11 +122,12 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err = validate.GitSpec(rs.Spec.Git, &rs); err != nil {
 		log.Error(err, "RepoSync failed validation")
 		reposync.SetStalled(&rs, "Validation", err)
-		// We intentionally overwrite the previous error here since we do not want
-		// to return it to the controller runtime.
-		err = r.updateStatus(ctx, &rs, log)
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		updateErr := r.updateStatus(ctx, &rs)
+		// Use the validation error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, err
+		return controllerruntime.Result{}, updateErr
 	}
 
 	repoContainerEnvs := r.populateRepoContainerEnvs(ctx, &rs, reconcilerName)
@@ -134,11 +136,12 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err := r.validateNamespaceSecret(ctx, &rs, secretName); err != nil {
 		log.Error(err, "RepoSync failed Secret validation required for installation")
 		reposync.SetStalled(&rs, "Validation", err)
-		// We intentionally overwrite the previous error here since we do not want
-		// to return it to the controller runtime.
-		_ = r.updateStatus(ctx, &rs, log)
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		updateErr := r.updateStatus(ctx, &rs)
+		// Use the validation error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, nil
+		return controllerruntime.Result{}, updateErr
 	}
 
 	reposyncLabelMap := map[string]string{
@@ -148,17 +151,31 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if err := Put(ctx, &rs, r.client, reconcilerName, secretName); err != nil {
+	if err := upsertSecret(ctx, &rs, r.client, reconcilerName, secretName); err != nil {
 		log.Error(err, "RepoSync failed secret creation", "auth", rs.Spec.Auth)
+		reposync.SetStalled(&rs, "Secret", err)
+		// Upsert errors should always trigger retry (return error),
+		// even if status update is successful.
+		updateErr := r.updateStatus(ctx, &rs)
+		if updateErr != nil {
+			log.Error(updateErr, "failed to update RepoSync status")
+		}
+		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, nil
+		return controllerruntime.Result{}, errors.Wrap(err, "Secret reconcile failed")
 	}
 
 	// Overwrite reconciler pod ServiceAccount.
 	if err := r.upsertServiceAccount(ctx, reconcilerName, rs.Spec.Git.Auth, rs.Spec.Git.GCPServiceAccountEmail, reposyncLabelMap); err != nil {
 		log.Error(err, "Failed to create/update ServiceAccount")
 		reposync.SetStalled(&rs, "ServiceAccount", err)
-		_ = r.updateStatus(ctx, &rs, log)
+		// Upsert errors should always trigger retry (return error),
+		// even if status update is successful.
+		updateErr := r.updateStatus(ctx, &rs)
+		if updateErr != nil {
+			log.Error(updateErr, "failed to update RepoSync status")
+		}
+		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "ServiceAccount reconcile failed")
 	}
@@ -167,7 +184,13 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err := r.upsertRoleBinding(ctx, rs.Namespace); err != nil {
 		log.Error(err, "Failed to create/update RoleBinding")
 		reposync.SetStalled(&rs, "RoleBinding", err)
-		_ = r.updateStatus(ctx, &rs, log)
+		// Upsert errors should always trigger retry (return error),
+		// even if status update is successful.
+		updateErr := r.updateStatus(ctx, &rs)
+		if updateErr != nil {
+			log.Error(updateErr, "failed to update RepoSync status")
+		}
+		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "RoleBinding reconcile failed")
 	}
@@ -179,7 +202,13 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err != nil {
 		log.Error(err, "Failed to create/update Deployment")
 		reposync.SetStalled(&rs, "Deployment", err)
-		_ = r.updateStatus(ctx, &rs, log)
+		// Upsert errors should always trigger retry (return error),
+		// even if status update is successful.
+		updateErr := r.updateStatus(ctx, &rs)
+		if updateErr != nil {
+			log.Error(updateErr, "failed to update RepoSync status")
+		}
+		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "Deployment reconcile failed")
 	}
@@ -192,7 +221,12 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if err != nil {
 			log.Error(err, "Failed to check reconciler deployment conditions")
 			reposync.SetStalled(&rs, "Deployment", err)
-			_ = r.updateStatus(ctx, &rs, log)
+			// Get errors should always trigger retry (return error),
+			// even if status update is successful.
+			updateErr := r.updateStatus(ctx, &rs)
+			if updateErr != nil {
+				log.Error(updateErr, "failed to update RepoSync status")
+			}
 			return controllerruntime.Result{}, err
 		}
 
@@ -225,7 +259,8 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		reposync.SetReconciling(&rs, "Deployment", msg)
 	}
 
-	err = r.updateStatus(ctx, &rs, log)
+	err = r.updateStatus(ctx, &rs)
+	// Use the status update error for metric tagging, if no other errors.
 	metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 	return controllerruntime.Result{}, err
 }
@@ -529,13 +564,9 @@ func (r *RepoSyncReconciler) mutateRoleBinding(ctx context.Context, namespace st
 	return r.updateRoleBindingSubjects(rb, reposyncList)
 }
 
-func (r *RepoSyncReconciler) updateStatus(ctx context.Context, rs *v1beta1.RepoSync, log logr.Logger) error {
+func (r *RepoSyncReconciler) updateStatus(ctx context.Context, rs *v1beta1.RepoSync) error {
 	rs.Status.ObservedGeneration = rs.Generation
-	err := r.client.Status().Update(ctx, rs)
-	if err != nil {
-		log.Error(err, "failed to update RepoSync status")
-	}
-	return err
+	return r.client.Status().Update(ctx, rs)
 }
 
 func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {

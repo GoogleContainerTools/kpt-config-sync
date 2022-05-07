@@ -5,7 +5,12 @@
 
 package inventory
 
-import "sigs.k8s.io/cli-utils/pkg/object"
+import (
+	"fmt"
+
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
+	"sigs.k8s.io/cli-utils/pkg/object"
+)
 
 const noInventoryErrorStr = `Package uninitialized. Please run "init" command.
 
@@ -20,55 +25,65 @@ const multipleInventoryErrorStr = `Package has multiple inventory object templat
 The package should have one and only one inventory object template.
 `
 
-const inventoryNamespaceInSet = `Inventory use namespace defined in package.
-
-The inventory cannot use a namespace that is defined in the package.
-`
-
 type NoInventoryObjError struct{}
 
-func (g NoInventoryObjError) Error() string {
+func (e *NoInventoryObjError) Error() string {
 	return noInventoryErrorStr
+}
+
+// Is returns true if the specified error is equal to this error.
+// Use errors.Is(error) to recursively check if an error wraps this error.
+func (e *NoInventoryObjError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := err.(*NoInventoryObjError)
+	return ok
 }
 
 type MultipleInventoryObjError struct {
 	InventoryObjectTemplates object.UnstructuredSet
 }
 
-func (g MultipleInventoryObjError) Error() string {
+func (e *MultipleInventoryObjError) Error() string {
 	return multipleInventoryErrorStr
 }
 
-//nolint:revive // redundant name in exported error ok
-type InventoryNamespaceInSet struct {
-	Namespace string
+// Is returns true if the specified error is equal to this error.
+// Use errors.Is(error) to recursively check if an error wraps this error.
+func (e *MultipleInventoryObjError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	tErr, ok := err.(*MultipleInventoryObjError)
+	if !ok {
+		return false
+	}
+	return e.InventoryObjectTemplates.Equal(tErr.InventoryObjectTemplates)
 }
 
-func (g InventoryNamespaceInSet) Error() string {
-	return inventoryNamespaceInSet
+type PolicyPreventedActuationError struct {
+	Strategy actuation.ActuationStrategy
+	Policy   Policy
+	Status   IDMatchStatus
 }
 
-//nolint:revive // redundant name in exported error ok
-type InventoryOverlapError struct {
-	err error
+func (e *PolicyPreventedActuationError) Error() string {
+	return fmt.Sprintf("inventory policy prevented actuation (strategy: %s, status: %s, policy: %s)",
+		e.Strategy, e.Status, e.Policy)
 }
 
-func (e *InventoryOverlapError) Error() string {
-	return e.err.Error()
-}
-
-func NewInventoryOverlapError(err error) *InventoryOverlapError {
-	return &InventoryOverlapError{err: err}
-}
-
-type NeedAdoptionError struct {
-	err error
-}
-
-func (e *NeedAdoptionError) Error() string {
-	return e.err.Error()
-}
-
-func NewNeedAdoptionError(err error) *NeedAdoptionError {
-	return &NeedAdoptionError{err: err}
+// Is returns true if the specified error is equal to this error.
+// Use errors.Is(error) to recursively check if an error wraps this error.
+func (e *PolicyPreventedActuationError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	tErr, ok := err.(*PolicyPreventedActuationError)
+	if !ok {
+		return false
+	}
+	return e.Strategy == tErr.Strategy &&
+		e.Policy == tErr.Policy &&
+		e.Status == tErr.Status
 }

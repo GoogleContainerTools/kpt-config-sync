@@ -51,12 +51,12 @@ ENV CGO_ENABLED=0
 # This is required by the `make fmt-go` target, even though it isn't used
 # in building the Nomos image. This was previously included in golang:alpine,
 # but not any more so we have to install it ourselves.
-RUN go get golang.org/x/tools/cmd/goimports
+RUN go install golang.org/x/tools/cmd/goimports
 
 # gotopt2 parses command line options
 # v0.1.2
 ARG GOTOPT2_REPO="github.com/filmil/gotopt2"
-RUN go get ${GOTOPT2_REPO}/cmd/gotopt2@v0.1.2
+RUN go install ${GOTOPT2_REPO}/cmd/gotopt2@v0.1.2
 
 # The build environment docker file.
 FROM ${GOLANG_CONTAINER}

@@ -35,9 +35,11 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
+	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
@@ -68,7 +70,20 @@ func (a *fakeApplier) Run(_ context.Context, _ inventory.Info, _ object.Unstruct
 }
 
 func TestSync(t *testing.T) {
-	resources, cache := prepareResources()
+	deploymentObj := newDeploymentObj()
+	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
+
+	testObj := newTestObj()
+	testID := object.UnstructuredToObjMetadata(testObj)
+	testGVK := testObj.GroupVersionKind()
+
+	objs := []client.Object{deploymentObj, testObj}
+
+	namespaceID := &object.ObjMetadata{
+		Name:      "test-namespace",
+		GroupKind: kinds.Namespace().GroupKind(),
+	}
+
 	uid := core.ID{
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
 		ObjectKey: client.ObjectKey{
@@ -92,22 +107,26 @@ func TestSync(t *testing.T) {
 		{
 			name: "unknown type for some resource",
 			events: []event.Event{
-				formApplyEvent(fakeID(), applyerror.NewUnknownTypeError(errors.New("unknown type"))),
-				formApplyEvent(nil, nil),
+				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("unknown type"), idFrom(*fakeID())),
+			multiErr: ErrorForResource(errors.New("unknown type"), idFrom(testID)),
 			gvks:     map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
 		},
 		{
 			name: "conflict error for some resource",
 			events: []event.Event{
-				formApplyEvent(fakeID(), inventory.NewInventoryOverlapError(errors.New("conflict"))),
-				formApplyEvent(nil, nil),
+				formApplySkipEvent(testID, testObj.DeepCopy(), &inventory.PolicyPreventedActuationError{
+					Strategy: actuation.ActuationStrategyApply,
+					Policy:   inventory.PolicyMustMatch,
+					Status:   inventory.NoMatch,
+				}),
+				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: KptManagementConflictError(resources[1]),
+			multiErr: KptManagementConflictError(testObj),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
@@ -118,81 +137,105 @@ func TestSync(t *testing.T) {
 			multiErr: largeResourceGroupError(fmt.Errorf("etcdserver: request is too large"), uid),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
 			name: "failed to apply",
 			events: []event.Event{
-				formApplyEvent(fakeID(), applyerror.NewApplyRunError(errors.New("failed apply"))),
-				formApplyEvent(nil, nil),
+				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewApplyRunError(errors.New("failed apply"))),
+				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("failed apply"), idFrom(*fakeID())),
+			multiErr: ErrorForResource(errors.New("failed apply"), idFrom(testID)),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
 			name: "failed to prune",
 			events: []event.Event{
-				formPruneEvent(event.Pruned, fakeID(), errors.New("failed pruning")),
-				formPruneEvent(event.Pruned, nil, nil),
+				formPruneEvent(event.PruneFailed, &testID, errors.New("failed pruning")),
+				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("failed pruning"), idFrom(*fakeID())),
+			multiErr: ErrorForResource(errors.New("failed pruning"), idFrom(testID)),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
 			name: "skipped pruning",
 			events: []event.Event{
-				formPruneEvent(event.Pruned, fakeID(), nil),
-				formPruneEvent(event.PruneSkipped, deploymentID(), nil),
-				formPruneEvent(event.Pruned, nil, nil),
+				formPruneEvent(event.PruneSuccessful, &testID, nil),
+				formPruneEvent(event.PruneSkipped, namespaceID, &filter.NamespaceInUseError{
+					Namespace: "test-namespace",
+				}),
+				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
+			multiErr: SkipErrorForResource(
+				errors.New("namespace still in use: test-namespace"),
+				idFrom(*namespaceID),
+				actuation.ActuationStrategyDelete),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
 			name: "all passed",
 			events: []event.Event{
-				formApplyEvent(fakeID(), nil),
-				formApplyEvent(deploymentID(), nil),
-				formApplyEvent(nil, nil),
-				formPruneEvent(event.Pruned, nil, nil),
+				formApplyEvent(event.ApplySuccessful, &testID, nil),
+				formApplyEvent(event.ApplySuccessful, &deploymentID, nil),
+				formApplyEvent(event.ApplyPending, nil, nil),
+				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
 		},
 		{
 			name: "all failed",
 			events: []event.Event{
-				formApplyEvent(fakeID(), applyerror.NewUnknownTypeError(errors.New("unknown type"))),
-				formApplyEvent(deploymentID(), applyerror.NewApplyRunError(errors.New("failed apply"))),
-				formApplyEvent(nil, nil),
-				formPruneEvent(event.Pruned, nil, nil),
+				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyFailed, &deploymentID, applyerror.NewApplyRunError(errors.New("failed apply"))),
+				formApplyEvent(event.ApplyPending, nil, nil),
+				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 			},
-			multiErr: status.Append(ErrorForResource(errors.New("unknown type"), idFrom(*fakeID())), ErrorForResource(errors.New("failed apply"), idFrom(*deploymentID()))),
+			multiErr: status.Append(ErrorForResource(errors.New("unknown type"), idFrom(testID)), ErrorForResource(errors.New("failed apply"), idFrom(deploymentID))),
 		},
 		{
 			name: "failed dependency during apply",
 			events: []event.Event{
-				formApplySkipEventWithDependency(deploymentID()),
+				formApplySkipEventWithDependency(deploymentID, deploymentObj.DeepCopy()),
 			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
-				fakeKind():         {},
+				testGVK:            {},
 			},
-			multiErr: status.Append(ErrorForResource(errors.New("dependencies are not reconciled: [Kind, random/random]"), idFrom(*deploymentID())), nil),
+			multiErr: status.Append(SkipErrorForResource(
+				errors.New("dependency apply reconcile timeout: namespace_name_group_kind"),
+				idFrom(deploymentID),
+				actuation.ActuationStrategyApply),
+				nil),
+		},
+		{
+			name: "failed dependency during prune",
+			events: []event.Event{
+				formPruneSkipEventWithDependency(deploymentID),
+			},
+			multiErr: SkipErrorForResource(
+				errors.New("dependent delete actuation failed: namespace_name_group_kind"),
+				idFrom(deploymentID),
+				actuation.ActuationStrategyDelete),
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Deployment(): {},
+				testGVK:            {},
+			},
 		},
 	}
 
@@ -216,7 +259,7 @@ func TestSync(t *testing.T) {
 		} else {
 			applier.clientSetFunc = applierFunc
 			var gvks map[schema.GroupVersionKind]struct{}
-			gvks, errs = applier.sync(context.Background(), resources, cache)
+			gvks, errs = applier.sync(context.Background(), objs)
 			if diff := cmp.Diff(tc.gvks, gvks, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("%s: Diff of GVK map from Apply(): %s", tc.name, diff)
 			}
@@ -236,7 +279,9 @@ func TestSync(t *testing.T) {
 				for i, actual := range actualErrs {
 					expected := expectedErrs[i]
 					if !strings.Contains(actual.Error(), expected.Error()) || reflect.TypeOf(expected) != reflect.TypeOf(actual) {
-						t.Errorf("%s: expected error %v but got %v", tc.name, expected, actual)
+						t.Errorf("%s:\nexpected error:\n%v\nbut got:\n%v", tc.name,
+							indent(expected.Error(), 1),
+							indent(actual.Error(), 1))
 					}
 				}
 			}
@@ -244,94 +289,109 @@ func TestSync(t *testing.T) {
 	}
 }
 
-func prepareResources() ([]client.Object, map[core.ID]client.Object) {
-	u1 := fake.UnstructuredObject(kinds.Deployment(), core.Namespace("test-namespace"), core.Name("random-name"))
-	u2 := fake.UnstructuredObject(schema.GroupVersionKind{
-		Group:   "configsync.test",
-		Version: "v1",
-		Kind:    "Test",
-	}, core.Namespace("test-namespace"), core.Name("random-name"))
-	objs := []client.Object{u1, u2}
-	cache := map[core.ID]client.Object{}
-	for _, u := range objs {
-		cache[core.IDOf(u)] = u
-	}
-	return objs, cache
-}
-
-func fakeID() *object.ObjMetadata {
-	return &object.ObjMetadata{
-		Namespace: "test-namespace",
-		Name:      "random-name",
-		GroupKind: schema.GroupKind{
-			Group: "configsync.test",
-			Kind:  "Test",
-		},
-	}
-}
-
-func deploymentID() *object.ObjMetadata {
-	return &object.ObjMetadata{
-		Namespace: "test-namespace",
-		Name:      "random-name",
-		GroupKind: kinds.Deployment().GroupKind(),
-	}
-}
-
-func fakeKind() schema.GroupVersionKind {
-	return schema.GroupVersionKind{
-		Group:   "configsync.test",
-		Version: "v1",
-		Kind:    "Test",
-	}
-}
-
-func formApplyEvent(id *object.ObjMetadata, err error) event.Event {
+func formApplyEvent(status event.ApplyEventStatus, id *object.ObjMetadata, err error) event.Event {
 	e := event.Event{
 		Type: event.ApplyType,
 		ApplyEvent: event.ApplyEvent{
-			Error: err,
+			Status: status,
+			Error:  err,
 		},
 	}
 	if id != nil {
 		e.ApplyEvent.Identifier = *id
+		e.ApplyEvent.Resource = &unstructured.Unstructured{}
 	}
 	return e
 }
 
-func formApplySkipEventWithDependency(id *object.ObjMetadata) event.Event {
-	u := &unstructured.Unstructured{}
-	u.SetAnnotations(map[string]string{dependson.Annotation: "/namespaces/random/Kind/random"})
+func formApplySkipEvent(id object.ObjMetadata, obj *unstructured.Unstructured, err error) event.Event {
+	return event.Event{
+		Type: event.ApplyType,
+		ApplyEvent: event.ApplyEvent{
+			Status:     event.ApplySkipped,
+			Identifier: id,
+			Resource:   obj,
+			Error:      err,
+		},
+	}
+}
+
+func formApplySkipEventWithDependency(id object.ObjMetadata, obj *unstructured.Unstructured) event.Event {
+	obj.SetAnnotations(map[string]string{dependson.Annotation: "group/namespaces/namespace/kind/name"})
 	e := event.Event{
 		Type: event.ApplyType,
 		ApplyEvent: event.ApplyEvent{
-			Operation:  event.Unchanged,
-			Identifier: *id,
-			Resource:   u,
+			Status:     event.ApplySkipped,
+			Identifier: id,
+			Resource:   obj,
+			Error: &filter.DependencyPreventedActuationError{
+				Object:       id,
+				Strategy:     actuation.ActuationStrategyApply,
+				Relationship: filter.RelationshipDependency,
+				Relation: object.ObjMetadata{
+					GroupKind: schema.GroupKind{
+						Group: "group",
+						Kind:  "kind",
+					},
+					Name:      "name",
+					Namespace: "namespace",
+				},
+				RelationPhase:           filter.PhaseReconcile,
+				RelationActuationStatus: actuation.ActuationSucceeded,
+				RelationReconcileStatus: actuation.ReconcileTimeout,
+			},
 		},
 	}
 	return e
 }
 
-func formPruneEvent(op event.PruneEventOperation, id *object.ObjMetadata, err error) event.Event {
+func formPruneSkipEventWithDependency(id object.ObjMetadata) event.Event {
+	return event.Event{
+		Type: event.PruneType,
+		PruneEvent: event.PruneEvent{
+			Status:     event.PruneSkipped,
+			Identifier: id,
+			Object:     &unstructured.Unstructured{},
+			Error: &filter.DependencyPreventedActuationError{
+				Object:       id,
+				Strategy:     actuation.ActuationStrategyDelete,
+				Relationship: filter.RelationshipDependent,
+				Relation: object.ObjMetadata{
+					GroupKind: schema.GroupKind{
+						Group: "group",
+						Kind:  "kind",
+					},
+					Name:      "name",
+					Namespace: "namespace",
+				},
+				RelationPhase:           filter.PhaseActuation,
+				RelationActuationStatus: actuation.ActuationFailed,
+				RelationReconcileStatus: actuation.ReconcilePending,
+			},
+		},
+	}
+}
+
+func formPruneEvent(status event.PruneEventStatus, id *object.ObjMetadata, err error) event.Event {
 	e := event.Event{
 		Type: event.PruneType,
 		PruneEvent: event.PruneEvent{
-			Error:     err,
-			Operation: op,
+			Error:  err,
+			Status: status,
 		},
 	}
 	if id != nil {
 		e.PruneEvent.Identifier = *id
+		e.PruneEvent.Object = &unstructured.Unstructured{}
 	}
 	return e
 }
 
-func formWaitEvent(op event.WaitEventOperation, id *object.ObjMetadata) event.Event {
+func formWaitEvent(status event.WaitEventStatus, id *object.ObjMetadata) event.Event {
 	e := event.Event{
 		Type: event.WaitType,
 		WaitEvent: event.WaitEvent{
-			Operation: op,
+			Status: status,
 		},
 	}
 	if id != nil {
@@ -351,10 +411,32 @@ func formErrorEvent(s string) event.Event {
 }
 
 func TestProcessWaitEvent(t *testing.T) {
+	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj())
+
 	status := newApplyStats()
-	processWaitEvent(formWaitEvent(event.ReconcileFailed, deploymentID()).WaitEvent, status.objsReconciled)
-	processWaitEvent(formWaitEvent(event.Reconciled, fakeID()).WaitEvent, status.objsReconciled)
+	processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, status.objsReconciled)
+	processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, status.objsReconciled)
 	if len(status.objsReconciled) != 1 {
 		t.Fatalf("expected %d object to be recocniled but got %d", 1, len(status.objsReconciled))
 	}
+}
+
+func indent(in string, indentation uint) string {
+	indent := strings.Repeat("\t", int(indentation))
+	lines := strings.Split(in, "\n")
+	return indent + strings.Join(lines, fmt.Sprintf("\n%s", indent))
+}
+
+func newDeploymentObj() *unstructured.Unstructured {
+	return fake.UnstructuredObject(kinds.Deployment(),
+		core.Namespace("test-namespace"), core.Name("random-name"))
+}
+
+func newTestObj() *unstructured.Unstructured {
+	return fake.UnstructuredObject(schema.GroupVersionKind{
+		Group:   "configsync.test",
+		Version: "v1",
+		Kind:    "Test",
+	}, core.Namespace("test-namespace"), core.Name("random-name"))
 }

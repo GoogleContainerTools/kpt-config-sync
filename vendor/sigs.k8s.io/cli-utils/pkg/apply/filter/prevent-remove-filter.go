@@ -23,15 +23,37 @@ func (prf PreventRemoveFilter) Name() string {
 	return PreventRemoveFilterName
 }
 
-// Filter returns true if the passed object should NOT be pruned (deleted)
-// because the "prevent remove" annotation is present; otherwise returns
-// false. Never returns an error.
-func (prf PreventRemoveFilter) Filter(obj *unstructured.Unstructured) (bool, string, error) {
+// Filter returns a AnnotationPreventedDeletionError if the object prune/delete
+// should be skipped.
+func (prf PreventRemoveFilter) Filter(obj *unstructured.Unstructured) error {
 	for annotation, value := range obj.GetAnnotations() {
 		if common.NoDeletion(annotation, value) {
-			reason := fmt.Sprintf("annotation prevents deletion (annotation: %q, value: %q)", annotation, value)
-			return true, reason, nil
+			return &AnnotationPreventedDeletionError{
+				Annotation: annotation,
+				Value:      value,
+			}
 		}
 	}
-	return false, "", nil
+	return nil
+}
+
+type AnnotationPreventedDeletionError struct {
+	Annotation string
+	Value      string
+}
+
+func (e *AnnotationPreventedDeletionError) Error() string {
+	return fmt.Sprintf("annotation prevents deletion (%q: %q)", e.Annotation, e.Value)
+}
+
+func (e *AnnotationPreventedDeletionError) Is(err error) bool {
+	if err == nil {
+		return false
+	}
+	tErr, ok := err.(*AnnotationPreventedDeletionError)
+	if !ok {
+		return false
+	}
+	return e.Annotation == tErr.Annotation &&
+		e.Value == tErr.Value
 }

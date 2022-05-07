@@ -74,7 +74,6 @@ type Event struct {
 // String returns a string suitable for logging
 func (e Event) String() string {
 	var sb strings.Builder
-	sb.WriteString("Event{ ")
 	switch e.Type {
 	case InitType:
 		sb.WriteString(e.InitEvent.String())
@@ -95,7 +94,6 @@ func (e Event) String() string {
 	case ValidationType:
 		sb.WriteString(e.ValidationEvent.String())
 	}
-	sb.WriteString(" }")
 	return sb.String()
 }
 
@@ -158,72 +156,75 @@ func (ee ErrorEvent) String() string {
 	return fmt.Sprintf("ErrorEvent{ Err: %q }", ee.Err.Error())
 }
 
-//go:generate stringer -type=WaitEventOperation -linecomment
-type WaitEventOperation int
+//go:generate stringer -type=WaitEventStatus -linecomment
+type WaitEventStatus int
 
 const (
-	ReconcilePending WaitEventOperation = iota // Pending
-	Reconciled
-	ReconcileSkipped // Skipped
-	ReconcileTimeout // Timeout
-	ReconcileFailed  // Failed
+	ReconcilePending    WaitEventStatus = iota // Pending
+	ReconcileSuccessful                        // Successful
+	ReconcileSkipped                           // Skipped
+	ReconcileTimeout                           // Timeout
+	ReconcileFailed                            // Failed
 )
 
 type WaitEvent struct {
 	GroupName  string
 	Identifier object.ObjMetadata
-	Operation  WaitEventOperation
+	Status     WaitEventStatus
 }
 
 // String returns a string suitable for logging
 func (we WaitEvent) String() string {
-	return fmt.Sprintf("WaitEvent{ GroupName: %q, Operation: %q, Identifier: %q }",
-		we.GroupName, we.Operation, we.Identifier)
+	return fmt.Sprintf("WaitEvent{ GroupName: %q, Status: %q, Identifier: %q }",
+		we.GroupName, we.Status, we.Identifier)
 }
 
-//go:generate stringer -type=ActionGroupEventType
-type ActionGroupEventType int
+//go:generate stringer -type=ActionGroupEventStatus
+type ActionGroupEventStatus int
 
 const (
-	Started ActionGroupEventType = iota
+	Started ActionGroupEventStatus = iota
 	Finished
 )
 
 type ActionGroupEvent struct {
 	GroupName string
 	Action    ResourceAction
-	Type      ActionGroupEventType
+	Status    ActionGroupEventStatus
 }
 
 // String returns a string suitable for logging
 func (age ActionGroupEvent) String() string {
 	return fmt.Sprintf("ActionGroupEvent{ GroupName: %q, Action: %q, Type: %q }",
-		age.GroupName, age.Action, age.Type)
+		age.GroupName, age.Action, age.Status)
 }
 
-//go:generate stringer -type=ApplyEventOperation
-type ApplyEventOperation int
+//go:generate stringer -type=ApplyEventStatus -linecomment
+type ApplyEventStatus int
 
 const (
-	ApplyUnspecified ApplyEventOperation = iota
-	ServersideApplied
-	Created
-	Unchanged
-	Configured
+	ApplyPending    ApplyEventStatus = iota // Pending
+	ApplySuccessful                         // Successful
+	ApplySkipped                            // Skipped
+	ApplyFailed                             // Failed
 )
 
 type ApplyEvent struct {
 	GroupName  string
 	Identifier object.ObjMetadata
-	Operation  ApplyEventOperation
+	Status     ApplyEventStatus
 	Resource   *unstructured.Unstructured
 	Error      error
 }
 
 // String returns a string suitable for logging
 func (ae ApplyEvent) String() string {
-	return fmt.Sprintf("ApplyEvent{ GroupName: %q, Operation: %q, Identifier: %q, Error: %q }",
-		ae.GroupName, ae.Operation, ae.Identifier, ae.Error)
+	if ae.Error != nil {
+		return fmt.Sprintf("ApplyEvent{ GroupName: %q, Status: %q, Identifier: %q, Error: %q }",
+			ae.GroupName, ae.Status, ae.Identifier, ae.Error)
+	}
+	return fmt.Sprintf("ApplyEvent{ GroupName: %q, Status: %q, Identifier: %q }",
+		ae.GroupName, ae.Status, ae.Identifier)
 }
 
 type StatusEvent struct {
@@ -243,58 +244,68 @@ func (se StatusEvent) String() string {
 			gen = se.PollResourceInfo.Resource.GetGeneration()
 		}
 	}
-	return fmt.Sprintf("StatusEvent{ Status: %q, Generation: %d, Identifier: %q, Error: %q }",
-		status, gen, se.Identifier, se.Error)
+	if se.Error != nil {
+		return fmt.Sprintf("StatusEvent{ Status: %q, Generation: %d, Identifier: %q, Error: %q }",
+			status, gen, se.Identifier, se.Error)
+	}
+	return fmt.Sprintf("StatusEvent{ Status: %q, Generation: %d, Identifier: %q }",
+		status, gen, se.Identifier)
 }
 
-//go:generate stringer -type=PruneEventOperation
-type PruneEventOperation int
+//go:generate stringer -type=PruneEventStatus -linecomment
+type PruneEventStatus int
 
 const (
-	PruneUnspecified PruneEventOperation = iota
-	Pruned
-	PruneSkipped
+	PrunePending    PruneEventStatus = iota // Pending
+	PruneSuccessful                         // Successful
+	PruneSkipped                            // Skipped
+	PruneFailed                             // Failed
 )
 
 type PruneEvent struct {
 	GroupName  string
 	Identifier object.ObjMetadata
-	Operation  PruneEventOperation
+	Status     PruneEventStatus
 	Object     *unstructured.Unstructured
-	// If prune is skipped, this reason string explains why
-	Reason string
-	Error  error
+	Error      error
 }
 
 // String returns a string suitable for logging
 func (pe PruneEvent) String() string {
-	return fmt.Sprintf("PruneEvent{ GroupName: %q, Operation: %q, Identifier: %q, Reason: %q, Error: %q }",
-		pe.GroupName, pe.Operation, pe.Identifier, pe.Reason, pe.Error)
+	if pe.Error != nil {
+		return fmt.Sprintf("PruneEvent{ GroupName: %q, Status: %q, Identifier: %q, Error: %q }",
+			pe.GroupName, pe.Status, pe.Identifier, pe.Error)
+	}
+	return fmt.Sprintf("PruneEvent{ GroupName: %q, Status: %q, Identifier: %q }",
+		pe.GroupName, pe.Status, pe.Identifier)
 }
 
-//go:generate stringer -type=DeleteEventOperation
-type DeleteEventOperation int
+//go:generate stringer -type=DeleteEventStatus -linecomment
+type DeleteEventStatus int
 
 const (
-	DeleteUnspecified DeleteEventOperation = iota
-	Deleted
-	DeleteSkipped
+	DeletePending    DeleteEventStatus = iota // Pending
+	DeleteSuccessful                          // Successful
+	DeleteSkipped                             // Skipped
+	DeleteFailed                              // Failed
 )
 
 type DeleteEvent struct {
 	GroupName  string
 	Identifier object.ObjMetadata
-	Operation  DeleteEventOperation
+	Status     DeleteEventStatus
 	Object     *unstructured.Unstructured
-	// If delete is skipped, this reason string explains why
-	Reason string
-	Error  error
+	Error      error
 }
 
 // String returns a string suitable for logging
 func (de DeleteEvent) String() string {
-	return fmt.Sprintf("DeleteEvent{ GroupName: %q, Operation: %q, Identifier: %q, Reason: %q, Error: %q }",
-		de.GroupName, de.Operation, de.Identifier, de.Reason, de.Error)
+	if de.Error != nil {
+		return fmt.Sprintf("DeleteEvent{ GroupName: %q, Status: %q, Identifier: %q, Error: %q }",
+			de.GroupName, de.Status, de.Identifier, de.Error)
+	}
+	return fmt.Sprintf("DeleteEvent{ GroupName: %q, Status: %q, Identifier: %q }",
+		de.GroupName, de.Status, de.Identifier)
 }
 
 type ValidationEvent struct {
@@ -304,6 +315,10 @@ type ValidationEvent struct {
 
 // String returns a string suitable for logging
 func (ve ValidationEvent) String() string {
-	return fmt.Sprintf("ValidationEvent{ Identifiers: %+v, Error: %q }",
-		ve.Identifiers, ve.Error)
+	if ve.Error != nil {
+		return fmt.Sprintf("ValidationEvent{ Identifiers: %+v, Error: %q }",
+			ve.Identifiers, ve.Error)
+	}
+	return fmt.Sprintf("ValidationEvent{ Identifiers: %+v }",
+		ve.Identifiers)
 }

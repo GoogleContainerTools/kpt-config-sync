@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Put secret in config-management-system namespace using the
-// existing secret in the reposync.namespace.
-func Put(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string, secretName string) error {
+// upsertSecret creates or updates the secret in config-management-system
+// namespace using the existing secret in the reposync.namespace.
+func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string, secretName string) error {
 	// Secret is only created if auth is not 'none' or 'gcenode'.
 	if SkipForAuth(rs.Spec.Auth) {
 		return nil

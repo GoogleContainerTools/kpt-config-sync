@@ -22,7 +22,9 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -205,4 +207,14 @@ func PollingPeriod(envName string, defaultValue time.Duration) time.Duration {
 		return pollingFreq
 	}
 	return defaultValue
+}
+
+// useFWIAuth returns whether ConfigSync uses fleet workload identity for authentication.
+// It is true only when all the following conditions are true:
+// 1. the auth type is `gcpserviceaccount`.
+// 2. the cluster is registered in a fleet (the membership object exists).
+// 3. the fleet workload identity is enabled (workload_identity_pool and identity_provider are not empty).
+func useFWIAuth(authType string, membership *hubv1.Membership) bool {
+	return authType == configsync.AuthGCPServiceAccount && membership != nil &&
+		membership.Spec.IdentityProvider != "" && membership.Spec.WorkloadIdentityPool != ""
 }

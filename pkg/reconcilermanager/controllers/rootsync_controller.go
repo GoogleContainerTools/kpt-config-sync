@@ -504,7 +504,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
 		}
-		injectFWICreds := auth == configsync.AuthGCPServiceAccount && r.membership != nil
+		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
 			if err := r.injectFleetWorkloadIdentityCredentials(&d.Spec.Template, gcpSAEmail); err != nil {
 				return err

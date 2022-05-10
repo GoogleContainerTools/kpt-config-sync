@@ -1766,6 +1766,34 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
+	testReconciler.membership = &hubv1.Membership{
+		Spec: hubv1.MembershipSpec{
+			Owner: hubv1.MembershipOwner{
+				ID: "fakeId",
+			},
+		},
+	}
+	// Test creating Deployment resources with GCPServiceAccount auth type.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	repoContainerEnv := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		gceNodeMutator(gcpSAEmail),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	// compare Deployment.
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Resources successfully created")
+
 	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
@@ -1774,14 +1802,11 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		},
 	}
 
-	// Test creating Deployment resources with GCPServiceAccount auth type.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
-	repoDeployment := repoSyncDeployment(
+	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
@@ -1790,7 +1815,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		fleetWorkloadIdentityMutator(workloadIdentityPool, gcpSAEmail),
 		containerEnvMutator(repoContainerEnv),
 	)
-	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+	wantDeployments = map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
 	// compare Deployment.
 	if err := validateDeployments(wantDeployments, fakeClient); err != nil {

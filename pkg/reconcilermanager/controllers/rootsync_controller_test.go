@@ -1502,14 +1502,13 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, core.Namespace(rs.Namespace)))
-	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
-			WorkloadIdentityPool: workloadIdentityPool,
-			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
+			Owner: hubv1.MembershipOwner{
+				ID: "fakeId",
+			},
 		},
 	}
-
 	// Test creating Deployment resources with GCPServiceAccount auth type.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1518,6 +1517,31 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		gceNodeMutator(gcpSAEmail),
+		containerEnvMutator(rootContainerEnvs),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	// compare Deployment.
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Resources successfully created")
+
+	workloadIdentityPool := "test-gke-dev.svc.id.goog"
+	testReconciler.membership = &hubv1.Membership{
+		Spec: hubv1.MembershipSpec{
+			WorkloadIdentityPool: workloadIdentityPool,
+			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
+		},
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setAnnotations(map[string]string{
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
@@ -1525,7 +1549,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		fleetWorkloadIdentityMutator(workloadIdentityPool, gcpSAEmail),
 		containerEnvMutator(rootContainerEnvs),
 	)
-	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+	wantDeployments = map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
 	// compare Deployment.
 	if err := validateDeployments(wantDeployments, fakeClient); err != nil {

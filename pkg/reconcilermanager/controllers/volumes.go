@@ -20,7 +20,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/metadata"
 )
@@ -53,7 +52,7 @@ func filterVolumes(existing []corev1.Volume, authType, secretName string, member
 		updatedVolumes = append(updatedVolumes, volume)
 	}
 
-	if authType == configsync.AuthGCPServiceAccount && membership != nil {
+	if useFWIAuth(authType, membership) {
 		updatedVolumes = append(updatedVolumes, corev1.Volume{
 			Name: gcpKSAVolumeName,
 			VolumeSource: corev1.VolumeSource{

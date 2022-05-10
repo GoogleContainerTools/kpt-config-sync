@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -227,13 +228,68 @@ func testWorkloadIdentity(nt *nomostest.NT, fleetMembership, gcpProject, crossPr
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "unstructured", "sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
 		v1beta1.OciSource, tenant, image, gsaEmail))
 
-	nt.T.Log("Verify GKE workload identity")
+	nt.T.Log("Verify Fleet workload identity within the same project")
 	nt.T.Log("Unregister the cluster if it is registered")
 	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
 		nt.T.Log(err)
 	}
+	nt.T.Log("Register the cluster to a fleet in the same project")
+	if err := registerCluster(fleetMembership, gcpProject, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Restart the reconciler-manager to pick up the Membership")
+	// The reconciler manager checks if the Membership CRD exists before setting
+	// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
+	// If the CRD exists, it configures the Membership watch.
+	// Otherwise, the watch is not configured to prevent the controller from crashing caused by an unknown CRD.
+	// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
+	// can set up the watch. Once the watch is configured, it can detect the
+	// deletion and creation of the Membership, which implies cluster unregistration and registration.
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
+
+	nt.T.Log("Verify GKE workload identity")
+	nt.T.Log("Unregister the cluster from the fleet in the same project")
+	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	tenant = "tenant-b"
+	nt.T.Logf("Update RootSync to sync %s", tenant)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+
+	nt.T.Log("Verify Fleet workload identity across project boundary")
+	nt.T.Log("Register the cluster to a fleet in a different project")
+	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
+		nt.T.Log(err)
+	}
+	if err := registerCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	tenant = "tenant-c"
+	nt.T.Logf("Update RootSync to sync %s", tenant)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
+
+	nt.T.Log("Verify GKE workload identity")
+	nt.T.Log("Unregister the cluster from the fleet in a different project")
+	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	tenant = "tenant-d"
+	nt.T.Logf("Update RootSync to sync %s", tenant)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)

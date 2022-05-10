@@ -664,7 +664,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RepoSy
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
-					// TODO  Inject FWI credentials
+					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(NamespaceReconcilerType))
 				}
 			case reconcilermanager.GitSync:

@@ -136,6 +136,13 @@ func TestWorkloadIdentity(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Restart the reconciler-manager to pick up the Membership")
+	// The reconciler manager checks if the Membership CRD exists before setting
+	// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
+	// If the CRD exists, it configures the Membership watch.
+	// Otherwise, the watch is not configured to prevent the controller from crashing caused by an unknown CRD.
+	// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
+	// can set up the watch. Once the watch is configured, it can detect the
+	// deletion and creation of the Membership, which implies cluster unregistration and registration.
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),

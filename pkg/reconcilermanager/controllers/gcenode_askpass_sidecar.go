@@ -47,8 +47,10 @@ func gceNodeAskPassContainerImage(name, tag string) string {
 	return fmt.Sprintf("gcr.io/config-management-release/%v:%v", name, tag)
 }
 
-func configureGceNodeAskPass(cr *corev1.Container, gsaEmail string, injectFWICreds bool) {
-	if injectFWICreds {
+// injectFWICredsToContainer injects container environment variable and
+// volumeMount for FWI credentials to the container.
+func injectFWICredsToContainer(cr *corev1.Container, inject bool) {
+	if inject {
 		cr.Env = append(cr.Env, corev1.EnvVar{
 			Name:  googleApplicationCredentialsEnvKey,
 			Value: filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile),
@@ -59,6 +61,10 @@ func configureGceNodeAskPass(cr *corev1.Container, gsaEmail string, injectFWICre
 			MountPath: gcpKSATokenDir,
 		})
 	}
+}
+
+func configureGceNodeAskPass(cr *corev1.Container, gsaEmail string, injectFWICreds bool) {
+	injectFWICredsToContainer(cr, injectFWICreds)
 	cr.Env = append(cr.Env, corev1.EnvVar{
 		Name:  gsaEmailEnvKey,
 		Value: gsaEmail,

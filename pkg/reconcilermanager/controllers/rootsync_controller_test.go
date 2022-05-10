@@ -1688,7 +1688,35 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	// TODO: add test for FWI
+	t.Log("Test FWI")
+	workloadIdentityPool := "test-gke-dev.svc.id.goog"
+	testReconciler.membership = &hubv1.Membership{
+		Spec: hubv1.MembershipSpec{
+			WorkloadIdentityPool: workloadIdentityPool,
+			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
+		},
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantServiceAccount)], wantServiceAccount, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("ServiceAccount diff %s", diff)
+	}
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setAnnotations(map[string]string{
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
+		setServiceAccountName(rootReconcilerName),
+		fwiOciMutator(workloadIdentityPool),
+		containerEnvMutator(rootContainerEnv),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
 }
 
 type depMutator func(*appsv1.Deployment)
@@ -1755,37 +1783,42 @@ func gceNodeMutator(gsaEmail string) depMutator {
 	}
 }
 
+func fwiVolume(workloadIdentityPool string) corev1.Volume {
+	return corev1.Volume{
+		Name: gcpKSAVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Audience:          workloadIdentityPool,
+							ExpirationSeconds: &expirationSeconds,
+							Path:              gsaTokenPath,
+						},
+					},
+					{
+						DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{
+							{
+								Path: googleApplicationCredentialsFile,
+								FieldRef: &corev1.ObjectFieldSelector{
+									APIVersion: "v1",
+									FieldPath:  fmt.Sprintf("metadata.annotations['%s']", metadata.FleetWorkloadIdentityCredentials),
+								},
+							},
+						}},
+					},
+				},
+				DefaultMode: &defaultMode,
+			},
+		},
+	}
+}
+
 func fleetWorkloadIdentityMutator(workloadIdentityPool, gsaEmail string) depMutator {
 	return func(dep *appsv1.Deployment) {
 		dep.Spec.Template.Spec.Volumes = []corev1.Volume{
 			{Name: "repo"},
-			{Name: gcpKSAVolumeName,
-				VolumeSource: corev1.VolumeSource{
-					Projected: &corev1.ProjectedVolumeSource{
-						Sources: []corev1.VolumeProjection{
-							{
-								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-									Audience:          workloadIdentityPool,
-									ExpirationSeconds: &expirationSeconds,
-									Path:              gsaTokenPath,
-								},
-							},
-							{
-								DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{
-									{
-										Path: googleApplicationCredentialsFile,
-										FieldRef: &corev1.ObjectFieldSelector{
-											APIVersion: "v1",
-											FieldPath:  fmt.Sprintf("metadata.annotations['%s']", metadata.FleetWorkloadIdentityCredentials),
-										},
-									},
-								}},
-							},
-						},
-						DefaultMode: &defaultMode,
-					},
-				},
-			},
+			fwiVolume(workloadIdentityPool),
 		}
 		dep.Spec.Template.Spec.Containers = fleetWorkloadIdentityContainers(gsaEmail)
 	}
@@ -1809,6 +1842,44 @@ func fleetWorkloadIdentityContainers(gsaEmail string) []corev1.Container {
 		}},
 	})
 	return containers
+}
+
+func fwiOciMutator(workloadIdentityPool string) depMutator {
+	return func(dep *appsv1.Deployment) {
+		dep.Spec.Template.Spec.Volumes = []corev1.Volume{
+			{Name: "repo"},
+			fwiVolume(workloadIdentityPool),
+		}
+		dep.Spec.Template.Spec.Containers = fwiOciContainers()
+	}
+}
+
+func fwiOciContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			Name:      reconcilermanager.Reconciler,
+			Resources: defaultResourceRequirements(),
+		},
+		{
+			Name:      reconcilermanager.HydrationController,
+			Resources: defaultResourceRequirements(),
+		},
+		{
+			Name:      reconcilermanager.OciSync,
+			Resources: defaultResourceRequirements(),
+			Env: []corev1.EnvVar{{
+				Name:  googleApplicationCredentialsEnvKey,
+				Value: filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile),
+			}},
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "repo", MountPath: "/repo"},
+				{
+					Name:      gcpKSAVolumeName,
+					ReadOnly:  true,
+					MountPath: gcpKSATokenDir,
+				}},
+		},
+	}
 }
 
 func containersWithRepoVolumeMutator(containers []corev1.Container) depMutator {

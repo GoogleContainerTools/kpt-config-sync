@@ -184,8 +184,10 @@ spec:
                 properties:
                   enableShellInRendering:
                     description: 'enableShellInRendering specifies whether to enable
-                      or disable the shell in rendering process. Default: false. If
-                      set to true, it will enable the shell in rendering process.'
+                      or disable the shell access in rendering process. Default: false.
+                      Kustomize remote bases requires shell access. Setting this field
+                      to true will enable shell in the rendering process and support
+                      pulling remote bases from public repositories.'
                     type: boolean
                   gitSyncDepth:
                     description: gitSyncDepth allows one to override the number of
@@ -1001,8 +1003,10 @@ spec:
                 properties:
                   enableShellInRendering:
                     description: 'enableShellInRendering specifies whether to enable
-                      or disable the shell in rendering process. Default: false. If
-                      set to true, it will enable the shell in rendering process.'
+                      or disable the shell access in rendering process. Default: false.
+                      Kustomize remote bases requires shell access. Setting this field
+                      to true will enable shell in the rendering process and support
+                      pulling remote bases from public repositories.'
                     type: boolean
                   gitSyncDepth:
                     description: gitSyncDepth allows one to override the number of

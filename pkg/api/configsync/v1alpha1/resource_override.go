@@ -55,8 +55,9 @@ type OverrideSpec struct {
 	// +optional
 	ReconcileTimeout *metav1.Duration `json:"reconcileTimeout,omitempty"`
 
-	// enableShellInRendering specifies whether to enable or disable the shell in rendering process. Default: false.
-	// If set to true, it will enable the shell in rendering process.
+	// enableShellInRendering specifies whether to enable or disable the shell access in rendering process. Default: false.
+	// Kustomize remote bases requires shell access. Setting this field to true will enable shell in the rendering process and
+	// support pulling remote bases from public repositories.
 	// +optional
 	EnableShellInRendering *bool `json:"enableShellInRendering,omitempty"`
 }

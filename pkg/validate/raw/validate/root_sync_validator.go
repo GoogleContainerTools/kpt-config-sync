@@ -42,7 +42,7 @@ func RootSync(obj ast.FileObject) status.Error {
 	} else {
 		rs = s.(*v1beta1.RootSync)
 	}
-	return GitSpec(rs.Spec.Git, rs)
+	return SourceSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs)
 }
 
 func toRootSyncV1Beta1(rs *v1alpha1.RootSync) (*v1beta1.RootSync, status.Error) {

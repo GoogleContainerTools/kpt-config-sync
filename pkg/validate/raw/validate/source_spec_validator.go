@@ -23,18 +23,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var (
-	authSSH               = configsync.AuthSSH
-	authCookiefile        = configsync.AuthCookieFile
-	authGCENode           = configsync.AuthGCENode
-	authToken             = configsync.AuthToken
-	authNone              = configsync.AuthNone
-	authGCPServiceAccount = configsync.AuthGCPServiceAccount
-)
-
 // gcpSASuffix specifies the default suffix used with gcp ServiceAccount email.
 // https://cloud.google.com/iam/docs/service-accounts#user-managed
 const gcpSASuffix = ".iam.gserviceaccount.com"
+
+// SourceSpec validates the source specification for any obvious problems.
+func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, rs client.Object) status.Error {
+	switch v1beta1.SourceType(sourceType) {
+	case v1beta1.GitSource:
+		return GitSpec(git, rs)
+	case v1beta1.OciSource:
+		return OciSpec(oci, rs)
+	default:
+		return InvalidSourceType(rs)
+	}
+}
 
 // GitSpec validates the git specification for any obvious problems.
 func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
@@ -51,8 +54,8 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
 	switch git.Auth {
-	case authSSH, authCookiefile, authGCENode, authToken, authNone:
-	case authGCPServiceAccount:
+	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone:
+	case configsync.AuthGCPServiceAccount:
 		if git.GCPServiceAccountEmail == "" {
 			return MissingGCPSAEmail(rs)
 		}
@@ -64,13 +67,13 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	}
 
 	// Check that proxy isn't unnecessarily declared.
-	if git.Proxy != "" && git.Auth != authNone && git.Auth != authCookiefile && git.Auth != authToken {
+	if git.Proxy != "" && git.Auth != configsync.AuthNone && git.Auth != configsync.AuthCookieFile && git.Auth != configsync.AuthToken {
 		return NoOpProxy(rs)
 	}
 
 	// Check the secret ref is specified if and only if it is required.
 	switch git.Auth {
-	case authNone, authGCENode, authGCPServiceAccount:
+	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		if git.SecretRef.Name != "" {
 			return IllegalSecretRef(rs)
 		}
@@ -80,6 +83,35 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 		}
 	}
 
+	return nil
+}
+
+// OciSpec validates the OCI specification for any obvious problems.
+func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
+	if oci == nil {
+		return MissingOciSpec(rs)
+	}
+
+	// We can't connect to the oci image if we don't have the URL.
+	if oci.Image == "" {
+		return MissingOciImage(rs)
+	}
+
+	// Ensure auth is a valid value.
+	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
+	// will fail to apply.
+	switch oci.Auth {
+	case configsync.AuthGCENode, configsync.AuthNone:
+	case configsync.AuthGCPServiceAccount:
+		if oci.GCPServiceAccountEmail == "" {
+			return MissingGCPSAEmail(rs)
+		}
+		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
+			return InvalidGCPSAEmail(rs)
+		}
+	default:
+		return InvalidOciAuthType(rs)
+	}
 	return nil
 }
 
@@ -93,7 +125,7 @@ var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 func MissingGitSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must define spec.git when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, v1beta1.GitSource).
 		BuildWithResources(o)
 }
 
@@ -102,17 +134,17 @@ func MissingGitSpec(o client.Object) status.Error {
 func MissingGitRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must define spec.git.repo", kind).
+		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, v1beta1.GitSource).
 		BuildWithResources(o)
 }
 
 // InvalidAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
 func InvalidAuthType(o client.Object) status.Error {
-	types := []string{authSSH, authCookiefile, authGCENode, authToken, authNone}
+	types := []string{configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone, configsync.AuthGCPServiceAccount}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must declare spec.git.auth to be one of [%s]", kind,
+		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
 			strings.Join(types, ",")).
 		BuildWithResources(o)
 }
@@ -122,8 +154,8 @@ func InvalidAuthType(o client.Object) status.Error {
 func NoOpProxy(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss which declare spec.git.proxy must declare spec.git.auth=%q, %q or %q",
-			kind, authNone, authCookiefile, authToken).
+		Sprintf("%ss which specify spec.git.proxy must also specify spec.git.auth as one of %q, %q or %q",
+			kind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken).
 		BuildWithResources(o)
 }
 
@@ -132,8 +164,8 @@ func NoOpProxy(o client.Object) status.Error {
 func IllegalSecretRef(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss declaring spec.git.auth : [%q, %q, %q] must not declare spec.git.secretRef",
-			kind, authNone, authGCENode, authGCPServiceAccount).
+		Sprintf("%ss which specify spec.git.auth as one of %q, %q, or %q must not specify spec.git.secretRef",
+			kind, configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount).
 		BuildWithResources(o)
 }
 
@@ -142,8 +174,8 @@ func IllegalSecretRef(o client.Object) status.Error {
 func MissingSecretRef(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss declaring spec.git.auth = %q or %q or %q must declare spec.git.secretRef",
-			kind, authSSH, authCookiefile, authToken).
+		Sprintf("%ss which specify spec.git.auth as one of %q, %q or %q must also specify spec.git.secretRef",
+			kind, configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthToken).
 		BuildWithResources(o)
 }
 
@@ -152,8 +184,8 @@ func MissingSecretRef(o client.Object) status.Error {
 func InvalidGCPSAEmail(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss declaring spec.git.auth = %q must have suffix <gcp_serviceaccount_name>.[%s]",
-			kind, authGCPServiceAccount, gcpSASuffix).
+		Sprintf("%ss which specify spec.git.auth or spec.oci.auth as %q must use suffix <gcp_serviceaccount_name>.[%s]",
+			kind, configsync.AuthGCPServiceAccount, gcpSASuffix).
 		BuildWithResources(o)
 }
 
@@ -162,8 +194,8 @@ func InvalidGCPSAEmail(o client.Object) status.Error {
 func MissingGCPSAEmail(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss declaring  spec.git.auth = %q must declare spec.git.gcpServiceAccountEmail",
-			kind, authGCPServiceAccount).
+		Sprintf("%ss which specify spec.git.auth or spec.oci.auth as %q must also specify spec.git.gcpServiceAccountEmail or spec.oci.gcpServiceAccountEmail",
+			kind, configsync.AuthGCPServiceAccount).
 		BuildWithResources(o)
 }
 
@@ -182,4 +214,42 @@ func validGCPServiceAccountEmail(email string) bool {
 		}
 	}
 	return false
+}
+
+// InvalidSourceType reports that a RootSync/RepoSync doesn't use one of the
+// supported source types.
+func InvalidSourceType(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.sourceType to be either %q or %q", kind, v1beta1.GitSource, v1beta1.OciSource).
+		BuildWithResources(o)
+}
+
+// MissingOciSpec reports that a RootSync/RepoSync doesn't declare the OCI spec
+// when spec.sourceType is set to `oci`.
+func MissingOciSpec(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, v1beta1.OciSource).
+		BuildWithResources(o)
+}
+
+// MissingOciImage reports that a RootSync/RepoSync doesn't declare the OCI image it is
+// supposed to connect to.
+func MissingOciImage(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, v1beta1.OciSource).
+		BuildWithResources(o)
+}
+
+// InvalidOciAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
+// methods for OCI image.
+func InvalidOciAuthType(o client.Object) status.Error {
+	types := []string{configsync.AuthGCENode, configsync.AuthGCPServiceAccount, configsync.AuthNone}
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,
+			strings.Join(types, ",")).
+		BuildWithResources(o)
 }

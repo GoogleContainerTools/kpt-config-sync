@@ -51,7 +51,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	}
 	nt.T.Log("Verify the NoOpProxyError")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `KNV1061: RootSyncs which declare spec.git.proxy must declare spec.git.auth="none", "cookiefile" or "token"`)
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
 
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)

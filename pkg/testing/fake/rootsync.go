@@ -21,6 +21,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // RootSyncObjectV1Alpha1 initializes a RootSync.
@@ -49,4 +50,12 @@ func RootSyncObjectV1Beta1(name string, opts ...core.MetaMutator) *v1beta1.RootS
 	mutate(result, opts...)
 
 	return result
+}
+
+// WithRootSyncSourceType sets the sourceType of the RootSync object.
+func WithRootSyncSourceType(sourceType v1beta1.SourceType) core.MetaMutator {
+	return func(o client.Object) {
+		rs := o.(*v1beta1.RootSync)
+		rs.Spec.SourceType = string(sourceType)
+	}
 }

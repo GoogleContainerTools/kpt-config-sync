@@ -118,7 +118,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	r.namespaces[req.Namespace] = struct{}{}
 	reconcilerName := reconciler.NsReconcilerName(rs.Namespace, rs.Name)
 
-	if err = r.validateSpec(ctx, &rs, log, reconcilerName); err != nil {
+	if err = r.validateSpec(ctx, &rs, reconcilerName); err != nil {
 		log.Error(err, "RepoSync failed validation")
 		reposync.SetStalled(&rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
@@ -510,40 +510,32 @@ func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *
 	return result
 }
 
-func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoSync, log logr.Logger, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		secretName := ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
-		return r.validateGitSpec(ctx, rs, log, secretName)
+		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
-		// TODO : add validations for the oci spec
+		return validate.OciSpec(rs.Spec.Oci, rs)
 	default:
-		err := fmt.Errorf("unknown sourceType %q. Must be %q or %q", rs.Spec.SourceType, v1beta1.GitSource, v1beta1.OciSource)
-		log.Error(err, "RepoSync failed validation")
-		return err
+		return validate.InvalidSourceType(rs)
 	}
-	return nil
 }
 
-func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, log logr.Logger, secretName string) error {
+func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
-		log.Error(err, "RepoSync failed validation")
 		return err
 	}
-	if err := r.validateNamespaceSecret(ctx, rs, secretName); err != nil {
-		log.Error(err, "RepoSync failed Secret validation required for installation")
-		return err
-	}
-	return nil
+	return r.validateNamespaceSecret(ctx, rs, reconcilerName)
 }
 
 // validateNamespaceSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
-func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSync *v1beta1.RepoSync, secretName string) error {
+func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSync *v1beta1.RepoSync, reconcilerName string) error {
 	if SkipForAuth(repoSync.Spec.Auth) {
 		// There is no Secret to check for the Config object.
 		return nil
 	}
 
+	secretName := ReconcilerResourceName(reconcilerName, repoSync.Spec.SecretRef.Name)
 	if errs := validation.IsDNS1123Label(secretName); errs != nil {
 		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}

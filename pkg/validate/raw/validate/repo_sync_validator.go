@@ -42,7 +42,7 @@ func RepoSync(obj ast.FileObject) status.Error {
 	} else {
 		rs = s.(*v1beta1.RepoSync)
 	}
-	return GitSpec(rs.Spec.Git, rs)
+	return SourceSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs)
 }
 
 func toRepoSyncV1Beta1(rs *v1alpha1.RepoSync) (*v1beta1.RepoSync, status.Error) {

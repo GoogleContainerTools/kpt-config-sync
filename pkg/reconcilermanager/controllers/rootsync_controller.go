@@ -395,13 +395,10 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, log)
 	case v1beta1.OciSource:
-		// TODO : add validations for the oci spec
+		return validate.OciSpec(rs.Spec.Oci, rs)
 	default:
-		err := fmt.Errorf("unknown sourceType %q. Must be %q or %q", rs.Spec.SourceType, v1beta1.GitSource, v1beta1.OciSource)
-		log.Error(err, "RootSync failed validation")
-		return err
+		return validate.InvalidSourceType(rs)
 	}
-	return nil
 }
 
 func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {

@@ -20,6 +20,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // RepoSyncObjectV1Alpha1 initializes a RepoSync with version v1alpha1.
@@ -48,4 +49,12 @@ func RepoSyncObjectV1Beta1(ns, name string, opts ...core.MetaMutator) *v1beta1.R
 	mutate(result, opts...)
 
 	return result
+}
+
+// WithRepoSyncSourceType sets the sourceType of the RepoSync object.
+func WithRepoSyncSourceType(sourceType v1beta1.SourceType) core.MetaMutator {
+	return func(o client.Object) {
+		rs := o.(*v1beta1.RepoSync)
+		rs.Spec.SourceType = string(sourceType)
+	}
 }

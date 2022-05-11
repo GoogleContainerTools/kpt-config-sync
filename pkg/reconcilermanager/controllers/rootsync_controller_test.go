@@ -40,8 +40,10 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/validate/raw/validate"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -1741,6 +1743,123 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRootSyncSpecValidation(t *testing.T) {
+	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupRootReconciler(t, rs)
+
+	// Verify unsupported source type
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify missing Git
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec.SourceType = string(v1beta1.GitSource)
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify missing Oci
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec.SourceType = string(v1beta1.OciSource)
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify missing OCI image
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec.SourceType = string(v1beta1.OciSource)
+	wantRs.Spec.Oci = &v1beta1.Oci{}
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify invalid OCI Auth
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec.SourceType = string(v1beta1.OciSource)
+	wantRs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify valid OCI spec
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	// Clear the stalled condition
+	rs.Status = v1beta1.RootSyncStatus{}
+	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec.SourceType = string(v1beta1.OciSource)
+	wantRs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
+	wantRs.Status.Reconciler = rootReconcilerName
+	wantRs.Status.Conditions = nil // clear the stalled condition
+	rootsync.SetReconciling(wantRs, "Deployment", "Reconciler deployment was created")
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+}
+
+func validateRootSyncStatus(want *v1beta1.RootSync, fakeClient *syncerFake.Client) error {
+	gotCoreObject := fakeClient.Objects[core.IDOf(want)]
+	got := gotCoreObject.(*v1beta1.RootSync)
+	if diff := cmp.Diff(want.Status.Conditions, got.Status.Conditions, cmpopts.SortSlices(
+		func(x, y v1beta1.RootSyncCondition) bool { return x.Message < y.Message }),
+		cmpopts.IgnoreFields(v1beta1.RootSyncCondition{}, "LastUpdateTime", "LastTransitionTime"),
+	); diff != "" {
+		return fmt.Errorf("status conditions diff %s", diff)
+	}
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(v1beta1.RootSync{}, "Status.Conditions")); diff != "" {
+		return fmt.Errorf("rootsync diff %s", diff)
+	}
+	return nil
 }
 
 type depMutator func(*appsv1.Deployment)

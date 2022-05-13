@@ -76,6 +76,9 @@ spec:
         ports:
         - containerPort: 55678 # Default OpenCensus receiver port.
         - containerPort: 8888  # Metrics.
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
         volumeMounts:
         - name: otel-agent-config-vol
           mountPath: /conf
@@ -95,3 +98,6 @@ spec:
       - name: otel-agent-config-vol
         configMap:
           name: otel-agent
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true

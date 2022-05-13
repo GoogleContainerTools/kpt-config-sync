@@ -175,8 +175,6 @@ data:
              capabilities:
                drop:
                - NET_RAW
-             runAsUser: 10001
-             runAsNonRoot: true
            ports:
            - containerPort: 55678 # Default OpenCensus receiver port.
              protocol: TCP
@@ -223,6 +221,8 @@ data:
              defaultMode: 420
          securityContext:
            fsGroup: 65533
+           runAsUser: 1000
+           runAsNonRoot: true
            seccompProfile:
              type: RuntimeDefault
      revisionHistoryLimit: 10

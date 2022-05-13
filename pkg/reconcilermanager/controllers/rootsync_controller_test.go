@@ -1631,12 +1631,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 		core.Label(metadata.SyncNameLabel, rootsyncName),
 	)
 
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
-		containerEnvMutator(rootContainerEnv),
+		containerEnvMutator(rootContainerEnvs),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
@@ -1665,11 +1665,11 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount diff %s", diff)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
-		containerEnvMutator(rootContainerEnv),
+		containerEnvMutator(rootContainerEnvs),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
@@ -1701,11 +1701,11 @@ func TestRootSyncWithOCI(t *testing.T) {
 	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantServiceAccount)], wantServiceAccount, cmpopts.EquateEmpty()); diff != "" {
 		t.Errorf("ServiceAccount diff %s", diff)
 	}
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
-		containerEnvMutator(rootContainerEnv),
+		containerEnvMutator(rootContainerEnvs),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
@@ -1735,10 +1735,45 @@ func TestRootSyncWithOCI(t *testing.T) {
 		}),
 		setServiceAccountName(rootReconcilerName),
 		fwiOciMutator(workloadIdentityPool),
-		containerEnvMutator(rootContainerEnv),
+		containerEnvMutator(rootContainerEnvs),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	t.Log("Test overriding the cpu request and memory limits of the oci-sync container")
+	overrideOciSyncResources := []v1beta1.ContainerResourcesSpec{
+		{
+			ContainerName: reconcilermanager.OciSync,
+			CPURequest:    resource.MustParse("200m"),
+			MemoryLimit:   resource.MustParse("1Gi"),
+		},
+	}
+
+	rs.Spec.Override = v1beta1.OverrideSpec{
+		Resources: overrideOciSyncResources,
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		setAnnotations(map[string]string{
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
+		fwiOciMutator(workloadIdentityPool),
+		containerResourcesMutator(overrideOciSyncResources),
+		containerEnvMutator(rootContainerEnvs),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
@@ -2042,7 +2077,7 @@ func containerResourcesMutator(overrides []v1beta1.ContainerResourcesSpec) depMu
 	return func(dep *appsv1.Deployment) {
 		for _, container := range dep.Spec.Template.Spec.Containers {
 			switch container.Name {
-			case reconcilermanager.Reconciler, reconcilermanager.GitSync, reconcilermanager.HydrationController:
+			case reconcilermanager.Reconciler, reconcilermanager.GitSync, reconcilermanager.HydrationController, reconcilermanager.OciSync:
 				for _, override := range overrides {
 					if override.ContainerName == container.Name {
 						mutateContainerResourceRequestsLimits(&container, override)

@@ -144,6 +144,9 @@ spec:
         - containerPort: 55678 # Default endpoint for OpenCensus receiver.
         - containerPort: 8888  # Default endpoint for querying metrics.
         - containerPort: 8675  # Prometheus exporter metrics.
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
         volumeMounts:
         - name: otel-collector-config-vol
           mountPath: /conf

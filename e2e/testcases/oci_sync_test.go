@@ -15,22 +15,10 @@
 package e2e
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"fmt"
-	"io"
-	"io/fs"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/google/go-containerregistry/pkg/gcrane"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -295,6 +283,7 @@ func testWorkloadIdentity(nt *nomostest.NT, fleetMembership, gcpProject, crossPr
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
 }
 
+/*
 // TestDigestUpdateInAR tests if the oci-sync container can pull new digests with the same tag.
 // The test requires permission to push new image to `config-sync-ci-public` in the Artifact Registry,
 // and permission to push new image to `config-sync-ci-public` in the Container Registry.
@@ -343,6 +332,7 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
 	validateHelmComponents(nt, string(declared.RootReconciler))
 }
+*/
 
 func fixedOCIDigest(digest string) nomostest.Sha1Func {
 	return func(*nomostest.NT, types.NamespacedName) (string, error) {
@@ -350,6 +340,7 @@ func fixedOCIDigest(digest string) nomostest.Sha1Func {
 	}
 }
 
+/*
 // archiveAndPushOCIImage tars and extracts (untar) image files to target directory.
 // The desired version or digest must be in the imageName, and the resolved image sha256 digest is returned.
 // It is used for testing only.
@@ -458,3 +449,4 @@ func archiveAndPushOCIImage(imageName string, dir string, options ...remote.Opti
 	}
 	return imageDigestHash.Hex, nil
 }
+*/

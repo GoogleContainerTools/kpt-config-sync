@@ -498,7 +498,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager
-        image: gcr.io/config-management-release/resource-group-controller:v1.0.4
+        image: gcr.io/config-management-release/resource-group-controller:v1.0.5
         imagePullPolicy: Always
         name: manager
         resources:

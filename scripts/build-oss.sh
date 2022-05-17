@@ -77,6 +77,7 @@ sed -e "s|IMAGE_NAME|$MGR_TAG|g" "${REPO_DIR}"/manifests/templates/reconciler-ma
   > "${MANIFEST_DIR}"/reconciler-manager.yaml
 
 cp "${REPO_DIR}"/manifests/templates/otel-collector.yaml "${MANIFEST_DIR}"/otel-collector.yaml
+cp "${REPO_DIR}"/manifests/templates/reconciler-manager/dev.yaml "${MANIFEST_DIR}"/dev.yaml
 
 sed -e "s|IMAGE_NAME|$WEBHOOK_TAG|g" "${REPO_DIR}"/manifests/templates/admission-webhook.yaml \
   > "${MANIFEST_DIR}"/admission-webhook.yaml

@@ -27,7 +27,7 @@ REPO_DIR="$(readlink -f "$(dirname "$0")")/.."
 
 WORK_DIR=$(mktemp -d -p "$REPO_DIR")
 
-function cleanup {      
+function cleanup {
   rm -rf "$WORK_DIR"
   echo "+++ Deleted temp working directory $WORK_DIR"
 }
@@ -35,7 +35,7 @@ function cleanup {
 trap cleanup EXIT
 
 # Invoking the build-oss.sh script to build the images and generate the manifests.
-MANIFEST_DIR="${WORK_DIR}" GCP_PROJECT=stolos-dev "${REPO_DIR}"/scripts/build-oss.sh
+MANIFEST_DIR="${WORK_DIR}" "${REPO_DIR}"/scripts/build-oss.sh
 
 # Apply the manifests to the cluster.
 echo "+++ Applying manifests"

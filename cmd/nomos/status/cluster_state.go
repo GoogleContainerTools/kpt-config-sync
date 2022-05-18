@@ -71,19 +71,21 @@ func unavailableCluster(ref string) *ClusterState {
 
 // RepoState represents the sync status of a single repo on a cluster.
 type RepoState struct {
-	scope    string
-	syncName string
-	git      *v1beta1.Git
-	status   string
-	commit   string
-	errors   []string
+	scope      string
+	syncName   string
+	sourceType v1beta1.SourceType
+	git        *v1beta1.Git
+	oci        *v1beta1.Oci
+	status     string
+	commit     string
+	errors     []string
 	// errorSummary summarizes the `errors` field.
 	errorSummary *v1beta1.ErrorSummary
 	resources    []resourceState
 }
 
 func (r *RepoState) printRows(writer io.Writer) {
-	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, gitString(r.git))
+	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci))
 	fmt.Fprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
 
 	if r.errorSummary != nil && r.errorSummary.TotalCount > 0 {
@@ -123,8 +125,18 @@ func (r *RepoState) printRows(writer io.Writer) {
 	}
 }
 
+func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci) string {
+	if sourceType == v1beta1.OciSource {
+		return ociString(oci)
+	}
+	return gitString(git)
+}
+
 func gitString(git *v1beta1.Git) string {
 	var gitStr string
+	if git == nil {
+		return "N/A"
+	}
 	if git.Dir == "" || git.Dir == "." || git.Dir == "/" {
 		gitStr = strings.TrimSuffix(git.Repo, "/")
 	} else {
@@ -142,6 +154,19 @@ func gitString(git *v1beta1.Git) string {
 	}
 
 	return gitStr
+}
+
+func ociString(oci *v1beta1.Oci) string {
+	var ociStr string
+	if oci == nil {
+		return "N/A"
+	}
+	if oci.Dir == "" || oci.Dir == "." || oci.Dir == "/" {
+		ociStr = strings.TrimSuffix(oci.Image, "/")
+	} else {
+		ociStr = strings.TrimSuffix(oci.Image, "/") + "/" + path.Clean(strings.TrimPrefix(oci.Dir, "/"))
+	}
+	return ociStr
 }
 
 // monoRepoStatus converts the given Git config and mono-repo status into a RepoState.
@@ -253,10 +278,12 @@ func getResourceStatusErrors(resourceConditions []v1.ResourceCondition) []string
 // namespaceRepoStatus converts the given RepoSync into a RepoState.
 func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, syncingConditionSupported bool) *RepoState {
 	repostate := &RepoState{
-		scope:    rs.Namespace,
-		syncName: rs.Name,
-		git:      rs.Spec.Git,
-		commit:   emptyCommit,
+		scope:      rs.Namespace,
+		syncName:   rs.Name,
+		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
+		git:        rs.Spec.Git,
+		oci:        rs.Spec.Oci,
+		commit:     emptyCommit,
 	}
 
 	stalledCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
@@ -346,10 +373,12 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 // RootRepoStatus converts the given RootSync into a RepoState.
 func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncingConditionSupported bool) *RepoState {
 	repostate := &RepoState{
-		scope:    "<root>",
-		syncName: rs.Name,
-		git:      rs.Spec.Git,
-		commit:   emptyCommit,
+		scope:      "<root>",
+		syncName:   rs.Name,
+		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
+		git:        rs.Spec.Git,
+		oci:        rs.Spec.Oci,
+		commit:     emptyCommit,
 	}
 	stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
 	reconcilingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncReconciling)

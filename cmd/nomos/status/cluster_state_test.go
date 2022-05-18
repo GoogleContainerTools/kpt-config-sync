@@ -37,6 +37,11 @@ var (
 		Dir:      "admin",
 	}
 
+	oci = &v1beta1.Oci{
+		Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample",
+		Dir:   "test",
+	}
+
 	gitUpdated = &v1beta1.Git{
 		Repo:     "git@github.com:tester/sample-updated",
 		Revision: "v2",
@@ -256,6 +261,47 @@ func TestRepoState_PrintRows(t *testing.T) {
 			},
 			"  bookstore:repo-sync\tgit@github.com:tester/sample@v1\t\n  PENDING\t\t\n",
 		},
+		{
+			"OCI repo with source error",
+			&RepoState{
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.OciSource,
+				oci: &v1beta1.Oci{
+					Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample",
+					Dir:   "test",
+				},
+				status:       "ERROR",
+				commit:       "abc123",
+				errors:       []string{"error1", "error2"},
+				errorSummary: errorSummayWithTwoErrors,
+			},
+			"  bookstore:repo-sync\tus-docker.pkg.dev/test-project/test-ar-repo/sample/test\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
+		},
+		{
+			"Git field is missing when sourceType is git",
+			&RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
+				status:       "ERROR",
+				errors:       []string{"missing Git config"},
+				errorSummary: errorSummayWithOneError,
+			},
+			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing Git config\t\n",
+		},
+		{
+			"OCI field is missing when sourceType is oci",
+			&RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				sourceType:   v1beta1.OciSource,
+				status:       "ERROR",
+				errors:       []string{"missing OCI config"},
+				errorSummary: errorSummayWithOneError,
+			},
+			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing OCI config\t\n",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -358,6 +404,13 @@ func toGitStatus(git *v1beta1.Git) *v1beta1.GitStatus {
 	}
 }
 
+func toOciStatus(oci *v1beta1.Oci) *v1beta1.OciStatus {
+	return &v1beta1.OciStatus{
+		Image: oci.Image,
+		Dir:   oci.Dir,
+	}
+}
+
 func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 	stalledCondition := v1beta1.RepoSyncCondition{
 		Type:    v1beta1.RepoSyncStalled,
@@ -401,6 +454,8 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		name                      string
 		syncingConditionSupported bool
 		gitSpec                   *v1beta1.Git
+		ociSpec                   *v1beta1.Oci
+		sourceType                v1beta1.SourceType
 		conditions                []v1beta1.RepoSyncCondition
 		sourceStatus              v1beta1.SourceStatus
 		renderingStatus           v1beta1.RenderingStatus
@@ -414,6 +469,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			conditions: []v1beta1.RepoSyncCondition{stalledCondition},
 			want: &RepoState{
 				scope:        "bookstore",
+				sourceType:   v1beta1.GitSource,
 				syncName:     "repo-sync",
 				git:          git,
 				status:       stalledMsg,
@@ -443,6 +499,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       stalledMsg,
 				commit:       emptyCommit,
@@ -455,11 +512,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			gitSpec:    git,
 			conditions: []v1beta1.RepoSyncCondition{reconcilingCondition},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   reconcilingMsg,
-				commit:   emptyCommit,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     reconcilingMsg,
+				commit:     emptyCommit,
 			},
 		},
 		{
@@ -481,11 +539,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   reconcilingMsg,
-				commit:   emptyCommit,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     reconcilingMsg,
+				commit:     emptyCommit,
 			},
 		},
 		{
@@ -493,11 +552,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			gitSpec:    git,
 			conditions: []v1beta1.RepoSyncCondition{reconciledCondition},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
-				commit:   emptyCommit,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
+				commit:     emptyCommit,
 			},
 		},
 		{
@@ -506,11 +566,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			syncingConditionSupported: true,
 			conditions:                []v1beta1.RepoSyncCondition{reconciledCondition},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
-				commit:   emptyCommit,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
+				commit:     emptyCommit,
 			},
 		},
 		{
@@ -532,9 +593,10 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
 				// This mistakenly reports an error because `nomos status` checks all errors first.
 				// The following test case shows how the status is reported correctly with the syncing condition.
 				status:       util.ErrorMsg,
@@ -563,11 +625,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   pendingMsg,
-				commit:   emptyCommit,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     pendingMsg,
+				commit:     emptyCommit,
 			},
 		},
 		{
@@ -580,10 +643,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2004: import error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     util.ErrorMsg,
 				// This mistakenly reports the commit as empty because "nomos status" used
 				// to read the commit from .status.sync.commit, which is not available at this point.
 				// The test case below shows how the commit is reported successfully via the syncing condition.
@@ -608,6 +672,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          git,
 				status:       util.ErrorMsg,
 				commit:       "abc123",
@@ -635,10 +700,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     util.ErrorMsg,
 				// This mistakenly shows the commit because `nomos status` sets commit to `.status.sync.commit`.
 				// The test case below shows how it is fixed.
 				commit: "abc123",
@@ -673,6 +739,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       util.ErrorMsg,
 				commit:       "def456",
@@ -690,10 +757,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Message: "rendering in progress",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
 				// This mistakenly reports an empty commit because `nomos status` sets commit to `.status.sync.commit`.
 				// The test case below shows how it is fixed with the syncing condition.
 				commit: emptyCommit,
@@ -713,11 +781,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Message: "rendering in progress",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
-				commit:   "abc123",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
+				commit:     "abc123",
 			},
 		},
 		{
@@ -739,9 +808,10 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
 				// This mistakenly reports an error status because `nomos status` checks all errors first.
 				// The test case below shows how it is fixed with the syncing condition.
 				status: util.ErrorMsg,
@@ -775,11 +845,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   pendingMsg,
-				commit:   "def456",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     pendingMsg,
+				commit:     "def456",
 			},
 		},
 		{
@@ -792,10 +863,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2015: rendering error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     util.ErrorMsg,
 				// This mistakenly reports an empty commit because `nomos status` sets the commit to `.status.sync.commit`.
 				// The test case below shows how it is fixed with the syncing condition.
 				commit:       emptyCommit,
@@ -819,6 +891,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          git,
 				status:       util.ErrorMsg,
 				commit:       "abc123",
@@ -846,10 +919,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     util.ErrorMsg,
 				// This mistakenly reports the commit and errors because `nomos status` checks all errors first.
 				// The test case below shows how it is fixed with the syncing condition.
 				commit: "abc123",
@@ -884,6 +958,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       util.ErrorMsg,
 				commit:       "def456",
@@ -901,10 +976,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Message: "rendering succeeded",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
 				// This mistakenly reports the commit to be empty because `nomos status` used to set the commit to `.status.sync.commit`.
 				// The test case below shows how it is fixed with they syncing condition.
 				commit: emptyCommit,
@@ -924,11 +1000,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Message: "rendering succeeded",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
-				commit:   "abc123",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
+				commit:     "abc123",
 			},
 		},
 		{
@@ -950,9 +1027,10 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
 				// This mistakenly reports an error status because `nomos status` used to check all errors first.
 				// The test case below shows how it is fixed with the syncing condition.
 				status: util.ErrorMsg,
@@ -986,11 +1064,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   pendingMsg,
-				commit:   "def456",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     pendingMsg,
+				commit:     "def456",
 			},
 		},
 		{
@@ -1008,10 +1087,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2004: parsing error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     util.ErrorMsg,
 				// This mistakenly reports the commit as empty because `nomos status` used to set the commit to `.status.sync.commit`.
 				// The test case below shows how the commit is correctly reported with the syncing condition.
 				commit:       emptyCommit,
@@ -1040,6 +1120,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          git,
 				status:       util.ErrorMsg,
 				commit:       "abc123",
@@ -1067,10 +1148,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   util.ErrorMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     util.ErrorMsg,
 				// This mistakenly reports the commit because `nomos status` used to set the commit to `.status.sync.commit`.
 				// The test case below shows how the commit is correctly reported with the syncing condition.
 				commit: "abc123",
@@ -1105,6 +1187,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       util.ErrorMsg,
 				commit:       "def456",
@@ -1126,10 +1209,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
 				// The commit should be available because it is included in the rendering and source statuses,
 				// but `nomos status` used to set the commit to be .status.sync.commit, which is `N/A`.
 				// The test case below shows how the commit is correctly reported with the syncing condition.
@@ -1154,11 +1238,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      git,
-				status:   pendingMsg,
-				commit:   "abc123",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     pendingMsg,
+				commit:     "abc123",
 			},
 		},
 		{
@@ -1180,9 +1265,10 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
 				// This mistakenly reports an error status because `nomos status` checks all errors first.
 				// The test case below shows how the status is correctly reported with the syncing condition.
 				status: util.ErrorMsg,
@@ -1216,11 +1302,12 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
 			},
 			want: &RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git:      gitUpdated,
-				status:   pendingMsg,
-				commit:   "def456",
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        gitUpdated,
+				status:     pendingMsg,
+				commit:     "def456",
 			},
 		},
 		{
@@ -1245,6 +1332,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          git,
 				status:       util.ErrorMsg,
 				commit:       "abc123",
@@ -1278,6 +1366,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          git,
 				status:       util.ErrorMsg,
 				commit:       "abc123",
@@ -1307,6 +1396,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       util.ErrorMsg,
 				commit:       "def456",
@@ -1340,6 +1430,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			want: &RepoState{
 				scope:        "bookstore",
 				syncName:     "repo-sync",
+				sourceType:   v1beta1.GitSource,
 				git:          gitUpdated,
 				status:       util.ErrorMsg,
 				commit:       "def456",
@@ -1366,12 +1457,13 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			want: &RepoState{
-				scope:     "bookstore",
-				syncName:  "repo-sync",
-				git:       git,
-				status:    syncedMsg,
-				commit:    "abc123",
-				resources: exampleResources(""),
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				sourceType: v1beta1.GitSource,
+				git:        git,
+				status:     syncedMsg,
+				commit:     "abc123",
+				resources:  exampleResources(""),
 			},
 		},
 		{
@@ -1397,12 +1489,132 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			want: &RepoState{
-				scope:     "bookstore",
-				syncName:  "repo-sync",
-				git:       git,
-				status:    syncedMsg,
-				commit:    "abc123",
-				resources: exampleResources("abc123"),
+				scope:      "bookstore",
+				syncName:   "repo-sync",
+				git:        git,
+				sourceType: v1beta1.GitSource,
+				status:     syncedMsg,
+				commit:     "abc123",
+				resources:  exampleResources("abc123"),
+			},
+		},
+		{
+			name:                      "OCI repo has import error",
+			ociSpec:                   oci,
+			sourceType:                v1beta1.OciSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("def456", []v1beta1.ErrorSource{v1beta1.SourceError}, errorSummayWithOneError),
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "def456",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2004: import error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				oci:          oci,
+				sourceType:   v1beta1.OciSource,
+				status:       util.ErrorMsg,
+				commit:       "def456",
+				errors:       []string{"KNV2004: import error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
+		{
+			name:                      "OCI repo has import error",
+			ociSpec:                   oci,
+			sourceType:                v1beta1.OciSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("abc123", []v1beta1.ErrorSource{v1beta1.SourceError}, errorSummayWithOneError),
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2004: import error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				oci:          oci,
+				sourceType:   v1beta1.OciSource,
+				status:       util.ErrorMsg,
+				commit:       "abc123",
+				errors:       []string{"KNV2004: import error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
+		{
+			name:                      "OCI repo has rendering error",
+			ociSpec:                   oci,
+			sourceType:                v1beta1.OciSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("def456", []v1beta1.ErrorSource{v1beta1.RenderingError}, errorSummayWithOneError),
+			},
+			renderingStatus: v1beta1.RenderingStatus{
+				Oci:     toOciStatus(oci),
+				Commit:  "def456",
+				Errors:  []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2015: rendering error"}},
+				Message: "rendering failed",
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "abc123",
+			},
+			syncStatus: v1beta1.SyncStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				oci:          oci,
+				sourceType:   v1beta1.OciSource,
+				status:       util.ErrorMsg,
+				commit:       "def456",
+				errors:       []string{"KNV2015: rendering error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
+		{
+			name:                      "OCI repo has syncing error",
+			ociSpec:                   oci,
+			sourceType:                v1beta1.OciSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("abc123", []v1beta1.ErrorSource{v1beta1.SyncError}, errorSummayWithOneError),
+			},
+			renderingStatus: v1beta1.RenderingStatus{
+				Oci:     toOciStatus(oci),
+				Commit:  "abc123",
+				Message: "rendering succeeded",
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "abc123",
+			},
+			syncStatus: v1beta1.SyncStatus{
+				Oci:    toOciStatus(oci),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				oci:          oci,
+				sourceType:   v1beta1.OciSource,
+				status:       util.ErrorMsg,
+				commit:       "abc123",
+				errors:       []string{"KNV2009: apply error"},
+				errorSummary: errorSummayWithOneError,
 			},
 		},
 	}
@@ -1410,6 +1622,11 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoSync := fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)
 			repoSync.Spec.Git = tc.gitSpec
+			repoSync.Spec.Oci = tc.ociSpec
+			repoSync.Spec.SourceType = string(tc.sourceType)
+			if repoSync.Spec.SourceType == "" {
+				repoSync.Spec.SourceType = string(v1beta1.GitSource)
+			}
 			repoSync.Status.Conditions = tc.conditions
 			repoSync.Status.Source = tc.sourceStatus
 			repoSync.Status.Rendering = tc.renderingStatus
@@ -2513,13 +2730,14 @@ gke_sample-project_europe-west1-b_cluster-1
 `,
 		},
 		{
-			"cluster with repos",
+			"cluster with Git repos",
 			&ClusterState{
 				Ref: "gke_sample-project_europe-west1-b_cluster-2",
 				repos: []*RepoState{
 					{
-						scope:    "<root>",
-						syncName: "root-sync",
+						scope:      "<root>",
+						syncName:   "root-sync",
+						sourceType: v1beta1.GitSource,
 						git: &v1beta1.Git{
 							Repo: "git@github.com:tester/sample",
 						},
@@ -2527,8 +2745,9 @@ gke_sample-project_europe-west1-b_cluster-1
 						commit: "abc123",
 					},
 					{
-						scope:    "bookstore",
-						syncName: "repos-sync",
+						scope:      "bookstore",
+						syncName:   "repos-sync",
+						sourceType: v1beta1.GitSource,
 						git: &v1beta1.Git{
 							Repo:   "git@github.com:tester/sample",
 							Branch: "feature",
@@ -2545,6 +2764,44 @@ gke_sample-project_europe-west1-b_cluster-2
   SYNCED	abc123	
   --------------------
   bookstore:repos-sync	git@github.com:tester/sample@feature	
+  SYNCED	abc123	
+`,
+		},
+		{
+			"cluster with Oci image",
+			&ClusterState{
+				Ref: "gke_sample-project_europe-west1-b_cluster-2",
+				repos: []*RepoState{
+					{
+						scope:      "<root>",
+						syncName:   "root-sync",
+						sourceType: v1beta1.OciSource,
+						oci: &v1beta1.Oci{
+							Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+					{
+						scope:      "bookstore",
+						syncName:   "repos-sync",
+						sourceType: v1beta1.OciSource,
+						oci: &v1beta1.Oci{
+							Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample-repo",
+							Dir:   "test",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample	
+  SYNCED	abc123	
+  --------------------
+  bookstore:repos-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test	
   SYNCED	abc123	
 `,
 		},

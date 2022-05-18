@@ -18,7 +18,7 @@ import (
 	"flag"
 	"os"
 
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/webhook"

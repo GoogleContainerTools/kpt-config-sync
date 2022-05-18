@@ -53,11 +53,11 @@ func (rc *ResourceCacheMap) Get(id object.ObjMetadata) ResourceStatus {
 	defer rc.mu.RUnlock()
 
 	obj, found := rc.cache[id]
-	if klog.V(4).Enabled() {
+	if klog.V(6).Enabled() {
 		if found {
-			klog.Infof("resource cache hit: %s", id)
+			klog.V(6).Infof("resource cache hit: %s", id)
 		} else {
-			klog.Infof("resource cache miss: %s", id)
+			klog.V(6).Infof("resource cache miss: %s", id)
 		}
 	}
 	if !found {

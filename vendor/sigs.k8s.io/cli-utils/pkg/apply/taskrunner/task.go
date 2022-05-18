@@ -149,6 +149,8 @@ func (w *WaitTask) startInner(taskContext *TaskContext) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	klog.V(3).Infof("wait task progress: %d/%d", 0, len(w.Ids))
+
 	pending := object.ObjMetadataSet{}
 	for _, id := range w.Ids {
 		switch {
@@ -180,6 +182,8 @@ func (w *WaitTask) startInner(taskContext *TaskContext) {
 		}
 	}
 	w.pending = pending
+
+	klog.V(3).Infof("wait task progress: %d/%d", len(w.Ids)-len(w.pending), len(w.Ids))
 
 	if len(pending) == 0 {
 		// all reconciled - clear pending and exit
@@ -345,9 +349,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 			w.pending = w.pending.Remove(id)
 			w.failed = append(w.failed, id)
 			w.sendEvent(taskContext, id, event.ReconcileFailed)
-		default:
-			// can't be all reconciled now, so don't bother checking
-			return
+			// default - still pending
 		}
 	case !w.Ids.Contains(id):
 		// not in wait group - ignore
@@ -380,10 +382,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 			w.pending = append(w.pending, id)
 			w.sendEvent(taskContext, id, event.ReconcilePending)
 		}
-		// can't be all reconciled, so don't bother checking. A failed
-		// resource doesn't prevent a WaitTask from completing, so there
-		// must be at least one InProgress resource we are still waiting for.
-		return
+		// else - still failed
 	default:
 		// reconciled - check if unreconciled
 		if !w.reconciledByID(taskContext, id) {
@@ -395,10 +394,11 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 			}
 			w.pending = append(w.pending, id)
 			w.sendEvent(taskContext, id, event.ReconcilePending)
-			// can't be all reconciled now, so don't bother checking
-			return
 		}
+		// else - still reconciled
 	}
+
+	klog.V(3).Infof("wait task progress: %d/%d", len(w.Ids)-len(w.pending), len(w.Ids))
 
 	// If we no longer have any pending resources, the WaitTask
 	// can be completed.
@@ -426,6 +426,6 @@ func (w *WaitTask) updateRESTMapper(taskContext *TaskContext) {
 		return
 	}
 
-	klog.V(5).Infof("resetting RESTMapper")
+	klog.V(3).Infof("Resetting RESTMapper")
 	meta.MaybeResetRESTMapper(w.Mapper)
 }

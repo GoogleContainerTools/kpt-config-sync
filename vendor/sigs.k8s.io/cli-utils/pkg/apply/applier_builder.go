@@ -13,13 +13,10 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/cli-utils/pkg/apply/info"
-	"sigs.k8s.io/cli-utils/pkg/apply/poller"
 	"sigs.k8s.io/cli-utils/pkg/apply/prune"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
-	"sigs.k8s.io/cli-utils/pkg/kstatus/polling"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
 )
 
 type ApplierBuilder struct {
@@ -31,7 +28,7 @@ type ApplierBuilder struct {
 	mapper                       meta.RESTMapper
 	restConfig                   *rest.Config
 	unstructuredClientForMapping func(*meta.RESTMapping) (resource.RESTClient, error)
-	statusPoller                 poller.Poller
+	statusWatcher                watcher.StatusWatcher
 }
 
 // NewApplierBuilder returns a new ApplierBuilder.
@@ -52,7 +49,7 @@ func (b *ApplierBuilder) Build() (*Applier, error) {
 			Client:    bx.client,
 			Mapper:    bx.mapper,
 		},
-		statusPoller:  bx.statusPoller,
+		statusWatcher: bx.statusWatcher,
 		invClient:     bx.invClient,
 		client:        bx.client,
 		openAPIGetter: bx.discoClient,
@@ -109,12 +106,8 @@ func (b *ApplierBuilder) finalize() (*ApplierBuilder, error) {
 		}
 		bx.unstructuredClientForMapping = bx.factory.UnstructuredClientForMapping
 	}
-	if bx.statusPoller == nil {
-		c, err := client.New(bx.restConfig, client.Options{Scheme: scheme.Scheme, Mapper: bx.mapper})
-		if err != nil {
-			return nil, fmt.Errorf("error creating client: %v", err)
-		}
-		bx.statusPoller = polling.NewStatusPoller(c, bx.mapper, polling.Options{})
+	if bx.statusWatcher == nil {
+		bx.statusWatcher = watcher.NewDefaultStatusWatcher(bx.client, bx.mapper)
 	}
 	return &bx, nil
 }
@@ -154,7 +147,7 @@ func (b *ApplierBuilder) WithUnstructuredClientForMapping(unstructuredClientForM
 	return b
 }
 
-func (b *ApplierBuilder) WithStatusPoller(statusPoller poller.Poller) *ApplierBuilder {
-	b.statusPoller = statusPoller
+func (b *ApplierBuilder) WithStatusWatcher(statusWatcher watcher.StatusWatcher) *ApplierBuilder {
+	b.statusWatcher = statusWatcher
 	return b
 }

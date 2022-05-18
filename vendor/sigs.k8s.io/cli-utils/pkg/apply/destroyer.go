@@ -16,13 +16,12 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/apply/info"
-	"sigs.k8s.io/cli-utils/pkg/apply/poller"
 	"sigs.k8s.io/cli-utils/pkg/apply/prune"
 	"sigs.k8s.io/cli-utils/pkg/apply/solver"
 	"sigs.k8s.io/cli-utils/pkg/apply/taskrunner"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
-	"sigs.k8s.io/cli-utils/pkg/kstatus/polling"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/validation"
 )
@@ -38,25 +37,30 @@ func NewDestroyer(factory cmdutil.Factory, invClient inventory.Client) (*Destroy
 	if err != nil {
 		return nil, fmt.Errorf("error setting up PruneOptions: %w", err)
 	}
-	statusPoller, err := polling.NewStatusPollerFromFactory(factory, polling.Options{})
+	client, err := factory.DynamicClient()
 	if err != nil {
 		return nil, err
 	}
+	mapper, err := factory.ToRESTMapper()
+	if err != nil {
+		return nil, err
+	}
+	statusWatcher := watcher.NewDefaultStatusWatcher(client, mapper)
 	return &Destroyer{
-		pruner:       pruner,
-		StatusPoller: statusPoller,
-		factory:      factory,
-		invClient:    invClient,
+		pruner:        pruner,
+		statusWatcher: statusWatcher,
+		factory:       factory,
+		invClient:     invClient,
 	}, nil
 }
 
 // Destroyer performs the step of grabbing all the previous inventory objects and
 // prune them. This also deletes all the previous inventory objects
 type Destroyer struct {
-	pruner       *prune.Pruner
-	StatusPoller poller.Poller
-	factory      cmdutil.Factory
-	invClient    inventory.Client
+	pruner        *prune.Pruner
+	statusWatcher watcher.StatusWatcher
+	factory       cmdutil.Factory
+	invClient     inventory.Client
 }
 
 type DestroyerOptions struct {
@@ -80,18 +84,11 @@ type DestroyerOptions struct {
 	// emitted on the eventChannel to the caller.
 	EmitStatusEvents bool
 
-	// PollInterval defines how often we should poll for the status
-	// of resources.
-	PollInterval time.Duration
-
 	// ValidationPolicy defines how to handle invalid objects.
 	ValidationPolicy validation.Policy
 }
 
 func setDestroyerDefaults(o *DestroyerOptions) {
-	if o.PollInterval == time.Duration(0) {
-		o.PollInterval = defaultPollInterval
-	}
 	if o.DeletePropagationPolicy == "" {
 		o.DeletePropagationPolicy = metav1.DeletePropagationBackground
 	}
@@ -213,10 +210,14 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		// Create a new TaskStatusRunner to execute the taskQueue.
 		klog.V(4).Infoln("destroyer building TaskStatusRunner...")
 		deleteIds := object.UnstructuredSetToObjMetadataSet(deleteObjs)
-		runner := taskrunner.NewTaskStatusRunner(deleteIds, d.StatusPoller)
+		statusWatcher := d.statusWatcher
+		// Disable watcher for dry runs
+		if opts.DryRunStrategy.ClientOrServerDryRun() {
+			statusWatcher = watcher.BlindStatusWatcher{}
+		}
+		runner := taskrunner.NewTaskStatusRunner(deleteIds, statusWatcher)
 		klog.V(4).Infoln("destroyer running TaskStatusRunner...")
 		err = runner.Run(ctx, taskContext, taskQueue.ToChannel(), taskrunner.Options{
-			PollInterval:     options.PollInterval,
 			EmitStatusEvents: options.EmitStatusEvents,
 		})
 		if err != nil {

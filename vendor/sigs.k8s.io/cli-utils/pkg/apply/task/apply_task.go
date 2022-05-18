@@ -214,7 +214,7 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 			groupName: taskName,
 		}).toPrinterFunc(),
 		DynamicClient:  dynamicClient,
-		DryRunVerifier: resource.NewDryRunVerifier(dynamicClient, openAPIGetter),
+		DryRunVerifier: resource.NewQueryParamVerifier(dynamicClient, openAPIGetter, resource.QueryParamDryRun),
 	}
 }
 

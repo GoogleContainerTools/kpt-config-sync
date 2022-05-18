@@ -18,35 +18,54 @@ import (
 	"fmt"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type resourceInfo struct {
-	group     string
-	name      string
-	kind      string
-	namespace string
-}
-
-// TestOverrideReconcileTimeout try to create a namespace through Config Sync with short reconcileTimeout(1s) and default ReconcileTimeout(5m)
+// TestOverrideReconcileTimeout tests that a misconfigured pod will never reconcile (timeout).
 func TestOverrideReconcileTimeout(t *testing.T) {
 	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
-	// Override reconcileTimeout to a very short time 1s, namespace reconcile can not finish in 1s.
-	// only actuation should succeed, reconcile should time out
-	nt.MustMergePatch(rootSync, `{"spec": {"override": {"reconcileTimeout": "1s"}}}`)
+	// Override reconcileTimeout to a short time 30s, pod will never be ready.
+	// Only actuation should succeed, reconcile should time out.
+	nt.MustMergePatch(rootSync, `{"spec": {"override": {"reconcileTimeout": "30s"}}}`)
 	nt.WaitForRepoSyncs()
-	namespaceName := "foo1"
-	resourceToVerify := &resourceInfo{group: "", name: namespaceName, kind: "Namespace", namespace: ""}
+	namespaceName := "timeout-1"
+
+	pod1Name := "pod-1"
+	container := corev1.Container{
+		Name:  "goproxy",
+		Image: "k8s.gcr.io/goproxy:0.1",
+		Ports: []corev1.ContainerPort{
+			{
+				ContainerPort: 8080,
+			},
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(8081), // wrong port will never be ready
+				},
+			},
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       10,
+		},
+	}
+	pod1 := fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))
+	idToVerify := core.IDOf(pod1)
+
+	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace %s", namespaceName))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name))
 	nt.WaitForRepoSyncs()
 
 	u := &unstructured.Unstructured{}
@@ -65,24 +84,32 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	} else {
 		expectActuationStatus := "Succeeded"
 		expectReconcileStatus := "Timeout"
-		err = verifyResourceStatus(u, resourceToVerify, expectActuationStatus, expectReconcileStatus)
+		err = verifyObjectStatus(u, idToVerify, expectActuationStatus, expectReconcileStatus)
 		if err != nil {
 			nt.T.Fatal(err)
 		} else {
-			nt.T.Logf("resource %q has actuation and reconcile status as expected", namespaceName)
+			nt.T.Logf("object %q has actuation and reconcile status as expected", namespaceName)
 		}
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/ns-1.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove namespace %s", namespaceName))
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s (never ready)", pod1Name))
 	nt.WaitForRepoSyncs()
-	nt.MustKubectl("delete", "namespaces", namespaceName, "--ignore-not-found")
+
+	// Verify pod is deleted.
+	// Otherwise deletion of a managed resource will be denied by the webhook.
+	nt.MustKubectl("delete", "pods", pod1Name, "-n", namespaceName, "--ignore-not-found")
 
 	// Override reconcileTimeout to 5m, namespace actuation should succeed, namespace reconcile should succeed.
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"reconcileTimeout": "5m"}}}`)
 	nt.WaitForRepoSyncs()
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace %s", namespaceName))
+
+	// Fix ReadinessProbe to use the right port
+	pod1.Spec.Containers[0].ReadinessProbe.ProbeHandler.TCPSocket.Port =
+		intstr.FromInt(int(pod1.Spec.Containers[0].Ports[0].ContainerPort))
+
+	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s (fixed)", pod1Name))
 	nt.WaitForRepoSyncs()
 
 	err = nt.Client.Get(nt.Context, client.ObjectKey{
@@ -94,17 +121,17 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	} else {
 		expectActuationStatus := "Succeeded"
 		expectReconcileStatus := "Succeeded"
-		err = verifyResourceStatus(u, resourceToVerify, expectActuationStatus, expectReconcileStatus)
+		err = verifyObjectStatus(u, idToVerify, expectActuationStatus, expectReconcileStatus)
 		if err != nil {
 			nt.T.Fatal(err)
 		} else {
-			nt.T.Logf("resource %q has actuation and reconcile status as expected", namespaceName)
+			nt.T.Logf("object %q has actuation and reconcile status as expected", namespaceName)
 		}
 	}
 }
 
-// verifyResourceStatus verify if a resource has actuation and reconcile status as expected
-func verifyResourceStatus(u *unstructured.Unstructured, resource *resourceInfo, expectActuation string, expectReconcile string) error {
+// verifyObjectStatus verifies that an object has actuation and reconcile status as expected
+func verifyObjectStatus(u *unstructured.Unstructured, id core.ID, expectActuation string, expectReconcile string) error {
 	resourceStatuses, exist, err := unstructured.NestedSlice(u.Object, "status", "resourceStatuses")
 	if !exist {
 		return fmt.Errorf("failed to find status.resourceStatues field")
@@ -114,14 +141,14 @@ func verifyResourceStatus(u *unstructured.Unstructured, resource *resourceInfo, 
 	}
 	for _, r := range resourceStatuses {
 		resourceStatus := r.(interface{}).(map[string]interface{})
-		if resourceStatus["name"] == resource.name && resourceStatus["kind"] == resource.kind &&
-			resourceStatus["namespace"] == resource.namespace && resourceStatus["group"] == resource.group {
+		if resourceStatus["name"] == id.Name && resourceStatus["kind"] == id.Kind &&
+			resourceStatus["namespace"] == id.Namespace && resourceStatus["group"] == id.Group {
 			if resourceStatus["actuation"] == expectActuation && resourceStatus["reconcile"] == expectReconcile {
 				return nil
 			}
-			return fmt.Errorf("resource %q does not have expected actuation and reconcile status, actual actuation status is %q, expect %q; actual reconcile status is %q, expect %q",
+			return fmt.Errorf("object %q does not have expected actuation and reconcile status, actual actuation status is %q, expect %q; actual reconcile status is %q, expect %q",
 				resourceStatus["name"], resourceStatus["actuation"], expectActuation, resourceStatus["reconcile"], expectReconcile)
 		}
 	}
-	return fmt.Errorf("failed to find resource %s : %s", resource.kind, resource.name)
+	return fmt.Errorf("failed to find object %s : %s", id.Kind, id.Name)
 }

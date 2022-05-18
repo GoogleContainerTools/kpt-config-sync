@@ -56,6 +56,17 @@ func IsNamespaced(u *unstructured.Unstructured) bool {
 	return u.GetNamespace() != ""
 }
 
+// IsNamespace returns true if the passed Unstructured object
+// is Namespace in the core (empty string) group.
+func IsNamespace(u *unstructured.Unstructured) bool {
+	if u == nil {
+		return false
+	}
+	gvk := u.GroupVersionKind()
+	// core group, any version
+	return gvk.Group == "" && gvk.Kind == "Namespace"
+}
+
 // IsCRD returns true if the passed Unstructured object has
 // GroupKind == Extensions/CustomResourceDefinition; false otherwise.
 func IsCRD(u *unstructured.Unstructured) bool {

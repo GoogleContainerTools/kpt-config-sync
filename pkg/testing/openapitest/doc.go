@@ -19,7 +19,7 @@ import (
 	// The openapi Document type does not satisfy the proto.Message interface in
 	// the new non-deprecated proto library.
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
-	openapiv2 "github.com/googleapis/gnostic/openapiv2"
+	openapiv2 "github.com/google/gnostic/openapiv2"
 )
 
 // Doc returns an openapi Document intialized from a static file of openapi

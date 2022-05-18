@@ -25,7 +25,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/google"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/reconcilermanager"

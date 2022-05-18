@@ -292,8 +292,8 @@ func (c *CachingClusterReader) listUnstructured(
 		if t.ResourceVersion != "" {
 			u.SetResourceVersion(t.ResourceVersion)
 		}
-		if t.SelfLink != "" {
-			u.SetSelfLink(t.SelfLink)
+		if t.SelfLink != "" { // nolint:staticcheck
+			u.SetSelfLink(t.SelfLink) // nolint:staticcheck
 		}
 		u.Items = make([]unstructured.Unstructured, len(t.Items))
 		for i, item := range t.Items {

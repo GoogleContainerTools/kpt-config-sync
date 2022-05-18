@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/klogr"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"

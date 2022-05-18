@@ -6,21 +6,20 @@ package taskrunner
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apply/cache"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
-	"sigs.k8s.io/cli-utils/pkg/apply/poller"
-	"sigs.k8s.io/cli-utils/pkg/kstatus/polling"
 	pollevent "sigs.k8s.io/cli-utils/pkg/kstatus/polling/event"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
 	"sigs.k8s.io/cli-utils/pkg/object"
 )
 
 // NewTaskStatusRunner returns a new TaskStatusRunner.
-func NewTaskStatusRunner(identifiers object.ObjMetadataSet, statusPoller poller.Poller) *TaskStatusRunner {
+func NewTaskStatusRunner(identifiers object.ObjMetadataSet, statusWatcher watcher.StatusWatcher) *TaskStatusRunner {
 	return &TaskStatusRunner{
-		Identifiers:  identifiers,
-		StatusPoller: statusPoller,
+		Identifiers:   identifiers,
+		StatusWatcher: statusWatcher,
 	}
 }
 
@@ -28,14 +27,13 @@ func NewTaskStatusRunner(identifiers object.ObjMetadataSet, statusPoller poller.
 // tasks while at the same time uses the statusPoller to
 // keep track of the status of the resources.
 type TaskStatusRunner struct {
-	Identifiers  object.ObjMetadataSet
-	StatusPoller poller.Poller
+	Identifiers   object.ObjMetadataSet
+	StatusWatcher watcher.StatusWatcher
 }
 
 // Options defines properties that is passed along to
 // the statusPoller.
 type Options struct {
-	PollInterval     time.Duration
 	EmitStatusEvents bool
 }
 
@@ -59,9 +57,7 @@ func (tsr *TaskStatusRunner) Run(
 	// If taskStatusRunner.Run is cancelled, baseRunner.run will exit early,
 	// causing the poller to be cancelled.
 	statusCtx, cancelFunc := context.WithCancel(context.Background())
-	statusChannel := tsr.StatusPoller.Poll(statusCtx, tsr.Identifiers, polling.PollOptions{
-		PollInterval: opts.PollInterval,
-	})
+	statusChannel := tsr.StatusWatcher.Watch(statusCtx, tsr.Identifiers, watcher.Options{})
 
 	// complete stops the statusPoller, drains the statusChannel, and returns
 	// the provided error.
@@ -69,17 +65,17 @@ func (tsr *TaskStatusRunner) Run(
 	// Avoid using defer, otherwise the statusPoller will hang. It needs to be
 	// drained synchronously before return, instead of asynchronously after.
 	complete := func(err error) error {
+		klog.V(7).Info("Runner cancelled status watcher")
 		cancelFunc()
-		for range statusChannel {
+		for statusEvent := range statusChannel {
+			klog.V(7).Infof("Runner ignored status event: %v", statusEvent)
 		}
 		return err
 	}
 
-	// Find and start the first task in the queue.
-	currentTask, done := nextTask(taskQueue, taskContext)
-	if done {
-		return complete(nil)
-	}
+	// Wait until the StatusWatcher is sychronized to start the first task.
+	var currentTask Task
+	done := false
 
 	// abort is used to signal that something has failed, and
 	// the task processing should end as soon as is possible. Only
@@ -106,18 +102,40 @@ func (tsr *TaskStatusRunner) Run(
 			// statusEvents.
 			// TODO: Check if a closed statusChannel might
 			// create a busy loop here.
-			if !ok || abort {
+			if !ok {
 				continue
 			}
 
-			// An error event on the statusChannel means the StatusPoller
+			if abort {
+				klog.V(7).Infof("Runner ignored status event: %v", statusEvent)
+				continue
+			}
+			klog.V(7).Infof("Runner received status event: %v", statusEvent)
+
+			// An error event on the statusChannel means the StatusWatcher
 			// has encountered a problem so it can't continue. This means
 			// the statusChannel will be closed soon.
 			if statusEvent.Type == pollevent.ErrorEvent {
 				abort = true
 				abortReason = fmt.Errorf("polling for status failed: %v",
 					statusEvent.Error)
-				currentTask.Cancel(taskContext)
+				if currentTask != nil {
+					currentTask.Cancel(taskContext)
+				} else {
+					// tasks not started yet - abort now
+					return complete(abortReason)
+				}
+				continue
+			}
+
+			// The StatusWatcher is synchronized.
+			// Tasks may commence!
+			if statusEvent.Type == pollevent.SyncEvent {
+				// Find and start the first task in the queue.
+				currentTask, done = nextTask(taskQueue, taskContext)
+				if done {
+					return complete(nil)
+				}
 				continue
 			}
 
@@ -147,8 +165,10 @@ func (tsr *TaskStatusRunner) Run(
 
 			// send a status update to the running task, but only if the status
 			// has changed and the task is tracking the object.
-			if currentTask.Identifiers().Contains(id) {
-				currentTask.StatusUpdate(taskContext, id)
+			if currentTask != nil {
+				if currentTask.Identifiers().Contains(id) {
+					currentTask.StatusUpdate(taskContext, id)
+				}
 			}
 		// A message on the taskChannel means that the current task
 		// has either completed or failed.
@@ -187,7 +207,13 @@ func (tsr *TaskStatusRunner) Run(
 			doneCh = nil // Set doneCh to nil so we don't enter a busy loop.
 			abort = true
 			abortReason = ctx.Err() // always non-nil when doneCh is closed
-			currentTask.Cancel(taskContext)
+			klog.V(7).Infof("Runner aborting: %v", abortReason)
+			if currentTask != nil {
+				currentTask.Cancel(taskContext)
+			} else {
+				// tasks not started yet - abort now
+				return complete(abortReason)
+			}
 		}
 	}
 }

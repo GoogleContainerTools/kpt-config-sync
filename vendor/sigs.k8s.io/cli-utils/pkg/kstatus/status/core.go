@@ -49,7 +49,7 @@ const (
 
 	// How long a pod can be unscheduled before it is reported as
 	// unschedulable.
-	scheduleWindow = 15 * time.Second
+	ScheduleWindow = 15 * time.Second
 )
 
 // GetLegacyConditionsFn returns a function that can compute the status for the
@@ -208,7 +208,7 @@ func deploymentConditions(u *unstructured.Unstructured) (*Result, error) {
 	// TODO spec.replicas zero case ??
 
 	if specReplicas > statusReplicas {
-		message := fmt.Sprintf("replicas: %d/%d", statusReplicas, specReplicas)
+		message := fmt.Sprintf("Replicas: %d/%d", statusReplicas, specReplicas)
 		return newInProgressStatus(tooFewReplicas, message), nil
 	}
 
@@ -448,7 +448,7 @@ func podConditions(u *unstructured.Unstructured) (*Result, error) {
 	case "Pending":
 		c, found := getConditionWithStatus(objc.Status.Conditions, "PodScheduled", corev1.ConditionFalse)
 		if found && c.Reason == "Unschedulable" {
-			if time.Now().Add(-scheduleWindow).Before(u.GetCreationTimestamp().Time) {
+			if time.Now().Add(-ScheduleWindow).Before(u.GetCreationTimestamp().Time) {
 				// We give the pod 15 seconds to be scheduled before we report it
 				// as unschedulable.
 				return newInProgressStatus("PodNotScheduled", "Pod has not been scheduled"), nil

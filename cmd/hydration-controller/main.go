@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/klogr"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"

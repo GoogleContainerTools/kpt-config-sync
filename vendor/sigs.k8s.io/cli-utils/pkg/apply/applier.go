@@ -20,17 +20,15 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/apply/info"
 	"sigs.k8s.io/cli-utils/pkg/apply/mutator"
-	"sigs.k8s.io/cli-utils/pkg/apply/poller"
 	"sigs.k8s.io/cli-utils/pkg/apply/prune"
 	"sigs.k8s.io/cli-utils/pkg/apply/solver"
 	"sigs.k8s.io/cli-utils/pkg/apply/taskrunner"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/validation"
 )
-
-const defaultPollInterval = 2 * time.Second
 
 // Applier performs the step of applying a set of resources into a cluster,
 // conditionally waits for all of them to be fully reconciled and finally
@@ -44,7 +42,7 @@ const defaultPollInterval = 2 * time.Second
 // cluster, different sets of tasks might be needed.
 type Applier struct {
 	pruner        *prune.Pruner
-	statusPoller  poller.Poller
+	statusWatcher watcher.StatusWatcher
 	invClient     inventory.Client
 	client        dynamic.Interface
 	openAPIGetter discovery.OpenAPISchemaInterface
@@ -236,10 +234,14 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		// Create a new TaskStatusRunner to execute the taskQueue.
 		klog.V(4).Infoln("applier building TaskStatusRunner...")
 		allIds := object.UnstructuredSetToObjMetadataSet(append(applyObjs, pruneObjs...))
-		runner := taskrunner.NewTaskStatusRunner(allIds, a.statusPoller)
+		statusWatcher := a.statusWatcher
+		// Disable watcher for dry runs
+		if opts.DryRunStrategy.ClientOrServerDryRun() {
+			statusWatcher = watcher.BlindStatusWatcher{}
+		}
+		runner := taskrunner.NewTaskStatusRunner(allIds, statusWatcher)
 		klog.V(4).Infoln("applier running TaskStatusRunner...")
 		err = runner.Run(ctx, taskContext, taskQueue.ToChannel(), taskrunner.Options{
-			PollInterval:     options.PollInterval,
 			EmitStatusEvents: options.EmitStatusEvents,
 		})
 		if err != nil {
@@ -258,10 +260,6 @@ type ApplierOptions struct {
 	// until all applied resources have been reconciled, and if so,
 	// how long to wait.
 	ReconcileTimeout time.Duration
-
-	// PollInterval defines how often we should poll for the status
-	// of resources.
-	PollInterval time.Duration
 
 	// EmitStatusEvents defines whether status events should be
 	// emitted on the eventChannel to the caller.
@@ -295,9 +293,6 @@ type ApplierOptions struct {
 // setDefaults set the options to the default values if they
 // have not been provided.
 func setDefaults(o *ApplierOptions) {
-	if o.PollInterval == 0 {
-		o.PollInterval = defaultPollInterval
-	}
 	if o.PrunePropagationPolicy == "" {
 		o.PrunePropagationPolicy = metav1.DeletePropagationBackground
 	}

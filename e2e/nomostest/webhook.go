@@ -46,7 +46,7 @@ func webhookReadiness(nt *NT) error {
 	if err != nil {
 		nt.T.Fatalf("`kubectl logs -n config-management-system -l app=admission-webhook --tail=-1` failed: %v", err)
 	}
-	readyStr := `controller-runtime/webhook "msg"="serving webhook server"  "host"="" "port"=10250`
+	readyStr := `controller-runtime/webhook "msg"="Serving webhook server"  "host"="" "port"=10250`
 	if !strings.Contains(string(out), readyStr) {
 		return errors.Errorf("The webhook is not ready yet")
 	}

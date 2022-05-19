@@ -100,15 +100,11 @@ func TestManagingReconciler(t *testing.T) {
 	// The reconciler-manager manages the container resource requirements on both
 	// autopilot clusters and non-autopilot clusters. Any manual changes will be reverted.
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	updatedContainerMemoryLimit := &resource.Quantity{}
-	managedMemoryLimit.DeepCopyInto(updatedContainerMemoryLimit)
-	updatedContainerMemoryLimit.Add(resource.MustParse("5Mi"))
-
-	nt.T.Log("Manually set the memory limit back to the original value")
+	nt.T.Log("Manually update the first container CPU and Memory limit")
 	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
 		d.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			"cpu":    *d.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu(),
-			"memory": *updatedContainerMemoryLimit,
+			"cpu":    resource.MustParse(updatedFirstContainerCPULimit),
+			"memory": resource.MustParse(updatedFirstContainerMemoryLimit),
 		}
 	})
 	nt.T.Log("Verify the reconciler-manager should revert the memory limit change")

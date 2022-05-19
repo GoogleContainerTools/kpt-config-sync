@@ -63,9 +63,8 @@ func defaultResourceRequestsLimits(nt *nomostest.NT) (reconcilerRequests, reconc
 
 	for _, container := range deploy.Spec.Template.Spec.Containers {
 		if container.Name == reconcilermanager.Reconciler || container.Name == reconcilermanager.GitSync {
-			if container.Resources.Limits.Cpu().IsZero() || container.Resources.Limits.Memory().IsZero() ||
-				container.Resources.Requests.Cpu().IsZero() || container.Resources.Requests.Memory().IsZero() {
-				nt.T.Fatalf("The %s container in %s should define CPU/memory limits and requests", container.Name, path)
+			if container.Resources.Requests.Cpu().IsZero() || container.Resources.Requests.Memory().IsZero() {
+				nt.T.Fatalf("The %s container in %s should define CPU/memory requests", container.Name, path)
 			}
 		}
 		if container.Name == reconcilermanager.Reconciler {

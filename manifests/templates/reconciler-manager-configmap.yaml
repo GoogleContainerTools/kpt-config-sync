@@ -71,9 +71,6 @@ data:
                - NET_RAW
              runAsUser: 65533
            resources:
-             limits:
-               cpu: "1"
-               memory: "300Mi"
              requests:
                cpu: "10m"
                memory: "100Mi"
@@ -92,9 +89,6 @@ data:
              mountPath: /repo
              readOnly: true
            resources:
-             limits:
-               cpu: "1"
-               memory: "300Mi"
              requests:
                cpu: "50m"
                memory: "200Mi"
@@ -127,9 +121,6 @@ data:
                - NET_RAW
              runAsUser: 65533
            resources:
-             limits:
-               cpu: "1"
-               memory: "200Mi"
              requests:
                cpu: "10m"
                memory: "200Mi"
@@ -150,9 +141,6 @@ data:
                - NET_RAW
              runAsUser: 65533
            resources:
-             limits:
-               cpu: "1"
-               memory: "200Mi"
              requests:
                cpu: "10m"
                memory: "200Mi"
@@ -163,9 +151,6 @@ data:
            args:
            - "--config=/conf/otel-agent-config.yaml"
            resources:
-             limits:
-               cpu: 500m
-               memory: 500Mi
              requests:
                cpu: 10m
                memory: 100Mi

@@ -49,9 +49,6 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
-          limits:
-            cpu: 200m
-            memory: 200Mi
         volumeMounts:
         - name: configs
           mountPath: /deployment.yaml
@@ -67,9 +64,6 @@ spec:
         args:
         - "--config=/conf/otel-agent-config.yaml"
         resources:
-          limits:
-            cpu: 500m
-            memory: 500Mi
           requests:
             cpu: 10m
             memory: 100Mi

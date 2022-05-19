@@ -37,10 +37,15 @@ spec:
       - name: admission-webhook
         command:
         - /admission-webhook
+        - --graceful-shutdown-timeout=10s
+        - --health-probe-bind-addr=:10258
         image: IMAGE_NAME
         ports:
           - name: admission
             containerPort: 10250
+            protocol: TCP
+          - name: readyz
+            containerPort: 10258
             protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
@@ -56,6 +61,15 @@ spec:
           - mountPath: /certs
             name: cert
             readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: readyz
+            scheme: HTTP
+          periodSeconds: 1
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 1
       terminationGracePeriodSeconds: 10
       volumes:
       - name: cert

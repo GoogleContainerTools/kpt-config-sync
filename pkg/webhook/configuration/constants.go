@@ -14,7 +14,11 @@
 
 package configuration
 
-import "kpt.dev/configsync/pkg/api/configsync"
+import (
+	"time"
+
+	"kpt.dev/configsync/pkg/api/configsync"
+)
 
 // ShortName is the short name of the ValidatingWebhookConfiguration for the
 // Admission Controller.
@@ -47,5 +51,23 @@ const ServicePort = 443
 // Setting ContainerPort to 443 requires elevated permissions, and should be avoided.
 const ContainerPort = 10250
 
+// HealthProbePort is used by the kubelet to probe the health & readiness of the
+// webhook containers.
+//
+// This port is only accessed on the same node, so it doesn't need to be
+// allowlisted in any firewall.
+const HealthProbePort = 10258
+
 // CertDir matches the mountPath specified in admission-webhook.yaml.
 const CertDir = "/certs"
+
+// GracefulShutdownTimeout is the default timeout to wait for the webhook
+// controller to exit after receiving an exit signal (SIGTERM or SIGINT).
+// After this timeout, the controller manager will exit anyway.
+const GracefulShutdownTimeout = 10 * time.Second
+
+// CacheSyncTimeout is the default timeout to wait for the webhook controller
+// informers to synchronize when starting to watch cluster resources.
+// After this timeout, if not synchronized, the watch will be cancelled,
+// causing the process to error and exit.
+const CacheSyncTimeout = 2 * time.Minute

@@ -16,13 +16,13 @@ package nomostest
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -31,7 +31,7 @@ import (
 // WaitForWebhookReadiness waits up to 3 minutes for the wehbook becomes ready.
 // If the webhook still is not ready after 3 minutes, the test would fail.
 func WaitForWebhookReadiness(nt *NT) {
-	nt.T.Logf("Waiting for the webhook becomes ready: %v", time.Now())
+	nt.T.Logf("Waiting for the webhook to become ready: %v", time.Now())
 	_, err := Retry(3*time.Minute, func() error {
 		return webhookReadiness(nt)
 	})
@@ -42,13 +42,10 @@ func WaitForWebhookReadiness(nt *NT) {
 }
 
 func webhookReadiness(nt *NT) error {
-	out, err := nt.Kubectl("logs", "-n", "config-management-system", "-l", "app=admission-webhook", "--tail=-1")
+	err := nt.Validate(configuration.ShortName, configmanagement.ControllerNamespace,
+		&appsv1.Deployment{}, isAvailableDeployment)
 	if err != nil {
-		nt.T.Fatalf("`kubectl logs -n config-management-system -l app=admission-webhook --tail=-1` failed: %v", err)
-	}
-	readyStr := `controller-runtime/webhook "msg"="Serving webhook server"  "host"="" "port"=10250`
-	if !strings.Contains(string(out), readyStr) {
-		return errors.Errorf("The webhook is not ready yet")
+		return fmt.Errorf("webhook server is not ready: %w", err)
 	}
 	return nil
 }

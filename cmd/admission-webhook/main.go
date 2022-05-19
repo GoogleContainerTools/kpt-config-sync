@@ -16,7 +16,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/profiler"
@@ -24,18 +27,25 @@ import (
 	"kpt.dev/configsync/pkg/webhook"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 )
 
 var (
 	setupLog = ctrl.Log.WithName("setup")
 
-	restartOnSecretRefresh bool
+	restartOnSecretRefresh  bool
+	healthProbeBindAddress  string
+	gracefulShutdownTimeout time.Duration
+	cacheSyncTimeout        time.Duration
 )
 
 func main() {
 	// Default to true since not restarting doesn't make sense?
 	flag.BoolVar(&restartOnSecretRefresh, "cert-restart-on-secret-refresh", true, "Kills the process when secrets are refreshed so that the pod can be restarted (secrets take up to 60s to be updated by running pods)")
+	flag.StringVar(&healthProbeBindAddress, "health-probe-bind-addr", fmt.Sprintf(":%d", configuration.HealthProbePort), "The address the healthz & readyz probes bind to.")
+	flag.DurationVar(&gracefulShutdownTimeout, "graceful-shutdown-timeout", configuration.GracefulShutdownTimeout, "The duration of time to wait while shutting down for all controllers to stop.")
+	flag.DurationVar(&cacheSyncTimeout, "cache-sync-timeout", configuration.CacheSyncTimeout, "The duration of time to wait while informers synchronize.")
 
 	log.Setup()
 
@@ -46,37 +56,69 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Port:    configuration.ContainerPort,
 		CertDir: configuration.CertDir,
+		// Required for the ReadyzCheck
+		HealthProbeBindAddress:  healthProbeBindAddress,
+		GracefulShutdownTimeout: &gracefulShutdownTimeout,
+		Controller: v1alpha1.ControllerConfigurationSpec{
+			CacheSyncTimeout: &cacheSyncTimeout,
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "starting manager")
 		os.Exit(1)
 	}
 
-	setupLog.Info("creating certificate rotator for webhook")
+	setupLog.Info("registering certificate rotator for webhook")
 	certDone, err := webhook.CreateCertsIfNeeded(mgr, restartOnSecretRefresh)
 	if err != nil {
-		setupLog.Error(err, "creating certificate rotator for webhook")
+		setupLog.Error(err, "unable to register certificate rotator for webhook")
+		os.Exit(1)
 	}
 
-	// We can't block on waiting for the cert rotator to be up: the Manager
-	// launches this process in Start(). However, we must wait for the cert
-	// rotator before registering the webhook in the Manager.
-	go startControllers(mgr, certDone)
+	validatorDone := make(chan struct{})
+	var checker healthz.Checker
+
+	// Block readiness on the validating webhook being registered.
+	// We can't use mgr.GetWebhookServer().StartedChecker() yet,
+	// because that starts the webhook. But we also can't call AddReadyzCheck
+	// after Manager.Start. So we need a custom ready check that delegates to
+	// the real ready check after the cert has been injected and validator started.
+	setupLog.Info("registering /readyz endpoint for webhook")
+	err = mgr.AddReadyzCheck("webhook", func(req *http.Request) error {
+		select {
+		case <-validatorDone:
+			// done waiting
+			return checker(req)
+		default:
+			// still waiting
+			return fmt.Errorf("webhook validator has not been started yet")
+		}
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to register ready check for webhook")
+		os.Exit(1)
+	}
+
+	// The webhook depends on the cert rotator.
+	// So block until the certs have been injected, then start the webhook.
+	go func() {
+		defer close(validatorDone)
+		setupLog.Info("waiting for certificate rotator")
+		<-certDone
+
+		setupLog.Info("registering validator for webhook")
+		if err := webhook.AddValidator(mgr); err != nil {
+			setupLog.Error(err, "unable to register validator for webhook")
+			os.Exit(1)
+		}
+
+		// Initialize checker so the existing readycheck can delegate to it.
+		checker = mgr.GetWebhookServer().StartedChecker()
+	}()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "running manager")
-		os.Exit(1)
-	}
-}
-
-func startControllers(mgr manager.Manager, certDone chan struct{}) {
-	setupLog.Info("waiting for certificate rotator")
-	<-certDone
-
-	setupLog.Info("registering validating webhook")
-	if err := webhook.AddValidator(mgr); err != nil {
-		setupLog.Error(err, "registering validating webhook")
 		os.Exit(1)
 	}
 }

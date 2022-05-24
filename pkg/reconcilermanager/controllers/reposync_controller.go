@@ -367,7 +367,8 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 			// It is a one-to-one mapping between the copied ns-reconciler Secret and the RepoSync object,
 			// so requeue the mapped RepoSync object and then return.
 			reconcilerName := reconciler.NsReconcilerName(rs.GetNamespace(), rs.GetName())
-			isGitSecret := secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
+			isGitSecret := rs.Spec.SourceType == string(v1beta1.GitSource) && rs.Spec.Git != nil &&
+				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
 			if isGitSecret {
 				return requeueRepoSyncRequest(secret, &rs)
 			}
@@ -513,8 +514,14 @@ func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *
 func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
+		if rs.Spec.Oci != nil {
+			return validate.RedundantOciSpec(rs)
+		}
 		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
+		if rs.Spec.Git != nil {
+			return validate.RedundantGitSpec(rs)
+		}
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	default:
 		return validate.InvalidSourceType(rs)

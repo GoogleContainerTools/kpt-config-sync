@@ -42,6 +42,9 @@ func RootSync(obj ast.FileObject) status.Error {
 	} else {
 		rs = s.(*v1beta1.RootSync)
 	}
+	if rs.Spec.SourceType == "" {
+		rs.Spec.SourceType = string(v1beta1.GitSource)
+	}
 	return SourceSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs)
 }
 

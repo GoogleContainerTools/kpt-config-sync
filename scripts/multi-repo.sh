@@ -48,14 +48,6 @@ kubectl delete secret root-ssh-key -n=config-management-system --ignore-not-foun
 kubectl create secret generic root-ssh-key -n=config-management-system \
       --from-file=ssh=${HOME}/.ssh/id_rsa.nomos
 
-# Cleanup exiting ssh-key secret.
-kubectl delete secret ssh-key -n=bookinfo --ignore-not-found
-# Create ssh-key secret for Namespace Reconciler.
-# shellcheck disable=SC2086
-kubectl create secret generic ssh-key -n=bookinfo \
-      --from-file=ssh=${HOME}/.ssh/id_rsa.nomos
-
-
 # Verify reconciler-manager pod is running.
 
 # Apply RootSync CR.

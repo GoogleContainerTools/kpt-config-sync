@@ -232,7 +232,7 @@ func TestStressLargeRequest(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for the sync to complete")
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "configs"}),
 		nomostest.WithTimeout(30*time.Minute))
 }

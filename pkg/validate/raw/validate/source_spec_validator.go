@@ -31,8 +31,14 @@ const gcpSASuffix = ".iam.gserviceaccount.com"
 func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, rs client.Object) status.Error {
 	switch v1beta1.SourceType(sourceType) {
 	case v1beta1.GitSource:
+		if oci != nil {
+			return RedundantOciSpec(rs)
+		}
 		return GitSpec(git, rs)
 	case v1beta1.OciSource:
+		if git != nil {
+			return RedundantGitSpec(rs)
+		}
 		return OciSpec(oci, rs)
 	default:
 		return InvalidSourceType(rs)
@@ -251,5 +257,23 @@ func InvalidOciAuthType(o client.Object) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,
 			strings.Join(types, ",")).
+		BuildWithResources(o)
+}
+
+// RedundantGitSpec reports that a RootSync/RepoSync declares the Git spec
+// when spec.sourceType is set to `oci`.
+func RedundantGitSpec(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must not specify spec.git when spec.sourceType is %q", kind, v1beta1.OciSource).
+		BuildWithResources(o)
+}
+
+// RedundantOciSpec reports that a RootSync/RepoSync declares the OCI spec
+// when spec.sourceType is set to `git`.
+func RedundantOciSpec(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must not specify spec.oci when spec.sourceType is %q", kind, v1beta1.GitSource).
 		BuildWithResources(o)
 }

@@ -18,7 +18,7 @@ metadata:
   name: repo-sync
   namespace: bookinfo
 spec:
-  git:
-    repo: https://github.com/config-sync-examples/namespace-repo-bookinfo
-    branch: main
+  sourceType: oci
+  oci:
+    image: us-docker.pkg.dev/stolos-dev/config-sync-ci-public/namespace-repo-bookinfo
     auth: none

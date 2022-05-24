@@ -1804,7 +1804,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs.Spec.SourceType = string(v1beta1.GitSource)
+	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
 	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
@@ -1818,7 +1818,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs.Spec.SourceType = string(v1beta1.OciSource)
+	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
 	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
@@ -1833,8 +1833,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs.Spec.SourceType = string(v1beta1.OciSource)
-	wantRs.Spec.Oci = &v1beta1.Oci{}
+	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
 	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
@@ -1851,15 +1850,46 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs.Spec.SourceType = string(v1beta1.OciSource)
-	wantRs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
+	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify redundant source specifications
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.Git = &v1beta1.Git{}
+	rs.Spec.Oci = &v1beta1.Oci{}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	rootsync.SetStalled(wantRs, "Validation", validate.RedundantOciSpec(rs))
+	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Git = &v1beta1.Git{}
+	rs.Spec.Oci = &v1beta1.Oci{}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	rootsync.SetStalled(wantRs, "Validation", validate.RedundantGitSpec(rs))
 	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
 	}
 
 	// verify valid OCI spec
 	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Git = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
@@ -1872,8 +1902,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs.Spec.SourceType = string(v1beta1.OciSource)
-	wantRs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
+	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = rootReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
 	rootsync.SetReconciling(wantRs, "Deployment", "Reconciler deployment was created")

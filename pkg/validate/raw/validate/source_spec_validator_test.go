@@ -92,6 +92,18 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	return rs
 }
 
+func withGit() func(*v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Git = &v1beta1.Git{}
+	}
+}
+
+func withOci() func(*v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Oci = &v1beta1.Oci{}
+	}
+}
+
 func TestValidateGitSpec(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -187,6 +199,16 @@ func TestValidateGitSpec(t *testing.T) {
 		{
 			name:    "invalid source type",
 			obj:     fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName, fake.WithRepoSyncSourceType("invalid")),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "redundant OCI spec",
+			obj:     repoSyncWithGit(withOci()),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "redundant Git spec",
+			obj:     repoSyncWithOci(withGit()),
 			wantErr: fake.Error(InvalidSyncCode),
 		},
 	}

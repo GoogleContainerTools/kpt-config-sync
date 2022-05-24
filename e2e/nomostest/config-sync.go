@@ -533,7 +533,8 @@ func waitForReconciler(nt *NT, name string) error {
 	return nil
 }
 
-func repoSyncClusterRole() *rbacv1.ClusterRole {
+// RepoSyncClusterRole returns clusterrole with permissions to manage resources in the cluster.
+func RepoSyncClusterRole() *rbacv1.ClusterRole {
 	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
 	cr.Rules = []rbacv1.PolicyRule{
 		{
@@ -701,7 +702,7 @@ func setPollingPeriods(t testing.NTB, obj client.Object) {
 
 func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
-	if err := nt.Create(repoSyncClusterRole()); err != nil {
+	if err := nt.Create(RepoSyncClusterRole()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -872,7 +873,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	}
 
 	if len(opts.NamespaceRepos) > 0 {
-		nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", repoSyncClusterRole())
+		nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", RepoSyncClusterRole())
 	}
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
@@ -1165,7 +1166,7 @@ func deleteNamespaceRepos(nt *NT) {
 		}
 	}
 
-	rsClusterRole := repoSyncClusterRole()
+	rsClusterRole := RepoSyncClusterRole()
 	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	}

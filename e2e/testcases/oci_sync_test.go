@@ -19,14 +19,20 @@ import (
 	"os"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/cli-utils/pkg/common"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -277,10 +283,139 @@ func testWorkloadIdentity(nt *nomostest.NT, fleetMembership, gcpProject, crossPr
 	tenant = "tenant-d"
 	nt.T.Logf("Update RootSync to sync %s", tenant)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRepoRootSha1Fn),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+}
+
+func TestSwitchFromGitToOci(t *testing.T) {
+	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	namespace := "bookinfo"
+	managerScope := string(declared.RootReconciler)
+	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
+	rsGitYAMLFile := "../testdata/reconciler-manager/reposync-sample.yaml"
+	// file path to the local RepoSync YAML file which syncs from a public OCI image that contains a role.
+	rsOCIYAMLFile := "../testdata/reconciler-manager/reposync-oci.yaml"
+	// file path to the RepoSync config in the root repository.
+	repoResourcePath := "acme/reposync-bookinfo.yaml"
+	// The Sha1Func that returns the fixed OCI digest of the namespace repo package.
+	nsRepoOCIDigestShaFunc := fixedOCIDigest("e118253937b078ea35032c665855f9c51ba23715302445bea663cae61a2a34f9")
+
+	// Verify the central controlled configuration: switch from Git to OCI
+	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
+	nt.T.Log("Add the RepoSync object to the Root Repo")
+	nt.RootRepos[configsync.RootSyncName].Copy(rsGitYAMLFile, repoResourcePath)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nomostest.RepoSyncClusterRole())
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
+	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
+	nt.WaitForRepoSyncs()
+	nt.T.Log("Verify an implicit namespace is created")
+	if err := nt.Validate(namespace, "", &corev1.Namespace{},
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, managerScope),
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("Verify the namespace objects are synced")
+	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nt.DefaultWaitTimeout, nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		nt.T.Error(err)
+	}
+	// Switch from Git to OCI
+	nt.T.Log("Update the RepoSync object to sync from OCI")
+	nt.RootRepos[configsync.RootSyncName].Copy(rsOCIYAMLFile, repoResourcePath)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository")
+	nt.WaitForRepoSyncs()
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("Verify the namespace objects are updated")
+	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nt.DefaultWaitTimeout, nsRepoOCIDigestShaFunc, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
+		nt.T.Error(err)
+	}
+
+	// Verify the manual configuration: switch from Git to OCI
+	nt.T.Log("Remove RepoSync from the root repository")
+	nt.RootRepos[configsync.RootSyncName].Remove(repoResourcePath)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository")
+	nt.WaitForRepoSyncs()
+	nt.T.Log("Verify the RepoSync object doesn't exist")
+	if err := nt.ValidateNotFound(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}); err != nil {
+		nt.T.Error(err)
+	}
+	// Verify the default sourceType is set when not specified.
+	nt.T.Log("Manually apply the RepoSync object")
+	nt.MustKubectl("apply", "-f", rsGitYAMLFile)
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("Verify the namespace objects are synced")
+	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nt.DefaultWaitTimeout, nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.ValidateNotFound("bookinfo-admin", namespace, &rbacv1.Role{}); err != nil {
+		nt.T.Error(err)
+	}
+	// Switch from Git to OCI
+	nt.T.Log("Manually update the RepoSync object to sync from OCI")
+	nt.MustKubectl("apply", "-f", rsOCIYAMLFile)
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("Verify the namespace objects are synced")
+	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nt.DefaultWaitTimeout, nsRepoOCIDigestShaFunc, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
+		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
+		nt.T.Error(err)
+	}
+
+	// Invalid cases
+	nt.T.Log("Manually patch RepoSync object to include both Git and OCI spec when sourceType is oci")
+	rs := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	nt.MustMergePatch(rs, `{"spec":{"git":{"repo": "test", "auth": "none"}}}`)
+	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must not specify spec.git when spec.sourceType is "oci"`)
+	nt.T.Log("Manually patch RepoSync object to include both Git and OCI spec when sourceType is git")
+	nt.MustMergePatch(rs, `{"spec":{"sourceType":"git"}}`)
+	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must not specify spec.oci when spec.sourceType is "git"`)
+	nt.T.Log("Manually patch RepoSync object to miss Git spec when sourceType is git")
+	nt.MustMergePatch(rs, `{"spec":{"git":null, "oci": null}}`)
+	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`)
+	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
+	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
+	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
+}
+
+// resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.
+func isSourceType(sourceType v1beta1.SourceType) nomostest.Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return nomostest.WrongTypeErr(rs, &v1beta1.RepoSync{})
+		}
+		actual := rs.Spec.SourceType
+		if string(sourceType) != actual {
+			return fmt.Errorf("RepoSync sourceType %q is not equal to the expected %q", actual, sourceType)
+		}
+		return nil
+	}
 }
 
 /*

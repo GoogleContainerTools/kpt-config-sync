@@ -1396,9 +1396,18 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 	return AcmeDir
 }
 
-// RemoteRepoRootSha1Fn returns .status.lastSyncedCommit as the latest sha1.
-func RemoteRepoRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
+// RemoteRootRepoSha1Fn returns .status.lastSyncedCommit as the latest sha1.
+func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RootSync{}
+	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
+		return "", err
+	}
+	return rs.Status.LastSyncedCommit, nil
+}
+
+// RemoteNsRepoSha1Fn returns .status.lastSyncedCommit as the latest sha1 for the Namespace Repo.
+func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
+	rs := &v1beta1.RepoSync{}
 	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}

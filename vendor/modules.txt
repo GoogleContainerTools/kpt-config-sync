@@ -33,7 +33,7 @@ github.com/Azure/go-autorest/tracing
 # github.com/BurntSushi/toml v0.3.1
 ## explicit
 github.com/BurntSushi/toml
-# github.com/GoogleContainerTools/kpt v1.0.0-beta.15.0.20220518204221-4417f8385bb2
+# github.com/GoogleContainerTools/kpt v1.0.0-beta.16
 ## explicit; go 1.17
 github.com/GoogleContainerTools/kpt/internal/errors
 github.com/GoogleContainerTools/kpt/internal/pkg

@@ -87,6 +87,8 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/GoogleContainerTools/kpt v1.0.0-beta.15.0.20220518204221-4417f8385bb2 h1:dIMz9eRshRtRkPPTVMLgVyUGbsWctU336uShQFMFXVk=
 github.com/GoogleContainerTools/kpt v1.0.0-beta.15.0.20220518204221-4417f8385bb2/go.mod h1:bjO3AtHFBtc6Rz29MTF6iug1XKyzFAHke3G2LgRWMHE=
+github.com/GoogleContainerTools/kpt v1.0.0-beta.16 h1:3ykO4AzZV3vU9+6PUWDlsVB2aHnbvfS/XXBlf9pRMgQ=
+github.com/GoogleContainerTools/kpt v1.0.0-beta.16/go.mod h1:bjO3AtHFBtc6Rz29MTF6iug1XKyzFAHke3G2LgRWMHE=
 github.com/GoogleContainerTools/kpt/porch/api v0.0.0-20220426215627-4db5feb3a360 h1:ajgEZIm6i8Eh2OYe91OdMk3cQdbxdPvtF5kG2+DqIYA=
 github.com/MakeNowJust/heredoc v0.0.0-20170808103936-bb23615498cd h1:sjQovDkwrZp8u+gxLtPgKGjk5hCxuy2hrRejBTA9xFU=
 github.com/MakeNowJust/heredoc v0.0.0-20170808103936-bb23615498cd/go.mod h1:64YHyfSL2R96J44Nlwm39UHepQbyR5q10x7iYa1ks2E=

@@ -5,8 +5,7 @@ go 1.17
 require (
 	cloud.google.com/go/trace v1.1.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
-	// TODO: Update to kpt v1.0.0-beta.16 when released
-	github.com/GoogleContainerTools/kpt v1.0.0-beta.15.0.20220518204221-4417f8385bb2
+	github.com/GoogleContainerTools/kpt v1.0.0-beta.16
 	github.com/Masterminds/semver v1.5.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v1.2.0

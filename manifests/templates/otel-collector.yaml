@@ -134,6 +134,9 @@ spec:
         args:
         - "--config=/conf/otel-collector-config.yaml"
         resources:
+          limits:
+            cpu: 1
+            memory: 2Gi
           requests:
             cpu: 200m
             memory: 400Mi

@@ -151,6 +151,9 @@ data:
            args:
            - "--config=/conf/otel-agent-config.yaml"
            resources:
+             limits:
+               cpu: 1
+               memory: 1Gi
              requests:
                cpu: 10m
                memory: 100Mi

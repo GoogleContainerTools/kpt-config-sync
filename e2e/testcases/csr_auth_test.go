@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -52,17 +53,19 @@ func TestGCENode(t *testing.T) {
 	tenant := "tenant-a"
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a CSR repo")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcenode", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcenode", "secretRef": {"name": ""}}}}`,
 		tenant, syncBranch, csrRepo))
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}, "sourceFormat": "hierarchy"}}`, origRepoURL))
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`, origRepoURL))
 	})
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+	if err := validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestWorkloadIdentity tests the `gcpserviceaccount` auth type with both GKE
@@ -97,26 +100,18 @@ func TestWorkloadIdentity(t *testing.T) {
 	if gkeRegion == "" && gkeZone == "" {
 		t.Fatal("Environment variable 'GCP_REGION' or 'GCP_ZONE' is required for this test case")
 	}
-
-	gsaEmail := "e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com"
-	tenant := "tenant-a"
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Logf("Update RootSync to sync %s from a CSR repo", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
-		tenant, syncBranch, csrRepo, gsaEmail))
-
-	gkeURI := "https://container.googleapis.com/v1/projects/" + gcpProject
 	fleetMembership := fmt.Sprintf("%s-%s", gcpProject, gcpCluster)
-
+	gkeURI := "https://container.googleapis.com/v1/projects/" + gcpProject
 	if gkeRegion != "" {
 		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", gkeRegion, gcpCluster)
 	} else {
 		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", gkeZone, gcpCluster)
 	}
 
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that the remaining tests can run in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}, "sourceFormat": "hierarchy"}}`, origRepoURL))
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`, origRepoURL))
 		// Unregister the cluster in the same project.
 		if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
 			nt.T.Log(err)
@@ -127,15 +122,44 @@ func TestWorkloadIdentity(t *testing.T) {
 		}
 	})
 
-	nt.T.Log("Unregister the cluster if it is registered")
-	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
-		nt.T.Log(err)
+	gsaEmail := "e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com"
+	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, csrRepo, gsaEmail, v1beta1.GitSource, nomostest.RemoteRootRepoSha1Fn)
+}
+
+func testWorkloadIdentity(nt *nomostest.NT, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, repo, gsaEmail string,
+	sourceType v1beta1.SourceType, rootCommitFn nomostest.Sha1Func) {
+	tenant := "tenant-a"
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, repo)
+	if sourceType == v1beta1.GitSource {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
+			tenant, syncBranch, repo, gsaEmail))
+	} else {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
+			v1beta1.OciSource, tenant, repo, gsaEmail))
 	}
+
+	nt.T.Log("Verify Fleet workload identity within the same project")
+	nt.T.Log("Unregister the cluster if it is registered in the same project or a different project")
+	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
+		nt.T.Fatal(err)
+	}
+	// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
+	// is guaranteed to have no membership watch setup.
+	// This is to ensure consistent behavior when the membership is not cleaned up from previous run.
+	// The underlying reconciler may or may not be restarted depending on the membership existence.
+	// If membership exists before the reconciler-manager is deployed (test leftovers), the reconciler will be updated.
+	// If membership doesn't exist (normal scenario), the reconciler should remain the same after the reconciler-manager restarts.
+	nt.T.Logf("Restart the reconciler-manager to ensure the membership watch is not set up")
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
 	nt.T.Log("Register the cluster to a fleet in the same project")
 	if err := registerCluster(fleetMembership, gcpProject, gkeURI); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Log("Restart the reconciler-manager to pick up the Membership")
+	nt.T.Logf("Restart the reconciler-manager to pick up the Membership")
 	// The reconciler manager checks if the Membership CRD exists before setting
 	// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
 	// If the CRD exists, it configures the Membership watch.
@@ -143,68 +167,66 @@ func TestWorkloadIdentity(t *testing.T) {
 	// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
 	// can set up the watch. Once the watch is configured, it can detect the
 	// deletion and creation of the Membership, which implies cluster unregistration and registration.
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
+	// The underlying reconciler should be updated with FWI creds after the reconciler-manager restarts.
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
+	nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
+		return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
+	})
 
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(rootCommitFn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
 
+	nt.T.Log("Verify GKE workload identity")
 	nt.T.Log("Unregister the cluster from the fleet in the same project")
 	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
 		nt.T.Fatal(err)
 	}
 	tenant = "tenant-b"
-	nt.T.Logf("Update RootSync to sync %s from a CSR repo", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
+	nt.T.Logf("Update RootSync to sync %s", tenant)
+	if sourceType == v1beta1.GitSource {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
+	} else {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
+	}
+	nomostest.Wait(nt.T, "wait for FWI credentials to be absent", nt.DefaultWaitTimeout, func() error {
+		return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+	})
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(rootCommitFn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
 
+	nt.T.Log("Verify Fleet workload identity across project boundary")
 	nt.T.Log("Register the cluster to a fleet in a different project")
-	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-		nt.T.Log(err)
-	}
 	if err := registerCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
 		nt.T.Fatal(err)
 	}
 	tenant = "tenant-c"
-	nt.T.Logf("Update RootSync to sync %s from a CSR repo", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
-
-	nt.T.Log("Unregister the cluster from the fleet in a different project")
-	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-		nt.T.Fatal(err)
+	nt.T.Logf("Update RootSync to sync %s", tenant)
+	if sourceType == v1beta1.GitSource {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
+	} else {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
 	}
-	tenant = "tenant-d"
-	nt.T.Logf("Update RootSync to sync %s from a CSR repo", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
+	nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
+		return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
+	})
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(rootCommitFn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
 }
 
 // validateFWICredentials validates whether the reconciler Pod manifests includes
 // the FWI credentials annotation or not.
-func validateFWICredentials(nt *nomostest.NT, reconcilerName string, validationFn func(pod corev1.Pod) error) {
-	nt.T.Log("Validate reconciler Pod manifests")
+func validateFWICredentials(nt *nomostest.NT, reconcilerName string, validationFn func(pod corev1.Pod) error) error {
 	var podList = &corev1.PodList{}
 	if err := nt.List(podList, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{metadata.ReconcilerLabel: reconcilerName}); err != nil {
-		nt.T.Fatal(err)
+		return err
 	}
 	if len(podList.Items) != 1 {
-		nt.T.Fatalf("expected only 1 Pod for the reconciler %s, but got %d", reconcilerName, len(podList.Items))
+		return fmt.Errorf("expected only 1 Pod for the reconciler %s, but got %d", reconcilerName, len(podList.Items))
 	}
-
-	if err := validationFn(podList.Items[0]); err != nil {
-		nt.T.Fatal(err)
-	}
+	return validationFn(podList.Items[0])
 }
 
 // fwiAnnotationAbsent validates if the Pod has the FWI credentials annotation.

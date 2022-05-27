@@ -119,7 +119,7 @@ func TestManagingReconciler(t *testing.T) {
 	nt.T.Log("Update the Deployment manifest in the ConfigMap")
 	nt.MustKubectl("apply", "-f", "../testdata/reconciler-manager-configmap-updated.yaml")
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
 	// Reset the reconciler-manager in the cleanup stage so other test cases can still run in a shared testing cluster.
 	nt.T.Cleanup(func() {
 		generation++
@@ -195,7 +195,7 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, genera
 	nt.MustKubectl("apply", "-f", originalManifestFile)
 
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
 
 	nt.T.Log("Verify the reconciler Deployment has been reverted to the original manifest")
 	nomostest.Wait(nt.T, "the deployment manifest to be reverted", nt.DefaultWaitTimeout, func() error {

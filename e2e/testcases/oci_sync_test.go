@@ -29,7 +29,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -94,11 +93,11 @@ func TestPublicOCI(t *testing.T) {
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "unstructured", "sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
 		v1beta1.OciSource, publicARImage))
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "hierarchy", "sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
@@ -128,11 +127,11 @@ func TestGCENodeOCI(t *testing.T) {
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "unstructured", "sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
 		v1beta1.OciSource, tenant, privateARImage))
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "hierarchy", "sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
@@ -196,7 +195,7 @@ func TestOCIWorkloadIdentity(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "hierarchy", "sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 		// Unregister the cluster in the same project.
 		if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
@@ -209,84 +208,10 @@ func TestOCIWorkloadIdentity(t *testing.T) {
 	})
 
 	nt.T.Log("Test OCI Workload Identity for AR")
-	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateARImage, gsaARReaderEmail)
+	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateARImage, gsaARReaderEmail, v1beta1.OciSource, fixedOCIDigest(imageDigest))
 
 	nt.T.Log("Test OCI Workload Identity for GCR")
-	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateGCRImage, gsaGCRReaderEmail)
-}
-
-func testWorkloadIdentity(nt *nomostest.NT, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, image, gsaEmail string) {
-	tenant := "tenant-a"
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Update RootSync to sync from an OCI image")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "unstructured", "sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-		v1beta1.OciSource, tenant, image, gsaEmail))
-
-	nt.T.Log("Verify Fleet workload identity within the same project")
-	nt.T.Log("Unregister the cluster if it is registered")
-	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
-		nt.T.Log(err)
-	}
-	nt.T.Log("Register the cluster to a fleet in the same project")
-	if err := registerCluster(fleetMembership, gcpProject, gkeURI); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.T.Log("Restart the reconciler-manager to pick up the Membership")
-	// The reconciler manager checks if the Membership CRD exists before setting
-	// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
-	// If the CRD exists, it configures the Membership watch.
-	// Otherwise, the watch is not configured to prevent the controller from crashing caused by an unknown CRD.
-	// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
-	// can set up the watch. Once the watch is configured, it can detect the
-	// deletion and creation of the Membership, which implies cluster unregistration and registration.
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
-
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
-
-	nt.T.Log("Verify GKE workload identity")
-	nt.T.Log("Unregister the cluster from the fleet in the same project")
-	if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
-		nt.T.Fatal(err)
-	}
-	tenant = "tenant-b"
-	nt.T.Logf("Update RootSync to sync %s", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
-
-	nt.T.Log("Verify Fleet workload identity across project boundary")
-	nt.T.Log("Register the cluster to a fleet in a different project")
-	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-		nt.T.Log(err)
-	}
-	if err := registerCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-		nt.T.Fatal(err)
-	}
-	tenant = "tenant-c"
-	nt.T.Logf("Update RootSync to sync %s", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
-
-	nt.T.Log("Verify GKE workload identity")
-	nt.T.Log("Unregister the cluster from the fleet in a different project")
-	if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-		nt.T.Fatal(err)
-	}
-	tenant = "tenant-d"
-	nt.T.Logf("Update RootSync to sync %s", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"dir": "%s"}}}`, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-	validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateGCRImage, gsaGCRReaderEmail, v1beta1.OciSource, fixedOCIDigest(imageDigest))
 }
 
 func TestSwitchFromGitToOci(t *testing.T) {
@@ -430,7 +355,7 @@ func TestDigestUpdate(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "hierarchy", "sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
 
@@ -451,7 +376,7 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "unstructured", "sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
 		v1beta1.OciSource, image))
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))

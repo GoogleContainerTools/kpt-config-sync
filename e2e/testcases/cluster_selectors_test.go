@@ -734,10 +734,10 @@ func renameCluster(nt *nomostest.NT, configMapName, clusterName string) {
 	nt.MustMergePatch(cm, fmt.Sprintf(`{"data":{"%s":"%s"}}`, reconcilermanager.ClusterNameKey, clusterName))
 
 	if nt.MultiRepo {
-		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName)
+		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
 	} else {
-		nomostest.DeletePodByLabel(nt, "app", filesystem.GitImporterName)
-		nomostest.DeletePodByLabel(nt, "app", "monitor")
+		nomostest.DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
+		nomostest.DeletePodByLabel(nt, "app", "monitor", false)
 	}
 }
 

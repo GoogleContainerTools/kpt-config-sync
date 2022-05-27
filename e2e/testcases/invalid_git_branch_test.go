@@ -170,9 +170,9 @@ func resetGitBranch(nt *nomostest.NT, branch string) {
 	nt.MustMergePatch(cm, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, branch))
 
 	if nt.MultiRepo {
-		nomostest.DeletePodByLabel(nt, "app", "reconciler-manager")
+		nomostest.DeletePodByLabel(nt, "app", "reconciler-manager", true)
 	} else {
-		nomostest.DeletePodByLabel(nt, "app", "git-importer")
-		nomostest.DeletePodByLabel(nt, "app", "monitor")
+		nomostest.DeletePodByLabel(nt, "app", "git-importer", false)
+		nomostest.DeletePodByLabel(nt, "app", "monitor", false)
 	}
 }

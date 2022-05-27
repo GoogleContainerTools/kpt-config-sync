@@ -964,7 +964,7 @@ func podHasReadyCondition(conditions []corev1.PodCondition) bool {
 }
 
 // NewPodReady checks if the new created pods are ready.
-// It also checks the reconcilers if the pod is a reconcielr-manager with multi-repo support.
+// It also checks if the new children pods that are managed by the pods are ready.
 func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentPods, oldChildPods []corev1.Pod) error {
 	if len(oldCurrentPods) == 0 {
 		return nil
@@ -987,13 +987,14 @@ func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentP
 }
 
 // DeletePodByLabel deletes pods that have the label and waits until new pods come up.
-func DeletePodByLabel(nt *NT, label, value string) {
+func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 	oldPods := &corev1.PodList{}
 	if err := nt.List(oldPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
 		nt.T.Fatal(err)
 	}
 	oldReconcilers := &corev1.PodList{}
-	if value == reconcilermanager.ManagerName {
+	if value == reconcilermanager.ManagerName && waitForChildren {
+		// Get the children pods managed by the reconciler-manager.
 		if err := nt.List(oldReconcilers, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: reconcilermanager.Reconciler}); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -1002,7 +1003,8 @@ func DeletePodByLabel(nt *NT, label, value string) {
 		nt.T.Fatalf("Pod delete failed: %v", err)
 	}
 	Wait(nt.T, "new pods come up", nt.DefaultWaitTimeout, func() error {
-		if value == reconcilermanager.ManagerName {
+		if value == reconcilermanager.ManagerName && waitForChildren {
+			// Wait for both the new reconciler-manager pod and the new reconcilers are ready.
 			return NewPodReady(nt, label, value, reconcilermanager.Reconciler, oldPods.Items, oldReconcilers.Items)
 		}
 		return NewPodReady(nt, label, value, "", oldPods.Items, nil)
@@ -1032,8 +1034,8 @@ func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir s
 	}
 
 	if restartPod {
-		DeletePodByLabel(nt, "app", filesystem.GitImporterName)
-		DeletePodByLabel(nt, "app", "monitor")
+		DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
+		DeletePodByLabel(nt, "app", "monitor", false)
 	}
 }
 

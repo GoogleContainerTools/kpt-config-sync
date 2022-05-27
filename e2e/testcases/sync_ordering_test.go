@@ -310,8 +310,8 @@ func TestSyncOrdering(t *testing.T) {
 
 	// TestCase: cm1 depends on cm0; both are managed by ConfigSync.
 	// Both exist in the repo and in the cluster.
-	// Delete cm0 from the repo, expected an ExternalDependencyError
-	nt.T.Log("A new test: verify that removing a dependant from the git repo cause an external dependency error")
+	// Delete cm0 from the repo, expected a DependencyActuationMismatchError
+	nt.T.Log("A new test: verify that removing a dependant from the git repo cause a dependency error")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
@@ -319,7 +319,7 @@ func TestSyncOrdering(t *testing.T) {
 	nt.WaitForRepoSyncs()
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing cm0 from the git repo")
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency", false)
+	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency", false)
 
 	// TestCase: cm1 depends on cm0; both are managed by ConfigSync.
 	// Both exist in the repo and in the cluster.
@@ -526,7 +526,7 @@ func TestSyncOrdering(t *testing.T) {
 	nt.T.Logf("Remove pod5 from the repo")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod5.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod5")
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency", false)
+	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency", false)
 
 	_, err = nomostest.Retry(20, func() error {
 		pod5 := &corev1.Pod{}

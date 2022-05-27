@@ -376,6 +376,13 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		nt.NonRootRepos[nsr] = resetRepository(nt, NamespaceRepo, nsr, opts.NamespaceRepos[nsr].UpstreamURL, filesystem.SourceFormatUnstructured)
 	}
 
+	if opts.InitialCommit != nil {
+		for path, obj := range opts.InitialCommit.Files {
+			nt.RootRepos[configsync.RootSyncName].Add(path, obj)
+		}
+		nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message)
+	}
+
 	// First wait for CRDs to be established.
 	var err error
 	if nt.MultiRepo {

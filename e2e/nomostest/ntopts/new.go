@@ -18,10 +18,19 @@ import (
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Opt is an option type for ntopts.New.
 type Opt func(opt *New)
+
+// Commit represents a commit to be created on a git repository
+type Commit struct {
+	// Message is the commit message
+	Message string
+	// Files is a map of file paths to Objects
+	Files map[string]client.Object
+}
 
 // New is the set of options for instantiating a new NT test.
 type New struct {
@@ -38,6 +47,9 @@ type New struct {
 
 	// SkipAutopilot will skip the test if running on an Autopilot cluster.
 	SkipAutopilot bool
+
+	// InitialCommit commit to create before the initial sync
+	InitialCommit *Commit
 
 	Nomos
 	MultiRepo
@@ -64,4 +76,11 @@ func RequireGKE(t testing.NTB) Opt {
 		t.Skip("The --test-cluster flag must be set to `gke` to run this test.")
 	}
 	return func(opt *New) {}
+}
+
+// WithInitialCommit creates the initialCommit before the first sync
+func WithInitialCommit(initialCommit Commit) func(opt *New) {
+	return func(opt *New) {
+		opt.InitialCommit = &initialCommit
+	}
 }

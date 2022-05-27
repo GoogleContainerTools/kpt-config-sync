@@ -117,9 +117,9 @@ func NewNamespaceApplier(c client.Client, cfg *rest.Config, namespace declared.S
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", statusMode)
-	inv, ok := live.WrapInventoryObj(u).(*live.InventoryResourceGroup)
-	if !ok {
-		return nil, errors.New("failed to create an ResourceGroup object")
+	inv, err := wrapInventoryObj(u)
+	if err != nil {
+		return nil, err
 	}
 	a := &Applier{
 		inventory:        inv,
@@ -146,9 +146,9 @@ func NewRootApplier(c client.Client, cfg *rest.Config, syncName, statusMode stri
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", statusMode)
-	inv, ok := live.WrapInventoryObj(u).(*live.InventoryResourceGroup)
-	if !ok {
-		return nil, errors.New("failed to create an ResourceGroup object")
+	inv, err := wrapInventoryObj(u)
+	if err != nil {
+		return nil, err
 	}
 	a := &Applier{
 		inventory:        inv,
@@ -161,6 +161,14 @@ func NewRootApplier(c client.Client, cfg *rest.Config, syncName, statusMode stri
 	}
 	klog.V(4).Infof("Root applier %s is initialized and synced with the API server", syncName)
 	return a, nil
+}
+
+func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGroup, error) {
+	inv, ok := live.WrapInventoryObj(obj).(*live.InventoryResourceGroup)
+	if !ok {
+		return nil, errors.New("failed to create an ResourceGroup object")
+	}
+	return inv, nil
 }
 
 func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEventStats, unknownTypeResources map[core.ID]struct{}) status.Error {

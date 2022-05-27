@@ -384,15 +384,21 @@ func TestManagementDisabledNamespace(t *testing.T) {
 
 // TestManagementDisabledConfigMap tests https://cloud.google.com/anthos-config-management/docs/how-to/managing-objects#stop-managing.
 func TestManagementDisabledConfigMap(t *testing.T) {
-	nt := nomostest.New(t)
-
-	// Create namespace.
 	fooNamespace := fake.NamespaceObject("foo")
 	cm1 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm1"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/cm1.yaml", cm1)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a namespace and a configmap")
-	nt.WaitForRepoSyncs()
+	// Initialize repo with disabled resource to test initial sync w/ unmanaged resources
+	cm2 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"), core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))
+	cm3 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm3"))
+
+	nt := nomostest.New(t, ntopts.WithInitialCommit(ntopts.Commit{
+		Message: "Create namespace and configmaps",
+		Files: map[string]client.Object{
+			"acme/namespaces/foo/ns.yaml":  fooNamespace,
+			"acme/namespaces/foo/cm1.yaml": cm1,
+			"acme/namespaces/foo/cm2.yaml": cm2,
+			"acme/namespaces/foo/cm3.yaml": cm3,
+		},
+	}))
 
 	// Test that the namespace exists with expected config management labels and annotations.
 	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
@@ -400,15 +406,27 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	// Test that the configmap exists with expected config management labels and annotations.
+	// Test that cm1 exists with expected config management labels and annotations.
 	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	if err != nil {
+		nt.T.Error(err)
+	}
+
+	// Test that the unmanaged cm2 does not exist.
+	err = nt.ValidateNotFound(cm2.Name, cm2.Namespace, &corev1.ConfigMap{})
+	if err != nil {
+		nt.T.Error(err)
+	}
+
+	// Test that cm3 exists with expected config management labels and annotations.
+	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
 	if err != nil {
 		nt.T.Error(err)
 	}
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3, metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5, metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
 		if err != nil {
 			return err
 		}
@@ -425,7 +443,8 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	// Update the configmap to be no longer be managed
 	cm1.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/cm1.yaml", cm1)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Unmanage the configmap")
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/cm3.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Unmanage cm1 and remove cm3")
 	nt.WaitForRepoSyncs()
 
 	// Test that the now unmanaged configmap does not contain any config management labels or annotations
@@ -434,9 +453,15 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	// Test that cm3 was properly pruned.
+	err = nt.ValidateNotFound(cm3.Name, cm3.Namespace, &corev1.ConfigMap{})
+	if err != nil {
+		nt.T.Error(err)
+	}
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3, metrics.ResourcePatched("ConfigMap", 1))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4, metrics.ResourcePatched("ConfigMap", 1))
 		if err != nil {
 			return err
 		}
@@ -463,7 +488,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 2)
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3)
 		if err != nil {
 			return err
 		}

@@ -134,7 +134,20 @@ func (cs *clientSet) handleDisabledObjects(ctx context.Context, rg *live.Invento
 }
 
 func (cs *clientSet) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
-	oldObjs, err := rg.Load()
+	clusterInv, err := cs.invClient.GetClusterInventoryInfo(rg)
+	if err != nil {
+		return err
+	}
+	if clusterInv == nil {
+		// If inventory does not exist, there is nothing to remove
+		return nil
+	}
+	wrappedInv, err := wrapInventoryObj(clusterInv)
+	if err != nil {
+		return err
+	}
+
+	oldObjs, err := wrappedInv.Load()
 	if err != nil {
 		return err
 	}

@@ -236,7 +236,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
 	nt.WaitForRepoSyncs()
 	nt.T.Log("Verify an implicit namespace is created")
-	if err := nt.Validate(namespace, "", &corev1.Namespace{},
+	implictNs := &corev1.Namespace{}
+	if err := nt.Validate(namespace, "", implictNs,
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, managerScope),
 		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
 		nt.T.Error(err)
@@ -326,6 +327,14 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
+
+	// Stop the Config Sync webhook to delete the implicit namespace manually
+	nomostest.StopWebhook(nt)
+	if err := nt.Delete(implictNs); err != nil {
+		{
+			nt.T.Error(err)
+		}
+	}
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

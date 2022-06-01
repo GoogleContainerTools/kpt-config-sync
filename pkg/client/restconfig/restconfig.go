@@ -15,16 +15,17 @@
 package restconfig
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // kubectl auth provider plugins
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cli-utils/pkg/flowcontrol"
 )
 
 // DefaultTimeout is the default REST config timeout.
@@ -59,15 +60,9 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 		if err == nil {
 			klog.V(1).Infof("Created rest config from source %s", source.name)
 			klog.V(7).Infof("Config: %#v", *config)
-			// Comfortable QPS limits for us to run smoothly.
-			// The defaults are too low. It is probably safe to increase these if
-			// we see problems in the future or need to accommodate VERY large numbers
-			// of resources.
-			//
-			// config.QPS does not apply to WATCH requests. Currently, there is no client-side
-			// or server-side rate-limiting for WATCH requests.
-			config.QPS = 20
-			config.Burst = 40
+
+			UpdateQPS(config)
+
 			config.Timeout = timeout
 			return config, nil
 		}
@@ -76,7 +71,50 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 		errorStrs = append(errorStrs, fmt.Sprintf("%s: %s", source.name, err))
 	}
 
-	return nil, errors.Errorf("Unable to create rest config:\n%s", strings.Join(errorStrs, "\n"))
+	return nil, fmt.Errorf("failed to build rest config:\n%s", strings.Join(errorStrs, "\n"))
+}
+
+// UpdateQPS modifies a rest.Config to update the client-side throttling QPS and
+// Burst QPS.
+//
+// If Flow Control is enabled on the apiserver, client-side throttling is
+// disabled!
+//
+// If Flow Control is disabled or undetected on the apiserver, client-side
+// throttling QPS will be increased to at least 30 (burst: 60).
+//
+// Flow Control is enabled by default on Kubernetes v1.20+.
+// https://kubernetes.io/docs/concepts/cluster-administration/flow-control/
+func UpdateQPS(config *rest.Config) {
+	// Timeout if the query takes too long, defaulting to the lower QPS limits.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	enabled, err := flowcontrol.IsEnabled(ctx, config)
+	if err != nil {
+		klog.Warning("Failed to query apiserver to check for flow control enablement: %v", err)
+		// Default to the lower QPS limits.
+	}
+	if enabled {
+		config.QPS = -1
+		config.Burst = -1
+		klog.V(1).Infof("Flow control enabled on apiserver: client-side throttling QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
+	} else {
+		config.QPS = maxIfNotNegative(config.QPS, 30)
+		config.Burst = int(maxIfNotNegative(float32(config.Burst), 60))
+		klog.V(1).Infof("Flow control disabled on apiserver: client-side throttling QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
+	}
+}
+
+func maxIfNotNegative(a, b float32) float32 {
+	switch {
+	case a < 0:
+		return a
+	case a > b:
+		return a
+	default:
+		return b
+	}
 }
 
 // NewConfigFlags builds ConfigFlags based on an existing rest config.

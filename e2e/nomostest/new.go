@@ -31,6 +31,7 @@ import (
 	testing2 "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -123,8 +124,13 @@ func NewOptStruct(testName, tmpDir string, t testing2.NTB, ntOptions ...ntopts.O
 
 	if optsStruct.RESTConfig == nil {
 		RestConfig(t, optsStruct)
+		// Increase the QPS for the clients used by the e2e tests.
+		// This does not affect the client used by Config Sync itself.
 		optsStruct.RESTConfig.QPS = 50
 		optsStruct.RESTConfig.Burst = 75
+
+		// Disable client-side throttling for the test client, if server-side throttling is enabled.
+		restconfig.UpdateQPS(optsStruct.RESTConfig)
 	}
 
 	return optsStruct

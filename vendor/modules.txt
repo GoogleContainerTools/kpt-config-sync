@@ -998,6 +998,7 @@ sigs.k8s.io/cli-utils/pkg/apply/solver
 sigs.k8s.io/cli-utils/pkg/apply/task
 sigs.k8s.io/cli-utils/pkg/apply/taskrunner
 sigs.k8s.io/cli-utils/pkg/common
+sigs.k8s.io/cli-utils/pkg/flowcontrol
 sigs.k8s.io/cli-utils/pkg/inventory
 sigs.k8s.io/cli-utils/pkg/jsonpath
 sigs.k8s.io/cli-utils/pkg/kstatus/polling

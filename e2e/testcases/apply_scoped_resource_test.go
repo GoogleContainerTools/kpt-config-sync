@@ -70,7 +70,9 @@ func TestApplyScopedResourcesHierarchicalMode(t *testing.T) {
 		nt.WaitForRepoSyncs()
 	})
 
-	nt.WaitForRepoSyncs(nomostest.WithTimeout(7 * time.Minute))
+	// The example includes the virt-operator deployment, which installs the VirtualMachine CRD.
+	// The example also includes a VirtualMachine, which will be skipped until the CRD is applied.
+	nt.WaitForRepoSyncs(nomostest.WithTimeout(nt.DefaultWaitTimeout * 2))
 
 	err := nomostest.WaitForCRDs(nt, []string{"virtualmachines.kubevirt.io"})
 	if err != nil {
@@ -143,7 +145,9 @@ func TestApplyScopedResourcesUnstructuredMode(t *testing.T) {
 		nt.WaitForRepoSyncs()
 	})
 
-	nt.WaitForRepoSyncs(nomostest.WithTimeout(7 * time.Minute))
+	// The example includes the virt-operator deployment, which installs the VirtualMachine CRD.
+	// The example also includes a VirtualMachine, which will be skipped until the CRD is applied.
+	nt.WaitForRepoSyncs(nomostest.WithTimeout(nt.DefaultWaitTimeout * 2))
 
 	err := nomostest.WaitForCRDs(nt, []string{"virtualmachines.kubevirt.io"})
 	if err != nil {

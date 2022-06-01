@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -49,6 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	webhookconfig "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -464,33 +466,57 @@ func validateMultiRepoDeployments(nt *NT) error {
 		}
 	}
 
+	deployments := []client.ObjectKey{
+		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace},
+		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace},
+		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace},
+		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace},
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error)
+
+	// Wait for deployments asynchronously, for more accurate time reporting.
+	for _, deployment := range deployments {
+		wg.Add(1)
+		go func(key client.ObjectKey) {
+			defer wg.Done()
+			took, err := Retry(nt.DefaultWaitTimeout, func() error {
+				return nt.Validate(key.Name, key.Namespace,
+					&appsv1.Deployment{}, isAvailableDeployment)
+			})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			nt.T.Logf("took %v to wait for Deployment %s", took, key)
+		}(deployment)
+	}
+
+	// Close error channel when all retry loops are done.
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+
+	// Collect errors until error channel is closed.
+	var errs status.MultiError
+	for err := range errCh {
+		errs = status.Append(errs, err)
+	}
+	if errs != nil {
+		return errs
+	}
+
+	// Validate the webhook config seperately, since it's not a Deployment.
 	took, err := Retry(nt.DefaultWaitTimeout, func() error {
-		err := nt.Validate(reconcilermanager.ManagerName, configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-		if err != nil {
-			return err
-		}
-		err = nt.Validate(DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-		if err != nil {
-			return err
-		}
-		err = nt.Validate(webhookconfig.ShortName, configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
-		if err != nil {
-			return err
-		}
-		return nt.Validate(metrics.OtelCollectorName, metrics.MonitoringNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
+		return nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
 	})
 	if err != nil {
 		return err
 	}
-	nt.T.Logf("took %v to wait for %s, %s, %s, and %s", took, reconcilermanager.ManagerName, DefaultRootReconcilerName, webhookconfig.ShortName, metrics.OtelCollectorName)
+	nt.T.Logf("took %v to wait for %s %s", took, "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io")
+
 	return nil
 }
 

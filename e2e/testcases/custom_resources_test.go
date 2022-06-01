@@ -33,6 +33,7 @@ import (
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
+
 	support, err := nt.SupportV1Beta1CRD()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -52,9 +53,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished)
-	})
+
+	err = nomostest.WaitForCRDs(nt, []string{"anvils.acme.com", "clusteranvils.acme.com"})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -63,6 +63,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
 	nt.WaitForRepoSyncs()
+
+	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
 
 	if nt.MultiRepo {
@@ -96,14 +98,21 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	}
 
 	// Remove CRD
+	// This will garbage collect the CR too and block until both are deleted.
 	_, err = nt.Kubectl("delete", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
+	// Reset discovery client to invalidate the cached Anvil CRD
+	nt.RenewClient()
+
+	// Modify the Anvil yaml to trigger immediate re-sync, instead of waiting
+	// for automatic retry (1hr default).
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
+
 	if nt.MultiRepo {
-		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
 		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 	} else {
 		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
@@ -126,6 +135,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt := nomostest.New(t)
+
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "clusteranvil-crd.yaml")
 	_, err := nt.Kubectl("apply", "-f", crdFile)
@@ -136,9 +146,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished)
-	})
+
+	err = nomostest.WaitForCRDs(nt, []string{"anvils.acme.com", "clusteranvils.acme.com"})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -147,6 +156,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
 	nt.WaitForRepoSyncs()
+
+	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
 
 	if nt.MultiRepo {
@@ -180,14 +191,21 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	}
 
 	// Remove CRD
+	// This will garbage collect the CR too and block until both are deleted.
 	_, err = nt.Kubectl("delete", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
+	// Reset discovery client to invalidate the cached Anvil CRD
+	nt.RenewClient()
+
+	// Modify the Anvil yaml to trigger immediate re-sync, instead of waiting
+	// for automatic retry (1hr default).
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
+
 	if nt.MultiRepo {
-		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
 		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 	} else {
 		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)

@@ -346,13 +346,27 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	if errs := differ.Update(ctx, c.client, c.decoder, *currentConfigs, *desiredConfigs, c.initTime); errs != nil {
 		klog.Warningf("Failed to apply actions: %v", status.FormatSingleLine(errs))
 		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
-		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(status.Append(errs, validationErrs)))
+		if validationErrs != nil {
+			// append non-blocking validation errors
+			errs = status.Append(errs, validationErrs)
+		}
+		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(errs))
+		return reconcile.Result{}, nil
+	}
+
+	importer.Metrics.NamespaceConfigs.Set(float64(len(desiredConfigs.NamespaceConfigs)))
+
+	if validationErrs != nil {
+		// report non-blocking validation errors
+		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(validationErrs))
+
+		klog.V(4).Infof("Reconcile completed with non-blocking validation errors")
 		return reconcile.Result{}, nil
 	}
 
 	c.appliedGitDir = absGitDir.OSPath()
 	importer.Metrics.CycleDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
-	importer.Metrics.NamespaceConfigs.Set(float64(len(desiredConfigs.NamespaceConfigs)))
 	c.updateImportStatus(ctx, repoObj, token, startTime, nil)
 
 	klog.V(4).Infof("Reconcile completed")

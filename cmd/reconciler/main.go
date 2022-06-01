@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
@@ -159,11 +158,6 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	dc, err := importer.DefaultCLIOptions.ToDiscoveryClient()
-	if err != nil {
-		klog.Fatalf("Failed to get DiscoveryClient: %v", err)
-	}
-
 	opts := reconciler.Options{
 		ClusterName:                *clusterName,
 		FightDetectionThreshold:    *fightDetectionThreshold,
@@ -180,7 +174,6 @@ func main() {
 		SourceType:                 v1beta1.SourceType(*sourceType),
 		SourceRepo:                 *sourceRepo,
 		SyncDir:                    relSyncDir,
-		DiscoveryClient:            dc,
 		SyncName:                   *syncName,
 		ReconcilerName:             *reconcilerName,
 		StatusMode:                 *statusMode,

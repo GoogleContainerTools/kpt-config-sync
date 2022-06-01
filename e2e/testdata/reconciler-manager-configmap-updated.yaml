@@ -87,10 +87,15 @@ data:
           - "--git-dir=/repo/source/rev"
           - "--hydrated-root=/repo/hydrated"
           - "--hydrated-link=rev"
+          env:
+          - name: KUBECACHEDIR
+            value: "/.kube/cache"
           volumeMounts:
           - name: repo
             mountPath: /repo
             readOnly: true
+          - name: kube
+            mountPath: /.kube
           resources:
             limits:
               cpu: "1"
@@ -210,6 +215,8 @@ data:
         schedulerName: default-scheduler
         volumes:
         - name: repo
+          emptyDir: {}
+        - name: kube
           emptyDir: {}
         - name: git-creds
           secret:

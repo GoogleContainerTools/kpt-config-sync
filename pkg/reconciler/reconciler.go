@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -94,8 +93,6 @@ type Options struct {
 	StatusMode string
 	// ReconcileTimeout controls the reconcile/prune Timeout in kpt applier
 	ReconcileTimeout string
-	// DiscoveryClient is used to read types and schemas from the API server.
-	DiscoveryClient discovery.DiscoveryInterface
 	// RootOptions is the set of options to fill in if this is configuring the
 	// Root reconciler.
 	// Unset for Namespace repositories.
@@ -115,7 +112,17 @@ func Run(opts Options) {
 	// Get a config to talk to the apiserver.
 	cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
 	if err != nil {
-		klog.Fatalf("failed to create rest config: %v", err)
+		klog.Fatalf("Error creating rest config: %v", err)
+	}
+
+	configFlags, err := restconfig.NewConfigFlags(cfg)
+	if err != nil {
+		klog.Fatalf("Error creating config flags from rest config: %v", err)
+	}
+
+	discoveryClient, err := configFlags.ToDiscoveryClient()
+	if err != nil {
+		klog.Fatalf("Error creating discovery client: %v", err)
 	}
 
 	s := scheme.Scheme
@@ -150,19 +157,19 @@ func Run(opts Options) {
 
 	reconcileTimeout, err := time.ParseDuration(opts.ReconcileTimeout)
 	if err != nil {
-		klog.Fatalf("failed to get the applier reconcile/prune task timeout: %v", err)
+		klog.Fatalf("Error parsing applier reconcile/prune task timeout: %v", err)
 	}
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
 	var a *applier.Applier
 	if opts.ReconcilerScope == declared.RootReconciler {
-		a, err = applier.NewRootApplier(cl, cfg, opts.SyncName, opts.StatusMode, reconcileTimeout)
+		a, err = applier.NewRootApplier(cl, configFlags, opts.SyncName, opts.StatusMode, reconcileTimeout)
 	} else {
-		a, err = applier.NewNamespaceApplier(cl, cfg, opts.ReconcilerScope, opts.SyncName, opts.StatusMode, reconcileTimeout)
+		a, err = applier.NewNamespaceApplier(cl, configFlags, opts.ReconcilerScope, opts.SyncName, opts.StatusMode, reconcileTimeout)
 	}
 	if err != nil {
-		klog.Fatalf("failed to create the applier: %v", err)
+		klog.Fatalf("Error creating applier: %v", err)
 	}
 
 	// Configure the Remediator.
@@ -173,7 +180,7 @@ func Run(opts Options) {
 	// idle watches too frequently.
 	cfgForRemediator, err := restconfig.NewRestConfig(watch.RESTConfigTimeout)
 	if err != nil {
-		klog.Fatalf("failed to create rest config for the remediator: %v", err)
+		klog.Fatalf("Error creating rest config for the remediator: %v", err)
 	}
 
 	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForRemediator, baseApplier, decls, opts.NumWorkers)
@@ -196,13 +203,13 @@ func Run(opts Options) {
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, opts.DiscoveryClient, decls, a, rem)
+			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, discoveryClient, decls, a, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
 		}
 	} else {
 		parser, err = parse.NewNamespaceRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.ReconcilerScope, &reader.File{}, cl,
-			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, opts.DiscoveryClient, decls, a, rem)
+			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, discoveryClient, decls, a, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}

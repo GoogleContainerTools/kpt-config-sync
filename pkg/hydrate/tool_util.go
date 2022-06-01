@@ -29,8 +29,8 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
@@ -291,10 +291,21 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute) (validate.Opt
 	var serverResourcer discovery.ServerResourcer = discovery.NoOpServerResourcer{}
 	var converter *declared.ValueConverter
 	if !flags.SkipAPIServer {
-		dc, err := importer.DefaultCLIOptions.ToDiscoveryClient()
+		cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
 		if err != nil {
-			return options, err
+			return options, fmt.Errorf("failed to create rest config: %w", err)
 		}
+
+		cf, err := restconfig.NewConfigFlags(cfg)
+		if err != nil {
+			return options, fmt.Errorf("failed to create config flags from rest config: %w", err)
+		}
+
+		dc, err := cf.ToDiscoveryClient()
+		if err != nil {
+			return options, fmt.Errorf("failed to create discovery client: %w", err)
+		}
+
 		serverResourcer = dc
 
 		converter, err = declared.NewValueConverter(dc)

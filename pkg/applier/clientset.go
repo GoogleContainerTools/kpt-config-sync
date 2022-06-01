@@ -21,7 +21,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -50,19 +49,8 @@ type clientSet struct {
 }
 
 // newClientSet creates a clientSet object.
-func newClientSet(c client.Client, cfg *rest.Config, statusMode string) (*clientSet, error) {
-	klog.Infof("Applier QPS: %v (%d Burst)", cfg.QPS, cfg.Burst)
-	// kubectl code wasn't really designed to be used as a library.
-	// There's no way to build a factory except from the kubectl config flags.
-	// So here we're building it from flags and then modifying the config.
-	cfgCopy := rest.CopyConfig(cfg)
-	kubeConfigFlags := genericclioptions.NewConfigFlags(true).WithDeprecatedPasswordFlag()
-	kubeConfigFlags.WrapConfigFn = func(factoryCfg *rest.Config) *rest.Config {
-		factoryCfg.QPS = cfgCopy.QPS
-		factoryCfg.Burst = cfgCopy.Burst
-		return factoryCfg
-	}
-	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(kubeConfigFlags)
+func newClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, statusMode string) (*clientSet, error) {
+	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(configFlags)
 	f := util.NewFactory(matchVersionKubeConfigFlags)
 
 	var statusPolicy inventory.StatusPolicy

@@ -22,9 +22,10 @@ import (
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -67,11 +68,11 @@ type Applier struct {
 	// clientSetFunc is the function to create kpt clientSet.
 	// Use this as a function so that the unit testing can mock
 	// the clientSet.
-	clientSetFunc func(client.Client, *rest.Config, string) (*clientSet, error)
+	clientSetFunc func(client.Client, *genericclioptions.ConfigFlags, string) (*clientSet, error)
 	// client get and updates RepoSync and its status.
 	client client.Client
-	// clientConfig for creating clients
-	clientConfig *rest.Config
+	// configFlags for creating clients
+	configFlags *genericclioptions.ConfigFlags
 	// errs tracks all the errors the applier encounters.
 	// This field is cleared at the start of the `Applier.Apply` method
 	errs status.MultiError
@@ -108,7 +109,7 @@ var _ Interface = &Applier{}
 
 // NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
 // the API server.
-func NewNamespaceApplier(c client.Client, cfg *rest.Config, namespace declared.Scope, syncName string, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
+func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, namespace declared.Scope, syncName string, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
 	u := newInventoryUnstructured(syncName, string(namespace), statusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
@@ -124,7 +125,7 @@ func NewNamespaceApplier(c client.Client, cfg *rest.Config, namespace declared.S
 	a := &Applier{
 		inventory:        inv,
 		client:           c,
-		clientConfig:     cfg,
+		configFlags:      configFlags,
 		clientSetFunc:    newClientSet,
 		policy:           inventory.PolicyAdoptIfNoInventory,
 		syncName:         syncName,
@@ -137,7 +138,7 @@ func NewNamespaceApplier(c client.Client, cfg *rest.Config, namespace declared.S
 }
 
 // NewRootApplier initializes an applier that can fetch all resources from the API server.
-func NewRootApplier(c client.Client, cfg *rest.Config, syncName, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
+func NewRootApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, syncName, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
 	u := newInventoryUnstructured(syncName, configmanagement.ControllerNamespace, statusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
@@ -153,7 +154,7 @@ func NewRootApplier(c client.Client, cfg *rest.Config, syncName, statusMode stri
 	a := &Applier{
 		inventory:        inv,
 		client:           c,
-		clientConfig:     cfg,
+		configFlags:      configFlags,
 		clientSetFunc:    newClientSet,
 		policy:           inventory.PolicyAdoptAll,
 		statusMode:       statusMode,
@@ -342,7 +343,7 @@ func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 
 // sync triggers a kpt live apply library call to apply a set of resources.
 func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
-	cs, err := a.clientSetFunc(a.client, a.clientConfig, a.statusMode)
+	cs, err := a.clientSetFunc(a.client, a.configFlags, a.statusMode)
 	if err != nil {
 		return nil, Error(err)
 	}
@@ -386,6 +387,14 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		// PruneTimeout is a task-level setting instead of an object-level setting.
 		PruneTimeout: a.reconcileTimeout,
 	}
+
+	// Reset shared mapper before each apply to invalidate the discovery cache.
+	// This allows for picking up CRD changes.
+	mapper, err := a.configFlags.ToRESTMapper()
+	if err != nil {
+		return nil, status.Append(nil, err)
+	}
+	meta.MaybeResetRESTMapper(mapper)
 
 	events := cs.apply(ctx, a.inventory, resources, options)
 	for e := range events {

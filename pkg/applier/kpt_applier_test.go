@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -244,8 +244,8 @@ func TestSync(t *testing.T) {
 		u.SetNamespace("test-namespace")
 		u.SetName("rs")
 		fakeClient := testingfake.NewClient(t, runtime.NewScheme(), u)
-		cfg := &rest.Config{} // unused by test applier
-		applierFunc := func(c client.Client, _ *rest.Config, _ string) (*clientSet, error) {
+		configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
+		applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
 			return &clientSet{
 				kptApplier: newFakeApplier(tc.initErr, tc.events),
 				client:     fakeClient,
@@ -253,7 +253,7 @@ func TestSync(t *testing.T) {
 		}
 
 		var errs status.MultiError
-		applier, err := NewNamespaceApplier(fakeClient, cfg, "test-namespace", "rs", "", 5*time.Minute)
+		applier, err := NewNamespaceApplier(fakeClient, configFlags, "test-namespace", "rs", "", 5*time.Minute)
 		if err != nil {
 			errs = Error(err)
 		} else {

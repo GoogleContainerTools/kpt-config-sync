@@ -97,10 +97,11 @@ func ResourceDeleted(gvk string) GVKMetric {
 // ValidateReconcilerManagerMetrics validates the `reconcile_duration_seconds`
 // metric from the reconciler manager.
 func (csm ConfigSyncMetrics) ValidateReconcilerManagerMetrics() error {
-	validation := hasTags([]tag.Tag{
+	metric := ocmetrics.ReconcileDurationView.Name
+	validation := hasTags(metric, []tag.Tag{
 		{Key: ocmetrics.KeyStatus, Value: "success"},
 	})
-	return csm.validateMetric(ocmetrics.ReconcileDurationView.Name, validation)
+	return csm.validateMetric(metric, validation)
 }
 
 // ValidateReconcilerMetrics validates the non-error and non-GVK metrics produced
@@ -137,17 +138,18 @@ func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconciler string, gvkMetric GVK
 // ValidateMetricsCommitApplied checks that the `last_apply_timestamp` metric has been
 // recorded for a particular commit hash.
 func (csm ConfigSyncMetrics) ValidateMetricsCommitApplied(commitHash string) error {
-	validation := hasTags([]tag.Tag{
+	metric := ocmetrics.LastApplyTimestampView.Name
+	validation := hasTags(metric, []tag.Tag{
 		{Key: ocmetrics.KeyCommit, Value: commitHash},
 	})
 
-	for _, metric := range csm[ocmetrics.LastApplyTimestampView.Name] {
-		if validation(metric) == nil {
+	for _, measurement := range csm[metric] {
+		if validation(measurement) == nil {
 			return nil
 		}
 	}
 
-	return errors.Errorf("Commit hash %s not found in config sync metrics", commitHash)
+	return errors.Errorf("commit hash %s not found in config sync metrics", commitHash)
 }
 
 // ValidateErrorMetrics checks for the absence of all the error metrics except
@@ -160,8 +162,8 @@ func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconciler string) error {
 		ocmetrics.InternalErrorsView.Name,
 	}
 	for _, m := range metrics {
-		if _, ok := csm[m]; ok {
-			return errors.Errorf("validating error metrics: expected no error metrics but found %v", m)
+		if measurement, ok := csm[m]; ok {
+			return errors.Errorf("validating error metrics: expected no error metrics but found %v: %+v", m, measurement)
 		}
 	}
 	return csm.ValidateReconcilerErrors(reconciler, 0, 0)
@@ -170,21 +172,22 @@ func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconciler string) error {
 // ValidateReconcilerErrors checks that the `reconciler_errors` metric is recorded
 // for the correct reconciler with the expected values for each of its component tags.
 func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconciler string, sourceValue, syncValue int) error {
-	if _, ok := csm[ocmetrics.ReconcilerErrorsView.Name]; ok {
-		for _, measurement := range csm[ocmetrics.ReconcilerErrorsView.Name] {
+	metric := ocmetrics.ReconcilerErrorsView.Name
+	if _, ok := csm[metric]; ok {
+		for _, measurement := range csm[metric] {
 			// If the measurement has a "source" tag, validate the values match.
-			if hasTags([]tag.Tag{
+			if hasTags(metric, []tag.Tag{
 				{Key: ocmetrics.KeyComponent, Value: "source"},
 			})(measurement) == nil {
-				if err := valueEquals(sourceValue)(measurement); err != nil {
+				if err := valueEquals(metric, sourceValue)(measurement); err != nil {
 					return err
 				}
 			}
 			// If the measurement has a "sync" tag, validate the values match.
-			if hasTags([]tag.Tag{
+			if hasTags(metric, []tag.Tag{
 				{Key: ocmetrics.KeyComponent, Value: "sync"},
 			})(measurement) == nil {
-				if err := valueEquals(syncValue)(measurement); err != nil {
+				if err := valueEquals(metric, syncValue)(measurement); err != nil {
 					return err
 				}
 			}
@@ -196,49 +199,53 @@ func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconciler string, sourceV
 // ValidateResourceOverrideCount checks that the `resource_override_count` metric is recorded
 // for the correct reconciler, container name, and resource type, and checks the metric value is correct.
 func (csm ConfigSyncMetrics) ValidateResourceOverrideCount(reconciler, containerName, resourceType string, count int) error {
-	if _, ok := csm[ocmetrics.ResourceOverrideCountView.Name]; ok {
+	metric := ocmetrics.ResourceOverrideCountView.Name
+	if _, ok := csm[metric]; ok {
 		validations := []Validation{
-			hasTags([]tag.Tag{
+			hasTags(metric, []tag.Tag{
 				{Key: ocmetrics.KeyReconcilerType, Value: reconciler},
 				{Key: ocmetrics.KeyContainer, Value: containerName},
 				{Key: ocmetrics.KeyResourceType, Value: resourceType},
 			}),
-			valueEquals(count),
+			valueEquals(metric, count),
 		}
-		return csm.validateMetric(ocmetrics.ResourceOverrideCountView.Name, validations...)
+		return csm.validateMetric(metric, validations...)
 	}
 	return nil
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
 func (csm ConfigSyncMetrics) ValidateResourceOverrideCountMissingTags(tags []tag.Tag) error {
-	if _, ok := csm[ocmetrics.ResourceOverrideCountView.Name]; ok {
+	metric := ocmetrics.ResourceOverrideCountView.Name
+	if _, ok := csm[metric]; ok {
 		validations := []Validation{
-			missingTags(tags),
+			missingTags(metric, tags),
 		}
-		return csm.validateMetric(ocmetrics.ResourceOverrideCountView.Name, validations...)
+		return csm.validateMetric(metric, validations...)
 	}
 	return nil
 }
 
 // ValidateGitSyncDepthOverrideCount checks that the `git_sync_depth_override_count` metric has the correct value.
 func (csm ConfigSyncMetrics) ValidateGitSyncDepthOverrideCount(count int) error {
-	if _, ok := csm[ocmetrics.GitSyncDepthOverrideCountView.Name]; ok {
+	metric := ocmetrics.GitSyncDepthOverrideCountView.Name
+	if _, ok := csm[metric]; ok {
 		validations := []Validation{
-			valueEquals(count),
+			valueEquals(metric, count),
 		}
-		return csm.validateMetric(ocmetrics.GitSyncDepthOverrideCountView.Name, validations...)
+		return csm.validateMetric(metric, validations...)
 	}
 	return nil
 }
 
 // ValidateNoSSLVerifyCount checks that the `no_ssl_verify_count` metric has the correct value.
 func (csm ConfigSyncMetrics) ValidateNoSSLVerifyCount(count int) error {
-	if _, ok := csm[ocmetrics.NoSSLVerifyCountView.Name]; ok {
+	metric := ocmetrics.NoSSLVerifyCountView.Name
+	if _, ok := csm[metric]; ok {
 		validations := []Validation{
-			valueEquals(count),
+			valueEquals(metric, count),
 		}
-		return csm.validateMetric(ocmetrics.NoSSLVerifyCountView.Name, validations...)
+		return csm.validateMetric(metric, validations...)
 	}
 	return nil
 }
@@ -246,7 +253,7 @@ func (csm ConfigSyncMetrics) ValidateNoSSLVerifyCount(count int) error {
 // validateSuccessTag checks that the metric is recorded for the correct reconciler
 // and has a "success" tag value.
 func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error {
-	validation := hasTags([]tag.Tag{
+	validation := hasTags(metric, []tag.Tag{
 		{Key: ocmetrics.KeyStatus, Value: "success"},
 	})
 	return csm.validateMetric(metric, validation)
@@ -255,20 +262,22 @@ func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error
 // validateAPICallDuration checks that the `api_duration_seconds` metric is recorded
 // and has the correct reconciler, operation, status, and type tags.
 func (csm ConfigSyncMetrics) validateAPICallDuration(reconciler, operation, gvk string) error {
-	validation := hasTags([]tag.Tag{
+	metric := ocmetrics.APICallDurationView.Name
+	validation := hasTags(metric, []tag.Tag{
 		{Key: ocmetrics.KeyOperation, Value: operation},
 		{Key: ocmetrics.KeyStatus, Value: "success"},
 	})
-	return errors.Wrapf(csm.validateMetric(ocmetrics.APICallDurationView.Name, validation), "%s %s operation", gvk, operation)
+	return errors.Wrapf(csm.validateMetric(metric, validation), "%s %s operation", gvk, operation)
 }
 
 // ValidateDeclaredResources checks that the declared_resources metric is recorded
 // and has the expected value.
 func (csm ConfigSyncMetrics) ValidateDeclaredResources(reconciler string, value int) error {
+	metric := ocmetrics.DeclaredResourcesView.Name
 	validations := []Validation{
-		valueEquals(value),
+		valueEquals(metric, value),
 	}
-	return csm.validateMetric(ocmetrics.DeclaredResourcesView.Name, validations...)
+	return csm.validateMetric(metric, validations...)
 }
 
 // validateApplyOperations checks that the `apply_operations` metric is recorded
@@ -276,25 +285,27 @@ func (csm ConfigSyncMetrics) ValidateDeclaredResources(reconciler string, value 
 // controllers may fail and retry successfully, the recorded value of this metric may
 // fluctuate, so we check that it is greater than or equal to the expected value.
 func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk string, value int) error {
+	metric := ocmetrics.ApplyOperationsView.Name
 	validations := []Validation{
-		hasTags([]tag.Tag{
+		hasTags(metric, []tag.Tag{
 			{Key: ocmetrics.KeyOperation, Value: operation},
 			{Key: ocmetrics.KeyStatus, Value: "success"},
 		}),
-		valueGTE(value),
+		valueGTE(metric, value),
 	}
-	return errors.Wrapf(csm.validateMetric(ocmetrics.ApplyOperationsView.Name, validations...), "%s %s operation", gvk, operation)
+	return errors.Wrapf(csm.validateMetric(metric, validations...), "%s %s operation", gvk, operation)
 }
 
 // validateRemediateDuration checks that the `remediate_duration_seconds` metric
 // is recorded and has the correct status and type tags.
 func (csm ConfigSyncMetrics) validateRemediateDuration(reconciler, gvk string) error {
+	metric := ocmetrics.RemediateDurationView.Name
 	validations := []Validation{
-		hasTags([]tag.Tag{
+		hasTags(metric, []tag.Tag{
 			{Key: ocmetrics.KeyStatus, Value: "success"},
 		}),
 	}
-	return errors.Wrap(csm.validateMetric(ocmetrics.RemediateDurationView.Name, validations...), gvk)
+	return errors.Wrap(csm.validateMetric(metric, validations...), gvk)
 }
 
 // validateMetric checks that at least one measurement from the metric passes all the validations.
@@ -317,13 +328,13 @@ func (csm ConfigSyncMetrics) validateMetric(name string, validations ...Validati
 				return nil
 			}
 		}
-		return errors.Errorf("metric validations failed for metric %s: %v", name, errs)
+		return errors.Wrapf(errs, "validating metric %q", name)
 	}
-	return errors.Errorf("validating metric: metric %s not recorded", name)
+	return errors.Errorf("validating metric %q: metric not found", name)
 }
 
 // hasTags checks that the measurement contains all the expected tags.
-func hasTags(tags []tag.Tag) Validation {
+func hasTags(name string, tags []tag.Tag) Validation {
 	return func(metric Measurement) error {
 		contains := func(tts []tag.Tag, t tag.Tag) bool {
 			for _, tt := range tts {
@@ -336,7 +347,8 @@ func hasTags(tags []tag.Tag) Validation {
 
 		for _, t := range tags {
 			if !contains(metric.Tags, t) {
-				return errors.Errorf("expected tag %v but not found in measurement", t)
+				return errors.Errorf("expected metric %q (tags: %v) to contain tag %v",
+					name, metric.Tags, t)
 			}
 		}
 		return nil
@@ -344,7 +356,7 @@ func hasTags(tags []tag.Tag) Validation {
 }
 
 // missingTags checks that the measurement misses all the specific tags.
-func missingTags(tags []tag.Tag) Validation {
+func missingTags(name string, tags []tag.Tag) Validation {
 	return func(metric Measurement) error {
 		contains := func(tts []tag.Tag, t tag.Tag) bool {
 			for _, tt := range tts {
@@ -357,7 +369,8 @@ func missingTags(tags []tag.Tag) Validation {
 
 		for _, t := range tags {
 			if contains(metric.Tags, t) {
-				return errors.Errorf("unexpected tag %v is found in measurement", t)
+				return errors.Errorf("expected metric %q (tags: %v) to not contain tag %v",
+					name, metric.Tags, t)
 			}
 		}
 		return nil
@@ -365,29 +378,30 @@ func missingTags(tags []tag.Tag) Validation {
 }
 
 // valueEquals checks that the measurement is recorded with the expected value.
-func valueEquals(value int) Validation {
+func valueEquals(name string, value int) Validation {
 	return func(metric Measurement) error {
 		mv, err := strconv.Atoi(metric.Value)
 		if err != nil {
 			return err
 		}
 		if !cmp.Equal(mv, value) {
-			return errors.Errorf("unexpected metric value (tags: %v), got %v but expected %v", metric.Tags, metric.Value, value)
+			return errors.Errorf("expected metric %q (tags: %v) to equal %v but got %v",
+				name, metric.Tags, value, metric.Value)
 		}
 		return nil
 	}
 }
 
 // valueGTE checks that the measurement value is greater than or equal to the expected value.
-func valueGTE(value int) Validation {
+func valueGTE(name string, value int) Validation {
 	return func(metric Measurement) error {
 		mv, err := strconv.Atoi(metric.Value)
 		if err != nil {
 			return err
 		}
 		if mv < value {
-			return errors.Errorf("unexpected metric value (tags: %v), got %v but expected "+
-				"a value greater than or equal to %v", metric.Tags, mv, value)
+			return errors.Errorf("expected metric %q (tags: %v) to be greater than or equal to %v but got %v",
+				name, metric.Tags, value, mv)
 		}
 		return nil
 	}

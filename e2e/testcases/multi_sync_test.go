@@ -214,13 +214,10 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Declare a conflicting Role in the Namespace repo: %s", repoSyncNN)
@@ -238,7 +235,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		return nt.ValidateReconcilerErrors(reconciler.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name), "sync")
 	})
 	if err != nil {
-		nt.T.Errorf("validating reconciler_errors metric: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
@@ -272,13 +269,10 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -304,13 +298,10 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Declare a conflicting Role in the Root repo: %s", configsync.RootSyncName)
@@ -327,7 +318,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nsReconcilerName, "sync")
 	})
 	if err != nil {
-		nt.T.Errorf("validating reconciler_errors metric: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
@@ -354,13 +345,10 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -458,13 +446,10 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Declare a conflicting Role in another Namespace repo: %s", repoSyncNN2)
@@ -492,7 +477,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nsReconcilerName2, "sync")
 	})
 	if err != nil {
-		nt.T.Errorf("validating reconciler_errors metric: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Logf("Remove the declaration from one Namespace repo %s", repoSyncNN1)

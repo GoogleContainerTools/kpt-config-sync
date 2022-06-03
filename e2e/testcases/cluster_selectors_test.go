@@ -133,14 +133,12 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestClusterSelectorOnObjects(t *testing.T) {
@@ -197,14 +195,12 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestClusterSelectorOnNamespaces(t *testing.T) {
@@ -236,13 +232,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// TODO: internal_errors_total metric from diff.go
-		//Validate no error metrics are emitted.
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Log("Add test cluster, and cluster registry data")
@@ -269,13 +262,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// TODO: internal_errors_total metric from diff.go
-		//Validate no error metrics are emitted.
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	renameCluster(nt, configMapName, testClusterName)
@@ -295,13 +285,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: unexpected internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Log("Updating bob-rolebinding to NOT have cluster-selector")
@@ -320,13 +307,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.T.Log("Revert namespace to match prod cluster")
@@ -346,13 +330,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: unexpected internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	renameCluster(nt, configMapName, prodClusterName)
@@ -371,13 +352,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -405,14 +383,12 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
@@ -446,14 +422,12 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
@@ -480,14 +454,12 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 
 	nt.WaitForRepoSyncs()
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
@@ -531,14 +503,12 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestInlineClusterSelectorFormat(t *testing.T) {
@@ -610,14 +580,12 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestClusterSelectorAnnotationConflicts(t *testing.T) {
@@ -644,7 +612,7 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -713,14 +681,12 @@ func TestClusterSelectorForCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err := nt.ValidateMetrics(nomostest.MetricsLatestCommit(nt), func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 // renameCluster updates CLUSTER_NAME in the config map and restart the reconcilers.

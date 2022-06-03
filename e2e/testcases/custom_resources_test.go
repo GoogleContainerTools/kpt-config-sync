@@ -88,13 +88,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: unexpected internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove CRD
@@ -123,7 +120,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 		return nt.ReconcilerMetrics.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 1)
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove the CR.
@@ -181,13 +178,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: unexpected internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove CRD
@@ -216,7 +210,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		return nt.ReconcilerMetrics.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 1)
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove the CR.

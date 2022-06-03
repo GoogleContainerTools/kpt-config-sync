@@ -40,7 +40,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// verify the deployment doesn't have the key yet
@@ -91,7 +91,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 		return nt.ValidateNoSSLVerifyCount(2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Set noSSLVerify to false for root-reconciler
@@ -120,7 +120,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// verify the deployment doesn't have the key yet
@@ -187,7 +187,7 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 		return nt.ValidateNoSSLVerifyCount(2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Set noSSLVerify to false for root-reconciler
@@ -216,6 +216,6 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }

@@ -144,14 +144,12 @@ func TestRevertClusterRole(t *testing.T) {
 		nt.T.Errorf("bug alert: did not revert ClusterRole conflict after %v: %v", d+d2, err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 // TestClusterRoleLifecycle ensures we can add/update/delete cluster-scoped
@@ -202,13 +200,10 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update the ClusterRole in the SOT.
@@ -236,13 +231,10 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Delete the ClusterRole from the SOT.
@@ -261,12 +253,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: unexpected internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }

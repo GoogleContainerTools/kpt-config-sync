@@ -116,13 +116,11 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	backendNN := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
@@ -290,7 +288,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from the RootSync
@@ -370,7 +368,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 1)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from repoSyncFrontend
@@ -387,13 +385,11 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }
 
@@ -434,13 +430,11 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	backendNN := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
@@ -608,7 +602,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from the RootSync
@@ -688,7 +682,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 1)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from repoSyncFrontend
@@ -705,12 +699,10 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }

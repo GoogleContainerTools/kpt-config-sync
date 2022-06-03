@@ -16,7 +16,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.5.0
+    controller-gen.kubebuilder.io/version: v0.9.0
   labels:
     configmanagement.gke.io/arch: csmr
     configmanagement.gke.io/system: "true"
@@ -253,7 +253,6 @@ spec:
                       type: object
                     type: array
                   statusMode:
-                    default: enabled
                     description: statusMode controls whether the actuation status
                       such as apply failed or not should be embedded into the ResourceGroup
                       object. Must be "enabled" or "disabled". If set to "enabled",
@@ -1073,7 +1072,6 @@ spec:
                       type: object
                     type: array
                   statusMode:
-                    default: enabled
                     description: statusMode controls whether the actuation status
                       such as apply failed or not should be embedded into the ResourceGroup
                       object. Must be "enabled" or "disabled". If set to "enabled",

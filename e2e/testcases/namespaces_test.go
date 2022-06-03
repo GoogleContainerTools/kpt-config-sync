@@ -67,13 +67,10 @@ func TestDeclareNamespace(t *testing.T) {
 			return err
 		}
 
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -98,13 +95,10 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Add label and annotation to namespace.
@@ -126,13 +120,10 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update label and annotation to namespace.
@@ -154,13 +145,10 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove label and annotation to namespace and commit.
@@ -182,13 +170,10 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -215,13 +200,10 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -249,13 +231,10 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -291,14 +270,10 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			if err != nil {
 				return err
 			}
-
-			// Validate no error metrics are emitted.
-			// TODO: internal_errors_total metric from diff.go
-			//if err := nt.ValidateErrorMetricsNotFound()
-			return nil
+			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 
 		// Update the namespace and the configmap to be no longer be managed
@@ -327,14 +302,10 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			if err != nil {
 				return err
 			}
-
-			// Validate no error metrics are emitted.
-			// TODO: internal_errors_total metric from diff.go
-			//if err := nt.ValidateErrorMetricsNotFound()
-			return nil
+			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 
 		// Remove the namspace and the configmap from the repository
@@ -360,14 +331,10 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			if err != nil {
 				return err
 			}
-
-			// Validate no error metrics are emitted.
-			// TODO: internal_errors_total metric from diff.go
-			//if err := nt.ValidateErrorMetricsNotFound()
-			return nil
+			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 
 		// Verify the NamespaceConfig is removed from the cluster.
@@ -431,13 +398,10 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 			return err
 		}
 
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update the configmap to be no longer be managed
@@ -466,13 +430,10 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 			return err
 		}
 
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove the configmap from the repository
@@ -493,13 +454,10 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 			return err
 		}
 
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -529,13 +487,10 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove label and annotation from the kube-system namespace.
@@ -558,13 +513,10 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating error metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update kube-system namespace to be no longer be managed.
@@ -585,13 +537,10 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -621,13 +570,10 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -666,13 +612,10 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Phase 2: Remove the Role, and ensure the implicit Namespace is NOT deleted.
@@ -695,13 +638,10 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//if err := nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -738,13 +678,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove the all declared Namespaces.
@@ -788,7 +725,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		return nt.ReconcilerMetrics.ValidateDeclaredResources(nomostest.DefaultRootReconcilerName, 0)
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Add safety back so we resume syncing.
@@ -828,13 +765,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Undeclare safety. We expect this to succeed since the user unambiguously wants
@@ -867,13 +801,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 

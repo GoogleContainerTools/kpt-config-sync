@@ -69,13 +69,10 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
@@ -103,13 +100,10 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
@@ -160,14 +154,12 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Role")
 	nt.WaitForRepoSyncs()
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestPreventDeletionClusterRole(t *testing.T) {
@@ -211,14 +203,12 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from ClusterRole")
 	nt.WaitForRepoSyncs()
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestPreventDeletionImplicitNamespace(t *testing.T) {

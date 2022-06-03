@@ -23,7 +23,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
-	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -87,17 +86,11 @@ func TestApplyScopedResourcesHierarchicalMode(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			err := nt.ValidateMetricNotFound(ocmetrics.ReconcilerErrorsView.Name)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }
 
@@ -162,17 +155,11 @@ func TestApplyScopedResourcesUnstructuredMode(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			err := nt.ValidateMetricNotFound(ocmetrics.ReconcilerErrorsView.Name)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }
 

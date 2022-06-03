@@ -119,13 +119,10 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	updatedService := service.DeepCopy()
@@ -147,13 +144,10 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -231,14 +225,12 @@ aggregationRule:
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 // TestPreserveLastApplied ensures we don't destroy the last-applied-configuration
@@ -307,14 +299,12 @@ func TestPreserveLastApplied(t *testing.T) {
 		}
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestAddUpdateDeleteLabels(t *testing.T) {
@@ -365,14 +355,12 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestAddUpdateDeleteAnnotations(t *testing.T) {
@@ -406,13 +394,10 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	cm.Annotations["baz"] = "qux"
@@ -437,13 +422,10 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	delete(cm.Annotations, "baz")
@@ -465,13 +447,10 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 

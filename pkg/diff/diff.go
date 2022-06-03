@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/lifecycle"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
@@ -91,10 +90,12 @@ func (d Diff) Operation(ctx context.Context, scope declared.Scope, syncName stri
 		// There is no declaration for the resource, but the resource exists on the
 		// cluster, so we need to figure out whether we delete the resource.
 		return d.deleteType(scope, syncName)
-	default:
-		klog.Warning("Calculated diff for object with no declaration and not on the cluster")
-		metrics.RecordInternalError(ctx, "differ")
-		// Nothing to do; no resource exists.
+	default: // d.Declared == nil && d.Actual == nil:
+		// Do nothing.
+		//
+		// We have a undeclared resource and nothing on the cluster.
+		// This could mean that git changed after the delete was detected,
+		// but it's more likely the delete was detected durring an apply run.
 		return NoOp
 	}
 }

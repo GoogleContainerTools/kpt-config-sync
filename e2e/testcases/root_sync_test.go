@@ -164,13 +164,10 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update RootSync.
@@ -206,13 +203,10 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -306,14 +300,12 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 		nt.T.Fatalf("RootSync update failed: %v", err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestForceRevert(t *testing.T) {
@@ -329,7 +321,7 @@ func TestForceRevert(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	nt.RootRepos[configsync.RootSyncName].Git("reset", "--hard", "HEAD^")
@@ -341,7 +333,7 @@ func TestForceRevert(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "")
 	})
 	if err != nil {
-		nt.T.Errorf("validating reconciler_errors metric: %v", err)
+		nt.T.Error(err)
 	}
 }
 
@@ -360,14 +352,12 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 		nt.T.Errorf("RootSync did not finish reconciling: %v", err)
 	}
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {

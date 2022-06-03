@@ -43,7 +43,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
@@ -104,7 +104,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		return nt.ValidateGitSyncDepthOverrideCount(2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from the RootSync
@@ -141,7 +141,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }
 
@@ -155,7 +155,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
@@ -216,7 +216,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		return nt.ValidateGitSyncDepthOverrideCount(2)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 
 	// Clear `spec.override` from the RootSync
@@ -253,6 +253,6 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
 	})
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 }

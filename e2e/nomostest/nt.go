@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -351,40 +352,28 @@ func (nt *NT) updateMetrics(prev testmetrics.ConfigSyncMetrics, parsedMetrics te
 	nt.ReconcilerMetrics = newCsm
 }
 
-// ValidateMetrics is a convenience wrapper that pulls the latest metrics, updates the
-// metrics on NT and execute the parameter function.
+// ValidateMetrics pulls the latest metrics, updates the metrics on NT and
+// executes the parameter function.
 func (nt *NT) ValidateMetrics(syncOption MetricsSyncOption, fn func() error) error {
 	if nt.MultiRepo {
+		nt.T.Log("validating metrics...")
 		prevMetrics := nt.ReconcilerMetrics
-		took, currentMetrics := nt.GetCurrentMetrics(syncOption)
-		nt.updateMetrics(prevMetrics, currentMetrics)
-
-		nt.T.Logf("took %v to wait for metrics to be synced", took)
-
-		err := fn()
-
-		if err != nil {
-			// Although not ideal, certain scenarios require metrics to be repulled to allow the validations parameter
-			// function to successfully pass. Original error is logged so these scenarios can be reseached and resolved
-			// in the future.
-
-			originalErr := err
-
-			duration, err := Retry(nt.DefaultWaitTimeout, func() error {
-				_, currentMetrics = nt.GetCurrentMetrics()
-				nt.updateMetrics(prevMetrics, currentMetrics)
-
-				return fn()
+		var once sync.Once
+		duration, err := Retry(nt.DefaultWaitTimeout, func() error {
+			duration, currentMetrics := nt.GetCurrentMetrics(syncOption)
+			nt.updateMetrics(prevMetrics, currentMetrics)
+			once.Do(func() {
+				// Only log this once. Afterwards GetCurrentMetrics will return immediately.
+				nt.T.Logf("waited %v for metrics to be current", duration)
 			})
-
-			if err == nil {
-				nt.T.Log(errors.Wrapf(originalErr, "WARNING: Metric validations initially failed, retry successful after %v", duration))
-			}
-
-			return err
+			return fn()
+		})
+		nt.T.Logf("waited %v for metrics to be valid", duration)
+		if err != nil {
+			return fmt.Errorf("validating metrics: %v", err)
 		}
+		return nil
 	}
-
 	return nil
 }
 
@@ -602,6 +591,8 @@ func (nt *NT) GetCurrentMetrics(syncOptions ...MetricsSyncOption) (time.Duration
 	if nt.MultiRepo {
 		var metrics testmetrics.ConfigSyncMetrics
 
+		// Metrics are buffered and sent in batches to the collector.
+		// So we may have to retry a few times until they're current.
 		took, err := Retry(nt.DefaultWaitTimeout, func() error {
 			var err error
 			metrics, err = testmetrics.ParseMetrics(nt.otelCollectorPort)

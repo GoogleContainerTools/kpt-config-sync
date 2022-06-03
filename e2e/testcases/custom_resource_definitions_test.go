@@ -86,7 +86,7 @@ func TestMustRemoveCustomResourceWithDefinition(t *testing.T) {
 					metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Anvil"))
 			})
 			if err != nil {
-				nt.T.Errorf("validating metrics: %v", err)
+				nt.T.Error(err)
 			}
 
 			// This should cause an error.
@@ -104,7 +104,7 @@ func TestMustRemoveCustomResourceWithDefinition(t *testing.T) {
 				return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
 			})
 			if err != nil {
-				nt.T.Errorf("validating metrics: %v", err)
+				nt.T.Error(err)
 			}
 
 			// This should fix the error.
@@ -117,7 +117,7 @@ func TestMustRemoveCustomResourceWithDefinition(t *testing.T) {
 				return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "")
 			})
 			if err != nil {
-				nt.T.Errorf("validating reconciler_errors metric: %v", err)
+				nt.T.Error(err)
 			}
 		})
 	}
@@ -165,7 +165,7 @@ func TestAddAndRemoveCustomResource(t *testing.T) {
 				return nil
 			})
 			if err != nil {
-				nt.T.Errorf("validating metrics: %v", err)
+				nt.T.Error(err)
 			}
 
 			// Remove the CustomResource.
@@ -226,7 +226,7 @@ func TestMustRemoveUnManagedCustomResource(t *testing.T) {
 			//	return err
 			//})
 			//if err != nil {
-			//	nt.T.Errorf("validating metrics: %v", err)
+			//	nt.T.Error(err)
 			//}
 
 			_, err = nomostest.Retry(30*time.Second, func() error {
@@ -300,13 +300,10 @@ func TestAddUpdateRemoveClusterScopedCRD(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				// Validate no error metrics are emitted.
-				// TODO: internal_errors_total metric from diff.go
-				//return nt.ValidateErrorMetricsNotFound()
-				return nil
+				return nt.ValidateErrorMetricsNotFound()
 			})
 			if err != nil {
-				nt.T.Errorf("validating metrics: %v", err)
+				nt.T.Error(err)
 			}
 
 			// Update the CRD from version v1 to version v2.
@@ -398,7 +395,7 @@ func TestAddUpdateNamespaceScopedCRD(t *testing.T) {
 				return err
 			})
 			if err != nil {
-				nt.T.Errorf("validating metrics: %v", err)
+				nt.T.Error(err)
 			}
 
 			// Update the CRD from version v1 to version v2.
@@ -492,13 +489,10 @@ func TestLargeCRD(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// Validate no error metrics are emitted.
-		// TODO: internal_errors_total metric from diff.go
-		//return nt.ValidateErrorMetricsNotFound()
-		return nil
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// update one CRD

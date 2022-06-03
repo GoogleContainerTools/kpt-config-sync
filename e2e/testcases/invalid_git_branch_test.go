@@ -41,7 +41,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	// Update RootSync to valid branch name
@@ -50,14 +50,12 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRepoSyncs()
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
@@ -80,7 +78,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Error(err)
 	}
 
 	rs.Spec.Branch = nomostest.MainBranch
@@ -89,14 +87,12 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRepoSyncs()
 
-	// Validate no error metrics are emitted.
-	// TODO: internal_errors_total metric from diff.go
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	return nt.ValidateErrorMetricsNotFound()
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating error metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func TestInvalidMonoRepoBranchStatus(t *testing.T) {

@@ -41,7 +41,6 @@ type OverrideSpec struct {
 	// Must be "enabled" or "disabled".
 	// If set to "enabled", it increases the size of the ResourceGroup object.
 	//
-	// +kubebuilder:default:=enabled
 	// +kubebuilder:validation:Pattern=^(enabled|disabled|)$
 	// +optional
 	StatusMode string `json:"statusMode,omitempty"`

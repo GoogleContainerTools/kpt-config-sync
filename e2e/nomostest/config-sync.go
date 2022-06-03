@@ -781,13 +781,10 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 			if err != nil {
 				return err
 			}
-			// Validate no error metrics are emitted.
-			// TODO: internal_errors_total metric from diff.go
-			//return nt.ValidateErrorMetricsNotFound()
-			return nil
+			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 	}
 
@@ -802,7 +799,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 			return nt.ValidateMultiRepoMetrics(nsReconciler, 0)
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 	}
 }
@@ -968,13 +965,10 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			if err != nil {
 				return err
 			}
-			// Validate no error metrics are emitted.
-			// TODO: unexpected resource_conflicts_total metric from remediator
-			//return nt.ValidateErrorMetricsNotFound()
-			return nil
+			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Errorf("validating metrics: %v", err)
+			nt.T.Error(err)
 		}
 	}
 }

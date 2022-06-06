@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
@@ -33,6 +34,9 @@ import (
 )
 
 var (
+	sourceType = flag.String("source-type", os.Getenv(reconcilermanager.SourceTypeKey),
+		"The type of repo being synced, must be git or oci.")
+
 	repoRootDir = flag.String("repo-root", "/repo",
 		"the absolute path in the container running the hydration to the repo root directory.")
 
@@ -110,6 +114,7 @@ func main() {
 
 	hydrator := &hydrate.Hydrator{
 		DonePath:           absDonePath,
+		SourceType:         v1beta1.SourceType(*sourceType),
 		SourceRoot:         absSourceRootDir,
 		HydratedRoot:       absHydratedRootDir,
 		SourceLink:         *sourceLinkDir,

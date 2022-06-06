@@ -26,9 +26,11 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/git"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -45,6 +47,8 @@ const (
 type Hydrator struct {
 	// DonePath is the absolute path to the done file under the /repo directory.
 	DonePath cmpath.Absolute
+	// SourceType is the type of the source repository, must be git or oci.
+	SourceType v1beta1.SourceType
 	// SourceRoot is the absolute path to the source root directory.
 	SourceRoot cmpath.Absolute
 	// HydratedRoot is the absolute path to the hydrated root directory.
@@ -73,14 +77,14 @@ func (h *Hydrator) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tickerRehydrate.C:
-			commit, syncDir, err := SourceCommitAndDir(absSourceDir, h.SyncDir, h.ReconcilerName)
+			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
 				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
 			} else {
 				h.rehydrateOnError(commit, syncDir.OSPath())
 			}
 		case <-tickerPoll.C:
-			commit, syncDir, err := SourceCommitAndDir(absSourceDir, h.SyncDir, h.ReconcilerName)
+			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
 				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
 			} else if DoneCommit(h.DonePath.OSPath()) != commit {
@@ -287,18 +291,25 @@ func deleteErrorFile(file string) error {
 }
 
 // SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest), the absolute path of the sync directory, and source errors.
-func SourceCommitAndDir(sourceRoot cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
+func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
 	// Check if the source configs are synced successfully.
 	errFilePath := filepath.Join(path.Dir(sourceRoot.OSPath()), git.ErrorFile)
+
+	var containerName string
+	if sourceType == v1beta1.OciSource {
+		containerName = reconcilermanager.OciSync
+	} else {
+		containerName = reconcilermanager.GitSync
+	}
 
 	// A function that turns an error to a status sourceError.
 	toSourceError := func(err error) status.Error {
 		if err == nil {
 			err = errors.Errorf("unable to sync repo\n%s",
-				git.SyncError(errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
+				git.SyncError(containerName, errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
 		} else {
 			err = errors.Wrapf(err, "unable to sync repo\n%s",
-				git.SyncError(errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
+				git.SyncError(containerName, errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
 		}
 		return status.SourceError.Wrap(err).Build()
 	}

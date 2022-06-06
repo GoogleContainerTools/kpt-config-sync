@@ -109,7 +109,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
-	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
+	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
 
 	// If failed to fetch the source commit and directory, set `.status.source` to fail early.
 	// Otherwise, set `.status.rendering` before `.status.source` because the parser needs to

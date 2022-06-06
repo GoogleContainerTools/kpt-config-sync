@@ -46,6 +46,10 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 
 	result = append(result,
 		corev1.EnvVar{
+			Name:  reconcilermanager.SourceTypeKey,
+			Value: sourceType,
+		},
+		corev1.EnvVar{
 			Name:  reconcilermanager.ScopeKey,
 			Value: string(scope),
 		},

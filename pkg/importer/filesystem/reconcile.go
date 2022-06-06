@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/git"
 	"kpt.dev/configsync/pkg/importer/reader"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/decode"
@@ -155,7 +156,7 @@ func newReconciler(clusterName string, gitDir string, policyDir string, parser C
 // dirError updates repo source status with an error due to failure to read mounted git repo.
 func (c *reconciler) dirError(ctx context.Context, startTime time.Time, err error, errorFilePath string) (reconcile.Result, error) {
 	importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
-	gitSyncError := git.SyncError(errorFilePath, "app=git-importer")
+	gitSyncError := git.SyncError(reconcilermanager.GitSync, errorFilePath, "app=git-importer")
 	errBuilder := status.SourceError
 	if err != nil {
 		errBuilder = errBuilder.Wrap(err)

@@ -121,20 +121,24 @@ func maxIfNotNegative(a, b float32) float32 {
 // Burst QPS is increased by 3x for discovery.
 // CacheDir is populated from the KUBECACHEDIR env var, if set.
 func NewConfigFlags(config *rest.Config) (*genericclioptions.ConfigFlags, error) {
-	cf := genericclioptions.NewConfigFlags(true).WithDeprecatedPasswordFlag()
+	// New non-interactive config (no password flags or prompt).
+	// Delay initialization (reading KUBECONFIG) until first ToRESTConfig() call.
+	// Persist rest.Config after initialization.
+	cf := genericclioptions.NewConfigFlags(true)
 
-	// Build default rest.Config
-	cfg, err := cf.ToRESTConfig()
-	if err != nil {
-		return cf, fmt.Errorf("failed to build rest config: %w", err)
+	// Copy the pointer from the stack to the heap so we can use it in the closure after this function has returned.
+	configPtrCopy := config
+	// Modify the rest.Config after initialization by copying from the supplied config.
+	cf.WrapConfigFn = func(factoryCfg *rest.Config) *rest.Config {
+		restConfigDeepCopyInto(configPtrCopy, factoryCfg)
+		return factoryCfg
 	}
 
-	// Modify the new persistent rest.Config to match the provided one
-	restConfigDeepCopyInto(config, cfg)
-
-	cf = cf.WithDiscoveryQPS(cfg.QPS)
-	if cfg.Burst > 0 {
-		cf = cf.WithDiscoveryBurst(cfg.Burst * 3)
+	// Use the same QPS for discovery.
+	cf = cf.WithDiscoveryQPS(config.QPS)
+	// Use a higher burst QPS for discovery, if not unlimitted.
+	if config.Burst > 0 {
+		cf = cf.WithDiscoveryBurst(config.Burst * 3)
 	}
 
 	// Optionally override default CacheDir ($HOME/.kube/cache)

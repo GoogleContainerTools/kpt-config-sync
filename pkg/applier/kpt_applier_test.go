@@ -158,7 +158,7 @@ func TestSync(t *testing.T) {
 				formPruneEvent(event.PruneFailed, &testID, errors.New("failed pruning")),
 				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("failed pruning"), idFrom(testID)),
+			multiErr: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},

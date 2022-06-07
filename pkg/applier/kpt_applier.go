@@ -250,7 +250,7 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEven
 		return nil
 
 	case event.PruneFailed:
-		return ErrorForResource(e.Error, id)
+		return PruneErrorForResource(e.Error, id)
 
 	case event.PruneSkipped:
 		if isNamespace(e.Object) && differ.SpecialNamespaces[e.Object.GetName()] {
@@ -267,7 +267,7 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEven
 		return handlePruneSkippedEvent(e.Object, id, e.Error)
 
 	default:
-		return ErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
+		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
 }
 

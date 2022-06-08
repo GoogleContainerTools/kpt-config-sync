@@ -103,6 +103,10 @@ func (p *Pruner) Prune(
 		uid := obj.GetUID()
 		if uid == "" {
 			err := object.NotFound([]interface{}{"metadata", "uid"}, "")
+			if klog.V(4).Enabled() {
+				// only log event emitted errors if the verbosity > 4
+				klog.Errorf("prune uid lookup errored (object: %s): %v", id, err)
+			}
 			taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
 			taskContext.InventoryManager().AddFailedDelete(id)
 			continue
@@ -116,7 +120,8 @@ func (p *Pruner) Prune(
 			if filterErr != nil {
 				var fatalErr *filter.FatalError
 				if errors.As(filterErr, &fatalErr) {
-					if klog.V(5).Enabled() {
+					if klog.V(4).Enabled() {
+						// only log event emitted errors if the verbosity > 4
 						klog.Errorf("prune filter errored (filter: %s, object: %s): %v", pruneFilter.Name(), id, fatalErr.Err)
 					}
 					taskContext.SendEvent(eventFactory.CreateFailedEvent(id, fatalErr.Err))
@@ -134,6 +139,7 @@ func (p *Pruner) Prune(
 						obj, err = p.removeInventoryAnnotation(obj)
 						if err != nil {
 							if klog.V(4).Enabled() {
+								// only log event emitted errors if the verbosity > 4
 								klog.Errorf("error removing annotation (object: %q, annotation: %q): %v", id, inventory.OwningInventoryKey, err)
 							}
 							taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
@@ -167,12 +173,18 @@ func (p *Pruner) Prune(
 				PropagationPolicy: &opts.PropagationPolicy,
 			})
 			if err != nil {
-				if klog.V(4).Enabled() {
-					klog.Errorf("error deleting object (object: %q): %v", id, err)
+				if apierrors.IsNotFound(err) {
+					klog.Warningf("error deleting object (object: %q): object not found: object may have been deleted asynchronously by another client", id)
+					// treat this as successful idempotent deletion
+				} else {
+					if klog.V(4).Enabled() {
+						// only log event emitted errors if the verbosity > 4
+						klog.Errorf("error deleting object (object: %q): %v", id, err)
+					}
+					taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
+					taskContext.InventoryManager().AddFailedDelete(id)
+					continue
 				}
-				taskContext.SendEvent(eventFactory.CreateFailedEvent(id, err))
-				taskContext.InventoryManager().AddFailedDelete(id)
-				continue
 			}
 		}
 		taskContext.InventoryManager().AddSuccessfulDelete(id, obj.GetUID())

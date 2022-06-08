@@ -99,14 +99,12 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 			obj = info.Object.(*unstructured.Unstructured)
 			id := object.UnstructuredToObjMetadata(obj)
 			if err != nil {
+				err = applyerror.NewUnknownTypeError(err)
 				if klog.V(4).Enabled() {
-					klog.Errorf("unable to convert obj to info for %s/%s (%s)--continue",
-						obj.GetNamespace(), obj.GetName(), err)
+					// only log event emitted errors if the verbosity > 4
+					klog.Errorf("apply task errored (object: %s): unable to convert obj to info: %v", id, err)
 				}
-				taskContext.SendEvent(a.createApplyFailedEvent(
-					id,
-					applyerror.NewUnknownTypeError(err),
-				))
+				taskContext.SendEvent(a.createApplyFailedEvent(id, err))
 				taskContext.InventoryManager().AddFailedApply(id)
 				continue
 			}
@@ -119,7 +117,8 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 				if filterErr != nil {
 					var fatalErr *filter.FatalError
 					if errors.As(filterErr, &fatalErr) {
-						if klog.V(5).Enabled() {
+						if klog.V(4).Enabled() {
+							// only log event emitted errors if the verbosity > 4
 							klog.Errorf("apply filter errored (filter: %s, object: %s): %v", applyFilter.Name(), id, fatalErr.Err)
 						}
 						taskContext.SendEvent(a.createApplyFailedEvent(id, err))
@@ -139,8 +138,9 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 			// Execute mutators, if any apply
 			err = a.mutate(ctx, obj)
 			if err != nil {
-				if klog.V(5).Enabled() {
-					klog.Errorf("error mutating: %v", err)
+				if klog.V(4).Enabled() {
+					// only log event emitted errors if the verbosity > 4
+					klog.Errorf("apply mutation errored (object: %s): %v", id, err)
 				}
 				taskContext.SendEvent(a.createApplyFailedEvent(id, err))
 				taskContext.InventoryManager().AddFailedApply(id)
@@ -152,7 +152,7 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 			ao := applyOptionsFactoryFunc(a.Name(), taskContext.EventChannel(),
 				a.ServerSideOptions, a.DryRunStrategy, a.DynamicClient, a.OpenAPIGetter)
 			ao.SetObjects([]*resource.Info{info})
-			klog.V(5).Infof("applying %s/%s...", info.Namespace, info.Name)
+			klog.V(5).Infof("applying object: %v", id)
 			err = ao.Run()
 			if err != nil && a.ServerSideOptions.ServerSideApply && isAPIService(obj) && isStreamError(err) {
 				// Server-side Apply doesn't work with APIService before k8s 1.21
@@ -161,13 +161,12 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 				err = a.clientSideApply(info, taskContext.EventChannel())
 			}
 			if err != nil {
+				err = applyerror.NewApplyRunError(err)
 				if klog.V(4).Enabled() {
-					klog.Errorf("error applying (%s/%s) %s", info.Namespace, info.Name, err)
+					// only log event emitted errors if the verbosity > 4
+					klog.Errorf("apply errored (object: %s): %v", id, err)
 				}
-				taskContext.SendEvent(a.createApplyFailedEvent(
-					id,
-					applyerror.NewApplyRunError(err),
-				))
+				taskContext.SendEvent(a.createApplyFailedEvent(id, err))
 				taskContext.InventoryManager().AddFailedApply(id)
 			} else if info.Object != nil {
 				acc, err := meta.Accessor(info.Object)

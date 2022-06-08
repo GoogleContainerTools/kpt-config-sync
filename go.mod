@@ -33,7 +33,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220401212409-b28bf2818661
 	k8s.io/kubectl v0.24.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/cli-utils v0.31.1
+	sigs.k8s.io/cli-utils v0.31.2
 	sigs.k8s.io/controller-runtime v0.12.1
 	sigs.k8s.io/kind v0.11.1
 	sigs.k8s.io/kustomize/api v0.11.4

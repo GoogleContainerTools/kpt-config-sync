@@ -135,6 +135,13 @@ DOCKER_RUN_ARGS = \
 	--rm                                                               \
 	$(BUILDENV_IMAGE)                                                  \
 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
 ##### SETUP #####
 
 .DEFAULT_GOAL := test
@@ -215,11 +222,20 @@ lint-bash:
 license:
 	@./scripts/prepare-licenses.sh
 
+.PHONY: lint-license
 lint-license: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/lint-license.sh
 
+"$(GOBIN)/addlicense":
+	go install github.com/google/addlicense@v1.0.0
+
+.PHONY: license-headers
+license-headers: "$(GOBIN)/addlicense"
+	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'
+
+.PHONY: lint-license-headers
 lint-license-headers:
-	@./scripts/lint-license-headers.sh
+	"$(GOBIN)/addlicense" -check -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'
 
 lint-yaml:
 	@./scripts/lint-yaml.sh

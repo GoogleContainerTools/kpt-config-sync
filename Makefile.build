@@ -1,6 +1,8 @@
 # Included by Makefile.
 # Rules related to building nomos and docker images.
 
+KUSTOMIZE := $(BIN_DIR)/kustomize
+
 ###################################
 # Build environment
 ###################################
@@ -18,10 +20,12 @@ push-buildenv: build-buildenv
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
 	@docker push $(BUILDENV_IMAGE)
 
+.PHONY: install-kustomize
+# install kustomize binary
 install-kustomize:
 	wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F$(KUSTOMIZE_VERSION)/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz -O /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz
 	tar -zxvf /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz -C /tmp
-	mv /tmp/kustomize $(BIN_DIR)/kustomize
+	mv /tmp/kustomize $(KUSTOMIZE)
 	rm /tmp/kustomize_$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz
 
 ###################################

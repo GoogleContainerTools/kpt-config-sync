@@ -1,48 +1,33 @@
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
 
+CONTROLLER_GEN := $(GOBIN)/controller-gen
+
+.PHONY: generate
 # Generate DeepCopy and runtime.Object implementation methods.
-generate: controller-gen
+generate: install-controller-gen
 	$(CONTROLLER_GEN) \
 		object:headerFile="hack/boilerplate.txt" \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
 		paths="./pkg/api/configmanagement/v1"
 
+.PHONY: configsync-crds
 # Generate configsync CRDs
-configsync-crds: controller-gen
+configsync-crds: install-controller-gen install-kustomize
 	$(CONTROLLER_GEN) \
-	crd \
-	crd:trivialVersions=true \
-	paths="./pkg/api/configsync/v1alpha1" \
-	paths="./pkg/api/configsync/v1beta1" \
-	output:artifacts:config=manifests \
-	&& mv manifests/configsync.gke.io_reposyncs.yaml manifests/patch/reposync-crd.yaml \
-	&& mv manifests/configsync.gke.io_rootsyncs.yaml manifests/patch/rootsync-crd.yaml; \
-  	kustomize build ./manifests/patch -o ./manifests;  \
+		crd \
+		paths="./pkg/api/configsync/v1alpha1" \
+		paths="./pkg/api/configsync/v1beta1" \
+		output:artifacts:config=manifests \
+		&& mv manifests/configsync.gke.io_reposyncs.yaml manifests/patch/reposync-crd.yaml \
+		&& mv manifests/configsync.gke.io_rootsyncs.yaml manifests/patch/rootsync-crd.yaml; \
+  	$(KUSTOMIZE) build ./manifests/patch -o ./manifests;  \
   	mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml; \
   	mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml; \
   	rm ./manifests/patch/reposync-crd.yaml; \
   	rm ./manifests/patch/rootsync-crd.yaml; \
 
-# find or download controller-gen
-# download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0 ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
-endif
+.PHONY: install-controller-gen
+# install controller-gen from source
+install-controller-gen:
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0

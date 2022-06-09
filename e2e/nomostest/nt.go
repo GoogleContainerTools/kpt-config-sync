@@ -38,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/e2e"
@@ -1234,7 +1233,7 @@ func (nt *NT) SupportV1Beta1CRD() (bool, error) {
 	// Use only major version and minor version in case other parts
 	// may affect the comparison.
 	v := fmt.Sprintf("v%s.%s", serverVersion.Major, serverVersion.Minor)
-	cmp := version.CompareKubeAwareVersionStrings(v, "v1.22")
+	cmp := strings.Compare(v, "v1.22")
 	return cmp < 0, nil
 }
 

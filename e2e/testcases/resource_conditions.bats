@@ -110,16 +110,16 @@ test_teardown() {
   run kubectl annotate clusterrole ${clusterresname} 'configmanagement.gke.io/errors=["CrashLoopBackOff"]'
 
   debug::log "Check for configmap error resource condition in namespace config"
-  wait::for -l -t 10 -- namespaceconfig_condition "Error"
+  wait::for -l -t 60 -- namespaceconfig_condition "Error"
 
   debug::log "Check for configmap error resource condition in repo status"
-  wait::for -l -t 10 -- configmap_condition "Error"
+  wait::for -l -t 60 -- configmap_condition "Error"
 
   debug::log "Check for clusterrole error resource condition in cluster config"
-  wait::for -l -t 20 -- clusterconfig_condition "Error"
+  wait::for -l -t 60 -- clusterconfig_condition "Error"
 
   debug::log "Check for clusterrole error resource condition in repo status"
-  wait::for -l -t 10 -- repos_condition "Error"
+  wait::for -l -t 60 -- repos_condition "Error"
 
   # Test removing error annotations
 
@@ -130,13 +130,13 @@ test_teardown() {
   run kubectl annotate clusterrole ${clusterresname} 'configmanagement.gke.io/errors-'
 
   debug::log "Check that namespace config does not contain resource conditions"
-  wait::for -l -t 10 -- namespaceconfig_condition_null
+  wait::for -l -t 60 -- namespaceconfig_condition_null
 
   debug::log "Check that cluster config does not contain resource conditions"
-  wait::for -l -t 10 -- clusterconfig_condition_null
+  wait::for -l -t 60 -- clusterconfig_condition_null
 
   debug::log "Check that repo does not contain resource conditions"
-  wait::for -l -t 10 -- repos_condition_null
+  wait::for -l -t 60 -- repos_condition_null
 
   # Test adding reconciling annotations
 
@@ -147,16 +147,16 @@ test_teardown() {
   run kubectl annotate clusterrole ${clusterresname} 'configmanagement.gke.io/reconciling=["ClusterRole needs... something..."]'
 
   debug::log "Check for configmap reconciling resource condition in namespace config"
-  wait::for -l -t 10 -- namespaceconfig_condition "Reconciling"
+  wait::for -l -t 60 -- namespaceconfig_condition "Reconciling"
 
   debug::log "Check for configmap reconciling resource condition in repo status"
-  wait::for -l -t 10 -- configmap_condition "Reconciling"
+  wait::for -l -t 60 -- configmap_condition "Reconciling"
 
   debug::log "Check for clusterrole reconciling resource condition in cluster config"
-  wait::for -l -t 20 -- clusterconfig_condition "Reconciling"
+  wait::for -l -t 60 -- clusterconfig_condition "Reconciling"
 
   debug::log "Check for clusterrole reconciling resource condition in repo status"
-  wait::for -l -t 10 -- repos_condition "Reconciling"
+  wait::for -l -t 60 -- repos_condition "Reconciling"
 
   # Test removing reconciling annotations
 
@@ -167,13 +167,13 @@ test_teardown() {
   run kubectl annotate clusterrole ${clusterresname} 'configmanagement.gke.io/reconciling-'
 
   debug::log "Check that namespace config does not contain resource conditions"
-  wait::for -l -t 10 -- namespaceconfig_condition_null
+  wait::for -l -t 60 -- namespaceconfig_condition_null
 
   debug::log "Check that cluster config does not contain resource conditions"
-  wait::for -l -t 20 -- clusterconfig_condition_null
+  wait::for -l -t 60 -- clusterconfig_condition_null
 
   debug::log "Check that repo does not contain resource conditions"
-  wait::for -l -t 10 -- repos_condition_null
+  wait::for -l -t 60 -- repos_condition_null
 }
 
 @test "${FILE_NAME}: constraint template gets status annotations" {

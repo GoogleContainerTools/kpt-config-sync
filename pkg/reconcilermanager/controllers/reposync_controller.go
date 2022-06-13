@@ -57,7 +57,8 @@ import (
 // RepoSyncReconciler reconciles a RepoSync object.
 type RepoSyncReconciler struct {
 	reconcilerBase
-	namespaces map[string]struct{}
+	// repoSyncs is a cache of the reconciled RepoSync objects.
+	repoSyncs map[types.NamespacedName]struct{}
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
@@ -71,7 +72,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 		},
-		namespaces: make(map[string]struct{}),
+		repoSyncs: make(map[types.NamespacedName]struct{}),
 	}
 }
 
@@ -88,7 +89,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err = r.client.Get(ctx, req.NamespacedName, &rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			if _, ok := r.namespaces[req.Namespace]; !ok {
+			if _, ok := r.repoSyncs[types.NamespacedName{Name: req.Name, Namespace: req.Namespace}]; !ok {
 				log.Error(err, "The RepoSync reconciler does not manage a RepoSync object for the namespace", "namespace", req.Namespace, "name", req.Name)
 				// return `controllerruntime.Result{}, nil` here to make sure the request will not be requeued.
 				return controllerruntime.Result{}, nil
@@ -97,7 +98,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			//
 			// Note: Update cleanup resources in cleanupNSControllerResources(...) when
 			// resources created by namespace controller changes.
-			cleanupErr := r.cleanupNSControllerResources(ctx, req.Namespace, reconciler.NsReconcilerName(req.Namespace, req.Name))
+			cleanupErr := r.cleanupNSControllerResources(ctx, req.Namespace, req.Name)
 			// if cleanupErr != nil, the request will be requeued.
 			return controllerruntime.Result{}, cleanupErr
 		}
@@ -115,7 +116,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	r.namespaces[req.Namespace] = struct{}{}
+	r.repoSyncs[types.NamespacedName{Name: req.Name, Namespace: req.Namespace}] = struct{}{}
 	reconcilerName := reconciler.NsReconcilerName(rs.Namespace, rs.Name)
 
 	if err = r.validateSpec(ctx, &rs, reconcilerName); err != nil {

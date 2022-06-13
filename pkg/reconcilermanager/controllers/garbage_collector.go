@@ -25,6 +25,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -39,7 +40,8 @@ import (
 // created in config-management-system namespace instead of reposync namespace.
 //
 // NOTE: Update this method when resources created by namespace controller changes.
-func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, ns, reconcilerName string) error {
+func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, ns, rsName string) error {
+	reconcilerName := reconciler.NsReconcilerName(ns, rsName)
 	r.log.Info("Cleaning up namespace controller resources", "reconcilerName", reconcilerName)
 
 	reposyncList := &v1beta1.RepoSyncList{}
@@ -71,9 +73,7 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, n
 		return err
 	}
 
-	if len(reposyncList.Items) == 0 {
-		delete(r.namespaces, ns)
-	}
+	delete(r.repoSyncs, types.NamespacedName{Namespace: ns, Name: rsName})
 	return nil
 }
 
@@ -100,7 +100,7 @@ func (r *RepoSyncReconciler) deleteSecret(ctx context.Context, reconcilerName st
 
 	for _, s := range secretList.Items {
 		if strings.HasPrefix(s.Name, reconcilerName) {
-			if err := r.client.Delete(ctx, &s); err != nil {
+			if err := r.cleanup(ctx, s.Name, s.Namespace, kinds.Secret()); err != nil {
 				return err
 			}
 		}

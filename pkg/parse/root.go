@@ -174,7 +174,11 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 		continueSyncing = false
 	}
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "source", rs.Status.Source.ErrorSummary.TotalCount)
-	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, []v1beta1.ErrorSource{v1beta1.SourceError}, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
+	var errorSource []v1beta1.ErrorSource
+	if rs.Status.Source.Errors != nil {
+		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
+	}
+	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
 
 	metrics.RecordReconcilerErrors(ctx, "source", status.ToCSE(newStatus.errs))
 
@@ -255,8 +259,11 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 		continueSyncing = false
 	}
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "rendering", rs.Status.Rendering.ErrorSummary.TotalCount)
-
-	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, []v1beta1.ErrorSource{v1beta1.RenderingError}, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+	var errorSource []v1beta1.ErrorSource
+	if rs.Status.Rendering.Errors != nil {
+		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
+	}
+	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.

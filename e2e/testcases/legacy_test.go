@@ -200,7 +200,8 @@ func TestBats(t *testing.T) {
 	testCases := []*BatsTest{
 		// Converted to acme_test.go.
 		//{fileName: "acme.bats"},
-		{fileName: "apiservice.bats"},
+		// Converted to apiservice_test.go.
+		//{fileName: "apiservice.bats"},
 		{
 			fileName: "basic.bats",
 			multiRepoIncompatible: testNums(

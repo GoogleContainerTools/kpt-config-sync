@@ -302,6 +302,12 @@ func (g *Repository) Copy(sourceDir, destDir string) {
 	g.T.Helper()
 
 	absDestPath := filepath.Join(g.Root, destDir)
+	parentDir := filepath.Dir(absDestPath)
+	if absDestPath != parentDir {
+		if err := os.MkdirAll(parentDir, os.ModePerm); err != nil {
+			g.T.Fatalf("failed to create directory: %s", parentDir)
+		}
+	}
 	if out, err := exec.Command("cp", "-r", sourceDir, absDestPath).CombinedOutput(); err != nil {
 		g.T.Fatalf("failed to copy directory: %s", string(out))
 	}

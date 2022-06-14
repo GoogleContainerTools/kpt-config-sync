@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -151,6 +152,9 @@ func (r *RepoSyncReconciler) updateRoleBindingSubjects(rb *rbacv1.RoleBinding, r
 			configsync.ControllerNamespace,
 			"ServiceAccount"))
 	}
+	sort.SliceStable(subjects, func(i, j int) bool {
+		return subjects[i].Name < subjects[j].Name
+	})
 	rb.Subjects = subjects
 	return nil
 }
@@ -197,6 +201,9 @@ func (r *RootSyncReconciler) updateClusterRoleBindingSubjects(crb *rbacv1.Cluste
 			configsync.ControllerNamespace,
 			"ServiceAccount"))
 	}
+	sort.SliceStable(subjects, func(i, j int) bool {
+		return subjects[i].Name < subjects[j].Name
+	})
 	crb.Subjects = subjects
 	return nil
 }

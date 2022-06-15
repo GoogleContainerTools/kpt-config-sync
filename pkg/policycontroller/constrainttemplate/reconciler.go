@@ -37,7 +37,7 @@ func newReconciler(cl client.Client) *constraintTemplateReconciler {
 // Reconcile handles Requests from the ConstraintTemplate controller. It will
 // annotate ConstraintTemplates based upon their status.
 func (c *constraintTemplateReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	ct := emptyConstraintTemplate()
+	ct := EmptyConstraintTemplate()
 	if err := c.client.Get(ctx, request.NamespacedName, &ct); err != nil {
 		if !errors.IsNotFound(err) {
 			klog.Errorf("Error getting ConstraintTemplate %q: %v", request.NamespacedName, err)

@@ -226,11 +226,12 @@ func TestBats(t *testing.T) {
 		// Converted to custom_resource_test.go
 		// {fileName: "custom_resources_v1beta1.bats"},
 		{fileName: "foo_corp.bats"},
-		{
-			fileName: "gatekeeper.bats",
-			// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
-			skipAutopilotCluster: allTests,
-		},
+		// Converted to gatekeeper_test.go
+		//{
+		//	fileName: "gatekeeper.bats",
+		//	// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
+		//	skipAutopilotCluster: allTests,
+		//},
 		// Converted to multiversion_test.go.
 		// {fileName: "multiversion.bats"},
 		// Converted to namespaces.go.

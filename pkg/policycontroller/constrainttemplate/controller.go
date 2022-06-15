@@ -56,11 +56,12 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-	ct := emptyConstraintTemplate()
+	ct := EmptyConstraintTemplate()
 	return c.Watch(&source.Kind{Type: &ct}, &handler.EnqueueRequestForObject{})
 }
 
-func emptyConstraintTemplate() unstructured.Unstructured {
+// EmptyConstraintTemplate returns an empty ConstraintTemplate.
+func EmptyConstraintTemplate() unstructured.Unstructured {
 	ct := unstructured.Unstructured{}
 	ct.SetGroupVersionKind(GVK)
 	return ct

@@ -273,6 +273,11 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	// Delete the constraint template before deleting CRD to avoid resource_conflicts error to be recorded
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove constraint template")
+	nt.WaitForRepoSyncs()
 }
 
 func TestConstraintStatusAnnotations(t *testing.T) {
@@ -292,7 +297,7 @@ func TestConstraintStatusAnnotations(t *testing.T) {
 	}
 
 	if err := nt.ApplyGatekeeperTestData("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
-		nt.T.Fatalf("Failed to create constraint template CRD: %v", err)
+		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
 	}
 
 	constraintGVK := schema.GroupVersionKind{
@@ -331,6 +336,11 @@ func TestConstraintStatusAnnotations(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	// Delete the constraint before deleting CRD to avoid resource_conflicts error to be recorded
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove constraint")
+	nt.WaitForRepoSyncs()
 }
 
 func hasConditions(want ...string) nomostest.Predicate {

@@ -158,7 +158,10 @@ func (csm ConfigSyncMetrics) ValidateMetricsCommitApplied(commitHash string) err
 func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconciler string) error {
 	metrics := []string{
 		ocmetrics.ResourceFightsView.Name,
-		ocmetrics.ResourceConflictsView.Name,
+		// TODO: (b/236191762) Re-enable the validation for the resource_conflicts error
+		// Disable it for now because this is a cumulative metric. It is triggered
+		// when the remediator is fighting with CRD garbage collector.
+		//ocmetrics.ResourceConflictsView.Name,
 		ocmetrics.InternalErrorsView.Name,
 	}
 	for _, m := range metrics {

@@ -315,11 +315,11 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolut
 	}
 
 	if _, err := os.Stat(errFilePath); err == nil || !os.IsNotExist(err) {
-		return "", cmpath.Absolute{}, toSourceError(err)
+		return "", "", toSourceError(err)
 	}
 	gitDir, err := sourceRoot.EvalSymlinks()
 	if err != nil {
-		return "", cmpath.Absolute{}, toSourceError(err)
+		return "", "", toSourceError(err)
 	}
 
 	commit := filepath.Base(gitDir.OSPath())
@@ -334,7 +334,7 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolut
 	relSyncDir := gitDir.Join(syncDir)
 	sourceDir, err := relSyncDir.EvalSymlinks()
 	if err != nil {
-		return commit, cmpath.Absolute{}, status.PathWrapError(
+		return commit, "", status.PathWrapError(
 			errors.Wrap(err, "evaluating symbolic link to policy sourceRoot"), relSyncDir.OSPath())
 	}
 	return commit, sourceDir, nil

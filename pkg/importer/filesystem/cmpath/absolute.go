@@ -24,21 +24,19 @@ import (
 )
 
 // Absolute represents an absolute path on a file system.
-type Absolute struct {
-	// path is a slash-delimited path.
-	path string
-}
+// The path is slash-delimited, but can be converted into the os-specific representation.
+type Absolute string
 
-var _ id.Path = Absolute{}
+var _ id.Path = Absolute("")
 
 // AbsoluteSlash returns an Absolute path from a slash-delimited path.
 //
 // It is an error to pass a non-absolute path.
 func AbsoluteSlash(p string) (Absolute, error) {
 	if !filepath.IsAbs(p) {
-		return Absolute{}, errors.Errorf("not an absolute path")
+		return "", errors.Errorf("not an absolute path")
 	}
-	return Absolute{path: path.Clean(p)}, nil
+	return Absolute(path.Clean(p)), nil
 }
 
 // AbsoluteOS returns an Absolute path from an OS-specific path.
@@ -51,22 +49,22 @@ func AbsoluteOS(p string) (Absolute, error) {
 
 // OSPath implements id.Path.
 func (p Absolute) OSPath() string {
-	return filepath.FromSlash(p.path)
+	return filepath.FromSlash(p.SlashPath())
 }
 
 // SlashPath implements id.Path.
 func (p Absolute) SlashPath() string {
-	return p.path
+	return string(p)
 }
 
 // Join appends r to p, creating a new Absolute path.
 func (p Absolute) Join(r Relative) Absolute {
-	return Absolute{path: path.Join(p.path, r.path)}
+	return Absolute(path.Join(p.SlashPath(), r.SlashPath()))
 }
 
 // Split returns a slice of the path elements.
 func (p Absolute) Split() []string {
-	splits := strings.Split(p.path, "/")
+	splits := strings.Split(p.SlashPath(), "/")
 	if splits[len(splits)-1] == "" {
 		// Discard trailing empty string if this is a path ending in slash.
 		splits = splits[:len(splits)-1]
@@ -77,15 +75,15 @@ func (p Absolute) Split() []string {
 // Equal returns true if the underlying absolute paths are equal.
 func (p Absolute) Equal(other Absolute) bool {
 	// Assumes Path was constructed or altered via exported methods.
-	return p.path == other.path
+	return p == other
 }
 
 // EvalSymlinks evaluates any symlinks in the Absolute and returns a new
 // Absolute with no symlinks.
 func (p Absolute) EvalSymlinks() (Absolute, error) {
-	abs, err := filepath.EvalSymlinks(filepath.FromSlash(p.path))
+	abs, err := filepath.EvalSymlinks(p.OSPath())
 	if err != nil {
-		return Absolute{}, err
+		return "", err
 	}
 	return AbsoluteOS(abs)
 }

@@ -19,7 +19,6 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/discovery"
 )
@@ -55,7 +54,7 @@ deployments                       deploy       apps                           tr
 clusterroles                                   rbac.authorization.k8s.io      false        ClusterRole
 rolebindings                                   rbac.authorization.k8s.io      true         RoleBinding
 `,
-			wantErr: InvalidScopeValue(cmpath.Absolute{}, "", "other"),
+			wantErr: InvalidScopeValue("", "", "other"),
 		},
 		{
 			name: "missing first line",
@@ -64,7 +63,7 @@ deployments                       deploy       apps                           tr
 clusterroles                                   rbac.authorization.k8s.io      false        ClusterRole
 rolebindings                                   rbac.authorization.k8s.io      true         RoleBinding
 `,
-			wantErr: MissingAPIGroup(cmpath.Absolute{}),
+			wantErr: MissingAPIGroup(""),
 		},
 	}
 
@@ -72,7 +71,7 @@ rolebindings                                   rbac.authorization.k8s.io      tr
 		t.Run(tc.name, func(t *testing.T) {
 			scoper := discovery.Scoper{}
 
-			gotErr := addLines(&scoper, cmpath.Absolute{}, tc.lines)
+			gotErr := addLines(&scoper, "", tc.lines)
 			if !errors.Is(gotErr, tc.wantErr) {
 				t.Fatalf("got addLines() error = %v, want %v", gotErr, tc.wantErr)
 			}
@@ -123,7 +122,7 @@ func TestAddLine(t *testing.T) {
 		{
 			name:      "invalid scope",
 			line:      "                               other        Namespace",
-			wantErr:   InvalidScopeValue(cmpath.Absolute{}, "", "other"),
+			wantErr:   InvalidScopeValue("", "", "other"),
 			groupKind: kinds.Namespace().GroupKind(),
 			wantScope: discovery.UnknownScope,
 		},
@@ -133,7 +132,7 @@ func TestAddLine(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			scoper := discovery.Scoper{}
 
-			gotErr := addLine(&scoper, cmpath.Absolute{}, tc.line)
+			gotErr := addLine(&scoper, "", tc.line)
 			if !errors.Is(gotErr, tc.wantErr) {
 				t.Errorf("got addLine() = %v, want %v", gotErr, tc.wantErr)
 			}

@@ -222,7 +222,7 @@ func validateHelm() error {
 // save the output to another temp directory, and return the output path for further
 // parsing and validation.
 func ValidateAndRunKustomize(sourcePath string) (cmpath.Absolute, error) {
-	var output = cmpath.Absolute{}
+	var output cmpath.Absolute
 	if err := validateKustomize(); err != nil {
 		return output, err
 	}
@@ -251,30 +251,30 @@ func ValidateAndRunKustomize(sourcePath string) (cmpath.Absolute, error) {
 func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute, bool, error) {
 	abs, err := filepath.Abs(flags.Path)
 	if err != nil {
-		return cmpath.Absolute{}, false, err
+		return "", false, err
 	}
 	rootDir, err := cmpath.AbsoluteOS(abs)
 	if err != nil {
-		return cmpath.Absolute{}, false, err
+		return "", false, err
 	}
 	rootDir, err = rootDir.EvalSymlinks()
 	if err != nil {
-		return cmpath.Absolute{}, false, err
+		return "", false, err
 	}
 
 	switch flags.OutputFormat {
 	case flags.OutputYAML, flags.OutputJSON: // do nothing
 	default:
-		return cmpath.Absolute{}, false, fmt.Errorf("format argument must be %q or %q", flags.OutputYAML, flags.OutputJSON)
+		return "", false, fmt.Errorf("format argument must be %q or %q", flags.OutputYAML, flags.OutputJSON)
 	}
 
 	needsKustomize, err := needsKustomize(abs)
 	if err != nil {
-		return cmpath.Absolute{}, false, errors.Wrapf(err, "unable to check if Kustomize is needed for the source directory: %s", abs)
+		return "", false, errors.Wrapf(err, "unable to check if Kustomize is needed for the source directory: %s", abs)
 	}
 
 	if needsKustomize && sourceFormat == filesystem.SourceFormatHierarchy {
-		return cmpath.Absolute{}, false, fmt.Errorf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured)
+		return "", false, fmt.Errorf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured)
 	}
 
 	return rootDir, needsKustomize, nil

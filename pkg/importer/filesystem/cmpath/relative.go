@@ -23,17 +23,15 @@ import (
 )
 
 // Relative represents a relative path on a file system.
-// The path is not guaranteed to be relative to the working directory.
-type Relative struct {
-	// path is a slash-delimited path.
-	path string
-}
+// The path is slash-delimited, but can be converted into the os-specific representation.
+// The path is not guaranteed to be relative to the current working directory.
+type Relative string
 
-var _ id.Path = Relative{}
+var _ id.Path = Relative("")
 
 // RelativeSlash returns an Relative path from a slash-delimited path.
 func RelativeSlash(p string) Relative {
-	return Relative{path: path.Clean(p)}
+	return Relative(path.Clean(p))
 }
 
 // RelativeOS returns an Relative path from an OS-specific path.
@@ -43,22 +41,22 @@ func RelativeOS(p string) Relative {
 
 // OSPath implements id.Path.
 func (p Relative) OSPath() string {
-	return filepath.FromSlash(p.path)
+	return filepath.FromSlash(p.SlashPath())
 }
 
 // SlashPath implements id.Path.
 func (p Relative) SlashPath() string {
-	return p.path
+	return string(p)
 }
 
 // Join appends r to p, creating a new Relative path.
 func (p Relative) Join(r Relative) Relative {
-	return Relative{path: path.Join(p.path, r.path)}
+	return Relative(path.Join(p.SlashPath(), r.SlashPath()))
 }
 
 // Split returns a slice of the path elements.
 func (p Relative) Split() []string {
-	splits := strings.Split(p.path, "/")
+	splits := strings.Split(p.SlashPath(), "/")
 	if splits[len(splits)-1] == "" {
 		// Discard trailing empty string if this is a path ending in slash.
 		splits = splits[:len(splits)-1]
@@ -69,20 +67,20 @@ func (p Relative) Split() []string {
 // Equal returns true if the underlying relative paths are equal.
 func (p Relative) Equal(other Relative) bool {
 	// Assumes Path was constructed or altered via exported methods.
-	return p.path == other.path
+	return p == other
 }
 
 // Base returns the Base of this Path.
 func (p Relative) Base() string {
-	return path.Base(p.path)
+	return path.Base(p.SlashPath())
 }
 
 // Dir returns the directory containing this Path.
 func (p Relative) Dir() Relative {
-	return RelativeSlash(path.Dir(p.path))
+	return RelativeSlash(path.Dir(p.SlashPath()))
 }
 
 // IsRoot returns true if the path is the Nomos root directory.
 func (p Relative) IsRoot() bool {
-	return p.path == "."
+	return p == "."
 }

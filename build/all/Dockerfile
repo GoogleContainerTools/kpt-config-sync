@@ -150,7 +150,7 @@ FROM k8s.gcr.io/build-image/debian-base-amd64:buster-v1.10.0 as nomos
 
 # https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
 RUN apt-get update && apt-get install -y \
-  libcap2-bin bash git
+  bash git
 
 RUN mkdir -p /opt/nomos/bin
 ENV PATH="/opt/nomos/bin:${PATH}"

@@ -15,62 +15,127 @@
 package diff
 
 import (
+	"fmt"
+	"strings"
+
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/importer"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	saImporter             = importer.Name
+	saRootReconcilerPrefix = core.RootReconcilerPrefix
+	saReconcilerManager    = reconcilermanager.ManagerName
+
+	// OperationManage is a meta operation that implies full control:
+	// CREATE + UPDATE + DELETE
+	OperationManage = admissionv1.Operation("MANAGE")
+)
+
 // IsManager returns true if the given reconciler is the manager for the resource.
 func IsManager(scope declared.Scope, syncName string, obj client.Object) bool {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
+	if !differ.ManagedByConfigSync(obj) {
+		// Not managed
 		return false
 	}
-	manager, ok := annotations[metadata.ResourceManagerKey]
-	if !ok || !differ.ManagedByConfigSync(obj) {
-		return false
-	}
-	return manager == declared.ResourceManager(scope, syncName)
+	newManager := declared.ResourceManager(scope, syncName)
+	oldManager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+	return oldManager == newManager
 }
 
-// CanManage returns true if the given reconciler is allowed to manage the given
-// resource.
-func CanManage(scope declared.Scope, syncName string, obj client.Object) bool {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
-		// If the object somehow has no annotations, it is unmanaged and therefore
-		// can be managed.
+// CanManage returns true if the given reconciler is allowed to perform the
+// specified operation on the specified resource object.
+func CanManage(scope declared.Scope, syncName string, obj client.Object, op admissionv1.Operation) bool {
+	if !differ.ManagementEnabled(obj) {
+		// Not managed
 		return true
 	}
-	manager, ok := annotations[metadata.ResourceManagerKey]
-	if !ok || !differ.ManagementEnabled(obj) {
-		// Any reconciler can manage any unmanaged resource.
-		return true
-	}
-	managerScope, _ := declared.ManagerScopeAndName(manager)
-	if manager != "" {
-		// Most objects have no manager, and ValidateScope will return an error in
-		// this case. Explicitly checking for empty string means we don't do this
-		// relatively expensive operation every time we're processing an object.
-		if err := declared.ValidateScope(string(managerScope)); err != nil {
-			// We don't care if the actual object's manager declaration is invalid.
-			// If it is and it's a managed object, we'll just overwrite it anyway.
-			// If it isn't actually managed, we'll show this message every time the
-			// object is updated - it is on the user to not mess with these annotations
-			// if they don't want to see the error message.
-			klog.Warningf("Invalid manager annotation %s=%q", metadata.ResourceManagerKey, manager)
-		}
-	}
-
-	if scope != declared.RootReconciler && managerScope == declared.RootReconciler {
-		// The namespace scope cannot manage root resources
+	oldManager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+	newManager := declared.ResourceManager(scope, syncName)
+	reconciler, _ := reconcilerName(newManager)
+	err := ValidateManager(reconciler, oldManager, core.IDOf(obj), op)
+	if err != nil {
+		klog.V(3).Infof("diff.CanManage? %v", err)
 		return false
 	}
-	if scope == declared.RootReconciler && managerScope != declared.RootReconciler {
-		// The root scope can always manage any namespace-scope managed resource.
-		return true
+	return true
+}
+
+// ValidateManager returns nil if the given reconciler is allowed to perform the
+// specified operation on the resource object with the specified id.
+//
+// It's not possible to parse a ReconcilerName into its component parts, because
+// R*Sync names and namespaces may include a dash, which is used as the delimiter.
+// But you CAN parse a manager name into scope (namespace) and name, and use that
+// to build a reconciler name. So we have to compare reconciler names instead of
+// manager names.
+func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Operation) error {
+	if manager == "" {
+		// All managers are allowed to manage an object without a specified manager
+		return nil
 	}
-	return manager == declared.ResourceManager(scope, syncName)
+
+	// TODO: Remove this check when we turn down the old importer deployment.
+	if isImporter(reconciler) {
+		// Config Sync importer (legacy) is allowed to manage any object.
+		return nil
+	}
+
+	if isReconcilerManager(reconciler) && op == admissionv1.Update &&
+		(id.GroupKind == kinds.RootSyncV1Beta1().GroupKind() ||
+			id.GroupKind == kinds.RepoSyncV1Beta1().GroupKind()) {
+		// ReconcilerManager is allowed to update RootSync/RepoSync to add/remove the finalizer
+		return nil
+	}
+
+	oldReconciler, syncScope := reconcilerName(manager)
+
+	if err := declared.ValidateScope(string(syncScope)); err != nil {
+		// All managers are allowed to manage an object with an invalid manager.
+		// But print a warning, because users shouldn't manually modify the manager.
+		klog.Warningf("Invalid manager annotation (object: %q, annotation: %s=%q)", id, metadata.ResourceManagerKey, manager)
+	}
+
+	if isRootReconciler(reconciler) && syncScope != declared.RootReconciler {
+		// RootReconciler is allowed to adopt an object as long as it's not
+		// managed by another RootReconciler.
+		return nil
+	}
+
+	if reconciler != oldReconciler {
+		return fmt.Errorf("config sync %q can not %s object %q managed by config sync %q",
+			reconciler, op, id, oldReconciler)
+	}
+	return nil
+}
+
+func reconcilerName(manager string) (string, declared.Scope) {
+	syncScope, syncName := declared.ManagerScopeAndName(manager)
+	var reconciler string
+	if syncScope == declared.RootReconciler {
+		reconciler = core.RootReconcilerName(syncName)
+	} else {
+		reconciler = core.NsReconcilerName(string(syncScope), syncName)
+	}
+	return reconciler, syncScope
+}
+
+func isImporter(reconcilerName string) bool {
+	return reconcilerName == saImporter
+}
+
+func isRootReconciler(reconcilerName string) bool {
+	return strings.HasPrefix(reconcilerName, saRootReconcilerPrefix)
+}
+
+func isReconcilerManager(reconcilerName string) bool {
+	return reconcilerName == saReconcilerManager
 }

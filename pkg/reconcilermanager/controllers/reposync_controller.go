@@ -39,7 +39,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
@@ -117,7 +116,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	r.repoSyncs[types.NamespacedName{Name: req.Name, Namespace: req.Namespace}] = struct{}{}
-	reconcilerName := reconciler.NsReconcilerName(rs.Namespace, rs.Name)
+	reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
 
 	if err = r.validateSpec(ctx, &rs, reconcilerName); err != nil {
 		log.Error(err, "RepoSync failed validation")
@@ -356,7 +355,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	// map the copied ns-reconciler Secret in the config-management-system to RepoSync request.
 	if secret.GetNamespace() == configsync.ControllerNamespace {
 		// Ignore secrets in the config-management-system namespace that don't start with ns-reconciler.
-		if !strings.HasPrefix(secret.GetName(), reconciler.NsReconcilerPrefix) {
+		if !strings.HasPrefix(secret.GetName(), core.NsReconcilerPrefix) {
 			return nil
 		}
 		allRepoSyncs := &v1beta1.RepoSyncList{}
@@ -367,7 +366,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 		for _, rs := range allRepoSyncs.Items {
 			// It is a one-to-one mapping between the copied ns-reconciler Secret and the RepoSync object,
 			// so requeue the mapped RepoSync object and then return.
-			reconcilerName := reconciler.NsReconcilerName(rs.GetNamespace(), rs.GetName())
+			reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 			isGitSecret := rs.Spec.SourceType == string(v1beta1.GitSource) && rs.Spec.Git != nil &&
 				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
 			if isGitSecret {
@@ -436,7 +435,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 	// Ignore changes from resources without the ns-reconciler prefix or configsync.gke.io:ns-reconciler
 	// because all the generated resources have the prefix.
 	nsRoleBindingName := RepoSyncPermissionsName()
-	if !strings.HasPrefix(obj.GetName(), reconciler.NsReconcilerPrefix) && obj.GetName() != nsRoleBindingName {
+	if !strings.HasPrefix(obj.GetName(), core.NsReconcilerPrefix) && obj.GetName() != nsRoleBindingName {
 		return nil
 	}
 
@@ -452,7 +451,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 	var requests []reconcile.Request
 	var attachedRSNames []string
 	for _, rs := range allRepoSyncs.Items {
-		reconcilerName := reconciler.NsReconcilerName(rs.GetNamespace(), rs.GetName())
+		reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.RoleBinding:
 			if obj.GetName() == nsRoleBindingName {
@@ -604,7 +603,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RepoSy
 		if !ok {
 			return errors.Errorf("expected appsv1 Deployment, got: %T", obj)
 		}
-		reconcilerName := reconciler.NsReconcilerName(rs.Namespace, rs.Name)
+		reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
 
 		// Only inject the FWI credentials when the auth type is gcpserviceaccount and the membership info is available.
 		var auth string

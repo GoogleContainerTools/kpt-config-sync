@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/diff"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -81,32 +82,6 @@ func (v *Validator) Handle(_ context.Context, req admission.Request) admission.R
 		return allow()
 	}
 
-	username := req.UserInfo.Username
-	// Check UserInfo for Config Sync service account and handle if found.
-	if isConfigSyncSA(req.UserInfo) {
-		if isImporter(username) {
-			// Config Sync importer can always update a resource.
-			return allow()
-		}
-		// Perform manager precedence check to verify this Config Sync reconciler
-		// can manage the object.
-		mgr, oldObj, err := objectManager(req)
-		if err != nil {
-			klog.Error(err.Error())
-			return allow()
-		}
-		if canManage(username, mgr) {
-			return allow()
-		}
-		klog.Errorf("%s can not manage object %q which is already managed by %s", username, core.GKNN(oldObj), mgr)
-		return deny(metav1.StatusReasonUnauthorized, fmt.Sprintf("%s can not manage object %q which is already managed by %s", username, core.GKNN(oldObj), mgr))
-	}
-
-	// Handle the requests for ResourceGroup CRs.
-	if isResourceGroupRequest(req) {
-		return handleResourceGroupRequest(req)
-	}
-
 	// Convert to client.Objects for convenience.
 	oldObj, newObj, err := convertObjects(req)
 	if err != nil {
@@ -114,6 +89,26 @@ func (v *Validator) Handle(_ context.Context, req admission.Request) admission.R
 		return allow()
 	}
 
+	// Check UserInfo for Config Sync service account and handle if found.
+	if isConfigSyncSA(req.UserInfo) {
+		username := configSyncSAName(req.UserInfo)
+		manager := objectManager(oldObj, newObj)
+		id := objectID(oldObj, newObj)
+		// TODO: validate managed=enabled?
+		err = diff.ValidateManager(username, manager, id, req.Operation)
+		if err != nil {
+			klog.Error(err.Error())
+			return deny(metav1.StatusReasonUnauthorized, err.Error())
+		}
+		return allow()
+	}
+
+	// Handle the requests for ResourceGroup CRs.
+	if isResourceGroupRequest(req) {
+		return handleResourceGroupRequest(req)
+	}
+
+	username := req.UserInfo.Username
 	switch req.Operation {
 	case admissionv1.Create:
 		return v.handleCreate(newObj, username)
@@ -234,16 +229,19 @@ func convertObjects(req admission.Request) (client.Object, client.Object, error)
 	return oldObj, newObj, nil
 }
 
-func objectManager(req admission.Request) (string, client.Object, error) {
-	oldObj, newObj, err := convertObjects(req)
-	if err != nil {
-		return "", nil, err
-	}
+func objectManager(oldObj, newObj client.Object) string {
 	mgr := getManager(oldObj)
 	if mgr == "" {
 		mgr = getManager(newObj)
 	}
-	return mgr, oldObj, nil
+	return mgr
+}
+
+func objectID(oldObj, newObj client.Object) core.ID {
+	if oldObj != nil {
+		return core.IDOf(oldObj)
+	}
+	return core.IDOf(newObj)
 }
 
 func getManager(obj client.Object) string {

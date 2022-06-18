@@ -39,7 +39,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
@@ -118,7 +117,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		rs.UID,
 	)
 
-	reconcilerName := reconciler.RootReconcilerName(rs.Name)
+	reconcilerName := core.RootReconcilerName(rs.Name)
 
 	if err = r.validateSpec(ctx, &rs, log); err != nil {
 		log.Error(err, "RootSync failed validation")
@@ -336,7 +335,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 	}
 
 	// Ignore secret starts with ns-reconciler prefix because those are for RepoSync objects.
-	if strings.HasPrefix(secret.GetName(), reconciler.NsReconcilerPrefix+"-") {
+	if strings.HasPrefix(secret.GetName(), core.NsReconcilerPrefix+"-") {
 		return nil
 	}
 
@@ -492,7 +491,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RootSy
 				rs.UID,
 			),
 		}
-		reconcilerName := reconciler.RootReconcilerName(rs.Name)
+		reconcilerName := core.RootReconcilerName(rs.Name)
 
 		// Only inject the FWI credentials when the auth type is gcpserviceaccount and the membership info is available.
 		var auth string

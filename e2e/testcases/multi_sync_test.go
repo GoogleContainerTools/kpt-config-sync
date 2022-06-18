@@ -42,7 +42,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -232,7 +231,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(reconciler.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name), "sync")
+		return nt.ValidateReconcilerErrors(core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name), "sync")
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -291,7 +290,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nsReconcilerName := reconciler.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
+	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
 	// Validate multi-repo metrics from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nsReconcilerName, 1, metrics.ResourceCreated("Role"))
@@ -433,7 +432,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	roleResourceVersion := role.ResourceVersion
 
 	// Validate multi-repo metrics from namespace reconciler.
-	nsReconcilerName1 := reconciler.NsReconcilerName(repoSyncNN1.Namespace, repoSyncNN1.Name)
+	nsReconcilerName1 := core.NsReconcilerName(repoSyncNN1.Namespace, repoSyncNN1.Name)
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		var err error
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
@@ -472,7 +471,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn(), nomostest.RepoSyncHasStatusSyncCommit, nil)
 
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
-	nsReconcilerName2 := reconciler.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
+	nsReconcilerName2 := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateReconcilerErrors(nsReconcilerName2, "sync")
 	})

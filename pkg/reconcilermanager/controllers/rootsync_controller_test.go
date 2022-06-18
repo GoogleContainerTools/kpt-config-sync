@@ -38,7 +38,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -58,7 +57,7 @@ const (
 	rootsyncSSHKey = "root-ssh-key"
 )
 
-var rootReconcilerName = reconciler.RootReconcilerName(rootsyncName)
+var rootReconcilerName = core.RootReconcilerName(rootsyncName)
 
 func clusterrolebinding(name, reconcilerName string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
 	result := fake.ClusterRoleBindingObject(opts...)
@@ -1042,10 +1041,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	fakeClient, testReconciler := setupRootReconciler(t, rs1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, core.Namespace(rs1.Namespace)))
 
-	rootReconcilerName2 := reconciler.RootReconcilerName(rs2.Name)
-	rootReconcilerName3 := reconciler.RootReconcilerName(rs3.Name)
-	rootReconcilerName4 := reconciler.RootReconcilerName(rs4.Name)
-	rootReconcilerName5 := reconciler.RootReconcilerName(rs5.Name)
+	rootReconcilerName2 := core.RootReconcilerName(rs2.Name)
+	rootReconcilerName3 := core.RootReconcilerName(rs3.Name)
+	rootReconcilerName4 := core.RootReconcilerName(rs4.Name)
+	rootReconcilerName5 := core.RootReconcilerName(rs5.Name)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1446,22 +1445,22 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A secret from the %s namespace starting with %s", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(fmt.Sprintf("%s-bookstore", reconciler.NsReconcilerPrefix), core.Namespace(configsync.ControllerNamespace)),
+			name:   fmt.Sprintf("A secret from the %s namespace starting with %s", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			secret: fake.SecretObject(fmt.Sprintf("%s-bookstore", core.NsReconcilerPrefix), core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A secret 'any' from the %s namespace NOT starting with %s, no mapping RootSync", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A secret 'any' from the %s namespace NOT starting with %s, no mapping RootSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject("any", core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", rootsyncSSHKey, configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", rootsyncSSHKey, configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject(rootsyncSSHKey, core.Namespace(configsync.ControllerNamespace)),
 			want:   expectedRequests(rootsyncSSHKey),
 		},
 		{
-			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", testSecretName, configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", testSecretName, configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject(testSecretName, core.Namespace(configsync.ControllerNamespace)),
 			want:   expectedRequests(testSecretName),
 		},

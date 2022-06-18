@@ -25,8 +25,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -54,7 +54,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	}
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -85,7 +85,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -118,7 +118,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -131,7 +131,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -166,7 +166,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	}
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -197,7 +197,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -230,7 +230,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -243,7 +243,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(reconciler.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
+		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
 	})
 	if err != nil {
 		nt.T.Fatal(err)

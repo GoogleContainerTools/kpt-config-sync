@@ -19,6 +19,7 @@ package diff
 import (
 	"context"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
@@ -121,7 +122,7 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 	// We don't need to check for owner references here since that would be a
 	// nomos vet error. Note that as-is, it is valid to declare something owned by
 	// another object, possible causing (and being surfaced as) a resource fight.
-	canManage := CanManage(scope, syncName, d.Actual)
+	canManage := CanManage(scope, syncName, d.Actual, admissionv1.Update)
 	switch {
 	case differ.ManagementEnabled(d.Declared) && canManage:
 		if d.Actual.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation &&
@@ -170,7 +171,7 @@ func (d Diff) deleteType(scope declared.Scope, syncName string) Operation {
 		// This object is owned by something else.
 		// It may be copying our metadata, so we don't have anything to check.
 		return NoOp
-	case !CanManage(scope, syncName, d.Actual):
+	case !CanManage(scope, syncName, d.Actual, admissionv1.Delete):
 		// We can't manage this and there isn't a competing declaration for it so,
 		// nothing to do.
 		return NoOp

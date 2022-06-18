@@ -29,8 +29,8 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/importer"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -649,21 +649,21 @@ func validatorForTest(t *testing.T) *Validator {
 func configSyncImporter() authenticationv1.UserInfo {
 	return authenticationv1.UserInfo{
 		Groups:   []string{saGroup, saNamespaceGroup},
-		Username: saImporter,
+		Username: importer.Name,
 	}
 }
 
 func configSyncRootReconciler(rsName string) authenticationv1.UserInfo {
 	return authenticationv1.UserInfo{
 		Groups:   []string{saGroup, saNamespaceGroup},
-		Username: saNamespaceGroupPrefix + ":" + reconciler.RootReconcilerName(rsName),
+		Username: saNamespaceGroupPrefix + core.RootReconcilerName(rsName),
 	}
 }
 
 func configSyncNamespaceReconciler(ns, rsName string) authenticationv1.UserInfo {
 	return authenticationv1.UserInfo{
 		Groups:   []string{saGroup, saNamespaceGroup},
-		Username: saNamespaceGroupPrefix + ":" + reconciler.NsReconcilerName(ns, rsName),
+		Username: saNamespaceGroupPrefix + core.NsReconcilerName(ns, rsName),
 	}
 }
 

@@ -447,7 +447,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		return false
 	}
 
-	if !diff.CanManage(w.scope, w.syncName, object) {
+	if !diff.CanManage(w.scope, w.syncName, object, diff.OperationManage) {
 		w.SetManagementConflict(object)
 		return false
 	}

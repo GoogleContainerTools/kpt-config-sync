@@ -47,7 +47,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/monitor/state"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
@@ -83,7 +82,7 @@ var (
 	multiConfigMaps = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, multiConfigMapsName)
 
 	// clusterRoleName is the ClusterRole used by Namespace Reconciler.
-	clusterRoleName = fmt.Sprintf("%s:%s", configsync.GroupName, reconciler.NsReconcilerPrefix)
+	clusterRoleName = fmt.Sprintf("%s:%s", configsync.GroupName, core.NsReconcilerPrefix)
 
 	templates = []string{
 		"admission-webhook.yaml",
@@ -585,7 +584,7 @@ func repoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
 	sb := []rbacv1.Subject{
 		{
 			Kind:      "ServiceAccount",
-			Name:      reconciler.NsReconcilerName(nn.Namespace, nn.Name),
+			Name:      core.NsReconcilerName(nn.Namespace, nn.Name),
 			Namespace: configmanagement.ControllerNamespace,
 		},
 	}
@@ -606,7 +605,7 @@ func repoSyncClusterRoleBinding(nn types.NamespacedName) *rbacv1.ClusterRoleBind
 	sb := []rbacv1.Subject{
 		{
 			Kind:      "ServiceAccount",
-			Name:      reconciler.NsReconcilerName(nn.Namespace, nn.Name),
+			Name:      core.NsReconcilerName(nn.Namespace, nn.Name),
 			Namespace: configmanagement.ControllerNamespace,
 		},
 	}
@@ -771,7 +770,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 
 	// Validate multi-repo metrics in root reconcilers.
 	for rsName := range opts.RootRepos {
-		rootReconciler := reconciler.RootReconcilerName(rsName)
+		rootReconciler := core.RootReconcilerName(rsName)
 		if err := waitForReconciler(nt, rootReconciler); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -789,7 +788,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 	}
 
 	for nn := range opts.NamespaceRepos {
-		nsReconciler := reconciler.NsReconcilerName(nn.Namespace, nn.Name)
+		nsReconciler := core.NsReconcilerName(nn.Namespace, nn.Name)
 		if err := waitForReconciler(nt, nsReconciler); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -1166,7 +1165,7 @@ func deleteRootRepos(nt *NT) {
 		if err := nt.Delete(&rs); err != nil {
 			nt.T.Fatal(err)
 		}
-		WaitToTerminate(nt, kinds.Deployment(), reconciler.RootReconcilerName(rs.Name), rs.Namespace)
+		WaitToTerminate(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace)
 		WaitToTerminate(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
 	}
 }

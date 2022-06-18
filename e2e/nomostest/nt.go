@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 
@@ -51,7 +52,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -145,7 +145,7 @@ const (
 )
 
 // DefaultRootReconcilerName is the root-reconciler name of the default RootSync object: "root-sync".
-var DefaultRootReconcilerName = reconciler.RootReconcilerName(configsync.RootSyncName)
+var DefaultRootReconcilerName = core.RootReconcilerName(configsync.RootSyncName)
 
 // RootSyncNN returns the NamespacedName of the RootSync object.
 func RootSyncNN(name string) types.NamespacedName {
@@ -440,12 +440,12 @@ func (nt *NT) ValidateErrorMetricsNotFound() error {
 			return err
 		}
 		for name := range nt.RootRepos {
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(reconciler.RootReconcilerName(name)); err != nil {
+			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(core.RootReconcilerName(name)); err != nil {
 				return err
 			}
 		}
 		for nn := range nt.NonRootRepos {
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(reconciler.NsReconcilerName(nn.Namespace, nn.Name)); err != nil {
+			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(core.NsReconcilerName(nn.Namespace, nn.Name)); err != nil {
 				return err
 			}
 		}
@@ -786,7 +786,7 @@ func (nt *NT) testLogs(previousPodLog bool) {
 		nt.PodLogs(configmanagement.ControllerNamespace, DefaultRootReconcilerName, reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, DefaultRootReconcilerName, reconcilermanager.GitSync, previousPodLog)
 		for nn := range nt.NonRootRepos {
-			nt.PodLogs(configmanagement.ControllerNamespace, reconciler.NsReconcilerName(nn.Namespace, nn.Name),
+			nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
 				reconcilermanager.Reconciler, previousPodLog)
 			//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
 		}

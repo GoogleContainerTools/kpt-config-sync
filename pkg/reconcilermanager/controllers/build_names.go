@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/reconciler"
+	"kpt.dev/configsync/pkg/core"
 )
 
 // ReconcilerResourceName returns resource name in the format <reconciler-name>-<resource-name>.
@@ -29,11 +29,11 @@ func ReconcilerResourceName(reconcilerName, resourceName string) string {
 // RepoSyncPermissionsName returns namespace reconciler permissions name.
 // e.g. configsync.gke.io:ns-reconciler
 func RepoSyncPermissionsName() string {
-	return fmt.Sprintf("%s:%s", configsync.GroupName, reconciler.NsReconcilerPrefix)
+	return fmt.Sprintf("%s:%s", configsync.GroupName, core.NsReconcilerPrefix)
 }
 
 // RootSyncPermissionsName returns root reconciler permissions name.
 // e.g. configsync.gke.io:root-reconciler
 func RootSyncPermissionsName() string {
-	return fmt.Sprintf("%s:%s", configsync.GroupName, reconciler.RootReconcilerPrefix)
+	return fmt.Sprintf("%s:%s", configsync.GroupName, core.RootReconcilerPrefix)
 }

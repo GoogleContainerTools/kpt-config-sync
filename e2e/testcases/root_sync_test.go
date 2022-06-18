@@ -29,9 +29,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,7 +86,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 		failNow = true
 	}
 	// validate Root Reconciler ServiceAccount is no longer present.
-	saName := reconciler.RootReconcilerName(rs.Name)
+	saName := core.RootReconcilerName(rs.Name)
 	if err = nt.ValidateNotFound(saName, v1.NSConfigManagementSystem, fake.ServiceAccountObject(saName)); err != nil {
 		nt.T.Error(err)
 		failNow = true

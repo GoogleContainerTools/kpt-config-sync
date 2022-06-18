@@ -29,8 +29,8 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,7 +41,7 @@ import (
 //
 // NOTE: Update this method when resources created by namespace controller changes.
 func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, ns, rsName string) error {
-	reconcilerName := reconciler.NsReconcilerName(ns, rsName)
+	reconcilerName := core.NsReconcilerName(ns, rsName)
 	r.log.Info("Cleaning up namespace controller resources", "reconcilerName", reconcilerName)
 
 	reposyncList := &v1beta1.RepoSyncList{}
@@ -148,7 +148,7 @@ func (r *RepoSyncReconciler) deleteDeployment(ctx context.Context, reconcilerNam
 func (r *RepoSyncReconciler) updateRoleBindingSubjects(rb *rbacv1.RoleBinding, rsList *v1beta1.RepoSyncList) error {
 	var subjects []rbacv1.Subject
 	for _, rs := range rsList.Items {
-		subjects = append(subjects, subject(reconciler.NsReconcilerName(rs.Namespace, rs.Name),
+		subjects = append(subjects, subject(core.NsReconcilerName(rs.Namespace, rs.Name),
 			configsync.ControllerNamespace,
 			"ServiceAccount"))
 	}
@@ -197,7 +197,7 @@ func (r *RootSyncReconciler) cleanup(ctx context.Context, name string, gvk schem
 func (r *RootSyncReconciler) updateClusterRoleBindingSubjects(crb *rbacv1.ClusterRoleBinding, rsList *v1beta1.RootSyncList) error {
 	var subjects []rbacv1.Subject
 	for _, rs := range rsList.Items {
-		subjects = append(subjects, subject(reconciler.RootReconcilerName(rs.Name),
+		subjects = append(subjects, subject(core.RootReconcilerName(rs.Name),
 			configsync.ControllerNamespace,
 			"ServiceAccount"))
 	}

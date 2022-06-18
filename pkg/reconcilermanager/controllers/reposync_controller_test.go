@@ -41,7 +41,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -74,7 +73,7 @@ const (
 // Set in init.
 var filesystemPollingPeriod time.Duration
 var hydrationPollingPeriod time.Duration
-var nsReconcilerName = reconciler.NsReconcilerName(reposyncNs, reposyncName)
+var nsReconcilerName = core.NsReconcilerName(reposyncNs, reposyncName)
 
 var parsedDeployment = func(de *appsv1.Deployment) error {
 	de.TypeMeta = fake.ToTypeMeta(kinds.Deployment())
@@ -1082,10 +1081,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 
 	fakeClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, core.Namespace(rs1.Namespace)))
 
-	nsReconcilerName2 := reconciler.NsReconcilerName(rs2.Namespace, rs2.Name)
-	nsReconcilerName3 := reconciler.NsReconcilerName(rs3.Namespace, rs3.Name)
-	nsReconcilerName4 := reconciler.NsReconcilerName(rs4.Namespace, rs4.Name)
-	nsReconcilerName5 := reconciler.NsReconcilerName(rs5.Namespace, rs5.Name)
+	nsReconcilerName2 := core.NsReconcilerName(rs2.Namespace, rs2.Name)
+	nsReconcilerName3 := core.NsReconcilerName(rs3.Namespace, rs3.Name)
+	nsReconcilerName4 := core.NsReconcilerName(rs4.Namespace, rs4.Name)
+	nsReconcilerName5 := core.NsReconcilerName(rs5.Namespace, rs5.Name)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1505,7 +1504,7 @@ func validateGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.Clie
 		t.Error(err)
 	}
 	// Verify the copied secret is deleted for RepoSync.
-	if strings.HasPrefix(reconcilerName, reconciler.NsReconcilerPrefix) {
+	if strings.HasPrefix(reconcilerName, core.NsReconcilerPrefix) {
 		s := fake.SecretObject(ReconcilerResourceName(reconcilerName, secretRefName), core.Namespace(configsync.ControllerNamespace))
 		if err := validateResourceDeleted(core.IDOf(s), fakeClient); err != nil {
 			t.Error(err)
@@ -1519,7 +1518,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	rs2 := repoSync("ns1", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rs3 := repoSync("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(testSecretName))
 
-	ns1rs1ReconcilerName := reconciler.NsReconcilerName(rs1.Namespace, rs1.Name)
+	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	serviceAccountToken := ns1rs1ReconcilerName + "-token-p29b5"
 	serviceAccount := fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(configsync.ControllerNamespace))
 	serviceAccount.Secrets = []corev1.ObjectReference{{Name: serviceAccountToken}}
@@ -1535,21 +1534,21 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A secret from the %s namespace NOT starting with %s", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A secret from the %s namespace NOT starting with %s", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject("s1", core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, but no corresponding RepoSync",
-				configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(reconciler.NsReconcilerName("any-ns", "any-rs"), reposyncSSHKey),
+				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			secret: fake.SecretObject(ReconcilerResourceName(core.NsReconcilerName("any-ns", "any-rs"), reposyncSSHKey),
 				core.Namespace(configsync.ControllerNamespace),
 			),
 			want: nil,
 		},
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, with a mapping RepoSync",
-				configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject(ReconcilerResourceName(ns1rs1ReconcilerName, reposyncSSHKey),
 				core.Namespace(configsync.ControllerNamespace),
 			),
@@ -1563,14 +1562,14 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 			},
 		},
 		{
-			name: fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, but no service account", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name: fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, but no service account", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject(ns1rs1ReconcilerName+"-token-123456",
 				core.Namespace(configsync.ControllerNamespace),
 			),
 			want: nil,
 		},
 		{
-			name:   fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, with a mapping service account", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, with a mapping service account", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			secret: fake.SecretObject(serviceAccountToken, core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{
@@ -1643,7 +1642,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 
 func TestMapObjectToRepoSync(t *testing.T) {
 	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
-	ns1rs1ReconcilerName := reconciler.NsReconcilerName(rs1.Namespace, rs1.Name)
+	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	rs2 := repoSync("ns2", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rsRoleBindingName := RepoSyncPermissionsName()
 
@@ -1659,17 +1658,17 @@ func TestMapObjectToRepoSync(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A deployment from the %s namespace NOT starting with %s", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A deployment from the %s namespace NOT starting with %s", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			object: fake.DeploymentObject(core.Name("deploy1"), core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, no mapping RepoSync", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
-			object: fake.DeploymentObject(core.Name(reconciler.NsReconcilerName("any", "any")), core.Namespace(configsync.ControllerNamespace)),
+			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, no mapping RepoSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			object: fake.DeploymentObject(core.Name(core.NsReconcilerName("any", "any")), core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, with mapping RepoSync", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, with mapping RepoSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			object: fake.DeploymentObject(core.Name(ns1rs1ReconcilerName), core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{
@@ -1687,17 +1686,17 @@ func TestMapObjectToRepoSync(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A serviceaccount from the %s namespace NOT starting with %s", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A serviceaccount from the %s namespace NOT starting with %s", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			object: fake.ServiceAccountObject("sa1", core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, no mapping RepoSync", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
-			object: fake.ServiceAccountObject(reconciler.NsReconcilerName("any", "any"), core.Namespace(configsync.ControllerNamespace)),
+			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, no mapping RepoSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			object: fake.ServiceAccountObject(core.NsReconcilerName("any", "any"), core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, with mapping RepoSync", configsync.ControllerNamespace, reconciler.NsReconcilerPrefix+"-"),
+			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, with mapping RepoSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
 			object: fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{

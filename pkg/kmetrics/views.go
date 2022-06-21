@@ -99,7 +99,7 @@ var (
 		Name:        KustomizeResourceCount.Name(),
 		Measure:     KustomizeResourceCount,
 		Description: "The number of resources outputted by `kustomize build`",
-		Aggregation: view.Sum(),
+		Aggregation: view.LastValue(),
 	}
 
 	// KustomizeExecutionTimeView is the execution time of `kustomize build`

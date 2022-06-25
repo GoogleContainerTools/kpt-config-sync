@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
@@ -457,7 +458,7 @@ func validateMonoRepoDeployments(nt *NT) error {
 func validateMultiRepoDeployments(nt *NT) error {
 	for name := range nt.RootRepos {
 		// Create a RootSync to initialize the root reconciler.
-		rs := RootSyncObjectV1Beta1(name, nt.GitProvider.SyncURL(nt.RootRepos[name].RemoteRepoName), nt.RootRepos[name].Format)
+		rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
 		if err := nt.Create(rs); err != nil {
 			if !apierrors.IsAlreadyExists(err) {
 				nt.T.Fatal(err)
@@ -465,22 +466,23 @@ func validateMultiRepoDeployments(nt *NT) error {
 		}
 	}
 
-	deployments := []client.ObjectKey{
-		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace},
-		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace},
-		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace},
-		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace},
+	deployments := map[client.ObjectKey]time.Duration{
+		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}: nt.DefaultWaitTimeout,
+		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:     nt.DefaultWaitTimeout,
+		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout * 2,
+		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:              nt.DefaultWaitTimeout,
 	}
 
 	var wg sync.WaitGroup
 	errCh := make(chan error)
 
 	// Wait for deployments asynchronously, for more accurate time reporting.
-	for _, deployment := range deployments {
+	for deployment, timeout := range deployments {
 		wg.Add(1)
+		timeoutCopy := timeout // copy loop var for use in goroutine
 		go func(key client.ObjectKey) {
 			defer wg.Done()
-			took, err := Retry(nt.DefaultWaitTimeout, func() error {
+			took, err := Retry(timeoutCopy, func() error {
 				return nt.Validate(key.Name, key.Namespace,
 					&appsv1.Deployment{}, isAvailableDeployment)
 			})
@@ -520,12 +522,8 @@ func validateMultiRepoDeployments(nt *NT) error {
 }
 
 func setupRootSync(nt *NT, rsName string) {
-	repo, exist := nt.RootRepos[rsName]
-	if !exist {
-		nt.T.Fatal("nonexistent root repo")
-	}
 	// create RootSync to initialize the root reconciler.
-	rs := RootSyncObjectV1Beta1(rsName, nt.GitProvider.SyncURL(repo.RemoteRepoName), nt.RootRepos[rsName].Format)
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
 	if err := nt.Create(rs); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			nt.T.Fatal(err)
@@ -534,12 +532,8 @@ func setupRootSync(nt *NT, rsName string) {
 }
 
 func setupRepoSync(nt *NT, nn types.NamespacedName) {
-	repo, exist := nt.NonRootRepos[nn]
-	if !exist {
-		nt.T.Fatal("nonexistent repo")
-	}
 	// create RepoSync to initialize the Namespace reconciler.
-	rs := RepoSyncObjectV1Beta1(nn.Namespace, nn.Name, nt.GitProvider.SyncURL(repo.RemoteRepoName))
+	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	if err := nt.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -820,6 +814,22 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 	return rs
 }
 
+// RootSyncObjectV1Alpha1FromRootRepo returns a v1alpha1 RootSync object which
+// uses a repo from nt.RootRepos.
+func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync {
+	repo, found := nt.RootRepos[name]
+	if !found {
+		nt.T.Fatal("nonexistent root repo")
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	sourceFormat := repo.Format
+	rs := RootSyncObjectV1Alpha1(name, repoURL, sourceFormat)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	return rs
+}
+
 // RootSyncObjectV1Beta1 returns the default RootSync object with version v1beta1.
 func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
@@ -837,14 +847,31 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 	return rs
 }
 
+// RootSyncObjectV1Beta1FromRootRepo returns a v1beta1 RootSync object which
+// uses a repo from nt.RootRepos.
+func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
+	repo, found := nt.RootRepos[name]
+	if !found {
+		nt.T.Fatal("nonexistent root repo")
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	sourceFormat := repo.Format
+	rs := RootSyncObjectV1Beta1(name, repoURL, sourceFormat)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	return rs
+}
+
 // StructuredNSPath returns structured path with namespace and resourcename in repo.
 func StructuredNSPath(namespace, resourceName string) string {
 	return fmt.Sprintf("acme/namespaces/%s/%s.yaml", namespace, resourceName)
 }
 
 // RepoSyncObjectV1Alpha1 returns the default RepoSync object in the given namespace.
-func RepoSyncObjectV1Alpha1(ns, name, repoURL string) *v1alpha1.RepoSync {
-	rs := fake.RepoSyncObjectV1Alpha1(ns, name)
+// SourceFormat for RepoSync must be Unstructured (default), so it's left unspecified.
+func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.RepoSync {
+	rs := fake.RepoSyncObjectV1Alpha1(nn.Namespace, nn.Name)
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
@@ -858,10 +885,27 @@ func RepoSyncObjectV1Alpha1(ns, name, repoURL string) *v1alpha1.RepoSync {
 	return rs
 }
 
+// RepoSyncObjectV1Alpha1FromNonRootRepo returns a v1alpha1 RepoSync object which
+// uses a repo from nt.NonRootRepos.
+func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1alpha1.RepoSync {
+	repo, found := nt.NonRootRepos[nn]
+	if !found {
+		nt.T.Fatal("nonexistent non-root repo")
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	// RepoSync is always Unstructured. So ignore repo.Format.
+	rs := RepoSyncObjectV1Alpha1(nn, repoURL)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	return rs
+}
+
 // RepoSyncObjectV1Beta1 returns the default RepoSync object
 // with version v1beta1 in the given namespace.
-func RepoSyncObjectV1Beta1(ns, name, repoURL string) *v1beta1.RepoSync {
-	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RepoSync {
+	rs := fake.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
+	rs.Spec.SourceFormat = string(sourceFormat)
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
@@ -871,6 +915,22 @@ func RepoSyncObjectV1Beta1(ns, name, repoURL string) *v1beta1.RepoSync {
 		SecretRef: v1beta1.SecretReference{
 			Name: "ssh-key",
 		},
+	}
+	return rs
+}
+
+// RepoSyncObjectV1Beta1FromNonRootRepo returns a v1beta1 RepoSync object which
+// uses a repo from nt.NonRootRepos.
+func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1beta1.RepoSync {
+	repo, found := nt.NonRootRepos[nn]
+	if !found {
+		nt.T.Fatal("nonexistent non-root repo")
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	sourceFormat := repo.Format
+	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -885,11 +945,10 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		if rsName == configsync.RootSyncName {
 			continue
 		}
-		repo, exist := nt.RootRepos[rsName]
-		if !exist {
-			nt.T.Fatal("nonexistent root repo")
+		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
+		if opts.MultiRepo.ReconcileTimeout != nil {
+			rs.Spec.Override.ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
-		rs := RootSyncObjectV1Beta1(rsName, nt.GitProvider.SyncURL(repo.RemoteRepoName), nt.RootRepos[rsName].Format)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
 	}
@@ -916,11 +975,10 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
 		}
 
-		repo, exist := nt.NonRootRepos[nn]
-		if !exist {
-			nt.T.Fatal("nonexistent repo")
+		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+		if opts.MultiRepo.ReconcileTimeout != nil {
+			rs.Spec.Override.ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
-		rs := RepoSyncObjectV1Beta1(ns, nn.Name, nt.GitProvider.SyncURL(repo.RemoteRepoName))
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, nn.Name), rs)
 
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
@@ -1136,7 +1194,7 @@ func resetNamespaceRepos(nt *NT) {
 				if apierrors.IsNotFound(err) {
 					// The RepoSync might be declared in other namespace repos and get pruned in the reset process.
 					// If that happens, re-create the object to clean up the managed testing resources.
-					rs := RepoSyncObjectV1Beta1(nn.Namespace, nn.Name, nt.GitProvider.SyncURL(nt.NonRootRepos[nn].RemoteRepoName))
+					rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 					if err := nt.Create(rs); err != nil {
 						nt.T.Fatal(err)
 					}
@@ -1202,5 +1260,11 @@ func SetPolicyDir(nt *NT, name, policyDir string) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, policyDir))
 	} else {
 		ResetMonoRepoSpec(nt, filesystem.SourceFormatHierarchy, policyDir)
+	}
+}
+
+func toMetav1Duration(t time.Duration) *metav1.Duration {
+	return &metav1.Duration{
+		Duration: t,
 	}
 }

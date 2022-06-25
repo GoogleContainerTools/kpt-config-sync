@@ -62,11 +62,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
 
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
-	repo, exist := nt.NonRootRepos[nn]
-	if !exist {
-		nt.T.Fatal("nonexistent repo")
-	}
-	rs := nomostest.RepoSyncObjectV1Beta1(namespaceRepo, configsync.RepoSyncName, nt.GitProvider.SyncURL(repo.RemoteRepoName))
+	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Branch = "invalid-branch"
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to invalid branch name")

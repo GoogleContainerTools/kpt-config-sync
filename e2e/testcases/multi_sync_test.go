@@ -95,56 +95,56 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, "", filesystem.SourceFormatUnstructured)
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
-	rs2 := nomostest.RootSyncObjectV1Alpha1(rr2, nt.GitProvider.SyncURL(rr2Repo.RemoteRepoName), filesystem.SourceFormatUnstructured)
+	nt.RootRepos[rr2] = rr2Repo
+	rs2 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr2)
 	rs2ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr2)
 	nt.RootRepos[configsync.RootSyncName].Add(rs2ConfigFile, rs2)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rr2)
-	nt.RootRepos[rr2] = rr2Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr2.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr3, rr2)
-	rs3 := nomostest.RootSyncObjectV1Alpha1(rr3, nt.GitProvider.SyncURL(rr3Repo.RemoteRepoName), filesystem.SourceFormatUnstructured)
+	nt.RootRepos[rr3] = rr3Repo
+	rs3 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr3)
 	rs3ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr3)
 	nt.RootRepos[rr2].Add(rs3ConfigFile, rs3)
 	nt.RootRepos[rr2].CommitAndPush("Adding RootSync: " + rr3)
-	nt.RootRepos[rr3] = rr3Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr3.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Create RepoSync %s", nn2)
-	nrs2 := nomostest.RepoSyncObjectV1Alpha1(nn2.Namespace, nn2.Name, nt.GitProvider.SyncURL(nn2Repo.RemoteRepoName))
+	nt.NonRootRepos[nn2] = nn2Repo
+	nrs2 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn2)
 	if err := nt.Create(nrs2); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.NonRootRepos[nn2] = nn2Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr2.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn3, configsync.RootSyncName)
-	nrs3 := nomostest.RepoSyncObjectV1Alpha1(nn3.Namespace, nn3.Name, nt.GitProvider.SyncURL(nn3Repo.RemoteRepoName))
+	nt.NonRootRepos[nn3] = nn3Repo
+	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn3)
 	nrs3ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name)
 	nt.RootRepos[configsync.RootSyncName].Add(nrs3ConfigFile, nrs3)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSync: " + nn3.String())
-	nt.NonRootRepos[nn3] = nn3Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr3.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", nn4, nn2)
-	nrs4 := nomostest.RepoSyncObjectV1Alpha1(nn4.Namespace, nn4.Name, nt.GitProvider.SyncURL(nn4Repo.RemoteRepoName))
+	nt.NonRootRepos[nn4] = nn4Repo
+	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn4)
 	nrs4ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name)
 	nt.NonRootRepos[nn2].Add(nrs4ConfigFile, nrs4)
 	nt.NonRootRepos[nn2].CommitAndPush("Adding RepoSync: " + nn4.String())
-	nt.NonRootRepos[nn4] = nn4Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr4.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn5, rr1)
-	nrs5 := nomostest.RepoSyncObjectV1Beta1(nn5.Namespace, nn5.Name, nt.GitProvider.SyncURL(nn5Repo.RemoteRepoName))
+	nt.NonRootRepos[nn5] = nn5Repo
+	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn5)
 	nrs5ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name)
 	nt.RootRepos[rr1].Add(nrs5ConfigFile, nrs5)
 	nt.RootRepos[rr1].CommitAndPush("Adding RepoSync: " + nn5.String())
-	nt.NonRootRepos[nn5] = nn5Repo
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr5.
 	nt.WaitForRepoSyncs()
 
@@ -526,7 +526,8 @@ func TestControllerValidationErrors(t *testing.T) {
 		}
 	})
 
-	rs := nomostest.RepoSyncObjectV1Beta1(configsync.ControllerNamespace, configsync.RepoSyncName, "")
+	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
+	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", filesystem.SourceFormatUnstructured)
 	if err := nt.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -545,7 +546,8 @@ func TestControllerValidationErrors(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	})
-	rs = nomostest.RepoSyncObjectV1Beta1(syncNsTooLong.Name, syncNameTooLong, "https://github.com/test/test")
+	nnTooLong := nomostest.RepoSyncNN(syncNsTooLong.Name, syncNameTooLong)
+	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
 	if err := nt.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -556,7 +558,8 @@ func TestControllerValidationErrors(t *testing.T) {
 		}
 	})
 
-	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(testNs, "repo-test", "https://github.com/test/test")
+	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
+	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
 	rsInvalidSecretRef.Spec.SecretRef.Name = "test-secret-ref-name-abcdefghijklmnopqrstuvwxyz"
 	if err := nt.Create(rsInvalidSecretRef); err != nil {
 		nt.T.Fatal(err)

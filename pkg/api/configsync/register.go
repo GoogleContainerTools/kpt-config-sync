@@ -51,7 +51,7 @@ const (
 	DefaultHydrationPollingPeriod = 5 * time.Second
 
 	// DefaultReconcileTimeout defines the timeout of kpt applier reconcile/prune task
-	DefaultReconcileTimeout = "5m"
+	DefaultReconcileTimeout = 5 * time.Minute
 )
 
 // source auth types

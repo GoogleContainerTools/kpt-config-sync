@@ -14,7 +14,11 @@
 
 package ntopts
 
-import "k8s.io/apimachinery/pkg/types"
+import (
+	"time"
+
+	"k8s.io/apimachinery/pkg/types"
+)
 
 // RepoOpts defines options for a Repo
 type RepoOpts struct {
@@ -52,6 +56,10 @@ type MultiRepo struct {
 
 	// ResourceGroup indicates that NT should also install the resource-group controller
 	ResourceGroup bool
+
+	// ReconcileTimeout sets spec.override.reconcileTimeout on each R*Sync
+	// Default: 5m.
+	ReconcileTimeout *time.Duration
 }
 
 // NamespaceRepo tells the test case that a Namespace Repo should be configured
@@ -134,3 +142,12 @@ const (
 	// in the Root Repo and delegates declaration of RepoSync to the app operator.
 	CentralControl = "Central"
 )
+
+// WithReconcileTimeout tells the test case to override the default reconcile
+// timeout on all RootSyncs and RepoSyncs.
+func WithReconcileTimeout(timeout time.Duration) func(opt *New) {
+	return func(opt *New) {
+		timeoutCopy := timeout
+		opt.ReconcileTimeout = &timeoutCopy
+	}
+}

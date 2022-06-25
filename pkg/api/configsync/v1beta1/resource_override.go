@@ -86,7 +86,7 @@ type ContainerResourcesSpec struct {
 // GetReconcileTimeout returns reconcile timeout in string, defaulting to 5m if empty
 func GetReconcileTimeout(d *metav1.Duration) string {
 	if d == nil || d.Duration == 0 {
-		return configsync.DefaultReconcileTimeout
+		return configsync.DefaultReconcileTimeout.String()
 	}
 	return d.Duration.String()
 }

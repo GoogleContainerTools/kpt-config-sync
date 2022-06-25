@@ -27,7 +27,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
@@ -101,15 +100,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	}
 
 	nt.T.Log("Test RootSync v1alpha1 version")
-	rsv1alpha1 := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
-	rsv1alpha1.Spec.SourceFormat = string(nt.RootRepos[configsync.RootSyncName].Format)
-	rsv1alpha1.Spec.Git = &v1alpha1.Git{
-		Repo:      nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName),
-		Branch:    nomostest.MainBranch,
-		Dir:       nomostest.AcmeDir,
-		Auth:      "ssh",
-		SecretRef: v1alpha1.SecretReference{Name: controllers.GitCredentialVolume},
-	}
+	rsv1alpha1 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, configsync.RootSyncName)
 	if err := nt.Create(rsv1alpha1); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			nt.T.Fatal(err)

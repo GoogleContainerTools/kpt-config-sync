@@ -174,6 +174,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		Client:                  sharedNt.Client,
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
+		DefaultReconcileTimeout: sharedNt.DefaultReconcileTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
 		MultiRepo:               sharedNt.MultiRepo,
 		ReconcilerPollingPeriod: sharedNT.ReconcilerPollingPeriod,
@@ -277,6 +278,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
 		Client:                  c,
+		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          kubeconfigPath,
 		MultiRepo:               opts.Nomos.MultiRepo,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
@@ -301,7 +303,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	} else {
-		nt.DefaultWaitTimeout = 6 * time.Minute
+		nt.DefaultWaitTimeout = 3 * time.Minute
 	}
 
 	if *e2e.TestCluster != e2e.Kind {

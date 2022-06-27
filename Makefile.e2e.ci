@@ -130,3 +130,7 @@ test-e2e-go-gke-local: __download_prober_creds
 # Manually rotate the prober's service account key.
 manual-rotate-prober-sa-key: __download_prober_creds
 	GCP_PROBER_CREDS=$(SA_KEY_FILE) ./scripts/prow/prober-runner-sa-key-rotate.sh
+
+# Manually rotate the prober's service account key in OSS prow.
+manual-rotate-prober-sa-key-oss: __download_prober_creds
+	GCP_PROBER_CREDS=$(SA_KEY_FILE) ./scripts/oss-prow/prober-runner-sa-key-rotate.sh

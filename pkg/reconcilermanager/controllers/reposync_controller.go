@@ -368,6 +368,10 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 		if !strings.HasPrefix(secret.GetName(), core.NsReconcilerPrefix) {
 			return nil
 		}
+		if err := r.addTypeInformationToObject(secret); err != nil {
+			klog.Errorf("failed to add type information to object (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
+			return nil
+		}
 		allRepoSyncs := &v1beta1.RepoSyncList{}
 		if err := r.client.List(context.Background(), allRepoSyncs); err != nil {
 			klog.Error("failed to list all RepoSyncs for object (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
@@ -449,6 +453,11 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		return nil
 	}
 
+	if err := r.addTypeInformationToObject(obj); err != nil {
+		klog.Errorf("failed to add type information to object (name: %s, namespace: %s): %v", obj.GetName(), obj.GetNamespace(), err)
+		return nil
+	}
+
 	allRepoSyncs := &v1beta1.RepoSyncList{}
 	if err := r.client.List(context.Background(), allRepoSyncs); err != nil {
 		klog.Error("failed to list all RepoSyncs for object (name: %s, namespace: %s): %v", obj.GetName(), obj.GetNamespace(), err)
@@ -483,6 +492,29 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 			obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), obj.GetNamespace(), strings.Join(attachedRSNames, ", "))
 	}
 	return requests
+}
+
+// addTypeInformationToObject adds TypeMeta information to a runtime.Object based upon the loaded scheme.Scheme
+// inspired by: https://github.com/kubernetes/cli-runtime/blob/v0.19.2/pkg/printers/typesetter.go#L41.
+// Note: The function only works for GVKs registered with the local scheme with exact version matching.
+func (r *RepoSyncReconciler) addTypeInformationToObject(obj runtime.Object) error {
+	gvks, _, err := r.scheme.ObjectKinds(obj)
+	if err != nil {
+		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
+	}
+
+	for _, gvk := range gvks {
+		if len(gvk.Kind) == 0 {
+			continue
+		}
+		if len(gvk.Version) == 0 || gvk.Version == runtime.APIVersionInternal {
+			continue
+		}
+		obj.GetObjectKind().SetGroupVersionKind(gvk)
+		break
+	}
+
+	return nil
 }
 
 func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile.Request {

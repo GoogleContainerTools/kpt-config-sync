@@ -24,15 +24,20 @@ generators:
           path: render-helm-chart
   helmGlobals:
     chartHome: ./charts
+    configHome: ./tmp
   helmCharts:
-  - name: coredns
-    releaseName: my-coredns
-    namespace: coredns
-  - name: ingress-nginx
-    repo: https://kubernetes.github.io/ingress-nginx
-    version: 4.0.5
-    releaseName: my-ingress-nginx
-    namespace: ingress-nginx
+  - chartArgs:
+      name: coredns
+    templateOptions:
+      releaseName: my-coredns
+      namespace: coredns
+  - chartArgs:
+      name: ingress-nginx
+      repo: https://kubernetes.github.io/ingress-nginx
+      version: 4.0.5
+    templateOptions:
+      releaseName: my-ingress-nginx
+      namespace: ingress-nginx
 
 commonLabels:
   test-case: hydration

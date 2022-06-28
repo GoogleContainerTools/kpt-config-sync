@@ -24,11 +24,14 @@ generators:
           path: render-helm-chart
   helmGlobals:
     chartHome: ./charts
+    configHome: ./tmp
   helmCharts:
-  - name: prometheus-operator
-    repo: https://charts.cloudposse.com/incubator
-    version: 0.2.0
-    releaseName: my-prometheus-operator
+  - chartArgs:
+      name: prometheus-operator
+      repo: https://charts.cloudposse.com/incubator
+      version: 0.2.0
+    templateOptions:
+      releaseName: my-prometheus-operator
 
 commonLabels:
   test-case: hydration

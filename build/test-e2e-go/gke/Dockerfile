@@ -32,7 +32,7 @@ RUN apk add bash curl docker gcc git jq make openssh-client python3 diffutils
 
 ARG HELM_VERSION=v3.6.3
 ARG KUSTOMIZE_VERSION=v4.5.2
-ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.1.0
+ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
 
 # Install the render-helm-chart function.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \

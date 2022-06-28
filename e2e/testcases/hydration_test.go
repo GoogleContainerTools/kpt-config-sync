@@ -122,7 +122,12 @@ func TestHydrateHelmComponents(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from the helm-components directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}}}`)
+	if nt.IsGKEAutopilot {
+		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
+		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
+	} else {
+		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}}}`)
+	}
 
 	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
 
@@ -140,7 +145,9 @@ func TestHydrateHelmComponents(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Render with a remote values.yaml file from a public repo")
 	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}, containerImagePullPolicy("Always"), nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
+	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.8.4"),
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -152,37 +159,38 @@ func TestHydrateHelmComponents(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	// TODO Skip the following test when running on GKE Autopilot clusters.
-	if !nt.IsGKEAutopilot {
-		nt.T.Log("Use the render-helm-chart function to render the charts")
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-kustomization.yaml", "./helm-components/kustomization.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
-		nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"), nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
-			nt.T.Fatal(err)
-		}
-		rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
-		expectedStatus = "SYNCED"
-		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-			nt.T.Error(err)
-		}
+	nt.T.Log("Use the render-helm-chart function to render the charts")
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-kustomization.yaml", "./helm-components/kustomization.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
+	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
+	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+		containerImagePullPolicy("IfNotPresent"), firstContainerImageIs("coredns/coredns:1.8.4"),
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
+		nt.T.Fatal(err)
+	}
+	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
+	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	expectedStatus = "SYNCED"
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		nt.T.Error(err)
+	}
 
-		nt.T.Log("Use the render-helm-chart function to render the charts with a remote values.yaml file")
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function with a remote values.yaml file from a public repo")
-		nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}, containerImagePullPolicy("Always"), nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
-			nt.T.Fatal(err)
-		}
-		rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
-		expectedStatus = "SYNCED"
-		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-			nt.T.Error(err)
-		}
+	nt.T.Log("Use the render-helm-chart function to render the charts with multiple remote values.yaml files")
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function with multiple remote values.yaml files from a public repo")
+	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
+	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.9.3"),
+		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
+		nt.T.Fatal(err)
+	}
+	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
+	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	expectedStatus = "SYNCED"
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		nt.T.Error(err)
 	}
 }
 
@@ -198,7 +206,12 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from the helm-overlay directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}}}`)
+	if nt.IsGKEAutopilot {
+		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
+		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
+	} else {
+		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}}}`)
+	}
 
 	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
 
@@ -247,34 +260,31 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 	}
 
-	// TODO Skip the following test when running on GKE Autopilot clusters.
-	if !nt.IsGKEAutopilot {
-		nt.T.Log("Use the render-helm-chart function to render the charts")
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay/kustomization.yaml", "./helm-overlay/kustomization.yaml")
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-overlay-kustomization.yaml", "./helm-overlay/base/kustomization.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
-		nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
+	nt.T.Log("Use the render-helm-chart function to render the charts")
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay/kustomization.yaml", "./helm-overlay/kustomization.yaml")
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-overlay-kustomization.yaml", "./helm-overlay/base/kustomization.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
+	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
 
-		rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
-		expectedStatus = "SYNCED"
-		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-			nt.T.Error(err)
-		}
+	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
+	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	expectedStatus = "SYNCED"
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		nt.T.Error(err)
+	}
 
-		nt.T.Log("Make the parsing fail again by checking in a deprecated group and kind with the render-helm-chart function")
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-deprecated-GK-kustomization.yaml", "./helm-overlay/kustomization.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind with the render-helm-chart function")
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
+	nt.T.Log("Make the parsing fail again by checking in a deprecated group and kind with the render-helm-chart function")
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-deprecated-GK-kustomization.yaml", "./helm-overlay/kustomization.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind with the render-helm-chart function")
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
 
-		rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-		rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-		latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
-		expectedStatus = "ERROR"
-		if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-			nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
-		}
+	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
+	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	expectedStatus = "ERROR"
+	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
+		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 	}
 }
 

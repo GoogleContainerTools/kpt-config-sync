@@ -24,10 +24,13 @@ generators:
           path: render-helm-chart
   helmGlobals:
     chartHome: ./charts
+    configHome: ./tmp
   helmCharts:
-  - name: coredns
-    releaseName: my-coredns
-    namespace: coredns
+  - chartArgs:
+      name: coredns
+    templateOptions:
+      releaseName: my-coredns
+      namespace: coredns
 
 commonAnnotations:
   hydration-tool: kustomize

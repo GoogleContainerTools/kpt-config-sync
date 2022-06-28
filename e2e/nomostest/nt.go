@@ -842,6 +842,24 @@ func (nt *NT) describeNotRunningTestPods() {
 				continue
 			}
 			nt.T.Logf("%s\n%s", cmd, out)
+			nt.printNotReadyContainerLogs(pod)
+		}
+	}
+}
+
+func (nt *NT) printNotReadyContainerLogs(pod corev1.Pod) {
+	for _, cs := range pod.Status.ContainerStatuses {
+		// Only print logs for containers that are not ready.
+		// The reconciler container's logs have been printed in testLogs, so ignore it.
+		if !cs.Ready && cs.Name != reconcilermanager.Reconciler {
+			args := []string{"logs", "pod", pod.GetName(), "-n", pod.GetNamespace(), "-c", cs.Name}
+			cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
+			out, err := nt.Kubectl(args...)
+			if err != nil {
+				nt.T.Logf("error running `%s`: %s\n%s", cmd, err, out)
+				continue
+			}
+			nt.T.Logf("%s\n%s", cmd, out)
 		}
 	}
 }

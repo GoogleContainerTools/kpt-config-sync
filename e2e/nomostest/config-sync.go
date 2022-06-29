@@ -469,7 +469,7 @@ func validateMultiRepoDeployments(nt *NT) error {
 	deployments := map[client.ObjectKey]time.Duration{
 		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}: nt.DefaultWaitTimeout,
 		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:     nt.DefaultWaitTimeout,
-		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout * 2,
+		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout,
 		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:              nt.DefaultWaitTimeout,
 	}
 

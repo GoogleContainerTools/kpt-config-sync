@@ -303,7 +303,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	} else {
-		nt.DefaultWaitTimeout = 3 * time.Minute
+		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
 
 	if *e2e.TestCluster != e2e.Kind {

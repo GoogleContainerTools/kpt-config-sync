@@ -27,6 +27,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
@@ -55,6 +56,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -691,6 +693,51 @@ func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, t
 	if gvk == kinds.Repo() || gvk == kinds.RepoSyncV1Beta1() {
 		nt.RenewClient()
 	}
+}
+
+// WaitForNamespace waits for a namespace to exist and be ready to use
+func (nt *NT) WaitForNamespace(timeout time.Duration, namespace string) {
+	nt.T.Helper()
+
+	// Wait for the repository to report it is synced.
+	took, err := Retry(timeout, func() error {
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   corev1.SchemeGroupVersion.Group,
+			Version: corev1.SchemeGroupVersion.Version,
+			Kind:    "Namespace",
+		})
+		obj.SetName(namespace)
+		if err := nt.Get(namespace, "", obj); err != nil {
+			return fmt.Errorf("namespace %q GET failed: %w", namespace, err)
+		}
+		result, err := status.Compute(obj)
+		if err != nil {
+			return fmt.Errorf("namespace %q status could not be computed: %w", namespace, err)
+		}
+		if result.Status != status.CurrentStatus {
+			return fmt.Errorf("namespace %q not reconciled: status is %q: %s", namespace, result.Status, result.Message)
+		}
+		return nil
+	})
+	if err != nil {
+		nt.T.Logf("failed after %v to wait for namespace %q to be ready", took, namespace)
+		nt.T.Fatal(err)
+	}
+	nt.T.Logf("took %v to wait for namespace %q to be ready", took, namespace)
+}
+
+// WaitForNamespaces waits for namespaces to exist and be ready to use
+func (nt *NT) WaitForNamespaces(timeout time.Duration, namespaces ...string) {
+	var wg sync.WaitGroup
+	for _, namespace := range namespaces {
+		wg.Add(1)
+		go func(t time.Duration, ns string) {
+			defer wg.Done()
+			nt.WaitForNamespace(t, ns)
+		}(timeout, namespace)
+	}
+	wg.Wait()
 }
 
 // RenewClient gets a new Client for talking to the cluster.

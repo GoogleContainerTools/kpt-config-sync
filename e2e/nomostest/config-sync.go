@@ -940,6 +940,8 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	rsCount := 0
 	cluster := os.Getenv("GCP_CLUSTER")
+
+	// Add any RootSyncs specified by the test options
 	for rsName := range opts.RootRepos {
 		// The default RootSync is created manually, don't check it in the repo.
 		if rsName == configsync.RootSyncName {
@@ -953,11 +955,18 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
 	}
 
-	if len(opts.NamespaceRepos) > 0 {
-		nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", RepoSyncClusterRole())
+	if len(opts.NamespaceRepos) == 0 {
+		// Wait for the RootSyncs and exit early
+		nt.WaitForRepoSyncs()
+		return
 	}
+
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", RepoSyncClusterRole())
+
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
+
+	// Add any RepoSyncs specified by the test options
 	for nn := range opts.NamespaceRepos {
 		ns := nn.Namespace
 		rsCount++
@@ -983,15 +992,26 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
 	}
-	// This waits for the Namespace to be created.
-	nt.WaitForRepoSyncs(RootSyncOnly())
 
-	// Now that the Namespace exists, create the secret inside it, and ensure
-	// its RepoSync reports everything is synced.
+	// Convert namespace set to list
+	namespaces := make([]string, 0, len(rsNamespaces))
+	for namespace := range rsNamespaces {
+		namespaces = append(namespaces, namespace)
+	}
+
+	// Wait for all Namespaces to be applied and reconciled.
+	nt.WaitForNamespaces(nt.DefaultWaitTimeout, namespaces...)
+
+	// Now that the Namespaces exist, create the Secrets,
+	// which are required for the RepoSyncs to reconcile.
 	for nn := range opts.NamespaceRepos {
 		CreateNamespaceSecret(nt, nn.Namespace)
 	}
+
+	// Wait for all RootSyncs and all RepoSyncs to be reconciled
 	nt.WaitForRepoSyncs()
+
+	// Validate all RepoSyncs exist
 	for nn := range opts.NamespaceRepos {
 		err := nt.Validate(nn.Name, nn.Namespace, &v1beta1.RepoSync{})
 		if err != nil {
@@ -1000,33 +1020,31 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	}
 
 	// Validate multi-repo metrics.
-	if len(opts.NamespaceRepos) > 0 {
-		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			var err error
-			if strings.Contains(cluster, "psp") {
-				err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
-					// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole, and
-					// 3 is for the resources created for every namespace: RepoSync, RoleBinding, ClusterRoleBinding
-					2+len(rsNamespaces)+rsCount*3,
-					testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-					testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"),
-					testmetrics.ResourceCreated("ClusterRoleBinding"))
-			} else {
-				err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
-					// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole,
-					// and 2 is for the resources created for every namespace: RepoSync and RoleBinding
-					2+len(rsNamespaces)+rsCount*2,
-					testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-					testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"))
-			}
-			if err != nil {
-				return err
-			}
-			return nt.ValidateErrorMetricsNotFound()
-		})
-		if err != nil {
-			nt.T.Error(err)
+	err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
+		var err error
+		if strings.Contains(cluster, "psp") {
+			err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
+				// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole, and
+				// 3 is for the resources created for every namespace: RepoSync, RoleBinding, ClusterRoleBinding
+				2+len(rsNamespaces)+rsCount*3,
+				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
+				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"),
+				testmetrics.ResourceCreated("ClusterRoleBinding"))
+		} else {
+			err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
+				// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole,
+				// and 2 is for the resources created for every namespace: RepoSync and RoleBinding
+				2+len(rsNamespaces)+rsCount*2,
+				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
+				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"))
 		}
+		if err != nil {
+			return err
+		}
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
 	}
 }
 

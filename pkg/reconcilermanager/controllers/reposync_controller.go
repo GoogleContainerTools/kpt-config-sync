@@ -117,6 +117,16 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	r.repoSyncs[types.NamespacedName{Name: req.Name, Namespace: req.Namespace}] = struct{}{}
 	reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
+	if errs := validation.IsDNS1123Subdomain(reconcilerName); errs != nil {
+		log.Error(err, "RepoSync failed validation")
+		reposync.SetStalled(&rs, "Validation", errors.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(errs, ", ")))
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		updateErr := r.updateStatus(ctx, &rs)
+		// Use the validation error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, updateErr
+	}
 
 	if err = r.validateSpec(ctx, &rs, reconcilerName); err != nil {
 		log.Error(err, "RepoSync failed validation")
@@ -543,7 +553,7 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	}
 
 	secretName := ReconcilerResourceName(reconcilerName, repoSync.Spec.SecretRef.Name)
-	if errs := validation.IsDNS1123Label(secretName); errs != nil {
+	if errs := validation.IsDNS1123Subdomain(secretName); errs != nil {
 		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}
 

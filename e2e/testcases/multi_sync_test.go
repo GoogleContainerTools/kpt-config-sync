@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
@@ -536,22 +537,19 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	syncNameTooLong := "test-rs-abcdefghijklmnopqrstuvwxyz"
-	syncNsTooLong := fake.NamespaceObject("test-ns-abcdefghijklmnopqrstuvwxyz")
-	if err := nt.Create(syncNsTooLong); err != nil {
-		nt.T.Fatal(err)
+	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
+	for i := range longBytes {
+		longBytes[i] = 'a'
 	}
-	t.Cleanup(func() {
-		if err := nt.Delete(syncNsTooLong); err != nil {
-			nt.T.Fatal(err)
-		}
-	})
-	nnTooLong := nomostest.RepoSyncNN(syncNsTooLong.Name, syncNameTooLong)
+	veryLongName := string(longBytes)
+	nnTooLong := nomostest.RepoSyncNN(testNs, veryLongName)
 	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
 	if err := nt.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
-
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
+		fmt.Sprintf(`Invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters.`,
+			testNs, veryLongName, len(veryLongName), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
 		if err := nt.Delete(rs); err != nil {
 			nt.T.Fatal(err)
@@ -560,13 +558,13 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
 	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
-	rsInvalidSecretRef.Spec.SecretRef.Name = "test-secret-ref-name-abcdefghijklmnopqrstuvwxyz"
+	rsInvalidSecretRef.Spec.SecretRef.Name = veryLongName
 	if err := nt.Create(rsInvalidSecretRef); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
-		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than 63 characters. To fix it, update '.spec.git.secretRef.name'`,
-			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), rsInvalidSecretRef.Spec.SecretRef.Name))
+		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
+			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), rsInvalidSecretRef.Spec.SecretRef.Name, validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
 		if err := nt.Delete(rsInvalidSecretRef); err != nil {
 			nt.T.Fatal(err)

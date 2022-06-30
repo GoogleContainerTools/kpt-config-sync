@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -118,6 +119,16 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	)
 
 	reconcilerName := core.RootReconcilerName(rs.Name)
+	if errs := validation.IsDNS1123Subdomain(reconcilerName); errs != nil {
+		log.Error(err, "RootSync failed validation")
+		rootsync.SetStalled(&rs, "Validation", errors.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(errs, ", ")))
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		updateErr := r.updateStatus(ctx, &rs)
+		// Use the validation error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, updateErr
+	}
 
 	if err = r.validateSpec(ctx, &rs, log); err != nil {
 		log.Error(err, "RootSync failed validation")

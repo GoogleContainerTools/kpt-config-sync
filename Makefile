@@ -178,6 +178,7 @@ include Makefile.e2e
 -include Makefile.prow
 include Makefile.gen
 include Makefile.oss
+include Makefile.oss.prow
 include Makefile.reconcilermanager
 -include Makefile.release
 

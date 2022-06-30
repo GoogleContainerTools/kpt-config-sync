@@ -8,9 +8,10 @@
 # between these two files will eliminate any confusion on what versions are
 # actually being used.
 
+ARG KUBEKINS_REGISTRY="gke-test-infra"
 ARG KUBEKINS="v20220204-29ea0e1be-1.22"
 
-FROM gcr.io/gke-test-infra/kubekins-e2e:${KUBEKINS}
+FROM gcr.io/${KUBEKINS_REGISTRY}/kubekins-e2e:${KUBEKINS}
 
 ARG KIND_RELEASE="v0.11.1"
 RUN wget -q -O /bin/kind https://kind.sigs.k8s.io/dl/${KIND_RELEASE}/kind-linux-amd64

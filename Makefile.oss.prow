@@ -1,0 +1,36 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# special prow related things
+
+# This is the image that our prow nomos-presubmit-e2e job runs so that it can
+# use KIND instead of setting up a GKE cluster per test run.
+
+# Note: nothing builds this, if you update the version, you will need to rebuild manually.
+# For the version tag, concatenate the kubekins version and KIND version
+E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY := k8s-staging-test-infra
+E2E_TEST_IMAGE_OSS_PROW_KUBEKINS := v20220607-4b3fb50c36-1.22
+E2E_TEST_IMAGE_OSS_PROW_KIND := v0.11.1
+E2E_TEST_IMAGE_OSS_PROW_TAG := kubekins-e2e-$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS)-kind-$(E2E_TEST_IMAGE_OSS_PROW_KIND)
+E2E_TEST_IMAGE_OSS_PROW := gcr.io/oss-prow-build-kpt-config-sync/e2e-prow:$(E2E_TEST_IMAGE_OSS_PROW_TAG)
+image-oss-prow: build/e2e-tests/Dockerfile.prow
+	@echo "+++ Building the image for the oss-prow presubmit run"
+	docker build \
+		-t $(E2E_TEST_IMAGE_OSS_PROW) \
+		--build-arg KUBEKINS_REGISTRY=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY) \
+		--build-arg KUBEKINS=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS) \
+		--build-arg KIND_RELEASE=$(E2E_TEST_IMAGE_OSS_PROW_KIND) \
+		-f $< \
+		$(dir $<).
+	@docker push $(E2E_TEST_IMAGE_OSS_PROW)

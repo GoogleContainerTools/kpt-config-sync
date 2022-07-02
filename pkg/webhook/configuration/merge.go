@@ -79,7 +79,7 @@ func Merge(left, right *admissionv1.ValidatingWebhookConfiguration) *admissionv1
 		}
 	}
 
-	var webhooks []admissionv1.ValidatingWebhook
+	webhooks := make([]admissionv1.ValidatingWebhook, 0, len(webhooksMap))
 	for _, webhook := range webhooksMap {
 		webhooks = append(webhooks, webhook)
 	}

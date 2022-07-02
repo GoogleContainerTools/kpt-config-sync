@@ -35,7 +35,11 @@ func TestMerge(t *testing.T) {
 			name:  "empty",
 			left:  &admissionv1.ValidatingWebhookConfiguration{},
 			right: &admissionv1.ValidatingWebhookConfiguration{},
-			want:  &admissionv1.ValidatingWebhookConfiguration{},
+			want: &admissionv1.ValidatingWebhookConfiguration{
+				// Webhooks should never be nil, otherwise the reconciler errors
+				// and retries endlessly, instead of waiting for the next update.
+				Webhooks: []admissionv1.ValidatingWebhook{},
+			},
 		},
 		{
 			name: "one vs zero webhooks",

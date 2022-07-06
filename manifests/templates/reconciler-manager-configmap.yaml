@@ -107,7 +107,7 @@ data:
            terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v3.5.0-gke.1__linux_amd64
+           image: gcr.io/config-management-release/git-sync:v3.5.1-gke.0__linux_amd64
            args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json", "--v=5"]
            volumeMounts:
            - name: repo

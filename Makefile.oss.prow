@@ -20,7 +20,7 @@
 # Note: nothing builds this, if you update the version, you will need to rebuild manually.
 # For the version tag, concatenate the kubekins version and KIND version
 E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY := k8s-staging-test-infra
-E2E_TEST_IMAGE_OSS_PROW_KUBEKINS := v20220607-4b3fb50c36-1.22
+E2E_TEST_IMAGE_OSS_PROW_KUBEKINS := v20220708-6b0cfd300e-1.23
 E2E_TEST_IMAGE_OSS_PROW_KIND := v0.11.1
 E2E_TEST_IMAGE_OSS_PROW_TAG := kubekins-e2e-$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS)-kind-$(E2E_TEST_IMAGE_OSS_PROW_KIND)
 E2E_TEST_IMAGE_OSS_PROW := gcr.io/oss-prow-build-kpt-config-sync/e2e-prow:$(E2E_TEST_IMAGE_OSS_PROW_TAG)

@@ -71,7 +71,7 @@ function get_sa_key_secret() {
 
 function update_k8s_secret() {
   local prow_test_ns="test-pods"
-  local prow_cluster="prow"
+  local prow_cluster="${PROJECT_NAME}"
   local prow_zone="us-central1-b"
 
   get_sa_key_secret

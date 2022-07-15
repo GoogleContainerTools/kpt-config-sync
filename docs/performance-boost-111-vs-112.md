@@ -21,7 +21,7 @@ Config Sync v1.12 contains several changes to let it sync faster with less total
 | Deployment 3k     |         1349   |          426   |       -68.4%  |
 
 
-### Sync Latency:
+### Sync Latency
 
 Sync latency is defined by the time it takes for a Config Sync reconciler to apply all resources from a git repo to a cluster.
 It doesn’t include the time it takes for all resources to finish reconciliation.
@@ -29,22 +29,18 @@ It doesn’t cover the use cases when dependencies and waits are involved when s
 It doesn’t include the additional API request latency from admission webhooks.
 
 
-### Tests:
+### Tests
 
-ConfigMap 10K 1N: Sync 10000 ConfigMaps to a cluster in 1 namespace after the namespace finishing reconciliation
-
-ConfigMap 10K 10N: Sync 10000 ConfigMaps to a cluster and spread in 10 namespaces after the 10 namespaces finishing reconciliation
-
-CR 3K: Sync 3000 Custom Resources to a cluster and spread in 3000 namespaces after the 3000 namespaces and related CRD finishing reconciliation
-
-Large CR 1K: Sync 1000 Large Custom Resources(36 KB) to a cluster and spread in 1000 namespaces after the 1000 namespaces and related CRD finishing reconciliation
-
-Deployment 3K: Sync 3000 Deployements to a cluster in 1 namespace after the namespace finishing reconciliation
+- **ConfigMap 10K 1N**: Sync 10000 ConfigMaps to a cluster in 1 namespace after the namespace finishing reconciliation
+- **ConfigMap 10K 10N**: Sync 10000 ConfigMaps to a cluster and spread in 10 namespaces after the 10 namespaces finishing reconciliation
+- **CR 3K**: Sync 3000 Custom Resources to a cluster and spread in 3000 namespaces after the 3000 namespaces and related CRD finishing reconciliation
+- **Large CR 1K**: Sync 1000 Large Custom Resources(36 KB) to a cluster and spread in 1000 namespaces after the 1000 namespaces and related CRD finishing reconciliation
+- **Deployment 3K**: Sync 3000 Deployements to a cluster in 1 namespace after the namespace finishing reconciliation
 
 
-### Test Cluster:
+### Test Cluster
 
-Version: 1.22.8-gke.202
-Nodes: 9(3 per zone)
-Total vCPUs: 144
-Total memory: 576GB
+- **Version**: 1.22.8-gke.202
+- **Nodes**: 9(3 per zone)
+- **Total vCPUs**: 144
+- **Total memory**: 576GB

@@ -25,7 +25,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.5.0
+    controller-gen.kubebuilder.io/version: v0.6.2
   labels:
     configmanagement.gke.io/arch: "csmr"
     configmanagement.gke.io/system: "true"
@@ -498,8 +498,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager
-        image: gcr.io/config-management-release/resource-group-controller:v1.0.5
-        imagePullPolicy: Always
+        image: gcr.io/config-management-release/resource-group-controller:v1.0.7
         name: manager
         resources:
           requests:
@@ -513,8 +512,8 @@ spec:
       - args:
         - --config=/conf/otel-agent-config.yaml
         command:
-        - /otelcontribcol
-        image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+        - /otelcol-contrib
+        image: gcr.io/config-management-release/otelcontribcol:v0.54.0
         livenessProbe:
           httpGet:
             path: /

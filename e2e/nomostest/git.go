@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -89,6 +90,9 @@ type Repository struct {
 
 	// UpstreamRepoURL is the URL of the seed repo
 	UpstreamRepoURL string
+
+	// Scheme used for encoding and decoding objects.
+	Scheme *runtime.Scheme
 }
 
 // NewRepository creates a remote repo on the git provider.
@@ -110,6 +114,7 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstream 
 		Type:         repoType,
 		SafetyNSName: safetyNs,
 		SafetyNSPath: fmt.Sprintf("acme/namespaces/%s/ns.yaml", safetyNs),
+		Scheme:       nt.scheme,
 	}
 
 	repoName, err := nt.GitProvider.CreateRepository(namespacedName)
@@ -269,6 +274,95 @@ func (g *Repository) Add(path string, obj client.Object) {
 	g.AddFile(path, bytes)
 }
 
+// Get reads, parses, and returns the specified file as an object.
+//
+// File must have one of these suffixes: .yaml, .yml, .json
+// This is meant to read files written with Add. So it only reads one object per
+// file. If you need to parse multiple objects from one file, use GetFile.
+func (g *Repository) Get(path string) client.Object {
+	g.T.Helper()
+
+	bytes := g.GetFile(path)
+
+	var err error
+	uObj := &unstructured.Unstructured{}
+	ext := filepath.Ext(path)
+	switch ext {
+	case ".yaml", ".yml", ".json":
+		err = yaml.Unmarshal(bytes, uObj)
+	default:
+		// If you're seeing this error, use "GetFile" instead to test ignoring
+		// files with extensions we ignore.
+		err = fmt.Errorf("invalid extension to read object from, %q, use .GetFile() instead", ext)
+	}
+	if err != nil {
+		g.T.Fatal(err)
+	}
+
+	gvk := uObj.GroupVersionKind()
+	if gvk.Empty() {
+		g.T.Fatalf("missing GVK in file: %s", path)
+	}
+
+	// Lookup type by GVK of those registered with the scheme
+	tObj, err := g.Scheme.New(gvk)
+	if err != nil {
+		// Return the unstructured object if the GVK is not registered with the scheme
+		if runtime.IsNotRegisteredError(err) {
+			return uObj
+		}
+		g.T.Fatal(err)
+	}
+
+	obj, ok := tObj.(client.Object)
+	if !ok {
+		// Return the unstructured object if the typed object is a
+		// runtime.Object but not a metav1.Object.
+		// Most registered objects should be metav1.Object.
+		// But if they aren't, we need to be able to read their metadata.
+		return uObj
+	}
+
+	// Convert the unstructured object to a typed object
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.UnstructuredContent(), obj)
+	if err != nil {
+		g.T.Fatal(err)
+	}
+	return obj
+}
+
+// GetAll reads, parses, and returns all the files in a specified directory as
+// objects.
+func (g *Repository) GetAll(dirPath string, recursive bool) []client.Object {
+	g.T.Helper()
+
+	absPath := filepath.Join(g.Root, dirPath)
+
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		g.T.Fatal(err)
+	}
+
+	var objs []client.Object
+	for _, entry := range entries {
+		entryPath := filepath.Join(dirPath, entry.Name())
+		if entry.IsDir() {
+			if recursive {
+				objs = append(objs, g.GetAll(entryPath, recursive)...)
+			}
+		} else {
+			ext := filepath.Ext(entry.Name())
+			switch ext {
+			case ".yaml", ".yml", ".json":
+				objs = append(objs, g.Get(entryPath))
+			default:
+				// ignore files that aren't yaml or json
+			}
+		}
+	}
+	return objs
+}
+
 // AddFile writes `bytes` to `file` in the git repository.
 // This function should only be directly used for testing the literal YAML/JSON
 // parsing logic.
@@ -293,6 +387,20 @@ func (g *Repository) AddFile(path string, bytes []byte) {
 	}
 	// Add the file to Git.
 	g.Git("add", absPath)
+}
+
+// GetFile reads and returns the specified file.
+func (g *Repository) GetFile(path string) []byte {
+	g.T.Helper()
+
+	absPath := filepath.Join(g.Root, path)
+
+	bytes, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		g.T.Fatal(err)
+	}
+
+	return bytes
 }
 
 // Copy copies the file or directory from source to destination.

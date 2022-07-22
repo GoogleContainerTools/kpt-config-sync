@@ -25,8 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Predicate evaluates a client.Object, returning an error if it fails validation.
@@ -384,6 +389,165 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 			}
 		}
 
+		return nil
+	}
+}
+
+// IsManagedBy checks that the object is managed by configsync, has the expected
+// resource manager, and has a valid resource-id.
+// Use diff.IsManager if you just need a boolean without errors.
+func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
+	return func(obj client.Object) error {
+		// Make sure GVK is populated (it's usually not for typed structs).
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			if err != nil {
+				return err
+			}
+			obj.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+
+		// managed is required by differ.ManagedByConfigSync
+		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
+		if managedValue != metadata.ResourceManagementEnabled {
+			return errors.Errorf("expected %s %s to be managed by configsync, but found %q=%q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				metadata.ResourceManagementKey, managedValue)
+		}
+
+		// manager is required by diff.IsManager
+		expectedManager := declared.ResourceManager(scope, syncName)
+		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+		if managerValue != expectedManager {
+			return errors.Errorf("expected %s %s to be managed by %q, but found %q=%q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				expectedManager, metadata.ResourceManagerKey, managerValue)
+		}
+
+		// resource-id is required by differ.ManagedByConfigSync
+		expectedID := core.GKNN(obj)
+		resourceIDValue := core.GetAnnotation(obj, metadata.ResourceIDKey)
+		if resourceIDValue != expectedID {
+			return errors.Errorf("expected %s %s to have resource-id %q, but found %q=%q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				expectedID, metadata.ResourceIDKey, resourceIDValue)
+		}
+		return nil
+	}
+}
+
+// IsNotManaged checks that the object is NOT managed by configsync.
+// Use differ.ManagedByConfigSync if you just need a boolean without errors.
+func IsNotManaged(nt *NT) Predicate {
+	return func(obj client.Object) error {
+		// Make sure GVK is populated (it's usually not for typed structs).
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			if err != nil {
+				return err
+			}
+			obj.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+
+		// manager is required by diff.IsManager.
+		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+		if managerValue != "" {
+			return errors.Errorf("expected %s %s to NOT have a manager, but found %q=%q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				metadata.ResourceManagerKey, managerValue)
+		}
+
+		// managed is required by differ.ManagedByConfigSync
+		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
+		if managedValue == metadata.ResourceManagementEnabled {
+			return errors.Errorf("expected %s %s to NOT have management enabled, but found %q=%q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				metadata.ResourceManagementKey, managedValue)
+		}
+		return nil
+	}
+}
+
+// ResourceVersionEquals checks that the object's ResourceVersion matches the
+// specified value.
+func ResourceVersionEquals(nt *NT, expected string) Predicate {
+	return func(obj client.Object) error {
+		resourceVersion := obj.GetResourceVersion()
+		if resourceVersion == expected {
+			return nil
+		}
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			if err != nil {
+				return err
+			}
+		}
+		return errors.Errorf("expected %s %s to have resourceVersion %q, but got %q",
+			gvk.Kind, ObjectNamespacedName(obj),
+			expected, resourceVersion)
+	}
+}
+
+// ResourceVersionNotEquals checks that the object's ResourceVersion does NOT
+// match specified value.
+func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
+	return func(obj client.Object) error {
+		resourceVersion := obj.GetResourceVersion()
+		if resourceVersion != unexpected {
+			return nil
+		}
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			if err != nil {
+				return err
+			}
+		}
+		return errors.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
+			gvk.Kind, ObjectNamespacedName(obj),
+			unexpected, resourceVersion)
+	}
+}
+
+// StatusEquals checks that the object's computed status matches the specified
+// status.
+func StatusEquals(nt *NT, expected status.Status) Predicate {
+	return func(obj client.Object) error {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			if err != nil {
+				return err
+			}
+			obj.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+
+		uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if err != nil {
+			return errors.Wrapf(err, "failed to convert %s %s to unstructured",
+				gvk.Kind, ObjectNamespacedName(obj))
+		}
+		uObj := &unstructured.Unstructured{Object: uMap}
+
+		result, err := status.Compute(uObj)
+		if err != nil {
+			return errors.Wrapf(err, "failed to compute status for %s %s",
+				gvk.Kind, ObjectNamespacedName(obj))
+		}
+
+		if result.Status != expected {
+			return errors.Errorf("expected %s %s to have status %q, but got %q",
+				gvk.Kind, ObjectNamespacedName(obj),
+				expected, result.Status)
+		}
 		return nil
 	}
 }

@@ -571,9 +571,9 @@ func RepoSyncClusterRole() *rbacv1.ClusterRole {
 	return cr
 }
 
-// repoSyncRoleBinding returns rolebinding that grants service account
+// RepoSyncRoleBinding returns rolebinding that grants service account
 // permission to manage resources in the namespace.
-func repoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
+func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
 	rb := fake.RoleBindingObject(core.Name(nn.Name), core.Namespace(nn.Namespace))
 	sb := []rbacv1.Subject{
 		{
@@ -614,7 +614,7 @@ func repoSyncClusterRoleBinding(nn types.NamespacedName) *rbacv1.ClusterRoleBind
 }
 
 func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
-	if err := nt.Create(repoSyncRoleBinding(nn)); err != nil {
+	if err := nt.Create(RepoSyncRoleBinding(nn)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -819,7 +819,7 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync {
 	repo, found := nt.RootRepos[name]
 	if !found {
-		nt.T.Fatal("nonexistent root repo")
+		nt.T.Fatal("nonexistent root repo: %s", name)
 	}
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
@@ -852,11 +852,27 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	repo, found := nt.RootRepos[name]
 	if !found {
-		nt.T.Fatal("nonexistent root repo")
+		nt.T.Fatal("nonexistent root repo: %s", name)
 	}
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Beta1(name, repoURL, sourceFormat)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	return rs
+}
+
+// RootSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RootSync object which
+// uses a repo from a specific nt.RootRepo.
+func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *v1beta1.RootSync {
+	repo, found := nt.RootRepos[repoName]
+	if !found {
+		nt.T.Fatal("nonexistent root repo: %s", repoName)
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	sourceFormat := repo.Format
+	rs := RootSyncObjectV1Beta1(syncName, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
 		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
@@ -890,7 +906,7 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1alpha1.RepoSync {
 	repo, found := nt.NonRootRepos[nn]
 	if !found {
-		nt.T.Fatal("nonexistent non-root repo")
+		nt.T.Fatal("nonexistent non-root repo: %s", nn)
 	}
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
@@ -924,7 +940,23 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1beta1.RepoSync {
 	repo, found := nt.NonRootRepos[nn]
 	if !found {
-		nt.T.Fatal("nonexistent non-root repo")
+		nt.T.Fatal("nonexistent non-root repo: %s", nn)
+	}
+	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	sourceFormat := repo.Format
+	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
+	if nt.DefaultReconcileTimeout != 0 {
+		rs.Spec.Override.ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	return rs
+}
+
+// RepoSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RepoSync object which
+// uses a repo from nt.RootRepos.
+func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, repoName string) *v1beta1.RepoSync {
+	repo, found := nt.RootRepos[repoName]
+	if !found {
+		nt.T.Fatal("nonexistent root repo: %s", repoName)
 	}
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
@@ -972,7 +1004,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		rsCount++
 		rsNamespaces[ns] = struct{}{}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), repoSyncRoleBinding(nn))
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), RepoSyncRoleBinding(nn))
 		if strings.Contains(cluster, "psp") {
 			// Add a ClusterRoleBinding so that the pods can be created
 			// when the cluster has PodSecurityPolicy enabled.

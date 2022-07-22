@@ -121,6 +121,36 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 	}
 }
 
+// RepoSyncHasStatusSyncDirectory creates a Predicate that ensures that the
+// .status.sync.gitStatus.dir field on the passed RepoSync matches the provided dir.
+func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RepoSync{})
+		}
+
+		// On error, display the full state of the RepoSync to aid in debugging.
+		objJSON, err := json.MarshalIndent(rs, "", "  ")
+		if err != nil {
+			return err
+		}
+
+		// Ensure the reconciler is ready (no true or error condition).
+		for i, condition := range rs.Status.Conditions {
+			if condition.Status == metav1.ConditionTrue {
+				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
+			}
+			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
+				return fmt.Errorf("status.conditions[%d](%s) contains status: %s, reason: %s, message: %s, commit: %s, errorsSourceRefs: %v, errorSummary: %v\n%s",
+					i, condition.Type, condition.Status, condition.Reason, condition.Message, condition.Commit, condition.ErrorSourceRefs, condition.ErrorSummary, string(objJSON))
+			}
+		}
+		return statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir, string(objJSON))
+	}
+}
+
 // RootSyncHasStatusSyncCommit creates a Predicate that ensures that the
 // .status.sync.commit field on the passed RootSync matches sha1.
 func RootSyncHasStatusSyncCommit(sha1 string) Predicate {

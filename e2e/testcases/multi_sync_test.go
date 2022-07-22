@@ -39,7 +39,6 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -239,7 +238,9 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{}, roleHasRules(rootPodRole().Rules), isManagedBy(declared.RootReconciler, configsync.RootSyncName))
+	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+		roleHasRules(rootPodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -251,7 +252,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	nt.T.Logf("Ensure the Role is updated to the one in the Namespace repo %s", repoSyncNN)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		roleHasRules(namespacePodRole().Rules), isManagedBy(declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
+		roleHasRules(namespacePodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -286,7 +288,9 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.NonRootRepos[repoSyncNN].CommitAndPush("declare Role")
 	nt.WaitForRepoSyncs()
 
-	err := nt.Validate("pods", testNs, &rbacv1.Role{}, roleHasRules(namespacePodRole().Rules), isManagedBy(declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
+	err := nt.Validate("pods", testNs, &rbacv1.Role{},
+		roleHasRules(namespacePodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -322,7 +326,9 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	}
 
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{}, roleHasRules(rootPodRole().Rules), isManagedBy(declared.RootReconciler, configsync.RootSyncName))
+	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+		roleHasRules(rootPodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -334,7 +340,8 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		roleHasRules(rootPodRole().Rules), isManagedBy(declared.RootReconciler, configsync.RootSyncName))
+		roleHasRules(rootPodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -365,8 +372,10 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.WaitForRepoSyncs()
 	nt.T.Logf("Ensure the Role is managed by Root %s", configsync.RootSyncName)
 	role := &rbacv1.Role{}
-	if err := nt.Validate("pods", testNs, role, roleHasRules(rootPodRole().Rules),
-		isManagedBy(declared.RootReconciler, configsync.RootSyncName)); err != nil {
+	err := nt.Validate("pods", testNs, role,
+		roleHasRules(rootPodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -382,7 +391,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// Ignore the Syncing condition because the sync status is updated by another reconciler, which doesn't update the SyncingCondition.
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository", true)
 	nt.T.Logf("The Role resource version should not be changed")
-	if err := nt.Validate("pods", testNs, &rbacv1.Role{}, sameResourceVersion(roleResourceVersion)); err != nil {
+	if err := nt.Validate("pods", testNs, &rbacv1.Role{},
+		nomostest.ResourceVersionEquals(nt, roleResourceVersion)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -390,7 +400,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nomostest.StopWebhook(nt)
 	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
 	if _, err := nomostest.Retry(60*time.Second, func() error {
-		return nt.Validate("pods", testNs, &rbacv1.Role{}, resourceVersionChanged(roleResourceVersion))
+		return nt.Validate("pods", testNs, &rbacv1.Role{},
+			nomostest.ResourceVersionNotEquals(nt, roleResourceVersion))
 	}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -405,8 +416,10 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Ensure the Role is managed by the other Root repo %s", rootSync2)
-	if err := nt.Validate("pods", testNs, &rbacv1.Role{},
-		roleHasRules(rootPodRole().Rules), isManagedBy(declared.RootReconciler, rootSync2)); err != nil {
+	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+		roleHasRules(rootPodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -426,15 +439,17 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.WaitForRepoSyncs()
 	role := &rbacv1.Role{}
 	nt.T.Logf("Ensure the Role is managed by Namespace Repo %s", repoSyncNN1)
-	if err := nt.Validate("pods", testNs, role, roleHasRules(namespacePodRole().Rules),
-		isManagedBy(declared.Scope(repoSyncNN1.Namespace), repoSyncNN1.Name)); err != nil {
+	err := nt.Validate("pods", testNs, role,
+		roleHasRules(namespacePodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN1.Namespace), repoSyncNN1.Name))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 	roleResourceVersion := role.ResourceVersion
 
 	// Validate multi-repo metrics from namespace reconciler.
 	nsReconcilerName1 := core.NsReconcilerName(repoSyncNN1.Namespace, repoSyncNN1.Name)
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		var err error
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
 		// available on GKE.
@@ -461,7 +476,9 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), repoSyncNN1.Name, repoSyncNN1.Namespace,
 		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn(), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	nt.T.Logf("The Role resource version should not be changed")
-	if err := nt.Validate("pods", testNs, &rbacv1.Role{}, sameResourceVersion(roleResourceVersion)); err != nil {
+	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+		nomostest.ResourceVersionEquals(nt, roleResourceVersion))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -487,7 +504,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	nt.T.Logf("Ensure the Role is managed by the other Namespace repo %s", repoSyncNN2)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		roleHasRules(namespacePodRole().Rules), isManagedBy(declared.Scope(repoSyncNN2.Namespace), repoSyncNN2.Name))
+		roleHasRules(namespacePodRole().Rules),
+		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN2.Namespace), repoSyncNN2.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -602,20 +620,6 @@ func namespacePodRole() *rbacv1.Role {
 	return result
 }
 
-func isManagedBy(scope declared.Scope, syncName string) nomostest.Predicate {
-	return func(o client.Object) error {
-		r, isRole := o.(*rbacv1.Role)
-		if !isRole {
-			return nomostest.WrongTypeErr(o, &rbacv1.Role{})
-		}
-		r.SetGroupVersionKind(kinds.Role())
-		if diff.IsManager(scope, syncName, r) {
-			return nil
-		}
-		return errors.Errorf("Pod Role is not managed by %s_%s", scope, syncName)
-	}
-}
-
 func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
 	return func(o client.Object) error {
 		r, isRole := o.(*rbacv1.Role)
@@ -627,23 +631,5 @@ func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
 			return errors.Errorf("Pod Role .rules diff: %s", diff)
 		}
 		return nil
-	}
-}
-
-func sameResourceVersion(expected string) nomostest.Predicate {
-	return func(o client.Object) error {
-		if o.GetResourceVersion() == expected {
-			return nil
-		}
-		return errors.Errorf("expected Role resourceVersion: %s, but got %s", expected, o.GetResourceVersion())
-	}
-}
-
-func resourceVersionChanged(expected string) nomostest.Predicate {
-	return func(o client.Object) error {
-		if o.GetResourceVersion() != expected {
-			return nil
-		}
-		return errors.Errorf("expected Role resourceVersion changed, but got the same resourceVersion %s", expected)
 	}
 }

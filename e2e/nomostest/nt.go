@@ -169,6 +169,11 @@ func RepoSyncNN(ns, name string) types.NamespacedName {
 	}
 }
 
+// ObjectNamespacedName returns the NamespacedName of the object.
+func ObjectNamespacedName(obj metav1.Object) types.NamespacedName {
+	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+}
+
 // DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
 var DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
 
@@ -578,8 +583,10 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 		syncNamespaceRepos := waitForRepoSyncsOptions.syncNamespaceRepos
 		if syncNamespaceRepos {
 			for nn := range nt.NonRootRepos {
+				syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
 				nt.WaitForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
-					syncTimeout, DefaultRepoSha1Fn(), RepoSyncHasStatusSyncCommit, nil)
+					syncTimeout, DefaultRepoSha1Fn(), RepoSyncHasStatusSyncCommit,
+					&SyncDirPredicatePair{syncDir, RepoSyncHasStatusSyncDirectory})
 			}
 		}
 	} else {
@@ -675,7 +682,7 @@ func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, t
 		}
 		isSynced := []Predicate{syncSha1(sha1)}
 		if syncDirPair != nil {
-			isSynced = append(isSynced, syncDirPair.predicate(syncDirPair.dir))
+			isSynced = append(isSynced, syncDirPair.Predicate(syncDirPair.Dir))
 		}
 
 		return nt.Validate(name, namespace, o, isSynced...)
@@ -1442,8 +1449,8 @@ func RootSyncOnly() WaitForRepoSyncsOption {
 
 // SyncDirPredicatePair is a pair of the sync directory and the predicate.
 type SyncDirPredicatePair struct {
-	dir       string
-	predicate func(string) Predicate
+	Dir       string
+	Predicate func(string) Predicate
 }
 
 // WithSyncDirectoryMap provides a map of RootSync|RepoSync and the corresponding sync directory.

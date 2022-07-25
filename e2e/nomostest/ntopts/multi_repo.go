@@ -60,6 +60,9 @@ type MultiRepo struct {
 	// ReconcileTimeout sets spec.override.reconcileTimeout on each R*Sync
 	// Default: 5m.
 	ReconcileTimeout *time.Duration
+
+	// SkipNonLocalGitProvider will skip the test if run with a GitProvider type other than local.
+	SkipNonLocalGitProvider bool
 }
 
 // NamespaceRepo tells the test case that a Namespace Repo should be configured
@@ -114,6 +117,11 @@ func MultiRepoIncompatible(opt *New) {
 // SkipMonoRepo will skip the test in mono repo mode.
 func SkipMonoRepo(opt *New) {
 	opt.SkipMonoRepo = true
+}
+
+// SkipNonLocalGitProvider will skip the test with non-local GitProvider types
+func SkipNonLocalGitProvider(opt *New) {
+	opt.SkipNonLocalGitProvider = true
 }
 
 // InstallResourceGroupController installs the resource-group controller.

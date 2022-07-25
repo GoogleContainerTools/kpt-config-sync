@@ -568,14 +568,15 @@ func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
 		result[reconcilermanager.GitSync] = gitSyncEnvs(ctx, options{
-			ref:         rs.Spec.Git.Revision,
-			branch:      rs.Spec.Git.Branch,
-			repo:        rs.Spec.Git.Repo,
-			secretType:  rs.Spec.Git.Auth,
-			period:      v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
-			proxy:       rs.Spec.Proxy,
-			depth:       rs.Spec.Override.GitSyncDepth,
-			noSSLVerify: rs.Spec.Git.NoSSLVerify,
+			ref:               rs.Spec.Git.Revision,
+			branch:            rs.Spec.Git.Branch,
+			repo:              rs.Spec.Git.Repo,
+			secretType:        rs.Spec.Git.Auth,
+			period:            v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
+			proxy:             rs.Spec.Proxy,
+			depth:             rs.Spec.Override.GitSyncDepth,
+			noSSLVerify:       rs.Spec.Git.NoSSLVerify,
+			privateCertSecret: rs.Spec.Git.PrivateCertSecret.Name,
 		})
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
@@ -702,11 +703,13 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		var auth configsync.AuthType
 		var gcpSAEmail string
 		var secretRefName string
+		var privateCertSecret string
 		switch v1beta1.SourceType(rs.Spec.SourceType) {
 		case v1beta1.GitSource:
 			auth = rs.Spec.Auth
 			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
 			secretRefName = rs.Spec.SecretRef.Name
+			privateCertSecret = rs.Spec.Git.PrivateCertSecret.Name
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
@@ -732,7 +735,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		// authenticate with the git repository using the authorization method specified
 		// in the RepoSync CR.
 		secretName := ReconcilerResourceName(reconcilerName, secretRefName)
-		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, r.membership)
+		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, privateCertSecret, r.membership)
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.
 		for _, container := range templateSpec.Containers {
@@ -765,7 +768,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
-					container.VolumeMounts = volumeMounts(rs.Spec.Auth, container.VolumeMounts)
+					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
 					if authTypeToken(rs.Spec.Auth) {

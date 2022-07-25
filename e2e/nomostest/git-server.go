@@ -36,6 +36,8 @@ import (
 const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
 const testGitServerImage = "gcr.io/stolos-dev/git-server:v1.0.0"
+const testGitHTTPServer = "http-git-server"
+const testGitHTTPServerImage = "gcr.io/stolos-dev/http-git-server:v1.0.0"
 
 func testGitServerSelector() map[string]string {
 	// Note that maps are copied by reference into objects.
@@ -187,7 +189,8 @@ func gitService() *corev1.Service {
 		core.Namespace(testGitNamespace),
 	)
 	service.Spec.Selector = testGitServerSelector()
-	service.Spec.Ports = []corev1.ServicePort{{Name: "ssh", Port: 22}}
+	service.Spec.Ports = []corev1.ServicePort{{Name: "ssh", Port: 22},
+		{Name: "https", Port: 443}}
 	return service
 }
 
@@ -196,7 +199,7 @@ func gitDeployment() *appsv1.Deployment {
 		core.Namespace(testGitNamespace),
 		core.Labels(testGitServerSelector()),
 	)
-
+	gitGID := int64(1000)
 	deployment.Spec = appsv1.DeploymentSpec{
 		MinReadySeconds: 2,
 		Strategy:        appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
@@ -211,6 +214,9 @@ func gitDeployment() *appsv1.Deployment {
 						Secret: &corev1.SecretVolumeSource{SecretName: gitServerSecret},
 					}},
 					{Name: "repos", VolumeSource: corev1.VolumeSource{EmptyDir: nil}},
+					{Name: "ssl-cert", VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{SecretName: gitServerCertSecret},
+					}},
 				},
 				Containers: []corev1.Container{
 					{
@@ -219,11 +225,23 @@ func gitDeployment() *appsv1.Deployment {
 						Ports: []corev1.ContainerPort{{ContainerPort: 22}},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "keys", MountPath: "/git-server/keys"},
-							{Name: "repos", MountPath: "/git-server/repos/config-management-system/root-sync"},
+							{Name: "repos", MountPath: "/git-server/repos"},
+						},
+					},
+					{
+						Name:  testGitHTTPServer,
+						Image: testGitHTTPServerImage,
+						Ports: []corev1.ContainerPort{{ContainerPort: 443}},
+						VolumeMounts: []corev1.VolumeMount{
+							{Name: "repos", MountPath: "/git-server/repos"},
+							{Name: "ssl-cert", MountPath: "/etc/nginx/ssl"},
 						},
 					},
 				},
 				ImagePullSecrets: []corev1.LocalObjectReference{},
+				SecurityContext: &corev1.PodSecurityContext{
+					FSGroup: &gitGID,
+				},
 			},
 		},
 	}

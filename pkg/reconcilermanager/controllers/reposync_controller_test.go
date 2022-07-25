@@ -88,7 +88,7 @@ var parsedDeployment = func(de *appsv1.Deployment) error {
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: defaultContainers(),
-				Volumes:    deploymentSecretVolumes("git-creds"),
+				Volumes:    deploymentSecretVolumes("git-creds", ""),
 			},
 		},
 	}
@@ -163,6 +163,12 @@ func reposyncOverrideReconcileTimeout(reconcileTimeout metav1.Duration) func(*v1
 func reposyncNoSSLVerify() func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.NoSSLVerify = true
+	}
+}
+
+func reposyncPrivateCert(privateCertSecret string) func(sync *v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		rs.Spec.Git.PrivateCertSecret.Name = privateCertSecret
 	}
 }
 
@@ -634,6 +640,134 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	rs.Spec.NoSSLVerify = false
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+}
+
+func TestRepoSyncCreateWithPrivateCert(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+	privateCertSecret := "foo-secret"
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
+		reposyncPrivateCert(privateCertSecret))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret)
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnvs := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+
+	nsSecretName := nsReconcilerName + "-" + secretName
+	repoDeployment := repoSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		privateCertSecretMutator(nsSecretName, privateCertSecret),
+		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
+		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
+		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
+		containerEnvMutator(repoContainerEnvs),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+}
+
+func TestRepoSyncUpdatePrivateCert(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret)
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnvs := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	nsSecretName := nsReconcilerName + "-" + secretName
+	repoDeployment := rootSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsSecretName),
+		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
+		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
+		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
+		containerEnvMutator(repoContainerEnvs),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+
+	// Unset rs.Spec.PrivateCertSecret
+	rs.Spec.PrivateCertSecret.Name = ""
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("No need to update Deployment")
+
+	// Set rs.Spec.PrivateCertSecret
+	privateCertSecret := "foo-secret"
+	rs.Spec.PrivateCertSecret.Name = privateCertSecret
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnvs = testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	updatedRepoDeployment := rootSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		privateCertSecretMutator(nsSecretName, privateCertSecret),
+		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
+		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
+		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
+		containerEnvMutator(repoContainerEnvs),
+	)
+	wantDeployments[core.IDOf(updatedRepoDeployment)] = updatedRepoDeployment
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// Unset rs.Spec.PrivateCertSecret
+	rs.Spec.PrivateCertSecret.Name = ""
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {

@@ -94,6 +94,10 @@ func NewOptStruct(testName, tmpDir string, t testing2.NTB, ntOptions ...ntopts.O
 		t.Skip("Test skipped for non-gcenode auth types")
 	}
 
+	if *e2e.GitProvider != e2e.Local && optsStruct.SkipNonLocalGitProvider {
+		t.Skip("Test skipped for non-local GitProvider types")
+	}
+
 	switch {
 	case optsStruct.Nomos.MultiRepo:
 		if optsStruct.MultiRepoIncompatible {
@@ -337,6 +341,8 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		// Pods don't always restart if the secrets don't exist, so we have to
 		// create the Namespaces + Secrets before anything else.
 		nt.gitPrivateKeyPath = generateSSHKeys(nt)
+
+		generateSSLKeys(nt)
 
 		waitForGit := installGitServer(nt)
 		if err := waitForGit(); err != nil {

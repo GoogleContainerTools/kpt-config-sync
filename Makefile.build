@@ -228,3 +228,15 @@ build-git-server:
 			-t gcr.io/stolos-dev/git-server:$(GIT_SERVER_RELEASE)
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
 	@docker push gcr.io/stolos-dev/git-server:$(GIT_SERVER_RELEASE)
+
+# NOTE: when updating the git-server version, update
+# e2e/nomostest/git-server.go to reflect the version change
+E2E_TEST_IMAGE_HTTP_GIT_SERVER_TAG := v1.0.0
+E2E_TEST_IMAGE_HTTP_GIT_SERVER := gcr.io/stolos-dev/http-git-server:$(E2E_TEST_IMAGE_HTTP_GIT_SERVER_TAG)
+# Builds the container used by e2e tests to test git over HTTPS.
+build-http-git-server:
+	@echo "+++ Building the http-git-server image"
+	docker build \
+		-t $(E2E_TEST_IMAGE_HTTP_GIT_SERVER) \
+		test/docker/http-git-server/
+	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)

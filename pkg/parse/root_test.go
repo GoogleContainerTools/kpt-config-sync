@@ -240,7 +240,7 @@ func TestRoot_Parse(t *testing.T) {
 					fake.WithRootSyncSourceType(v1beta1.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{},"f:secretRef":{}},"f:override":{},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:privateCertSecret":{},"f:repo":{},"f:secretRef":{}},"f:override":{},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),

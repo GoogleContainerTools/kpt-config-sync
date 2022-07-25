@@ -69,13 +69,21 @@ type Git struct {
 	Proxy string `json:"proxy,omitempty"`
 
 	// secretRef is the secret used to connect to the Git source of truth.
+	// +nullable
 	// +optional
 	SecretRef SecretReference `json:"secretRef,omitempty"`
 
 	// noSSLVerify specifies whether to enable or disable the SSL certificate verification. Default: false.
 	// If noSSLVerify is set to true, it tells Git to skip the SSL certificate verification.
+	// This should either not be set or be set to false when privateCertSecret is provided.
 	// +optional
 	NoSSLVerify bool `json:"noSSLVerify,omitempty"`
+
+	// privateCertSecret specifies the name of the secret where the private certificate is stored.
+	// The creation of the secret should be done out of band by the user.
+	// +nullable
+	// +optional
+	PrivateCertSecret SecretReference `json:"privateCertSecret,omitempty"`
 }
 
 // SecretReference contains the reference to the secret used to connect to

@@ -102,7 +102,9 @@ spec:
                   noSSLVerify:
                     description: 'noSSLVerify specifies whether to enable or disable
                       the SSL certificate verification. Default: false. If noSSLVerify
-                      is set to true, it tells Git to skip the SSL certificate verification.'
+                      is set to true, it tells Git to skip the SSL certificate verification.
+                      This should either not be set or be set to false when privateCertSecret
+                      is provided.'
                     type: boolean
                   period:
                     description: 'period is the time duration between consecutive
@@ -113,6 +115,16 @@ spec:
                       a bug where it looks like the code is dealing with seconds but
                       its actually nanoseconds (or vice versa).'
                     type: string
+                  privateCertSecret:
+                    description: privateCertSecret specifies the name of the secret
+                      where the private certificate is stored. The creation of the
+                      secret should be done out of band by the user.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   proxy:
                     description: proxy specifies an HTTPS proxy for accessing the
                       Git repo. Only has an effect when secretType is one of ("cookiefile",
@@ -134,6 +146,7 @@ spec:
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
                       source of truth.
+                    nullable: true
                     properties:
                       name:
                         description: name represents the secret name.
@@ -1002,7 +1015,9 @@ spec:
                   noSSLVerify:
                     description: 'noSSLVerify specifies whether to enable or disable
                       the SSL certificate verification. Default: false. If noSSLVerify
-                      is set to true, it tells Git to skip the SSL certificate verification.'
+                      is set to true, it tells Git to skip the SSL certificate verification.
+                      This should either not be set or be set to false when privateCertSecret
+                      is provided.'
                     type: boolean
                   period:
                     description: 'period is the time duration between consecutive
@@ -1013,6 +1028,16 @@ spec:
                       a bug where it looks like the code is dealing with seconds but
                       its actually nanoseconds (or vice versa).'
                     type: string
+                  privateCertSecret:
+                    description: privateCertSecret specifies the name of the secret
+                      where the private certificate is stored. The creation of the
+                      secret should be done out of band by the user.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   proxy:
                     description: proxy specifies an HTTPS proxy for accessing the
                       Git repo. Only has an effect when secretType is one of ("cookiefile",
@@ -1034,6 +1059,7 @@ spec:
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
                       source of truth.
+                    nullable: true
                     properties:
                       name:
                         description: name represents the secret name.

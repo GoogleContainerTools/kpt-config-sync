@@ -99,7 +99,7 @@ spec:
             cpu: "150m"
             memory: "100Mi"
       - name: git-sync
-        image: gcr.io/config-management-release/git-sync:v3.5.1-gke.0__linux_amd64
+        image: gcr.io/config-management-release/git-sync:v3.6.0-gke.0__linux_amd64
         # Do not put "rev-" in the root arg or you will break our parsing of commit hashes. See
         # pkg/policyimporter/git/git.go to see where we depend on that magic string from git-sync.
         args: ["--root=/repo/root", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json", "--v=5"]

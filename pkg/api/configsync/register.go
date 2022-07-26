@@ -64,11 +64,11 @@ const (
 	AuthSSH AuthType = "ssh"
 	// AuthCookieFile indicates using cookiefile to authenticate to Git. It doesn't apply to OCI.
 	AuthCookieFile AuthType = "cookiefile"
-	// AuthNone indicates no auth token is required for Git or OCI.
+	// AuthNone indicates no auth token is required for Git or OCI or Helm.
 	AuthNone AuthType = "none"
-	// AuthToken indicates using a username/password to authenticate to Git. It doesn't apply to OCI.
+	// AuthToken indicates using a username/password to authenticate to Git or Helm. It doesn't apply to OCI.
 	AuthToken AuthType = "token"
 	// AuthGCPServiceAccount indicates using a GCP service account to authenticate to
-	// Git or OCI when GKE Workload Identity or Fleet Workload Identity is enabled.
+	// Git or OCI or Helm, when GKE Workload Identity or Fleet Workload Identity is enabled.
 	AuthGCPServiceAccount AuthType = "gcpserviceaccount"
 )

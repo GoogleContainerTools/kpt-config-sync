@@ -235,6 +235,9 @@ const (
 
 	// OciSource represents the source type is OCI package.
 	OciSource SourceType = "oci"
+
+	// HelmSource represents the source type is Helm repository.
+	HelmSource SourceType = "helm"
 )
 
 // GetPeriodSecs returns the sync period defaulting to 15 if empty.

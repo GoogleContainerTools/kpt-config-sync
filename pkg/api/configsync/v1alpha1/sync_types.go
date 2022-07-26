@@ -33,8 +33,8 @@ type Spec struct {
 
 	// sourceType specifies the type of the source of truth.
 	//
-	// Must be one of git, oci. Optional. Set to git if not specified.
-	// +kubebuilder:validation:Pattern=^(git|oci|)$
+	// Must be one of git, oci, helm. Optional. Set to git if not specified.
+	// +kubebuilder:validation:Pattern=^(git|oci|helm)$
 	// +kubebuilder:default:=git
 	// +optional
 	SourceType string `json:"sourceType,omitempty"`
@@ -46,6 +46,10 @@ type Spec struct {
 	// oci contains configuration specific to importing resources from an OCI package.
 	// +optional
 	Oci *Oci `json:"oci,omitempty"`
+
+	// helm contains configuration specific to importing resources from a Helm repo.
+	// +optional
+	Helm *Helm `json:"helm,omitempty"`
 
 	// override allows to override the settings for a reconciler.
 	// +nullable
@@ -269,4 +273,7 @@ const (
 
 	// OciSource represents the source type is OCI package.
 	OciSource SourceType = "oci"
+
+	// HelmSource represents the source type is Helm repository.
+	HelmSource SourceType = "helm"
 )

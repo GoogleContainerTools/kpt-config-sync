@@ -143,6 +143,79 @@ spec:
                 - auth
                 - repo
                 type: object
+              helm:
+                description: helm contains configuration specific to importing resources
+                  from a Helm repo.
+                properties:
+                  auth:
+                    description: auth specifies the type to authenticate to the Helm
+                      repository. Must be one of secret, gcpserviceaccount, or none.
+                      The validation of this is case-sensitive. Required.
+                    enum:
+                    - none
+                    - gcpserviceaccount
+                    - token
+                    type: string
+                  chart:
+                    description: chart is a Helm chart name. Required.
+                    type: string
+                  gcpServiceAccountEmail:
+                    description: 'gcpServiceAccountEmail specifies the GCP service
+                      account used to annotate the RootSync/RepoSync controller Kubernetes
+                      Service Account. Note: The field is used when spec.helm.auth:
+                      gcpserviceaccount.'
+                    type: string
+                  includeCRDs:
+                    description: 'includeCRDs specifies if Helm template should also
+                      generate CustomResourceDefinitions. If IncludeCRDs is set to
+                      false, no CustomeResourceDefinition will be generated. Default:
+                      false.'
+                    type: boolean
+                  namespace:
+                    description: namespace sets the target namespace for a release
+                    type: string
+                  period:
+                    description: 'period is the time duration between consecutive
+                      syncs. Default: 15s. Use string to specify this field value,
+                      like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Chart will not be re-synced if version is specified and it is
+                      not "latest"'
+                    type: string
+                  releaseName:
+                    description: releaseName is the name of the Helm release.
+                    type: string
+                  repo:
+                    description: repo is the helm repository URL to sync from. Required.
+                    type: string
+                  secretRef:
+                    description: secretRef holds the authentication secret for accessing
+                      the Helm repository.
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
+                  values:
+                    description: values to use instead of default values that accompany
+                      the chart
+                    type: object
+                  valuesFiles:
+                    description: valuesFiles is a list of path to Helm value files.
+                      Values files must be in the same repository with the Helm chart.
+                      And the paths here are absolute path from the root directory
+                      of the repository
+                    items:
+                      type: string
+                    type: array
+                  version:
+                    description: version is the chart version. If this is not specified,
+                      the latest version is used
+                    type: string
+                required:
+                - auth
+                - chart
+                - repo
+                type: object
               oci:
                 description: oci contains configuration specific to importing resources
                   from an OCI package.
@@ -279,8 +352,8 @@ spec:
               sourceType:
                 default: git
                 description: "sourceType specifies the type of the source of truth.
-                  \n Must be one of git, oci. Optional. Set to git if not specified."
-                pattern: ^(git|oci|)$
+                  \n Must be one of git, oci, helm. Optional. Set to git if not specified."
+                pattern: ^(git|oci|helm)$
                 type: string
             type: object
           status:
@@ -970,6 +1043,79 @@ spec:
                 - auth
                 - repo
                 type: object
+              helm:
+                description: helm contains configuration specific to importing resources
+                  from a Helm repo.
+                properties:
+                  auth:
+                    description: auth specifies the type to authenticate to the Helm
+                      repository. Must be one of secret, gcpserviceaccount, or none.
+                      The validation of this is case-sensitive. Required.
+                    enum:
+                    - none
+                    - gcpserviceaccount
+                    - token
+                    type: string
+                  chart:
+                    description: chart is a Helm chart name. Required.
+                    type: string
+                  gcpServiceAccountEmail:
+                    description: 'gcpServiceAccountEmail specifies the GCP service
+                      account used to annotate the RootSync/RepoSync controller Kubernetes
+                      Service Account. Note: The field is used when spec.helm.auth:
+                      gcpserviceaccount.'
+                    type: string
+                  includeCRDs:
+                    description: 'includeCRDs specifies if Helm template should also
+                      generate CustomResourceDefinitions. If IncludeCRDs is set to
+                      false, no CustomeResourceDefinition will be generated. Default:
+                      false.'
+                    type: boolean
+                  namespace:
+                    description: namespace sets the target namespace for a release
+                    type: string
+                  period:
+                    description: 'period is the time duration between consecutive
+                      syncs. Default: 15s. Use string to specify this field value,
+                      like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Chart will not be re-synced if version is specified and it is
+                      not "latest"'
+                    type: string
+                  releaseName:
+                    description: releaseName is the name of the Helm release.
+                    type: string
+                  repo:
+                    description: repo is the helm repository URL to sync from. Required.
+                    type: string
+                  secretRef:
+                    description: secretRef holds the authentication secret for accessing
+                      the Helm repository.
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
+                  values:
+                    description: values to use instead of default values that accompany
+                      the chart
+                    type: object
+                  valuesFiles:
+                    description: valuesFiles is a list of path to Helm value files.
+                      Values files must be in the same repository with the Helm chart.
+                      And the paths here are absolute path from the root directory
+                      of the repository
+                    items:
+                      type: string
+                    type: array
+                  version:
+                    description: version is the chart version. If this is not specified,
+                      the latest version is used
+                    type: string
+                required:
+                - auth
+                - chart
+                - repo
+                type: object
               oci:
                 description: oci contains configuration specific to importing resources
                   from an OCI package.
@@ -1107,8 +1253,8 @@ spec:
               sourceType:
                 default: git
                 description: "sourceType specifies the type of the source of truth.
-                  \n Must be one of git, oci. Optional. Set to git if not specified."
-                pattern: ^(git|oci|)$
+                  \n Must be one of git, oci, helm. Optional. Set to git if not specified."
+                pattern: ^(git|oci|helm)$
                 type: string
             type: object
           status:

@@ -834,8 +834,11 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	if nt.MultiRepo {
 		nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 		nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
-		nt.PodLogs(configmanagement.ControllerNamespace, DefaultRootReconcilerName, reconcilermanager.Reconciler, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, DefaultRootReconcilerName, reconcilermanager.GitSync, previousPodLog)
+		for name := range nt.RootRepos {
+			nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
+				reconcilermanager.Reconciler, previousPodLog)
+			//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		}
 		for nn := range nt.NonRootRepos {
 			nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
 				reconcilermanager.Reconciler, previousPodLog)

@@ -108,7 +108,27 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace s
 
 	reconcilerDeployment.Name = name
 	reconcilerDeployment.Namespace = namespace
+
+	// Add common deployment labels.
+	// This enables label selecting deployment by R*Sync name & namespace.
 	r.addLabels(reconcilerDeployment, labelMap)
+
+	// Add common deployment labels to the pod template.
+	// This enables label selecting deployment pods by R*Sync name & namespace.
+	r.addTemplateLabels(reconcilerDeployment, labelMap)
+
+	// Add deployment name to the pod template.
+	// This enables label selecting deployment pods by deployment name.
+	r.addTemplateLabels(reconcilerDeployment, map[string]string{
+		metadata.DeploymentNameLabel: name,
+	})
+
+	// Add deployment name to the pod selector.
+	// This enables label selecting deployment pods by deployment name.
+	r.addSelectorLabels(reconcilerDeployment, map[string]string{
+		metadata.DeploymentNameLabel: name,
+	})
+
 	if err := mutateObject(reconcilerDeployment); err != nil {
 		return controllerutil.OperationResultNone, err
 	}
@@ -350,4 +370,32 @@ func (r *reconcilerBase) injectFleetWorkloadIdentityCredentials(podTemplate *cor
 	}
 	core.SetAnnotation(podTemplate, metadata.FleetWorkloadIdentityCredentials, string(bytes))
 	return nil
+}
+
+// addSelectorLabels will merge the labelMaps into the deployment spec.selector.matchLabels
+func (r *reconcilerBase) addSelectorLabels(deployment *appsv1.Deployment, labelMap map[string]string) {
+	currentLabels := deployment.Spec.Selector.MatchLabels
+	if currentLabels == nil {
+		currentLabels = make(map[string]string, len(labelMap))
+	}
+
+	for key, value := range labelMap {
+		currentLabels[key] = value
+	}
+
+	deployment.Spec.Selector.MatchLabels = currentLabels
+}
+
+// addTemplateLabels will merge the labelMaps into the deployment spec.template.labels
+func (r *reconcilerBase) addTemplateLabels(deployment *appsv1.Deployment, labelMap map[string]string) {
+	currentLabels := deployment.Spec.Template.Labels
+	if currentLabels == nil {
+		currentLabels = make(map[string]string, len(labelMap))
+	}
+
+	for key, value := range labelMap {
+		currentLabels[key] = value
+	}
+
+	deployment.Spec.Template.Labels = currentLabels
 }

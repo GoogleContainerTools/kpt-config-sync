@@ -669,8 +669,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RepoSy
 
 		// Add unique reconciler label
 		core.SetLabel(&d.Spec.Template, metadata.ReconcilerLabel, reconcilerName)
-		core.SetLabel(&d.Spec.Template, metadata.SyncNameLabel, rs.Name)
-		core.SetLabel(&d.Spec.Template, metadata.SyncNamespaceLabel, rs.Namespace)
+
 		templateSpec := &d.Spec.Template.Spec
 		// Update ServiceAccountName. eg. ns-reconciler-<namespace>
 		templateSpec.ServiceAccountName = reconcilerName

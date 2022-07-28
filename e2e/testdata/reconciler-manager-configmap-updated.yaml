@@ -39,10 +39,12 @@ data:
     selector:
       matchLabels:
         app: reconciler
+        configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
     template:
       metadata:
         labels:
           app: reconciler
+          configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
       spec:
         serviceAccountName: # this field will be assigned dynamically by the reconciler-manager
         containers:

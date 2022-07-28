@@ -45,6 +45,11 @@ const (
 
 	// SyncNameLabel indicates the name of RootSync or RepoSync.
 	SyncNameLabel = configsync.ConfigSyncPrefix + "sync-name"
+
+	// DeploymentNameLabel indicates the name of the Deployment.
+	// This is used to enable selecting pods by label, primarily for printing logs.
+	// Example: kubectl logs deployment/<deploy-name> <container-name> -n config-management-system
+	DeploymentNameLabel = configsync.ConfigSyncPrefix + "deployment-name"
 )
 
 // DepthSuffix is a label suffix for hierarchical namespace depth.

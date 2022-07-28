@@ -39,10 +39,12 @@ data:
      selector:
        matchLabels:
          app: reconciler
+         configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
      template:
        metadata:
          labels:
            app: reconciler
+           configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
          annotations:
            cluster-autoscaler.kubernetes.io/safe-to-evict: "true" # this annotation is needed so that pods doesn't block scale down
        spec:

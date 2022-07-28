@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -43,6 +44,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -410,16 +412,110 @@ func formErrorEvent(s string) event.Event {
 	return e
 }
 
+func TestProcessApplyEvent(t *testing.T) {
+	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj())
+
+	ctx := context.Background()
+	status := newApplyStats()
+	objStatusMap := make(ObjectStatusMap)
+	unknownTypeResources := make(map[core.ID]struct{})
+
+	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, &deploymentID, fmt.Errorf("test error")).ApplyEvent, &status.ApplyEvent, objStatusMap, unknownTypeResources)
+	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
+	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
+
+	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, &testID, nil).ApplyEvent, &status.ApplyEvent, objStatusMap, unknownTypeResources)
+	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
+
+	expectedApplyStatus := newApplyStats()
+	expectedApplyStatus.ApplyEvent.EventByOp[event.ApplyFailed] = 1
+	expectedApplyStatus.ApplyEvent.EventByOp[event.ApplySuccessful] = 1
+	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+
+	expectedObjStatusMap := ObjectStatusMap{
+		idFrom(deploymentID): {
+			Strategy:  actuation.ActuationStrategyApply,
+			Actuation: actuation.ActuationFailed,
+		},
+		idFrom(testID): {
+			Strategy:  actuation.ActuationStrategyApply,
+			Actuation: actuation.ActuationSucceeded,
+		},
+	}
+	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+
+	// TODO: test handleMetrics on success
+	// TODO: test unknownTypeResources on UnknownTypeError
+	// TODO: test handleApplySkippedEvent on skip
+}
+
+func TestProcessPruneEvent(t *testing.T) {
+	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj())
+
+	ctx := context.Background()
+	status := newApplyStats()
+	objStatusMap := make(ObjectStatusMap)
+	cs := &clientSet{}
+
+	err := processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, &status.PruneEvent, objStatusMap, cs)
+	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
+	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
+
+	err = processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, &status.PruneEvent, objStatusMap, cs)
+	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
+
+	expectedApplyStatus := newApplyStats()
+	expectedApplyStatus.PruneEvent.EventByOp[event.PruneFailed] = 1
+	expectedApplyStatus.PruneEvent.EventByOp[event.PruneSuccessful] = 1
+	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+
+	expectedObjStatusMap := ObjectStatusMap{
+		idFrom(deploymentID): {
+			Strategy:  actuation.ActuationStrategyDelete,
+			Actuation: actuation.ActuationFailed,
+		},
+		idFrom(testID): {
+			Strategy:  actuation.ActuationStrategyDelete,
+			Actuation: actuation.ActuationSucceeded,
+		},
+	}
+	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+
+	// TODO: test handleMetrics on success
+	// TODO: test PruneErrorForResource on failed
+	// TODO: test SpecialNamespaces on skip
+	// TODO: test handlePruneSkippedEvent on skip
+}
+
 func TestProcessWaitEvent(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
 	testID := object.UnstructuredToObjMetadata(newTestObj())
 
 	status := newApplyStats()
-	processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, status.objsReconciled)
-	processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, status.objsReconciled)
-	if len(status.objsReconciled) != 1 {
-		t.Fatalf("expected %d object to be recocniled but got %d", 1, len(status.objsReconciled))
+	objStatusMap := make(ObjectStatusMap)
+
+	err := processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, &status.WaitEvent, objStatusMap)
+	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileFailed)
+
+	err = processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, &status.WaitEvent, objStatusMap)
+	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileSuccessful)
+
+	expectedApplyStatus := newApplyStats()
+	expectedApplyStatus.WaitEvent.EventByOp[event.ReconcileFailed] = 1
+	expectedApplyStatus.WaitEvent.EventByOp[event.ReconcileSuccessful] = 1
+	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+
+	expectedObjStatusMap := ObjectStatusMap{
+		idFrom(deploymentID): {
+			Reconcile: actuation.ReconcileFailed,
+		},
+		idFrom(testID): {
+			Reconcile: actuation.ReconcileSucceeded,
+		},
 	}
+	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
 }
 
 func indent(in string, indentation uint) string {

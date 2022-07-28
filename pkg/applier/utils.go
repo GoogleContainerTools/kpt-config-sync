@@ -16,6 +16,8 @@ package applier
 
 import (
 	"encoding/json"
+	"sort"
+	"strings"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"golang.org/x/net/context"
@@ -26,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/object"
+	"sigs.k8s.io/cli-utils/pkg/object/mutation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -62,6 +65,14 @@ func objMetaFrom(obj client.Object) object.ObjMetadata {
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
 		GroupKind: obj.GetObjectKind().GroupVersionKind().GroupKind(),
+	}
+}
+
+func objMetaFromID(id core.ID) object.ObjMetadata {
+	return object.ObjMetadata{
+		Namespace: id.Namespace,
+		Name:      id.Name,
+		GroupKind: id.GroupKind,
 	}
 }
 
@@ -129,4 +140,52 @@ func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Un
 	annotations[StatusModeKey] = statusMode
 	u.SetAnnotations(annotations)
 	return c.Update(ctx, u)
+}
+
+func refsFromIDs(ids ...core.ID) []mutation.ResourceReference {
+	if len(ids) == 0 {
+		return nil
+	}
+	refs := make([]mutation.ResourceReference, len(ids))
+	for i, id := range ids {
+		refs[i] = mutation.ResourceReferenceFromObjMetadata(objMetaFromID(id))
+	}
+	return refs
+}
+
+func stringsFromRefs(refs ...mutation.ResourceReference) []string {
+	if len(refs) == 0 {
+		return nil
+	}
+	strs := make([]string, len(refs))
+	for i, ref := range refs {
+		strs[i] = ref.String()
+	}
+	return strs
+}
+
+const (
+	// Uncomment if needed for building depends-on annotations (deadcode)
+	// commaDelimiter        = ","
+	commaSpaceDelimiter   = ", "
+	commaNewlineDelimiter = ",\n"
+)
+
+// joinIDs joins the object IDs (GKNN) using ResourceReference string format
+// and the specified delimiter.
+//
+// ResourceReference string format is used becasue the normal ID string format,
+// includes commas and spaces that make it harder to parse in a list delimited
+// by commas.
+//
+// This can be used to build depends-on annotations when commaDelimiter is used,
+// or for log messages with commaSpaceDelimiter or commaNewlineDelimiter.
+func joinIDs(delimiter string, ids ...core.ID) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	refs := refsFromIDs(ids...)
+	refStrs := stringsFromRefs(refs...)
+	sort.Strings(refStrs)
+	return strings.Join(refStrs, delimiter)
 }

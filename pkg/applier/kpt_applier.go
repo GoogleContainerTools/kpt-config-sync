@@ -172,21 +172,30 @@ func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGr
 	return inv, nil
 }
 
-func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEventStats, unknownTypeResources map[core.ID]struct{}) status.Error {
+func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("apply %v for object: %v", e.Status, id)
-	stats.eventByOp[e.Status]++
+	stats.EventByOp[e.Status]++
+
+	objectStatus, ok := objectStatusMap[id]
+	if !ok || objectStatus == nil {
+		objectStatus = &ObjectStatus{}
+		objectStatusMap[id] = objectStatus
+	}
+	objectStatus.Strategy = actuation.ActuationStrategyApply
 
 	switch e.Status {
 	case event.ApplyPending:
-		// ignore
+		objectStatus.Actuation = actuation.ActuationPending
 		return nil
 
 	case event.ApplySuccessful:
+		objectStatus.Actuation = actuation.ActuationSucceeded
 		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
 		return nil
 
 	case event.ApplyFailed:
+		objectStatus.Actuation = actuation.ActuationFailed
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
@@ -196,6 +205,7 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEven
 		}
 
 	case event.ApplySkipped:
+		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
 		return handleApplySkippedEvent(e.Resource, id, e.Error)
 
@@ -204,11 +214,35 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, stats *applyEven
 	}
 }
 
-func processWaitEvent(e event.WaitEvent, objReconciled map[core.ID]struct{}) {
+func processWaitEvent(e event.WaitEvent, waitStats *waitEventStats, objectStatusMap ObjectStatusMap) error {
 	id := idFrom(e.Identifier)
-	if e.Status == event.ReconcileSuccessful {
-		objReconciled[id] = struct{}{}
+	if e.Status != event.ReconcilePending {
+		// Don't log pending. It's noisy and only fires in certain conditions.
+		klog.V(4).Infof("Reconcile %v: %v", e.Status, id)
 	}
+	waitStats.EventByOp[e.Status]++
+
+	objectStatus, ok := objectStatusMap[id]
+	if !ok || objectStatus == nil {
+		objectStatus = &ObjectStatus{}
+		objectStatusMap[id] = objectStatus
+	}
+
+	switch e.Status {
+	case event.ReconcilePending:
+		objectStatus.Reconcile = actuation.ReconcilePending
+	case event.ReconcileSkipped:
+		objectStatus.Reconcile = actuation.ReconcileSkipped
+	case event.ReconcileSuccessful:
+		objectStatus.Reconcile = actuation.ReconcileSucceeded
+	case event.ReconcileFailed:
+		objectStatus.Reconcile = actuation.ReconcileFailed
+	case event.ReconcileTimeout:
+		objectStatus.Reconcile = actuation.ReconcileTimeout
+	default:
+		return ErrorForResource(fmt.Errorf("unexpected wait event status: %v", e.Status), id)
+	}
+	return nil
 }
 
 // handleApplySkippedEvent translates from apply skipped event into resource error.
@@ -235,24 +269,34 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
-func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEventStats, cs *clientSet) status.Error {
+func processPruneEvent(ctx context.Context, e event.PruneEvent, stats *pruneEventStats, objectStatusMap ObjectStatusMap, cs *clientSet) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
-	stats.eventByOp[e.Status]++
+	stats.EventByOp[e.Status]++
+
+	objectStatus, ok := objectStatusMap[id]
+	if !ok || objectStatus == nil {
+		objectStatus = &ObjectStatus{}
+		objectStatusMap[id] = objectStatus
+	}
+	objectStatus.Strategy = actuation.ActuationStrategyDelete
 
 	switch e.Status {
 	case event.PrunePending:
-		// ignore
+		objectStatus.Actuation = actuation.ActuationPending
 		return nil
 
 	case event.PruneSuccessful:
+		objectStatus.Actuation = actuation.ActuationSucceeded
 		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
 		return nil
 
 	case event.PruneFailed:
+		objectStatus.Actuation = actuation.ActuationFailed
 		return PruneErrorForResource(e.Error, id)
 
 	case event.PruneSkipped:
+		objectStatus.Actuation = actuation.ActuationSkipped
 		if isNamespace(e.Object) && differ.SpecialNamespaces[e.Object.GetName()] {
 			// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 			err := cs.disableObject(ctx, e.Object)
@@ -350,6 +394,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 	a.checkInventoryObjectSize(ctx, cs.client)
 
 	stats := newApplyStats()
+	objStatusMap := make(ObjectStatusMap)
 	// disabledObjs are objects for which the management are disabled
 	// through annotation.
 	enabledObjs, disabledObjs := partitionObjs(objs)
@@ -360,9 +405,9 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 			a.errs = status.Append(a.errs, err)
 			return nil, a.errs
 		}
-		stats.disableObjs = disabledObjStats{
-			total:     uint64(len(disabledObjs)),
-			succeeded: disabledCount,
+		stats.DisableObjs = DisabledObjStats{
+			Total:     uint64(len(disabledObjs)),
+			Succeeded: disabledCount,
 		}
 	}
 	klog.Infof("%v objects to be applied: %v", len(enabledObjs), core.GKNNs(enabledObjs))
@@ -412,7 +457,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 			} else {
 				a.errs = status.Append(a.errs, Error(e.ErrorEvent.Err))
 			}
-			stats.errorTypeEvents++
+			stats.ErrorTypeEvents++
 		case event.WaitType:
 			// Log WaitEvent at the verbose level of 4 due to the number of WaitEvent.
 			// For every object which is skipped to apply/prune, there will be one ReconcileSkipped WaitEvent.
@@ -421,7 +466,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 			// a reconciled object may become pending before a wait task times out.
 			// Record the objs that have been reconciled.
 			klog.V(4).Info(e.WaitEvent)
-			processWaitEvent(e.WaitEvent, stats.objsReconciled)
+			a.errs = status.Append(a.errs, processWaitEvent(e.WaitEvent, &stats.WaitEvent, objStatusMap))
 		case event.ApplyType:
 			logEvent := event.ApplyEvent{
 				GroupName:  e.ApplyEvent.GroupName,
@@ -431,7 +476,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 				Error: e.ApplyEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processApplyEvent(ctx, e.ApplyEvent, &stats.applyEvent, unknownTypeResources))
+			a.errs = status.Append(a.errs, processApplyEvent(ctx, e.ApplyEvent, &stats.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
 			logEvent := event.PruneEvent{
 				GroupName:  e.PruneEvent.GroupName,
@@ -441,7 +486,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 				Error: e.PruneEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processPruneEvent(ctx, e.PruneEvent, &stats.pruneEvent, cs))
+			a.errs = status.Append(a.errs, processPruneEvent(ctx, e.PruneEvent, &stats.PruneEvent, objStatusMap, cs))
 		default:
 			klog.V(4).Infof("skipped %v event", e.Type)
 		}
@@ -463,6 +508,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		klog.V(4).Infof("The applier made no new progress")
 	} else {
 		klog.Infof("The applier made new progress: %s.", stats.string())
+		objStatusMap.Log(klog.V(0))
 	}
 	return gvks, a.errs
 }

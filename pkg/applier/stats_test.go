@@ -23,21 +23,21 @@ import (
 func TestDisabledObjStats(t *testing.T) {
 	testcases := []struct {
 		name       string
-		stats      disabledObjStats
+		stats      DisabledObjStats
 		wantEmpty  bool
 		wantString string
 	}{
 		{
 			name:       "empty disabledObjStats",
-			stats:      disabledObjStats{},
+			stats:      DisabledObjStats{},
 			wantEmpty:  true,
 			wantString: "",
 		},
 		{
 			name: "non-empty disabledObjStats",
-			stats: disabledObjStats{
-				total:     4,
-				succeeded: 0,
+			stats: DisabledObjStats{
+				Total:     4,
+				Succeeded: 0,
 			},
 			wantEmpty:  false,
 			wantString: "disabled 0 out of 4 objects",
@@ -67,7 +67,7 @@ func TestPruneEventStats(t *testing.T) {
 		{
 			name: "empty pruneEventStats",
 			stats: pruneEventStats{
-				eventByOp: map[event.PruneEventStatus]uint64{},
+				EventByOp: map[event.PruneEventStatus]uint64{},
 			},
 			wantEmpty:  true,
 			wantString: "",
@@ -75,7 +75,7 @@ func TestPruneEventStats(t *testing.T) {
 		{
 			name: "non-empty pruneEventStats",
 			stats: pruneEventStats{
-				eventByOp: map[event.PruneEventStatus]uint64{
+				EventByOp: map[event.PruneEventStatus]uint64{
 					event.PruneSkipped:    4,
 					event.PruneSuccessful: 0,
 					event.PruneFailed:     1,
@@ -109,7 +109,7 @@ func TestApplyEventStats(t *testing.T) {
 		{
 			name: "empty applyEventStats",
 			stats: applyEventStats{
-				eventByOp: map[event.ApplyEventStatus]uint64{},
+				EventByOp: map[event.ApplyEventStatus]uint64{},
 			},
 			wantEmpty:  true,
 			wantString: "",
@@ -117,7 +117,7 @@ func TestApplyEventStats(t *testing.T) {
 		{
 			name: "non-empty applyEventStats",
 			stats: applyEventStats{
-				eventByOp: map[event.ApplyEventStatus]uint64{
+				EventByOp: map[event.ApplyEventStatus]uint64{
 					event.ApplySuccessful: 4,
 					event.ApplySkipped:    2,
 					event.ApplyFailed:     2,
@@ -144,7 +144,7 @@ func TestApplyEventStats(t *testing.T) {
 func TestApplyStats(t *testing.T) {
 	testcases := []struct {
 		name       string
-		stats      applyStats
+		stats      ApplyStats
 		wantEmpty  bool
 		wantString string
 	}{
@@ -156,19 +156,19 @@ func TestApplyStats(t *testing.T) {
 		},
 		{
 			name: "non-empty applyStats",
-			stats: applyStats{
-				applyEvent: applyEventStats{
-					eventByOp: map[event.ApplyEventStatus]uint64{
+			stats: ApplyStats{
+				ApplyEvent: applyEventStats{
+					EventByOp: map[event.ApplyEventStatus]uint64{
 						event.ApplySuccessful: 1,
 						event.ApplySkipped:    2,
 					},
 				},
-				pruneEvent: pruneEventStats{
-					eventByOp: map[event.PruneEventStatus]uint64{
+				PruneEvent: pruneEventStats{
+					EventByOp: map[event.PruneEventStatus]uint64{
 						event.PruneFailed: 3,
 					},
 				},
-				errorTypeEvents: 4,
+				ErrorTypeEvents: 4,
 			},
 			wantEmpty:  false,
 			wantString: "ApplyEvents: 3 (Successful: 1, Skipped: 2), PruneEvents: 3 (Failed: 3), ErrorEvents: 4",

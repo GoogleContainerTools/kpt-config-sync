@@ -28,6 +28,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
@@ -39,7 +40,7 @@ const (
 	updatedKeyData = "updated-test-key"
 )
 
-func repoSyncWithAuth(ns, name, auth string, opts ...core.MetaMutator) *v1beta1.RepoSync {
+func repoSyncWithAuth(ns, name string, auth configsync.AuthType, opts ...core.MetaMutator) *v1beta1.RepoSync {
 	result := fake.RepoSyncObjectV1Beta1(ns, name, opts...)
 	result.Spec.SourceType = string(v1beta1.GitSource)
 	result.Spec.Git = &v1beta1.Git{
@@ -49,7 +50,7 @@ func repoSyncWithAuth(ns, name, auth string, opts ...core.MetaMutator) *v1beta1.
 	return result
 }
 
-func secret(t *testing.T, name, data, auth string, opts ...core.MetaMutator) *corev1.Secret {
+func secret(t *testing.T, name, data string, auth configsync.AuthType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
 	result := fake.SecretObject(name, opts...)
 	result.Data = secretData(t, data, auth)
@@ -60,14 +61,14 @@ func secret(t *testing.T, name, data, auth string, opts ...core.MetaMutator) *co
 	return result
 }
 
-func secretData(t *testing.T, data, auth string) map[string][]byte {
+func secretData(t *testing.T, data string, auth configsync.AuthType) map[string][]byte {
 	t.Helper()
 	key, err := json.Marshal(data)
 	if err != nil {
 		t.Fatalf("failed to marshal test key: %v", err)
 	}
 	return map[string][]byte{
-		auth: key,
+		string(auth): key,
 	}
 }
 

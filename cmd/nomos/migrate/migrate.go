@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -373,7 +374,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 				Branch:                 syncBranch,
 				Dir:                    syncDir,
 				Period:                 metav1.Duration{Duration: time.Duration(syncWaitSeconds) * time.Second},
-				Auth:                   secretType,
+				Auth:                   configsync.AuthType(secretType),
 				Proxy:                  proxyConfig,
 				GCPServiceAccountEmail: gcpServiceAccountEmail,
 				SecretRef: v1beta1.SecretReference{

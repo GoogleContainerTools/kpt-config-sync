@@ -134,7 +134,7 @@ func update(ctx context.Context, existingsecret *corev1.Secret, namespaceSecret 
 
 // SkipForAuth returns true if the passed auth is either 'none' or 'gcenode' or
 // 'gcpserviceaccount'.
-func SkipForAuth(auth string) bool {
+func SkipForAuth(auth configsync.AuthType) bool {
 	switch auth {
 	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		return true

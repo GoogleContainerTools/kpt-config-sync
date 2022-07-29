@@ -16,6 +16,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // Git contains the configs which specify how to connect to and read from a Git
@@ -50,8 +51,8 @@ type Git struct {
 	// Must be one of ssh, cookiefile, gcenode, token, or none.
 	// The validation of this is case-sensitive. Required.
 	//
-	// +kubebuilder:validation:Pattern=^(ssh|cookiefile|gcenode|gcpserviceaccount|token|none)$
-	Auth string `json:"auth"`
+	// +kubebuilder:validation:Enum=ssh;cookiefile;gcenode;gcpserviceaccount;token;none
+	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate
 	// the RootSync/RepoSync controller Kubernetes Service Account.

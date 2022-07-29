@@ -55,7 +55,7 @@ type options struct {
 	// repo is the git repo being synced.
 	repo string
 	// secretType used to connect to the repo.
-	secretType string
+	secretType configsync.AuthType
 	// proxy used to connect to the repo.
 	proxy string
 	// period is the time in seconds between consecutive syncs.
@@ -119,7 +119,7 @@ func gitSyncHTTPSProxyEnv(secretRef string, keys map[string]bool) []corev1.EnvVa
 	return envVars
 }
 
-func authTypeToken(secret string) bool {
+func authTypeToken(secret configsync.AuthType) bool {
 	return configsync.AuthToken == secret
 }
 

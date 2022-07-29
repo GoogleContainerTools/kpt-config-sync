@@ -76,27 +76,27 @@ func TestValidateSecretExist(t *testing.T) {
 func TestValidateSecretData(t *testing.T) {
 	testCases := []struct {
 		name      string
-		auth      string
+		auth      configsync.AuthType
 		secret    *corev1.Secret
 		wantError bool
 	}{
 		{
 			name:   "SSH auth data present",
-			auth:   "ssh",
+			auth:   configsync.AuthSSH,
 			secret: secretObj(t, "ssh-key", configsync.AuthSSH, core.Namespace("bookinfo")),
 		},
 		{
 			name:   "Cookiefile auth data present",
-			auth:   "cookiefile",
+			auth:   configsync.AuthCookieFile,
 			secret: secretObj(t, "ssh-key", "cookie_file", core.Namespace("bookinfo")),
 		},
 		{
 			name: "None auth",
-			auth: "none",
+			auth: configsync.AuthNone,
 		},
 		{
 			name: "GCENode auth",
-			auth: "gcenode",
+			auth: configsync.AuthGCENode,
 		},
 		{
 			name:      "Usupported auth",

@@ -161,7 +161,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Overwrite reconciler pod ServiceAccount.
-	var auth string
+	var auth configsync.AuthType
 	var gcpSAEmail string
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -648,7 +648,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs v1beta1.RepoSy
 		reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
 
 		// Only inject the FWI credentials when the auth type is gcpserviceaccount and the membership info is available.
-		var auth string
+		var auth configsync.AuthType
 		var gcpSAEmail string
 		var secretRefName string
 		switch v1beta1.SourceType(rs.Spec.SourceType) {

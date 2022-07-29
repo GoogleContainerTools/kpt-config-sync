@@ -147,7 +147,7 @@ func MissingGitRepo(o client.Object) status.Error {
 // InvalidAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
 func InvalidAuthType(o client.Object) status.Error {
-	types := []string{configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone, configsync.AuthGCPServiceAccount}
+	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
@@ -252,7 +252,7 @@ func MissingOciImage(o client.Object) status.Error {
 // InvalidOciAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for OCI image.
 func InvalidOciAuthType(o client.Object) status.Error {
-	types := []string{configsync.AuthGCENode, configsync.AuthGCPServiceAccount, configsync.AuthNone}
+	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthNone)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,

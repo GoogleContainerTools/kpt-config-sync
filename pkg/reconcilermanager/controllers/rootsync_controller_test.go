@@ -90,14 +90,14 @@ func configMapWithData(namespace, name string, data map[string]string, opts ...c
 	return result
 }
 
-func secretObj(t *testing.T, name, auth string, opts ...core.MetaMutator) *corev1.Secret {
+func secretObj(t *testing.T, name string, auth configsync.AuthType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
 	result := fake.SecretObject(name, opts...)
 	result.Data = secretData(t, "test-key", auth)
 	return result
 }
 
-func secretObjWithProxy(t *testing.T, name, auth string, opts ...core.MetaMutator) *corev1.Secret {
+func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
 	result := fake.SecretObject(name, opts...)
 	result.Data = secretData(t, "test-key", auth)
@@ -148,13 +148,13 @@ func rootsyncBranch(branch string) func(*v1beta1.RootSync) {
 	}
 }
 
-func rootsyncSecretType(auth string) func(*v1beta1.RootSync) {
+func rootsyncSecretType(auth configsync.AuthType) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
 		rs.Spec.Auth = auth
 	}
 }
 
-func rootsyncOCIAuthType(auth string) func(*v1beta1.RootSync) {
+func rootsyncOCIAuthType(auth configsync.AuthType) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
 		rs.Spec.Oci.Auth = auth
 	}

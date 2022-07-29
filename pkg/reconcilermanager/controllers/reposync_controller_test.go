@@ -115,13 +115,13 @@ func reposyncBranch(branch string) func(*v1beta1.RepoSync) {
 	}
 }
 
-func reposyncSecretType(auth string) func(*v1beta1.RepoSync) {
+func reposyncSecretType(auth configsync.AuthType) func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.Auth = auth
 	}
 }
 
-func reposyncOCIAuthType(auth string) func(*v1beta1.RepoSync) {
+func reposyncOCIAuthType(auth configsync.AuthType) func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.Oci.Auth = auth
 	}

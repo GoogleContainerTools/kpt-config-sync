@@ -44,7 +44,7 @@ func validateSecretExist(ctx context.Context, secretRef, namespace string, c cli
 }
 
 // validateSecretData verify secret data for the given auth type.
-func validateSecretData(auth string, secret *corev1.Secret) error {
+func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
 	switch auth {
 	case configsync.AuthSSH:
 		if _, ok := secret.Data[GitSecretConfigKeySSH]; !ok {

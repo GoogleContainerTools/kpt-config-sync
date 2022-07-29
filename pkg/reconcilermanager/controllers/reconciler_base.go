@@ -68,7 +68,7 @@ type reconcilerBase struct {
 	membership              *hubv1.Membership
 }
 
-func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name, auth, email string, labelMap map[string]string, refs ...metav1.OwnerReference) error {
+func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name string, auth configsync.AuthType, email string, labelMap map[string]string, refs ...metav1.OwnerReference) error {
 	var childSA corev1.ServiceAccount
 	childSA.Name = name
 	childSA.Namespace = v1.NSConfigManagementSystem

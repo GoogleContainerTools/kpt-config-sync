@@ -78,7 +78,13 @@ spec:
                     description: auth is the type of secret configured for access
                       to the Git repo. Must be one of ssh, cookiefile, gcenode, token,
                       or none. The validation of this is case-sensitive. Required.
-                    pattern: ^(ssh|cookiefile|gcenode|gcpserviceaccount|token|none)$
+                    enum:
+                    - ssh
+                    - cookiefile
+                    - gcenode
+                    - gcpserviceaccount
+                    - token
+                    - none
                     type: string
                   branch:
                     description: 'branch is the git branch to checkout. Default: "master".'
@@ -145,7 +151,10 @@ spec:
                     description: auth is the type of secret configured for access
                       to the OCI package. Must be one of gcenode, gcpserviceaccount,
                       or none. The validation of this is case-sensitive. Required.
-                    pattern: ^(gcenode|gcpserviceaccount|none)$
+                    enum:
+                    - gcenode
+                    - gcpserviceaccount
+                    - none
                     type: string
                   dir:
                     description: 'dir is the absolute path of the directory that contains
@@ -897,7 +906,13 @@ spec:
                     description: auth is the type of secret configured for access
                       to the Git repo. Must be one of ssh, cookiefile, gcenode, token,
                       or none. The validation of this is case-sensitive. Required.
-                    pattern: ^(ssh|cookiefile|gcenode|gcpserviceaccount|token|none)$
+                    enum:
+                    - ssh
+                    - cookiefile
+                    - gcenode
+                    - gcpserviceaccount
+                    - token
+                    - none
                     type: string
                   branch:
                     description: 'branch is the git branch to checkout. Default: "master".'
@@ -963,7 +978,10 @@ spec:
                     description: auth is the type of secret configured for access
                       to the OCI package. Must be one of gcenode, gcpserviceaccount,
                       or none. The validation of this is case-sensitive. Required.
-                    pattern: ^(gcenode|gcpserviceaccount|none)$
+                    enum:
+                    - gcenode
+                    - gcpserviceaccount
+                    - none
                     type: string
                   dir:
                     description: 'dir is the absolute path of the directory that contains

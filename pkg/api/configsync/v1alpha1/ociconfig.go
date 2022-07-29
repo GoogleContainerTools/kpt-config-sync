@@ -14,7 +14,10 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
+)
 
 // Oci contains configuration specific to importing resources from an OCI package.
 type Oci struct {
@@ -45,8 +48,8 @@ type Oci struct {
 	// Must be one of gcenode, gcpserviceaccount, or none.
 	// The validation of this is case-sensitive. Required.
 	//
-	// +kubebuilder:validation:Pattern=^(gcenode|gcpserviceaccount|none)$
-	Auth string `json:"auth"`
+	// +kubebuilder:validation:Enum=gcenode;gcpserviceaccount;none
+	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate
 	// the RootSync/RepoSync controller Kubernetes Service Account.

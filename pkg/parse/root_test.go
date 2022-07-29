@@ -79,7 +79,7 @@ func (r *noOpRemediator) Errors() status.MultiError {
 	return nil
 }
 
-func gitSpec(repo, auth string) core.MetaMutator {
+func gitSpec(repo string, auth configsync.AuthType) core.MetaMutator {
 	return func(o client.Object) {
 		if rs, ok := o.(*v1beta1.RootSync); ok {
 			rs.Spec.Git = &v1beta1.Git{
@@ -233,10 +233,10 @@ func TestRoot_Parse(t *testing.T) {
 			name:   "no implicit namespace if unstructured and namespace is config-management-system",
 			format: filesystem.SourceFormatUnstructured,
 			parsed: []ast.FileObject{
-				fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(v1beta1.GitSource), gitSpec("https://github.com/test/test.git", "none")),
+				fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(v1beta1.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
 			},
 			want: []ast.FileObject{
-				fake.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", "none"),
+				fake.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", configsync.AuthNone),
 					fake.WithRootSyncSourceType(v1beta1.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),

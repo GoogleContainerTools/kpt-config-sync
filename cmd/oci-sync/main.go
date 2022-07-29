@@ -34,7 +34,7 @@ import (
 
 var flImage = flag.String("image", envString(reconcilermanager.OciSyncImage, ""),
 	"the OCI image repository for the package")
-var flAuth = flag.String("auth", envString(reconcilermanager.OciSyncAuth, configsync.AuthNone),
+var flAuth = flag.String("auth", envString(reconcilermanager.OciSyncAuth, string(configsync.AuthNone)),
 	fmt.Sprintf("the authentication type for access to the OCI package. Must be one of %s, %s, or %s. Defaults to %s",
 		configsync.AuthGCPServiceAccount, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
 var flRoot = flag.String("root", envString("OCI_SYNC_ROOT", envString("HOME", "")+"/oci"),
@@ -126,7 +126,7 @@ func main() {
 	}
 
 	var auth authn.Authenticator
-	switch *flAuth {
+	switch configsync.AuthType(*flAuth) {
 	case configsync.AuthNone:
 		auth = authn.Anonymous
 	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:

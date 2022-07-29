@@ -24,13 +24,13 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
-func auth(authType string) func(*v1beta1.RepoSync) {
+func auth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
 		sync.Spec.Auth = authType
 	}
 }
 
-func ociAuth(authType string) func(*v1beta1.RepoSync) {
+func ociAuth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
 		sync.Spec.Oci.Auth = authType
 	}

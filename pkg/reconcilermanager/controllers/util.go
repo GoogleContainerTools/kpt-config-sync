@@ -172,14 +172,14 @@ func sourceFormatEnv(format string) corev1.EnvVar {
 }
 
 // ociSyncEnvs returns the environment variables for the oci-sync container.
-func ociSyncEnvs(image, auth string, period float64) []corev1.EnvVar {
+func ociSyncEnvs(image string, auth configsync.AuthType, period float64) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncImage,
 		Value: image,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncAuth,
-		Value: auth,
+		Value: string(auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncWait,
 		Value: fmt.Sprintf("%f", period),
@@ -218,7 +218,7 @@ func PollingPeriod(envName string, defaultValue time.Duration) time.Duration {
 // 1. the auth type is `gcpserviceaccount`.
 // 2. the cluster is registered in a fleet (the membership object exists).
 // 3. the fleet workload identity is enabled (workload_identity_pool and identity_provider are not empty).
-func useFWIAuth(authType string, membership *hubv1.Membership) bool {
+func useFWIAuth(authType configsync.AuthType, membership *hubv1.Membership) bool {
 	return authType == configsync.AuthGCPServiceAccount && membership != nil &&
 		membership.Spec.IdentityProvider != "" && membership.Spec.WorkloadIdentityPool != ""
 }

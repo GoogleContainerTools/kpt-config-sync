@@ -54,19 +54,21 @@ const (
 	DefaultReconcileTimeout = 5 * time.Minute
 )
 
-// source auth types
+// AuthType specifies the type to authenticate to a repository.
+type AuthType string
+
 const (
 	// AuthGCENode indicates using gcenode to authenticate to Git or OCI.
-	AuthGCENode = "gcenode"
+	AuthGCENode AuthType = "gcenode"
 	// AuthSSH indicates using an ssh key to authenticate to Git. It doesn't apply to OCI.
-	AuthSSH = "ssh"
+	AuthSSH AuthType = "ssh"
 	// AuthCookieFile indicates using cookiefile to authenticate to Git. It doesn't apply to OCI.
-	AuthCookieFile = "cookiefile"
+	AuthCookieFile AuthType = "cookiefile"
 	// AuthNone indicates no auth token is required for Git or OCI.
-	AuthNone = "none"
+	AuthNone AuthType = "none"
 	// AuthToken indicates using a username/password to authenticate to Git. It doesn't apply to OCI.
-	AuthToken = "token"
+	AuthToken AuthType = "token"
 	// AuthGCPServiceAccount indicates using a GCP service account to authenticate to
 	// Git or OCI when GKE Workload Identity or Fleet Workload Identity is enabled.
-	AuthGCPServiceAccount = "gcpserviceaccount"
+	AuthGCPServiceAccount AuthType = "gcpserviceaccount"
 )

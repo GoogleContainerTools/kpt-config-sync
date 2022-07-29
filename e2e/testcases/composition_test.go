@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -65,6 +66,7 @@ import (
 // 1. RootSync -> RootSyncs -> RepoSyncs -> RepoSyncs
 // 2. RepoSyncs & RepoSyncs can share a repository, using different directories.
 // 3. RepoSyncs can share an ssh-key secret
+// 4. R*Sync status isn't updated after sync without external input.
 func TestComposition(t *testing.T) {
 	nt := nomostest.New(t,
 		ntopts.SkipMonoRepo,
@@ -225,25 +227,22 @@ func TestComposition(t *testing.T) {
 		synedObjs[id] = obj
 	}
 
-	nt.T.Log("Waiting 1m to make sure there's no fights...")
+	nt.T.Log("Waiting 1m to make sure there's no unnecessary updates...")
 	time.Sleep(1 * time.Minute)
 
-	for id := range synedObjs {
+	for id, synedObj := range synedObjs {
 		nt.T.Logf("Ensure %q exists, is current, and its ResourceVersion has not changed", id)
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(id.GroupVersionKind)
 		err := nt.Validate(id.Name, id.Namespace, obj,
-			nomostest.StatusEquals(nt, status.CurrentStatus))
-		// TODO: b/240343634 Fix needless status updates and re-enable this check
-		// nomostest.ResourceVersionEquals(nt, synedObj.GetResourceVersion()))
+			nomostest.StatusEquals(nt, status.CurrentStatus),
+			nomostest.ResourceVersionEquals(nt, synedObj.GetResourceVersion()))
 		if err != nil {
-			nt.T.Fatal(err)
+			// Error, not Fatal, so we can see all the diffs when it fails.
+			nt.T.Error(err)
+			// Log the diff so we can see what fields changed.
+			nt.T.Logf("Diff (- Expected, + Actual):\n%s", cmp.Diff(synedObj, obj))
 		}
-		// TODO: remove this equality check once ResourceVersion is being validated (uncomment to debug diffs)
-		// if !cmp.Equal(synedObj, obj) {
-		// 	nt.T.Fatal("Expected %q to NOT have changed, but got diff (- Expected, + Actual):\n%s",
-		// 		id, cmp.Diff(synedObj, obj))
-		// }
 	}
 }
 

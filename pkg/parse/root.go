@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -326,10 +327,12 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 		return fmt.Errorf("The denominator must be a positive number")
 	}
 
-	var rs v1beta1.RootSync
-	if err := p.client.Get(ctx, rootsync.ObjectKey(p.syncName), &rs); err != nil {
+	rs := &v1beta1.RootSync{}
+	if err := p.client.Get(ctx, rootsync.ObjectKey(p.syncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync")
 	}
+
+	currentRS := rs.DeepCopy()
 
 	// syncing indicates whether the applier is syncing.
 	syncing := p.applier.Syncing()
@@ -344,15 +347,26 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
 	if syncing {
-		rootsync.SetSyncing(&rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, &errorSummary, rs.Status.Sync.LastUpdate)
+		rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	} else {
 		if errorSummary.TotalCount == 0 {
 			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
 		}
-		rootsync.SetSyncing(&rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, &errorSummary, rs.Status.Sync.LastUpdate)
+		rootsync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	}
 
-	if err := p.client.Status().Update(ctx, &rs); err != nil {
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, ignoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	if klog.V(5).Enabled() {
+		klog.V(5).Infof("Updating RootSync status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+	}
+
+	if err := p.client.Status().Update(ctx, rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
@@ -376,8 +390,8 @@ func setSyncStatus(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncErro
 }
 
 // summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`, and returns an ErrorSource slice and an ErrorSummary.
-func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncStatus) ([]v1beta1.ErrorSource, v1beta1.ErrorSummary) {
-	errorSources := []v1beta1.ErrorSource{}
+func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncStatus) ([]v1beta1.ErrorSource, *v1beta1.ErrorSummary) {
+	var errorSources []v1beta1.ErrorSource
 	if len(sourceStatus.Errors) > 0 {
 		errorSources = append(errorSources, v1beta1.SourceError)
 	}
@@ -385,7 +399,7 @@ func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncS
 		errorSources = append(errorSources, v1beta1.SyncError)
 	}
 
-	errorSummary := v1beta1.ErrorSummary{}
+	errorSummary := &v1beta1.ErrorSummary{}
 	for _, summary := range []*v1beta1.ErrorSummary{sourceStatus.ErrorSummary, syncStatus.ErrorSummary} {
 		if summary == nil {
 			continue
@@ -524,3 +538,15 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 	}
 	return nil
 }
+
+var emptyTime = metav1.Time{}
+
+// ignoreTimestampUpdates ignores timestamps when testing equality, unless one is
+// empty and the other is not.
+//
+// This is used to test R*Sync equality, because the timestamps get updated
+// every time, even if nothing else changed.
+var ignoreTimestampUpdates = cmp.Comparer(func(x, y metav1.Time) bool {
+	return x == emptyTime && y == emptyTime ||
+		x != emptyTime && y != emptyTime
+})

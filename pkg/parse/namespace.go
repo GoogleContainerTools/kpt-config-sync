@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -250,10 +251,12 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 		return fmt.Errorf("The denominator must be a positive number")
 	}
 
-	var rs v1beta1.RepoSync
-	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), &rs); err != nil {
+	rs := &v1beta1.RepoSync{}
+	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), rs); err != nil {
 		return status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.scope))
 	}
+
+	currentRS := rs.DeepCopy()
 
 	// syncing indicates whether the applier is syncing.
 	syncing := p.applier.Syncing()
@@ -268,15 +271,26 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
 	if syncing {
-		reposync.SetSyncing(&rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, &errorSummary, rs.Status.Sync.LastUpdate)
+		reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	} else {
 		if errorSummary.TotalCount == 0 {
 			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
 		}
-		reposync.SetSyncing(&rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, &errorSummary, rs.Status.Sync.LastUpdate)
+		reposync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	}
 
-	if err := p.client.Status().Update(ctx, &rs); err != nil {
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, ignoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping status update for RepoSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	if klog.V(5).Enabled() {
+		klog.V(5).Infof("Updating RepoSync status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+	}
+
+	if err := p.client.Status().Update(ctx, rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)

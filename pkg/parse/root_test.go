@@ -694,14 +694,14 @@ func TestSummarizeErrors(t *testing.T) {
 		sourceStatus         v1beta1.SourceStatus
 		syncStatus           v1beta1.SyncStatus
 		expectedErrorSources []v1beta1.ErrorSource
-		expectedErrorSummary v1beta1.ErrorSummary
+		expectedErrorSummary *v1beta1.ErrorSummary
 	}{
 		{
 			name:                 "both sourceStatus and syncStatus are empty",
 			sourceStatus:         v1beta1.SourceStatus{},
 			syncStatus:           v1beta1.SyncStatus{},
-			expectedErrorSources: []v1beta1.ErrorSource{},
-			expectedErrorSummary: v1beta1.ErrorSummary{},
+			expectedErrorSources: nil,
+			expectedErrorSummary: &v1beta1.ErrorSummary{},
 		},
 		{
 			name: "sourceStatus is not empty (no trucation), syncStatus is empty",
@@ -718,7 +718,7 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 			syncStatus:           v1beta1.SyncStatus{},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                2,
 				Truncated:                 false,
 				ErrorCountAfterTruncation: 2,
@@ -739,7 +739,7 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 			syncStatus:           v1beta1.SyncStatus{},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                100,
 				Truncated:                 true,
 				ErrorCountAfterTruncation: 2,
@@ -760,7 +760,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                2,
 				Truncated:                 false,
 				ErrorCountAfterTruncation: 2,
@@ -781,7 +781,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                100,
 				Truncated:                 true,
 				ErrorCountAfterTruncation: 2,
@@ -812,7 +812,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                4,
 				Truncated:                 false,
 				ErrorCountAfterTruncation: 4,
@@ -843,7 +843,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                102,
 				Truncated:                 true,
 				ErrorCountAfterTruncation: 4,
@@ -875,7 +875,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                102,
 				Truncated:                 true,
 				ErrorCountAfterTruncation: 4,
@@ -907,7 +907,7 @@ func TestSummarizeErrors(t *testing.T) {
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
-			expectedErrorSummary: v1beta1.ErrorSummary{
+			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                200,
 				Truncated:                 true,
 				ErrorCountAfterTruncation: 4,

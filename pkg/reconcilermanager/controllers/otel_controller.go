@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -183,6 +184,9 @@ func (r *OtelReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 		},
 	}
 	return controllerruntime.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+		}).
 		For(&corev1.ConfigMap{}).
 		WithEventFilter(p).
 		Complete(r)

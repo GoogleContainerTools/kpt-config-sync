@@ -356,13 +356,13 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 	}
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, ignoreTimestampUpdates) {
+	if cmp.Equal(currentRS.Status, rs.Status, diff.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping status update for RootSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Updating RootSync status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
@@ -538,15 +538,3 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 	}
 	return nil
 }
-
-var emptyTime = metav1.Time{}
-
-// ignoreTimestampUpdates ignores timestamps when testing equality, unless one is
-// empty and the other is not.
-//
-// This is used to test R*Sync equality, because the timestamps get updated
-// every time, even if nothing else changed.
-var ignoreTimestampUpdates = cmp.Comparer(func(x, y metav1.Time) bool {
-	return x == emptyTime && y == emptyTime ||
-		x != emptyTime && y != emptyTime
-})

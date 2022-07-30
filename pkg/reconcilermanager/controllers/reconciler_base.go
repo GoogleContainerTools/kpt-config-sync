@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -66,6 +67,15 @@ type reconcilerBase struct {
 	reconcilerPollingPeriod time.Duration
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
+
+	// lastReconciledResourceVersions is a cache of the last reconciled
+	// ResourceVersion for each R*Sync objects.
+	//
+	// This is used for an optimization to avoid re-reconciling.
+	// However, since ResourceVersion must be treated as opaque, we can't know
+	// if it's the latest or not. So this is just an optimization, not a guarantee.
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
+	lastReconciledResourceVersions map[types.NamespacedName]string
 }
 
 func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name string, auth configsync.AuthType, email string, labelMap map[string]string, refs ...metav1.OwnerReference) error {
@@ -100,10 +110,10 @@ func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name string, 
 
 type mutateFn func(client.Object) error
 
-func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace string, labelMap map[string]string, mutateObject mutateFn) (controllerutil.OperationResult, error) {
+func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace string, labelMap map[string]string, mutateObject mutateFn) (*appsv1.Deployment, controllerutil.OperationResult, error) {
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := parseDeployment(reconcilerDeployment); err != nil {
-		return controllerutil.OperationResultNone, errors.Wrap(err, "failed to parse reconciler Deployment manifest from ConfigMap")
+		return nil, controllerutil.OperationResultNone, errors.Wrap(err, "failed to parse reconciler Deployment manifest from ConfigMap")
 	}
 
 	reconcilerDeployment.Name = name
@@ -130,9 +140,10 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace s
 	})
 
 	if err := mutateObject(reconcilerDeployment); err != nil {
-		return controllerutil.OperationResultNone, err
+		return nil, controllerutil.OperationResultNone, err
 	}
-	return r.createOrPatchDeployment(ctx, reconcilerDeployment)
+	result, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
+	return reconcilerDeployment, result, err
 }
 
 // createOrPatchDeployment() first call Get() on the object. If the
@@ -398,4 +409,38 @@ func (r *reconcilerBase) addTemplateLabels(deployment *appsv1.Deployment, labelM
 	}
 
 	deployment.Spec.Template.Labels = currentLabels
+}
+
+// setLastReconciled sets the last resourceVersion that was fully reconciled for
+// a specific R*Sync object. This should only be set if the reconciler
+// successfully performed an update of the R*Sync in this reconcile attempt.
+func (r *reconcilerBase) setLastReconciled(nn types.NamespacedName, resourceVersion string) {
+	if r.lastReconciledResourceVersions == nil {
+		r.lastReconciledResourceVersions = make(map[types.NamespacedName]string)
+	}
+	r.lastReconciledResourceVersions[nn] = resourceVersion
+}
+
+// clearLastReconciled clears the last reconciled resourceVersion for a specific
+// R*Sync object. This should be called after a R*Sync is deleted.
+func (r *reconcilerBase) clearLastReconciled(nn types.NamespacedName) {
+	if r.lastReconciledResourceVersions == nil {
+		return
+	}
+	delete(r.lastReconciledResourceVersions, nn)
+}
+
+// isLastReconciled checks if a resourceVersion for a specific R*Sync object is
+// the same as last one that was reconciled. If true, reconciliation can safely
+// be skipped, because that resourceVersion is no longer the latest, and a new
+// reconcile should be queued to handle the latest.
+func (r *reconcilerBase) isLastReconciled(nn types.NamespacedName, resourceVersion string) bool {
+	if r.lastReconciledResourceVersions == nil {
+		return false
+	}
+	lastReconciled := r.lastReconciledResourceVersions[nn]
+	if lastReconciled == "" {
+		return false
+	}
+	return resourceVersion == lastReconciled
 }

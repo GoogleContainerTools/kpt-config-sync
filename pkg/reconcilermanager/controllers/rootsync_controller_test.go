@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1904,10 +1905,85 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = rootReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
-	rootsync.SetReconciling(wantRs, "Deployment", "Reconciler deployment was created")
+	rootsync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	if err := validateRootSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestRootSyncReconcileStaleClientCache(t *testing.T) {
+	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupRootReconciler(t, rs)
+	ctx := context.Background()
+
+	// Simulate ResourceVersion set by apiserver
+	rs.ResourceVersion = "1"
+	err := fakeClient.Update(ctx, rs)
+	require.NoError(t, err, "unexpected Update error")
+
+	// Reconcile should succeed and update the RootSync
+	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
+	require.NoError(t, err, "unexpected Reconcile error")
+
+	// Expect Stalled condition with True status, because the RootSync is invalid
+	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	require.NoError(t, err, "unexpected Get error")
+	reconcilingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
+	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
+	require.Equal(t, reconcilingCondition.Status, metav1.ConditionTrue, "unexpected Stalled condition status")
+	require.Contains(t, reconcilingCondition.Message, "KNV1061: RootSyncs must specify spec.sourceType", "unexpected Stalled condition message")
+
+	// Expect next Reconcile to error since the ResourceVersion hasn't been updated.
+	// This means the client cache hasn't been updated and isn't returning the latest version.
+	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
+	require.Error(t, err, "expected Reconcile to error")
+	require.Equal(t, err.Error(), "ResourceVersion already reconciled: 1", "unexpected Reconcile error")
+
+	// Simulate ResourceVersion updated in the client cache by the
+	// reconciler-manager's resource watch from the apiserver
+	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	require.NoError(t, err, "unexpected Get error")
+	rs.ResourceVersion = "A" // doesn't need to be increasing or even numeric
+	err = fakeClient.Update(ctx, rs)
+	require.NoError(t, err, "unexpected Update error")
+
+	// Reconcile should succeed and NOT update the RootSync
+	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
+	require.NoError(t, err, "unexpected Reconcile error")
+
+	// Expect the same Stalled condition error message
+	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	require.NoError(t, err, "unexpected Get error")
+	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
+	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
+	require.Equal(t, reconcilingCondition.Status, metav1.ConditionTrue, "unexpected Stalled condition status")
+	require.Contains(t, reconcilingCondition.Message, "KNV1061: RootSyncs must specify spec.sourceType", "unexpected Stalled condition message")
+
+	// Simulate a spec update, with ResourceVersion updated by the apiserver
+	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	require.NoError(t, err, "unexpected Get error")
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.ResourceVersion = "2" // doesn't need to be increasing or even numeric
+	err = fakeClient.Update(ctx, rs)
+	require.NoError(t, err, "unexpected Update error")
+
+	// Reconcile should succeed and update the RootSync
+	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
+	require.NoError(t, err, "unexpected Reconcile error")
+
+	// Expect Stalled condition with True status, because the RootSync is differently invalid
+	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	require.NoError(t, err, "unexpected Get error")
+	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
+	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
+	require.Equal(t, reconcilingCondition.Status, metav1.ConditionTrue, "unexpected Stalled condition status")
+	require.Contains(t, reconcilingCondition.Message, "RootSyncs must specify spec.git when spec.sourceType is \"git\"", "unexpected Stalled condition message")
 }
 
 func validateRootSyncStatus(want *v1beta1.RootSync, fakeClient *syncerFake.Client) error {

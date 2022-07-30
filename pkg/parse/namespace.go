@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/reader"
@@ -280,13 +281,13 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	}
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, ignoreTimestampUpdates) {
+	if cmp.Equal(currentRS.Status, rs.Status, diff.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping status update for RepoSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Updating RepoSync status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 

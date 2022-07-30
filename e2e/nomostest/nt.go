@@ -169,11 +169,6 @@ func RepoSyncNN(ns, name string) types.NamespacedName {
 	}
 }
 
-// ObjectNamespacedName returns the NamespacedName of the object.
-func ObjectNamespacedName(obj metav1.Object) types.NamespacedName {
-	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-}
-
 // DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
 var DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
 

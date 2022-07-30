@@ -133,3 +133,8 @@ func DeletionGracePeriod(seconds int64) MetaMutator {
 		o.SetDeletionGracePeriodSeconds(&seconds)
 	}
 }
+
+// ObjectNamespacedName returns the NamespacedName of the object.
+func ObjectNamespacedName(obj metav1.Object) types.NamespacedName {
+	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+}

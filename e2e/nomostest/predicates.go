@@ -413,7 +413,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
 		if managedValue != metadata.ResourceManagementEnabled {
 			return errors.Errorf("expected %s %s to be managed by configsync, but found %q=%q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagementKey, managedValue)
 		}
 
@@ -422,7 +422,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
 		if managerValue != expectedManager {
 			return errors.Errorf("expected %s %s to be managed by %q, but found %q=%q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				expectedManager, metadata.ResourceManagerKey, managerValue)
 		}
 
@@ -431,7 +431,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 		resourceIDValue := core.GetAnnotation(obj, metadata.ResourceIDKey)
 		if resourceIDValue != expectedID {
 			return errors.Errorf("expected %s %s to have resource-id %q, but found %q=%q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				expectedID, metadata.ResourceIDKey, resourceIDValue)
 		}
 		return nil
@@ -457,7 +457,7 @@ func IsNotManaged(nt *NT) Predicate {
 		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
 		if managerValue != "" {
 			return errors.Errorf("expected %s %s to NOT have a manager, but found %q=%q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagerKey, managerValue)
 		}
 
@@ -465,7 +465,7 @@ func IsNotManaged(nt *NT) Predicate {
 		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
 		if managedValue == metadata.ResourceManagementEnabled {
 			return errors.Errorf("expected %s %s to NOT have management enabled, but found %q=%q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagementKey, managedValue)
 		}
 		return nil
@@ -489,7 +489,7 @@ func ResourceVersionEquals(nt *NT, expected string) Predicate {
 			}
 		}
 		return errors.Errorf("expected %s %s to have resourceVersion %q, but got %q",
-			gvk.Kind, ObjectNamespacedName(obj),
+			gvk.Kind, core.ObjectNamespacedName(obj),
 			expected, resourceVersion)
 	}
 }
@@ -511,7 +511,7 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 			}
 		}
 		return errors.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
-			gvk.Kind, ObjectNamespacedName(obj),
+			gvk.Kind, core.ObjectNamespacedName(obj),
 			unexpected, resourceVersion)
 	}
 }
@@ -533,19 +533,19 @@ func StatusEquals(nt *NT, expected status.Status) Predicate {
 		uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 		if err != nil {
 			return errors.Wrapf(err, "failed to convert %s %s to unstructured",
-				gvk.Kind, ObjectNamespacedName(obj))
+				gvk.Kind, core.ObjectNamespacedName(obj))
 		}
 		uObj := &unstructured.Unstructured{Object: uMap}
 
 		result, err := status.Compute(uObj)
 		if err != nil {
 			return errors.Wrapf(err, "failed to compute status for %s %s",
-				gvk.Kind, ObjectNamespacedName(obj))
+				gvk.Kind, core.ObjectNamespacedName(obj))
 		}
 
 		if result.Status != expected {
 			return errors.Errorf("expected %s %s to have status %q, but got %q",
-				gvk.Kind, ObjectNamespacedName(obj),
+				gvk.Kind, core.ObjectNamespacedName(obj),
 				expected, result.Status)
 		}
 		return nil

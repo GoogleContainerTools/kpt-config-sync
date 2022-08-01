@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -148,6 +149,8 @@ kind delete cluster --name=%s`, name)
 	}
 	t.Logf("finished creating cluster at %s", finish.Format(time.RFC3339))
 
+	preloadImagesKind(t, name)
+
 	// We don't need to specify masterUrl since we have a Kubeconfig.
 	cfg, err := clientcmd.BuildConfigFromFlags("", kcfgPath)
 	if err != nil {
@@ -206,4 +209,27 @@ apiServer:
 
 	// We failed to create the cluster maxKindTries times, so fail out.
 	return err
+}
+
+func localImageName(name string) string {
+	return fmt.Sprintf("%s/%s:%s", *e2e.ImagePrefix, name, *e2e.ImageTag)
+}
+
+func preloadImagesKind(t testing.NTB, name string) {
+	imageNames := []string{
+		"nomos", "reconciler", "hydration-controller",
+		"hydration-controller-with-shell", "reconciler-manager",
+		"admission-webhook", "oci-sync"}
+	var images []string
+	for _, imageName := range imageNames {
+		images = append(images, localImageName(imageName))
+	}
+	for _, image := range images {
+		args := []string{"load", "docker-image", "--name", name, image}
+		t.Logf("kind %s", strings.Join(args, " "))
+		err := exec.Command("kind", args...).Run()
+		if err != nil {
+			t.Errorf("kind image preload error: %v", err)
+		}
+	}
 }

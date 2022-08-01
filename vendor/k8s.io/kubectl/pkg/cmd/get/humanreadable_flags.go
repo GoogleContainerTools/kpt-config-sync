@@ -95,7 +95,7 @@ func (f *HumanPrintFlags) ToPrinter(outputFormat string) (printers.ResourcePrint
 		ShowLabels:    showLabels,
 	})
 
-	// TODO: handle sorting here
+	// TODO(juanvallejo): handle sorting here
 
 	return p, nil
 }

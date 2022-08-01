@@ -175,7 +175,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	err := func() error {
 		defer c.mu.Unlock()
 
-		// TODO: Reconsider HandleCrash
+		// TODO(pwittrock): Reconsider HandleCrash
 		defer utilruntime.HandleCrash()
 
 		// NB(directxman12): launch the sources *before* trying to wait for the

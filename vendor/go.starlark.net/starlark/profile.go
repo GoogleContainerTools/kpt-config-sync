@@ -53,7 +53,7 @@ package starlark
 // pin function values in memory indefinitely as this may cause lambda
 // values to keep their free variables live much longer than necessary.
 
-// TODO:
+// TODO(adonovan):
 // - make Start/Stop fully thread-safe.
 // - fix the pc hack.
 // - experiment with other values of quantum.
@@ -87,7 +87,7 @@ func StartProfile(w io.Writer) error {
 		return fmt.Errorf("profiler already running")
 	}
 
-	// TODO: make the API fully concurrency-safe.
+	// TODO(adonovan): make the API fully concurrency-safe.
 	// The main challenge is racy reads/writes of profiler.events,
 	// and of send/close races on the channel it refers to.
 	// It's easy to solve them with a mutex but harder to do
@@ -133,7 +133,7 @@ func (thread *Thread) beginProfSpan() {
 	thread.frameAt(0).spanStart = nanotime()
 }
 
-// TODO: experiment with smaller values,
+// TODO(adonovan): experiment with smaller values,
 // which trade space and time for greater precision.
 const quantum = 10 * time.Millisecond
 
@@ -295,7 +295,7 @@ func profile(w io.Writer) {
 		// Mix it into the low bits of the address.
 		// This is super hacky and may result in collisions
 		// in large functions or if functions are numerous.
-		// TODO: fix: try making this cleaner by treating
+		// TODO(adonovan): fix: try making this cleaner by treating
 		// each bytecode segment as a Profile.Mapping.
 		pcAddr := fnAddr
 		if _, ok := fr.fn.(*Function); ok {

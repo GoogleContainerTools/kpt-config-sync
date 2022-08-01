@@ -117,7 +117,7 @@ func (s *secureConnectSource) getClientCertificate(info *tls.CertificateRequestI
 	command := s.metadata.Cmd
 	data, err := exec.Command(command[0], command[1:]...).Output()
 	if err != nil {
-		// TODO: read stderr for error message? Might contain sensitive info.
+		// TODO(cbro): read stderr for error message? Might contain sensitive info.
 		return nil, err
 	}
 	cert, err := tls.X509KeyPair(data, data)

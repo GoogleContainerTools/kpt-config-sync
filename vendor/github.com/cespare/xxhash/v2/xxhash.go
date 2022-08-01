@@ -16,7 +16,7 @@ const (
 	prime5 uint64 = 2870177450012600261
 )
 
-// NOTE: I'm using both consts and vars of the primes. Using consts where
+// NOTE(caleb): I'm using both consts and vars of the primes. Using consts where
 // possible in the Go code is worth a small (but measurable) performance boost
 // by avoiding some MOVQs. Vars are needed for the asm and also are useful for
 // convenience in the Go code in a few places where we need to intentionally

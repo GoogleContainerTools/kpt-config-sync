@@ -132,7 +132,7 @@ func selfSignedJWTTokenSource(data []byte, ds *DialSettings) (oauth2.TokenSource
 
 // QuotaProjectFromCreds returns the quota project from the JSON blob in the provided credentials.
 //
-// NOTE: consider promoting this to a field on google.Credentials.
+// NOTE(cbro): consider promoting this to a field on google.Credentials.
 func QuotaProjectFromCreds(cred *google.Credentials) string {
 	var v struct {
 		QuotaProject string `json:"quota_project_id"`

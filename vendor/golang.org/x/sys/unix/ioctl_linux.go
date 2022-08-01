@@ -185,7 +185,7 @@ func IoctlIfreq(fd int, req uint, value *Ifreq) error {
 	return ioctlPtr(fd, req, unsafe.Pointer(&value.raw))
 }
 
-// TODO: export if and when IfreqData is exported.
+// TODO(mdlayher): export if and when IfreqData is exported.
 
 // ioctlIfreqData performs an ioctl using an ifreqData structure for input
 // and/or output. See the netdevice(7) man page for details.

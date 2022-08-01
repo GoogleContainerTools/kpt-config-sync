@@ -51,7 +51,7 @@ type Metric interface {
 	// recommended to sort labels lexicographically. Callers of Write should
 	// still make sure of sorting if they depend on it.
 	Write(*dto.Metric) error
-	// TODO: The original rationale of passing in a pre-allocated
+	// TODO(beorn7): The original rationale of passing in a pre-allocated
 	// dto.Metric protobuf to save allocations has disappeared. The
 	// signature of this method should be changed to "Write() (*dto.Metric,
 	// error)".

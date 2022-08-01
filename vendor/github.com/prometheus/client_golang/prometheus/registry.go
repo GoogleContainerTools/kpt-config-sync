@@ -606,7 +606,7 @@ func processMetric(
 				desc.fqName, dtoMetric, desc.help, metricFamily.GetHelp(),
 			)
 		}
-		// TODO: Simplify switch once Desc has type.
+		// TODO(beorn7): Simplify switch once Desc has type.
 		switch metricFamily.GetType() {
 		case dto.MetricType_COUNTER:
 			if dtoMetric.Counter == nil {
@@ -650,7 +650,7 @@ func processMetric(
 		metricFamily = &dto.MetricFamily{}
 		metricFamily.Name = proto.String(desc.fqName)
 		metricFamily.Help = proto.String(desc.help)
-		// TODO: Simplify switch once Desc has type.
+		// TODO(beorn7): Simplify switch once Desc has type.
 		switch {
 		case dtoMetric.Gauge != nil:
 			metricFamily.Type = dto.MetricType_GAUGE.Enum()

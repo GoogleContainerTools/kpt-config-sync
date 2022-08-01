@@ -407,7 +407,7 @@ type MatchingLabels map[string]string
 
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
-	// TODO: can we avoid reserializing this over and over?
+	// TODO(directxman12): can we avoid reserializing this over and over?
 	sel := labels.SelectorFromValidatedSet(map[string]string(m))
 	opts.LabelSelector = sel
 }
@@ -461,7 +461,7 @@ type MatchingFields fields.Set
 
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingFields) ApplyToList(opts *ListOptions) {
-	// TODO: can we avoid re-serializing this?
+	// TODO(directxman12): can we avoid re-serializing this?
 	sel := fields.Set(m).AsSelector()
 	opts.FieldSelector = sel
 }

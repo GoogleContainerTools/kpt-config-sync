@@ -55,7 +55,7 @@ func anyToSockaddrGOOS(fd int, rsa *RawSockaddrAny) (Sockaddr, error) {
 func nametomib(name string) (mib []_C_int, err error) {
 	const siz = unsafe.Sizeof(mib[0])
 
-	// NOTE: It seems strange to set the buffer to have
+	// NOTE(rsc): It seems strange to set the buffer to have
 	// size CTL_MAXNAME+2 but use only CTL_MAXNAME
 	// as the size. I don't know why the +2 is here, but the
 	// kernel uses +2 for its own implementation of this function.
@@ -352,7 +352,7 @@ func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err e
 
 /*
  * Unimplemented
- * TODO: Update this list for DragonFly.
+ * TODO(jsing): Update this list for DragonFly.
  */
 // Profil
 // Sigaction

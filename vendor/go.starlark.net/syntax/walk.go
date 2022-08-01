@@ -17,7 +17,7 @@ func Walk(n Node, f func(Node) bool) {
 		return
 	}
 
-	// TODO: opt: order cases using profile data.
+	// TODO(adonovan): opt: order cases using profile data.
 	switch n := n.(type) {
 	case *File:
 		walkStmts(n.Stmts, f)

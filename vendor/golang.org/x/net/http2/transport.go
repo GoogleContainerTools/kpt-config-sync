@@ -380,7 +380,7 @@ func (cs *clientStream) abortStreamLocked(err error) {
 		cs.reqBody.Close()
 		cs.reqBodyClosed = true
 	}
-	// TODO: Clean up tests where cs.cc.cond is nil.
+	// TODO(dneil): Clean up tests where cs.cc.cond is nil.
 	if cs.cc.cond != nil {
 		// Wake up writeRequestBody if it is waiting on flow control.
 		cs.cc.cond.Broadcast()
@@ -1248,7 +1248,7 @@ func (cs *clientStream) writeRequest(req *http.Request) (err error) {
 	}
 	cc.mu.Unlock()
 
-	// TODO: this is a copy of the logic in net/http. Unify somewhere?
+	// TODO(bradfitz): this is a copy of the logic in net/http. Unify somewhere?
 	if !cc.t.disableCompression() &&
 		req.Header.Get("Accept-Encoding") == "" &&
 		req.Header.Get("Range") == "" &&
@@ -1625,7 +1625,7 @@ func (cs *clientStream) writeRequestBody(req *http.Request) (err error) {
 			sentEnd = sawEOF && len(remain) == 0 && !hasTrailers
 			err = cc.fr.WriteData(cs.ID, sentEnd, data)
 			if err == nil {
-				// TODO: this flush is for latency, not bandwidth.
+				// TODO(bradfitz): this flush is for latency, not bandwidth.
 				// Most requests won't need this. Make this opt-in or
 				// opt-out?  Use some heuristic on the body type? Nagel-like
 				// timers?  Based on 'n'? Only last chunk of this for loop,
@@ -2192,7 +2192,7 @@ func (rl *clientConnReadLoop) processHeaders(f *MetaHeadersFrame) error {
 	}
 	if !cs.firstByte {
 		if cs.trace != nil {
-			// TODO: move first response byte earlier,
+			// TODO(bradfitz): move first response byte earlier,
 			// when we first read the 9 byte header, not waiting
 			// until all the HEADERS+CONTINUATION frames have been
 			// merged. This works for now.
@@ -2469,7 +2469,7 @@ func (b transportResponseBody) Close() error {
 		}
 		cc.mu.Unlock()
 
-		// TODO: Acquiring this mutex can block indefinitely.
+		// TODO(dneil): Acquiring this mutex can block indefinitely.
 		// Move flow control return to a goroutine?
 		cc.wmu.Lock()
 		// Return connection-level flow control.
@@ -2724,7 +2724,7 @@ func (rl *clientConnReadLoop) processSettingsNoWrite(f *SettingsFrame) error {
 
 			cc.initialWindowSize = s.Val
 		default:
-			// TODO: handle more settings? SETTINGS_HEADER_TABLE_SIZE probably.
+			// TODO(bradfitz): handle more settings? SETTINGS_HEADER_TABLE_SIZE probably.
 			cc.vlogf("Unhandled Setting: %v", s)
 		}
 		return nil

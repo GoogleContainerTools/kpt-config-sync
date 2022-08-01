@@ -100,7 +100,7 @@ func VerifyEvents(expEvents []ExpEvent, events []event.Event) error {
 }
 
 // nolint:gocyclo
-// TODO: This function is pretty complex and with quite a bit of
+// TODO(mortent): This function is pretty complex and with quite a bit of
 // duplication. We should see if there is a better way to provide a flexible
 // way to verify that we go the expected events.
 func isMatch(ee ExpEvent, e event.Event) bool {

@@ -154,7 +154,7 @@ func overloaded(elems, buckets int) bool {
 
 func (ht *hashtable) grow() {
 	// Double the number of buckets and rehash.
-	// TODO: opt:
+	// TODO(adonovan): opt:
 	// - avoid reentrant calls to ht.insert, and specialize it.
 	//   e.g. we know the calls to Equals will return false since
 	//   there are no duplicates among the old keys.
@@ -272,7 +272,7 @@ func (ht *hashtable) delete(k Value) (v Value, found bool, err error) {
 		}
 	}
 
-	// TODO: opt: remove completely empty bucket from bucket list.
+	// TODO(adonovan): opt: remove completely empty bucket from bucket list.
 
 	return None, false, nil // not found
 }

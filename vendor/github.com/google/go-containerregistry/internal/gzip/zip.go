@@ -50,7 +50,7 @@ func ReadCloserLevel(r io.ReadCloser, level int) io.ReadCloser {
 
 	// Returns err so we can pw.CloseWithError(err)
 	go func() error {
-		// TODO: Just defer {pw,gw,r}.Close like you'd expect.
+		// TODO(go1.14): Just defer {pw,gw,r}.Close like you'd expect.
 		// Context: https://golang.org/issue/24283
 		gw, err := gzip.NewWriterLevel(bw, level)
 		if err != nil {

@@ -222,7 +222,7 @@ func (r *withRetry) Before(ctx context.Context, request *Request) error {
 
 	// if we are here, we have made attempt(s) al least once before.
 	if request.backoff != nil {
-		// TODO with default set to use exponential backoff
+		// TODO(tkashem) with default set to use exponential backoff
 		//  we can merge these two sleeps:
 		//  BackOffManager.Sleep(max(backoffManager.CalculateBackoff(), retryAfter))
 		//  see https://github.com/kubernetes/kubernetes/issues/108302

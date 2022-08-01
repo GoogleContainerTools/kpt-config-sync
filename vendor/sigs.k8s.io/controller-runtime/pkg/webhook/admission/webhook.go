@@ -75,7 +75,7 @@ func (r *Response) Complete(req Request) error {
 	if r.Result.Code == 0 {
 		r.Result.Code = http.StatusOK
 	}
-	// TODO: do we need to populate this further, and/or
+	// TODO(directxman12): do we need to populate this further, and/or
 	// is code actually necessary (the same webhook doesn't use it)
 
 	if len(r.Patches) == 0 {
@@ -154,7 +154,7 @@ func (wh *Webhook) Handle(ctx context.Context, req Request) Response {
 
 // InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
 func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
-	// TODO: we should have a better way to pass this down
+	// TODO(directxman12): we should have a better way to pass this down
 
 	var err error
 	wh.decoder, err = NewDecoder(s)

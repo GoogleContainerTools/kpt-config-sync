@@ -409,7 +409,7 @@ func layerTime(layer v1.Layer, t time.Time) (v1.Layer, error) {
 		}
 
 		if header.Typeflag == tar.TypeReg {
-			// TODO: This should be lazy, and not buffer the entire layer contents.
+			// TODO(#1168): This should be lazy, and not buffer the entire layer contents.
 			if _, err = io.CopyN(tarWriter, tarReader, header.Size); err != nil {
 				return nil, fmt.Errorf("writing layer file: %w", err)
 			}

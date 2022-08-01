@@ -5,7 +5,7 @@
 //go:build !go1.13
 // +build !go1.13
 
-// TODO: For support on <go1.13, we use the xerrors package.
+// TODO(≥go1.13): For support on <go1.13, we use the xerrors package.
 // Drop this file when we no longer support older Go versions.
 
 package cmpopts

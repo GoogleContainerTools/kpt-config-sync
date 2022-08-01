@@ -280,12 +280,12 @@ func (fl *fileLoader) errIfArgEqualOrHigher(
 	return fl.referrer.errIfArgEqualOrHigher(candidateRoot)
 }
 
-// TODO: Distinguish branches?
+// TODO(monopole): Distinguish branches?
 // I.e. Allow a distinction between git URI with
 // path foo and tag bar and a git URI with the same
 // path but a different tag?
 func (fl *fileLoader) errIfRepoCycle(newRepoSpec *git.RepoSpec) error {
-	// TODO: Use parsed data instead of Raw().
+	// TODO(monopole): Use parsed data instead of Raw().
 	if fl.repoSpec != nil &&
 		strings.HasPrefix(fl.repoSpec.Raw(), newRepoSpec.Raw()) {
 		return fmt.Errorf(

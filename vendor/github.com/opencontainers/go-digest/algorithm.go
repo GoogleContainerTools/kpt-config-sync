@@ -41,7 +41,7 @@ const (
 )
 
 var (
-	// TODO: Follow the pattern of the standard crypto package for
+	// TODO(stevvooe): Follow the pattern of the standard crypto package for
 	// registration of digests. Effectively, we are a registerable set and
 	// common symbol access.
 
@@ -122,7 +122,7 @@ func (a Algorithm) Hash() hash.Hash {
 			panic(fmt.Sprintf("empty digest algorithm, validate before calling Algorithm.Hash()"))
 		}
 
-		// NOTE: A missing hash is usually a programming error that
+		// NOTE(stevvooe): A missing hash is usually a programming error that
 		// must be resolved at compile time. We don't import in the digest
 		// package to allow users to choose their hash implementation (such as
 		// when using stevvooe/resumable or a hardware accelerated package).
@@ -138,7 +138,7 @@ func (a Algorithm) Hash() hash.Hash {
 // Encode encodes the raw bytes of a digest, typically from a hash.Hash, into
 // the encoded portion of the digest.
 func (a Algorithm) Encode(d []byte) string {
-	// TODO: Currently, all algorithms use a hex encoding. When we
+	// TODO(stevvooe): Currently, all algorithms use a hex encoding. When we
 	// add support for back registration, we can modify this accordingly.
 	return fmt.Sprintf("%x", d)
 }

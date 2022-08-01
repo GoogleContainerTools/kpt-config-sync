@@ -320,7 +320,7 @@ func BackgroundContext() netcontext.Context {
 		}
 		backgroundContext = toContext(c)
 
-		// TODO: Wire up the shutdown handler to do a final flush.
+		// TODO(dsymonds): Wire up the shutdown handler to do a final flush.
 		go c.logFlusher(make(chan int))
 	})
 
@@ -555,7 +555,7 @@ func (c *context) Request() *http.Request {
 
 func (c *context) addLogLine(ll *logpb.UserAppLogLine) {
 	// Truncate long log lines.
-	// TODO: Check if this is still necessary.
+	// TODO(dsymonds): Check if this is still necessary.
 	const lim = 8 << 10
 	if len(*ll.Message) > lim {
 		suffix := fmt.Sprintf("...(length %d)", len(*ll.Message))

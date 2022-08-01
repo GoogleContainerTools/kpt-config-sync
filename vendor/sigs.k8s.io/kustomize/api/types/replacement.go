@@ -71,7 +71,7 @@ type FieldOptions struct {
 	// Which position in the split to consider.
 	Index int `json:"index,omitempty" yaml:"index,omitempty"`
 
-	// TODO : Implement use of this option
+	// TODO (#3492): Implement use of this option
 	// None, Base64, URL, Hex, etc
 	Encoding string `json:"encoding,omitempty" yaml:"encoding,omitempty"`
 

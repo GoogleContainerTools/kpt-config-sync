@@ -90,7 +90,7 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out client.Ob
 	}
 
 	// Copy the value of the item in the cache to the returned value
-	// TODO: this is a terrible hack, pls fix (we should have deepcopyinto)
+	// TODO(directxman12): this is a terrible hack, pls fix (we should have deepcopyinto)
 	outVal := reflect.ValueOf(out)
 	objVal := reflect.ValueOf(obj)
 	if !objVal.Type().AssignableTo(outVal.Type()) {
@@ -114,7 +114,7 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 
 	switch {
 	case listOpts.FieldSelector != nil:
-		// TODO: support more complicated field selectors by
+		// TODO(directxman12): support more complicated field selectors by
 		// combining multiple indices, GetIndexers, etc
 		field, val, requiresExact := requiresExactMatch(listOpts.FieldSelector)
 		if !requiresExact {

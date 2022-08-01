@@ -118,7 +118,7 @@ func loadConfig(context string) (*rest.Config, error) {
 	// $HOME for the user's home directory, but we can also try
 	// os/user.HomeDir when $HOME is unset.
 	//
-	// TODO: could this be done upstream?
+	// TODO(jlanford): could this be done upstream?
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if _, ok := os.LookupEnv("HOME"); !ok {
 		u, err := user.Current()

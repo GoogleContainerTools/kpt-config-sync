@@ -179,7 +179,7 @@ func (p *Pkg) Kptfile() (*kptfilev1.KptFile, error) {
 }
 
 // ReadKptfile reads the KptFile in the given pkg.
-// TODO: This method exists for current version of Kptfile.
+// TODO(droot): This method exists for current version of Kptfile.
 // Need to reconcile with the team how we want to handle multiple versions
 // of Kptfile in code. One option is to follow Kubernetes approach to
 // have an internal version of Kptfile that all the code uses. In that case,
@@ -584,7 +584,7 @@ func (p *Pkg) ReadRGFile(filename string) (*rgfilev1alpha1.ResourceGroup, error)
 	return p.rgFile, nil
 }
 
-// TODO: Consolidate both Kptfile and ResourceGroup file reading functions to use
+// TODO(rquitales): Consolidate both Kptfile and ResourceGroup file reading functions to use
 // shared logic/function.
 
 // ReadRGFile reads the KptFile in the given pkg.

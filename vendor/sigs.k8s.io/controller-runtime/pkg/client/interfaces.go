@@ -43,7 +43,7 @@ type Patch interface {
 	Data(obj Object) ([]byte, error)
 }
 
-// TODO: is there a sane way to deal with get/delete options?
+// TODO(directxman12): is there a sane way to deal with get/delete options?
 
 // Reader knows how to read and list Kubernetes objects.
 type Reader interface {

@@ -170,7 +170,7 @@ func parseExpression(expression string) (result templatePart, err error) {
 }
 
 func parseTerm(term string) (result templateTerm, err error) {
-	// TODO: Remove "*" suffix parsing once we check that no APIs have
+	// TODO(djd): Remove "*" suffix parsing once we check that no APIs have
 	// mistakenly used that attribute.
 	if strings.HasSuffix(term, "*") {
 		result.explode = true

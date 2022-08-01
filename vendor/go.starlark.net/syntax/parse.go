@@ -7,7 +7,7 @@ package syntax
 // This file defines a recursive-descent parser for Starlark.
 // The LL(1) grammar of Starlark and the names of many productions follow Python 2.7.
 //
-// TODO: use syntax.Error more systematically throughout the
+// TODO(adonovan): use syntax.Error more systematically throughout the
 // package.  Verify that error positions are correct using the
 // chunkedfile mechanism.
 

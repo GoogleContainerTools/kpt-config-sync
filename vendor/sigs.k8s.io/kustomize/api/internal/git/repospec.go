@@ -24,7 +24,7 @@ const notCloned = filesys.ConfirmedDir("/notCloned")
 // RepoSpec specifies a git repository and a branch and path therein.
 type RepoSpec struct {
 	// Raw, original spec, used to look for cycles.
-	// TODO: Drop raw, use processed fields instead.
+	// TODO(monopole): Drop raw, use processed fields instead.
 	raw string
 
 	// Host, e.g. github.com

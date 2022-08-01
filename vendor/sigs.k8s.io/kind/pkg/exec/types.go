@@ -51,7 +51,7 @@ type RunError struct {
 var _ error = &RunError{}
 
 func (e *RunError) Error() string {
-	// TODO: implement formatter, and show output for %+v ?
+	// TODO(BenTheElder): implement formatter, and show output for %+v ?
 	return fmt.Sprintf("command \"%s\" failed with error: %v", e.PrettyCommand(), e.Inner)
 }
 

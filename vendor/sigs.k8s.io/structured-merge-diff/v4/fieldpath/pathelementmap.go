@@ -24,7 +24,7 @@ import (
 
 // PathElementValueMap is a map from PathElement to value.Value.
 //
-// TODO: We have multiple very similar implementation of this
+// TODO(apelisse): We have multiple very similar implementation of this
 // for PathElementSet and SetNodeMap, so we could probably share the
 // code.
 type PathElementValueMap struct {

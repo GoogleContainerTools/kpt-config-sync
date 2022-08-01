@@ -598,7 +598,7 @@ func isFenceLine(data []byte, info *string, oldmarker string, newlineOptional bo
 		return 0, ""
 	}
 
-	// TODO: It's probably a good idea to simplify the 2 code paths here
+	// TODO(shurcooL): It's probably a good idea to simplify the 2 code paths here
 	// into one, always get the info string, and discard it if the caller doesn't care.
 	if info != nil {
 		infoLength := 0

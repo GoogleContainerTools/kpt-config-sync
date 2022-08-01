@@ -52,7 +52,7 @@ func (c *CommandHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response
 // headers are then filled into each request. For details on the custom headers see:
 //   https://github.com/kubernetes/enhancements/tree/master/keps/sig-cli/859-kubectl-headers
 // Each call overwrites the previously parsed command headers (not additive).
-// TODO: Parse/add flags removing PII from flag values.
+// TODO(seans3): Parse/add flags removing PII from flag values.
 func (c *CommandHeaderRoundTripper) ParseCommandHeaders(cmd *cobra.Command, args []string) {
 	if cmd == nil {
 		return

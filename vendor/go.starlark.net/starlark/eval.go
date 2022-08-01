@@ -1120,7 +1120,7 @@ func slice(x, lo, hi, step_ Value) (Value, error) {
 		}
 	}
 
-	// TODO: opt: preallocate result array.
+	// TODO(adonovan): opt: preallocate result array.
 
 	var start, end int
 	if step > 0 {

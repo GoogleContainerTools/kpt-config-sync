@@ -198,7 +198,7 @@ func (j jsonName) generatePath() (string, error) {
 	return res, nil
 }
 
-// TODO: delete this struct after cleaning up old service config implementation.
+// TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonMC struct {
 	Name                    *[]jsonName
 	WaitForReady            *bool
@@ -208,7 +208,7 @@ type jsonMC struct {
 	RetryPolicy             *jsonRetryPolicy
 }
 
-// TODO: delete this struct after cleaning up old service config implementation.
+// TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
 	LoadBalancingPolicy *string
 	LoadBalancingConfig *internalserviceconfig.BalancerConfig
@@ -339,7 +339,7 @@ func convertRetryPolicy(jrp *jsonRetryPolicy) (p *internalserviceconfig.RetryPol
 		RetryableStatusCodes: make(map[codes.Code]bool),
 	}
 	if rp.MaxAttempts > 5 {
-		// TODO: Make the max maxAttempts configurable.
+		// TODO(retry): Make the max maxAttempts configurable.
 		rp.MaxAttempts = 5
 	}
 	for _, code := range jrp.RetryableStatusCodes {

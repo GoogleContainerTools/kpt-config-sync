@@ -184,7 +184,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the recorder provider to inject event recorders for the components.
-	// TODO: the log for the event provider should have a context (name, tags, etc) specific
+	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
 	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {

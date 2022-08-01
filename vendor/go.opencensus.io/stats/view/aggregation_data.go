@@ -166,7 +166,7 @@ func (a *DistributionData) variance() float64 {
 
 func (a *DistributionData) isAggregationData() bool { return true }
 
-// TODO: support exemplar attachments.
+// TODO(songy23): support exemplar attachments.
 func (a *DistributionData) addSample(v float64, attachments map[string]interface{}, t time.Time) {
 	if v < a.Min {
 		a.Min = v

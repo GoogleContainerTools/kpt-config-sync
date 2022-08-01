@@ -179,7 +179,7 @@ func (ip *informerCache) IndexField(ctx context.Context, obj client.Object, fiel
 
 func indexByField(indexer Informer, field string, extractor client.IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
-		// TODO: check if this is the correct type?
+		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(client.Object)
 		if !isObj {
 			return nil, fmt.Errorf("object of type %T is not an Object", objRaw)

@@ -38,7 +38,7 @@ var _ io.ReadCloser = (*estargz.Blob)(nil)
 func ReadCloser(r io.ReadCloser, opts ...estargz.Option) (*estargz.Blob, v1.Hash, error) {
 	defer r.Close()
 
-	// TODO: Avoid buffering into memory.
+	// TODO(#876): Avoid buffering into memory.
 	bs, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, v1.Hash{}, err

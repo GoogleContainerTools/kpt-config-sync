@@ -100,7 +100,7 @@ func (e *Error) Temporary() bool {
 	return true
 }
 
-// TODO: Consider moving to internal/redact.
+// TODO(jonjohnsonjr): Consider moving to internal/redact.
 func redactURL(original *url.URL) *url.URL {
 	qs := original.Query()
 	for k, v := range qs {

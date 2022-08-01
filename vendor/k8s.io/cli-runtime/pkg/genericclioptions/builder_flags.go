@@ -24,7 +24,7 @@ import (
 )
 
 // ResourceBuilderFlags are flags for finding resources
-// TODO: wire --local flag from commands through
+// TODO(juanvallejo): wire --local flag from commands through
 type ResourceBuilderFlags struct {
 	FileNameFlags *FileNameFlags
 

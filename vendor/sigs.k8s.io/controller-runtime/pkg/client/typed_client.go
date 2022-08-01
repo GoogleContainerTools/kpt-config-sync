@@ -165,7 +165,7 @@ func (c *typedClient) UpdateStatus(ctx context.Context, obj Object, opts ...Upda
 	if err != nil {
 		return err
 	}
-	// TODO: examine the returned error and check if it error needs to be
+	// TODO(droot): examine the returned error and check if it error needs to be
 	// wrapped to improve the UX ?
 	// It will be nice to receive an error saying the object doesn't implement
 	// status subresource and check CRD definition

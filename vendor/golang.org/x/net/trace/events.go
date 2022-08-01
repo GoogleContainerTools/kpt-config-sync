@@ -69,7 +69,7 @@ func RenderEvents(w http.ResponseWriter, req *http.Request, sensitive bool) {
 	// Count the number of eventLogs in each family for each error age.
 	data.Counts = make([][]int, len(data.Families))
 	for i, name := range data.Families {
-		// TODO: move this loop under the family lock.
+		// TODO(sameer): move this loop under the family lock.
 		f := getEventFamily(name)
 		data.Counts[i] = make([]int, len(data.Buckets))
 		for j, b := range data.Buckets {
@@ -259,7 +259,7 @@ type eventLog struct {
 
 	// Append-only sequence of events.
 	//
-	// TODO: change this to a ring buffer to avoid the array copy
+	// TODO(sameer): change this to a ring buffer to avoid the array copy
 	// when we hit maxEventsPerLog.
 	mu            sync.RWMutex
 	events        []logEntry
@@ -326,7 +326,7 @@ func (el *eventLog) printf(isErr bool, format string, a ...interface{}) {
 		} else {
 			el.discarded++
 		}
-		// TODO: if this causes allocations on a critical path,
+		// TODO(sameer): if this causes allocations on a critical path,
 		// change eventLog.What to be a fmt.Stringer, as in trace.go.
 		el.events[0].What = fmt.Sprintf("(%d events discarded)", el.discarded)
 		// The timestamp of the discarded meta-event should be

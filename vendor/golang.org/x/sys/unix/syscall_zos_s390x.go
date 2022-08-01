@@ -100,7 +100,7 @@ func (sa *SockaddrUnix) sockaddr() (unsafe.Pointer, _Socklen, error) {
 }
 
 func anyToSockaddr(_ int, rsa *RawSockaddrAny) (Sockaddr, error) {
-	// TODO: Implement use of first param (fd)
+	// TODO(neeilan): Implement use of first param (fd)
 	switch rsa.Addr.Family {
 	case AF_UNIX:
 		pp := (*RawSockaddrUnix)(unsafe.Pointer(rsa))
@@ -162,7 +162,7 @@ func Accept(fd int) (nfd int, sa Sockaddr, err error) {
 	if err != nil {
 		return
 	}
-	// TODO: Remove 0 in call
+	// TODO(neeilan): Remove 0 in call
 	sa, err = anyToSockaddr(0, &rsa)
 	if err != nil {
 		Close(nfd)
@@ -531,7 +531,7 @@ func (w WaitStatus) TrapCause() int { return -1 }
 //sys	waitpid(pid int, wstatus *_C_int, options int) (wpid int, err error)
 
 func Wait4(pid int, wstatus *WaitStatus, options int, rusage *Rusage) (wpid int, err error) {
-	// TODO: z/OS doesn't have wait4. I don't think getrusage does what we want.
+	// TODO(mundaym): z/OS doesn't have wait4. I don't think getrusage does what we want.
 	// At the moment rusage will not be touched.
 	var status _C_int
 	wpid, err = waitpid(pid, &status, options)
@@ -614,7 +614,7 @@ func Getsockname(fd int) (sa Sockaddr, err error) {
 	if err = getsockname(fd, &rsa, &len); err != nil {
 		return
 	}
-	// TODO : Remove this 0 ( added to get sys/unix compiling on z/OS )
+	// TODO(neeilan) : Remove this 0 ( added to get sys/unix compiling on z/OS )
 	return anyToSockaddr(0, &rsa)
 }
 
@@ -1144,7 +1144,7 @@ func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from
 	recvflags = int(msg.Flags)
 	// source address is only specified if the socket is unconnected
 	if rsa.Addr.Family != AF_UNSPEC {
-		// TODO: Remove 0 arg added to get this compiling on z/OS
+		// TODO(neeilan): Remove 0 arg added to get this compiling on z/OS
 		from, err = anyToSockaddr(0, &rsa)
 	}
 	return
@@ -1216,8 +1216,8 @@ func Readdir(dir uintptr) (*Dirent, error) {
 	// __readdir_r_a returns errno at the end of the directory stream, rather than 0.
 	// Therefore to avoid false positives we clear errno before calling it.
 
-	// TODO: Commented this out to get sys/unix compiling on z/OS. Uncomment and fix. Error: "undefined: clearsyscall"
-	//clearsyscall.Errno() // TODO: check pre-emption rules.
+	// TODO(neeilan): Commented this out to get sys/unix compiling on z/OS. Uncomment and fix. Error: "undefined: clearsyscall"
+	//clearsyscall.Errno() // TODO(mundaym): check pre-emption rules.
 
 	e, _, _ := syscall_syscall(SYS___READDIR_R_A, dir, uintptr(unsafe.Pointer(&ent)), uintptr(unsafe.Pointer(&res)))
 	var err error
@@ -1348,7 +1348,7 @@ func Munlockall() (err error) {
 
 func ClockGettime(clockid int32, ts *Timespec) error {
 
-	var ticks_per_sec uint32 = 100 //TODO: value is currently hardcoded; need sysconf() call otherwise
+	var ticks_per_sec uint32 = 100 //TODO(kenan): value is currently hardcoded; need sysconf() call otherwise
 	var nsec_per_sec int64 = 1000000000
 
 	if ts == nil {

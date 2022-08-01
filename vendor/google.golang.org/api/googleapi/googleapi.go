@@ -335,7 +335,7 @@ func CloseBody(res *http.Response) {
 	}
 	// Justification for 3 byte reads: two for up to "\r\n" after
 	// a JSON/XML document, and then 1 to see EOF if we haven't yet.
-	// TODO: detect Go 1.3+ and skip these reads.
+	// TODO(bradfitz): detect Go 1.3+ and skip these reads.
 	// See https://codereview.appspot.com/58240043
 	// and https://codereview.appspot.com/49570044
 	buf := make([]byte, 1)

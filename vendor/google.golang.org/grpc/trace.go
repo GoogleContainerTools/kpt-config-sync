@@ -99,7 +99,7 @@ func truncate(x string, l int) string {
 type payload struct {
 	sent bool        // whether this is an outgoing payload
 	msg  interface{} // e.g. a proto.Message
-	// TODO: add stringifying info to codec, and limit how much we hold here?
+	// TODO(dsymonds): add stringifying info to codec, and limit how much we hold here?
 }
 
 func (p payload) String() string {

@@ -14,7 +14,7 @@
 // Handlers running) and not be woken up again until the PING packet
 // returns.
 
-// TODO : add a mechanism for Handlers to going into
+// TODO (maybe): add a mechanism for Handlers to going into
 // half-closed-local mode (rw.(io.Closer) test?) but not exit their
 // handler, and continue to be able to read from the
 // Request.Body. This would be a somewhat semantic change from HTTP/1
@@ -674,7 +674,7 @@ func isClosedConnError(err error) bool {
 		return true
 	}
 
-	// TODO: x/tools/cmd/bundle doesn't really support
+	// TODO(bradfitz): x/tools/cmd/bundle doesn't really support
 	// build tags, so I can't make an http2_windows.go file with
 	// Windows-specific stuff. Fix that and move this, once we
 	// have a way to bundle this into std's net/http somehow.
@@ -2459,7 +2459,7 @@ func (rws *responseWriterState) writeChunk(p []byte) (n int, err error) {
 		}
 		var date string
 		if _, ok := rws.snapHeader["Date"]; !ok {
-			// TODO: be faster here, like net/http? measure.
+			// TODO(bradfitz): be faster here, like net/http? measure.
 			date = time.Now().UTC().Format(http.TimeFormat)
 		}
 

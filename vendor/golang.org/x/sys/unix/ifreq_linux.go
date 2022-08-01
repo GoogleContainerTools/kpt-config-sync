@@ -41,7 +41,7 @@ func NewIfreq(name string) (*Ifreq, error) {
 	return &Ifreq{raw: ifr}, nil
 }
 
-// TODO: get/set methods for hardware address sockaddr, char array, etc.
+// TODO(mdlayher): get/set methods for hardware address sockaddr, char array, etc.
 
 // Name returns the interface name associated with the Ifreq.
 func (ifr *Ifreq) Name() string {
@@ -124,7 +124,7 @@ func (ifr *Ifreq) clear() {
 	}
 }
 
-// TODO: export as IfreqData? For now we can provide helpers such as
+// TODO(mdlayher): export as IfreqData? For now we can provide helpers such as
 // IoctlGetEthtoolDrvinfo which use these APIs under the hood.
 
 // An ifreqData is an Ifreq which carries pointer data. To produce an ifreqData,

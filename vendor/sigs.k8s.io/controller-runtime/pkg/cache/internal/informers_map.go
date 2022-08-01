@@ -256,7 +256,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	ip.informersByGVK[gvk] = i
 
 	// Start the Informer if need by
-	// TODO: write thorough tests and document what happens here - can you add indexers?
+	// TODO(seans): write thorough tests and document what happens here - can you add indexers?
 	// can you add eventhandlers?
 	if ip.started {
 		go i.Informer.Run(ip.stop)

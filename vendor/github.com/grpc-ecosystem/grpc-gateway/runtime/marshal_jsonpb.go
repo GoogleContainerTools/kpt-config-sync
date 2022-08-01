@@ -225,7 +225,7 @@ func decodeNonProtoField(d *json.Decoder, v interface{}) error {
 		}
 		switch repr.(type) {
 		case string:
-			// TODO Should use proto.StructProperties?
+			// TODO(yugui) Should use proto.StructProperties?
 			return fmt.Errorf("unmarshaling of symbolic enum %q not supported: %T", repr, rv.Interface())
 		case float64:
 			rv.Set(reflect.ValueOf(int32(repr.(float64))).Convert(rv.Type()))

@@ -89,7 +89,7 @@ func (f *Function) validate(fsys filesys.FileSystem, fnType string, idx int, pkg
 			}
 		}
 	}
-	// TODO: validate the exec
+	// TODO(droot): validate the exec
 
 	if len(f.ConfigMap) != 0 && f.ConfigPath != "" {
 		return &ValidateError{

@@ -142,7 +142,7 @@ func (oa oauthAccess) RequireTransportSecurity() bool {
 // NewComputeEngine constructs the PerRPCCredentials that fetches access tokens from
 // Google Compute Engine (GCE)'s metadata server. It is only valid to use this
 // if your program is running on a GCE instance.
-// TODO: Deprecate and remove this.
+// TODO(dsymonds): Deprecate and remove this.
 func NewComputeEngine() credentials.PerRPCCredentials {
 	return TokenSource{google.ComputeTokenSource("")}
 }

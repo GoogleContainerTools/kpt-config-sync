@@ -20,7 +20,7 @@ import (
 
 const (
 	// These have the form: sha256:<hex string>
-	// TODO: replace with opencontainers/go-digest or docker/distribution's validation.
+	// TODO(dekkagaijin): replace with opencontainers/go-digest or docker/distribution's validation.
 	digestChars = "sh:0123456789abcdef"
 	digestDelim = "@"
 )

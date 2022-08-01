@@ -106,7 +106,7 @@ func Cluster(logger log.Logger, p providers.Provider, opts *ClusterOptions) erro
 		return err
 	}
 
-	// TODO: make this controllable from the command line?
+	// TODO(bentheelder): make this controllable from the command line?
 	actionsToRun := []actions.Action{
 		loadbalancer.NewAction(), // setup external loadbalancer
 		configaction.NewAction(), // setup kubeadm config
@@ -151,7 +151,7 @@ func Cluster(logger log.Logger, p providers.Provider, opts *ClusterOptions) erro
 	var err error
 	for _, b := range []time.Duration{0, time.Millisecond, time.Millisecond * 50, time.Millisecond * 100} {
 		time.Sleep(b)
-		if err = kubeconfig.Export(p, opts.Config.Name, opts.KubeconfigPath); err == nil {
+		if err = kubeconfig.Export(p, opts.Config.Name, opts.KubeconfigPath, true); err == nil {
 			break
 		}
 	}
@@ -226,7 +226,7 @@ func fixupOptions(opts *ClusterOptions) error {
 	// if NodeImage was set, override the image on all nodes
 	if opts.NodeImage != "" {
 		// Apply image override to all the Nodes defined in Config
-		// TODO: this should be reconsidered when implementing
+		// TODO(fabrizio pandini): this should be reconsidered when implementing
 		//     https://github.com/kubernetes-sigs/kind/issues/133
 		for i := range opts.Config.Nodes {
 			opts.Config.Nodes[i].Image = opts.NodeImage

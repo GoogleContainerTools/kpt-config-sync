@@ -72,7 +72,7 @@ func (r *remoteIndex) RawManifest() ([]byte, error) {
 		return r.manifest, nil
 	}
 
-	// NOTE: We should never get here because the public entrypoints
+	// NOTE(jonjohnsonjr): We should never get here because the public entrypoints
 	// do type-checking via remote.Descriptor. I've left this here for tests that
 	// directly instantiate a remoteIndex.
 	manifest, desc, err := r.fetchManifest(r.Ref, acceptableIndexMediaTypes)

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var limitSem = make(chan int, 100) // TODO: Use environment variable.
+var limitSem = make(chan int, 100) // TODO(dsymonds): Use environment variable.
 
 func limitRelease() {
 	// non-blocking

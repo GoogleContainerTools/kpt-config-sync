@@ -20,7 +20,7 @@ package v2beta2
 // generate Swagger API documentation for its models. Please read this PR for more
 // information on the implementation: https://github.com/emicklei/go-restful/pull/215
 //
-// TODOs are ignored from the parser (e.g. TODO:... || TODO:...) if and only if
+// TODOs are ignored from the parser (e.g. TODO(andronat):... || TODO:...) if and only if
 // they are on one line! For multiple line or blocks that you want to ignore use ---.
 // Any context after a --- is ignored.
 //

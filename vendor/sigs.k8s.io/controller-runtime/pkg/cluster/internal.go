@@ -41,7 +41,7 @@ type cluster struct {
 
 	cache cache.Cache
 
-	// TODO: Provide an escape hatch to get individual indexers
+	// TODO(directxman12): Provide an escape hatch to get individual indexers
 	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
 	client client.Client
 

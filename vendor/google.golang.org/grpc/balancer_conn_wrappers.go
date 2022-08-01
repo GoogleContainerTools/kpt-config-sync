@@ -253,7 +253,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 		// Set old ac.acbw to nil so the Shutdown state update will be ignored
 		// by balancer.
 		//
-		// TODO the state transition could be wrong when tearDown() old ac
+		// TODO(bar) the state transition could be wrong when tearDown() old ac
 		// and creating new ac, fix the transition.
 		acbw.ac.acbw = nil
 		acbw.ac.mu.Unlock()

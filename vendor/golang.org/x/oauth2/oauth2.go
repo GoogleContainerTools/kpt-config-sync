@@ -161,7 +161,7 @@ func (c *Config) AuthCodeURL(state string, opts ...AuthCodeOption) string {
 		v.Set("scope", strings.Join(c.Scopes, " "))
 	}
 	if state != "" {
-		// TODO: Docs say never to omit state; don't allow empty.
+		// TODO(light): Docs say never to omit state; don't allow empty.
 		v.Set("state", state)
 	}
 	for _, opt := range opts {

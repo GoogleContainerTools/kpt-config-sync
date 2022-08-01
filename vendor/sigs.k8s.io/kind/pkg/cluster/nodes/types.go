@@ -31,7 +31,7 @@ type Node interface {
 	String() string // see also: fmt.Stringer
 	// Role should return the node's role
 	Role() (string, error) // see also: pkg/cluster/constants
-	// TODO: should return node addresses more generally
+	// TODO(bentheelder): should return node addresses more generally
 	// Possibly remove this method in favor of obtaining this detail with
 	// exec or from the provider
 	IP() (ipv4 string, ipv6 string, err error)

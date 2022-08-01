@@ -1096,7 +1096,7 @@ func (rn *RNode) MatchesLabelSelector(selector string) (bool, error) {
 
 // HasNilEntryInList returns true if the RNode contains a list which has
 // a nil item, along with the path to the missing item.
-// TODO: This doesn't do what it claims to do.
+// TODO(broken): This doesn't do what it claims to do.
 // (see TODO in unit test and pr 1513).
 func (rn *RNode) HasNilEntryInList() (bool, string) {
 	return hasNilEntryInList(rn.value)

@@ -85,7 +85,7 @@ func checkGeneration(u *unstructured.Unstructured) (*Result, error) {
 	}
 	if found {
 		// Resource does not have this field, so we can't do this check.
-		// TODO: Verify behavior of not set vs does not exist.
+		// TODO(mortent): Verify behavior of not set vs does not exist.
 		if observedGeneration != generation {
 			message := fmt.Sprintf("%s generation is %d, but latest observed generation is %d", u.GetKind(), generation, observedGeneration)
 			return &Result{

@@ -391,7 +391,7 @@ func (f Float) Freeze()        {} // immutable
 func (f Float) Truth() Bool    { return f != 0.0 }
 func (f Float) Hash() (uint32, error) {
 	// Equal float and int values must yield the same hash.
-	// TODO: opt: if f is non-integral, and thus not equal
+	// TODO(adonovan): opt: if f is non-integral, and thus not equal
 	// to any Int, we can avoid the Int conversion and use a cheaper hash.
 	if isFinite(float64(f)) {
 		return finiteFloatToInt(f).Hash()

@@ -26,7 +26,7 @@ import (
 )
 
 // SelectNodesByRole returns a list of nodes with the matching role
-// TODO: remove this in favor of specific role select methods
+// TODO(bentheelder): remove this in favor of specific role select methods
 // and avoid the unnecessary error handling
 func SelectNodesByRole(allNodes []nodes.Node, role string) ([]nodes.Node, error) {
 	out := []nodes.Node{}
@@ -112,7 +112,7 @@ func ControlPlaneNodes(allNodes []nodes.Node) ([]nodes.Node, error) {
 		return nil, err
 	}
 	// pick the first by sorting
-	// TODO: perhaps in the future we should mark this node
+	// TODO(bentheelder): perhaps in the future we should mark this node
 	// specially at container creation time
 	sort.Slice(controlPlaneNodes, func(i, j int) bool {
 		return strings.Compare(controlPlaneNodes[i].String(), controlPlaneNodes[j].String()) < 0
@@ -121,7 +121,7 @@ func ControlPlaneNodes(allNodes []nodes.Node) ([]nodes.Node, error) {
 }
 
 // BootstrapControlPlaneNode returns a handle to the bootstrap control plane node
-// TODO: remove this. This node shouldn't be special (fix that first)
+// TODO(bentheelder): remove this. This node shouldn't be special (fix that first)
 func BootstrapControlPlaneNode(allNodes []nodes.Node) (nodes.Node, error) {
 	controlPlaneNodes, err := ControlPlaneNodes(allNodes)
 	if err != nil {

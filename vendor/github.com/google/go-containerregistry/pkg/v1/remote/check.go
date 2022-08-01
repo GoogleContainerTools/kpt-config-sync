@@ -16,7 +16,7 @@ import (
 // This can be useful to check whether the caller has permission to push an
 // image before doing work to construct the image.
 //
-// TODO: Remove the need for this method.
+// TODO(#412): Remove the need for this method.
 func CheckPushPermission(ref name.Reference, kc authn.Keychain, t http.RoundTripper) error {
 	auth, err := kc.Resolve(ref.Context().Registry)
 	if err != nil {
@@ -28,7 +28,7 @@ func CheckPushPermission(ref name.Reference, kc authn.Keychain, t http.RoundTrip
 	if err != nil {
 		return fmt.Errorf("creating push check transport for %v failed: %w", ref.Context().Registry, err)
 	}
-	// TODO: Against GCR, just doing the token handshake is
+	// TODO(jasonhall): Against GCR, just doing the token handshake is
 	// enough, but this doesn't extend to Dockerhub
 	// (https://github.com/docker/hub-feedback/issues/1771), so we actually
 	// need to initiate an upload to tell whether the credentials can

@@ -50,7 +50,7 @@ func ensureNodeImages(logger log.Logger, status *cli.Status, cfg *config.Cluster
 // retrying up to retries times
 // it returns true if it attempted to pull, and any errors from pulling
 func pullIfNotPresent(logger log.Logger, image string, retries int) (pulled bool, err error) {
-	// TODO: switch most (all) of the logging here to debug level
+	// TODO(bentheelder): switch most (all) of the logging here to debug level
 	// once we have configurable log levels
 	// if this did not return an error, then the image exists locally
 	cmd := exec.Command("docker", "inspect", "--type=image", image)
@@ -71,7 +71,7 @@ func pull(logger log.Logger, image string, retries int) error {
 		for i := 0; i < retries; i++ {
 			time.Sleep(time.Second * time.Duration(i+1))
 			logger.V(1).Infof("Trying again to pull image: %q ... %v", image, err)
-			// TODO: add some backoff / sleep?
+			// TODO(bentheelder): add some backoff / sleep?
 			err = exec.Command("docker", "pull", image).Run()
 			if err == nil {
 				break

@@ -183,7 +183,7 @@ func keyToString(keyEvent *winterm.KEY_EVENT_RECORD, escapeSequence []byte) stri
 
 	_, alt, control := getControlKeys(keyEvent.ControlKeyState)
 	if control {
-		// TODO: Implement following control sequences
+		// TODO(azlinux): Implement following control sequences
 		// <Ctrl>-D  Signals the end of input from the keyboard; also exits current shell.
 		// <Ctrl>-H  Deletes the first character to the left of the cursor. Also called the ERASE key.
 		// <Ctrl>-Q  Restarts printing after it has been stopped with <Ctrl>-s.

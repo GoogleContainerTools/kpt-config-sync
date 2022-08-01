@@ -114,7 +114,7 @@ func (d pusherDelegator) Push(target string, opts *http.PushOptions) error {
 var pickDelegator = make([]func(*responseWriterDelegator) delegator, 32)
 
 func init() {
-	// TODO: Code generation would help here.
+	// TODO(beorn7): Code generation would help here.
 	pickDelegator[0] = func(d *responseWriterDelegator) delegator { // 0
 		return d
 	}

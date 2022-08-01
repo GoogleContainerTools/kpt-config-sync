@@ -14,7 +14,7 @@ import (
 )
 
 // ConnPool is a pool of grpc.ClientConns.
-type ConnPool = internal.ConnPool // NOTE: type alias to export the type. It must live in internal to avoid a circular dependency.
+type ConnPool = internal.ConnPool // NOTE(cbro): type alias to export the type. It must live in internal to avoid a circular dependency.
 
 var _ ConnPool = &roundRobinConnPool{}
 var _ ConnPool = &singleConnPool{}

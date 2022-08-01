@@ -55,7 +55,7 @@ func NewTmpConfirmedDir() (ConfirmedDir, error) {
 //
 // This is tested on linux, but will have trouble
 // on other operating systems.
-// TODO Refactor when #golang/go/18358 closes.
+// TODO(monopole) Refactor when #golang/go/18358 closes.
 // See also:
 //   https://github.com/golang/go/issues/18358
 //   https://github.com/golang/dep/issues/296

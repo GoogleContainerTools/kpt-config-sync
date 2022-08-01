@@ -572,7 +572,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	// TODO: garbage. reuse buffer after proto decoding instead
+	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
 	msg = make([]byte, int(length))
 	if _, err := p.r.Read(msg); err != nil {
@@ -604,7 +604,7 @@ func encode(c baseCodec, msg interface{}) ([]byte, error) {
 // compress returns the input bytes compressed by compressor or cp.  If both
 // compressors are nil, returns nil.
 //
-// TODO: eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
+// TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
 func compress(in []byte, cp Compressor, compressor encoding.Compressor) ([]byte, error) {
 	if compressor == nil && cp == nil {
 		return nil, nil
@@ -751,7 +751,7 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
-// TODO: wrap the old compressor/decompressor using the new API?
+// TODO(dfawley): wrap the old compressor/decompressor using the new API?
 func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
 	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
 	if err != nil {

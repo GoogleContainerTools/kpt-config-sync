@@ -225,7 +225,7 @@ func Setgroups(gids []int) (err error) {
 // ReadDirent reads directory entries from fd and writes them into buf.
 func ReadDirent(fd int, buf []byte) (n int, err error) {
 	// Final argument is (basep *uintptr) and the syscall doesn't take nil.
-	// TODO: Can we use a single global basep for all calls?
+	// TODO(rsc): Can we use a single global basep for all calls?
 	return Getdents(fd, buf, new(uintptr))
 }
 

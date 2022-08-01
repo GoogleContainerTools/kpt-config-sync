@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// TODO: Remove this helper package once it's copied to k/apimachinery
+// TODO(yue9944882): Remove this helper package once it's copied to k/apimachinery
 
 // FormatMap formats map[string]string to a string.
 func FormatMap(m map[string]string) (fmtStr string) {

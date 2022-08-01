@@ -172,7 +172,7 @@ func (p *FnPlugin) invokePlugin(input []byte) ([]byte, error) {
 	// and in addition kio.Pipeline won't create anything if there are no objects
 	// see https://github.com/kubernetes-sigs/kustomize/blob/master/kyaml/kio/kio.go#L93
 	// Since we added `local-config` annotation so it will be ignored in generator output
-	// TODO: This is actually not used by generator and only used to bypass a kio limitation.
+	// TODO(donnyxia): This is actually not used by generator and only used to bypass a kio limitation.
 	// Need better solution.
 	if input == nil {
 		yml, err := functionConfig.String()

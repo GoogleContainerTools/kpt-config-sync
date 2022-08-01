@@ -21,8 +21,8 @@ import "context"
 // DefaultCmder is a LocalCmder instance used for convenience, packages
 // originally using os/exec.Command can instead use pkg/kind/exec.Command
 // which forwards to this instance
-// TODO: swap this for testing
-// TODO: consider not using a global for this :^)
+// TODO(bentheelder): swap this for testing
+// TODO(bentheelder): consider not using a global for this :^)
 var DefaultCmder = &LocalCmder{}
 
 // Command is a convenience wrapper over DefaultCmder.Command

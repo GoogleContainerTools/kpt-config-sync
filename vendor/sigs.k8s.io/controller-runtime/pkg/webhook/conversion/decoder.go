@@ -24,7 +24,7 @@ import (
 
 // Decoder knows how to decode the contents of a CRD version conversion
 // request into a concrete object.
-// TODO: consider reusing decoder from admission pkg for this.
+// TODO(droot): consider reusing decoder from admission pkg for this.
 type Decoder struct {
 	codecs serializer.CodecFactory
 }

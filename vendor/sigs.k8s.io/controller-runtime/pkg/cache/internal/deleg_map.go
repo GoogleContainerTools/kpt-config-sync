@@ -33,7 +33,7 @@ import (
 // It uses a standard parameter codec constructed based on the given generated Scheme.
 type InformersMap struct {
 	// we abstract over the details of structured/unstructured/metadata with the specificInformerMaps
-	// TODO: genericize this over different projections now that we have 3 different maps
+	// TODO(directxman12): genericize this over different projections now that we have 3 different maps
 
 	structured   *specificInformersMap
 	unstructured *specificInformersMap

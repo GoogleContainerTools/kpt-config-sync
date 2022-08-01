@@ -33,16 +33,20 @@ import (
 // KindVersion is a specific Kind version associated with a Kubernetes minor version.
 type KindVersion string
 
-// The v0.11.1 images from https://github.com/kubernetes-sigs/kind/releases/tag/v0.11.1
+// kind v0.14.x supports k8s 1.18-1.24 - images from https://github.com/kubernetes-sigs/kind/releases/tag/v0.14.0
+// kind v0.12.x supports k8s 1.14-1.23 - images from https://github.com/kubernetes-sigs/kind/releases/tag/v0.12.0
 const (
-	Kind1_21 KindVersion = "kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6"
-	Kind1_20 KindVersion = "kindest/node:v1.20.7@sha256:cbeaf907fc78ac97ce7b625e4bf0de16e3ea725daf6b04f930bd14c67c671ff9"
-	Kind1_19 KindVersion = "kindest/node:v1.19.11@sha256:07db187ae84b4b7de440a73886f008cf903fcf5764ba8106a9fd5243d6f32729"
-	Kind1_18 KindVersion = "kindest/node:v1.18.19@sha256:7af1492e19b3192a79f606e43c35fb741e520d195f96399284515f077b3b622c"
-	Kind1_17 KindVersion = "kindest/node:v1.17.17@sha256:66f1d0d91a88b8a001811e2f1054af60eef3b669a9a74f9b6db871f2f1eeed00"
-	Kind1_16 KindVersion = "kindest/node:v1.16.15@sha256:83067ed51bf2a3395b24687094e283a7c7c865ccc12a8b1d7aa673ba0c5e8861"
-	Kind1_15 KindVersion = "kindest/node:v1.15.12@sha256:b920920e1eda689d9936dfcf7332701e80be12566999152626b2c9d730397a95"
-	Kind1_14 KindVersion = "kindest/node:v1.14.10@sha256:f8a66ef82822ab4f7569e91a5bccaf27bceee135c1457c512e54de8c6f7219f8"
+	Kind1_24 KindVersion = "kindest/node:v1.24.0@sha256:0866296e693efe1fed79d5e6c7af8df71fc73ae45e3679af05342239cdc5bc8e"
+	Kind1_23 KindVersion = "kindest/node:v1.23.6@sha256:b1fa224cc6c7ff32455e0b1fd9cbfd3d3bc87ecaa8fcb06961ed1afb3db0f9ae"
+	Kind1_22 KindVersion = "kindest/node:v1.22.9@sha256:8135260b959dfe320206eb36b3aeda9cffcb262f4b44cda6b33f7bb73f453105"
+	Kind1_21 KindVersion = "kindest/node:v1.21.12@sha256:f316b33dd88f8196379f38feb80545ef3ed44d9197dca1bfd48bcb1583210207"
+	Kind1_20 KindVersion = "kindest/node:v1.20.15@sha256:6f2d011dffe182bad80b85f6c00e8ca9d86b5b8922cdf433d53575c4c5212248"
+	Kind1_19 KindVersion = "kindest/node:v1.19.16@sha256:d9c819e8668de8d5030708e484a9fdff44d95ec4675d136ef0a0a584e587f65c"
+	Kind1_18 KindVersion = "kindest/node:v1.18.20@sha256:738cdc23ed4be6cc0b7ea277a2ebcc454c8373d7d8fb991a7fcdbd126188e6d7"
+	Kind1_17 KindVersion = "kindest/node:v1.17.17@sha256:e477ee64df5731aa4ef4deabbafc34e8d9a686b49178f726563598344a3898d5"
+	Kind1_16 KindVersion = "kindest/node:v1.16.15@sha256:64bac16b83b6adfd04ea3fbcf6c9b5b893277120f2b2cbf9f5fa3e5d4c2260cc"
+	Kind1_15 KindVersion = "kindest/node:v1.15.12@sha256:9dfc13db6d3fd5e5b275f8c4657ee6a62ef9cb405546664f2de2eabcfd6db778"
+	Kind1_14 KindVersion = "kindest/node:v1.14.10@sha256:b693339da2a927949025869425e20daf80111ccabf020d4021a23c00bae29d82"
 
 	// Kubeconfig is the filename of the KUBECONFIG file.
 	Kubeconfig = "KUBECONFIG"
@@ -85,6 +89,12 @@ func asKindVersion(t testing.NTB, version string) KindVersion {
 		return Kind1_20
 	case "1.21":
 		return Kind1_21
+	case "1.22":
+		return Kind1_22
+	case "1.23":
+		return Kind1_23
+	case "1.24":
+		return Kind1_24
 	}
 	t.Fatalf("Unrecognized Kind version: %q", version)
 	return ""

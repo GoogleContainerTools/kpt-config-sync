@@ -52,7 +52,7 @@ RUN go install github.com/filmil/gotopt2/cmd/gotopt2@v0.1.2
 
 # kind can run kubernetes clusters in docker
 # v0.10.0
-RUN go install sigs.k8s.io/kind@v0.10.0
+RUN go install sigs.k8s.io/kind@v0.14.0
 
 # Build intermediate image for gcloud / kubectl
 FROM marketplace.gcr.io/google/ubuntu1804 as gcloud-install

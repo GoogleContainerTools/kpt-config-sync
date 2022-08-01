@@ -37,18 +37,18 @@ docker inspect "${reg_name}" &>/dev/null || (
 # It's safe to run this even if the container is already running.
 docker start "${reg_name}"
 
-# Ensure kind v0.11.1 is installed.
+# Ensure kind v0.14.0 is installed.
 # Dear future people: Feel free to upgrade this as new versions are released.
 # Note that upgrading the kind version will require updating the image versions:
 # https://github.com/kubernetes-sigs/kind/releases
 kind &> /dev/null || (
-  echo "Kind is not installed. Install v0.11.1."
+  echo "Kind is not installed. Install v0.14.0."
   echo "https://kind.sigs.k8s.io/docs/user/quick-start/"
   exit 1
 )
 
-kind version | grep v0.11.1 || (
-  echo "Using unsupported kind version. Install v0.11.1."
+kind version | grep v0.14.0 || (
+  echo "Using unsupported kind version. Install v0.14.0."
   echo "https://kind.sigs.k8s.io/docs/user/quick-start/"
   exit 1
 )

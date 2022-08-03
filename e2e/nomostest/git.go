@@ -44,6 +44,12 @@ const (
 	// MainBranch is static as behavior when switching branches is never under
 	// test.
 	MainBranch = "main"
+
+	// GitKeepFileName is a conventional name for an empty file you add to
+	// directories in git when you want to make sure the directory is retained even
+	// when all the other files are deleted.
+	// Without this file, the directory may remain locally, but won't exist in git.
+	GitKeepFileName = ".gitkeep"
 )
 
 // RepoType represents the type of the source repository.
@@ -167,10 +173,8 @@ func (g *Repository) Git(command ...string) {
 func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) {
 	g.T.Helper()
 
-	// Add the README to the inside of acme/ so the directory is guaranteed to
-	// exist - ACM refuses to sync to non-existent directories, and git requires
-	// at least one file in order for a directory to exist.
-	g.AddFile("acme/README.md", []byte("Test repository."))
+	// Add .gitkeep to retain dir when empty, otherwise configsync will error.
+	g.AddEmptyDir(AcmeDir)
 	if g.Type == RootRepo {
 		// Keep a safety namespace to avoid failing the safety check.
 		g.Add(g.SafetyNSPath, fake.NamespaceObject(g.SafetyNSName))
@@ -178,7 +182,7 @@ func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) {
 	switch sourceFormat {
 	case filesystem.SourceFormatHierarchy:
 		// Hierarchy format requires a Repo object.
-		g.Add("acme/system/repo.yaml", fake.RepoObject())
+		g.Add(filepath.Join(AcmeDir, "system", "repo.yaml"), fake.RepoObject())
 	case filesystem.SourceFormatUnstructured:
 		// It is an error for unstructured repos to include the Repo object.
 	default:
@@ -387,6 +391,17 @@ func (g *Repository) AddFile(path string, bytes []byte) {
 	}
 	// Add the file to Git.
 	g.Git("add", absPath)
+}
+
+// AddEmptyDir creates an empty dir containing an empty .gitkeep file, so the
+// empty dir will be retained in git.
+//
+// Use this when creating empty sync directories, otherwise Config Sync will
+// error that the directory doesn't exist.
+func (g *Repository) AddEmptyDir(path string) {
+	g.T.Helper()
+
+	g.AddFile(filepath.Join(path, GitKeepFileName), []byte{})
 }
 
 // GetFile reads and returns the specified file.

@@ -116,7 +116,7 @@ test_teardown() {
   wait::for -l -t 60 -- configmap_condition "Error"
 
   debug::log "Check for clusterrole error resource condition in cluster config"
-  wait::for -l -t 60 -- clusterconfig_condition "Error"
+  wait::for -l -t 120 -- clusterconfig_condition "Error"
 
   debug::log "Check for clusterrole error resource condition in repo status"
   wait::for -l -t 60 -- repos_condition "Error"
@@ -153,7 +153,7 @@ test_teardown() {
   wait::for -l -t 60 -- configmap_condition "Reconciling"
 
   debug::log "Check for clusterrole reconciling resource condition in cluster config"
-  wait::for -l -t 60 -- clusterconfig_condition "Reconciling"
+  wait::for -l -t 120 -- clusterconfig_condition "Reconciling"
 
   debug::log "Check for clusterrole reconciling resource condition in repo status"
   wait::for -l -t 60 -- repos_condition "Reconciling"

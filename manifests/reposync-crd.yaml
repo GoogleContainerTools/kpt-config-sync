@@ -118,7 +118,8 @@ spec:
                   privateCertSecret:
                     description: privateCertSecret specifies the name of the secret
                       where the private certificate is stored. The creation of the
-                      secret should be done out of band by the user.
+                      secret should be done out of band by the user and should store
+                      the certificate in a key named "cert".
                     nullable: true
                     properties:
                       name:
@@ -1031,7 +1032,8 @@ spec:
                   privateCertSecret:
                     description: privateCertSecret specifies the name of the secret
                       where the private certificate is stored. The creation of the
-                      secret should be done out of band by the user.
+                      secret should be done out of band by the user and should store
+                      the certificate in a key named "cert".
                     nullable: true
                     properties:
                       name:

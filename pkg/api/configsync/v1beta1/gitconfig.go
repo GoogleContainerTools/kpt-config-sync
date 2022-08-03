@@ -80,7 +80,8 @@ type Git struct {
 	NoSSLVerify bool `json:"noSSLVerify,omitempty"`
 
 	// privateCertSecret specifies the name of the secret where the private certificate is stored.
-	// The creation of the secret should be done out of band by the user.
+	// The creation of the secret should be done out of band by the user and should store the
+	// certificate in a key named "cert".
 	// +nullable
 	// +optional
 	PrivateCertSecret SecretReference `json:"privateCertSecret,omitempty"`

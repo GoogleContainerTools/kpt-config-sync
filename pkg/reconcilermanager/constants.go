@@ -55,6 +55,9 @@ const (
 	// OciSync is the name of the oci-sync container in reconciler pods.
 	OciSync = "oci-sync"
 
+	// HelmSync is the name of the helm-sync container in reconciler pods.
+	HelmSync = "helm-sync"
+
 	// HydrationController is the name of the hydration-controller container in reconciler pods.
 	HydrationController = "hydration-controller"
 
@@ -74,16 +77,16 @@ const (
 )
 
 const (
-	// SourceTypeKey is the OS env variable key for the type of the source repo, must be git or oci.
+	// SourceTypeKey is the OS env variable key for the type of the source repo, must be git or oci or helm.
 	SourceTypeKey = "SOURCE_TYPE"
 
-	// SourceRepoKey is the OS env variable key for the git or OCI repo URL.
+	// SourceRepoKey is the OS env variable key for the git or OCI or Helm repo URL.
 	SourceRepoKey = "SOURCE_REPO"
 
-	// SourceBranchKey is the OS env variable key for the git branch name. It doesn't apply to OCI.
+	// SourceBranchKey is the OS env variable key for the git branch name. It doesn't apply to OCI and helm.
 	SourceBranchKey = "SOURCE_BRANCH"
 
-	// SourceRevKey is the OS env variable key for the git revision. It doesn't apply to OCI.
+	// SourceRevKey is the OS env variable key for the git or helm revision.
 	SourceRevKey = "SOURCE_REV"
 )
 
@@ -106,4 +109,27 @@ const (
 
 	// OciSyncWait is the OS env variable key for the OCI sync wait period in seconds.
 	OciSyncWait = "OCI_SYNC_WAIT"
+)
+
+const (
+	// HelmRepo is the OS env variable key for the Helm repository URL.
+	HelmRepo = "HELM_REPO"
+
+	// HelmChart is the OS env variable key for the Helm chart name.
+	HelmChart = "HELM_CHART"
+
+	// HelmChartVersion is the OS env variable key for the Helm chart version.
+	HelmChartVersion = "HELM_CHART_VERSION"
+
+	// HelmReleaseName is the OS env variable key for the Helm release name.
+	HelmReleaseName = "HELM_RELEASE_NAME"
+
+	//HelmReleaseNamespace is the OS env variable key for the Helm release namespace.s
+	HelmReleaseNamespace = "HELM_RELEASE_NAMESPACE"
+
+	//HelmAuthType is the OS env variable key for Helm sync auth type.
+	HelmAuthType = "HELM_AUTH_TYPE"
+
+	// HelmSyncWait is the OS env variable key for the Helm sync wait period in seconds.
+	HelmSyncWait = "HELM_SYNC_WAIT"
 )

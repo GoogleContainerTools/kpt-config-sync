@@ -38,10 +38,13 @@ import (
 func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, scope declared.Scope, reconcilerName, pollPeriod string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	var syncDir string
-	if v1beta1.SourceType(sourceType) == v1beta1.OciSource {
+	switch v1beta1.SourceType(sourceType) {
+	case v1beta1.OciSource:
 		syncDir = ociConfig.Dir
-	} else {
+	case v1beta1.GitSource:
 		syncDir = gitConfig.Dir
+	case v1beta1.HelmSource:
+		syncDir = "."
 	}
 
 	result = append(result,
@@ -74,7 +77,7 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
+func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.Helm, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
@@ -83,10 +86,19 @@ func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScop
 	var syncBranch string
 	var syncRevision string
 	var syncDir string
-	if v1beta1.SourceType(sourceType) == v1beta1.OciSource {
+	switch v1beta1.SourceType(sourceType) {
+	case v1beta1.OciSource:
 		syncRepo = ociConfig.Image
 		syncDir = ociConfig.Dir
-	} else {
+	case v1beta1.HelmSource:
+		syncRepo = helmConfig.Repo
+		syncDir = helmConfig.Chart
+		if helmConfig.Version != "" {
+			syncRevision = helmConfig.Version
+		} else {
+			syncRevision = "latest"
+		}
+	case v1beta1.GitSource:
 		syncRepo = gitConfig.Repo
 		syncDir = gitConfig.Dir
 		if gitConfig.Branch != "" {
@@ -182,6 +194,34 @@ func ociSyncEnvs(image string, auth configsync.AuthType, period float64) []corev
 		Value: string(auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncWait,
+		Value: fmt.Sprintf("%f", period),
+	})
+	return result
+}
+
+// helmSyncEnvs returns the environment variables for the oci-sync container.
+func helmSyncEnvs(repo, chart, version, releaseName, namespace string, auth configsync.AuthType, period float64) []corev1.EnvVar {
+	var result []corev1.EnvVar
+	result = append(result, corev1.EnvVar{
+		Name:  reconcilermanager.HelmRepo,
+		Value: repo,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmChart,
+		Value: chart,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmChartVersion,
+		Value: version,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmReleaseName,
+		Value: releaseName,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmReleaseNamespace,
+		Value: namespace,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmAuthType,
+		Value: string(auth),
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmSyncWait,
 		Value: fmt.Sprintf("%f", period),
 	})
 	return result

@@ -99,6 +99,13 @@ image-nomos: license
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
+	@echo "+++ Building the Helm-sync image"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(HELM_SYNC_IMAGE) \
+		-t $(HELM_SYNC_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
 
 
 # Pushes the specified component's docker image to gcr.io.
@@ -114,6 +121,7 @@ push-to-gcr-nomos: image-nomos
 	docker push $(HYDRATION_CONTROLLER_TAG)
 	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker push $(OCI_SYNC_TAG)
+	docker push $(HELM_SYNC_TAG)
 
 ###################################
 # Deployment generation
@@ -155,6 +163,7 @@ $(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml: \
 	@mkdir -p $(dir $@)
 	@sed -e 's|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|' \
 		-e 's|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|' \
+		-e 's|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|' \
 		-e 's|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|' < $< > $@
 
 .PHONY: $(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml

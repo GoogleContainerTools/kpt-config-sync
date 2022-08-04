@@ -39,6 +39,7 @@ HC_WITH_SHELL_TAG="gcr.io/${GCP_PROJECT}/configsync/hydration-controller-with-sh
 REC_TAG="gcr.io/${GCP_PROJECT}/configsync/reconciler:${TAG}"
 WEBHOOK_TAG="gcr.io/${GCP_PROJECT}/configsync/admission-webhook:${TAG}"
 OCI_TAG="gcr.io/${GCP_PROJECT}/configsync/oci-sync:${TAG}"
+HELM_TAG="gcr.io/${GCP_PROJECT}/configsync/helm-sync:${TAG}"
 
 make -C "${REPO_DIR}" image-nomos \
   NOMOS_TAG="${NOMOS_TAG}" \
@@ -47,13 +48,15 @@ make -C "${REPO_DIR}" image-nomos \
   HYDRATION_CONTROLLER_WITH_SHELL_TAG="${HC_WITH_SHELL_TAG}"\
   RECONCILER_MANAGER_TAG="${MGR_TAG}" \
   ADMISSION_WEBHOOK_TAG="${WEBHOOK_TAG}" \
-  OCI_SYNC_TAG="${OCI_TAG}"
+  OCI_SYNC_TAG="${OCI_TAG}" \
+  HELM_SYNC_TAG="${HELM_TAG}"
 docker push "${MGR_TAG}"
 docker push "${HC_TAG}"
 docker push "${HC_WITH_SHELL_TAG}"
 docker push "${REC_TAG}"
 docker push "${WEBHOOK_TAG}"
 docker push "${OCI_TAG}"
+docker push "${HELM_TAG}"
 
 echo "+++ Generating manifests"
 cp "${REPO_DIR}"/manifests/test-resources/00-namespace.yaml "${MANIFEST_DIR}"/00-namespace.yaml
@@ -66,6 +69,7 @@ cp "${REPO_DIR}"/manifests/test-resources/resourcegroup-manifest.yaml "${MANIFES
 
 sed -e "s|RECONCILER_IMAGE_NAME|$REC_TAG|" \
   -e "s|OCI_SYNC_IMAGE_NAME|$OCI_TAG|" \
+  -e "s|HELM_SYNC_IMAGE_NAME|$HELM_TAG|" \
   -e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$HC_TAG|" \
   "${REPO_DIR}"/manifests/templates/reconciler-manager-configmap.yaml \
   > "${MANIFEST_DIR}"/reconciler-manager-configmap.yaml

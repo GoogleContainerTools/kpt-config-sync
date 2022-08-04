@@ -23,7 +23,7 @@ COPY . .
 ARG VERSION
 ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
 
-ARG HELM_VERSION=v3.6.3
+ARG HELM_VERSION=v3.9.0
 ARG KUSTOMIZE_VERSION=v4.5.2
 
 # Install Helm
@@ -54,7 +54,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/hydration-controller \
     ./cmd/nomos \
     ./cmd/admission-webhook \
-    ./cmd/oci-sync
+    ./cmd/oci-sync \
+    ./cmd/helm-sync
 
 # Hydration controller image
 FROM gcr.io/distroless/static:nonroot as hydration-controller
@@ -88,6 +89,23 @@ COPY LICENSES.txt LICENSES.txt
 USER 1000
 
 ENTRYPOINT ["/oci-sync"]
+
+# Helm-sync image
+FROM gcr.io/distroless/static:latest as helm-sync
+# Setting HOME ensures that whatever UID this ultimately runs as can write files.
+ENV HOME=/tmp
+WORKDIR /
+COPY --from=bins /go/bin/helm-sync .
+COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+
+# License file required for on-prem release.
+COPY LICENSE LICENSE
+COPY LICENSES.txt LICENSES.txt
+
+# Switch to non-root user
+USER 1000
+
+ENTRYPOINT ["/helm-sync"]
 
 # Hydration controller image with shell
 FROM k8s.gcr.io/build-image/debian-base-amd64:bullseye-v1.3.0 as hydration-controller-with-shell

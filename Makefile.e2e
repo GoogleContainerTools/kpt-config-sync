@@ -144,6 +144,8 @@ __push-local-image: image-nomos
 	@docker push localhost:5000/admission-webhook:$(LATEST_IMAGE_TAG)
 	@docker tag $(OCI_SYNC_TAG) localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
 	@docker push localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
+	@docker tag $(HELM_SYNC_TAG) localhost:5000/helm-sync:$(LATEST_IMAGE_TAG)
+	@docker push localhost:5000/helm-sync:$(LATEST_IMAGE_TAG)
 
 __install-nomos-local:
 	@GO111MODULE=on go install ./cmd/nomos/nomos.go

@@ -175,6 +175,9 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	case v1beta1.OciSource:
 		auth = rs.Spec.Oci.Auth
 		gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
+	case v1beta1.HelmSource:
+		auth = rs.Spec.Helm.Auth
+		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	}
 	if err := r.upsertServiceAccount(ctx, reconcilerName, auth, gcpSAEmail, rootsyncLabelMap, owRefs); err != nil {
 		log.Error(err, "Failed to create/update Service Account")
@@ -410,7 +413,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -427,6 +430,8 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 		})
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
+	case v1beta1.HelmSource:
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm.Repo, rs.Spec.Helm.Chart, rs.Spec.Helm.Version, rs.Spec.Helm.ReleaseName, rs.Spec.Helm.Namespace, rs.Spec.Helm.Auth, v1beta1.GetPeriodSecs(rs.Spec.Helm.Period))
 	}
 	return result
 }
@@ -443,6 +448,9 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 			return validate.RedundantGitSpec(rs)
 		}
 		return validate.OciSpec(rs.Spec.Oci, rs)
+	case v1beta1.HelmSource:
+		//TODO: add Helm Source Validation
+		return nil
 	default:
 		return validate.InvalidSourceType(rs)
 	}
@@ -570,6 +578,9 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
+		case v1beta1.HelmSource:
+			auth = rs.Spec.Helm.Auth
+			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
@@ -619,6 +630,13 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
+				}
+			case reconcilermanager.HelmSync:
+				// Don't add the helm-sync container when sourceType is NOT helm.
+				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.HelmSource {
+					addContainer = false
+				} else {
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.

@@ -28,11 +28,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"golang.org/x/net/context"
 	"k8s.io/klog/v2"
-)
-
-const (
-	// tmpLink is the temporary soft link name.
-	tmpLink = "tmp-link"
+	"kpt.dev/configsync/pkg/util"
 )
 
 // FetchPackage fetches the package from the OCI repository and write it to the destination.
@@ -75,7 +71,7 @@ func FetchPackage(ctx context.Context, imageName, ociRoot, rev string, auth auth
 	}
 
 	klog.Infof("pulled image digest %q", imageDigestHash)
-	return updateSymlink(ociRoot, linkPath, destDir, oldDir)
+	return util.UpdateSymlink(ociRoot, linkPath, destDir, oldDir)
 }
 
 // pullImage pulls image from source using provided options for auth credentials
@@ -143,24 +139,5 @@ func extract(image v1.Image, dir string) error {
 		}
 	}
 
-	return nil
-}
-
-// updateSymlink updates the symbolic link to the package directory.
-func updateSymlink(ociRoot, linkAbsPath, packageDir, oldPackageDir string) error {
-	tmpLinkPath := filepath.Join(ociRoot, tmpLink)
-
-	if err := os.Symlink(packageDir, tmpLinkPath); err != nil {
-		return fmt.Errorf("unable to create symlink: %w", err)
-	}
-
-	if err := os.Rename(tmpLinkPath, linkAbsPath); err != nil {
-		return fmt.Errorf("unable to replace symlink: %w", err)
-	}
-
-	if err := os.RemoveAll(oldPackageDir); err != nil {
-		klog.Warningf("unable to remove the previously package directory %s: %v", oldPackageDir, err)
-	}
-	klog.Infof("symlink %q updates to %q", linkAbsPath, packageDir)
 	return nil
 }

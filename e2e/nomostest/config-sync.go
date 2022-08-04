@@ -355,6 +355,8 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 			replaced = strings.ReplaceAll(replaced, "HYDRATION_CONTROLLER_IMAGE_NAME", hydrationControllerImgName)
 			ociSyncImgName := fmt.Sprintf("%s/oci-sync:%s", *e2e.ImagePrefix, *e2e.ImageTag)
 			replaced = strings.ReplaceAll(replaced, "OCI_SYNC_IMAGE_NAME", ociSyncImgName)
+			helmSyncImgName := fmt.Sprintf("%s/helm-sync:%s", *e2e.ImagePrefix, *e2e.ImageTag)
+			replaced = strings.ReplaceAll(replaced, "HELM_SYNC_IMAGE_NAME", helmSyncImgName)
 		case "admission-webhook.yaml":
 			imgName = fmt.Sprintf("%s/admission-webhook:%s", *e2e.ImagePrefix, *e2e.ImageTag)
 		default:

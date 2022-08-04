@@ -79,13 +79,13 @@ type Options struct {
 	// HydratedLink is the relative path to the hydrated root.
 	// It is a symlink that links to the hydrated configs under the hydrated root dir.
 	HydratedLink string
-	// SourceRev is the git revision being synced.
+	// SourceRev is the git revision or a helm chart version being synced.
 	SourceRev string
 	// SourceBranch is the git branch being synced.
 	SourceBranch string
-	// SourceRepo is the git or OCI repo being synced.
+	// SourceRepo is the git or OCI or Helm repo being synced.
 	SourceRepo string
-	// SourceType is the type of the source repository, must be git or oci.
+	// SourceType is the type of the source repository, must be git or oci or Helm.
 	SourceType v1beta1.SourceType
 	// SyncDir is the relative path to the configurations in the source.
 	SyncDir cmpath.Relative

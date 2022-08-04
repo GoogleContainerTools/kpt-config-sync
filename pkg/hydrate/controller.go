@@ -290,16 +290,19 @@ func deleteErrorFile(file string) error {
 	return nil
 }
 
-// SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest), the absolute path of the sync directory, and source errors.
+// SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest or a helm chart version), the absolute path of the sync directory, and source errors.
 func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
 	// Check if the source configs are synced successfully.
 	errFilePath := filepath.Join(path.Dir(sourceRoot.OSPath()), git.ErrorFile)
 
 	var containerName string
-	if sourceType == v1beta1.OciSource {
+	switch sourceType {
+	case v1beta1.OciSource:
 		containerName = reconcilermanager.OciSync
-	} else {
+	case v1beta1.GitSource:
 		containerName = reconcilermanager.GitSync
+	case v1beta1.HelmSource:
+		containerName = reconcilermanager.HelmSync
 	}
 
 	// A function that turns an error to a status sourceError.

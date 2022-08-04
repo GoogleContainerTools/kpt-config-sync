@@ -50,13 +50,13 @@ var (
 	// source configuration flags. These values originate in the ConfigManagement and
 	// configure git-sync/oci-sync to clone the desired repository/reference we want.
 	sourceType = flag.String("source-type", os.Getenv(reconcilermanager.SourceTypeKey),
-		"The type of repo being synced, must be git or oci.")
+		"The type of repo being synced, must be git or oci or helm.")
 	sourceRepo = flag.String("source-repo", os.Getenv(reconcilermanager.SourceRepoKey),
 		"The URL of the git or OCI repo being synced.")
 	sourceBranch = flag.String("source-branch", os.Getenv(reconcilermanager.SourceBranchKey),
 		"The branch of the git repo being synced.")
 	sourceRev = flag.String("source-rev", os.Getenv(reconcilermanager.SourceRevKey),
-		"The git reference we're syncing to in the git repo. Could be a specific commit.")
+		"The reference we're syncing to in the repo. Could be a specific commit or a chart version.")
 	syncDir = flag.String("sync-dir", os.Getenv(reconcilermanager.SyncDirKey),
 		"The relative path of the root configuration directory within the repo.")
 

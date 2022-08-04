@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -146,72 +145,132 @@ func TestGCENodeOCI(t *testing.T) {
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
-// TestOCIWorkloadIdentity tests the `gcpserviceaccount` auth type with both GKE
-// Workload Identity and Fleet Workload Identity (in-project and cross-project).
+// TestOCIARGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
 //  The test will run on a GKE cluster only with following pre-requisites
 // 1. Workload Identity is enabled.
 // 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
-// 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //  gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
 //     --role roles/iam.workloadIdentityUser \
 //     --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//     --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
 //     e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
-// 5. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIARGKEWorkloadIdentity(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  false,
+		crossProject: false,
+		sourceRepo:   privateARImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaARReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
+	})
+}
+
+// TestOCIGCRGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
+//  The test will run on a GKE cluster only with following pre-requisites
+// 1. Workload Identity is enabled.
+// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
 //      --role roles/iam.workloadIdentityUser \
 //      --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
+//      e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
+// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  false,
+		crossProject: false,
+		sourceRepo:   privateGCRImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaGCRReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
+	})
+}
+
+// TestOCIARFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
+//  The test will run on a GKE cluster only with following pre-requisites
+// 1. Workload Identity is enabled.
+// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//  gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//     --role roles/iam.workloadIdentityUser \
+//     --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
+//     e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIARFleetWISameProject(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  true,
+		crossProject: false,
+		sourceRepo:   privateARImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaARReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
+	})
+}
+
+// TestOCIGCRFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
+//  The test will run on a GKE cluster only with following pre-requisites
+// 1. Workload Identity is enabled.
+// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//      --role roles/iam.workloadIdentityUser \
+//      --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
+//      e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
+// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIGCRFleetWISameProject(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  true,
+		crossProject: false,
+		sourceRepo:   privateGCRImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaGCRReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
+	})
+}
+
+// TestOCIARFleetWIDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
+//  The test will run on a GKE cluster only with following pre-requisites
+// 1. Workload Identity is enabled.
+// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//  gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//     --role roles/iam.workloadIdentityUser \
+//     --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
+//     e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+// 4. The cross-project fleet host project 'cs-dev-hub' is created.
+// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIARFleetWIDifferentProject(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  true,
+		crossProject: true,
+		sourceRepo:   privateARImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaARReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
+	})
+}
+
+// TestOCIGCRFleetWIDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
+//  The test will run on a GKE cluster only with following pre-requisites
+// 1. Workload Identity is enabled.
+// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//      --role roles/iam.workloadIdentityUser \
 //      --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
 //      e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
-// 6. The cross-project fleet host project 'cs-dev-hub' is created.
-// 7. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIWorkloadIdentity(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RequireGKE(t))
-
-	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
-	crossProjectFleetProjectID := "cs-dev-hub"
-	gcpProject := os.Getenv("GCP_PROJECT")
-	if gcpProject == "" {
-		t.Fatal("Environment variable 'GCP_PROJECT' is required for this test case")
-	}
-	gcpCluster := os.Getenv("GCP_CLUSTER")
-	if gcpCluster == "" {
-		t.Fatal("Environment variable 'GCP_CLUSTER' is required for this test case")
-	}
-	gkeRegion := os.Getenv("GCP_REGION")
-	gkeZone := os.Getenv("GCP_ZONE")
-	if gkeRegion == "" && gkeZone == "" {
-		t.Fatal("Environment variable 'GCP_REGION' or 'GCP_ZONE' is required for this test case")
-	}
-	fleetMembership := fmt.Sprintf("%s-%s", gcpProject, gcpCluster)
-	gkeURI := "https://container.googleapis.com/v1/projects/" + gcpProject
-	if gkeRegion != "" {
-		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", gkeRegion, gcpCluster)
-	} else {
-		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", gkeZone, gcpCluster)
-	}
-
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Cleanup(func() {
-		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
-			v1beta1.GitSource, origRepoURL))
-		// Unregister the cluster in the same project.
-		if err := unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
-			nt.T.Log(err)
-		}
-		// Unregister the cluster in a different fleet host project.
-		if err := unregisterCluster(fleetMembership, crossProjectFleetProjectID, gkeURI); err != nil {
-			nt.T.Log(err)
-		}
+// 4. The cross-project fleet host project 'cs-dev-hub' is created.
+// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
+	testWorkloadIdentity(t, workloadIdentityTestSpec{
+		fleetWITest:  true,
+		crossProject: true,
+		sourceRepo:   privateGCRImage,
+		sourceType:   v1beta1.OciSource,
+		gsaEmail:     gsaGCRReaderEmail,
+		rootCommitFn: fixedOCIDigest(imageDigest),
 	})
-
-	nt.T.Log("Test OCI Workload Identity for AR")
-	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateARImage, gsaARReaderEmail, v1beta1.OciSource, fixedOCIDigest(imageDigest))
-
-	nt.T.Log("Test OCI Workload Identity for GCR")
-	testWorkloadIdentity(nt, fleetMembership, gcpProject, crossProjectFleetProjectID, gkeURI, privateGCRImage, gsaGCRReaderEmail, v1beta1.OciSource, fixedOCIDigest(imageDigest))
 }
 
 func TestSwitchFromGitToOci(t *testing.T) {

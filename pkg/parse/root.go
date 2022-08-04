@@ -206,12 +206,22 @@ func setSourceStatus(source *v1beta1.SourceStatus, p Parser, newStatus sourceSta
 			Dir:      p.options().SyncDir.SlashPath(),
 		}
 		source.Oci = nil
+		source.Helm = nil
 	case v1beta1.OciSource:
 		source.Oci = &v1beta1.OciStatus{
 			Image: p.options().SourceRepo,
 			Dir:   p.options().SyncDir.SlashPath(),
 		}
 		source.Git = nil
+		source.Helm = nil
+	case v1beta1.HelmSource:
+		source.Helm = &v1beta1.HelmStatus{
+			Repo:    p.options().SourceRepo,
+			Chart:   p.options().SyncDir.SlashPath(),
+			Version: p.options().SourceRev,
+		}
+		source.Git = nil
+		source.Oci = nil
 	}
 	errorSummary := &v1beta1.ErrorSummary{
 		TotalCount:                len(cse),

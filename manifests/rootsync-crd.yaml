@@ -636,6 +636,25 @@ spec:
                     - repo
                     - revision
                     type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
+                    type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was
                       last updated by a reconciler.
@@ -778,6 +797,25 @@ spec:
                     - repo
                     - revision
                     type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
+                    type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was
                       last updated by a reconciler.
@@ -915,6 +953,25 @@ spec:
                     - dir
                     - repo
                     - revision
+                    type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
                     type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was
@@ -1550,6 +1607,25 @@ spec:
                     - repo
                     - revision
                     type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
+                    type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was
                       last updated by a reconciler.
@@ -1692,6 +1768,25 @@ spec:
                     - repo
                     - revision
                     type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
+                    type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was
                       last updated by a reconciler.
@@ -1829,6 +1924,25 @@ spec:
                     - dir
                     - repo
                     - revision
+                    type: object
+                  helmStatus:
+                    description: helmStatus contains fields describing the status
+                      of a Helm source of truth.
+                    properties:
+                      chart:
+                        description: chart is the name of helm chart being fetched
+                        type: string
+                      repo:
+                        description: repo is the helm repository URL being synced
+                          from.
+                        type: string
+                      version:
+                        description: version is the helm chart version being fetched.
+                        type: string
+                    required:
+                    - chart
+                    - repo
+                    - version
                     type: object
                   lastUpdate:
                     description: lastUpdate is the timestamp of when this status was

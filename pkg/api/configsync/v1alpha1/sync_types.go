@@ -100,6 +100,10 @@ type SourceStatus struct {
 	// +optional
 	Oci *OciStatus `json:"ociStatus,omitempty"`
 
+	// helmStatus contains fields describing the status of a Helm source of truth.
+	// +optional
+	Helm *HelmStatus `json:"helmStatus,omitempty"`
+
 	// hash of the source of truth that is rendered.
 	// It can be a git commit hash, or an OCI image digest.
 	// +optional
@@ -129,6 +133,10 @@ type RenderingStatus struct {
 	// ociStatus contains fields describing the status of an OCI source of truth.
 	// +optional
 	Oci *OciStatus `json:"ociStatus,omitempty"`
+
+	// helmStatus contains fields describing the status of a Helm source of truth.
+	// +optional
+	Helm *HelmStatus `json:"helmStatus,omitempty"`
 
 	// hash of the source of truth that is rendered.
 	// It can be a git commit hash, or an OCI image digest.
@@ -162,6 +170,10 @@ type SyncStatus struct {
 	// ociStatus contains fields describing the status of an OCI source of truth.
 	// +optional
 	Oci *OciStatus `json:"ociStatus,omitempty"`
+
+	// helmStatus contains fields describing the status of a Helm source of truth.
+	// +optional
+	Helm *HelmStatus `json:"helmStatus,omitempty"`
 
 	// hash of the source of truth that is rendered.
 	// It can be a git commit hash, or an OCI image digest.
@@ -208,6 +220,18 @@ type OciStatus struct {
 	// dir is the absolute path of the directory that contains the local resources.
 	// Default: the root directory of the repository
 	Dir string `json:"dir"`
+}
+
+// HelmStatus describes the status of a Helm source of truth.
+type HelmStatus struct {
+	// repo is the helm repository URL being synced from.
+	Repo string `json:"repo"`
+
+	// version is the helm chart version being fetched.
+	Version string `json:"version"`
+
+	// chart is the name of helm chart being fetched
+	Chart string `json:"chart"`
 }
 
 // ConfigSyncError represents an error that occurs while parsing, applying, or

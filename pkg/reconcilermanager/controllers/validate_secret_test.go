@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
@@ -38,7 +39,7 @@ func TestValidateSecretExist(t *testing.T) {
 			name:            "Secret present",
 			secretNamespace: "bookinfo",
 			secretReference: "ssh-key",
-			wantSecret:      secretObj(t, "ssh-key", configsync.AuthSSH, core.Namespace("bookinfo")),
+			wantSecret:      secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")),
 		},
 
 		{
@@ -54,7 +55,7 @@ func TestValidateSecretExist(t *testing.T) {
 	if err := corev1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	fakeClient := syncerFake.NewClient(t, s, secretObj(t, "ssh-key", configsync.AuthSSH, core.Namespace("bookinfo")))
+	fakeClient := syncerFake.NewClient(t, s, secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")))
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,12 +84,12 @@ func TestValidateSecretData(t *testing.T) {
 		{
 			name:   "SSH auth data present",
 			auth:   configsync.AuthSSH,
-			secret: secretObj(t, "ssh-key", configsync.AuthSSH, core.Namespace("bookinfo")),
+			secret: secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")),
 		},
 		{
 			name:   "Cookiefile auth data present",
 			auth:   configsync.AuthCookieFile,
-			secret: secretObj(t, "ssh-key", "cookie_file", core.Namespace("bookinfo")),
+			secret: secretObj(t, "ssh-key", "cookie_file", v1beta1.GitSource, core.Namespace("bookinfo")),
 		},
 		{
 			name: "None auth",

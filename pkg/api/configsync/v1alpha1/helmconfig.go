@@ -42,7 +42,7 @@ type Helm struct {
 
 	// values to use instead of default values that accompany the chart
 	// +optional
-	Values unstructured.Unstructured `json:"values,omitempty"`
+	Values *unstructured.Unstructured `json:"values,omitempty"`
 
 	// valuesFiles is a list of path to Helm value files.
 	// Values files must be in the same repository with the Helm chart.
@@ -66,7 +66,7 @@ type Helm struct {
 	// auth specifies the type to authenticate to the Helm repository.
 	// Must be one of secret, gcpserviceaccount, or none.
 	// The validation of this is case-sensitive. Required.
-	// +kubebuilder:validation:Enum=none;gcpserviceaccount;token
+	// +kubebuilder:validation:Enum=none;gcpserviceaccount;token;gcenode
 	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate

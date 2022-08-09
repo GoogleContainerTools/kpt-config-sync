@@ -159,6 +159,9 @@ data:
            volumeMounts:
            - name: repo
              mountPath: /repo
+           - name: helm-creds
+             mountPath: /etc/helm-secret
+             readOnly: true
            terminationMessagePath: "/dev/termination-log"
            terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
@@ -230,6 +233,10 @@ data:
            emptyDir: {}
          - name: kube
            emptyDir: {}
+         - name: helm-creds
+           secret:
+             secretName: helm-creds
+             defaultMode: 288
          - name: git-creds
            secret:
              secretName: git-creds

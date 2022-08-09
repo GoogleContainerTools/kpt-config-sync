@@ -33,3 +33,11 @@ const (
 	// GitSecretConfigKeyTokenUsername is the key at which a token's username is stored
 	GitSecretConfigKeyTokenUsername = "username"
 )
+
+// Helm secret data key names
+const (
+	// HelmSecretKeyToken is the key at which a token's value is stored
+	HelmSecretKeyPassword = "password"
+	// HelmSecretKeyUsername is the key at which a token's username is stored
+	HelmSecretKeyUsername = "username"
+)

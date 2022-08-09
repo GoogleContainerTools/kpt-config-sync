@@ -34,26 +34,38 @@ import (
 )
 
 const (
-	sshAuth        = "ssh"
-	namespaceKey   = "ssh-key"
-	keyData        = "test-key"
-	updatedKeyData = "updated-test-key"
+	sshAuth         = configsync.AuthSSH
+	tokenAuth       = configsync.AuthToken
+	gitSource       = v1beta1.GitSource
+	helmSource      = v1beta1.HelmSource
+	namespaceKey    = "ssh-key"
+	tokenSecretName = "token"
+	keyData         = "test-key"
+	tokenData       = "MWYyZDFlMmU2N2Rm"
+	updatedKeyData  = "updated-test-key"
 )
 
-func repoSyncWithAuth(ns, name string, auth configsync.AuthType, opts ...core.MetaMutator) *v1beta1.RepoSync {
+func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType v1beta1.SourceType, opts ...core.MetaMutator) *v1beta1.RepoSync {
 	result := fake.RepoSyncObjectV1Beta1(ns, name, opts...)
-	result.Spec.SourceType = string(v1beta1.GitSource)
-	result.Spec.Git = &v1beta1.Git{
-		Auth:      auth,
-		SecretRef: v1beta1.SecretReference{Name: "ssh-key"},
+	result.Spec.SourceType = string(sourceType)
+	if sourceType == v1beta1.GitSource {
+		result.Spec.Git = &v1beta1.Git{
+			Auth:      auth,
+			SecretRef: v1beta1.SecretReference{Name: "ssh-key"},
+		}
+	} else if sourceType == v1beta1.HelmSource {
+		result.Spec.Helm = &v1beta1.Helm{
+			Auth:      auth,
+			SecretRef: v1beta1.SecretReference{Name: "token"},
+		}
 	}
 	return result
 }
 
-func secret(t *testing.T, name, data string, auth configsync.AuthType, opts ...core.MetaMutator) *corev1.Secret {
+func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceType v1beta1.SourceType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
 	result := fake.SecretObject(name, opts...)
-	result.Data = secretData(t, data, auth)
+	result.Data = secretData(t, data, auth, sourceType)
 	result.SetLabels(map[string]string{
 		metadata.SyncNamespaceLabel: reposyncNs,
 		metadata.SyncNameLabel:      reposyncName,
@@ -61,11 +73,17 @@ func secret(t *testing.T, name, data string, auth configsync.AuthType, opts ...c
 	return result
 }
 
-func secretData(t *testing.T, data string, auth configsync.AuthType) map[string][]byte {
+func secretData(t *testing.T, data string, auth configsync.AuthType, sourceType v1beta1.SourceType) map[string][]byte {
 	t.Helper()
 	key, err := json.Marshal(data)
 	if err != nil {
 		t.Fatalf("failed to marshal test key: %v", err)
+	}
+	if auth == configsync.AuthToken && sourceType == v1beta1.HelmSource {
+		return map[string][]byte{
+			"username": key,
+			"password": key,
+		}
 	}
 	return map[string][]byte{
 		string(auth): key,
@@ -90,33 +108,63 @@ func TestCreate(t *testing.T) {
 		wantSecret *corev1.Secret
 	}{
 		{
-			name:     "Secret created",
-			reposync: repoSyncWithAuth(reposyncNs, reposyncName, sshAuth),
-			client:   fakeClient(t, secret(t, namespaceKey, keyData, sshAuth, core.Namespace(reposyncNs))),
-			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth,
+			name:     "Secret created for git source",
+			reposync: repoSyncWithAuth(reposyncNs, reposyncName, sshAuth, gitSource),
+			client:   fakeClient(t, secret(t, namespaceKey, keyData, sshAuth, gitSource, core.Namespace(reposyncNs))),
+			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth, gitSource,
 				core.Namespace(v1.NSConfigManagementSystem),
 			),
 		},
 		{
-			name:     "Secret updated",
-			reposync: repoSyncWithAuth(reposyncNs, reposyncName, sshAuth),
-			client: fakeClient(t, secret(t, namespaceKey, updatedKeyData, sshAuth, core.Namespace(reposyncNs)),
-				secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth, core.Namespace(v1.NSConfigManagementSystem)),
+			name:     "Secret updated for git source",
+			reposync: repoSyncWithAuth(reposyncNs, reposyncName, sshAuth, gitSource),
+			client: fakeClient(t, secret(t, namespaceKey, updatedKeyData, sshAuth, gitSource, core.Namespace(reposyncNs)),
+				secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth, gitSource, core.Namespace(v1.NSConfigManagementSystem)),
 			),
-			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), updatedKeyData, sshAuth,
+			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), updatedKeyData, sshAuth, gitSource,
 				core.Namespace(v1.NSConfigManagementSystem),
 			),
 		},
 		{
-			name:      "Secret not found",
-			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, sshAuth),
+			name:      "Secret not found for git source",
+			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, sshAuth, gitSource),
 			client:    fakeClient(t),
 			wantError: true,
 		},
 		{
-			name:      "Secret not updated, secret not present",
-			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, sshAuth),
-			client:    fakeClient(t, secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth, core.Namespace(v1.NSConfigManagementSystem))),
+			name:      "Secret not updated, secret not present for git source",
+			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, sshAuth, gitSource),
+			client:    fakeClient(t, secret(t, ReconcilerResourceName(nsReconcilerName, namespaceKey), keyData, sshAuth, gitSource, core.Namespace(v1.NSConfigManagementSystem))),
+			wantError: true,
+		},
+		{
+			name:     "Secret created for helm source",
+			reposync: repoSyncWithAuth(reposyncNs, reposyncName, tokenAuth, helmSource),
+			client:   fakeClient(t, secret(t, tokenSecretName, tokenData, tokenAuth, helmSource, core.Namespace(reposyncNs))),
+			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, tokenSecretName), tokenData, tokenAuth, helmSource,
+				core.Namespace(v1.NSConfigManagementSystem),
+			),
+		},
+		{
+			name:     "Secret updated for helm source",
+			reposync: repoSyncWithAuth(reposyncNs, reposyncName, tokenAuth, helmSource),
+			client: fakeClient(t, secret(t, tokenSecretName, updatedKeyData, tokenAuth, helmSource, core.Namespace(reposyncNs)),
+				secret(t, ReconcilerResourceName(nsReconcilerName, tokenSecretName), keyData, tokenAuth, helmSource, core.Namespace(v1.NSConfigManagementSystem)),
+			),
+			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, tokenSecretName), updatedKeyData, tokenAuth, helmSource,
+				core.Namespace(v1.NSConfigManagementSystem),
+			),
+		},
+		{
+			name:      "Secret not found for helm source",
+			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, tokenAuth, helmSource),
+			client:    fakeClient(t),
+			wantError: true,
+		},
+		{
+			name:      "Secret not updated, secret not present for helm source",
+			reposync:  repoSyncWithAuth(reposyncNs, reposyncName, tokenAuth, helmSource),
+			client:    fakeClient(t, secret(t, ReconcilerResourceName(nsReconcilerName, tokenSecretName), keyData, tokenAuth, helmSource, core.Namespace(v1.NSConfigManagementSystem))),
 			wantError: true,
 		},
 	}

@@ -161,7 +161,13 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
 	if err := upsertSecret(ctx, rs, r.client, reconcilerName); err != nil {
-		log.Error(err, "RepoSync failed secret creation", "auth", rs.Spec.Auth)
+		var authType configsync.AuthType
+		if rs.Spec.SourceType == string(v1beta1.GitSource) {
+			authType = rs.Spec.Auth
+		} else if rs.Spec.SourceType == string(v1beta1.HelmSource) {
+			authType = rs.Spec.Helm.Auth
+		}
+		log.Error(err, "RepoSync failed secret creation", "auth", authType)
 		reposync.SetStalled(rs, "Secret", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
@@ -313,6 +319,16 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}); err != nil {
 		return err
 	}
+	// Index the `helmSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, helmSecretRefField, func(rawObj client.Object) []string {
+		rs := rawObj.(*v1beta1.RepoSync)
+		if rs.Spec.Helm == nil || rs.Spec.Helm.SecretRef.Name == "" {
+			return nil
+		}
+		return []string{rs.Spec.Helm.SecretRef.Name}
+	}); err != nil {
+		return err
+	}
 
 	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
@@ -416,7 +432,9 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 			reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 			isGitSecret := rs.Spec.SourceType == string(v1beta1.GitSource) && rs.Spec.Git != nil &&
 				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
-			if isGitSecret {
+			isHelmSecret := rs.Spec.SourceType == string(v1beta1.HelmSource) && rs.Spec.Helm != nil &&
+				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.Helm.SecretRef.Name)
+			if isGitSecret || isHelmSecret {
 				return requeueRepoSyncRequest(secret, &rs)
 			}
 			isSAToken := strings.HasPrefix(secret.GetName(), reconcilerName+"-token-")
@@ -453,6 +471,16 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 		return nil
 	}
 
+	attachedHelmRepoSyncs := &v1beta1.RepoSyncList{}
+	listOps = &client.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(helmSecretRefField, secret.GetName()),
+		Namespace:     secret.GetNamespace(),
+	}
+	if err := r.client.List(context.Background(), attachedHelmRepoSyncs, listOps); err != nil {
+		klog.Errorf("failed to list attached RepoSyncs for secret (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
+		return nil
+	}
+	attachedRepoSyncs.Items = append(attachedRepoSyncs.Items, attachedHelmRepoSyncs.Items...)
 	requests := make([]reconcile.Request, len(attachedRepoSyncs.Items))
 	attachedRSNames := make([]string, len(attachedRepoSyncs.Items))
 	for i, rs := range attachedRepoSyncs.Items {
@@ -584,7 +612,7 @@ func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm.Repo, rs.Spec.Helm.Chart, rs.Spec.Helm.Version, rs.Spec.Helm.ReleaseName, rs.Spec.Helm.Namespace, rs.Spec.Helm.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm.Repo, rs.Spec.Helm.Chart, rs.Spec.Helm.Version, rs.Spec.Helm.ReleaseName, rs.Spec.Helm.Namespace, rs.Spec.Helm.Auth, v1beta1.GetPeriodSecs(rs.Spec.Helm.Period))
 
 	}
 	return result
@@ -619,24 +647,33 @@ func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.Re
 
 // validateNamespaceSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
 func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSync *v1beta1.RepoSync, reconcilerName string) error {
-	if SkipForAuth(repoSync.Spec.Auth) {
+	var authType configsync.AuthType
+	var namespaceSecretName string
+	if repoSync.Spec.SourceType == string(v1beta1.GitSource) {
+		authType = repoSync.Spec.Auth
+		namespaceSecretName = repoSync.Spec.SecretRef.Name
+	} else if repoSync.Spec.SourceType == string(v1beta1.HelmSource) {
+		authType = repoSync.Spec.Helm.Auth
+		namespaceSecretName = repoSync.Spec.Helm.SecretRef.Name
+	}
+	if SkipForAuth(authType) {
 		// There is no Secret to check for the Config object.
 		return nil
 	}
 
-	secretName := ReconcilerResourceName(reconcilerName, repoSync.Spec.SecretRef.Name)
+	secretName := ReconcilerResourceName(reconcilerName, namespaceSecretName)
 	if errs := validation.IsDNS1123Subdomain(secretName); errs != nil {
 		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}
 
 	secret, err := validateSecretExist(ctx,
-		repoSync.Spec.SecretRef.Name,
+		namespaceSecretName,
 		repoSync.Namespace,
 		r.client)
 	if err != nil {
 		return err
 	}
-	return validateSecretData(repoSync.Spec.Auth, secret)
+	return validateSecretData(authType, secret)
 }
 
 func (r *RepoSyncReconciler) validateNamespaceName(namespaceName string) error {
@@ -725,6 +762,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		case v1beta1.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
+			secretRefName = rs.Spec.Helm.SecretRef.Name
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
@@ -743,11 +781,11 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		// Update DeprecatedServiceAccount to avoid discrepancy in equality check.
 		templateSpec.DeprecatedServiceAccount = reconcilerName
 		// Mutate secret.secretname to secret reference specified in RepoSync CR.
-		// Secret reference is the name of the secret used by git-sync container to
-		// authenticate with the git repository using the authorization method specified
+		// Secret reference is the name of the secret used by git-sync or helm-sync container to
+		// authenticate with the git or helm repository using the authorization method specified
 		// in the RepoSync CR.
 		secretName := ReconcilerResourceName(reconcilerName, secretRefName)
-		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, privateCertSecret, r.membership)
+		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, privateCertSecret, rs.Spec.SourceType, r.membership)
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.
 		for _, container := range templateSpec.Containers {
@@ -779,6 +817,10 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					container.VolumeMounts = volumeMounts(rs.Spec.Helm.Auth, "", rs.Spec.SourceType, container.VolumeMounts)
+					if authTypeToken(rs.Spec.Helm.Auth) {
+						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretName)...)
+					}
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -787,7 +829,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
-					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, container.VolumeMounts)
+					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, rs.Spec.SourceType, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
 					if authTypeToken(rs.Spec.Auth) {

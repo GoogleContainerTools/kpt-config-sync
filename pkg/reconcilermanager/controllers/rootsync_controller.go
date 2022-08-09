@@ -581,6 +581,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		case v1beta1.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
+			secretRefName = rs.Spec.Helm.SecretRef.Name
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
@@ -601,10 +602,10 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		templateSpec.DeprecatedServiceAccount = reconcilerName
 
 		// Mutate secret.secretname to secret reference specified in RootSync CR.
-		// Secret reference is the name of the secret used by git-sync container to
-		// authenticate with the git repository using the authorization method specified
+		// Secret reference is the name of the secret used by git-sync or helm-sync container to
+		// authenticate with the git or helm repository using the authorization method specified
 		// in the RootSync CR.
-		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, privateCertSecret, r.membership)
+		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, privateCertSecret, rs.Spec.SourceType, r.membership)
 
 		var updatedContainers []corev1.Container
 
@@ -637,6 +638,10 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					container.VolumeMounts = volumeMounts(rs.Spec.Helm.Auth, "", rs.Spec.SourceType, container.VolumeMounts)
+					if authTypeToken(rs.Spec.Helm.Auth) {
+						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
+					}
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -645,7 +650,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
-					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, container.VolumeMounts)
+					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, rs.Spec.SourceType, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
 					secretName := rs.Spec.SecretRef.Name

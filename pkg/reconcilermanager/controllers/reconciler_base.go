@@ -53,6 +53,11 @@ const (
 	// It will be used in both the indexing and watching.
 	gitSecretRefField = ".spec.git.secretRef.name"
 
+	// helmSecretRefField is the path of the field in the RootSync|RepoSync CRDs
+	// that we wish to use as the "object reference".
+	// It will be used in both the indexing and watching.
+	helmSecretRefField = ".spec.helm.secretRef.name"
+
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
 )

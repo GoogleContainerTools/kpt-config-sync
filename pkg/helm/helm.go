@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
 )
 
@@ -35,6 +36,9 @@ type Hydrator struct {
 	Namespace   string
 	HydrateRoot string
 	Dest        string
+	Auth        configsync.AuthType
+	UserName    string
+	Password    string
 }
 
 func (h *Hydrator) templateArgs(destDir string) []string {
@@ -43,7 +47,7 @@ func (h *Hydrator) templateArgs(destDir string) []string {
 		args = append(args, h.ReleaseName)
 	}
 	if h.isOCI() {
-		args = append(args, filepath.Join(h.Repo, h.Chart))
+		args = append(args, h.Repo+"/"+h.Chart)
 	} else {
 		args = append(args, h.Chart)
 		args = append(args, "--repo", h.Repo)
@@ -59,6 +63,17 @@ func (h *Hydrator) templateArgs(destDir string) []string {
 	return args
 }
 
+func (h *Hydrator) registryLoginArgs() []string {
+	args := []string{"registry", "login"}
+	if h.Auth == configsync.AuthToken {
+		args = append(args, "--username", h.UserName)
+		args = append(args, "--password", h.Password)
+	}
+	res := strings.Split(strings.TrimPrefix(h.Repo, "oci://"), "/")
+	args = append(args, "https://"+res[0])
+	return args
+}
+
 // HelmTemplate runs helm template with args
 func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	//TODO: add logic to handle "latest" version
@@ -71,6 +86,13 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	if oldDir == destDir {
 		klog.Infof("no update required with the same helm chart version %q", h.Version)
 		return nil
+	}
+	if h.Auth != configsync.AuthNone && h.isOCI() {
+		args := h.registryLoginArgs()
+		out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))
+		}
 	}
 	args := h.templateArgs(destDir)
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()

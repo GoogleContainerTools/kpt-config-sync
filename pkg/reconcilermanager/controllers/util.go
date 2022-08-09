@@ -199,6 +199,12 @@ func ociSyncEnvs(image string, auth configsync.AuthType, period float64) []corev
 	return result
 }
 
+const (
+	// helm-sync container specific environment variables.
+	helmSyncName     = "HELM_SYNC_USERNAME"
+	helmSyncPassword = "HELM_SYNC_PASSWORD"
+)
+
 // helmSyncEnvs returns the environment variables for the oci-sync container.
 func helmSyncEnvs(repo, chart, version, releaseName, namespace string, auth configsync.AuthType, period float64) []corev1.EnvVar {
 	var result []corev1.EnvVar
@@ -225,6 +231,38 @@ func helmSyncEnvs(repo, chart, version, releaseName, namespace string, auth conf
 		Value: fmt.Sprintf("%f", period),
 	})
 	return result
+}
+
+// helmSyncTokenAuthEnv returns environment variables for helm-sync container for 'token' Auth.
+func helmSyncTokenAuthEnv(secretRef string) []corev1.EnvVar {
+	helmSyncUsername := &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: secretRef,
+			},
+			Key: "username",
+		},
+	}
+
+	helmSyncPswd := &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: secretRef,
+			},
+			Key: "password",
+		},
+	}
+
+	return []corev1.EnvVar{
+		{
+			Name:      helmSyncName,
+			ValueFrom: helmSyncUsername,
+		},
+		{
+			Name:      helmSyncPassword,
+			ValueFrom: helmSyncPswd,
+		},
+	}
 }
 
 func ownerReference(kind, name string, uid types.UID) metav1.OwnerReference {

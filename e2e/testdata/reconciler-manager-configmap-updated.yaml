@@ -163,6 +163,29 @@ data:
             requests:
               cpu: "10m"
               memory: "200Mi"
+        - name: helm-sync
+          image: gcr.io/config-management-release/helm-sync:v1.13.0-rc.1
+          args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
+          volumeMounts:
+          - name: repo
+            mountPath: /repo
+          - name: helm-creds
+            mountPath: /etc/helm-secret
+            readOnly: true
+          terminationMessagePath: "/dev/termination-log"
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+              - NET_RAW
+            runAsUser: 65533
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "200Mi"
         - name: otel-agent
           image: gcr.io/config-management-release/otelcontribcol:v0.54.0
           command:

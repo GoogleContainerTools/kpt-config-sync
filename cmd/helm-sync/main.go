@@ -17,10 +17,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
 	"k8s.io/klog/v2/klogr"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
@@ -34,6 +36,9 @@ var (
 		"the name of the helm chart being synced")
 	flVersion = flag.String("version", os.Getenv(reconcilermanager.HelmChartVersion),
 		"the version of the helm chart being synced")
+	flAuth = flag.String("auth", util.EnvString(reconcilermanager.HelmAuthType, string(configsync.AuthNone)),
+		fmt.Sprintf("the authentication type for access to the Helm repository. Must be one of %s, %s, %s or %s. Defaults to %s",
+			configsync.AuthGCPServiceAccount, configsync.AuthToken, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
 	flReleaseName = flag.String("release-name", os.Getenv(reconcilermanager.HelmReleaseName),
 		"the name of helm release")
 	flNamespace = flag.String("namespace", os.Getenv(reconcilermanager.HelmReleaseNamespace),
@@ -52,6 +57,10 @@ var (
 		"exit after the first sync")
 	flMaxSyncFailures = flag.Int("max-sync-failures", util.EnvInt("HELM_SYNC_MAX_SYNC_FAILURES", 0),
 		"the number of consecutive failures allowed before aborting (the first sync must succeed, -1 will retry forever after the initial sync)")
+	flUsername = flag.String("username", util.EnvString("HELM_SYNC_USERNAME", ""),
+		"the username to use for helm authantication")
+	flPassword = flag.String("password", util.EnvString("HELM_SYNC_PASSWORD", ""),
+		"the password or personal access token to use for helm authantication")
 )
 
 func main() {
@@ -77,6 +86,13 @@ func main() {
 	if *flWait < 0 {
 		utillog.HandleError(log, true, "ERROR: --wait must be greater than or equal to 0")
 	}
+
+	if *flUsername != "" {
+		if *flPassword == "" {
+			utillog.HandleError(log, true, "ERROR: --password must be set when --username is specified")
+		}
+	}
+
 	initialSync := true
 	failCount := 0
 	for {
@@ -87,8 +103,11 @@ func main() {
 			Version:     *flVersion,
 			ReleaseName: *flReleaseName,
 			Namespace:   *flNamespace,
+			Auth:        configsync.AuthType(*flAuth),
 			HydrateRoot: *flRoot,
 			Dest:        *flDest,
+			UserName:    *flUsername,
+			Password:    *flPassword,
 		}
 		if err := hydrator.HelmTemplate(ctx); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {

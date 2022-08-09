@@ -29,20 +29,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
+	return rs.Spec.SourceType == string(v1beta1.GitSource) && !SkipForAuth(rs.Spec.Auth)
+}
+func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
+	return rs.Spec.SourceType == string(v1beta1.HelmSource) && !SkipForAuth(rs.Spec.Helm.Auth)
+}
+
 // upsertSecret creates or updates the secret in config-management-system
 // namespace using the existing secret in the reposync.namespace.
 func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string) error {
-	// Secret is only created if sourceType is git and auth is not 'none', 'gcenode', or 'gcpserviceaccount'.
-	if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.GitSource || SkipForAuth(rs.Spec.Auth) {
+	// Secret is only created if sourceType is git or helm and auth is not 'none', 'gcenode', or 'gcpserviceaccount'.
+	if !shouldUpsertGitSecret(rs) && !shouldUpsertHelmSecret(rs) {
 		return nil
 	}
-
 	// namespaceSecret represent secret in reposync.namespace.
 	namespaceSecret := &corev1.Secret{}
-	if err := get(ctx, rs.Spec.SecretRef.Name, rs.Namespace, namespaceSecret, c); err != nil {
+	var namespaceSecretName string
+	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource {
+		namespaceSecretName = rs.Spec.SecretRef.Name
+	} else {
+		namespaceSecretName = rs.Spec.Helm.SecretRef.Name
+	}
+	if err := get(ctx, namespaceSecretName, rs.Namespace, namespaceSecret, c); err != nil {
 		if apierrors.IsNotFound(err) {
 			return errors.Errorf(
-				"%s not found. Create %s secret in %s namespace", rs.Spec.SecretRef.Name, rs.Spec.SecretRef.Name, rs.Namespace)
+				"%s not found. Create %s secret in %s namespace", namespaceSecretName, namespaceSecretName, rs.Namespace)
 		}
 		return errors.Wrapf(err, "error while retrieving namespace secret")
 	}
@@ -50,7 +62,7 @@ func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, re
 	// existingsecret represent secret in config-management-system namespace.
 	existingsecret := &corev1.Secret{}
 
-	secretName := ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
+	secretName := ReconcilerResourceName(reconcilerName, namespaceSecretName)
 	if err := get(ctx, secretName, v1.NSConfigManagementSystem, existingsecret, c); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return errors.Wrapf(err,

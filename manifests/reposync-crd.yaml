@@ -169,6 +169,7 @@ spec:
                     - none
                     - gcpserviceaccount
                     - token
+                    - gcenode
                     type: string
                   chart:
                     description: chart is a Helm chart name. Required.
@@ -1140,6 +1141,7 @@ spec:
                     - none
                     - gcpserviceaccount
                     - token
+                    - gcenode
                     type: string
                   chart:
                     description: chart is a Helm chart name. Required.

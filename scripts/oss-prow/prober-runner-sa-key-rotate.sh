@@ -29,6 +29,7 @@
 set -euox pipefail
 
 PROJECT_NAME=${PROJECT_NAME:-oss-prow-build-kpt-config-sync}
+CLUSTER_NAME=${CLUSTER_NAME:-${PROJECT_NAME}}
 SERVICE_ACCOUNT=${SERVICE_ACCOUNT:-prober-runner}
 KEY_FILE=${KEY_FILE:-prober_runner_client_key.json}
 SECRET=${SECRET:-nomos-prober-runner-gcp-client-key}
@@ -71,7 +72,7 @@ function get_sa_key_secret() {
 
 function update_k8s_secret() {
   local prow_test_ns="test-pods"
-  local prow_cluster="${PROJECT_NAME}"
+  local prow_cluster="${CLUSTER_NAME}"
   local prow_zone="us-central1-b"
 
   get_sa_key_secret

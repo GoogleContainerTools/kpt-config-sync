@@ -160,7 +160,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if err := upsertSecret(ctx, rs, r.client, reconcilerName); err != nil {
+	if err := upsertSecrets(ctx, rs, r.client, reconcilerName); err != nil {
 		var authType configsync.AuthType
 		if rs.Spec.SourceType == string(v1beta1.GitSource) {
 			authType = rs.Spec.Auth
@@ -785,6 +785,9 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		// authenticate with the git or helm repository using the authorization method specified
 		// in the RepoSync CR.
 		secretName := ReconcilerResourceName(reconcilerName, secretRefName)
+		if usePrivateCert(privateCertSecret) {
+			privateCertSecret = ReconcilerResourceName(reconcilerName, privateCertSecret)
+		}
 		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, privateCertSecret, rs.Spec.SourceType, r.membership)
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.

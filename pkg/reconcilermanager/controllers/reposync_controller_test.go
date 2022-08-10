@@ -706,7 +706,9 @@ func TestRepoSyncCreateWithPrivateCert(t *testing.T) {
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret)
+	certSecret := secretObj(t, privateCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret.Data[PrivateCertKey] = []byte("test-cert")
+	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -717,9 +719,10 @@ func TestRepoSyncCreateWithPrivateCert(t *testing.T) {
 	repoContainerEnvs := testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
 
 	nsSecretName := nsReconcilerName + "-" + secretName
+	nsPrivateCertSecret := nsReconcilerName + "-" + privateCertSecret
 	repoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		privateCertSecretMutator(nsSecretName, privateCertSecret),
+		privateCertSecretMutator(nsSecretName, nsPrivateCertSecret),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
@@ -737,11 +740,14 @@ func TestRepoSyncUpdatePrivateCert(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
+	privateCertSecret := "foo-secret"
 	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret)
+	certSecret := secretObj(t, privateCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret.Data[PrivateCertKey] = []byte("test-cert")
+	fakeClient, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -782,7 +788,6 @@ func TestRepoSyncUpdatePrivateCert(t *testing.T) {
 	t.Log("No need to update Deployment")
 
 	// Set rs.Spec.PrivateCertSecret
-	privateCertSecret := "foo-secret"
 	rs.Spec.PrivateCertSecret.Name = privateCertSecret
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -793,9 +798,10 @@ func TestRepoSyncUpdatePrivateCert(t *testing.T) {
 	}
 
 	repoContainerEnvs = testReconciler.populateRepoContainerEnvs(ctx, rs, nsReconcilerName)
+	nsPrivateCertSecret := nsReconcilerName + "-" + privateCertSecret
 	updatedRepoDeployment := rootSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		privateCertSecretMutator(nsSecretName, privateCertSecret),
+		privateCertSecretMutator(nsSecretName, nsPrivateCertSecret),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),

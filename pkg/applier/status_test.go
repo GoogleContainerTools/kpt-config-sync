@@ -16,6 +16,7 @@ package applier
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -146,6 +147,10 @@ func TestObjectStatusMapFilter(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		result := tc.input.Filter(tc.strategy, tc.actuation, tc.reconcile)
+		// Map range order is semi-random, so sort result to avoid flakey test failures.
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].String() < result[j].String()
+		})
 		testutil.AssertEqual(t, tc.expected, result, "[%s] unexpected Filter return", tc.name)
 	}
 }

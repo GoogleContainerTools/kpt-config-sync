@@ -14,7 +14,7 @@ import (
 // This file simulates epoll on z/OS using poll.
 
 // Analogous to epoll_event on Linux.
-// TODO: Pad is because the Linux kernel expects a 96-bit struct. We never pass this to the kernel; remove?
+// TODO(neeilan): Pad is because the Linux kernel expects a 96-bit struct. We never pass this to the kernel; remove?
 type EpollEvent struct {
 	Events uint32
 	Fd     int32
@@ -45,7 +45,7 @@ const (
 	// EPOLLWAKEUP    = 0x20000000 // Relies on Linux's BLOCK_SUSPEND capability
 )
 
-// TODO: We can eliminate these epToPoll / pToEpoll calls by using identical mask values for POLL/EPOLL
+// TODO(neeilan): We can eliminate these epToPoll / pToEpoll calls by using identical mask values for POLL/EPOLL
 // constants where possible The lower 16 bits of epoll events (uint32) can fit any system poll event (int16).
 
 // epToPollEvt converts epoll event field to poll equivalent.
@@ -137,7 +137,7 @@ func (e *epollImpl) epollctl(epfd int, op int, fd int, event *EpollEvent) (err e
 
 	switch op {
 	case EPOLL_CTL_ADD:
-		// TODO: When we make epfds and fds disjoint, detect epoll
+		// TODO(neeilan): When we make epfds and fds disjoint, detect epoll
 		// loops here (instances watching each other) and return ELOOP.
 		if _, ok := ep.fds[fd]; ok {
 			return EEXIST

@@ -43,5 +43,5 @@
 // different back ends.
 package view // import "go.opencensus.io/stats/view"
 
-// TODO: Add a link to the language independent OpenCensus
+// TODO(acetechnologist): Add a link to the language independent OpenCensus
 // spec when it is available.

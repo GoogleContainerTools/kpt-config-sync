@@ -314,7 +314,7 @@ func (r RunFns) getFunctionFilters(global bool, fns ...*yaml.RNode) (
 			continue
 		}
 		if spec.Container.Network && !r.Network {
-			// TODO: Provide error info about which function needs the network
+			// TODO(eddiezane): Provide error info about which function needs the network
 			return fltrs, errors.Errorf("network required but not enabled with --network")
 		}
 		// merge envs from imperative and declarative

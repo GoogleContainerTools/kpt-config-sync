@@ -17,7 +17,7 @@ import (
 	"strconv"
 )
 
-// TODO: util packages are an anti-pattern and this should be moved
+// TODO(mdlayher): util packages are an anti-pattern and this should be moved
 // somewhere else that is more focused in the future.
 
 // A ValueParser enables parsing a single string into a variety of data types

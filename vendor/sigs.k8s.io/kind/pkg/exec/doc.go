@@ -15,6 +15,6 @@ limitations under the License.
 */
 
 // Package exec contains an interface for executing commands, along with helpers
-// TODO: add standardized timeout functionality & a default timeout
+// TODO(bentheelder): add standardized timeout functionality & a default timeout
 // so that commands cannot hang indefinitely (!)
 package exec

@@ -82,7 +82,7 @@ func logPanic(r interface{}) {
 
 // ErrorHandlers is a list of functions which will be invoked when a nonreturnable
 // error occurs.
-// TODO: for testability, this and the below HandleError function
+// TODO(lavalamp): for testability, this and the below HandleError function
 // should be packaged up into a testable and reusable object.
 var ErrorHandlers = []func(error){
 	logError,
@@ -117,7 +117,7 @@ func logError(err error) {
 
 type rudimentaryErrorBackoff struct {
 	minPeriod time.Duration // immutable
-	// TODO: use the clock for testability. Need to move that
+	// TODO(lavalamp): use the clock for testability. Need to move that
 	// package for that to be accessible here.
 	lastErrorTimeLock sync.Mutex
 	lastErrorTime     time.Time

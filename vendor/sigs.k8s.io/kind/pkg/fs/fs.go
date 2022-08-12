@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package fs contains utilities for interacting with the host filesystem
 // in a docker friendly way
-// TODO: this should be internal
+// TODO(bentheelder): this should be internal
 package fs
 
 import (

@@ -137,7 +137,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	if _, found := s.webhooks[path]; found {
 		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
-	// TODO: call setfields if we've already started the server
+	// TODO(directxman12): call setfields if we've already started the server
 	s.webhooks[path] = hook
 	s.WebhookMux.Handle(path, metrics.InstrumentedHook(path, hook))
 
@@ -148,7 +148,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	// Otherwise, InjectFunc will do this for us later.
 	if s.setFields != nil {
 		if err := s.setFields(hook); err != nil {
-			// TODO: swallowing this error isn't great, but we'd have to
+			// TODO(directxman12): swallowing this error isn't great, but we'd have to
 			// change the signature to fix that
 			regLog.Error(err, "unable to inject fields into webhook during registration")
 		}

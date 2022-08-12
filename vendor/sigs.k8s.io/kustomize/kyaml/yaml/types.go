@@ -79,7 +79,7 @@ func (p Parser) Filter(_ *RNode) (*RNode, error) {
 	return o, d.Decode(o.value)
 }
 
-// TODO: test this
+// TODO(pwittrock): test this
 func GetStyle(styles ...string) Style {
 	var style Style
 	for _, s := range styles {

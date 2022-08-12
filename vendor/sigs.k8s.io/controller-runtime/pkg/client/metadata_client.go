@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/metadata"
 )
 
-// TODO: we could rewrite this on top of the low-level REST
+// TODO(directxman12): we could rewrite this on top of the low-level REST
 // client to avoid the extra shallow copy at the end, but I'm not sure it's
 // worth it -- the metadata client deals with falling back to loading the whole
 // object on older API servers, etc, and we'd have to reproduce that.

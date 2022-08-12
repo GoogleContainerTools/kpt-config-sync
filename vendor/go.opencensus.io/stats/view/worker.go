@@ -229,7 +229,7 @@ func SetReportingPeriod(d time.Duration) {
 // duration is. For example, the Stackdriver exporter recommends a value no
 // lower than 1 minute. Consult each exporter per your needs.
 func (w *worker) SetReportingPeriod(d time.Duration) {
-	// TODO: ensure that the duration d is more than a certain
+	// TODO(acetechnologist): ensure that the duration d is more than a certain
 	// value. e.g. 1s
 	req := &setReportingPeriodReq{
 		d: d,

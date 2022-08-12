@@ -455,7 +455,7 @@ func (w *writer) uploadOne(ctx context.Context, l v1.Layer) error {
 		}
 
 		// Only log layers with +json or +yaml. We can let through other stuff if it becomes popular.
-		// TODO: Would be great to have an actual parser.
+		// TODO(opencontainers/image-spec#791): Would be great to have an actual parser.
 		mt, err := l.MediaType()
 		if err != nil {
 			return err
@@ -505,7 +505,7 @@ func (w *writer) writeIndex(ctx context.Context, ref name.Reference, ii v1.Image
 		return err
 	}
 
-	// TODO: Pipe through remote.WithJobs and upload these in parallel.
+	// TODO(#803): Pipe through remote.WithJobs and upload these in parallel.
 	for _, desc := range index.Manifests {
 		ref := ref.Context().Digest(desc.Digest.String())
 		exists, err := w.checkExistingManifest(desc.Digest, desc.MediaType)

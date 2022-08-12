@@ -118,7 +118,7 @@ func Decode(payload string) (*ClaimSet, error) {
 	// decode returned id token to get expiry
 	s := strings.Split(payload, ".")
 	if len(s) < 2 {
-		// TODO: Provide more context about the error.
+		// TODO(jbd): Provide more context about the error.
 		return nil, errors.New("jws: invalid token received")
 	}
 	decoded, err := base64.RawURLEncoding.DecodeString(s[1])

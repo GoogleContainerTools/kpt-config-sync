@@ -105,4 +105,4 @@ type HTTPFormat interface {
 	SpanContextToRequest(sc trace.SpanContext, req *http.Request)
 }
 
-// TODO: Find a more representative but short name for HTTPFormat.
+// TODO(jbd): Find a more representative but short name for HTTPFormat.

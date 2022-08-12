@@ -163,7 +163,7 @@ func (rs *ResourceSchema) IsMissingOrNull() bool {
 }
 
 // SchemaForResourceType returns the Schema for the given Resource
-// TODO: create a version of this function that will return a schema
+// TODO(pwittrock): create a version of this function that will return a schema
 // which can be used for duck-typed Resources -- e.g. contains common fields such
 // as metadata, replicas and spec.template.spec
 func SchemaForResourceType(t yaml.TypeMeta) *ResourceSchema {
@@ -603,7 +603,7 @@ func initSchema() {
 	}
 	globalSchema.schemaInit = true
 
-	// TODO: Accept proto-formatted schema files
+	// TODO(natasha41575): Accept proto-formatted schema files
 	if customSchema != nil {
 		err := parse(customSchema, JsonOrYaml)
 		if err != nil {

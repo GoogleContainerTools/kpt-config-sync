@@ -382,7 +382,7 @@ func (f FieldMatcher) Filter(rn *RNode) (*RNode, error) {
 		}
 		switch {
 		case f.StringRegexValue != "":
-			// TODO: pre-compile this when unmarshalling and cache to a field
+			// TODO(pwittrock): pre-compile this when unmarshalling and cache to a field
 			rg, err := regexp.Compile(f.StringRegexValue)
 			if err != nil {
 				return nil, err

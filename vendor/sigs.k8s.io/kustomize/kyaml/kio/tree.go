@@ -31,7 +31,7 @@ const (
 var GraphStructures = []string{string(TreeStructureGraph), string(TreeStructurePackage)}
 
 // TreeWriter prints the package structured as a tree.
-// TODO: test this package better.  it is lower-risk since it is only
+// TODO(pwittrock): test this package better.  it is lower-risk since it is only
 //   used for printing rather than updating or editing.
 type TreeWriter struct {
 	Writer          io.Writer
@@ -379,7 +379,7 @@ func (p TreeWriter) doResource(leaf *yaml.RNode, metaString string, branch treep
 }
 
 // getFields looks up p.Fields from leaf and structures them into treeFields.
-// TODO: simplify this function
+// TODO(pwittrock): simplify this function
 func (p TreeWriter) getFields(leaf *yaml.RNode) (treeFields, error) {
 	fieldsByName := map[string]*treeField{}
 

@@ -46,7 +46,7 @@ func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
 	return &WebhookBuilder{mgr: m}
 }
 
-// TODO: update the GoDoc for conversion.
+// TODO(droot): update the GoDoc for conversion.
 
 // For takes a runtime.Object which should be a CR.
 // If the given object implements the admission.Defaulter interface, a MutatingWebhook will be wired for this type.

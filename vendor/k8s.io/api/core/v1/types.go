@@ -53,7 +53,7 @@ type VolumeSource struct {
 	// to see the host machine. Most containers will NOT need this.
 	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
 	// ---
-	// TODO We need to restrict who can use host directory mounts and who can/can not
+	// TODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not
 	// mount host directories as read/write.
 	// +optional
 	HostPath *HostPathVolumeSource `json:"hostPath,omitempty" protobuf:"bytes,1,opt,name=hostPath"`

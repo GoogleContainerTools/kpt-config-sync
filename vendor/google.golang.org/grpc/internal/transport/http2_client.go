@@ -427,7 +427,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
-	// TODO: Handle uint32 overflow of Stream.id.
+	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
 		ct:             t,
 		done:           make(chan struct{}),
@@ -485,7 +485,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Benchmark if the performance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
@@ -508,7 +508,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	}
 	if dl, ok := ctx.Deadline(); ok {
 		// Send out timeout regardless its value. The server can detect timeout context by itself.
-		// TODO: Perhaps this field should be updated when actually writing out to the wire.
+		// TODO(mmukhi): Perhaps this field should be updated when actually writing out to the wire.
 		timeout := time.Until(dl)
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-timeout", Value: grpcutil.EncodeDuration(timeout)})
 	}
@@ -1070,7 +1070,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
-		// TODO: A copy is required here because there is no
+		// TODO(bradfitz, zhaoq): A copy is required here because there is no
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
@@ -1468,9 +1468,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 // reader runs as a separate goroutine in charge of reading data from network
 // connection.
 //
-// TODO: currently one reader per transport. Investigate whether this is
+// TODO(zhaoq): currently one reader per transport. Investigate whether this is
 // optimal.
-// TODO: Check the validity of the incoming frame sequence.
+// TODO(zhaoq): Check the validity of the incoming frame sequence.
 func (t *http2Client) reader() {
 	defer close(t.readerDone)
 	// Check the validity of server preface.

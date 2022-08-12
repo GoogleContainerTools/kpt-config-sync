@@ -146,7 +146,7 @@ type Metric struct {
 	unknownFields protoimpl.UnknownFields
 
 	// The descriptor of the Metric.
-	// TODO: consider only sending the name of descriptor for
+	// TODO(issue #152): consider only sending the name of descriptor for
 	// optimization.
 	MetricDescriptor *MetricDescriptor `protobuf:"bytes,1,opt,name=metric_descriptor,json=metricDescriptor,proto3" json:"metric_descriptor,omitempty"`
 	// One or more timeseries for a single metric, where each timeseries has
@@ -637,7 +637,7 @@ type DistributionValue struct {
 	SumOfSquaredDeviation float64 `protobuf:"fixed64,3,opt,name=sum_of_squared_deviation,json=sumOfSquaredDeviation,proto3" json:"sum_of_squared_deviation,omitempty"`
 	// Don't change bucket boundaries within a TimeSeries if your backend doesn't
 	// support this.
-	// TODO: consider not required to send bucket options for
+	// TODO(issue #152): consider not required to send bucket options for
 	// optimization.
 	BucketOptions *DistributionValue_BucketOptions `protobuf:"bytes,4,opt,name=bucket_options,json=bucketOptions,proto3" json:"bucket_options,omitempty"`
 	// If the distribution does not have a histogram, then omit this field.

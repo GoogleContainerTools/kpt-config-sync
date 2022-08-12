@@ -62,7 +62,7 @@ var (
 	}
 
 	withEventTypePrefixColumns = []string{"EVENT"}
-	withNamespacePrefixColumns = []string{"NAMESPACE"} // TODO: print cluster name too.
+	withNamespacePrefixColumns = []string{"NAMESPACE"} // TODO(erictune): print cluster name too.
 )
 
 // HumanReadablePrinter is an implementation of ResourcePrinter which attempts to provide

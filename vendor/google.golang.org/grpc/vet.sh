@@ -117,7 +117,7 @@ done
 
 # - Collection of static analysis checks
 #
-# TODO: don't use deprecated functions in examples or first-party
+# TODO(dfawley): don't use deprecated functions in examples or first-party
 # plugins.
 SC_OUT="$(mktemp)"
 staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true

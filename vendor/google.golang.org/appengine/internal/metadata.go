@@ -27,7 +27,7 @@ var (
 	}
 )
 
-// TODO: Do we need to support default values, like Python?
+// TODO(dsymonds): Do we need to support default values, like Python?
 func mustGetMetadata(key string) []byte {
 	b, err := getMetadata(key)
 	if err != nil {
@@ -37,7 +37,7 @@ func mustGetMetadata(key string) []byte {
 }
 
 func getMetadata(key string) ([]byte, error) {
-	// TODO: May need to use url.Parse to support keys with query args.
+	// TODO(dsymonds): May need to use url.Parse to support keys with query args.
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{

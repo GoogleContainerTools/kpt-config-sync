@@ -344,7 +344,7 @@ func (sc *scanner) readLine() bool {
 // peekRune returns the next rune in the input without consuming it.
 // Newlines in Unix, DOS, or Mac format are treated as one rune, '\n'.
 func (sc *scanner) peekRune() rune {
-	// TODO: opt: measure and perhaps inline eof.
+	// TODO(adonovan): opt: measure and perhaps inline eof.
 	if sc.eof() {
 		return 0
 	}

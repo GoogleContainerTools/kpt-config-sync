@@ -12,9 +12,9 @@ import (
 	"go.starlark.net/syntax"
 )
 
-const vmdebug = false // TODO: use a bitfield of specific kinds of error.
+const vmdebug = false // TODO(adonovan): use a bitfield of specific kinds of error.
 
-// TODO:
+// TODO(adonovan):
 // - optimize position table.
 // - opt: record MaxIterStack during compilation and preallocate the stack.
 
@@ -70,7 +70,7 @@ func (fn *Function) CallInternal(thread *Thread, args Tuple, kwargs []Tuple) (Va
 		locals[index] = &cell{locals[index]}
 	}
 
-	// TODO: add static check that beneath this point
+	// TODO(adonovan): add static check that beneath this point
 	// - there is exactly one return statement
 	// - there is no redefinition of 'err'.
 
@@ -88,7 +88,7 @@ loop:
 		pc++
 		var arg uint32
 		if op >= compile.OpcodeArgMin {
-			// TODO: opt: profile this.
+			// TODO(adonovan): opt: profile this.
 			// Perhaps compiling big endian would be less work to decode?
 			for s := uint(0); ; s += 7 {
 				b := code[pc]

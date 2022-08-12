@@ -388,7 +388,7 @@ func (h *histogram) Write(out *dto.Metric) error {
 // findBucket returns the index of the bucket for the provided value, or
 // len(h.upperBounds) for the +Inf bucket.
 func (h *histogram) findBucket(v float64) int {
-	// TODO: For small numbers of buckets (<30), a linear search is
+	// TODO(beorn7): For small numbers of buckets (<30), a linear search is
 	// slightly faster than the binary search. If we really care, we could
 	// switch from one search strategy to the other depending on the number
 	// of buckets.

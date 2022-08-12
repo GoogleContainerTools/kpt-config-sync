@@ -172,7 +172,7 @@ func (i *idleAwareFramer) ReadFrame() (spdy.Frame, error) {
 	// resetChan should never be closed since it is only closed
 	// when the connection has closed its closeChan. This closure
 	// only occurs after all Reads have finished
-	// TODO : refactor relationship into connection
+	// TODO (dmcgowan): refactor relationship into connection
 	i.resetChan <- struct{}{}
 
 	return frame, nil

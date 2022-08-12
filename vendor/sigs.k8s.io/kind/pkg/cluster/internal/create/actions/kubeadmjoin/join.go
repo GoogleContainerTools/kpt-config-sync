@@ -79,7 +79,7 @@ func joinSecondaryControlPlanes(
 	ctx.Status.Start("Joining more control-plane nodes 🎮")
 	defer ctx.Status.End(false)
 
-	// TODO: it's too bad we can't do this concurrently
+	// TODO(bentheelder): it's too bad we can't do this concurrently
 	// (this is not safe currently)
 	for _, node := range secondaryControlPlanes {
 		node := node // capture loop variable
@@ -118,7 +118,7 @@ func joinWorkers(
 // runKubeadmJoin executes kubeadm join command
 func runKubeadmJoin(logger log.Logger, node nodes.Node) error {
 	// run kubeadm join
-	// TODO: this should be using the config file
+	// TODO(bentheelder): this should be using the config file
 	cmd := node.Command(
 		"kubeadm", "join",
 		// the join command uses the config file generated in a well known location

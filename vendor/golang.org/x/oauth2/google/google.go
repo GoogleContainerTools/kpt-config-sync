@@ -260,7 +260,7 @@ func (cs computeSource) Token() (*oauth2.Token, error) {
 		TokenType:   res.TokenType,
 		Expiry:      time.Now().Add(time.Duration(res.ExpiresInSec) * time.Second),
 	}
-	// NOTE: add hidden metadata about where the token is from.
+	// NOTE(cbro): add hidden metadata about where the token is from.
 	// This is needed for detection by client libraries to know that credentials come from the metadata server.
 	// This may be removed in a future version of this library.
 	return tok.WithExtra(map[string]interface{}{

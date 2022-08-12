@@ -274,7 +274,7 @@ func (cic *ClusterClient) GetClusterObjs(localInv Info) (object.ObjMetadataSet, 
 // inventory label. Merges multiple inventory objects into one if it retrieves
 // more than one (this should be very rare).
 //
-// TODO: Remove the special case code to merge multiple cluster inventory
+// TODO(seans3): Remove the special case code to merge multiple cluster inventory
 // objects once we've determined that this case is no longer possible.
 func (cic *ClusterClient) GetClusterInventoryInfo(inv Info) (*unstructured.Unstructured, error) {
 	clusterInvObjects, err := cic.GetClusterInventoryObjs(inv)

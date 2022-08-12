@@ -326,7 +326,7 @@ func (cm *controllerManager) serveMetrics() {
 	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
 		ErrorHandling: promhttp.HTTPErrorOnError,
 	})
-	// TODO: Use existing Kubernetes machinery for serving metrics
+	// TODO(JoelSpeed): Use existing Kubernetes machinery for serving metrics
 	mux := http.NewServeMux()
 	mux.Handle(defaultMetricsEndpoint, handler)
 	for path, extraHandler := range cm.metricsExtraHandlers {

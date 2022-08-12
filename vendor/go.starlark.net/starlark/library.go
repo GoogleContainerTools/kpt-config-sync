@@ -707,7 +707,7 @@ func range_(thread *Thread, b *Builtin, args Tuple, kwargs []Tuple) (Value, erro
 		return nil, err
 	}
 
-	// TODO: analyze overflow/underflows cases for 32-bit implementations.
+	// TODO(adonovan): analyze overflow/underflows cases for 32-bit implementations.
 	if len(args) == 1 {
 		// range(stop)
 		start, stop = 0, start
@@ -1966,7 +1966,7 @@ func string_splitlines(_ *Thread, b *Builtin, args Tuple, kwargs []Tuple) (Value
 	}
 	var lines []string
 	if s := string(b.Receiver().(String)); s != "" {
-		// TODO: handle CRLF correctly.
+		// TODO(adonovan): handle CRLF correctly.
 		if keepends {
 			lines = strings.SplitAfter(s, "\n")
 		} else {

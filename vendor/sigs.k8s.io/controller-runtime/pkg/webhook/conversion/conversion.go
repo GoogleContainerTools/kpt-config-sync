@@ -69,7 +69,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: may be move the conversion logic to a separate module to
+	// TODO(droot): may be move the conversion logic to a separate module to
 	// decouple it from the http layer ?
 	resp, err := wh.handleConvertRequest(convertReview.Request)
 	if err != nil {

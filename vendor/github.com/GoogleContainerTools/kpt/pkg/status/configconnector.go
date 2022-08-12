@@ -34,7 +34,7 @@ import (
 
 // ConfigConnectorStatusReader can compute reconcile status for Config Connector
 // resources. It leverages information in the `Reason` field of the `Ready` condition.
-// TODO: Make more of the convencience functions and types from cli-utils
+// TODO(mortent): Make more of the convencience functions and types from cli-utils
 // exported so we can simplify this.
 type ConfigConnectorStatusReader struct {
 	Mapper meta.RESTMapper

@@ -88,7 +88,7 @@ func (bt *bearerTransport) RoundTrip(in *http.Request) (*http.Response, error) {
 	// If we hit a WWW-Authenticate challenge, it might be due to expired tokens or insufficient scope.
 	if challenges := authchallenge.ResponseChallenges(res); len(challenges) != 0 {
 		for _, wac := range challenges {
-			// TODO: Should we also update "realm" or "service"?
+			// TODO(jonjohnsonjr): Should we also update "realm" or "service"?
 			if scope, ok := wac.Parameters["scope"]; ok {
 				// From https://tools.ietf.org/html/rfc6750#section-3
 				// The "scope" attribute is defined in Section 3.3 of [RFC6749].  The
@@ -107,7 +107,7 @@ func (bt *bearerTransport) RoundTrip(in *http.Request) (*http.Response, error) {
 			}
 		}
 
-		// TODO: Teach transport.Error about "error" and "error_description" from challenge.
+		// TODO(jonjohnsonjr): Teach transport.Error about "error" and "error_description" from challenge.
 
 		// Retry the request to attempt to get a valid token.
 		if err = bt.refresh(in.Context()); err != nil {
@@ -241,7 +241,7 @@ func (bt *bearerTransport) refreshOauth(ctx context.Context) ([]byte, error) {
 		v.Set("grant_type", "refresh_token")
 		v.Set("refresh_token", auth.IdentityToken)
 	} else if auth.Username != "" && auth.Password != "" {
-		// TODO: This is unreachable.
+		// TODO(#629): This is unreachable.
 		v.Set("grant_type", "password")
 		v.Set("username", auth.Username)
 		v.Set("password", auth.Password)

@@ -857,8 +857,8 @@ func (nt *NT) testLogs(previousPodLog bool) {
 // testPods prints the output of `kubectl get pods`, which includes a 'RESTARTS' column
 // indicating how many times each pod has restarted. If a pod has restarted, the following
 // two commands can be used to get more information:
-//   1) kubectl get pods -n config-management-system -o yaml
-//   2) kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
+//  1. kubectl get pods -n config-management-system -o yaml
+//  2. kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
 func (nt *NT) testPods() {
 	out, err := nt.Kubectl("get", "pods", "-n", configmanagement.ControllerNamespace)
 	// Print a standardized header before each printed log to make ctrl+F-ing the
@@ -869,9 +869,9 @@ func (nt *NT) testPods() {
 	}
 }
 
-func (nt *NT) describeNotRunningTestPods() {
+func (nt *NT) describeNotRunningTestPods(namespace string) {
 	cmPods := &corev1.PodList{}
-	if err := nt.List(cmPods, client.InNamespace(configmanagement.ControllerNamespace)); err != nil {
+	if err := nt.List(cmPods, client.InNamespace(namespace)); err != nil {
 		nt.T.Fatal(err)
 		return
 	}

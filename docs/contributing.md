@@ -1,15 +1,11 @@
 # How to Contribute
 
-Config Sync is currently being mirrored from internal Google systems to Github,
-but we are working on migrating all the infrastructure for the project onto
-github. Our goal is that all development of Config Sync will happen in this
-repository. We expect to complete this effort in a couple of months, so stay tuned.
+ConfigSync follows the fork and PR model that a lot of OSS projects do.  If you
+are looking to contribute to this project please fork it, create a change
+and then submit a PR against the `main` branch which is the HEAD of development.
 
-In the meantime, we will try to upstream any PRs made against this github repo
-on a best-effort basis. If you run into any issues using Config Sync or have
-any suggestions or questions to the Config Sync team, file an issue.
-
-When you are ready, take a look at our [developer guide] to get started.
+For larger changes and for anything that has a change to the CLI and API please
+write a [design document] first.
 
 ## Contributor License Agreement
 
@@ -36,3 +32,4 @@ This project follows [Google's Open Source Community
 Guidelines](https://opensource.google/conduct/).
 
 [developer guide]: development.md
+[design document]: design-docs/00-template.md

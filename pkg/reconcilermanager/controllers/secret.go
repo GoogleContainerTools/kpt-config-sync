@@ -29,6 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func shouldUpsertPrivateCertSecret(rs *v1beta1.RepoSync) bool {
+	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && usePrivateCert(rs.Spec.PrivateCertSecret.Name)
+}
+
 func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
 	return rs.Spec.SourceType == string(v1beta1.GitSource) && !SkipForAuth(rs.Spec.Auth)
 }
@@ -36,33 +40,45 @@ func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
 	return rs.Spec.SourceType == string(v1beta1.HelmSource) && !SkipForAuth(rs.Spec.Helm.Auth)
 }
 
-// upsertSecret creates or updates the secret in config-management-system
-// namespace using the existing secret in the reposync.namespace.
-func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string) error {
-	// Secret is only created if sourceType is git or helm and auth is not 'none', 'gcenode', or 'gcpserviceaccount'.
-	if !shouldUpsertGitSecret(rs) && !shouldUpsertHelmSecret(rs) {
-		return nil
+// upsertSecrets creates or updates all secrets in config-management-system
+// namespace using existing secrets in the reposync.namespace.
+func upsertSecrets(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName string) error {
+	if shouldUpsertPrivateCertSecret(rs) {
+		err := upsertSecret(ctx, rs, c, reconcilerName, rs.Spec.Git.PrivateCertSecret.Name)
+		if err != nil {
+			return err
+		}
 	}
+	if shouldUpsertGitSecret(rs) {
+		err := upsertSecret(ctx, rs, c, reconcilerName, rs.Spec.Git.SecretRef.Name)
+		if err != nil {
+			return err
+		}
+	}
+	if shouldUpsertHelmSecret(rs) {
+		err := upsertSecret(ctx, rs, c, reconcilerName, rs.Spec.Helm.SecretRef.Name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// upsertSecret creates or updates a secret in config-management-system
+// namespace using an existing secret in the reposync.namespace.
+func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerName, nsSecretName string) error {
 	// namespaceSecret represent secret in reposync.namespace.
 	namespaceSecret := &corev1.Secret{}
-	var namespaceSecretName string
-	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource {
-		namespaceSecretName = rs.Spec.SecretRef.Name
-	} else {
-		namespaceSecretName = rs.Spec.Helm.SecretRef.Name
-	}
-	if err := get(ctx, namespaceSecretName, rs.Namespace, namespaceSecret, c); err != nil {
+	if err := get(ctx, nsSecretName, rs.Namespace, namespaceSecret, c); err != nil {
 		if apierrors.IsNotFound(err) {
 			return errors.Errorf(
-				"%s not found. Create %s secret in %s namespace", namespaceSecretName, namespaceSecretName, rs.Namespace)
+				"%s not found. Create %s secret in %s namespace", nsSecretName, nsSecretName, rs.Namespace)
 		}
 		return errors.Wrapf(err, "error while retrieving namespace secret")
 	}
-
 	// existingsecret represent secret in config-management-system namespace.
 	existingsecret := &corev1.Secret{}
-
-	secretName := ReconcilerResourceName(reconcilerName, namespaceSecretName)
+	secretName := ReconcilerResourceName(reconcilerName, nsSecretName)
 	if err := get(ctx, secretName, v1.NSConfigManagementSystem, existingsecret, c); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return errors.Wrapf(err,
@@ -73,7 +89,7 @@ func upsertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, re
 		if err := create(ctx, namespaceSecret, reconcilerName, c, rs.Name, rs.Namespace); err != nil {
 			return errors.Wrapf(err,
 				"failed to create %s secret in %s namespace",
-				rs.Spec.SecretRef.Name, v1.NSConfigManagementSystem)
+				nsSecretName, v1.NSConfigManagementSystem)
 		}
 		return nil
 	}

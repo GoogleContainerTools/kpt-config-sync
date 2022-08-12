@@ -15,104 +15,29 @@
 package controllers
 
 import (
-	"fmt"
-
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"kpt.dev/configsync/pkg/kinds"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
-const (
-	// The set of status conditions which can be assigned to resources.
-	statusInProgress statusType = "InProgress"
-	statusFailed     statusType = "Failed"
-	// currentStatus specifies that the resource has progressed successfully and available.
-	statusCurrent statusType = "Current"
-)
-
-type statusType string
-
-// status contains the deployment status and message.
-type deploymentStatus struct {
-	// status
-	status statusType
-	// message
-	message string
-}
-
-// inProgressStatus creates a status result with the InProgress status.
-func inProgressStatus(message string) *deploymentStatus {
-	return &deploymentStatus{
-		status:  statusInProgress,
-		message: message,
+// computeDeploymentStatus uses kstatus to compute the deployment status based
+// on its conditions and other status fields.
+func computeDeploymentStatus(depObj *appsv1.Deployment) (*kstatus.Result, error) {
+	objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depObj)
+	if err != nil {
+		return nil, err
 	}
-}
+	obj := &unstructured.Unstructured{Object: objMap}
 
-func checkDeploymentConditions(depObj *appsv1.Deployment) (*deploymentStatus, error) {
-	available := false
-	progressing := false
+	// kstatus.Compute requires the group & kind to be set to trigger
+	// deployment-specific exceptions, but ToUnstructured doesn't set it.
+	obj.SetGroupVersionKind(kinds.Deployment())
 
-	for _, c := range depObj.Status.Conditions {
-		switch c.Type {
-		case appsv1.DeploymentProgressing:
-			if c.Reason == "ProgressDeadlineExceeded" {
-				return &deploymentStatus{
-					status:  statusFailed,
-					message: "Reconciler Deployment progress deadline exceeded",
-				}, nil
-			}
-			if c.Status == corev1.ConditionTrue && c.Reason == "NewReplicaSetAvailable" {
-				progressing = true
-			}
-		case appsv1.DeploymentAvailable:
-			if c.Status == corev1.ConditionTrue {
-				available = true
-			}
-		}
+	result, err := kstatus.Compute(obj)
+	if err != nil {
+		return nil, err
 	}
-
-	//replicas
-	specReplicas := *depObj.Spec.Replicas
-	statusReplicas := depObj.Status.Replicas
-
-	if specReplicas > statusReplicas {
-		message := fmt.Sprintf("Replicas: %d/%d", statusReplicas, specReplicas)
-		return inProgressStatus(message), nil
-	}
-
-	updatedReplicas := depObj.Status.UpdatedReplicas
-	if specReplicas > updatedReplicas {
-		message := fmt.Sprintf("Updated: %d/%d", updatedReplicas, specReplicas)
-		return inProgressStatus(message), nil
-	}
-
-	if statusReplicas > specReplicas {
-		message := fmt.Sprintf("Pending termination: %d", statusReplicas-specReplicas)
-		return inProgressStatus(message), nil
-	}
-
-	availableReplicas := depObj.Status.AvailableReplicas
-	if updatedReplicas > availableReplicas {
-		message := fmt.Sprintf("Available: %d/%d", availableReplicas, updatedReplicas)
-		return inProgressStatus(message), nil
-	}
-
-	readyReplicas := depObj.Status.ReadyReplicas
-	if specReplicas > readyReplicas {
-		message := fmt.Sprintf("Ready: %d/%d", readyReplicas, specReplicas)
-		return inProgressStatus(message), nil
-	}
-
-	// Check status conditions.
-	if !progressing {
-		return inProgressStatus("Reconciler ReplicaSet not Available"), nil
-	}
-	if !available {
-		return inProgressStatus("Reconciler Deployment not Available"), nil
-	}
-
-	// All ok.
-	return &deploymentStatus{
-		status:  statusCurrent,
-		message: fmt.Sprintf("Deployment is available. Replicas: %d", statusReplicas),
-	}, nil
+	return result, nil
 }

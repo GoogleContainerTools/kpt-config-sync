@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
 var reconcilerDeploymentReplicaCount int32 = 1
@@ -55,22 +57,46 @@ func setStateConditions(progressCondition string, availableStatus corev1.Conditi
 	}
 }
 
-func TestDeploymentConditions(t *testing.T) {
+func unsetGVK(dep *appsv1.Deployment) {
+	dep.SetGroupVersionKind(schema.GroupVersionKind{})
+}
+
+func TestComputeDeploymentStatus(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		reconcilerDeployment *appsv1.Deployment
-		wantStatus           *deploymentStatus
+		wantStatus           *kstatus.Result
 		wantError            bool
 	}{
+		{
+			name: "Deployment newly created without GVK",
+			reconcilerDeployment: repoSyncDeployment(nsReconcilerName,
+				unsetGVK,
+				setReplicas(reconcilerDeploymentReplicaCount, 0),
+			),
+			wantStatus: &kstatus.Result{
+				Status:  kstatus.InProgressStatus,
+				Message: fmt.Sprintf("Replicas: %d/%d", 0, reconcilerDeploymentReplicaCount),
+				Conditions: []kstatus.Condition{
+					{
+						Type:    kstatus.ConditionReconciling,
+						Status:  corev1.ConditionTrue,
+						Reason:  "LessReplicas",
+						Message: fmt.Sprintf("Replicas: %d/%d", 0, reconcilerDeploymentReplicaCount),
+					},
+				},
+			},
+		},
 		{
 			name: "Deployment Available",
 			reconcilerDeployment: repoSyncDeployment(nsReconcilerName,
 				setReplicas(reconcilerDeploymentReplicaCount, reconcilerDeploymentReplicaCount),
 				setStateConditions("NewReplicaSetAvailable", corev1.ConditionTrue),
 			),
-			wantStatus: &deploymentStatus{
-				status:  statusCurrent,
-				message: fmt.Sprintf("Deployment is available. Replicas: %d", reconcilerDeploymentReplicaCount),
+			wantStatus: &kstatus.Result{
+				Status:     kstatus.CurrentStatus,
+				Message:    fmt.Sprintf("Deployment is available. Replicas: %d", reconcilerDeploymentReplicaCount),
+				Conditions: []kstatus.Condition{},
 			},
 		},
 		{
@@ -79,9 +105,17 @@ func TestDeploymentConditions(t *testing.T) {
 				setReplicas(reconcilerDeploymentReplicaCount, reconcilerDeploymentReplicaCount),
 				setStateConditions("NewReplicaSetAvailable", corev1.ConditionFalse),
 			),
-			wantStatus: &deploymentStatus{
-				status:  statusInProgress,
-				message: "Reconciler Deployment not Available",
+			wantStatus: &kstatus.Result{
+				Status:  kstatus.InProgressStatus,
+				Message: "Deployment not Available",
+				Conditions: []kstatus.Condition{
+					{
+						Type:    kstatus.ConditionReconciling,
+						Status:  corev1.ConditionTrue,
+						Reason:  "DeploymentNotAvailable",
+						Message: "Deployment not Available",
+					},
+				},
 			},
 		},
 		{
@@ -90,9 +124,17 @@ func TestDeploymentConditions(t *testing.T) {
 				setReplicas(2, reconcilerDeploymentReplicaCount),
 				setStateConditions("Reconciler ReplicaSet not Available", corev1.ConditionTrue),
 			),
-			wantStatus: &deploymentStatus{
-				status:  statusInProgress,
-				message: fmt.Sprintf("Replicas: %d/%d", reconcilerDeploymentReplicaCount, 2),
+			wantStatus: &kstatus.Result{
+				Status:  kstatus.InProgressStatus,
+				Message: fmt.Sprintf("Replicas: %d/%d", reconcilerDeploymentReplicaCount, 2),
+				Conditions: []kstatus.Condition{
+					{
+						Type:    kstatus.ConditionReconciling,
+						Status:  corev1.ConditionTrue,
+						Reason:  "LessReplicas",
+						Message: fmt.Sprintf("Replicas: %d/%d", reconcilerDeploymentReplicaCount, 2),
+					},
+				},
 			},
 		},
 		{
@@ -101,25 +143,30 @@ func TestDeploymentConditions(t *testing.T) {
 				setReplicas(reconcilerDeploymentReplicaCount, 0),
 				setStateConditions("ProgressDeadlineExceeded", corev1.ConditionFalse),
 			),
-			wantStatus: &deploymentStatus{
-				status:  statusFailed,
-				message: "Reconciler Deployment progress deadline exceeded",
+			wantStatus: &kstatus.Result{
+				Status:  kstatus.FailedStatus,
+				Message: "Progress deadline exceeded",
+				Conditions: []kstatus.Condition{
+					{
+						Type:   kstatus.ConditionStalled,
+						Status: corev1.ConditionTrue,
+						Reason: "ProgressDeadlineExceeded",
+					},
+				},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotResult, err := checkDeploymentConditions(tc.reconcilerDeployment)
+			gotResult, err := computeDeploymentStatus(tc.reconcilerDeployment)
 			if tc.wantError && err == nil {
-				t.Errorf("deploymentConditions() got error: %q, want error", err)
+				t.Errorf("computeDeploymentStatus() got error: %q, want error", err)
 			} else if !tc.wantError && err != nil {
-				t.Errorf("deploymentConditions() got error: %q, want error: nil", err)
+				t.Errorf("computeDeploymentStatus() got error: %q, want error: nil", err)
 			}
 			if !tc.wantError {
-				if !cmp.Equal(gotResult, tc.wantStatus, cmp.AllowUnexported(deploymentStatus{})) {
-					t.Errorf("deploymentConditions() got result: %v, want result: %v", gotResult, tc.wantStatus)
-				}
+				testutil.AssertEqual(t, tc.wantStatus, gotResult, "unexpected status")
 			}
 		})
 	}

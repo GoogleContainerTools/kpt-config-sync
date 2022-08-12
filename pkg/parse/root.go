@@ -299,12 +299,22 @@ func setRenderingStatus(rendering *v1beta1.RenderingStatus, p Parser, newStatus 
 			Dir:      p.options().SyncDir.SlashPath(),
 		}
 		rendering.Oci = nil
+		rendering.Helm = nil
 	case v1beta1.OciSource:
 		rendering.Oci = &v1beta1.OciStatus{
 			Image: p.options().SourceRepo,
 			Dir:   p.options().SyncDir.SlashPath(),
 		}
 		rendering.Git = nil
+		rendering.Helm = nil
+	case v1beta1.HelmSource:
+		rendering.Helm = &v1beta1.HelmStatus{
+			Repo:    p.options().SourceRepo,
+			Chart:   p.options().SyncDir.SlashPath(),
+			Version: p.options().SourceRev,
+		}
+		rendering.Git = nil
+		rendering.Oci = nil
 	}
 	rendering.Message = newStatus.message
 	errorSummary := &v1beta1.ErrorSummary{
@@ -391,6 +401,7 @@ func setSyncStatus(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncErro
 	syncStatus.Sync.Commit = syncStatus.Source.Commit
 	syncStatus.Sync.Git = syncStatus.Source.Git
 	syncStatus.Sync.Oci = syncStatus.Source.Oci
+	syncStatus.Sync.Helm = syncStatus.Source.Helm
 	syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
 		TotalCount: len(syncErrs),
 		Truncated:  denominator != 1,

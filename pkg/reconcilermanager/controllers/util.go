@@ -17,6 +17,7 @@ package controllers
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -205,30 +206,52 @@ const (
 	helmSyncPassword = "HELM_SYNC_PASSWORD"
 )
 
-// helmSyncEnvs returns the environment variables for the oci-sync container.
-func helmSyncEnvs(repo, chart, version, releaseName, namespace string, auth configsync.AuthType, period float64) []corev1.EnvVar {
+// helmSyncEnvs returns the environment variables for the helm-sync container.
+func helmSyncEnvs(helm *v1beta1.Helm) []corev1.EnvVar {
 	var result []corev1.EnvVar
+	helmValues := ""
+	helmValuesFiles := ""
+	if len(helm.ValuesFiles) > 0 {
+		helmValuesFiles = strings.Join(helm.ValuesFiles, ",")
+	}
+	if helm.Values != nil {
+		var vals []string
+		for key, val := range helm.Values.Object {
+			vals = append(vals, fmt.Sprintf("%s=%v", key, val))
+		}
+		helmValues = strings.Join(vals, ",")
+	}
+
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.HelmRepo,
-		Value: repo,
+		Value: helm.Repo,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChart,
-		Value: chart,
+		Value: helm.Chart,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChartVersion,
-		Value: version,
+		Value: helm.Version,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseName,
-		Value: releaseName,
+		Value: helm.ReleaseName,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseNamespace,
-		Value: namespace,
+		Value: helm.Namespace,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmValues,
+		Value: helmValues,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmValuesFiles,
+		Value: helmValuesFiles,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmIncludeCRDs,
+		Value: fmt.Sprint(helm.IncludeCRDs),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmAuthType,
-		Value: string(auth),
+		Value: string(helm.Auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmSyncWait,
-		Value: fmt.Sprintf("%f", period),
+		Value: fmt.Sprintf("%f", v1beta1.GetPeriodSecs(helm.Period)),
 	})
 	return result
 }

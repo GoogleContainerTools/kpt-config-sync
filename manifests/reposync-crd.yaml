@@ -163,8 +163,8 @@ spec:
                 properties:
                   auth:
                     description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of secret, gcpserviceaccount, or none.
-                      The validation of this is case-sensitive. Required.
+                      repository. Must be one of token, gcpserviceaccount, gcenode
+                      or none. The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
@@ -215,10 +215,9 @@ spec:
                       the chart
                     type: object
                   valuesFiles:
-                    description: valuesFiles is a list of path to Helm value files.
-                      Values files must be in the same repository with the Helm chart.
-                      And the paths here are absolute path from the root directory
-                      of the repository
+                    description: valuesFiles is a list of URL to Helm value files.
+                      Values files must be in the same repository with the Helm chart
+                      or in a public repository.
                     items:
                       type: string
                     type: array
@@ -1135,8 +1134,8 @@ spec:
                 properties:
                   auth:
                     description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of secret, gcpserviceaccount, or none.
-                      The validation of this is case-sensitive. Required.
+                      repository. Must be one of token, gcpserviceaccount, gcenode
+                      or none. The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
@@ -1187,10 +1186,9 @@ spec:
                       the chart
                     type: object
                   valuesFiles:
-                    description: valuesFiles is a list of path to Helm value files.
-                      Values files must be in the same repository with the Helm chart.
-                      And the paths here are absolute path from the root directory
-                      of the repository
+                    description: valuesFiles is a list of URL to Helm value files.
+                      Values files must be in the same repository with the Helm chart
+                      or in a public repository.
                     items:
                       type: string
                     type: array

@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
@@ -63,21 +65,40 @@ func (h *Hydrator) templateArgs(destDir string) []string {
 	return args
 }
 
-func (h *Hydrator) registryLoginArgs() []string {
+func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
 	args := []string{"registry", "login"}
 	if h.Auth == configsync.AuthToken {
 		args = append(args, "--username", h.UserName)
 		args = append(args, "--password", h.Password)
+	} else if h.Auth == configsync.AuthGCPServiceAccount || h.Auth == configsync.AuthGCENode {
+		token, err := fetchNewToken(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch new token: %w", err)
+		}
+		args = append(args, "--username", "oauth2accesstoken")
+		args = append(args, "--password", token.AccessToken)
 	}
 	res := strings.Split(strings.TrimPrefix(h.Repo, "oci://"), "/")
 	args = append(args, "https://"+res[0])
-	return args
+	return args, nil
+}
+
+func fetchNewToken(ctx context.Context) (*oauth2.Token, error) {
+	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return nil, fmt.Errorf("failed to find default credentials: %w", err)
+	}
+	t, err := creds.TokenSource.Token()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token from credentials: %w", err)
+	}
+	return t, nil
 }
 
 // HelmTemplate runs helm template with args
 func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	//TODO: add logic to handle "latest" version
-	destDir := filepath.Join(h.HydrateRoot, h.Chart+h.Version)
+	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
 	linkPath := filepath.Join(h.HydrateRoot, h.Dest)
 	oldDir, err := filepath.EvalSymlinks(linkPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -88,7 +109,10 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 		return nil
 	}
 	if h.Auth != configsync.AuthNone && h.isOCI() {
-		args := h.registryLoginArgs()
+		args, err := h.registryLoginArgs(ctx)
+		if err != nil {
+			return err
+		}
 		out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))

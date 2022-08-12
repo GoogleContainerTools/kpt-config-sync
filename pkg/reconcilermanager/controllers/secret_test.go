@@ -171,7 +171,7 @@ func TestCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := upsertSecret(context.Background(), tc.reposync, tc.client, nsReconcilerName)
+			err := upsertSecrets(context.Background(), tc.reposync, tc.client, nsReconcilerName)
 			if tc.wantError && err == nil {
 				t.Errorf("Create() got error: %q, want error", err)
 			} else if !tc.wantError && err != nil {

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -68,6 +69,7 @@ func TestPrivateCertSecretV1Alpha1(t *testing.T) {
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
+	reconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
 
 	// Set RootSync SyncURL to use HTTPS
 	rootSyncHTTPS := "https://test-git-server.config-management-system-test/git/config-management-system/root-sync"
@@ -96,7 +98,7 @@ func TestPrivateCertSecretV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS")
 	// RepoSync should fail without privateCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -106,7 +108,7 @@ func TestPrivateCertSecretV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync set privateCertSecret")
 	nt.WaitForRepoSyncs()
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, privateCertPath))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, privateCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -135,7 +137,7 @@ func TestPrivateCertSecretV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync unset privateCertSecret")
 	// RepoSync should fail without privateCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -148,7 +150,7 @@ func TestPrivateCertSecretV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use SSH")
 	nt.WaitForRepoSyncs()
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -177,6 +179,7 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	reconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
 
 	// Set RootSync SyncURL to use HTTPS
 	rootSyncHTTPS := "https://test-git-server.config-management-system-test/git/config-management-system/root-sync"
@@ -205,7 +208,7 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS")
 	// RepoSync should fail without privateCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -215,7 +218,13 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync set privateCertSecret")
 	nt.WaitForRepoSyncs()
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, privateCertPath))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, privateCertPath))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Check that the namespace secret was upserted to c-m-s namespace
+	err = nt.Validate(controllers.ReconcilerResourceName(reconcilerName, privateCertSecret), v1.NSConfigManagementSystem, &corev1.Secret{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -244,7 +253,7 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync unset privateCertSecret")
 	// RepoSync should fail without privateCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -257,7 +266,7 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use SSH")
 	nt.WaitForRepoSyncs()
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

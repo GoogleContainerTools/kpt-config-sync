@@ -237,7 +237,7 @@ func downloadSSHKey(nt *NT) string {
 	return privateKeyPath(nt)
 }
 
-// CreateNamespaceSecret creates secret in a given namespace using privateKeyPath.
+// CreateNamespaceSecret creates secrets in a given namespace using local paths.
 func CreateNamespaceSecret(nt *NT, ns string) {
 	nt.T.Helper()
 	privateKeypath := nt.gitPrivateKeyPath
@@ -245,4 +245,5 @@ func CreateNamespaceSecret(nt *NT, ns string) {
 		privateKeypath = privateKeyPath(nt)
 	}
 	createSecret(nt, ns, namespaceSecret, fmt.Sprintf("ssh=%s", privateKeypath))
+	createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPath(nt)))
 }

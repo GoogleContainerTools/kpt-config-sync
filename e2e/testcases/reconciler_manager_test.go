@@ -218,6 +218,19 @@ func hasGeneration(generation int64) nomostest.Predicate {
 	}
 }
 
+func minReadySecondsIs(expectedMinReadySeconds int32) nomostest.Predicate {
+	return func(o client.Object) error {
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		if d.Spec.MinReadySeconds != expectedMinReadySeconds {
+			return fmt.Errorf("expected minReadySeconds: %d, got: %d", expectedMinReadySeconds, d.Spec.MinReadySeconds)
+		}
+		return nil
+	}
+}
+
 func firstContainerImageIs(image string) nomostest.Predicate {
 	return func(o client.Object) error {
 		d, ok := o.(*appsv1.Deployment)
@@ -602,4 +615,43 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 			firstContainerCPULimitIs(expectedFirstContainerCPULimit))
 	})
 
+}
+
+func TestAllowVerticalScaleResourceAdjustment(t *testing.T) {
+	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+
+	reconcilerDeployment := &appsv1.Deployment{}
+	if err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, reconcilerDeployment); err != nil {
+		nt.T.Fatal(err)
+	}
+	rs := &v1beta1.RootSync{}
+	if err := nt.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// allow vertical scale
+	_, err := nt.Kubectl("patch", "deployment", "reconciler-manager", "-n", "config-management-system", "-p", "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"args\":[\"--enable-leader-election\", \"--allow-vertical-scale\"],\"name\":\"reconciler-manager\"}]}}}}")
+	if err != nil {
+		nt.T.Fatalf("Error enabling vertical scale in deployment", err)
+	}
+
+	// update numbers are compliant with autopilot requirement
+	var updatedFirstContainerCPURequest int64 = 430
+	var updatedFirstContainerMemoryRequest int64 = 200
+	initialMinReadySeconds := reconcilerDeployment.Spec.MinReadySeconds
+
+	// simulating VPA update to deployment
+	// this will increment root-reconciler generation to 2
+	_, err = nt.Kubectl("patch", "deployment", "root-reconciler", "-n", "config-management-system", "-p", fmt.Sprintf("{\"spec\":{\"minReadySeconds\":25,\"template\":{\"spec\":{\"containers\":[{\"name\":\"%s\",\"resources\":{\"requests\":{\"cpu\":\"%dm\",\"memory\":\"%dMi\"}}}]}}}}", "hydration-controller", updatedFirstContainerCPURequest, updatedFirstContainerMemoryRequest))
+	if err != nil {
+		nt.T.Fatalf("Error simulating VPA deployment update", err)
+	}
+
+	// update to container resource CPU and memory should be maintained, others (i.e minReadySeconds) will be reverted back
+	// the minReadySeconds reversal will increment root-reconciler generation to 3
+	nomostest.Wait(nt.T, "Waiting for deployment update", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate("root-reconciler", v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(3), firstContainerCPURequestIs(updatedFirstContainerCPURequest),
+			firstContainerMemoryRequestIs(updatedFirstContainerMemoryRequest), minReadySecondsIs(initialMinReadySeconds))
+	})
 }

@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	// +kubebuilder:scaffold:imports
 )
@@ -70,10 +71,12 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var allowVerticalScale bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&allowVerticalScale, "allow-vertical-scale", util.EnvBool(reconcilermanager.AllowVerticalScale, false), "Allowing vertical scale to let VPA manage the resource")
 	flag.Parse()
 
 	profiler.Service()
@@ -91,7 +94,7 @@ func main() {
 
 	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName("RepoSync"),
-		mgr.GetScheme())
+		mgr.GetScheme(), allowVerticalScale)
 	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RepoSync")
 		os.Exit(1)
@@ -99,7 +102,7 @@ func main() {
 
 	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName("RootSync"),
-		mgr.GetScheme())
+		mgr.GetScheme(), allowVerticalScale)
 	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RootSync")
 		os.Exit(1)

@@ -70,7 +70,7 @@ type RepoSyncReconciler struct {
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
-func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
+func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, log logr.Logger, scheme *runtime.Scheme, allowVerticalScale bool) *RepoSyncReconciler {
 	return &RepoSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			clusterName:             clusterName,
@@ -80,6 +80,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 			syncKind:                kindRepoSync,
+			allowVerticalScale:      allowVerticalScale,
 		},
 		repoSyncs: make(map[types.NamespacedName]struct{}),
 	}

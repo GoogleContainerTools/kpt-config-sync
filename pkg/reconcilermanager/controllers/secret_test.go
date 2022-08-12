@@ -173,9 +173,9 @@ func TestCreate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := upsertSecrets(context.Background(), tc.reposync, tc.client, nsReconcilerName)
 			if tc.wantError && err == nil {
-				t.Errorf("Create() got error: %q, want error", err)
+				t.Errorf("upsertSecrets() got error: %q, want error", err)
 			} else if !tc.wantError && err != nil {
-				t.Errorf("Create() got error: %q, want error: nil", err)
+				t.Errorf("upsertSecrets() got error: %q, want error: nil", err)
 			}
 			if !tc.wantError {
 				if diff := cmp.Diff(tc.client.Objects[core.IDOf(tc.wantSecret)], tc.wantSecret); diff != "" {

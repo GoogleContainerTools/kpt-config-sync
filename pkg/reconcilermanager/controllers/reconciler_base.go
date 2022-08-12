@@ -301,13 +301,8 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 	return resourceChanged
 }
 
-// deploymentStatus return standardized status for Deployment.
-//
-// For Deployments, we look at .status.conditions as well as the other properties
-// under .status. Status will be Failed if the progress deadline has been exceeded.
-// Code Reference: https://github.com/kubernetes-sigs/cli-utils/blob/v0.22.0/pkg/kstatus/status/core.go
-// TODO  Update to use the library kstatus once available.
-func (r *reconcilerBase) deploymentStatus(ctx context.Context, key client.ObjectKey) (*deploymentStatus, error) {
+// deployment returns the deployment from the server
+func (r *reconcilerBase) deployment(ctx context.Context, key client.ObjectKey) (*appsv1.Deployment, error) {
 	var depObj appsv1.Deployment
 	if err := r.client.Get(ctx, key, &depObj); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -316,7 +311,7 @@ func (r *reconcilerBase) deploymentStatus(ctx context.Context, key client.Object
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
 	}
-	return checkDeploymentConditions(&depObj)
+	return &depObj, nil
 }
 
 func mutateContainerResource(ctx context.Context, c *corev1.Container, override v1beta1.OverrideSpec, reconcilerType string) {

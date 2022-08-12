@@ -47,6 +47,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -228,19 +229,29 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 	rs.Status.Reconciler = reconcilerName
 
-	var result *deploymentStatus
+	// Get the latest deployment to check the status.
+	// For other operations, upsertDeployment will have returned the latest already.
 	if op == controllerutil.OperationResultNone {
-		// Get status from server
-		result, err = r.deploymentStatus(ctx, client.ObjectKey{
+		deployObj, err = r.deployment(ctx, types.NamespacedName{
 			Namespace: v1.NSConfigManagementSystem,
 			Name:      reconcilerName,
 		})
-	} else {
-		// Get status from create/update result
-		result, err = checkDeploymentConditions(deployObj)
+		if err != nil {
+			log.Error(err, "Failed to get Deployment")
+			rootsync.SetStalled(rs, "Deployment", err)
+			// Get errors should always trigger retry (return error),
+			// even if status update is successful.
+			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			if updateErr != nil {
+				log.Error(updateErr, "failed to update RootSync status")
+			}
+			return controllerruntime.Result{}, err
+		}
 	}
+
+	result, err := computeDeploymentStatus(deployObj)
 	if err != nil {
-		log.Error(err, "Failed to check reconciler deployment conditions")
+		log.Error(err, "Failed to compute reconciler deployment status")
 		rootsync.SetStalled(rs, "Deployment", err)
 		// Get errors should always trigger retry (return error),
 		// even if status update is successful.
@@ -252,21 +263,21 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Update RootSync status based on reconciler deployment condition result.
-	switch result.status {
-	case statusInProgress:
+	switch result.Status {
+	case kstatus.InProgressStatus:
 		// inProgressStatus indicates that the deployment is not yet
 		// available. Hence update the Reconciling status condition.
-		rootsync.SetReconciling(rs, "Deployment", result.message)
+		rootsync.SetReconciling(rs, "Deployment", result.Message)
 		// Clear Stalled condition.
 		rootsync.ClearCondition(rs, v1beta1.RootSyncStalled)
-	case statusFailed:
+	case kstatus.FailedStatus:
 		// statusFailed indicates that the deployment failed to reconcile. Update
 		// Reconciling status condition with appropriate message specifying the
 		// reason for failure.
-		rootsync.SetReconciling(rs, "Deployment", result.message)
+		rootsync.SetReconciling(rs, "Deployment", result.Message)
 		// Set Stalled condition with the deployment statusFailed.
-		rootsync.SetStalled(rs, "Deployment", errors.New(string(result.status)))
-	case statusCurrent:
+		rootsync.SetStalled(rs, "Deployment", errors.New(string(result.Status)))
+	case kstatus.CurrentStatus:
 		// currentStatus indicates that the deployment is available, which qualifies
 		// to clear the Reconciling status condition in RootSync.
 		rootsync.ClearCondition(rs, v1beta1.RootSyncReconciling)
@@ -281,7 +292,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, err
 	}
 
-	if updated && result.status == statusCurrent {
+	if updated && result.Status == kstatus.CurrentStatus {
 		r.log.Info("Deployment successfully reconciled", operationSubjectName, reconcilerName, executedOperation, op)
 	}
 	return controllerruntime.Result{}, nil

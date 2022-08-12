@@ -84,7 +84,7 @@ var (
 
 	// reflector metrics.
 
-	// TODO: update these to be histograms once the metrics overhaul KEP
+	// TODO(directxman12): update these to be histograms once the metrics overhaul KEP
 	// PRs start landing.
 
 	listsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{

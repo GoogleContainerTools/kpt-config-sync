@@ -291,7 +291,7 @@ const (
 	// Used in Java as Unicode (not to be confused with Java's UTF-16) and
 	// ICU's UTF-16,version=1. Not compliant with RFC 2781.
 
-	// TODO : strictBOM: BOM must match Endianness. This would allow:
+	// TODO (maybe): strictBOM: BOM must match Endianness. This would allow:
 	// - UTF-16(B|L)E,version=1: writeBOM | acceptBOM | requireBOM | strictBOM
 	//    (UnicodeBig and UnicodeLittle in Java)
 	// - RFC 2781-compliant, but less common interpretation for UTF-16(B|L)E:

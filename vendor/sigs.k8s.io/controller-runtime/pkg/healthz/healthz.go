@@ -78,7 +78,7 @@ func (h *Handler) serveAggregated(resp http.ResponseWriter, req *http.Request) {
 	sort.Slice(parts, func(i, j int) bool { return parts[i].name < parts[j].name })
 
 	// ...and write out the result
-	// TODO: this should also accept a request for JSON content (via a accept header)
+	// TODO(directxman12): this should also accept a request for JSON content (via a accept header)
 	_, forceVerbose := req.URL.Query()["verbose"]
 	writeStatusesAsText(resp, parts, excluded, failed, forceVerbose)
 }

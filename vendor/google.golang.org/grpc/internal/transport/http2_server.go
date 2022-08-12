@@ -165,7 +165,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		ID:  http2.SettingMaxFrameSize,
 		Val: http2MaxFrameLen,
 	}}
-	// TODO: Have a better way to signal "no limit" because 0 is
+	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
 	maxStreams := config.MaxStreams
 	if maxStreams == 0 {
@@ -771,7 +771,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
-		// TODO: A copy is required here because there is no
+		// TODO(bradfitz, zhaoq): A copy is required here because there is no
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
@@ -951,7 +951,7 @@ func (t *http2Server) setResetPingStrikes() {
 }
 
 func (t *http2Server) writeHeaderLocked(s *Stream) error {
-	// TODO: Benchmark if the performance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
@@ -987,14 +987,14 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 
 // WriteStatus sends stream status to the client and terminates the stream.
 // There is no further I/O operations being able to perform on this stream.
-// TODO: Now it indicates the end of entire stream. Revisit if early
+// TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	if s.getState() == streamDone {
 		return nil
 	}
 	s.hdrMu.Lock()
-	// TODO: Benchmark if the performance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
 	if !s.updateHeaderSent() {                      // No headers have been sent.
@@ -1059,13 +1059,13 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if _, ok := err.(ConnectionError); ok {
 				return err
 			}
-			// TODO: Make sure this is the right code to return.
+			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
 			return status.Errorf(codes.Internal, "transport: %v", err)
 		}
 	} else {
 		// Writing headers checks for this condition.
 		if s.getState() == streamDone {
-			// TODO: Should the server write also return io.EOF?
+			// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
 			s.cancel()
 			select {
 			case <-t.done:
@@ -1193,7 +1193,7 @@ func (t *http2Server) keepalive() {
 }
 
 // Close starts shutting down the http2Server transport.
-// TODO: Now the destruction is not blocked on any pending streams. This
+// TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
 func (t *http2Server) Close() {
 	t.mu.Lock()
@@ -1301,7 +1301,7 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	t.maxStreamMu.Lock()
 	t.mu.Lock()
-	if t.state == closing { // TODO: This seems unnecessary.
+	if t.state == closing { // TODO(mmukhi): This seems unnecessary.
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()
 		// The transport is closing.

@@ -48,7 +48,7 @@ func (f Filter) Filter(nodes []*yaml.RNode) ([]*yaml.RNode, error) {
 // that's how the referrer's name field is updated.
 // Currently, however, this filter still needs the extra methods on Referrer
 // to consult things like the resource Id, its namespace, etc.
-// TODO: No filter should use the Resource api; all information
+// TODO(3455): No filter should use the Resource api; all information
 // about names should come from annotations, with helper methods
 // on the RNode object.  Resource should get stupider, RNode smarter.
 func (f Filter) run(node *yaml.RNode) (*yaml.RNode, error) {

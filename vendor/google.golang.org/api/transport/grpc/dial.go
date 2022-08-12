@@ -50,7 +50,7 @@ func Dial(ctx context.Context, opts ...option.ClientOption) (*grpc.ClientConn, e
 	if o.GRPCConnPool != nil {
 		return o.GRPCConnPool.Conn(), nil
 	}
-	// NOTE: We removed support for option.WithGRPCConnPool (GRPCConnPoolSize)
+	// NOTE(cbro): We removed support for option.WithGRPCConnPool (GRPCConnPoolSize)
 	// on 2020-02-12 because RoundRobin and WithBalancer are deprecated and we need to remove usages of it.
 	//
 	// Connection pooling is only done via DialPool.
@@ -147,7 +147,7 @@ func dial(ctx context.Context, insecure bool, o *internal.DialSettings) (*grpc.C
 				grpcOpts = append(grpcOpts, timeoutDialerOption)
 			}
 			// Check if google-c2p resolver is enabled for DirectPath
-			// TODO: remove grpc version guard once google-api-go-client is able to depends on the latest grpc
+			// TODO(mohanli): remove grpc version guard once google-api-go-client is able to depends on the latest grpc
 			if grpc.Version >= "1.42" && strings.EqualFold(os.Getenv(enableDirectPathXds), "true") {
 				// google-c2p resolver target must not have a port number
 				if addr, _, err := net.SplitHostPort(endpoint); err == nil {
@@ -166,7 +166,7 @@ func dial(ctx context.Context, insecure bool, o *internal.DialSettings) (*grpc.C
 					grpc.WithDisableServiceConfig(),
 					grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`))
 			}
-			// TODO: add support for system parameters (quota project, request reason) via chained interceptor.
+			// TODO(cbro): add support for system parameters (quota project, request reason) via chained interceptor.
 		} else {
 			tlsConfig := &tls.Config{
 				GetClientCertificate: clientCertSource,
@@ -262,7 +262,7 @@ func checkDirectPathEndPoint(endpoint string) bool {
 	// Also don't try direct path if the user has chosen an alternate name resolver
 	// (i.e., via ":///" prefix).
 	//
-	// TODO: once gRPC has introspectible options, check the user hasn't
+	// TODO(cbro): once gRPC has introspectible options, check the user hasn't
 	// provided a custom dialer in gRPC options.
 	if strings.Contains(endpoint, "://") && !strings.HasPrefix(endpoint, "dns:///") {
 		return false

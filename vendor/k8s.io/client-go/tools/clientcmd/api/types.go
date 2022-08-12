@@ -30,12 +30,12 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type Config struct {
 	// Legacy field from pkg/api/types.go TypeMeta.
-	// TODO: remove this after eliminating downstream dependencies.
+	// TODO(jlowdermilk): remove this after eliminating downstream dependencies.
 	// +k8s:conversion-gen=false
 	// +optional
 	Kind string `json:"kind,omitempty"`
 	// Legacy field from pkg/api/types.go TypeMeta.
-	// TODO: remove this after eliminating downstream dependencies.
+	// TODO(jlowdermilk): remove this after eliminating downstream dependencies.
 	// +k8s:conversion-gen=false
 	// +optional
 	APIVersion string `json:"apiVersion,omitempty"`

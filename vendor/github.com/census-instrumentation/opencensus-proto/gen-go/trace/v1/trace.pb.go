@@ -215,7 +215,7 @@ func (Span_Link_Type) EnumDescriptor() ([]byte, []int) {
 // contiguous - there may be gaps or overlaps between spans in a trace.
 //
 // The next id is 17.
-// TODO: Add an example.
+// TODO(bdrutu): Add an example.
 type Span struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

@@ -59,7 +59,7 @@ func (r Repository) String() string {
 }
 
 // Scope returns the scope required to perform the given action on the registry.
-// TODO: consider moving scopes to a separate package.
+// TODO(jonjohnsonjr): consider moving scopes to a separate package.
 func (r Repository) Scope(action string) string {
 	return fmt.Sprintf("repository:%s:%s", r.RepositoryStr(), action)
 }

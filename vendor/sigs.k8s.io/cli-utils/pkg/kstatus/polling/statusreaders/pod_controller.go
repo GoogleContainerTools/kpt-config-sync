@@ -38,7 +38,7 @@ type podControllerStatusReader struct {
 	groupKind       schema.GroupKind
 
 	statusFunc func(u *unstructured.Unstructured) (*status.Result, error)
-	// TODO: See if we can avoid this. For now it is useful for testing.
+	// TODO(mortent): See if we can avoid this. For now it is useful for testing.
 	statusForGenResourcesFunc statusForGenResourcesFunc
 }
 

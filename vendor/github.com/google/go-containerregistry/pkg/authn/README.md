@@ -98,7 +98,7 @@ func main() {
 }
 ```
 
-<!-- TODO: Wrap these in docker-credential-magic and reference those from here. -->
+<!-- TODO(jasonhall): Wrap these in docker-credential-magic and reference those from here. -->
 
 ## Using Multiple `Keychain`s
 

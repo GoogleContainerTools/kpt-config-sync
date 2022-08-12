@@ -57,7 +57,7 @@ func init() {
 // expired than its actual expiration time. It is used to avoid late
 // expirations due to client-server time mismatches.
 //
-// NOTE: this is take from golang.org/x/oauth2
+// NOTE(ericchiang): this is take from golang.org/x/oauth2
 const expiryDelta = 10 * time.Second
 
 var cache = newClientCache()

@@ -103,7 +103,7 @@ var DefaultClientViews = []*view.View{
 	ClientCompletedRPCsView,
 }
 
-// TODO: Add roundtrip_latency, uncompressed_request_bytes, uncompressed_response_bytes, request_count, response_count.
-// TODO: This is temporary and will need to be replaced by a
+// TODO(jbd): Add roundtrip_latency, uncompressed_request_bytes, uncompressed_response_bytes, request_count, response_count.
+// TODO(acetechnologist): This is temporary and will need to be replaced by a
 // mechanism to load these defaults from a common repository/config shared by
 // all supported languages. Likely a serialized protobuf of these defaults.

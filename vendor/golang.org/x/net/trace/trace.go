@@ -125,7 +125,7 @@ func init() {
 			"involve a vendored copy of golang.org/x/net/trace.")
 	}
 
-	// TODO: Serve Traces from /debug/traces in the future?
+	// TODO(jbd): Serve Traces from /debug/traces in the future?
 	// There is no requirement for a request to be present to have traces.
 	http.HandleFunc(debugRequestsPath, Traces)
 	http.HandleFunc(debugEventsPath, Events)
@@ -626,7 +626,7 @@ func (b *traceBucket) Add(tr *trace) {
 // If tracedOnly is true, only the traces with trace information will be returned.
 // The logs will be ref'd before returning; the caller should call
 // the Free method when it is done with them.
-// TODO: keep track of traced requests in separate buckets.
+// TODO(dsymonds): keep track of traced requests in separate buckets.
 func (b *traceBucket) Copy(tracedOnly bool) traceList {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -906,7 +906,7 @@ func (tr *trace) Events() []event {
 	return tr.events
 }
 
-var traceFreeList = make(chan *trace, 1000) // TODO: Use sync.Pool?
+var traceFreeList = make(chan *trace, 1000) // TODO(dsymonds): Use sync.Pool?
 
 // newTrace returns a trace ready to use.
 func newTrace() *trace {

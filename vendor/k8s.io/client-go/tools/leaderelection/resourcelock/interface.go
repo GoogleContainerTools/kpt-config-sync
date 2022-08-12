@@ -107,7 +107,7 @@ const (
 // LeaderElectionRecord is the record that is stored in the leader election annotation.
 // This information should be used for observational purposes only and could be replaced
 // with a random string (e.g. UUID) with only slight modification of this code.
-// TODO: this should potentially be versioned
+// TODO(mikedanese): this should potentially be versioned
 type LeaderElectionRecord struct {
 	// HolderIdentity is the ID that owns the lease. If empty, no one owns this lease and
 	// all callers may acquire. Versions of this library prior to Kubernetes 1.14 will not

@@ -1070,7 +1070,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		return err
 	}
 	hdr, payload := msgHeader(data, compData)
-	// TODO: should we be checking len(data) instead?
+	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
 	}

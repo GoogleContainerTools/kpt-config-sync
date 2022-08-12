@@ -74,7 +74,7 @@ func NewDiscoveryRESTMapper(c *rest.Config) (meta.RESTMapper, error) {
 
 // GVKForObject finds the GroupVersionKind associated with the given object, if there is only a single such GVK.
 func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-	// TODO: do we want to generalize this to arbitrary container types?
+	// TODO(directxman12): do we want to generalize this to arbitrary container types?
 	// I think we'd need a generalized form of scheme or something.  It's a
 	// shame there's not a reliable "GetGVK" interface that works by default
 	// for unpopulated static types and populated "dynamic" types
@@ -149,7 +149,7 @@ func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConf
 	if cfg.UserAgent == "" {
 		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
-	// TODO: In the long run, we want to check discovery or something to make sure that this is actually true.
+	// TODO(FillZpp): In the long run, we want to check discovery or something to make sure that this is actually true.
 	if cfg.ContentType == "" && !isUnstructured {
 		protobufSchemeLock.RLock()
 		if protobufScheme.Recognizes(gvk) {

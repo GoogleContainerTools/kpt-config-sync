@@ -148,7 +148,7 @@ const (
 	OpcodeMax    = CALL_VAR_KW
 )
 
-// TODO: add dynamic checks for missing opcodes in the tables below.
+// TODO(adonovan): add dynamic checks for missing opcodes in the tables below.
 
 var opcodeNames = [...]string{
 	AMP:         "amp",
@@ -821,7 +821,7 @@ func clip(x, min, max int32) (int32, bool) {
 }
 
 // addUint32 encodes x as 7-bit little-endian varint.
-// TODO: opt: steal top two bits of opcode
+// TODO(adonovan): opt: steal top two bits of opcode
 // to encode the number of complete bytes that follow.
 func addUint32(code []byte, x uint32, min int) []byte {
 	end := len(code) + min
@@ -994,7 +994,7 @@ func (fcomp *fcomp) set(id *syntax.Ident) {
 	case resolve.Local:
 		fcomp.emit1(SETLOCAL, uint32(bind.Index))
 	case resolve.Cell:
-		// TODO: opt: make a single op for LOCAL<n>, SETCELL.
+		// TODO(adonovan): opt: make a single op for LOCAL<n>, SETCELL.
 		fcomp.emit1(LOCAL, uint32(bind.Index))
 		fcomp.emit(SETCELL)
 	case resolve.Global:
@@ -1014,11 +1014,11 @@ func (fcomp *fcomp) lookup(id *syntax.Ident) {
 	case resolve.Local:
 		fcomp.emit1(LOCAL, uint32(bind.Index))
 	case resolve.Free:
-		// TODO: opt: make a single op for FREE<n>, CELL.
+		// TODO(adonovan): opt: make a single op for FREE<n>, CELL.
 		fcomp.emit1(FREE, uint32(bind.Index))
 		fcomp.emit(CELL)
 	case resolve.Cell:
-		// TODO: opt: make a single op for LOCAL<n>, CELL.
+		// TODO(adonovan): opt: make a single op for LOCAL<n>, CELL.
 		fcomp.emit1(LOCAL, uint32(bind.Index))
 		fcomp.emit(CELL)
 	case resolve.Global:
@@ -1380,7 +1380,7 @@ func (fcomp *fcomp) expr(e syntax.Expr) {
 	case *syntax.BinaryExpr:
 		switch e.Op {
 		// short-circuit operators
-		// TODO: use ifelse to simplify conditions.
+		// TODO(adonovan): use ifelse to simplify conditions.
 		case syntax.OR:
 			// x or y  =>  if x then x else y
 			done := fcomp.newBlock()
@@ -1496,7 +1496,7 @@ func (fcomp *fcomp) plus(e *syntax.BinaryExpr) {
 	// If len(args) > 2, use of an accumulator instead of a chain of
 	// PLUS operations may be more efficient.
 	// However, no gain was measured on a workload analogous to Bazel loading;
-	// TODO: opt: re-evaluate on a Bazel analysis-like workload.
+	// TODO(adonovan): opt: re-evaluate on a Bazel analysis-like workload.
 	//
 	// We cannot use a single n-ary SUM operation
 	//    a b c SUM<3>
@@ -1529,7 +1529,7 @@ func (fcomp *fcomp) plus(e *syntax.BinaryExpr) {
 func addable(e syntax.Expr) rune {
 	switch e := e.(type) {
 	case *syntax.Literal:
-		// TODO: opt: support INT/FLOAT/BIGINT constant folding.
+		// TODO(adonovan): opt: support INT/FLOAT/BIGINT constant folding.
 		switch e.Token {
 		case syntax.STRING:
 			return 's'
@@ -1577,7 +1577,7 @@ func unparen(e syntax.Expr) syntax.Expr {
 }
 
 func (fcomp *fcomp) binop(pos syntax.Position, op syntax.Token) {
-	// TODO: simplify by assuming syntax and compiler constants align.
+	// TODO(adonovan): simplify by assuming syntax and compiler constants align.
 	fcomp.setPos(pos)
 	switch op {
 	// arithmetic
@@ -1624,7 +1624,7 @@ func (fcomp *fcomp) binop(pos syntax.Position, op syntax.Token) {
 }
 
 func (fcomp *fcomp) call(call *syntax.CallExpr) {
-	// TODO: opt: Use optimized path for calling methods
+	// TODO(adonovan): opt: Use optimized path for calling methods
 	// of built-ins: x.f(...) to avoid materializing a closure.
 	// if dot, ok := call.Fcomp.(*syntax.DotExpr); ok {
 	// 	fcomp.expr(dot.X)
@@ -1642,7 +1642,7 @@ func (fcomp *fcomp) call(call *syntax.CallExpr) {
 
 // args emits code to push a tuple of positional arguments
 // and a tuple of named arguments containing alternating keys and values.
-// Either or both tuples may be empty (TODO: optimize).
+// Either or both tuples may be empty (TODO(adonovan): optimize).
 func (fcomp *fcomp) args(call *syntax.CallExpr) (op Opcode, arg uint32) {
 	var callmode int
 	// Compute the number of each kind of parameter.
@@ -1702,7 +1702,7 @@ func (fcomp *fcomp) args(call *syntax.CallExpr) (op Opcode, arg uint32) {
 		fcomp.expr(kwargs)
 	}
 
-	// TODO: avoid this with a more flexible encoding.
+	// TODO(adonovan): avoid this with a more flexible encoding.
 	if p >= 256 || n >= 256 {
 		// resolve already checked this; should be unreachable
 		panic("too many arguments in call")
@@ -1828,7 +1828,7 @@ func (fcomp *fcomp) function(f *resolve.Function) {
 	funcode := fcomp.pcomp.function(f.Name, f.Pos, f.Body, f.Locals, f.FreeVars)
 
 	if debug {
-		// TODO: do compilations sequentially not as a tree,
+		// TODO(adonovan): do compilations sequentially not as a tree,
 		// to make the log easier to read.
 		// Simplify by identifying Toplevel and functionIndex 0.
 		fmt.Fprintf(os.Stderr, "resuming %s @ %s\n", fcomp.fn.Name, fcomp.pos)

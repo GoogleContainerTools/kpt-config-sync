@@ -100,7 +100,7 @@ func (tsr *TaskStatusRunner) Run(
 			// If the statusChannel has closed or we are preparing
 			// to abort the task processing, we just ignore all
 			// statusEvents.
-			// TODO: Check if a closed statusChannel might
+			// TODO(mortent): Check if a closed statusChannel might
 			// create a busy loop here.
 			if !ok {
 				continue

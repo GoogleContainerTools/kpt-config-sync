@@ -44,7 +44,7 @@ const (
 	jsonExt = ".json"
 
 	mimeJson = "application/json"
-	// TODO: change @68f4ded to a version tag when gnostic add version tags.
+	// TODO(mehdy): change @68f4ded to a version tag when gnostic add version tags.
 	mimePb   = "application/com.github.googleapis.gnostic.OpenAPIv3@68f4ded+protobuf"
 	mimePbGz = "application/x-gzip"
 

@@ -67,7 +67,7 @@ func (a *Applier) prepareObjects(localInv inventory.Info, localObjs object.Unstr
 	// If the inventory uses the Name strategy and an inventory ID is provided,
 	// verify that the existing inventory object (if there is one) has an ID
 	// label that matches.
-	// TODO: This inventory id validation should happen in destroy and status.
+	// TODO(seans): This inventory id validation should happen in destroy and status.
 	if localInv.Strategy() == inventory.NameStrategy && localInv.ID() != "" {
 		prevInvObjs, err := a.invClient.GetClusterInventoryObjs(localInv)
 		if err != nil {

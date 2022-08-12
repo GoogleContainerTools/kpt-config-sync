@@ -34,7 +34,7 @@ import (
 // If path == "-" then reads from stdin
 func Load(path string) (*config.Cluster, error) {
 	// special case: empty path -> default config
-	// TODO: consider removing this
+	// TODO(bentheelder): consider removing this
 	if path == "" {
 		out := &config.Cluster{}
 		config.SetDefaultsCluster(out)

@@ -344,7 +344,7 @@ func writeOpenMetricsSample(
 		if err != nil {
 			return written, err
 		}
-		// TODO: Format this directly without converting to a float first.
+		// TODO(beorn7): Format this directly without converting to a float first.
 		n, err = writeOpenMetricsFloat(w, float64(*metric.TimestampMs)/1000)
 		written += n
 		if err != nil {
@@ -477,7 +477,7 @@ func writeExemplar(w enhancedWriter, e *dto.Exemplar) (int, error) {
 		if err != nil {
 			return written, err
 		}
-		// TODO: Format this directly from components of ts to
+		// TODO(beorn7): Format this directly from components of ts to
 		// avoid overflow/underflow and precision issues of the float
 		// conversion.
 		n, err = writeOpenMetricsFloat(w, float64(ts.UnixNano())/1e9)

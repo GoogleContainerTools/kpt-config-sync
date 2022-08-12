@@ -112,7 +112,7 @@ func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, admRevGVK 
 	}
 	// Default to a v1 AdmissionReview, otherwise the API server may not recognize the request
 	// if multiple AdmissionReview versions are permitted by the webhook config.
-	// TODO: this should be configurable since older API servers won't know about v1.
+	// TODO(estroz): this should be configurable since older API servers won't know about v1.
 	if admRevGVK == nil || *admRevGVK == (schema.GroupVersionKind{}) {
 		ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
 	} else {

@@ -2,12 +2,17 @@
 
 * Author(s): \<your name\>, \<your github alias\>
 * Approver: \<kpt-maintainer\>
+* Status: provisional|implementable|implemented|deferred|rejected|withdrawn|replaced
 
 >    Every feature will need design sign off an PR approval from a core
 >    maintainer.  If you have not got in touch with anyone yet, you can leave
 >    this blank and we will try to line someone up for you.
 
-## Why
+## Summary
+
+Please provide a 1-2 paragraph summary of what this feature is designed to do.
+
+## Motivation
 
 Please provide a reason to have this feature.  For best results a feature should
 be addressing a problem that is described in a github issue.  Link the issues
@@ -17,7 +22,7 @@ design is going to get prioritized on the roadmap.
 It's good to include some background about the problem, but do not use that as a
 substitute for real user feedback.
 
-## Design
+## Design Overview
 
 Please describe your solution. Please list any:
 
@@ -53,6 +58,19 @@ corner cases”). Makes it easier to author the user-facing docs as part of the
 development process (Ideally as part of the same PR) as opposed to it being an 
 afterthought.
 
+## Risks and Mitigations
+
+What are the major risks of implementing this feature?  What is the mitigration
+plan? Example:
+
+| Risk                               | Mitigration                                     |
+| ---------------------------------- | ----------------------------------------------- |
+| The feature might increase load    | The implementation will need to add a load test |
+| Another Risk                       | Another mitigration                             |
+
+## Test Plan
+
+
 ## Open Issues/Questions
 
 Please list any open questions here in the following format:
@@ -66,6 +84,7 @@ specify __Not Yet Resolved__
 
 If there is an industry precedent or alternative approaches please list them 
 here as well as citing *why* you decided not to pursue those paths.
+
 
 ### \<Approach\>
 

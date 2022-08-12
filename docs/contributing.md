@@ -1,6 +1,6 @@
 # How to Contribute
 
-ConfigSync follows the fork and PR model that a lot of OSS projects do.  If you
+ConfigSync follows the [Kubernetes contribution process].  If you
 are looking to contribute to this project please fork it, create a change
 and then submit a PR against the `main` branch which is the HEAD of development.
 
@@ -33,3 +33,4 @@ Guidelines](https://opensource.google/conduct/).
 
 [developer guide]: development.md
 [design document]: design-docs/00-template.md
+[Kubernetes contribution process]: https://github.com/kubernetes/community/blob/master/contributors/guide/github-workflow.md

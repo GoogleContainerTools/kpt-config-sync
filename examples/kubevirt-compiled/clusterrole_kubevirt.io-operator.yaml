@@ -19,7 +19,7 @@ metadata:
   labels:
     operator.kubevirt.io: ""
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
-  name: kubevirt.io:operator
+  name: kubevirt.io-operator
 rules:
 - apiGroups:
   - kubevirt.io

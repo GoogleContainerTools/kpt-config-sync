@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -65,6 +64,9 @@ const (
 
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
+
+	logFieldKind   = "kind"
+	logFieldObject = "object"
 )
 
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
@@ -78,6 +80,9 @@ type reconcilerBase struct {
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
 
+	// syncKind is the kind of the sync object: RootSync or RepoSync.
+	syncKind string
+
 	// lastReconciledResourceVersions is a cache of the last reconciled
 	// ResourceVersion for each R*Sync objects.
 	//
@@ -88,13 +93,21 @@ type reconcilerBase struct {
 	lastReconciledResourceVersions map[types.NamespacedName]string
 }
 
-func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name string, auth configsync.AuthType, email string, labelMap map[string]string, refs ...metav1.OwnerReference) error {
-	var childSA corev1.ServiceAccount
-	childSA.Name = name
-	childSA.Namespace = v1.NSConfigManagementSystem
-	r.addLabels(&childSA, labelMap)
+func (r *reconcilerBase) upsertServiceAccount(
+	ctx context.Context,
+	reconcilerRef types.NamespacedName,
+	auth configsync.AuthType,
+	email string,
+	labelMap map[string]string,
+	refs ...metav1.OwnerReference,
+) (client.ObjectKey, error) {
+	childSARef := reconcilerRef
+	childSA := &corev1.ServiceAccount{}
+	childSA.Name = childSARef.Name
+	childSA.Namespace = childSARef.Namespace
+	r.addLabels(childSA, labelMap)
 
-	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, &childSA, func() error {
+	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childSA, func() error {
 		// Update ownerRefs for RootSync ServiceAccount.
 		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
 		// performs garbage collection for Reposync controller resources.
@@ -105,29 +118,32 @@ func (r *reconcilerBase) upsertServiceAccount(ctx context.Context, name string, 
 		// In case, Workload Identity is not enabled on a cluster and spec.git.auth: gcpserviceaccount,
 		// the added annotation will be a no-op.
 		if auth == configsync.AuthGCPServiceAccount {
-			core.SetAnnotation(&childSA, GCPSAAnnotationKey, email)
+			core.SetAnnotation(childSA, GCPSAAnnotationKey, email)
 		}
 		return nil
 	})
 	if err != nil {
-		return err
+		return childSARef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("ServiceAccount successfully reconciled", operationSubjectName, name, executedOperation, op)
+		r.log.Info("Managed object successfully reconciled",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "ServiceAccount",
+			executedOperation, op)
 	}
-	return nil
+	return childSARef, nil
 }
 
 type mutateFn func(client.Object) error
 
-func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace string, labelMap map[string]string, mutateObject mutateFn) (*appsv1.Deployment, controllerutil.OperationResult, error) {
+func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef types.NamespacedName, labelMap map[string]string, mutateObject mutateFn) (*appsv1.Deployment, controllerutil.OperationResult, error) {
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := parseDeployment(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, errors.Wrap(err, "failed to parse reconciler Deployment manifest from ConfigMap")
 	}
 
-	reconcilerDeployment.Name = name
-	reconcilerDeployment.Namespace = namespace
+	reconcilerDeployment.Name = reconcilerRef.Name
+	reconcilerDeployment.Namespace = reconcilerRef.Namespace
 
 	// Add common deployment labels.
 	// This enables label selecting deployment by R*Sync name & namespace.
@@ -140,13 +156,13 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace s
 	// Add deployment name to the pod template.
 	// This enables label selecting deployment pods by deployment name.
 	r.addTemplateLabels(reconcilerDeployment, map[string]string{
-		metadata.DeploymentNameLabel: name,
+		metadata.DeploymentNameLabel: reconcilerRef.Name,
 	})
 
 	// Add deployment name to the pod selector.
 	// This enables label selecting deployment pods by deployment name.
 	r.addSelectorLabels(reconcilerDeployment, map[string]string{
-		metadata.DeploymentNameLabel: name,
+		metadata.DeploymentNameLabel: reconcilerRef.Name,
 	})
 
 	if err := mutateObject(reconcilerDeployment); err != nil {
@@ -160,15 +176,18 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, name, namespace s
 // object does not exist, Create() will be called. If it does exist, Patch()
 // will be called.
 func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (controllerutil.OperationResult, error) {
-	key := client.ObjectKeyFromObject(declared)
+	dRef := client.ObjectKeyFromObject(declared)
+	kind := "Deployment"
 
 	current := &appsv1.Deployment{}
 
-	if err := r.client.Get(ctx, key, current); err != nil {
+	if err := r.client.Get(ctx, dRef, current); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return controllerutil.OperationResultNone, err
 		}
-		r.log.Info("Resource not found, creating one", "Resource", declared.GetObjectKind().GroupVersionKind().Kind, "namespace/name", key.String())
+		r.log.V(3).Info("Managed object not found, creating",
+			logFieldObject, dRef.String(),
+			logFieldKind, kind)
 		if err := r.client.Create(ctx, declared); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
@@ -195,21 +214,29 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		if !vpaEnabled {
 			mutator = "Autopilot"
 		}
-		r.log.V(3).Info("The resources of the containers in the declared Deployment is updated", "mutator", mutator)
+		r.log.V(3).Info("Managed object container resources updated",
+			logFieldObject, dRef.String(),
+			logFieldKind, kind,
+			"mutator", mutator)
 	}
 
 	if reflect.DeepEqual(current.Labels, declared.Labels) && reflect.DeepEqual(current.Spec, declared.Spec) {
 		return controllerutil.OperationResultNone, nil
 	}
 
-	r.log.Info("The Deployment needs to be updated", "name", declared.Name)
+	r.log.V(3).Info("Managed object found, updating",
+		logFieldObject, dRef.String(),
+		logFieldKind, kind)
 	if err := r.client.Update(ctx, declared); err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
 			return controllerutil.OperationResultNone, err
 		}
 		// The provided data is invalid (e.g. http://b/196922619), so delete and re-create the resource.
-		r.log.Error(err, "Failed to patch resource, deleting and re-creating the resource", "Resource", declared.GetObjectKind().GroupVersionKind().Kind, "namespace/name", key.String())
+		// This handles changes to immutable fields, like labels.
+		r.log.Error(err, "Managed object update failed, deleting and re-creating",
+			logFieldObject, dRef.String(),
+			logFieldKind, kind)
 		if err := r.client.Delete(ctx, declared); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
@@ -307,12 +334,12 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 }
 
 // deployment returns the deployment from the server
-func (r *reconcilerBase) deployment(ctx context.Context, key client.ObjectKey) (*appsv1.Deployment, error) {
+func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*appsv1.Deployment, error) {
 	var depObj appsv1.Deployment
-	if err := r.client.Get(ctx, key, &depObj); err != nil {
+	if err := r.client.Get(ctx, dRef, &depObj); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, errors.Errorf(
-				"Deployment %s not found in namespace: %s.", key.Name, key.Namespace)
+				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
 	}

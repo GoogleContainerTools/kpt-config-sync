@@ -58,6 +58,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+const kindRepoSync = "RepoSync"
+
 // RepoSyncReconciler reconciles a RepoSync object.
 type RepoSyncReconciler struct {
 	reconcilerBase
@@ -77,6 +79,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
+			syncKind:                kindRepoSync,
 		},
 		repoSyncs: make(map[types.NamespacedName]struct{}),
 	}
@@ -90,17 +93,24 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	log := r.log.WithValues("reposync", req.NamespacedName)
+	rsRef := req.NamespacedName
+	log := r.log.WithValues("reposync", rsRef)
 	start := time.Now()
 	var err error
 	rs := &v1beta1.RepoSync{}
+	reconcilerRef := types.NamespacedName{
+		Namespace: v1.NSConfigManagementSystem,
+		Name:      core.NsReconcilerName(rsRef.Namespace, rsRef.Name),
+	}
 
-	if err = r.client.Get(ctx, req.NamespacedName, rs); err != nil {
+	if err = r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(req.NamespacedName)
-			if _, ok := r.repoSyncs[req.NamespacedName]; !ok {
-				log.Error(err, "The RepoSync reconciler does not manage a RepoSync object for the namespace", "namespace", req.Namespace, "name", req.Name)
+			r.clearLastReconciled(rsRef)
+			if _, ok := r.repoSyncs[rsRef]; !ok {
+				log.Error(err, "Sync object not managed by this reconciler-manager",
+					logFieldObject, rsRef.String(),
+					logFieldKind, r.syncKind)
 				// return `controllerruntime.Result{}, nil` here to make sure the request will not be requeued.
 				return controllerruntime.Result{}, nil
 			}
@@ -108,7 +118,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			//
 			// Note: Update cleanup resources in cleanupNSControllerResources(...) when
 			// resources created by namespace controller changes.
-			cleanupErr := r.cleanupNSControllerResources(ctx, req.Namespace, req.Name)
+			cleanupErr := r.cleanupNSControllerResources(ctx, rsRef, reconcilerRef)
 			// if cleanupErr != nil, the request will be requeued.
 			return controllerruntime.Result{}, cleanupErr
 		}
@@ -118,14 +128,16 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	// The caching client sometimes returns an old R*Sync, because the watch
 	// hasn't received the update event yet. If so, error and retry.
 	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(req.NamespacedName, rs.ResourceVersion) {
+	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
 		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
 	}
 
 	currentRS := rs.DeepCopy()
 
-	if err = r.validateNamespaceName(req.NamespacedName.Namespace); err != nil {
-		log.Error(err, "RepoSync namespace name failed validation")
+	if err = r.validateNamespaceName(rsRef.Namespace); err != nil {
+		log.Error(err, "Namespace invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 		reposync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
@@ -136,10 +148,12 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	r.repoSyncs[types.NamespacedName{Name: req.Name, Namespace: req.Namespace}] = struct{}{}
-	reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
-	if errs := validation.IsDNS1123Subdomain(reconcilerName); errs != nil {
-		log.Error(err, "RepoSync failed validation")
-		reposync.SetStalled(rs, "Validation", errors.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(errs, ", ")))
+	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
+		err = errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
+		log.Error(err, "Name or namespace invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
+		reposync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
@@ -148,8 +162,10 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err = r.validateSpec(ctx, rs, reconcilerName); err != nil {
-		log.Error(err, "RepoSync failed validation")
+	if err = r.validateSpec(ctx, rs, reconcilerRef.Name); err != nil {
+		log.Error(err, "Spec invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 		reposync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
@@ -161,20 +177,47 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if err := upsertSecrets(ctx, rs, r.client, reconcilerName); err != nil {
+	if sRef, err := upsertAuthSecret(ctx, rs, r.client, reconcilerRef); err != nil {
 		var authType configsync.AuthType
 		if rs.Spec.SourceType == string(v1beta1.GitSource) {
 			authType = rs.Spec.Auth
 		} else if rs.Spec.SourceType == string(v1beta1.HelmSource) {
 			authType = rs.Spec.Helm.Auth
 		}
-		log.Error(err, "RepoSync failed secret creation", "auth", authType)
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, sRef.String(),
+			logFieldKind, "Secret",
+			"type", "auth",
+			"auth", authType)
 		reposync.SetStalled(rs, "Secret", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RepoSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
+		}
+		// Use the upsert error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, errors.Wrap(err, "Secret reconcile failed")
+	}
+
+	// Create secret in config-management-system namespace using the
+	// existing secret in the reposync.namespace.
+	if sRef, err := upsertCACertSecret(ctx, rs, r.client, reconcilerRef); err != nil {
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, sRef.String(),
+			logFieldKind, "Secret",
+			"type", "caCert")
+		reposync.SetStalled(rs, "Secret", err)
+		// Upsert errors should always trigger retry (return error),
+		// even if status update is successful.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
@@ -200,14 +243,20 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		auth = rs.Spec.Helm.Auth
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	}
-	if err := r.upsertServiceAccount(ctx, reconcilerName, auth, gcpSAEmail, reposyncLabelMap); err != nil {
-		log.Error(err, "Failed to create/update ServiceAccount")
+	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, reposyncLabelMap); err != nil {
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, saRef.String(),
+			logFieldKind, "ServiceAccount",
+			"sourceType", rs.Spec.SourceType,
+			"auth", auth)
 		reposync.SetStalled(rs, "ServiceAccount", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RepoSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
@@ -215,55 +264,64 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Overwrite reconciler rolebinding.
-	if err := r.upsertRoleBinding(ctx, rs.Namespace); err != nil {
-		log.Error(err, "Failed to create/update RoleBinding")
+	if rbRef, err := r.upsertRoleBinding(ctx, rs.Namespace, reconcilerRef.Namespace); err != nil {
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, rbRef.String(),
+			logFieldKind, "RoleBinding")
 		reposync.SetStalled(rs, "RoleBinding", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RepoSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "RoleBinding reconcile failed")
 	}
 
-	repoContainerEnvs := r.populateRepoContainerEnvs(ctx, rs, reconcilerName)
-	mut := r.mutationsFor(ctx, rs, repoContainerEnvs)
+	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
+	mut := r.mutationsFor(ctx, rs, containerEnvs)
 
 	// Upsert Namespace reconciler deployment.
-	deployObj, op, err := r.upsertDeployment(ctx, reconcilerName, v1.NSConfigManagementSystem, reposyncLabelMap, mut)
+	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, reposyncLabelMap, mut)
 	if err != nil {
-		log.Error(err, "Failed to create/update Deployment")
+		log.Error(err, "Managed object get failed",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "Deployment")
 		reposync.SetStalled(rs, "Deployment", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RepoSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "Deployment reconcile failed")
 	}
-	rs.Status.Reconciler = reconcilerName
+	rs.Status.Reconciler = reconcilerRef.Name
 
 	// Get the latest deployment to check the status.
 	// For other operations, upsertDeployment will have returned the latest already.
 	if op == controllerutil.OperationResultNone {
-		deployObj, err = r.deployment(ctx, types.NamespacedName{
-			Namespace: v1.NSConfigManagementSystem,
-			Name:      reconcilerName,
-		})
+		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			log.Error(err, "Failed to get Deployment")
+			log.Error(err, "Managed object get failed",
+				logFieldObject, reconcilerRef.String(),
+				logFieldKind, "Deployment")
 			reposync.SetStalled(rs, "Deployment", err)
 			// Get errors should always trigger retry (return error),
 			// even if status update is successful.
 			_, updateErr := r.updateStatus(ctx, currentRS, rs)
 			if updateErr != nil {
-				log.Error(updateErr, "failed to update RepoSync status")
+				log.Error(updateErr, "Object status update failed",
+					logFieldObject, rsRef.String(),
+					logFieldKind, r.syncKind)
 			}
 			return controllerruntime.Result{}, err
 		}
@@ -271,13 +329,17 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	result, err := computeDeploymentStatus(deployObj)
 	if err != nil {
-		log.Error(err, "Failed to compute reconciler deployment status")
+		log.Error(err, "Managed object status check failed",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "Deployment")
 		reposync.SetStalled(rs, "Deployment", err)
 		// Get errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RepoSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		return controllerruntime.Result{}, err
 	}
@@ -313,7 +375,9 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	if updated && result.Status == kstatus.CurrentStatus {
-		r.log.Info("Deployment successfully reconciled", operationSubjectName, reconcilerName, executedOperation, op)
+		r.log.Info("Sync object successfully reconciled",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 	}
 	return controllerruntime.Result{}, nil
 }
@@ -456,12 +520,12 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 			}
 			isSAToken := strings.HasPrefix(secret.GetName(), reconcilerName+"-token-")
 			if isSAToken {
-				objectKey := client.ObjectKey{
+				saRef := client.ObjectKey{
 					Name:      reconcilerName,
 					Namespace: configsync.ControllerNamespace,
 				}
 				serviceAccount := &corev1.ServiceAccount{}
-				if err := r.client.Get(context.Background(), objectKey, serviceAccount); err != nil {
+				if err := r.client.Get(context.Background(), saRef, serviceAccount); err != nil {
 					klog.Error("failed to get ServiceAccount %q in the %q namespace: %v", secret.GetName(), secret.GetNamespace(), err)
 					return nil
 				}
@@ -602,7 +666,7 @@ func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile
 	}
 }
 
-func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
+func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
 		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)),
@@ -693,32 +757,39 @@ func (r *RepoSyncReconciler) validateNamespaceName(namespaceName string) error {
 	return nil
 }
 
-func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, namespace string) error {
+func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, rsNamespace, reconcilerNamespace string) (client.ObjectKey, error) {
+	rbRef := client.ObjectKey{
+		Namespace: rsNamespace,
+		Name:      RepoSyncPermissionsName(),
+	}
 	var childRB rbacv1.RoleBinding
-	childRB.Name = RepoSyncPermissionsName()
-	childRB.Namespace = namespace
+	childRB.Name = rbRef.Name
+	childRB.Namespace = rbRef.Namespace
 
 	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, &childRB, func() error {
-		return r.mutateRoleBinding(ctx, namespace, &childRB)
+		return r.mutateRoleBinding(ctx, &childRB, rsNamespace, reconcilerNamespace)
 	})
 	if err != nil {
-		return err
+		return rbRef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("RoleBinding successfully reconciled", operationSubjectName, childRB.Name, executedOperation, op)
+		r.log.Info("Managed object successfully reconciled",
+			logFieldObject, rbRef.String(),
+			logFieldKind, "RoleBinding",
+			executedOperation, op)
 	}
-	return nil
+	return rbRef, nil
 }
 
-func (r *RepoSyncReconciler) mutateRoleBinding(ctx context.Context, namespace string, rb *rbacv1.RoleBinding) error {
+func (r *RepoSyncReconciler) mutateRoleBinding(ctx context.Context, rb *rbacv1.RoleBinding, rsNamespace, reconcilerNamespace string) error {
 	// Update rolereference.
 	rb.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
 
-	reposyncList := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, reposyncList, client.InNamespace(namespace)); err != nil {
-		return errors.Wrapf(err, "failed to list the RepoSync objects in namespace %q", namespace)
+	rsList := &v1beta1.RepoSyncList{}
+	if err := r.client.List(ctx, rsList, client.InNamespace(rsNamespace)); err != nil {
+		return errors.Wrapf(err, "failed to list the RepoSync objects in namespace %q", rsNamespace)
 	}
-	return r.updateRoleBindingSubjects(rb, reposyncList)
+	return r.updateRoleBindingSubjects(rb, rsList, reconcilerNamespace)
 }
 
 func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RepoSync) (bool, error) {
@@ -849,7 +920,8 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					if authTypeToken(rs.Spec.Auth) {
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
 					}
-					keys := GetKeys(ctx, r.client, rs.Spec.SecretRef.Name, rs.Namespace)
+					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.SecretRef.Name}
+					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(NamespaceReconcilerType))
 				}

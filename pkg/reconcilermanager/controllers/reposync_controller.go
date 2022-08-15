@@ -330,6 +330,16 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}); err != nil {
 		return err
 	}
+	// Index the `privateCertSecretField` field, so that we will be able to lookup RepoSync be a referenced `privateCertSecretField` name.
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, privateCertSecretField, func(rawObj client.Object) []string {
+		rs := rawObj.(*v1beta1.RepoSync)
+		if rs.Spec.Git == nil || rs.Spec.Git.PrivateCertSecret.Name == "" {
+			return nil
+		}
+		return []string{rs.Spec.Git.PrivateCertSecret.Name}
+	}); err != nil {
+		return err
+	}
 	// Index the `helmSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, helmSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RepoSync)
@@ -441,11 +451,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 			// It is a one-to-one mapping between the copied ns-reconciler Secret and the RepoSync object,
 			// so requeue the mapped RepoSync object and then return.
 			reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
-			isGitSecret := rs.Spec.SourceType == string(v1beta1.GitSource) && rs.Spec.Git != nil &&
-				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.SecretRef.Name)
-			isHelmSecret := rs.Spec.SourceType == string(v1beta1.HelmSource) && rs.Spec.Helm != nil &&
-				secret.GetName() == ReconcilerResourceName(reconcilerName, rs.Spec.Helm.SecretRef.Name)
-			if isGitSecret || isHelmSecret {
+			if isUpsertedSecret(&rs, secret.GetName()) {
 				return requeueRepoSyncRequest(secret, &rs)
 			}
 			isSAToken := strings.HasPrefix(secret.GetName(), reconcilerName+"-token-")
@@ -473,25 +479,19 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	// The user-managed ns-reconciler Secret might be shared among multiple RepoSync objects in the same namespace,
 	// so requeue all the attached RepoSync objects.
 	attachedRepoSyncs := &v1beta1.RepoSyncList{}
-	listOps := &client.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(gitSecretRefField, secret.GetName()),
-		Namespace:     secret.GetNamespace(),
+	secretFields := []string{gitSecretRefField, privateCertSecretField, helmSecretRefField}
+	for _, secretField := range secretFields {
+		listOps := &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(secretField, secret.GetName()),
+			Namespace:     secret.GetNamespace(),
+		}
+		fetchedRepoSyncs := &v1beta1.RepoSyncList{}
+		if err := r.client.List(context.Background(), fetchedRepoSyncs, listOps); err != nil {
+			klog.Errorf("failed to list attached RepoSyncs for secret (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
+			return nil
+		}
+		attachedRepoSyncs.Items = append(attachedRepoSyncs.Items, fetchedRepoSyncs.Items...)
 	}
-	if err := r.client.List(context.Background(), attachedRepoSyncs, listOps); err != nil {
-		klog.Errorf("failed to list attached RepoSyncs for secret (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
-		return nil
-	}
-
-	attachedHelmRepoSyncs := &v1beta1.RepoSyncList{}
-	listOps = &client.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(helmSecretRefField, secret.GetName()),
-		Namespace:     secret.GetNamespace(),
-	}
-	if err := r.client.List(context.Background(), attachedHelmRepoSyncs, listOps); err != nil {
-		klog.Errorf("failed to list attached RepoSyncs for secret (name: %s, namespace: %s): %v", secret.GetName(), secret.GetNamespace(), err)
-		return nil
-	}
-	attachedRepoSyncs.Items = append(attachedRepoSyncs.Items, attachedHelmRepoSyncs.Items...)
 	requests := make([]reconcile.Request, len(attachedRepoSyncs.Items))
 	attachedRSNames := make([]string, len(attachedRepoSyncs.Items))
 	for i, rs := range attachedRepoSyncs.Items {

@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -44,6 +45,11 @@ func syncURLSSHPatch(url string) string {
 	return fmt.Sprintf(
 		`{"spec": {"git": {"repo": "%s", "auth": "ssh", "secretRef": {"name": "%s"}}}}`,
 		url, controllers.GitCredentialVolume)
+}
+
+func secretDataPatch(key, value string) string {
+	value64 := base64.StdEncoding.EncodeToString([]byte(value))
+	return fmt.Sprintf(`{"data": {"%s": "%s"}}`, key, value64)
 }
 
 func TestPrivateCertSecretV1Alpha1(t *testing.T) {
@@ -265,6 +271,87 @@ func TestPrivateCertSecretV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.Git.SecretRef.Name = "ssh-key"
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use SSH")
+	nt.WaitForRepoSyncs()
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func TestPrivateCertSecretWatch(t *testing.T) {
+	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+	nt.WaitForRepoSyncs()
+	key := "GIT_SSL_CAINFO"
+	privateCertSecret := "git-cert-pub"
+	privateCertPath := "/etc/private-cert/cert"
+	var err error
+
+	// verify the deployment doesn't have the key yet
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
+	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	reconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
+
+	// Set RepoSync to use HTTPS with privateCertSecret
+	repoSyncHTTPS := "https://test-git-server.config-management-system-test/git/backend/repo-sync"
+	repoSyncBackend.Spec.Git.Repo = repoSyncHTTPS
+	repoSyncBackend.Spec.Git.Auth = "none"
+	repoSyncBackend.Spec.Git.SecretRef.Name = ""
+	repoSyncBackend.Spec.Git.PrivateCertSecret.Name = privateCertSecret
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS with privateCertSecret")
+	nt.WaitForRepoSyncs()
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, privateCertPath))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Check that the namespace secret was upserted to c-m-s namespace
+	cmsSecret := &corev1.Secret{}
+	cmsSecretName := controllers.ReconcilerResourceName(reconcilerName, privateCertSecret)
+	err = nt.Validate(cmsSecretName, v1.NSConfigManagementSystem, cmsSecret)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// Modify the secret in c-m-s namespace
+	nt.MustMergePatch(cmsSecret, secretDataPatch("foo", "bar"))
+	nt.WaitForRepoSyncs()
+	// Check that watch triggered resync of the c-m-s secret
+	err = nt.Validate(cmsSecretName, v1.NSConfigManagementSystem, &corev1.Secret{}, nomostest.SecretMissingKey("foo"))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// Modify the secret in RepoSync namespace
+	rsSecret := &corev1.Secret{}
+	err = nt.Validate(privateCertSecret, backendNamespace, rsSecret)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.MustMergePatch(rsSecret, secretDataPatch("baz", "bat"))
+	nt.WaitForRepoSyncs()
+	// Check that the watch triggered upsert to c-m-s secret
+	err = nt.Validate(cmsSecretName, v1.NSConfigManagementSystem, &corev1.Secret{}, nomostest.SecretHasKey("baz", "bat"))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Unset privateCertSecret for repoSyncBackend and use SSH
+	repoSyncSSHURL := nt.GitProvider.SyncURL(nt.NonRootRepos[nn].RemoteRepoName)
+	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL
+	repoSyncBackend.Spec.Git.Auth = "ssh"
+	repoSyncBackend.Spec.Git.SecretRef.Name = "ssh-key"
+	repoSyncBackend.Spec.Git.PrivateCertSecret.Name = ""
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync unset privateCertSecret and use SSH")
 	nt.WaitForRepoSyncs()
 	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {

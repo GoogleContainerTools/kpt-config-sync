@@ -24,20 +24,38 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// isUpsertedSecret returns true if the provided secret from the
+// config-management-system namespace was upserted by the Reconciler
+func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
+	reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
+	if shouldUpsertPrivateCertSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Git.PrivateCertSecret.Name) {
+		return true
+	}
+	if shouldUpsertGitSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Git.SecretRef.Name) {
+		return true
+	}
+	if shouldUpsertHelmSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Helm.SecretRef.Name) {
+		return true
+	}
+	return false
+}
+
 func shouldUpsertPrivateCertSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && usePrivateCert(rs.Spec.PrivateCertSecret.Name)
+	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && usePrivateCert(rs.Spec.PrivateCertSecret.Name)
 }
 
 func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
-	return rs.Spec.SourceType == string(v1beta1.GitSource) && !SkipForAuth(rs.Spec.Auth)
+	return rs.Spec.SourceType == string(v1beta1.GitSource) && rs.Spec.Git != nil && !SkipForAuth(rs.Spec.Auth)
 }
+
 func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
-	return rs.Spec.SourceType == string(v1beta1.HelmSource) && !SkipForAuth(rs.Spec.Helm.Auth)
+	return rs.Spec.SourceType == string(v1beta1.HelmSource) && rs.Spec.Helm != nil && !SkipForAuth(rs.Spec.Helm.Auth)
 }
 
 // upsertSecrets creates or updates all secrets in config-management-system

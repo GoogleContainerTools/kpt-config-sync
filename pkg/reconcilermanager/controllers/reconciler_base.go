@@ -53,6 +53,11 @@ const (
 	// It will be used in both the indexing and watching.
 	gitSecretRefField = ".spec.git.secretRef.name"
 
+	// privateCertSecretField is the path of the field in the RootSync|RepoSync CRDs
+	// that we wish to use as the "object reference".
+	// It will be used in both the indexing and watching.
+	privateCertSecretField = ".spec.git.privateCertSecret.name"
+
 	// helmSecretRefField is the path of the field in the RootSync|RepoSync CRDs
 	// that we wish to use as the "object reference".
 	// It will be used in both the indexing and watching.

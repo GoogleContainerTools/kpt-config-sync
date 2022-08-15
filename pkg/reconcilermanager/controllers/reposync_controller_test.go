@@ -1698,11 +1698,14 @@ func validateGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.Clie
 
 func TestMapSecretToRepoSyncs(t *testing.T) {
 	testSecretName := "ssh-test"
+	privateCertSecret := "cert-pub"
 	rs1 := repoSync("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rs2 := repoSync("ns1", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rs3 := repoSync("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(testSecretName))
+	rs4 := repoSync("ns1", "rs4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthNone), reposyncPrivateCert(privateCertSecret))
 
 	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
+	ns1rs4ReconcilerName := core.NsReconcilerName(rs4.Namespace, rs4.Name)
 	serviceAccountToken := ns1rs1ReconcilerName + "-token-p29b5"
 	serviceAccount := fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(configsync.ControllerNamespace))
 	serviceAccount.Secrets = []corev1.ObjectReference{{Name: serviceAccountToken}}
@@ -1740,6 +1743,21 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 				{
 					NamespacedName: types.NamespacedName{
 						Name:      "rs1",
+						Namespace: "ns1",
+					},
+				},
+			},
+		},
+		{
+			name: fmt.Sprintf("A privateCertSecret from the %s namespace starting with %s, with a mapping RepoSync",
+				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			secret: fake.SecretObject(ReconcilerResourceName(ns1rs4ReconcilerName, privateCertSecret),
+				core.Namespace(configsync.ControllerNamespace),
+			),
+			want: []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "rs4",
 						Namespace: "ns1",
 					},
 				},
@@ -1799,9 +1817,21 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   fmt.Sprintf("A privateCertSecret %s from the ns1 namespace with mapping RepoSyncs", privateCertSecret),
+			secret: fake.SecretObject(privateCertSecret, core.Namespace("ns1")),
+			want: []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "rs4",
+						Namespace: "ns1",
+					},
+				},
+			},
+		},
 	}
 
-	_, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, serviceAccount)
+	_, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, rs4, serviceAccount)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := testReconciler.mapSecretToRepoSyncs(tc.secret)

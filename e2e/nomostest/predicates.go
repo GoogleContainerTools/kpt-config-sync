@@ -169,7 +169,7 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 	}
 }
 
-//HasExactlyImageName ensures a container has the expected image name
+// HasExactlyImageName ensures a container has the expected image name
 func HasExactlyImageName(containerName string, expectImageName string) Predicate {
 	return func(o client.Object) error {
 		dep, ok := o.(*appsv1.Deployment)
@@ -547,6 +547,34 @@ func StatusEquals(nt *NT, expected status.Status) Predicate {
 			return errors.Errorf("expected %s %s to have status %q, but got %q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				expected, result.Status)
+		}
+		return nil
+	}
+}
+
+// SecretHasKey checks that the secret contains key with value
+func SecretHasKey(key, value string) Predicate {
+	return func(o client.Object) error {
+		secret := o.(*corev1.Secret)
+		actual, ok := secret.Data[key]
+		if !ok {
+			return errors.Errorf("expected key %s not found in secret %s/%s", key, secret.GetNamespace(), secret.GetName())
+		}
+		if string(actual) != value {
+			return errors.Errorf("expected secret %s/%s to have %s=%s, but got %s=%s",
+				secret.GetNamespace(), secret.GetName(), key, value, key, actual)
+		}
+		return nil
+	}
+}
+
+// SecretMissingKey checks that the secret does not contain key
+func SecretMissingKey(key string) Predicate {
+	return func(o client.Object) error {
+		secret := o.(*corev1.Secret)
+		_, ok := secret.Data[key]
+		if ok {
+			return errors.Errorf("expected key %s to be missing from secret %s/%s, but was found", key, secret.GetNamespace(), secret.GetName())
 		}
 		return nil
 	}

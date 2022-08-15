@@ -32,6 +32,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -245,5 +246,7 @@ func CreateNamespaceSecret(nt *NT, ns string) {
 		privateKeypath = privateKeyPath(nt)
 	}
 	createSecret(nt, ns, namespaceSecret, fmt.Sprintf("ssh=%s", privateKeypath))
-	createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPath(nt)))
+	if nt.GitProvider.Type() == e2e.Local {
+		createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPath(nt)))
+	}
 }

@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: custom-metrics
----
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -46,12 +42,13 @@ spec:
     spec:
       serviceAccountName: custom-metrics-stackdriver-adapter
       containers:
-      - image: gcr.io/google-containers/custom-metrics-stackdriver-adapter:v0.10.0
+      - image: gcr.io/gke-release/custom-metrics-stackdriver-adapter:v0.12.2-gke.0
         imagePullPolicy: Always
         name: pod-custom-metrics-stackdriver-adapter
         command:
         - /adapter
-        - --use-new-resource-model=false
+        - --use-new-resource-model=true
+        - --enable-core-metrics-api
         resources:
           limits:
             cpu: 250m

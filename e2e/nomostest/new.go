@@ -342,7 +342,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		// create the Namespaces + Secrets before anything else.
 		nt.gitPrivateKeyPath = generateSSHKeys(nt)
 
-		generateSSLKeys(nt)
+		nt.caCertPath = generateSSLKeys(nt)
 
 		waitForGit := installGitServer(nt)
 		if err := waitForGit(); err != nil {

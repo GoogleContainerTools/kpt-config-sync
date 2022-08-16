@@ -124,8 +124,17 @@ const (
 	// HelmReleaseName is the OS env variable key for the Helm release name.
 	HelmReleaseName = "HELM_RELEASE_NAME"
 
-	//HelmReleaseNamespace is the OS env variable key for the Helm release namespace.s
+	//HelmReleaseNamespace is the OS env variable key for the Helm release namespace.
 	HelmReleaseNamespace = "HELM_RELEASE_NAMESPACE"
+
+	// HelmValues is the OS env variable key for the Helm chart values.
+	HelmValues = "HELM_VALUES"
+
+	//HelmValuesFiles is the OS env variable key for Helm values files.
+	HelmValuesFiles = "HELM_VALUES_FILES"
+
+	//HelmIncludeCRDs is the OS env variable key for whether to include CRDs in helm rendering output.
+	HelmIncludeCRDs = "HELM_INCLUDE_CRDS"
 
 	//HelmAuthType is the OS env variable key for Helm sync auth type.
 	HelmAuthType = "HELM_AUTH_TYPE"

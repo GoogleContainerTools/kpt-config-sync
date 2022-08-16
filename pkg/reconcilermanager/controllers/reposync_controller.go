@@ -623,8 +623,7 @@ func (r *RepoSyncReconciler) populateRepoContainerEnvs(ctx context.Context, rs *
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm.Repo, rs.Spec.Helm.Chart, rs.Spec.Helm.Version, rs.Spec.Helm.ReleaseName, rs.Spec.Helm.Namespace, rs.Spec.Helm.Auth, v1beta1.GetPeriodSecs(rs.Spec.Helm.Period))
-
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm)
 	}
 	return result
 }
@@ -835,6 +834,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					if authTypeToken(rs.Spec.Helm.Auth) {
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretName)...)
 					}
+					injectFWICredsToContainer(&container, injectFWICreds)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.

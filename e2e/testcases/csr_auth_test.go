@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -198,12 +199,14 @@ func cleanMembershipInfo(nt *nomostest.NT, fleetMembership, gcpProject, gkeURI s
 }
 
 type workloadIdentityTestSpec struct {
-	fleetWITest  bool
-	crossProject bool
-	sourceRepo   string
-	sourceType   v1beta1.SourceType
-	gsaEmail     string
-	rootCommitFn nomostest.Sha1Func
+	fleetWITest   bool
+	crossProject  bool
+	sourceRepo    string
+	sourceChart   string
+	sourceVersion string
+	sourceType    v1beta1.SourceType
+	gsaEmail      string
+	rootCommitFn  nomostest.Sha1Func
 }
 
 func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
@@ -237,7 +240,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that the remaining tests can run in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 		cleanMembershipInfo(nt, fleetMembership, gcpProject, gkeURI)
 	})
@@ -277,12 +280,16 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 
 	// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
 	nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, testSpec.sourceRepo)
-	if testSpec.sourceType == v1beta1.GitSource {
+	switch testSpec.sourceType {
+	case v1beta1.GitSource:
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
 			tenant, syncBranch, testSpec.sourceRepo, testSpec.gsaEmail))
-	} else {
+	case v1beta1.OciSource:
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
 			v1beta1.OciSource, tenant, testSpec.sourceRepo, testSpec.gsaEmail))
+	case v1beta1.HelmSource:
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns", "valuesFiles" : ["%s"]}, "git": null}}`,
+			v1beta1.HelmSource, testSpec.sourceChart, testSpec.sourceRepo, testSpec.sourceVersion, testSpec.gsaEmail, "https://raw.githubusercontent.com/config-sync-examples/helm-components/main/coredns-values.yaml"))
 	}
 
 	if testSpec.fleetWITest {
@@ -290,10 +297,18 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 			return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationExists)
 		})
 	}
-
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	if testSpec.sourceType == v1beta1.HelmSource {
+		nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: testSpec.sourceChart}))
+		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+			containerImagePullPolicy("Always")); err != nil {
+			nt.T.Error(err)
+		}
+	} else {
+		nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+		validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	}
 }
 
 // validateFWICredentials validates whether the reconciler Pod manifests includes

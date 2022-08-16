@@ -44,9 +44,8 @@ type Helm struct {
 	// +optional
 	Values *unstructured.Unstructured `json:"values,omitempty"`
 
-	// valuesFiles is a list of path to Helm value files.
-	// Values files must be in the same repository with the Helm chart.
-	// And the paths here are absolute path from the root directory of the repository
+	// valuesFiles is a list of URL to Helm value files.
+	// Values files must be in the same repository with the Helm chart or in a public repository.
 	// +optional
 	ValuesFiles []string `json:"valuesFiles,omitempty"`
 
@@ -64,7 +63,7 @@ type Helm struct {
 	Period metav1.Duration `json:"period,omitempty"`
 
 	// auth specifies the type to authenticate to the Helm repository.
-	// Must be one of secret, gcpserviceaccount, or none.
+	// Must be one of token, gcpserviceaccount, gcenode or none.
 	// The validation of this is case-sensitive. Required.
 	// +kubebuilder:validation:Enum=none;gcpserviceaccount;token;gcenode
 	Auth configsync.AuthType `json:"auth"`

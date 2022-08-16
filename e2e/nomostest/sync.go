@@ -257,35 +257,46 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.Sourc
 	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
 		return fmt.Errorf("status.source contains %d errors:\n%s", status.Source.ErrorSummary.TotalCount, objJSON)
 	}
-	if sourceType == v1beta1.OciSource {
-		if ociDir := status.Source.Oci.Dir; ociDir != dir {
-			return fmt.Errorf("status.source.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
-		}
-	} else if gitDir := status.Source.Git.Dir; gitDir != dir {
-		return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
-	}
 	if status.Sync.ErrorSummary != nil && status.Sync.ErrorSummary.TotalCount > 0 {
 		return fmt.Errorf("status.sync contains %d errors:\n%s", status.Sync.ErrorSummary.TotalCount, objJSON)
-	}
-	if sourceType == v1beta1.OciSource {
-		if ociDir := status.Sync.Oci.Dir; ociDir != dir {
-			return fmt.Errorf("status.sync.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
-		}
-	} else if gitDir := status.Sync.Git.Dir; gitDir != dir {
-		return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
 	}
 	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
 		return fmt.Errorf("status.rendering contains %d errors:\n%s", status.Rendering.ErrorSummary.TotalCount, objJSON)
 	}
-	if sourceType == v1beta1.OciSource {
+	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
+		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, objJSON)
+	}
+	switch sourceType {
+	case v1beta1.OciSource:
+		if ociDir := status.Source.Oci.Dir; ociDir != dir {
+			return fmt.Errorf("status.source.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
+		}
+		if ociDir := status.Sync.Oci.Dir; ociDir != dir {
+			return fmt.Errorf("status.sync.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
+		}
 		if ociDir := status.Rendering.Oci.Dir; ociDir != dir {
 			return fmt.Errorf("status.rendering.ociStatus.dir %q does not match the provided directory %q:\n%s", ociDir, dir, objJSON)
 		}
-	} else if gitDir := status.Rendering.Git.Dir; gitDir != dir {
-		return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
-	}
-	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s", message, objJSON)
+	case v1beta1.GitSource:
+		if gitDir := status.Source.Git.Dir; gitDir != dir {
+			return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+		}
+		if gitDir := status.Sync.Git.Dir; gitDir != dir {
+			return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+		}
+		if gitDir := status.Rendering.Git.Dir; gitDir != dir {
+			return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s", gitDir, dir, objJSON)
+		}
+	case v1beta1.HelmSource:
+		if helmChart := status.Source.Helm.Chart; helmChart != dir {
+			return fmt.Errorf("status.source.helmStatus.chart %q does not match the provided chart %q:\n%s", helmChart, dir, objJSON)
+		}
+		if helmChart := status.Sync.Helm.Chart; helmChart != dir {
+			return fmt.Errorf("status.sync.helmStatus.chart %q does not match the provided chart %q:\n%s", helmChart, dir, objJSON)
+		}
+		if helmChart := status.Rendering.Helm.Chart; helmChart != dir {
+			return fmt.Errorf("status.rendering.helmStatus.chart %q does not match the provided chart %q:\n%s", helmChart, dir, objJSON)
+		}
 	}
 	return nil
 }

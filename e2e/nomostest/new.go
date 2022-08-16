@@ -186,6 +186,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		RootRepos:               sharedNt.RootRepos,
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
+		caCertPath:              sharedNt.caCertPath,
 		gitRepoPort:             sharedNt.gitRepoPort,
 		scheme:                  sharedNt.scheme,
 		otelCollectorPort:       sharedNt.otelCollectorPort,

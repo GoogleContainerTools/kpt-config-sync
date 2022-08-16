@@ -119,6 +119,9 @@ type NT struct {
 	// gitPrivateKeyPath is the path to the private key used for communicating with the Git server.
 	gitPrivateKeyPath string
 
+	// caCertPath is the path to the CA cert used for communicating with the Git server.
+	caCertPath string
+
 	// gitRepoPort is the local port that forwards to the git repo deployment.
 	gitRepoPort int
 
@@ -857,8 +860,8 @@ func (nt *NT) testLogs(previousPodLog bool) {
 // testPods prints the output of `kubectl get pods`, which includes a 'RESTARTS' column
 // indicating how many times each pod has restarted. If a pod has restarted, the following
 // two commands can be used to get more information:
-//   1) kubectl get pods -n config-management-system -o yaml
-//   2) kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
+//  1. kubectl get pods -n config-management-system -o yaml
+//  2. kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
 func (nt *NT) testPods() {
 	out, err := nt.Kubectl("get", "pods", "-n", configmanagement.ControllerNamespace)
 	// Print a standardized header before each printed log to make ctrl+F-ing the

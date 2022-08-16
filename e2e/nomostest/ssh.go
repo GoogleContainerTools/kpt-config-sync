@@ -211,7 +211,7 @@ func generateSSLKeys(nt *NT) string {
 		fmt.Sprintf("server.crt=%s", certPath(nt)),
 		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt)))
 
-	return certPath(nt)
+	return caCertPath(nt)
 }
 
 // downloadSSHKey downloads the private SSH key from Cloud Secret Manager.
@@ -247,6 +247,10 @@ func CreateNamespaceSecret(nt *NT, ns string) {
 	}
 	createSecret(nt, ns, namespaceSecret, fmt.Sprintf("ssh=%s", privateKeypath))
 	if nt.GitProvider.Type() == e2e.Local {
-		createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPath(nt)))
+		caCertPathVal := nt.caCertPath
+		if len(caCertPathVal) == 0 {
+			caCertPathVal = caCertPath(nt)
+		}
+		createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPathVal))
 	}
 }

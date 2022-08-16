@@ -872,9 +872,9 @@ func (nt *NT) testPods() {
 	}
 }
 
-func (nt *NT) describeNotRunningTestPods() {
+func (nt *NT) describeNotRunningTestPods(namespace string) {
 	cmPods := &corev1.PodList{}
-	if err := nt.List(cmPods, client.InNamespace(configmanagement.ControllerNamespace)); err != nil {
+	if err := nt.List(cmPods, client.InNamespace(namespace)); err != nil {
 		nt.T.Fatal(err)
 		return
 	}

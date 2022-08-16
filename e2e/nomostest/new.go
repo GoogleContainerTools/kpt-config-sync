@@ -206,7 +206,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 			// print the logs for the previous container instances if they exist.
 			nt.testLogs(true)
 			nt.testPods()
-			nt.describeNotRunningTestPods()
+			nt.describeNotRunningTestPods(configmanagement.ControllerNamespace)
 		}
 	})
 
@@ -346,6 +346,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 
 		waitForGit := installGitServer(nt)
 		if err := waitForGit(); err != nil {
+			nt.describeNotRunningTestPods(testGitNamespace)
 			t.Fatalf("waiting for git-server Deployment to become available: %v", err)
 		}
 	} else {
@@ -359,7 +360,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 			// print the logs for the previous container instances if they exist.
 			nt.testLogs(true)
 			nt.testPods()
-			nt.describeNotRunningTestPods()
+			nt.describeNotRunningTestPods(configmanagement.ControllerNamespace)
 		}
 	})
 

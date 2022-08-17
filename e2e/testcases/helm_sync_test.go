@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -81,6 +82,39 @@ func TestHelmARFleetWISameProject(t *testing.T) {
 		gsaEmail:      gsaARReaderEmail,
 		rootCommitFn:  helmChartVersion(privateHelmChart + ":" + privateHelmChartVersion),
 	})
+}
+
+// TestHelmARTokenAuth verifies Config Sync can pull Helm chart from private Artifact Registry with Token auth type.
+// This test will work only with following pre-requisites:
+// Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+// A JSON key file is generated for this service account and stored in Secret Manager
+func TestHelmARTokenAuth(t *testing.T) {
+	nt := nomostest.New(t,
+		ntopts.SkipMonoRepo,
+		ntopts.Unstructured,
+		ntopts.RequireGKE(t),
+	)
+
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.T.Log("Fetch password from Secret Manager")
+	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Create secret for authentication")
+	_, err = nt.Kubectl("create", "secret", "generic", "foo", "--namespace=config-management-system", "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	if err != nil {
+		nt.T.Fatalf("failed to create secret, err: %v", err)
+	}
+	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}, "git": null}}`,
+		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
+	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+		containerImagePullPolicy("IfNotPresent")); err != nil {
+		nt.T.Error(err)
+	}
 }
 
 func helmChartVersion(chartVersion string) nomostest.Sha1Func {

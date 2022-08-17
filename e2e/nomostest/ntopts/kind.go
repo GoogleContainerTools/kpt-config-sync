@@ -211,6 +211,8 @@ apiServer:
 			}),
 			// Retain nodes for debugging logs.
 			cluster.CreateWithRetain(true),
+			// Wait for cluster to be ready before proceeding
+			cluster.CreateWithWaitForReady(10*time.Minute),
 		)
 		if err == nil {
 			return nil

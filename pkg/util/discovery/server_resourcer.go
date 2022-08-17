@@ -15,6 +15,8 @@
 package discovery
 
 import (
+	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
@@ -52,20 +54,22 @@ func GetResources(discoveryClient ServerResourcer) ([]*metav1.APIResourceList, s
 	}
 	_, resourceLists, discoveryErr := discoveryClient.ServerGroupsAndResources()
 	if discoveryErr != nil {
-		// Apparently the ServerResources batches a bunch of discovery requests calls
-		// and the author decided that it's perfectly reasonable to return an error
-		// for failure on any of those calls (despite some succeeding), so we
-		// check for this specific error then ignore it while logging a warning.
-		// It's not clear how we should handle this error since there's not a good
-		// way to determine if we really needed the discovery info from that one
-		// group that failed and something is going horribly wrong, or if someone
-		// decided to have fun with adding broken APIServices.  In any case, this is
-		// Kubernetes so we are going to continue onward in the name of eventual
-		// consistency, tally-ho!
-		if discovery.IsGroupDiscoveryFailedError(discoveryErr) {
-			klog.Warningf("failed to discover some APIGroups: %s", discoveryErr)
+		// b/238836947 ServerGroupsAndResources still returns the resources it discovered when there was an error.
+		// Most errors are fatal, but we want to ignore NotFound errors. This allows for CRDs and CRs to be applied
+		// with a two-pass apply & retry strategy, where objects with a NotFound resources are skipped until the
+		// resource is registered. Other errors must cause failure, otherwise they might cause existing objects to be pruned.
+		var discoErr *discovery.ErrGroupDiscoveryFailed
+		if errors.As(discoveryErr, &discoErr) {
+			for gv, subErr := range discoErr.Groups {
+				if apierrors.IsNotFound(subErr) {
+					klog.Warningf("Failed to discover APIGroups %s due to not found, moving on: %v", gv, subErr)
+				} else {
+					// return all the discovery errors if any one of them is a blocking error
+					return nil, status.APIServerError(discoveryErr, "API discovery failed")
+				}
+			}
 		} else {
-			return nil, status.APIServerError(discoveryErr, "failed to get server resources")
+			return nil, status.APIServerError(discoveryErr, "API discovery failed")
 		}
 	}
 	return resourceLists, nil

@@ -213,9 +213,9 @@ func rootsyncNoSSLVerify() func(*v1beta1.RootSync) {
 	}
 }
 
-func rootsyncPrivateCert(privateCertSecret string) func(*v1beta1.RootSync) {
+func rootsyncCACert(caCertSecretRef string) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
-		rs.Spec.Git.PrivateCertSecret.Name = privateCertSecret
+		rs.Spec.Git.CACertSecretRef.Name = caCertSecretRef
 	}
 }
 
@@ -660,13 +660,13 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	t.Log("Deployment successfully updated")
 }
 
-func TestRootSyncCreateWithPrivateCert(t *testing.T) {
+func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
-	privateCertSecret := "foo-secret"
+	caCertSecret := "foo-secret"
 	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
 		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
-		rootsyncPrivateCert(privateCertSecret))
+		rootsyncCACert(caCertSecret))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
@@ -682,7 +682,7 @@ func TestRootSyncCreateWithPrivateCert(t *testing.T) {
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
-		privateCertSecretMutator(secretName, privateCertSecret),
+		caCertSecretMutator(secretName, caCertSecret),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -696,7 +696,7 @@ func TestRootSyncCreateWithPrivateCert(t *testing.T) {
 	t.Log("Deployment successfully created")
 }
 
-func TestRootSyncUpdatePrivateCert(t *testing.T) {
+func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
@@ -729,8 +729,8 @@ func TestRootSyncUpdatePrivateCert(t *testing.T) {
 	}
 	t.Log("Deployment successfully created")
 
-	// Unset rs.Spec.PrivateCertSecret
-	rs.Spec.PrivateCertSecret.Name = ""
+	// Unset rs.Spec.CACertSecretRef
+	rs.Spec.CACertSecretRef.Name = ""
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -744,9 +744,9 @@ func TestRootSyncUpdatePrivateCert(t *testing.T) {
 	}
 	t.Log("No need to update Deployment")
 
-	// Set rs.Spec.PrivateCertSecret
-	privateCertSecret := "foo-secret"
-	rs.Spec.PrivateCertSecret.Name = privateCertSecret
+	// Set rs.Spec.CACertSecretRef
+	caCertSecret := "foo-secret"
+	rs.Spec.CACertSecretRef.Name = caCertSecret
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -758,7 +758,7 @@ func TestRootSyncUpdatePrivateCert(t *testing.T) {
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
-		privateCertSecretMutator(secretName, privateCertSecret),
+		caCertSecretMutator(secretName, caCertSecret),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -770,8 +770,8 @@ func TestRootSyncUpdatePrivateCert(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	// Unset rs.Spec.PrivateCertSecret
-	rs.Spec.PrivateCertSecret.Name = ""
+	// Unset rs.Spec.CACertSecretRef
+	rs.Spec.CACertSecretRef.Name = ""
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -2251,10 +2251,10 @@ func helmSecretMutator(secretName string) depMutator {
 	}
 }
 
-func privateCertSecretMutator(secretName, privateCertSecretName string) depMutator {
+func caCertSecretMutator(secretName, caCertSecretName string) depMutator {
 	return func(dep *appsv1.Deployment) {
-		dep.Spec.Template.Spec.Volumes = deploymentSecretVolumes(secretName, privateCertSecretName)
-		dep.Spec.Template.Spec.Containers = secretMountContainers(privateCertSecretName)
+		dep.Spec.Template.Spec.Volumes = deploymentSecretVolumes(secretName, caCertSecretName)
+		dep.Spec.Template.Spec.Containers = secretMountContainers(caCertSecretName)
 	}
 }
 
@@ -2495,14 +2495,14 @@ func defaultContainers() []corev1.Container {
 	}
 }
 
-func secretMountContainers(privateCertSecret string) []corev1.Container {
+func secretMountContainers(caCertSecret string) []corev1.Container {
 	gitSyncVolumeMounts := []corev1.VolumeMount{
 		{Name: "repo", MountPath: "/repo"},
 		{Name: "git-creds", MountPath: "/etc/git-secret", ReadOnly: true},
 	}
-	if privateCertSecret != "" {
+	if caCertSecret != "" {
 		gitSyncVolumeMounts = append(gitSyncVolumeMounts, corev1.VolumeMount{
-			Name: "private-cert", MountPath: "/etc/private-cert", ReadOnly: true,
+			Name: "ca-cert", MountPath: "/etc/ca-cert", ReadOnly: true,
 		})
 	}
 	return []corev1.Container{
@@ -2610,7 +2610,7 @@ func gceNodeContainers(gsaEmail string) []corev1.Container {
 	return containers
 }
 
-func deploymentSecretVolumes(secretName, privateCertSecretName string) []corev1.Volume {
+func deploymentSecretVolumes(secretName, caCertSecretName string) []corev1.Volume {
 	volumes := []corev1.Volume{
 		{Name: "repo"},
 		{Name: "git-creds", VolumeSource: corev1.VolumeSource{
@@ -2619,15 +2619,15 @@ func deploymentSecretVolumes(secretName, privateCertSecretName string) []corev1.
 			},
 		}},
 	}
-	if usePrivateCert(privateCertSecretName) {
+	if useCACert(caCertSecretName) {
 		volumes = append(volumes, corev1.Volume{
-			Name: "private-cert", VolumeSource: corev1.VolumeSource{
+			Name: "ca-cert", VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: privateCertSecretName,
+					SecretName: caCertSecretName,
 					Items: []corev1.KeyToPath{
 						{
-							Key:  PrivateCertKey,
-							Path: PrivateCertKey,
+							Key:  CACertSecretKey,
+							Path: CACertSecretKey,
 						},
 					},
 					DefaultMode: &defaultMode},

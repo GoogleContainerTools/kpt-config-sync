@@ -75,16 +75,18 @@ type Git struct {
 
 	// noSSLVerify specifies whether to enable or disable the SSL certificate verification. Default: false.
 	// If noSSLVerify is set to true, it tells Git to skip the SSL certificate verification.
-	// This should either not be set or be set to false when privateCertSecret is provided.
+	// This should either be false or unset when caCertSecretRef is provided.
 	// +optional
 	NoSSLVerify bool `json:"noSSLVerify,omitempty"`
 
-	// privateCertSecret specifies the name of the secret where the private certificate is stored.
+	// caCertSecretRef specifies the name of the secret where the CA certificate is stored.
 	// The creation of the secret should be done out of band by the user and should store the
-	// certificate in a key named "cert".
+	// certificate in a key named "cert". For RepoSync resources, the secret should be
+	// created in the same namespace as the RepoSync. For RootSync resource, the secret
+	// must be created in the config-management-system namespace.
 	// +nullable
 	// +optional
-	PrivateCertSecret SecretReference `json:"privateCertSecret,omitempty"`
+	CACertSecretRef SecretReference `json:"caCertSecretRef,omitempty"`
 }
 
 // SecretReference contains the reference to the secret used to connect to

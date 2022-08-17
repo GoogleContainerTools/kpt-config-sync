@@ -89,6 +89,20 @@ spec:
                   branch:
                     description: 'branch is the git branch to checkout. Default: "master".'
                     type: string
+                  caCertSecretRef:
+                    description: caCertSecretRef specifies the name of the secret
+                      where the CA certificate is stored. The creation of the secret
+                      should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the
+                      secret must be created in the same namespace as the RepoSync.
+                      For RootSync resource, the secret must be created in the config-management-system
+                      namespace.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   dir:
                     description: 'dir is the absolute path of the directory that contains
                       the local resources.  Default: the root directory of the repo.'
@@ -103,8 +117,8 @@ spec:
                     description: 'noSSLVerify specifies whether to enable or disable
                       the SSL certificate verification. Default: false. If noSSLVerify
                       is set to true, it tells Git to skip the SSL certificate verification.
-                      This should either not be set or be set to false when privateCertSecret
-                      is provided.'
+                      This should either be false or unset when caCertSecretRef is
+                      provided.'
                     type: boolean
                   period:
                     description: 'period is the time duration between consecutive
@@ -115,17 +129,6 @@ spec:
                       a bug where it looks like the code is dealing with seconds but
                       its actually nanoseconds (or vice versa).'
                     type: string
-                  privateCertSecret:
-                    description: privateCertSecret specifies the name of the secret
-                      where the private certificate is stored. The creation of the
-                      secret should be done out of band by the user and should store
-                      the certificate in a key named "cert".
-                    nullable: true
-                    properties:
-                      name:
-                        description: name represents the secret name.
-                        type: string
-                    type: object
                   proxy:
                     description: proxy specifies an HTTPS proxy for accessing the
                       Git repo. Only has an effect when secretType is one of ("cookiefile",
@@ -1061,6 +1064,20 @@ spec:
                   branch:
                     description: 'branch is the git branch to checkout. Default: "master".'
                     type: string
+                  caCertSecretRef:
+                    description: caCertSecretRef specifies the name of the secret
+                      where the CA certificate is stored. The creation of the secret
+                      should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the
+                      secret should be created in the same namespace as the RepoSync.
+                      For RootSync resource, the secret must be created in the config-management-system
+                      namespace.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   dir:
                     description: 'dir is the absolute path of the directory that contains
                       the local resources.  Default: the root directory of the repo.'
@@ -1074,8 +1091,8 @@ spec:
                     description: 'noSSLVerify specifies whether to enable or disable
                       the SSL certificate verification. Default: false. If noSSLVerify
                       is set to true, it tells Git to skip the SSL certificate verification.
-                      This should either not be set or be set to false when privateCertSecret
-                      is provided.'
+                      This should either be false or unset when caCertSecretRef is
+                      provided.'
                     type: boolean
                   period:
                     description: 'period is the time duration between consecutive
@@ -1086,17 +1103,6 @@ spec:
                       a bug where it looks like the code is dealing with seconds but
                       its actually nanoseconds (or vice versa).'
                     type: string
-                  privateCertSecret:
-                    description: privateCertSecret specifies the name of the secret
-                      where the private certificate is stored. The creation of the
-                      secret should be done out of band by the user and should store
-                      the certificate in a key named "cert".
-                    nullable: true
-                    properties:
-                      name:
-                        description: name represents the secret name.
-                        type: string
-                    type: object
                   proxy:
                     description: proxy specifies an HTTPS proxy for accessing the
                       Git repo. Only has an effect when secretType is one of ("cookiefile",

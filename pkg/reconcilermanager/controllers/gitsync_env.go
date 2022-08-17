@@ -64,8 +64,8 @@ type options struct {
 	depth *int64
 	// noSSLVerify specifies whether to skip the SSL certificate verification in Git.
 	noSSLVerify bool
-	// privateCertSecret specifies the name of a secret containing a private certificate
-	privateCertSecret string
+	// caCertSecretRef specifies the name of a secret containing a CA certificate
+	caCertSecretRef string
 }
 
 // gitSyncTokenAuthEnv returns environment variables for git-sync container for 'token' Auth.
@@ -125,8 +125,8 @@ func authTypeToken(secret configsync.AuthType) bool {
 	return configsync.AuthToken == secret
 }
 
-func usePrivateCert(privateCertSecret string) bool {
-	return privateCertSecret != ""
+func useCACert(caCertSecretRef string) bool {
+	return caCertSecretRef != ""
 }
 
 func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
@@ -147,10 +147,10 @@ func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
 		})
 		metrics.RecordNoSSLVerifyCount(ctx)
 	}
-	if usePrivateCert(opts.privateCertSecret) {
+	if useCACert(opts.caCertSecretRef) {
 		result = append(result, corev1.EnvVar{
 			Name:  "GIT_SSL_CAINFO",
-			Value: fmt.Sprintf("%s/%s", PrivateCertPath, PrivateCertKey),
+			Value: fmt.Sprintf("%s/%s", CACertPath, CACertSecretKey),
 		})
 	}
 	if opts.depth != nil && *opts.depth >= 0 {

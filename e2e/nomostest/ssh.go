@@ -112,7 +112,7 @@ func writePEMToFile(nt *NT, path, pemType string, data []byte) {
 	}
 }
 
-func createPrivateCA(nt *NT) {
+func createCAWithCerts(nt *NT) {
 	err := os.MkdirAll(sslDir(nt), fileMode)
 	if err != nil {
 		nt.T.Fatal("creating ssl directory:", err)
@@ -202,7 +202,7 @@ func generateSSHKeys(nt *NT) string {
 func generateSSLKeys(nt *NT) string {
 	nt.T.Helper()
 
-	createPrivateCA(nt)
+	createCAWithCerts(nt)
 
 	createSecret(nt, configmanagement.ControllerNamespace, gitServerPublicCertSecret,
 		fmt.Sprintf("cert=%s", caCertPath(nt)))

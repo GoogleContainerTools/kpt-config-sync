@@ -34,7 +34,7 @@ import (
 // config-management-system namespace was upserted by the Reconciler
 func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 	reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
-	if shouldUpsertPrivateCertSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Git.PrivateCertSecret.Name) {
+	if shouldUpsertCACertSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Git.CACertSecretRef.Name) {
 		return true
 	}
 	if shouldUpsertGitSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, rs.Spec.Git.SecretRef.Name) {
@@ -46,8 +46,8 @@ func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 	return false
 }
 
-func shouldUpsertPrivateCertSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && usePrivateCert(rs.Spec.PrivateCertSecret.Name)
+func shouldUpsertCACertSecret(rs *v1beta1.RepoSync) bool {
+	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && useCACert(rs.Spec.CACertSecretRef.Name)
 }
 
 func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
@@ -97,8 +97,8 @@ func upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client
 // namespace.
 func upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
-	if shouldUpsertPrivateCertSecret(rs) {
-		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, rs.Spec.Git.PrivateCertSecret.Name)
+	if shouldUpsertCACertSecret(rs) {
+		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, rs.Spec.Git.CACertSecretRef.Name)
 		userSecret, err := getUserSecret(ctx, c, nsSecretRef)
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")

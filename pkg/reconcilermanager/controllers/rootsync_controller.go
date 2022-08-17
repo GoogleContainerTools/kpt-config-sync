@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -58,6 +58,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+const kindRootSync = "RootSync"
 
 // ReconcilerType defines the type of a reconciler
 type ReconcilerType string
@@ -86,6 +88,7 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
+			syncKind:                kindRootSync,
 		},
 	}
 }
@@ -98,16 +101,21 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	log := r.log.WithValues("rootsync", req.NamespacedName)
+	rsRef := req.NamespacedName
+	log := r.log.WithValues("rootsync", rsRef)
 	start := time.Now()
 	var err error
 	rs := &v1beta1.RootSync{}
+	reconcilerRef := types.NamespacedName{
+		Namespace: configmanagement.ControllerNamespace,
+		Name:      core.RootReconcilerName(rsRef.Name),
+	}
 
-	if err = r.client.Get(ctx, req.NamespacedName, rs); err != nil {
+	if err = r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(req.NamespacedName)
-			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx)
+			r.clearLastReconciled(rsRef)
+			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef.Namespace)
 		}
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
@@ -115,14 +123,16 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	// The caching client sometimes returns an old R*Sync, because the watch
 	// hasn't received the update event yet. If so, error and retry.
 	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(req.NamespacedName, rs.ResourceVersion) {
+	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
 		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
 	}
 
 	currentRS := rs.DeepCopy()
 
-	if err = r.validateNamespaceName(req.NamespacedName.Namespace); err != nil {
-		log.Error(err, "RootSync failed validation")
+	if err = r.validateNamespaceName(rsRef.Namespace); err != nil {
+		log.Error(err, "Namespace invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 		rootsync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
@@ -138,10 +148,12 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		rs.UID,
 	)
 
-	reconcilerName := core.RootReconcilerName(rs.Name)
-	if errs := validation.IsDNS1123Subdomain(reconcilerName); errs != nil {
-		log.Error(err, "RootSync failed validation")
-		rootsync.SetStalled(rs, "Validation", errors.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(errs, ", ")))
+	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
+		err = errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
+		log.Error(err, "Name or namespace invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
+		rootsync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
@@ -151,7 +163,9 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	if err = r.validateSpec(ctx, rs, log); err != nil {
-		log.Error(err, "RootSync failed validation")
+		log.Error(err, "Spec invalid",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 		rootsync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
 		// unless the status update also fails.
@@ -180,14 +194,20 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		auth = rs.Spec.Helm.Auth
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	}
-	if err := r.upsertServiceAccount(ctx, reconcilerName, auth, gcpSAEmail, rootsyncLabelMap, owRefs); err != nil {
-		log.Error(err, "Failed to create/update Service Account")
+	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, rootsyncLabelMap, owRefs); err != nil {
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, saRef.String(),
+			logFieldKind, "ServiceAccount",
+			"sourceType", rs.Spec.SourceType,
+			"auth", auth)
 		rootsync.SetStalled(rs, "ServiceAccount", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RootSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
@@ -195,55 +215,64 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	if err := r.upsertClusterRoleBinding(ctx); err != nil {
-		log.Error(err, "Failed to create/update ClusterRoleBinding")
+	if crbRef, err := r.upsertClusterRoleBinding(ctx, rs.Namespace, reconcilerRef.Namespace); err != nil {
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, crbRef.String(),
+			logFieldKind, "ClusterRoleBinding")
 		rootsync.SetStalled(rs, "ClusterRoleBinding", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RootSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "ClusterRoleBinding reconcile failed")
 	}
 
-	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerName)
+	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
 	mut := r.mutationsFor(ctx, rs, containerEnvs)
 
 	// Upsert Root reconciler deployment.
-	deployObj, op, err := r.upsertDeployment(ctx, reconcilerName, v1.NSConfigManagementSystem, rootsyncLabelMap, mut)
+	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, rootsyncLabelMap, mut)
 	if err != nil {
-		log.Error(err, "Failed to create/update Deployment")
+		log.Error(err, "Managed object upsert failed",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "Deployment")
 		rootsync.SetStalled(rs, "Deployment", err)
 		// Upsert errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RootSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		// Use the upsert error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "Deployment reconcile failed")
 	}
-	rs.Status.Reconciler = reconcilerName
+	rs.Status.Reconciler = reconcilerRef.Name
 
 	// Get the latest deployment to check the status.
 	// For other operations, upsertDeployment will have returned the latest already.
 	if op == controllerutil.OperationResultNone {
-		deployObj, err = r.deployment(ctx, types.NamespacedName{
-			Namespace: v1.NSConfigManagementSystem,
-			Name:      reconcilerName,
-		})
+		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			log.Error(err, "Failed to get Deployment")
+			log.Error(err, "Managed object get failed",
+				logFieldObject, reconcilerRef.String(),
+				logFieldKind, "Deployment")
 			rootsync.SetStalled(rs, "Deployment", err)
 			// Get errors should always trigger retry (return error),
 			// even if status update is successful.
 			_, updateErr := r.updateStatus(ctx, currentRS, rs)
 			if updateErr != nil {
-				log.Error(updateErr, "failed to update RootSync status")
+				log.Error(updateErr, "Object status update failed",
+					logFieldObject, rsRef.String(),
+					logFieldKind, r.syncKind)
 			}
 			return controllerruntime.Result{}, err
 		}
@@ -251,13 +280,17 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	result, err := computeDeploymentStatus(deployObj)
 	if err != nil {
-		log.Error(err, "Failed to compute reconciler deployment status")
+		log.Error(err, "Managed object status check failed",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "Deployment")
 		rootsync.SetStalled(rs, "Deployment", err)
 		// Get errors should always trigger retry (return error),
 		// even if status update is successful.
 		_, updateErr := r.updateStatus(ctx, currentRS, rs)
 		if updateErr != nil {
-			log.Error(updateErr, "failed to update RootSync status")
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 		}
 		return controllerruntime.Result{}, err
 	}
@@ -293,7 +326,9 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	if updated && result.Status == kstatus.CurrentStatus {
-		r.log.Info("Deployment successfully reconciled", operationSubjectName, reconcilerName, executedOperation, op)
+		r.log.Info("Sync object successfully reconciled",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
 	}
 	return controllerruntime.Result{}, nil
 }
@@ -469,15 +504,9 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 
 func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
-		log.Error(err, "RootSync failed validation")
 		return err
 	}
-	if err := r.validateRootSecret(ctx, rs); err != nil {
-		log.Error(err, "RootSync failed Secret validation required for installation")
-		return err
-	}
-	log.V(2).Info("secret found, proceeding with installation")
-	return nil
+	return r.validateRootSecret(ctx, rs)
 }
 
 func (r *RootSyncReconciler) validateNamespaceName(namespaceName string) error {
@@ -503,33 +532,37 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context) error {
-	var childCRB rbacv1.ClusterRoleBinding
-	childCRB.Name = RootSyncPermissionsName()
+func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, rsNamespace, reconcilerNamespace string) (client.ObjectKey, error) {
+	crbRef := client.ObjectKey{Name: RootSyncPermissionsName()}
+	childCRB := &rbacv1.ClusterRoleBinding{}
+	childCRB.Name = crbRef.Name
 
-	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, &childCRB, func() error {
-		return r.mutateRootSyncClusterRoleBinding(ctx, &childCRB)
+	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childCRB, func() error {
+		return r.mutateRootSyncClusterRoleBinding(ctx, childCRB, rsNamespace, reconcilerNamespace)
 	})
 	if err != nil {
-		return err
+		return crbRef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("ClusterRoleBinding successfully reconciled", operationSubjectName, childCRB.Name, executedOperation, op)
+		r.log.Info("Managed object successfully reconciled",
+			logFieldObject, crbRef.String(),
+			logFieldKind, "ClusterRoleBinding",
+			executedOperation, op)
 	}
-	return nil
+	return crbRef, nil
 }
 
-func (r *RootSyncReconciler) mutateRootSyncClusterRoleBinding(ctx context.Context, crb *rbacv1.ClusterRoleBinding) error {
+func (r *RootSyncReconciler) mutateRootSyncClusterRoleBinding(ctx context.Context, crb *rbacv1.ClusterRoleBinding, rsNamespace, reconcilerNamespace string) error {
 	crb.OwnerReferences = nil
 
 	// Update rolereference.
 	crb.RoleRef = rolereference("cluster-admin", "ClusterRole")
 
-	rootsyncList := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, rootsyncList, client.InNamespace(configsync.ControllerNamespace)); err != nil {
+	rsList := &v1beta1.RootSyncList{}
+	if err := r.client.List(ctx, rsList, client.InNamespace(rsNamespace)); err != nil {
 		return errors.Wrapf(err, "failed to list the RootSync objects")
 	}
-	return r.updateClusterRoleBindingSubjects(crb, rootsyncList)
+	return r.updateClusterRoleBindingSubjects(crb, rsList, reconcilerNamespace)
 }
 
 func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RootSync) (bool, error) {
@@ -669,7 +702,8 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					if authTypeToken(rs.Spec.Auth) {
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
 					}
-					keys := GetKeys(ctx, r.client, secretName, rs.Namespace)
+					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: secretName}
+					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 				}

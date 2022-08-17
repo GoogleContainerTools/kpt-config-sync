@@ -27,18 +27,19 @@ import (
 
 // validateSecretExist validate the presence of secret in the cluster
 func validateSecretExist(ctx context.Context, secretRef, namespace string, c client.Client) (*corev1.Secret, error) {
-	secretNN := client.ObjectKey{
+	sRef := client.ObjectKey{
 		Name:      secretRef,
 		Namespace: namespace,
 	}
 
 	secret := &corev1.Secret{}
-	if err := c.Get(ctx, secretNN, secret); err != nil {
+	if err := c.Get(ctx, sRef, secret); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, errors.Errorf(
-				"%s not found. Create %s secret in %s namespace", secretRef, secretRef, namespace)
+				"secret %s not found: create one to allow client authentication", sRef)
 		}
-		return nil, errors.Errorf("error while retrieving git-creds secret: %v", err)
+		return nil, errors.Wrapf(err,
+			"secret %s get failed", sRef)
 	}
 	return secret, nil
 }
@@ -48,18 +49,18 @@ func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
 	switch auth {
 	case configsync.AuthSSH:
 		if _, ok := secret.Data[GitSecretConfigKeySSH]; !ok {
-			return fmt.Errorf("git secretType was set as \"ssh\" but ssh key is not present in %v secret", secret.Name)
+			return fmt.Errorf("git secretType was set as %q but ssh key is not present in %v secret", auth, secret.Name)
 		}
 	case configsync.AuthCookieFile:
 		if _, ok := secret.Data[GitSecretConfigKeyCookieFile]; !ok {
-			return fmt.Errorf("git secretType was set as \"cookiefile\" but cookie_file key is not present in %v secret", secret.Name)
+			return fmt.Errorf("git secretType was set as %q but cookie_file key is not present in %v secret", auth, secret.Name)
 		}
 	case configsync.AuthToken:
 		if _, ok := secret.Data[GitSecretConfigKeyToken]; !ok {
-			return fmt.Errorf("git secretType was set as \"token\" but token key is not present in %v secret", secret.Name)
+			return fmt.Errorf("git secretType was set as %q but token key is not present in %v secret", auth, secret.Name)
 		}
 		if _, ok := secret.Data[GitSecretConfigKeyTokenUsername]; !ok {
-			return fmt.Errorf("git secretType was set as \"token\" but username key is not present in %v secret", secret.Name)
+			return fmt.Errorf("git secretType was set as %q but username key is not present in %v secret", auth, secret.Name)
 		}
 	case configsync.AuthNone:
 	case configsync.AuthGCENode:

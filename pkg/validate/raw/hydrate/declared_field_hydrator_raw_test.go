@@ -29,8 +29,9 @@ func TestRawYAML(t *testing.T) {
 	// 1) If we used literal structs the protocol field would implicitly be added.
 	// 2) It's really annoying to specify these as Unstructureds.
 	testCases := []struct {
-		name string
-		yaml string
+		name   string
+		expErr bool
+		yaml   string
 	}{
 		{
 			name: "Pod",
@@ -66,6 +67,21 @@ spec:
 `,
 		},
 		{
+			name: "Pod with empty ports section should not error",
+			yaml: `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  containers:
+  - image: nginx:1.7.9
+    name: nginx
+    ports:
+`,
+		},
+		{
 			name: "Pod initContainers",
 			yaml: `
 apiVersion: v1
@@ -74,11 +90,44 @@ metadata:
   name: nginx
   namespace: bookstore
 spec:
+  containers:
+      - image: nginx:1.7.9
+        name: nginx
   initContainers:
   - image: nginx:1.7.9
     name: nginx
     ports:
     - containerPort: 80
+`,
+		},
+		{
+			name: "Pod initContainers empty - implicit",
+			yaml: `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  containers:
+    - image: nginx:1.7.9
+      name: nginx
+  initContainers:
+`,
+		},
+		{
+			name: "Pod initContainers empty - explicit",
+			yaml: `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  containers:
+    - image: nginx:1.7.9
+      name: nginx
+  initContainers: null
 `,
 		},
 		{
@@ -260,6 +309,50 @@ spec:
   - port: 80
 `,
 		},
+		{
+			name:   "Pod with empty containers field should error",
+			expErr: true,
+			yaml: `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  containers:
+`,
+		},
+		{
+			name:   "Pod with initContainers but not containers should error",
+			expErr: true,
+			yaml: `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  initContainers:
+  - image: nginx:1.7.9
+    name: nginx
+    ports:
+    - containerPort: 80
+`,
+		},
+		{
+			name:   "Service with no ports should error",
+			expErr: true,
+			yaml: `
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  selector:
+    app: nginx
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -284,7 +377,7 @@ spec:
 			}
 
 			err = DeclaredFields(objs)
-			if err != nil {
+			if err != nil && !tc.expErr {
 				t.Fatal(err)
 			}
 		})

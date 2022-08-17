@@ -16,6 +16,8 @@ package hydrate
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -132,7 +134,7 @@ func setDefaultProtocol(u *unstructured.Unstructured) status.MultiError {
 	case kinds.CronJob().GroupKind():
 		errs = setDefaultProtocolInNestedPodSpec(u.Object, "spec", "jobTemplate", "spec", "template", "spec")
 	case kinds.Service().GroupKind():
-		errs = setDefaultProtocolInNestedPorts(u.Object, "spec", "ports")
+		errs = setDefaultProtocolInNestedPorts(u.Object, true, "spec", "ports")
 	}
 
 	if len(errs) > 0 {
@@ -152,54 +154,66 @@ func setDefaultProtocol(u *unstructured.Unstructured) status.MultiError {
 }
 
 func setDefaultProtocolInNestedPodSpec(obj map[string]interface{}, fields ...string) []error {
+	// We have to use the generic NestedFieldNoCopy and manually cast to a map as unstructured.NestedMap
+	// returns a deepcopy of the object, which does not allow us to modify the object in place.
 	podSpec, found, err := unstructured.NestedFieldNoCopy(obj, fields...)
 	if err != nil {
-		return []error{err}
-	} else if found {
-		errs := setDefaultProtocolInPodSpec(podSpec)
-		if len(errs) > 0 {
-			return errs
-		}
+		return []error{fmt.Errorf("unable to get pod spec: %w", err)}
 	}
-	return nil
-}
+	if !found || podSpec == nil {
+		return []error{fmt.Errorf(".%s is required", strings.Join(fields, "."))}
+	}
 
-func setDefaultProtocolInPodSpec(podSpec interface{}) []error {
 	mPodSpec, ok := podSpec.(map[string]interface{})
 	if !ok {
-		return []error{errors.New("PodSpec must be a map")}
+		return []error{fmt.Errorf(".%s accessor error: %v is of the type %T, expected map[string]interface{}", strings.Join(fields, "."), podSpec, podSpec)}
 	}
 
+	return setDefaultProtocolInPodSpec(mPodSpec, fields)
+}
+
+func setDefaultProtocolInPodSpec(podSpec map[string]interface{}, fields []string) []error {
 	var errs []error
-	initContainers, found, err := unstructured.NestedSlice(mPodSpec, "initContainers")
+
+	// Use the more generic NestedField instead of NestedSlice. We can have occurences where
+	// the nested slice is empty/nill/null in the resource, causing unstructured.NestedSlice to
+	// error when it tries to assert nil to be []interface{}. We need to be able to ignore empty
+	// initContainers by handling nil values.
+	initContainers, found, err := unstructured.NestedFieldNoCopy(podSpec, "initContainers")
 	if err != nil {
 		errs = append(errs, err)
-	} else if found {
-		setErrs := setDefaultProtocolInContainers(initContainers)
-		if len(setErrs) == 0 {
-			err = unstructured.SetNestedSlice(mPodSpec, initContainers, "initContainers")
-			if err != nil {
-				errs = append(errs, err)
-			}
+	} else if found && initContainers != nil {
+		initContainersSlice, ok := initContainers.([]interface{})
+		if !ok {
+			errs = append(errs, fmt.Errorf(".%s.initContainers accessor error: %v is of the type %T, expected []interface{}", strings.Join(fields, "."), initContainers, initContainers))
 		} else {
-			errs = append(errs, setErrs...)
+			errs = updateDefaultProtocolInContainers(podSpec, initContainersSlice, "initContainers", errs)
 		}
 	}
 
-	containers, found, err := unstructured.NestedSlice(mPodSpec, "containers")
+	// We don't need to use the generic NestedField function since we want it to error
+	// if the containers field is empty. A pod spec with no containers field is invalid.
+	containers, found, err := unstructured.NestedSlice(podSpec, "containers")
 	if err != nil {
 		errs = append(errs, err)
 	} else if found {
-		setErrs := setDefaultProtocolInContainers(containers)
-		if len(setErrs) == 0 {
-			err = unstructured.SetNestedSlice(mPodSpec, containers, "containers")
-			if err != nil {
-				errs = append(errs, err)
-			}
-		} else {
-			errs = append(errs, setErrs...)
-		}
+		errs = updateDefaultProtocolInContainers(podSpec, containers, "containers", errs)
 	}
+
+	return errs
+}
+
+func updateDefaultProtocolInContainers(podSpec map[string]interface{}, containers []interface{}, field string, errs []error) []error {
+	setErrs := setDefaultProtocolInContainers(containers)
+	if len(setErrs) != 0 {
+		return append(errs, setErrs...)
+	}
+
+	err := unstructured.SetNestedSlice(podSpec, containers, field)
+	if err != nil {
+		return append(errs, err)
+	}
+
 	return errs
 }
 
@@ -220,26 +234,38 @@ func setDefaultProtocolInContainer(container interface{}) []error {
 		return []error{errors.New("container must be a map")}
 	}
 
-	return setDefaultProtocolInNestedPorts(mContainer, "ports")
+	return setDefaultProtocolInNestedPorts(mContainer, false, "ports")
 }
 
-func setDefaultProtocolInNestedPorts(obj map[string]interface{}, fields ...string) []error {
-	var errs []error
-	ports, found, err := unstructured.NestedSlice(obj, fields...)
+func setDefaultProtocolInNestedPorts(obj map[string]interface{}, mustExist bool, fields ...string) []error {
+	ports, found, err := unstructured.NestedFieldNoCopy(obj, fields...)
 	if err != nil {
-		errs = append(errs, err)
-	} else if found {
-		setErrs := setDefaultProtocolInPorts(ports)
-		if setErrs == nil {
-			err = unstructured.SetNestedSlice(obj, ports, fields...)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		} else {
-			errs = append(errs, setErrs...)
-		}
+		return []error{err}
 	}
-	return errs
+	if !found || ports == nil {
+		// Service resource requires the port field to be specified, or it is not a valid resource.
+		if mustExist {
+			return []error{fmt.Errorf(".%s is required", strings.Join(fields, "."))}
+		}
+		// Other resources can have empty ports field, and we can gracefully return early.
+		return nil
+	}
+
+	sPorts, ok := ports.([]interface{})
+	if !ok {
+		return []error{fmt.Errorf(".%s accessor error: %v is of the type %T, expected []interface{}", strings.Join(fields, "."), ports, ports)}
+	}
+
+	setErrs := setDefaultProtocolInPorts(sPorts)
+	if len(setErrs) != 0 {
+		return setErrs
+	}
+
+	err = unstructured.SetNestedSlice(obj, sPorts, fields...)
+	if err != nil {
+		return []error{err}
+	}
+	return nil
 }
 
 func setDefaultProtocolInPorts(ports []interface{}) []error {

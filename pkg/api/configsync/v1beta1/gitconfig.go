@@ -81,7 +81,7 @@ type Git struct {
 
 	// caCertSecretRef specifies the name of the secret where the CA certificate is stored.
 	// The creation of the secret should be done out of band by the user and should store the
-	// certificate in a key named "cert". For RepoSync resources, the secret should be
+	// certificate in a key named "cert". For RepoSync resources, the secret must be
 	// created in the same namespace as the RepoSync. For RootSync resource, the secret
 	// must be created in the config-management-system namespace.
 	// +nullable

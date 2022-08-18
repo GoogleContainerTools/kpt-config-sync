@@ -47,8 +47,10 @@ type Hydrator struct {
 	Password    string
 }
 
-func (h *Hydrator) templateArgs(destDir string) []string {
+func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
 	args := []string{"template"}
+	var err error
+
 	if h.ReleaseName != "" {
 		args = append(args, h.ReleaseName)
 	}
@@ -57,6 +59,10 @@ func (h *Hydrator) templateArgs(destDir string) []string {
 	} else {
 		args = append(args, h.Chart)
 		args = append(args, "--repo", h.Repo)
+		args, err = h.appendAuthArgs(ctx, args)
+		if err != nil {
+			return []string{}, err
+		}
 	}
 	if h.Namespace != "" {
 		args = append(args, "--namespace", h.Namespace)
@@ -78,22 +84,14 @@ func (h *Hydrator) templateArgs(destDir string) []string {
 		args = append(args, "--include-crds")
 	}
 	args = append(args, "--output-dir", destDir)
-	return args
+	return args, nil
 }
 
 func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
 	args := []string{"registry", "login"}
-	switch h.Auth {
-	case configsync.AuthToken:
-		args = append(args, "--username", h.UserName)
-		args = append(args, "--password", h.Password)
-	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
-		token, err := fetchNewToken(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch new token: %w", err)
-		}
-		args = append(args, "--username", "oauth2accesstoken")
-		args = append(args, "--password", token.AccessToken)
+	args, err := h.appendAuthArgs(ctx, args)
+	if err != nil {
+		return []string{}, err
 	}
 	res := strings.Split(strings.TrimPrefix(h.Repo, "oci://"), "/")
 	args = append(args, "https://"+res[0])
@@ -135,7 +133,10 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))
 		}
 	}
-	args := h.templateArgs(destDir)
+	args, err := h.templateArgs(ctx, destDir)
+	if err != nil {
+		return err
+	}
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
@@ -146,4 +147,20 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 
 func (h *Hydrator) isOCI() bool {
 	return strings.HasPrefix(h.Repo, "oci://")
+}
+
+func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string, error) {
+	switch h.Auth {
+	case configsync.AuthToken:
+		args = append(args, "--username", h.UserName)
+		args = append(args, "--password", h.Password)
+	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
+		token, err := fetchNewToken(ctx)
+		if err != nil {
+			return []string{}, fmt.Errorf("failed to fetch new token: %w", err)
+		}
+		args = append(args, "--username", "oauth2accesstoken")
+		args = append(args, "--password", token.AccessToken)
+	}
+	return args, nil
 }

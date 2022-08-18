@@ -237,8 +237,8 @@ license-headers: "$(GOBIN)/addlicense"
 	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'
 
 .PHONY: lint-license-headers
-lint-license-headers:
-	"$(GOBIN)/addlicense" -check -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'
+lint-license-headers: "$(GOBIN)/addlicense"
+	GOBIN=$(GOBIN) ./scripts/lint-license-headers.sh
 
 lint-yaml:
 	@./scripts/lint-yaml.sh

@@ -94,6 +94,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 		ntopts.Unstructured,
 		ntopts.RequireGKE(t),
 	)
+	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Fetch password from Secret Manager")
@@ -109,6 +110,11 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}, "git": null}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
+	nt.T.Cleanup(func() {
+		// Change the rs back so that it works in the shared test environment.
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
+			v1beta1.GitSource, origRepoURL))
+	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},

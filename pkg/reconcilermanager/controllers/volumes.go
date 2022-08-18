@@ -32,14 +32,14 @@ const GitCredentialVolume = "git-creds"
 // HelmCredentialVolume is the volume name of the git credentials.
 const HelmCredentialVolume = "helm-creds"
 
-// PrivateCertVolume is the volume name of the private certificate.
-const PrivateCertVolume = "private-cert"
+// CACertVolume is the volume name of the CA certificate.
+const CACertVolume = "ca-cert"
 
-// PrivateCertKey is the secret key that contains the private certificate.
-const PrivateCertKey = "cert"
+// CACertSecretKey is the name of the key in the Secret's data map whose value holds the CA cert
+const CACertSecretKey = "cert"
 
-// PrivateCertPath is the path where the certificate is mounted.
-const PrivateCertPath = "/etc/private-cert"
+// CACertPath is the path where the certificate is mounted.
+const CACertPath = "/etc/ca-cert"
 
 // defaultMode is the default permission of the `gcp-ksa` volume.
 var defaultMode int32 = 0644
@@ -52,7 +52,7 @@ var expirationSeconds = int64((48 * time.Hour).Seconds())
 // filterVolumes returns the volumes depending on different auth types.
 // If authType is `none`, `gcenode`, or `gcpserviceaccount`, it won't mount the `git-creds` volume.
 // If authType is `gcpserviceaccount` with fleet membership available, it also mounts a `gcp-ksa` volume.
-func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secretName, privateCertSecret, sourceType string, membership *hubv1.Membership) []corev1.Volume {
+func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secretName, caCertSecretName, sourceType string, membership *hubv1.Membership) []corev1.Volume {
 	var updatedVolumes []corev1.Volume
 
 	for _, volume := range existing {
@@ -71,16 +71,16 @@ func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secre
 		updatedVolumes = append(updatedVolumes, volume)
 	}
 
-	if usePrivateCert(privateCertSecret) {
+	if useCACert(caCertSecretName) {
 		updatedVolumes = append(updatedVolumes, corev1.Volume{
-			Name: PrivateCertVolume,
+			Name: CACertVolume,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: privateCertSecret,
+					SecretName: caCertSecretName,
 					Items: []corev1.KeyToPath{
 						{
-							Key:  PrivateCertKey,
-							Path: PrivateCertKey,
+							Key:  CACertSecretKey,
+							Path: CACertSecretKey,
 						},
 					},
 					DefaultMode: &defaultMode,
@@ -125,12 +125,12 @@ func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secre
 
 // volumeMounts returns a sorted list of VolumeMounts by filtering out git-creds
 // VolumeMount when secret is 'none' or 'gcenode'.
-func volumeMounts(auth configsync.AuthType, privateCertSecret, sourceType string, vm []corev1.VolumeMount) []corev1.VolumeMount {
+func volumeMounts(auth configsync.AuthType, caCertSecretRef, sourceType string, vm []corev1.VolumeMount) []corev1.VolumeMount {
 	var volumeMount []corev1.VolumeMount
-	if usePrivateCert(privateCertSecret) {
+	if useCACert(caCertSecretRef) {
 		volumeMount = append(volumeMount, corev1.VolumeMount{
-			MountPath: PrivateCertPath,
-			Name:      PrivateCertVolume,
+			MountPath: CACertPath,
+			Name:      CACertVolume,
 			ReadOnly:  true,
 		})
 	}

@@ -394,13 +394,13 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}); err != nil {
 		return err
 	}
-	// Index the `privateCertSecretField` field, so that we will be able to lookup RepoSync be a referenced `privateCertSecretField` name.
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, privateCertSecretField, func(rawObj client.Object) []string {
+	// Index the `caCertSecretRefField` field, so that we will be able to lookup RepoSync be a referenced `caCertSecretRefField` name.
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, caCertSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RepoSync)
-		if rs.Spec.Git == nil || rs.Spec.Git.PrivateCertSecret.Name == "" {
+		if rs.Spec.Git == nil || rs.Spec.Git.CACertSecretRef.Name == "" {
 			return nil
 		}
-		return []string{rs.Spec.Git.PrivateCertSecret.Name}
+		return []string{rs.Spec.Git.CACertSecretRef.Name}
 	}); err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	// The user-managed ns-reconciler Secret might be shared among multiple RepoSync objects in the same namespace,
 	// so requeue all the attached RepoSync objects.
 	attachedRepoSyncs := &v1beta1.RepoSyncList{}
-	secretFields := []string{gitSecretRefField, privateCertSecretField, helmSecretRefField}
+	secretFields := []string{gitSecretRefField, caCertSecretRefField, helmSecretRefField}
 	for _, secretField := range secretFields {
 		listOps := &client.ListOptions{
 			FieldSelector: fields.OneTermEqualSelector(secretField, secret.GetName()),
@@ -674,15 +674,15 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
 		result[reconcilermanager.GitSync] = gitSyncEnvs(ctx, options{
-			ref:               rs.Spec.Git.Revision,
-			branch:            rs.Spec.Git.Branch,
-			repo:              rs.Spec.Git.Repo,
-			secretType:        rs.Spec.Git.Auth,
-			period:            v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
-			proxy:             rs.Spec.Proxy,
-			depth:             rs.Spec.Override.GitSyncDepth,
-			noSSLVerify:       rs.Spec.Git.NoSSLVerify,
-			privateCertSecret: rs.Spec.Git.PrivateCertSecret.Name,
+			ref:             rs.Spec.Git.Revision,
+			branch:          rs.Spec.Git.Branch,
+			repo:            rs.Spec.Git.Repo,
+			secretType:      rs.Spec.Git.Auth,
+			period:          v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
+			proxy:           rs.Spec.Proxy,
+			depth:           rs.Spec.Override.GitSyncDepth,
+			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
+			caCertSecretRef: rs.Spec.Git.CACertSecretRef.Name,
 		})
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
@@ -830,13 +830,13 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		var auth configsync.AuthType
 		var gcpSAEmail string
 		var secretRefName string
-		var privateCertSecret string
+		var caCertSecretRefName string
 		switch v1beta1.SourceType(rs.Spec.SourceType) {
 		case v1beta1.GitSource:
 			auth = rs.Spec.Auth
 			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
 			secretRefName = rs.Spec.SecretRef.Name
-			privateCertSecret = rs.Spec.Git.PrivateCertSecret.Name
+			caCertSecretRefName = rs.Spec.Git.CACertSecretRef.Name
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
@@ -866,10 +866,10 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		// authenticate with the git or helm repository using the authorization method specified
 		// in the RepoSync CR.
 		secretName := ReconcilerResourceName(reconcilerName, secretRefName)
-		if usePrivateCert(privateCertSecret) {
-			privateCertSecret = ReconcilerResourceName(reconcilerName, privateCertSecret)
+		if useCACert(caCertSecretRefName) {
+			caCertSecretRefName = ReconcilerResourceName(reconcilerName, caCertSecretRefName)
 		}
-		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, privateCertSecret, rs.Spec.SourceType, r.membership)
+		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, caCertSecretRefName, rs.Spec.SourceType, r.membership)
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.
 		for _, container := range templateSpec.Containers {
@@ -914,7 +914,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
-					container.VolumeMounts = volumeMounts(rs.Spec.Auth, privateCertSecret, rs.Spec.SourceType, container.VolumeMounts)
+					container.VolumeMounts = volumeMounts(rs.Spec.Auth, caCertSecretRefName, rs.Spec.SourceType, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
 					if authTypeToken(rs.Spec.Auth) {

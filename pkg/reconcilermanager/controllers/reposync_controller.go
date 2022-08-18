@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -65,8 +65,6 @@ type RepoSyncReconciler struct {
 	reconcilerBase
 	// repoSyncs is a cache of the reconciled RepoSync objects.
 	repoSyncs map[types.NamespacedName]struct{}
-
-	lock sync.Mutex
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
@@ -90,9 +88,6 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 
 // Reconcile the RepoSync resource.
 func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	rsRef := req.NamespacedName
 	log := r.log.WithValues("reposync", rsRef)
 	start := time.Now()
@@ -106,7 +101,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err = r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(rsRef)
 			if _, ok := r.repoSyncs[rsRef]; !ok {
 				log.Error(err, "Sync object not managed by this reconciler-manager",
 					logFieldObject, rsRef.String(),
@@ -123,13 +117,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			return controllerruntime.Result{}, cleanupErr
 		}
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RepoSync")
-	}
-
-	// The caching client sometimes returns an old R*Sync, because the watch
-	// hasn't received the update event yet. If so, error and retry.
-	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
-		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
 	}
 
 	currentRS := rs.DeepCopy()
@@ -419,23 +406,29 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).
-		For(&v1beta1.RepoSync{}).
-		// Custom Watch to trigger Reconcile for objects created by RepoSync controller.
+		// Reconcile RepoSyncs in all namespaces
+		For(&v1beta1.RepoSync{},
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RepoSync reconcile when a managed or user-managed Secret changes.
 		Watches(&source.Kind{Type: &corev1.Secret{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRepoSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &appsv1.Deployment{}},
+		// Trigger RepoSync reconcile when a managed Deployment changes.
+		Watches(&source.Kind{Type: &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Namespace: v1.NSConfigManagementSystem}}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RepoSync reconcile when a managed ServiceAccount changes.
 		Watches(&source.Kind{Type: &corev1.ServiceAccount{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RepoSync reconcile when a managed RoleBinding changes.
 		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
-		// Custom Watch for membership to trigger reconciliation.
+		// Trigger RepoSync reconcile when a managed (Fleet) Membership changes.
 		controllerBuilder.Watches(&source.Kind{Type: &hubv1.Membership{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRepoSyncs()),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
@@ -480,14 +473,11 @@ func (r *RepoSyncReconciler) requeueAllRepoSyncs() []reconcile.Request {
 	requests := make([]reconcile.Request, len(allRepoSyncs.Items))
 	for i, rs := range allRepoSyncs.Items {
 		requests[i] = reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: client.ObjectKeyFromObject(&rs),
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to membership trigger reconciliations for %d RepoSync objects.", len(allRepoSyncs.Items))
+		klog.Infof("Changes to Membership enqueued reconciliation for %d RepoSync objects", len(allRepoSyncs.Items))
 	}
 	return requests
 }
@@ -557,18 +547,17 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 		attachedRepoSyncs.Items = append(attachedRepoSyncs.Items, fetchedRepoSyncs.Items...)
 	}
 	requests := make([]reconcile.Request, len(attachedRepoSyncs.Items))
-	attachedRSNames := make([]string, len(attachedRepoSyncs.Items))
+	rsRefs := make([]string, len(attachedRepoSyncs.Items))
 	for i, rs := range attachedRepoSyncs.Items {
-		attachedRSNames[i] = rs.GetName()
+		rsRef := client.ObjectKeyFromObject(&rs)
+		rsRefs[i] = rsRef.String()
 		requests[i] = reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: rsRef,
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to Secret (name: %s, namespace: %s) triggers a reconciliation for the RepoSync object %q in the same namespace.", secret.GetName(), secret.GetNamespace(), strings.Join(attachedRSNames, ", "))
+		klog.Infof("Changes to Secret (%s) enqueued reconciliation for RepoSync object(s): %s",
+			client.ObjectKeyFromObject(secret), strings.Join(rsRefs, ", "))
 	}
 	return requests
 }
@@ -604,18 +593,15 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 	// All RepoSync objects share the same RoleBinding object, so requeue all RepoSync objects the RoleBinding is changed.
 	// For other resources, requeue the mapping RepoSync object and then return.
 	var requests []reconcile.Request
-	var attachedRSNames []string
+	var rsRefs []string
 	for _, rs := range allRepoSyncs.Items {
 		reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.RoleBinding:
 			if obj.GetName() == nsRoleBindingName {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name:      rs.GetName(),
-						Namespace: rs.GetNamespace(),
-					}})
-				attachedRSNames = append(attachedRSNames, rs.GetName())
+				rsRef := client.ObjectKeyFromObject(&rs)
+				rsRefs = append(rsRefs, rsRef.String())
+				requests = append(requests, reconcile.Request{NamespacedName: rsRef})
 			}
 		default: // Deployment and ServiceAccount
 			if obj.GetName() == reconcilerName {
@@ -624,44 +610,19 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to %s (name: %s, namespace: %s) triggers a reconciliation for the RepoSync objects %q in the same namespace.",
-			obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), obj.GetNamespace(), strings.Join(attachedRSNames, ", "))
+		klog.Infof("Changes to %s (%s) enqueued reconciliation for RepoSync object(s): %s",
+			obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), strings.Join(rsRefs, ", "))
 	}
 	return requests
 }
 
-// addTypeInformationToObject adds TypeMeta information to a runtime.Object based upon the loaded scheme.Scheme
-// inspired by: https://github.com/kubernetes/cli-runtime/blob/v0.19.2/pkg/printers/typesetter.go#L41.
-// Note: The function only works for GVKs registered with the local scheme with exact version matching.
-func (r *RepoSyncReconciler) addTypeInformationToObject(obj runtime.Object) error {
-	gvks, _, err := r.scheme.ObjectKinds(obj)
-	if err != nil {
-		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
-	}
-
-	for _, gvk := range gvks {
-		if len(gvk.Kind) == 0 {
-			continue
-		}
-		if len(gvk.Version) == 0 || gvk.Version == runtime.APIVersionInternal {
-			continue
-		}
-		obj.GetObjectKind().SetGroupVersionKind(gvk)
-		break
-	}
-
-	return nil
-}
-
 func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile.Request {
-	klog.Infof("Changes to %s (name: %s, namespace: %s) triggers a reconciliation for the RepoSync object %q in the same namespace.",
-		obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), obj.GetNamespace(), rs.GetName())
+	rsRef := client.ObjectKeyFromObject(rs)
+	klog.Infof("Changes to %s (%s) enqueued reconciliation for RepoSync object: %s",
+		obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), rsRef)
 	return []reconcile.Request{
 		{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: rsRef,
 		},
 	}
 }
@@ -806,15 +767,10 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	resourceVersion := rs.ResourceVersion
-
 	err := r.client.Status().Update(ctx, rs)
 	if err != nil {
 		return false, err
 	}
-
-	// Register the latest ResourceVersion as reconciled.
-	r.setLastReconciled(core.ObjectNamespacedName(rs), resourceVersion)
 	return true, nil
 }
 

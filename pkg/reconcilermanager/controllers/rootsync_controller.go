@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -74,8 +73,6 @@ const (
 // RootSyncReconciler reconciles a RootSync object
 type RootSyncReconciler struct {
 	reconcilerBase
-
-	lock sync.Mutex
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
@@ -98,9 +95,6 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 
 // Reconcile the RootSync resource.
 func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	rsRef := req.NamespacedName
 	log := r.log.WithValues("rootsync", rsRef)
 	start := time.Now()
@@ -114,17 +108,9 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err = r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(rsRef)
 			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef.Namespace)
 		}
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
-	}
-
-	// The caching client sometimes returns an old R*Sync, because the watch
-	// hasn't received the update event yet. If so, error and retry.
-	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
-		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
 	}
 
 	currentRS := rs.DeepCopy()
@@ -350,19 +336,97 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).
-		For(&v1beta1.RootSync{}).
-		Owns(&appsv1.Deployment{}).
-		Watches(&source.Kind{Type: &corev1.Secret{}},
+		// Reconcile RootSync in all namespaces.
+		// Reconcile adds an error condition if not in the controller namespace.
+		For(&v1beta1.RootSync{},
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RootSync reconcile when a managed Deployment changes.
+		// OwnerReferences added by reconcile, enabling garbage collection.
+		Owns(&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Namespace: configmanagement.ControllerNamespace}},
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RootSync reconcile when a managed ServiceAccount changes.
+		// OwnerReferences added by reconcile, enabling garbage collection.
+		Owns(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{Namespace: configmanagement.ControllerNamespace}},
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RootSync reconcile when a user-managed Secret changes.
+		Watches(&source.Kind{Type: &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: configmanagement.ControllerNamespace}}},
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRootSyncs),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// Trigger RootSync reconcile when a managed ClusterRoleBinding changes.
+		// ClusterRoleBindings are shared between RootSync, not owned by any one.
+		Watches(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
-		// Custom Watch for membership to trigger reconciliation.
+		// Trigger RootSync reconcile when a managed (Fleet) Membership changes.
 		controllerBuilder.Watches(&source.Kind{Type: &hubv1.Membership{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs()),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
 	return controllerBuilder.Complete(r)
+}
+
+// mapObjectToRootSync define a mapping from an object in 'config-management-system'
+// namespace to a RootSync to be reconciled.
+func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.Request {
+	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
+	// because all the generated resources have the prefix.
+	roleBindingName := RootSyncPermissionsName()
+	if !strings.HasPrefix(obj.GetName(), core.RootReconcilerPrefix) && obj.GetName() != roleBindingName {
+		return nil
+	}
+
+	if err := r.addTypeInformationToObject(obj); err != nil {
+		klog.Errorf("failed to add type information to object (name: %s, namespace: %s): %v", obj.GetName(), obj.GetNamespace(), err)
+		return nil
+	}
+
+	allRootSyncs := &v1beta1.RootSyncList{}
+	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
+		klog.Error("failed to list all RootSyncs for object (name: %s, namespace: %s): %v", obj.GetName(), obj.GetNamespace(), err)
+		return nil
+	}
+
+	// Most of the resources are mapped to a single RootSync object except ClusterRoleBinding.
+	// All RootSync objects share the same ClusterRoleBinding object, so requeue all RootSync objects if the ClusterRoleBinding is changed.
+	// For other resources, requeue the mapping RootSync object and then return.
+	var requests []reconcile.Request
+	var rsRefs []string
+	for _, rs := range allRootSyncs.Items {
+		reconcilerName := core.RootReconcilerName(rs.GetName())
+		switch obj.(type) {
+		case *rbacv1.ClusterRoleBinding:
+			if obj.GetName() == roleBindingName {
+				rsRef := client.ObjectKeyFromObject(&rs)
+				rsRefs = append(rsRefs, rsRef.String())
+				requests = append(requests, reconcile.Request{NamespacedName: rsRef})
+			}
+		default: // Deployment and ServiceAccount
+			if obj.GetName() == reconcilerName {
+				return requeueRootSyncRequest(obj, &rs)
+			}
+		}
+	}
+	if len(requests) > 0 {
+		klog.Infof("Changes to %s (%s) enqueued reconciliation for RootSync object(s): %s",
+			obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), strings.Join(rsRefs, ", "))
+	}
+	return requests
+}
+
+func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile.Request {
+	rsRef := client.ObjectKeyFromObject(rs)
+	klog.Infof("Changes to %s (%s) enqueued reconciliation for RootSync object: %s",
+		obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), rsRef)
+	return []reconcile.Request{
+		{
+			NamespacedName: rsRef,
+		},
+	}
 }
 
 func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []reconcile.Request {
@@ -402,14 +466,11 @@ func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
 	requests := make([]reconcile.Request, len(allRootSyncs.Items))
 	for i, rs := range allRootSyncs.Items {
 		requests[i] = reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: client.ObjectKeyFromObject(&rs),
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to membership trigger reconciliations for %d RootSync objects.", len(allRootSyncs.Items))
+		klog.Infof("Changes to Membership enqueued reconciliation for %d RootSync objects", len(allRootSyncs.Items))
 	}
 	return requests
 }
@@ -440,18 +501,17 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 	}
 
 	requests := make([]reconcile.Request, len(attachedRootSyncs.Items))
-	attachedRSNames := make([]string, len(attachedRootSyncs.Items))
+	rsRefs := make([]string, len(attachedRootSyncs.Items))
 	for i, rs := range attachedRootSyncs.Items {
-		attachedRSNames[i] = rs.GetName()
+		rsRef := client.ObjectKeyFromObject(&rs)
+		rsRefs[i] = rsRef.String()
 		requests[i] = reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: rsRef,
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to Secret (name: %s, namespace: %s) triggers a reconciliation for the RootSync objects: %s", secret.GetName(), secret.GetNamespace(), strings.Join(attachedRSNames, ", "))
+		klog.Infof("Changes to Secret (%s) enqueued reconciliation for RootSync object(s): %s",
+			client.ObjectKeyFromObject(secret), strings.Join(rsRefs, ", "))
 	}
 	return requests
 }
@@ -579,15 +639,10 @@ func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	resourceVersion := rs.ResourceVersion
-
 	err := r.client.Status().Update(ctx, rs)
 	if err != nil {
 		return false, err
 	}
-
-	// Register the latest ResourceVersion as reconciled.
-	r.setLastReconciled(core.ObjectNamespacedName(rs), resourceVersion)
 	return true, nil
 }
 

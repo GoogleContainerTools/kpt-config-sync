@@ -19,6 +19,7 @@
 # tag via the git CLI.  This script should be limited to this specific purpose.
 
 set -eo pipefail
+set +o history
 
 ####################################################################################################
 # FUNCTION DECLARATIONS
@@ -84,8 +85,11 @@ if ! [[ "${CS_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   err "Error: CS_VERSION must be in the form v1.2.3 - got ${CS_VERSION}"
 fi
 
+REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
+# Use Github access token if provided
+[[ -n "${GH_TOKEN}" ]] && REMOTE="https://${GH_TOKEN}@github.com/GoogleContainerTools/kpt-config-sync.git"
 # Fetch all existing tags
-git fetch --tags > /dev/null
+git fetch "${REMOTE}" --tags > /dev/null
 echo "+++ Successfully fetched tags"
 
 RC=$(latest_rc_of_version "$CS_VERSION")
@@ -98,5 +102,4 @@ git tag -a "$NEXT_RC" -m "Release candidate $NEXT_RC"
 echo "+++ Successfully tagged commit $(git rev-parse HEAD) as ${NEXT_RC}"
 
 echo "+++ Pushing RC tag"
-REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
 git push "${REMOTE}" "${NEXT_RC}"

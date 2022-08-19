@@ -26,21 +26,27 @@ set -eo pipefail
 # It's crucial that error messages in these functions be sent to stderr with 1>&2.
 # Otherwise, they will not bubble up to the make target that calls this script.
 
+err () {
+  local msg="$1"
+  echo "${msg}" 1>&2
+  exit 1
+}
+
 latest_rc_of_version () {
   local version="$1"
   if [ -z "$version" ]; then
-    echo "Error: function expects version argument" 1>&2
-    exit 1
+    err "Error: function expects version argument"
   fi
 
 
   # 1. Get all the versions with the right prefix,
   # 2. order them by their "rc.X" values
   # 3. Take the last/highest one
-  rc=$(git tag --list "$version*" | sort -V | tail -n 1)
+  rc=$(git tag --list "${version}-rc.*" | sort -V | tail -n 1)
   if [ -z "$rc" ]; then
-    echo "Error: no RC found with prefix: ${version}" 1>&2
-    exit 1
+    # Return contrived initial zero tag. It will get incremented to 1.
+    rc="${version}-rc.0"
+    echo "no RC found for ${version} - Creating initial RC" 1>&2
   fi
   echo "$rc"
 }
@@ -55,8 +61,7 @@ increment_rc_of_semver () {
   local semver="${1}"
 
   if [ -z "$semver" ]; then
-    echo "Error: must pass an argument in SEMVER style.  Looks like vMAJOR.MINOR.PATCH-rc.X" 1>&2
-    exit 1
+    err "Error: must pass an argument in SEMVER style.  Looks like vMAJOR.MINOR.PATCH-rc.X"
   fi
 
   # Split the semver string on "."
@@ -74,14 +79,9 @@ increment_rc_of_semver () {
 
 ####################################################################################################
 
-if [ -z "$CS_VERSION" ]; then
-  echo "Error: must specify enviroment variable CS_VERSION in style vMAJOR.MINOR.PATCH" 1>&2
-  exit 1
-fi
-
-# If a user omits the leading "v" (enters 1.2.3 instead of v1.2.3), handle it.
-if ! [[ "${CS_VERSION}" = v* ]]; then
-  CS_VERSION="v${CS_VERSION}"
+# If a user omits the leading "v" (enters 1.2.3 instead of v1.2.3), throw an error.
+if ! [[ "${CS_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  err "Error: CS_VERSION must be in the form v1.2.3 - got ${CS_VERSION}"
 fi
 
 # Fetch all existing tags
@@ -95,4 +95,8 @@ NEXT_RC=$(increment_rc_of_semver "$RC")
 echo "+++ Incremented RC.  NEXT_RC: $NEXT_RC"
 
 git tag -a "$NEXT_RC" -m "Release candidate $NEXT_RC"
-echo "+++ Succesfully tagged commit $(git rev-parse HEAD) as $NEXT_RC"
+echo "+++ Successfully tagged commit $(git rev-parse HEAD) as ${NEXT_RC}"
+
+echo "+++ Pushing RC tag"
+REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
+git push "${REMOTE}" "${NEXT_RC}"

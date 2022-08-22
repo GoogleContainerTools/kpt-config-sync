@@ -38,7 +38,7 @@ import (
 // created in config-management-system namespace instead of reposync namespace.
 //
 // NOTE: Update this method when resources created by namespace controller changes.
-func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, rsKey, reconcilerKey types.NamespacedName) error {
+func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, rsKey, reconcilerRef types.NamespacedName) error {
 	r.log.Info("Deleting managed objects",
 		logFieldObject, rsKey.String(),
 		logFieldKind, r.syncKind)
@@ -52,23 +52,23 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, r
 	// of errors to try cleaning up resources again.
 
 	// Deployment
-	if err := r.deleteDeployment(ctx, reconcilerKey); err != nil {
+	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
 		return err
 	}
 	// configmaps
-	if err := r.deleteConfigMaps(ctx, reconcilerKey); err != nil {
+	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
 		return err
 	}
 	// serviceaccount
-	if err := r.deleteServiceAccount(ctx, reconcilerKey); err != nil {
+	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
 		return err
 	}
 	// rolebinding
-	if err := r.deleteRoleBinding(ctx, rsList, rsKey.Namespace, reconcilerKey.Namespace); err != nil {
+	if err := r.deleteRoleBinding(ctx, rsList, rsKey.Namespace, reconcilerRef.Namespace); err != nil {
 		return err
 	}
 	// secret
-	if err := r.deleteSecrets(ctx, reconcilerKey); err != nil {
+	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
 		return err
 	}
 
@@ -83,27 +83,27 @@ func (r *reconcilerBase) cleanup(ctx context.Context, key types.NamespacedName, 
 	u.SetGroupVersionKind(gvk)
 	if err := r.client.Delete(ctx, u); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.log.Info("Object already deleted",
+			r.log.Info("Managed object already deleted",
 				logFieldObject, key.String(),
 				logFieldKind, gvk.Kind)
 			return nil
 		}
 		return err
 	}
-	r.log.Info("Object successfully deleted",
+	r.log.Info("Managed object delete successful",
 		logFieldObject, key.String(),
 		logFieldKind, gvk.Kind)
 	return nil
 }
 
-func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerKey types.NamespacedName) error {
+func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerRef types.NamespacedName) error {
 	secretList := &corev1.SecretList{}
-	if err := r.client.List(ctx, secretList, client.InNamespace(reconcilerKey.Namespace)); err != nil {
+	if err := r.client.List(ctx, secretList, client.InNamespace(reconcilerRef.Namespace)); err != nil {
 		return err
 	}
 
 	for _, s := range secretList.Items {
-		if strings.HasPrefix(s.Name, reconcilerKey.Name) {
+		if strings.HasPrefix(s.Name, reconcilerRef.Name) {
 			if err := r.cleanup(ctx, client.ObjectKeyFromObject(&s), kinds.Secret()); err != nil {
 				return err
 			}
@@ -112,14 +112,14 @@ func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerKey ty
 	return nil
 }
 
-func (r *RepoSyncReconciler) deleteConfigMaps(ctx context.Context, reconcilerKey types.NamespacedName) error {
+func (r *RepoSyncReconciler) deleteConfigMaps(ctx context.Context, reconcilerRef types.NamespacedName) error {
 	cms := []string{
-		ReconcilerResourceName(reconcilerKey.Name, reconcilermanager.Reconciler),
-		ReconcilerResourceName(reconcilerKey.Name, reconcilermanager.HydrationController),
-		ReconcilerResourceName(reconcilerKey.Name, reconcilermanager.GitSync),
+		ReconcilerResourceName(reconcilerRef.Name, reconcilermanager.Reconciler),
+		ReconcilerResourceName(reconcilerRef.Name, reconcilermanager.HydrationController),
+		ReconcilerResourceName(reconcilerRef.Name, reconcilermanager.GitSync),
 	}
 	for _, name := range cms {
-		key := types.NamespacedName{Namespace: reconcilerKey.Namespace, Name: name}
+		key := types.NamespacedName{Namespace: reconcilerRef.Namespace, Name: name}
 		if err := r.cleanup(ctx, key, kinds.ConfigMap()); err != nil {
 			return err
 		}
@@ -127,8 +127,8 @@ func (r *RepoSyncReconciler) deleteConfigMaps(ctx context.Context, reconcilerKey
 	return nil
 }
 
-func (r *RepoSyncReconciler) deleteServiceAccount(ctx context.Context, reconcilerKey types.NamespacedName) error {
-	return r.cleanup(ctx, reconcilerKey, kinds.ServiceAccount())
+func (r *RepoSyncReconciler) deleteServiceAccount(ctx context.Context, reconcilerRef types.NamespacedName) error {
+	return r.cleanup(ctx, reconcilerRef, kinds.ServiceAccount())
 }
 
 func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, rsList *v1beta1.RepoSyncList, rsNamespace, reconcilerNamespace string) error {
@@ -146,8 +146,8 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, rsList *v1be
 	return r.client.Update(ctx, rb)
 }
 
-func (r *RepoSyncReconciler) deleteDeployment(ctx context.Context, reconcilerKey types.NamespacedName) error {
-	return r.cleanup(ctx, reconcilerKey, kinds.Deployment())
+func (r *RepoSyncReconciler) deleteDeployment(ctx context.Context, reconcilerRef types.NamespacedName) error {
+	return r.cleanup(ctx, reconcilerRef, kinds.Deployment())
 }
 
 func (r *RepoSyncReconciler) updateRoleBindingSubjects(rb *rbacv1.RoleBinding, rsList *v1beta1.RepoSyncList, reconcilerNamespace string) error {

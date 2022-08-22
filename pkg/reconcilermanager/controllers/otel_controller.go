@@ -64,7 +64,7 @@ func NewOtelReconciler(clusterName string, client client.Client, log logr.Logger
 
 // Reconcile the otel ConfigMap and update the Deployment annotation.
 func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	log := r.log.WithValues("otel", req.NamespacedName)
+	log := r.log.WithValues("otel", req.NamespacedName.String())
 
 	configMapDataHash, err := r.reconcileConfigMap(ctx, req)
 	if err != nil {
@@ -92,8 +92,8 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 		return nil, nil
 	}
 
-	var cm corev1.ConfigMap
-	if err := r.client.Get(ctx, req.NamespacedName, &cm); err != nil {
+	cm := &corev1.ConfigMap{}
+	if err := r.client.Get(ctx, req.NamespacedName, cm); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -108,31 +108,37 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 // configureGooglecloudConfigMap creates or updates a map with a config that
 // enables Googlecloud exporter if Application Default Credentials are present.
 func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]byte, error) {
+	// Check that GCP credentials are injected
 	creds, _ := getDefaultCredentials(ctx)
-	if creds != nil && creds.ProjectID != "" {
-		var cm corev1.ConfigMap
-		cm.Name = metrics.OtelCollectorGooglecloud
-		cm.Namespace = metrics.MonitoringNamespace
+	if creds == nil || creds.ProjectID == "" {
+		// No injected credentials
+		return nil, nil
+	}
 
-		op, err := controllerruntime.CreateOrUpdate(ctx, r.client, &cm, func() error {
-			cm.Labels = map[string]string{
-				"app":                metrics.OpenTelemetry,
-				"component":          metrics.OtelCollectorName,
-				metadata.SystemLabel: "true",
-				metadata.ArchLabel:   "csmr",
-			}
-			cm.Data = map[string]string{
-				"otel-collector-config.yaml": metrics.CollectorConfigGooglecloud,
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
+	cm := &corev1.ConfigMap{}
+	cm.Name = metrics.OtelCollectorGooglecloud
+	cm.Namespace = metrics.MonitoringNamespace
+	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, cm, func() error {
+		cm.Labels = map[string]string{
+			"app":                metrics.OpenTelemetry,
+			"component":          metrics.OtelCollectorName,
+			metadata.SystemLabel: "true",
+			metadata.ArchLabel:   "csmr",
 		}
-		if op != controllerutil.OperationResultNone {
-			r.log.Info("ConfigMap successfully reconciled", operationSubjectName, cm.Name, executedOperation, op)
-			return hash(cm)
+		cm.Data = map[string]string{
+			"otel-collector-config.yaml": metrics.CollectorConfigGooglecloud,
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if op != controllerutil.OperationResultNone {
+		r.log.Info("Managed object upsert successful",
+			logFieldObject, client.ObjectKeyFromObject(cm).String(),
+			logFieldKind, "ConfigMap",
+			logFieldOperation, op)
+		return hash(cm)
 	}
 	return nil, nil
 }
@@ -145,12 +151,12 @@ func (r *OtelReconciler) updateDeploymentAnnotation(ctx context.Context, hash []
 		return nil
 	}
 
-	var dep appsv1.Deployment
+	dep := &appsv1.Deployment{}
 	dep.Name = metrics.OtelCollectorName
 	dep.Namespace = metrics.MonitoringNamespace
-	key := client.ObjectKeyFromObject(&dep)
+	key := client.ObjectKeyFromObject(dep)
 
-	if err := r.client.Get(ctx, key, &dep); err != nil {
+	if err := r.client.Get(ctx, key, dep); err != nil {
 		return status.APIServerError(err, "failed to get otel Deployment")
 	}
 
@@ -165,10 +171,11 @@ func (r *OtelReconciler) updateDeploymentAnnotation(ctx context.Context, hash []
 		return nil
 	}
 
-	if err := r.client.Patch(ctx, &dep, patch); err != nil {
+	if err := r.client.Patch(ctx, dep, patch); err != nil {
 		return err
 	}
-	r.log.Info("Deployment successfully updated", operationSubjectName, dep.Name)
+	r.log.Info("Deployment annotation patch successful",
+		logFieldObject, key.String())
 	return nil
 }
 

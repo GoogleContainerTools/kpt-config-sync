@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // isUpsertedSecret returns true if the provided secret from the
@@ -61,7 +63,7 @@ func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
 // upsertAuthSecret creates or updates the auth secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func upsertAuthSecret(ctx context.Context, log logr.Logger, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	switch {
 	case shouldUpsertGitSecret(rs):
@@ -70,9 +72,15 @@ func upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
 		}
-		err = upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
+		}
+		if op != controllerutil.OperationResultNone {
+			log.Info("Managed object upsert successful",
+				logFieldObject, cmsSecretRef.String(),
+				logFieldKind, "Secret",
+				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil
 	case shouldUpsertHelmSecret(rs):
@@ -81,9 +89,15 @@ func upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
 		}
-		err = upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
+		}
+		if op != controllerutil.OperationResultNone {
+			log.Info("Managed object upsert successful",
+				logFieldObject, cmsSecretRef.String(),
+				logFieldKind, "Secret",
+				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil
 	default:
@@ -95,7 +109,7 @@ func upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client
 // upsertCACertSecret creates or updates the CA cert secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func upsertCACertSecret(ctx context.Context, log logr.Logger, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	if shouldUpsertCACertSecret(rs) {
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, rs.Spec.Git.CACertSecretRef.Name)
@@ -103,9 +117,15 @@ func upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, c client.Clie
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")
 		}
-		err = upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
+		}
+		if op != controllerutil.OperationResultNone {
+			log.Info("Managed object upsert successful",
+				logFieldObject, cmsSecretRef.String(),
+				logFieldKind, "Secret",
+				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil
 	}
@@ -143,27 +163,27 @@ func getUserSecret(ctx context.Context, c client.Client, nsSecretRef client.Obje
 
 // upsertSecret creates or updates a secret in config-management-system
 // namespace using an existing user secret.
-func upsertSecret(ctx context.Context, c client.Client, cmsSecretRef, rsRef types.NamespacedName, userSecret *corev1.Secret) error {
+func upsertSecret(ctx context.Context, c client.Client, cmsSecretRef, rsRef types.NamespacedName, userSecret *corev1.Secret) (controllerutil.OperationResult, error) {
 	cmsSecret := &corev1.Secret{}
 	if err := getSecret(ctx, c, cmsSecretRef, cmsSecret); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return errors.Wrapf(err,
-				"secret %s get failed", cmsSecretRef)
+			return controllerutil.OperationResultNone,
+				errors.Wrapf(err, "secret %s get failed", cmsSecretRef)
 		}
 		// Secret not present in config-management-system namespace.
 		// Create one using secret in the RepoSync namespace.
 		if err := createSecret(ctx, c, cmsSecretRef, rsRef, userSecret); err != nil {
-			return errors.Wrapf(err,
-				"secret %s create failed", cmsSecretRef)
+			return controllerutil.OperationResultNone,
+				errors.Wrapf(err, "secret %s create failed", cmsSecretRef)
 		}
-		return nil
+		return controllerutil.OperationResultCreated, nil
 	}
 	// Update the existing secret in config-management-system.
 	if err := updateSecret(ctx, c, cmsSecret, userSecret); err != nil {
-		return errors.Wrapf(err,
-			"secret %s update failed", cmsSecretRef)
+		return controllerutil.OperationResultNone,
+			errors.Wrapf(err, "secret %s update failed", cmsSecretRef)
 	}
-	return nil
+	return controllerutil.OperationResultUpdated, nil
 }
 
 // GetSecretKeys returns the keys that are contained in the Secret.

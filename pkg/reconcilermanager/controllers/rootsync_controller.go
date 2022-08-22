@@ -102,7 +102,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	defer r.lock.Unlock()
 
 	rsRef := req.NamespacedName
-	log := r.log.WithValues("rootsync", rsRef)
+	log := r.log.WithValues("rootsync", rsRef.String())
 	start := time.Now()
 	var err error
 	rs := &v1beta1.RootSync{}
@@ -175,7 +175,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	rootsyncLabelMap := map[string]string{
+	labelMap := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
 	}
@@ -194,7 +194,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		auth = rs.Spec.Helm.Auth
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	}
-	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, rootsyncLabelMap, owRefs); err != nil {
+	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap, owRefs); err != nil {
 		log.Error(err, "Managed object upsert failed",
 			logFieldObject, saRef.String(),
 			logFieldKind, "ServiceAccount",
@@ -237,7 +237,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	mut := r.mutationsFor(ctx, rs, containerEnvs)
 
 	// Upsert Root reconciler deployment.
-	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, rootsyncLabelMap, mut)
+	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
 		log.Error(err, "Managed object upsert failed",
 			logFieldObject, reconcilerRef.String(),
@@ -295,6 +295,12 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, err
 	}
 
+	log.V(3).Info("RootSync reconciler Deployment status",
+		logFieldObject, reconcilerRef.String(),
+		"resourceVersion", deployObj.ResourceVersion,
+		"status", result.Status,
+		"message", result.Message)
+
 	// Update RootSync status based on reconciler deployment condition result.
 	switch result.Status {
 	case kstatus.InProgressStatus:
@@ -326,7 +332,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	if updated && result.Status == kstatus.CurrentStatus {
-		r.log.Info("Sync object successfully reconciled",
+		r.log.Info("Sync object reconcile successful",
 			logFieldObject, rsRef.String(),
 			logFieldKind, r.syncKind)
 	}
@@ -402,10 +408,7 @@ func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
 	requests := make([]reconcile.Request, len(allRootSyncs.Items))
 	for i, rs := range allRootSyncs.Items {
 		requests[i] = reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      rs.GetName(),
-				Namespace: rs.GetNamespace(),
-			},
+			NamespacedName: client.ObjectKeyFromObject(&rs),
 		}
 	}
 	if len(requests) > 0 {
@@ -544,10 +547,10 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, rsNam
 		return crbRef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("Managed object successfully reconciled",
+		r.log.Info("Managed object upsert successful",
 			logFieldObject, crbRef.String(),
 			logFieldKind, "ClusterRoleBinding",
-			executedOperation, op)
+			logFieldOperation, op)
 	}
 	return crbRef, nil
 }
@@ -570,13 +573,15 @@ func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 
 	// Avoid unnecessary status updates.
 	if cmp.Equal(currentRS.Status, rs.Status, diff.IgnoreTimestampUpdates) {
-		klog.V(5).Infof("Skipping status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		klog.V(3).Infof("Skipping status update for RootSync %s (ResourceVersion: %s)",
+			client.ObjectKeyFromObject(rs), rs.ResourceVersion)
 		return false, nil
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.Infof("Updating status for RootSync %s (ResourceVersion: %s):\nDiff (- Expected, + Actual):\n%s",
+			client.ObjectKeyFromObject(rs), rs.ResourceVersion,
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	resourceVersion := rs.ResourceVersion

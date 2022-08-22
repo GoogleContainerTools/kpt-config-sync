@@ -43,10 +43,6 @@ import (
 )
 
 const (
-	// These are used as keys in calls to r.log.Info
-	executedOperation    = "operation"
-	operationSubjectName = "name"
-
 	// gitSecretRefField is the path of the field in the RootSync|RepoSync CRDs
 	// that we wish to use as the "object reference".
 	// It will be used in both the indexing and watching.
@@ -65,8 +61,9 @@ const (
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
 
-	logFieldKind   = "kind"
-	logFieldObject = "object"
+	logFieldKind      = "kind"
+	logFieldObject    = "object"
+	logFieldOperation = "operation"
 )
 
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
@@ -126,10 +123,10 @@ func (r *reconcilerBase) upsertServiceAccount(
 		return childSARef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("Managed object successfully reconciled",
-			logFieldObject, reconcilerRef.String(),
+		r.log.Info("Managed object upsert successful",
+			logFieldObject, childSA.String(),
 			logFieldKind, "ServiceAccount",
-			executedOperation, op)
+			logFieldOperation, op)
 	}
 	return childSARef, nil
 }
@@ -168,8 +165,17 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	if err := mutateObject(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, err
 	}
-	result, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
-	return reconcilerDeployment, result, err
+	op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
+	if err != nil {
+		return reconcilerDeployment, op, err
+	}
+	if op != controllerutil.OperationResultNone {
+		r.log.Info("Managed object upsert successful",
+			logFieldObject, reconcilerRef.String(),
+			logFieldKind, "Deployment",
+			logFieldOperation, op)
+	}
+	return reconcilerDeployment, op, nil
 }
 
 // createOrPatchDeployment() first call Get() on the object. If the
@@ -335,15 +341,15 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 
 // deployment returns the deployment from the server
 func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*appsv1.Deployment, error) {
-	var depObj appsv1.Deployment
-	if err := r.client.Get(ctx, dRef, &depObj); err != nil {
+	depObj := &appsv1.Deployment{}
+	if err := r.client.Get(ctx, dRef, depObj); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, errors.Errorf(
 				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
 	}
-	return &depObj, nil
+	return depObj, nil
 }
 
 func mutateContainerResource(ctx context.Context, c *corev1.Container, override v1beta1.OverrideSpec, reconcilerType string) {

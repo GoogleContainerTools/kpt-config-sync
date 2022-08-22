@@ -696,18 +696,11 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		if rs.Spec.Oci != nil {
-			return validate.RedundantOciSpec(rs)
-		}
 		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
-		if rs.Spec.Git != nil {
-			return validate.RedundantGitSpec(rs)
-		}
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		//TODO: add validation logic here
-		return nil
+		return validate.HelmSpec(rs.Spec.Helm, rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}

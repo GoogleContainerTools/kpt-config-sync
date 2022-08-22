@@ -191,6 +191,31 @@ $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
 # nomos-manifest
 ###################################
 
+# Copy the subset of Config Sync multirepo/OSS manifests from previously constructed ACM manifests
+__config-sync-manifest-oss:
+	@echo "+++ Copying manifests for OSS deployments"
+	rm -rf $(OUTPUT_DIR)/oss/cloned
+	mkdir -p $(OUTPUT_DIR)/oss/cloned
+	rsync \
+		--exclude='admission-webhook.yaml' \
+		.output/deployment/* .output/oss/cloned/deployment/
+	rsync \
+		--exclude='acm-psp.yaml' \
+		--exclude='policy-controller-psp.yaml' \
+		--exclude='cluster-config-crd.yaml' \
+		--exclude='hierarchyconfig-crd.yaml' \
+		--exclude='importer-service-account.yaml' \
+		--exclude='monitor-service-account.yaml' \
+		--exclude='namespace-config-crd.yaml' \
+		--exclude='nomos-repo-crd.yaml' \
+		--exclude='sync-declaration-crd.yaml' \
+		.output/manifests/* .output/oss/cloned/manifests/
+	@echo "++++ Add OSS yaml files to config-sync-manifest.yaml"
+	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
+		--destination=${OSS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
+		$(OUTPUT_DIR)/oss/cloned/manifests \
+		$(OUTPUT_DIR)/oss/cloned/deployment
+
 # config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
 .PHONY: config-sync-manifest
 config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
@@ -203,6 +228,7 @@ config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
 		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
 		$(OUTPUT_DIR)/manifests \
 		$(OUTPUT_DIR)/deployment
+	$(MAKE) __config-sync-manifest-oss
 
 # config-sync-manifest-e2e adds additional resources that are necessary for the e2e tests
 .PHONY: config-sync-manifest-e2e

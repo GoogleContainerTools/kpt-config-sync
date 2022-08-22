@@ -42,6 +42,7 @@ STAGING_DIR := $(OUTPUT_DIR)/staging
 
 # Directory used for staging the manifest primitives.
 NOMOS_MANIFEST_STAGING_DIR := $(STAGING_DIR)/operator
+OSS_MANIFEST_STAGING_DIR := $(STAGING_DIR)/oss
 
 # Directory that gets mounted into /tmp for build and test containers.
 TEMP_OUTPUT_DIR := $(OUTPUT_DIR)/tmp
@@ -156,6 +157,7 @@ $(OUTPUT_DIR):
 		$(TEMP_OUTPUT_DIR) \
 		$(TEST_GEN_YAML_DIR) \
 		$(NOMOS_MANIFEST_STAGING_DIR) \
+		$(OSS_MANIFEST_STAGING_DIR) \
 		$(GEN_DEPLOYMENT_DIR)
 
 # These directories get mounted by DOCKER_RUN_ARGS, so we have to create them

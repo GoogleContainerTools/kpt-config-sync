@@ -172,11 +172,11 @@ func gitDeployment() *appsv1.Deployment {
 			Spec: corev1.PodSpec{
 				Volumes: []corev1.Volume{
 					{Name: "keys", VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: gitServerSecret},
+						Secret: &corev1.SecretVolumeSource{SecretName: gitServerSecretName},
 					}},
 					{Name: "repos", VolumeSource: corev1.VolumeSource{EmptyDir: nil}},
 					{Name: "ssl-cert", VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: gitServerCertSecret},
+						Secret: &corev1.SecretVolumeSource{SecretName: gitServerCertSecretName},
 					}},
 				},
 				Containers: []corev1.Container{

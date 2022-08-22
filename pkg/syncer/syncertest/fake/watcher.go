@@ -176,22 +176,14 @@ func (ws *WatchSupervisor) sendEventToWatchers(ctx context.Context, gk schema.Gr
 
 // StartWatcher starts a watchSupervisor and stops it in test cleanup.
 func StartWatcher(t *testing.T, watcher *Watcher) {
-	doneCh := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := watcher.Start(ctx)
 	t.Cleanup(func() {
 		// Stop watcher
 		cancel()
 		// Wait for watcher to exit
 		<-doneCh
 	})
-
-	// Start event handler
-	go func() {
-		// Run watcher until cancelled
-		watcher.Run(ctx)
-		// Signal watcher exit
-		close(doneCh)
-	}()
 }
 
 // Watcher is a fake implementation of watch.Interface.
@@ -221,20 +213,24 @@ func NewWatcher(supervisor *WatchSupervisor, gk schema.GroupKind, exampleList cl
 	}
 }
 
-// Run adds the watcher to the supervisor and handles events until the
-// context is done or the Watcher is stopped, then the watcher is removed from
-// the supervisor.
-func (fw *Watcher) Run(ctx context.Context) {
+// Start adds the watcher to the supervisor and starts a background goroutine
+// to handle events until the context is done or the Watcher is stopped, then
+// the watcher is removed from the supervisor.
+// Returns a done channel that will be closed event handling had stopped and the
+// watcher has been removed from the supervisor.
+func (fw *Watcher) Start(ctx context.Context) <-chan struct{} {
 	fw.supervisor.addWatcher(fw.gk, fw.inCh)
 	// Wrap with a new context so that both the input context and
 	// fakeWatcher.Stop() can stop the event handler.
 	fw.context, fw.cancel = context.WithCancel(ctx)
-	defer func() {
-		// Clean up context if input channel closed before context was cancelled
+	doneCh := make(chan struct{})
+	go func() {
+		fw.handleEvents(fw.context)
 		fw.cancel()
 		fw.supervisor.removeWatcher(fw.gk, fw.inCh)
+		close(doneCh)
 	}()
-	fw.handleEvents(fw.context)
+	return doneCh
 }
 
 func (fw *Watcher) handleEvents(ctx context.Context) {

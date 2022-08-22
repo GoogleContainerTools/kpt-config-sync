@@ -29,7 +29,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
+	watchutil "kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // TestRepoSyncReconcilerDeploymentLifecycle validates that the
@@ -93,29 +95,22 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 		t.Fatal("timed out waiting for reconciler deployment to be applied")
 	}
 
-	t.Log("watching for reconciler deployment delete")
-	watchCtx2, watchCancel2 := context.WithTimeout(ctx, 10*time.Second)
-	defer watchCancel2()
+	t.Log("verifying the reconciler-manager finalizer is present")
+	rsKey := client.ObjectKeyFromObject(rs)
+	rs = &v1beta1.RepoSync{}
+	err = fakeClient.Get(ctx, rsKey, rs)
+	require.NoError(t, err)
+	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
-	watcher, err = watchObjects(watchCtx2, fakeClient, &appsv1.DeploymentList{})
+	t.Log("deleting sync object and watching for NotFound")
+	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
 	require.NoError(t, err)
 
-	// Delete RootSync
-	rs.ResourceVersion = "" // we don't care what the RV is when deleting
-	err = fakeClient.Delete(ctx, rs)
-	require.NoError(t, err)
-
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
-		t.Logf("reconciler deployment %s", event.Type)
-		if event.Type == watch.Deleted {
-			reconcilerObj = event.Object.(*appsv1.Deployment)
-			// success! deployment was deleted.
-			return nil
-		}
-		// keep watching
-		return errors.Errorf("reconciler deployment %s", event.Type)
-	})
-	require.NoError(t, err)
+	// All managed objects should have been deleted by the reconciler-manager finalizer.
+	// Only the user Secret should remain.
+	secretObj.SetUID("1")
+	t.Log("verifying all managed objects were deleted")
+	fakeClient.Check(t, secretObj)
 }
 
 // TestRepoSyncReconcilerDeploymentDriftProtection validates that changes to

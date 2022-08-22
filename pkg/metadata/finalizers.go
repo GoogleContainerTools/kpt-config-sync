@@ -21,6 +21,14 @@ import (
 
 const (
 	// ReconcilerFinalizer is the finalizer added to the RootSync/RepoSync by
-	// the reconciler when the deletion-propagation-policy is Foreground.
+	// the reconciler when the deletion-propagation-policy is Foreground to
+	// ensure deletion of the user objects it manages, before the
+	// RootSync/RepoSync is deleted.
 	ReconcilerFinalizer = configsync.ConfigSyncPrefix + reconcilermanager.Reconciler
+
+	// ReconcilerManagerFinalizer is the finalizer added to the
+	// RootSync/RepoSync by the reconciler-manager to ensure
+	// deletion of the reconciler and its dependencies, before the
+	// RootSync/RepoSync is deleted.
+	ReconcilerManagerFinalizer = configsync.ConfigSyncPrefix + reconcilermanager.ManagerName
 )

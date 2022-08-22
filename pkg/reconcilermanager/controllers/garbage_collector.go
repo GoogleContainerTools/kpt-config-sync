@@ -17,19 +17,34 @@ package controllers
 import (
 	"context"
 	"strings"
+	"time"
 
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/util/watch"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// deleteWaitTimeout is the time to block watching for an object to be deleted.
+//
+// Shorter means the reconciler-manager will be more responsive.
+// Longer means the reconciler-manager will be more efficient.
+//
+// Since reconcile timeout doesn't cause a Stalled condition, it's ok to timeout
+// and wait for Reconcile to be triggered by another event.
+const deleteWaitTimeout = 30 * time.Second
+
+// cleanup deletes the object and waits for it to be fully deleted.
 func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
@@ -41,20 +56,31 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 	}
 	// Convert Object to Unstructured to avoid checking UID, ResourceVersion, or
 	// modifying input object.
-	u := &unstructured.Unstructured{}
-	u.SetName(id.Name)
-	u.SetNamespace(id.Namespace)
-	u.SetGroupVersionKind(gvk)
+	uObj := &unstructured.Unstructured{}
+	uObj.SetName(id.Name)
+	uObj.SetNamespace(id.Namespace)
+	uObj.SetGroupVersionKind(gvk)
 	r.logger(ctx).Info("Deleting managed object",
 		logFieldObjectRef, id.ObjectKey.String(),
 		logFieldObjectKind, id.Kind)
-	if err := r.client.Delete(ctx, u); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.logger(ctx).Info("Managed object already deleted",
-				logFieldObjectRef, id.ObjectKey.String(),
-				logFieldObjectKind, id.Kind)
-			return nil
+	err = watch.DeleteAndWait(ctx, r.watcher, uObj, deleteWaitTimeout)
+	if err != nil {
+		// ErrWaitTimeout is returned when the context is Done, but doesn't
+		// specify cancelled or deadline exceeded.
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			// If the DeleteAndWait observed any events, the object should have been updated.
+			if uObj.GetDeletionTimestamp().IsZero() {
+				// object not deleted
+				return NewObjectOperationErrorWithID(err, id, OperationDelete)
+			}
+			result, computeErr := kstatus.Compute(uObj)
+			if computeErr != nil {
+				return errors.Wrapf(computeErr, "computing %s (%s) status failed", id.Kind, id.ObjectKey)
+			}
+			// Since DeletionTimestamp is set, this will be either Terminating or Failed
+			return NewObjectReconcileErrorWithID(err, id, result.Status)
 		}
+		// If not a timeout, assume the delete failed.
 		return NewObjectOperationErrorWithID(err, id, OperationDelete)
 	}
 	r.logger(ctx).Info("Managed object delete successful",
@@ -89,6 +115,16 @@ func (r *reconcilerBase) deleteConfigMaps(ctx context.Context, reconcilerRef typ
 		cm := &corev1.ConfigMap{}
 		cm.Name = name
 		cm.Namespace = reconcilerRef.Namespace
+		key := client.ObjectKeyFromObject(cm)
+		// Client cache is updated by watchers. So using Get to prevent delete
+		// avoids unnecessary API calls.
+		if err := r.client.Get(ctx, key, cm); err != nil {
+			if apierrors.IsNotFound(err) {
+				// Since these are obsolete, don't bother logging "already deleted"
+				continue
+			}
+			return NewObjectOperationErrorWithKey(err, cm, OperationDelete, key)
+		}
 		if err := r.cleanup(ctx, cm); err != nil {
 			return err
 		}

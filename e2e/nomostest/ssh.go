@@ -38,10 +38,31 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 )
 
-const gitServerSecret = "ssh-pub"
-const namespaceSecret = "ssh-key"
-const gitServerCertSecret = "ssl-cert"
-const gitServerPublicCertSecret = "git-cert-pub"
+const (
+	// rootAuthSecretName is the name of the Auth secret required by the
+	// RootSync reconciler to authenticate with the git-server.
+	rootAuthSecretName = controllers.GitCredentialVolume
+
+	// rootCACertSecretName is the name of the CACert secret required by
+	// the RootSync reconciler.
+	rootCACertSecretName = "git-cert-pub"
+
+	// NamespaceAuthSecretName is the name of the Auth secret required by the
+	// RepoSync reconciler to authenticate with the git-server.
+	NamespaceAuthSecretName = "ssh-key"
+
+	// NamespaceCACertSecretName is the name of the CACert secret required by
+	// the RepoSync reconciler to authenticate the git-server SSL cert.
+	NamespaceCACertSecretName = "git-cert-pub"
+
+	// gitServerSecretName is the name of the Secret used by the local
+	// git-server to authenticate clients.
+	gitServerSecretName = "ssh-pub"
+
+	// gitServerCertSecretName ins the name of the Secret used by the local
+	// git-server to authenticate itself to clients.
+	gitServerCertSecretName = "ssl-cert"
+)
 
 func sshDir(nt *NT) string {
 	nt.T.Helper()
@@ -184,10 +205,10 @@ func generateSSHKeys(nt *NT) string {
 
 	createSSHKeyPair(nt)
 
-	createSecret(nt, configmanagement.ControllerNamespace, controllers.GitCredentialVolume,
+	createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
 		fmt.Sprintf("ssh=%s", privateKeyPath(nt)))
 
-	createSecret(nt, testGitNamespace, gitServerSecret,
+	createSecret(nt, testGitNamespace, gitServerSecretName,
 		filepath.Join(publicKeyPath(nt)))
 
 	return privateKeyPath(nt)
@@ -204,10 +225,10 @@ func generateSSLKeys(nt *NT) string {
 
 	createCAWithCerts(nt)
 
-	createSecret(nt, configmanagement.ControllerNamespace, gitServerPublicCertSecret,
+	createSecret(nt, configmanagement.ControllerNamespace, rootCACertSecretName,
 		fmt.Sprintf("cert=%s", caCertPath(nt)))
 
-	createSecret(nt, testGitNamespace, gitServerCertSecret,
+	createSecret(nt, testGitNamespace, gitServerCertSecretName,
 		fmt.Sprintf("server.crt=%s", certPath(nt)),
 		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt)))
 
@@ -232,7 +253,7 @@ func downloadSSHKey(nt *NT) string {
 		nt.T.Fatal("saving SSH key:", err)
 	}
 
-	createSecret(nt, configmanagement.ControllerNamespace, controllers.GitCredentialVolume,
+	createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
 		fmt.Sprintf("ssh=%s", privateKeyPath(nt)))
 
 	return privateKeyPath(nt)
@@ -245,12 +266,12 @@ func CreateNamespaceSecret(nt *NT, ns string) {
 	if len(privateKeypath) == 0 {
 		privateKeypath = privateKeyPath(nt)
 	}
-	createSecret(nt, ns, namespaceSecret, fmt.Sprintf("ssh=%s", privateKeypath))
+	createSecret(nt, ns, NamespaceAuthSecretName, fmt.Sprintf("ssh=%s", privateKeypath))
 	if nt.GitProvider.Type() == e2e.Local {
 		caCertPathVal := nt.caCertPath
 		if len(caCertPathVal) == 0 {
 			caCertPathVal = caCertPath(nt)
 		}
-		createSecret(nt, ns, gitServerPublicCertSecret, fmt.Sprintf("cert=%s", caCertPathVal))
+		createSecret(nt, ns, NamespaceCACertSecretName, fmt.Sprintf("cert=%s", caCertPathVal))
 	}
 }

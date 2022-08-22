@@ -42,6 +42,12 @@ var (
 		Dir:   "test",
 	}
 
+	helm = &v1beta1.Helm{
+		Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+		Chart:   "test",
+		Version: "0.1.0",
+	}
+
 	gitUpdated = &v1beta1.Git{
 		Repo:     "git@github.com:tester/sample-updated",
 		Revision: "v2",
@@ -279,6 +285,20 @@ func TestRepoState_PrintRows(t *testing.T) {
 			"  bookstore:repo-sync\tus-docker.pkg.dev/test-project/test-ar-repo/sample/test\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
 		},
 		{
+			"Helm repo with source error",
+			&RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				sourceType:   v1beta1.HelmSource,
+				helm:         helm,
+				status:       "ERROR",
+				commit:       "abc123",
+				errors:       []string{"error1", "error2"},
+				errorSummary: errorSummayWithTwoErrors,
+			},
+			"  bookstore:repo-sync\toci://us-central1-docker.pkg.dev/stolos-dev/sample/test:0.1.0\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
+		},
+		{
 			"Git field is missing when sourceType is git",
 			&RepoState{
 				scope:        "bookstore",
@@ -301,6 +321,18 @@ func TestRepoState_PrintRows(t *testing.T) {
 				errorSummary: errorSummayWithOneError,
 			},
 			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing OCI config\t\n",
+		},
+		{
+			"Helm field is missing when sourceType is helm",
+			&RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				sourceType:   v1beta1.HelmSource,
+				status:       "ERROR",
+				errors:       []string{"missing Helm config"},
+				errorSummary: errorSummayWithOneError,
+			},
+			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing Helm config\t\n",
 		},
 	}
 	for _, tc := range testCases {
@@ -411,6 +443,14 @@ func toOciStatus(oci *v1beta1.Oci) *v1beta1.OciStatus {
 	}
 }
 
+func toHelmStatus(oci *v1beta1.Helm) *v1beta1.HelmStatus {
+	return &v1beta1.HelmStatus{
+		Repo:    helm.Repo,
+		Chart:   helm.Chart,
+		Version: helm.Version,
+	}
+}
+
 func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 	stalledCondition := v1beta1.RepoSyncCondition{
 		Type:    v1beta1.RepoSyncStalled,
@@ -455,6 +495,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		syncingConditionSupported bool
 		gitSpec                   *v1beta1.Git
 		ociSpec                   *v1beta1.Oci
+		helmSpec                  *v1beta1.Helm
 		sourceType                v1beta1.SourceType
 		conditions                []v1beta1.RepoSyncCondition
 		sourceStatus              v1beta1.SourceStatus
@@ -1617,12 +1658,107 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				errorSummary: errorSummayWithOneError,
 			},
 		},
+		{
+			name:                      "Helm repo has import error",
+			helmSpec:                  helm,
+			sourceType:                v1beta1.HelmSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("abc123", []v1beta1.ErrorSource{v1beta1.SourceError}, errorSummayWithOneError),
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Helm:   toHelmStatus(helm),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2004: import error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				helm:         helm,
+				sourceType:   v1beta1.HelmSource,
+				status:       util.ErrorMsg,
+				commit:       "abc123",
+				errors:       []string{"KNV2004: import error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
+		{
+			name:                      "Helm repo has rendering error",
+			helmSpec:                  helm,
+			sourceType:                v1beta1.HelmSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("def456", []v1beta1.ErrorSource{v1beta1.RenderingError}, errorSummayWithOneError),
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Helm:   toHelmStatus(helm),
+				Commit: "def456",
+			},
+			renderingStatus: v1beta1.RenderingStatus{
+				Helm:    toHelmStatus(helm),
+				Commit:  "def456",
+				Errors:  []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2015: rendering error"}},
+				Message: "rendering failed",
+			},
+			syncStatus: v1beta1.SyncStatus{
+				Helm:   toHelmStatus(helm),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				helm:         helm,
+				sourceType:   v1beta1.HelmSource,
+				status:       util.ErrorMsg,
+				commit:       "def456",
+				errors:       []string{"KNV2015: rendering error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
+		{
+			name:                      "Helm repo has syncing error",
+			helmSpec:                  helm,
+			sourceType:                v1beta1.HelmSource,
+			syncingConditionSupported: true,
+			conditions: []v1beta1.RepoSyncCondition{
+				reconciledCondition,
+				syncingFalseCondition("abc123", []v1beta1.ErrorSource{v1beta1.SyncError}, errorSummayWithOneError),
+			},
+			sourceStatus: v1beta1.SourceStatus{
+				Helm:   toHelmStatus(helm),
+				Commit: "abc123",
+			},
+			renderingStatus: v1beta1.RenderingStatus{
+				Helm:    toHelmStatus(helm),
+				Commit:  "abc123",
+				Message: "rendering succeeded",
+			},
+			syncStatus: v1beta1.SyncStatus{
+				Helm:   toHelmStatus(helm),
+				Commit: "abc123",
+				Errors: []v1beta1.ConfigSyncError{{ErrorMessage: "KNV2009: apply error"}},
+			},
+			want: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync",
+				helm:         helm,
+				sourceType:   v1beta1.HelmSource,
+				status:       util.ErrorMsg,
+				commit:       "abc123",
+				errors:       []string{"KNV2009: apply error"},
+				errorSummary: errorSummayWithOneError,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repoSync := fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)
 			repoSync.Spec.Git = tc.gitSpec
 			repoSync.Spec.Oci = tc.ociSpec
+			repoSync.Spec.Helm = tc.helmSpec
 			repoSync.Spec.SourceType = string(tc.sourceType)
 			if repoSync.Spec.SourceType == "" {
 				repoSync.Spec.SourceType = string(v1beta1.GitSource)
@@ -2802,6 +2938,46 @@ gke_sample-project_europe-west1-b_cluster-2
   SYNCED	abc123	
   --------------------
   bookstore:repos-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test	
+  SYNCED	abc123	
+`,
+		},
+		{
+			"cluster with Helm chart",
+			&ClusterState{
+				Ref: "gke_sample-project_europe-west1-b_cluster-2",
+				repos: []*RepoState{
+					{
+						scope:      "<root>",
+						syncName:   "root-sync",
+						sourceType: v1beta1.HelmSource,
+						helm: &v1beta1.Helm{
+							Repo:  "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+							Chart: "test",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+					{
+						scope:      "bookstore",
+						syncName:   "repos-sync",
+						sourceType: v1beta1.HelmSource,
+						helm: &v1beta1.Helm{
+							Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+							Chart:   "test",
+							Version: "0.2.0",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync	oci://us-central1-docker.pkg.dev/stolos-dev/sample/test:latest	
+  SYNCED	abc123	
+  --------------------
+  bookstore:repos-sync	oci://us-central1-docker.pkg.dev/stolos-dev/sample/test:0.2.0	
   SYNCED	abc123	
 `,
 		},

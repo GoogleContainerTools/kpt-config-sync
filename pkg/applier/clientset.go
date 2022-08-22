@@ -61,7 +61,7 @@ func newClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		klog.Infof("Disabled status reporting")
 		statusPolicy = inventory.StatusPolicyNone
 	}
-	invClient, err := inventory.NewClient(f, live.WrapInventoryObj, live.InvToUnstructuredFunc, statusPolicy)
+	invClient, err := inventory.NewClient(f, live.WrapInventoryObj(1), live.InvToUnstructuredFunc, statusPolicy)
 	if err != nil {
 		return nil, err
 	}

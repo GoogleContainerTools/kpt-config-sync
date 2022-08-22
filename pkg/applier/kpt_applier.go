@@ -165,7 +165,7 @@ func NewRootApplier(c client.Client, configFlags *genericclioptions.ConfigFlags,
 }
 
 func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGroup, error) {
-	inv, ok := live.WrapInventoryObj(obj).(*live.InventoryResourceGroup)
+	inv, ok := live.WrapInventoryObj(1)(obj).(*live.InventoryResourceGroup)
 	if !ok {
 		return nil, errors.New("failed to create an ResourceGroup object")
 	}

@@ -9,10 +9,16 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/object"
@@ -117,6 +123,69 @@ func (icm *ConfigMap) GetObject() (*unstructured.Unstructured, error) {
 		return nil, err
 	}
 	return invCopy, nil
+}
+
+// Apply is an Storage interface function implemented to apply the inventory
+// object. StatusPolicy is not needed since ConfigMaps do not have a status subresource.
+func (icm *ConfigMap) Apply(dc dynamic.Interface, mapper meta.RESTMapper, _ StatusPolicy) error {
+	invInfo, namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// Get cluster object, if exsists.
+	clusterObj, err := namespacedClient.Get(context.TODO(), invInfo.GetName(), metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// Create cluster inventory object, if it does not exist on cluster.
+	if clusterObj == nil {
+		klog.V(4).Infof("creating inventory object: %s/%s", invInfo.GetNamespace(), invInfo.GetName())
+		_, err = namespacedClient.Create(context.TODO(), invInfo, metav1.CreateOptions{})
+		return err
+	}
+
+	// Update the cluster inventory object instead.
+	klog.V(4).Infof("updating inventory object: %s/%s", invInfo.GetNamespace(), invInfo.GetName())
+	_, err = namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
+	return err
+}
+
+// ApplyWithPrune is a Storage interface function implemented to apply the inventory object with a list of objects
+// to be pruned. StatusPolicy is not needed since ConfigMaps do not have a status subresource.
+func (icm *ConfigMap) ApplyWithPrune(dc dynamic.Interface, mapper meta.RESTMapper, _ StatusPolicy, _ object.ObjMetadataSet) error {
+	invInfo, namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// Update the cluster inventory object.
+	klog.V(4).Infof("updating inventory object: %s/%s", invInfo.GetNamespace(), invInfo.GetName())
+	_, err = namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
+	return err
+}
+
+// getNamespacedClient is a helper function for Apply and ApplyWithPrune that creates a namespaced client for interacting with the live
+// cluster, as well as returning the ConfigMap object as a wrapped resource.Info object.
+func (icm *ConfigMap) getNamespacedClient(dc dynamic.Interface, mapper meta.RESTMapper) (*unstructured.Unstructured, dynamic.ResourceInterface, error) {
+	invInfo, err := icm.GetObject()
+	if err != nil {
+		return nil, nil, err
+	}
+	if invInfo == nil {
+		return nil, nil, fmt.Errorf("attempting to create a nil inventory object")
+	}
+
+	mapping, err := mapper.RESTMapping(invInfo.GroupVersionKind().GroupKind(), invInfo.GroupVersionKind().Version)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create client to interact with cluster.
+	namespacedClient := dc.Resource(mapping.Resource).Namespace(invInfo.GetNamespace())
+
+	return invInfo, namespacedClient, nil
 }
 
 func buildObjMap(objMetas object.ObjMetadataSet, objStatus []actuation.ObjectStatus) map[string]string {

@@ -16,8 +16,11 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/resource"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util"
@@ -59,33 +63,47 @@ var ResourceGroupGVK = schema.GroupVersionKind{
 // the Inventory and InventoryInfo interface. This wrapper loads and stores the
 // object metadata (inventory) to and from the wrapped ResourceGroup.
 type InventoryResourceGroup struct {
-	inv       *unstructured.Unstructured
-	objMetas  []object.ObjMetadata
-	objStatus []actuation.ObjectStatus
+	inv           *unstructured.Unstructured
+	objMetas      []object.ObjMetadata
+	objStatus     map[object.ObjMetadata]actuation.ObjectStatus
+	strategy      inventory.Strategy
+	resourceCount int
 }
 
 func (icm *InventoryResourceGroup) Strategy() inventory.Strategy {
-	return inventory.NameStrategy
+	return icm.strategy
 }
 
 var _ inventory.Storage = &InventoryResourceGroup{}
 var _ inventory.Info = &InventoryResourceGroup{}
 
-// WrapInventoryObj takes a passed ResourceGroup (as a resource.Info),
+// WrapInventoryObj returns a closure that takes a passed ResourceGroup (as a resource.Info),
 // wraps it with the InventoryResourceGroup and upcasts the wrapper as
-// an the Inventory interface.
-func WrapInventoryObj(obj *unstructured.Unstructured) inventory.Storage {
-	if obj != nil {
-		klog.V(4).Infof("wrapping Inventory obj: %s/%s\n", obj.GetNamespace(), obj.GetName())
+// a Storage interface. The number of managed resources per ResourceGroup is specified
+// by the resourceCount argument.
+// Strategy is hardcoded to be of NameStrategy as logic for sharded ResourceGroups
+// needs to be handled within kpt, and using label strategy would cause errors in
+// cli-utils.
+func WrapInventoryObj(resourceCount int) func(*unstructured.Unstructured) inventory.Storage {
+	return func(obj *unstructured.Unstructured) inventory.Storage {
+		if obj != nil {
+			klog.V(4).Infof("wrapping Inventory obj: %s/%s\n", obj.GetNamespace(), obj.GetName())
+		}
+		return &InventoryResourceGroup{inv: obj, strategy: inventory.NameStrategy, resourceCount: resourceCount}
 	}
-	return &InventoryResourceGroup{inv: obj}
 }
 
-func WrapInventoryInfoObj(obj *unstructured.Unstructured) inventory.Info {
+// WrapInventoryInfoObj takes a passed ResourceGroup (as a resource.Info),
+// wraps it with the InventoryResourceGroup and upcasts the wrapper as
+// an Inventory interface.
+// Strategy is passed as a function argument as there are use cases where using the label strategy
+// is useful, eg. mass deletion of all sharded ResourceGroups. In all other cases, the NameStrategy should
+// be used instead.
+func WrapInventoryInfoObj(obj *unstructured.Unstructured, strategy inventory.Strategy) inventory.Info {
 	if obj != nil {
 		klog.V(4).Infof("wrapping InventoryInfo obj: %s/%s\n", obj.GetNamespace(), obj.GetName())
 	}
-	return &InventoryResourceGroup{inv: obj}
+	return &InventoryResourceGroup{inv: obj, strategy: strategy}
 }
 
 func InvToUnstructuredFunc(inv inventory.Info) *unstructured.Unstructured {
@@ -166,12 +184,44 @@ func (icm *InventoryResourceGroup) Load() (object.ObjMetadataSet, error) {
 	return objs, nil
 }
 
+// loadFrom creates a list of managed GKNN ObjectMetadata as an ObjectMetadataSet from an unstructured ResourceGroup.
+func (icm *InventoryResourceGroup) loadFrom(obj *unstructured.Unstructured) (object.ObjMetadataSet, error) {
+	var objs object.ObjMetadataSet
+	klog.V(4).Infof("loading inventory...")
+
+	items, exists, err := unstructured.NestedSlice(obj.Object, "spec", "resources")
+	if err != nil {
+		err := fmt.Errorf("error retrieving object metadata from inventory object")
+		return objs, err
+	}
+	if !exists {
+		klog.V(4).Infof("Inventory (spec.resources) does not exist")
+		return objs, nil
+	}
+
+	klog.V(4).Infof("loading %d inventory items", len(items))
+	for _, item := range items {
+		objMeta, err := idFromUnstructuredField(item)
+		if err != nil {
+			return nil, err
+		}
+
+		objs = append(objs, objMeta)
+	}
+
+	return objs, nil
+}
+
 // Store is an Inventory interface function implemented to store
 // the object metadata in the wrapped ResourceGroup. Actual storing
 // happens in "GetObject".
 func (icm *InventoryResourceGroup) Store(objMetas object.ObjMetadataSet, status []actuation.ObjectStatus) error {
 	icm.objMetas = objMetas
-	icm.objStatus = status
+	icm.objStatus = make(map[object.ObjMetadata]actuation.ObjectStatus, len(status))
+	for _, s := range status {
+		icm.objStatus[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
+	}
+
 	return nil
 }
 
@@ -191,12 +241,7 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 	var objs []interface{}
 	for _, objMeta := range icm.objMetas {
 		klog.V(4).Infof("storing inventory obj refercence: %s/%s", objMeta.Namespace, objMeta.Name)
-		objs = append(objs, map[string]interface{}{
-			"group":     objMeta.GroupKind.Group,
-			"kind":      objMeta.GroupKind.Kind,
-			"namespace": objMeta.Namespace,
-			"name":      objMeta.Name,
-		})
+		objs = append(objs, idToUnstructuredMap(objMeta))
 	}
 	klog.V(4).Infof("Creating list of %d resources status", len(icm.objMetas))
 	var objStatus []interface{}
@@ -246,6 +291,630 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 		}
 	}
 	return invCopy, nil
+}
+
+// sortResourceGroups is a utility function for sorting a list of sharded ResourceGroup objects by the
+// ResourceGroup object name.
+func sortResourceGroups(resourcegroups []unstructured.Unstructured) {
+	sort.Slice(resourcegroups, func(i, j int) bool {
+		return resourcegroups[i].GetName() < resourcegroups[j].GetName()
+	})
+}
+
+// Apply is a Storage interface function implemented to apply the inventory
+// object.
+func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTMapper, statusPolicy inventory.StatusPolicy) error {
+	namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// Get all cluster ResourceGroup objects using label selector.
+	resourceList, err := namespacedClient.List(context.TODO(), metav1.ListOptions{
+		LabelSelector: icm.shardedLabel(),
+	})
+	if err != nil {
+		return err
+	}
+	resourcegroups := resourceList.Items
+
+	// Internal flag to indicate whether current ResourceGroup should be updated to include new labels.
+	var shouldUpdate bool
+
+	// Fallback to using name lookup for backwards compatibility where a ResourceGroup already exists on cluster without
+	// the label selector. This occurs when the on cluster ResourceGroup was created with an older version of kpt.
+	if len(resourcegroups) == 0 {
+		rg, err := namespacedClient.Get(context.TODO(), icm.Name(), metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+
+		if rg != nil {
+			resourcegroups = []unstructured.Unstructured{*rg}
+			shouldUpdate = true
+		}
+	}
+
+	if len(resourcegroups) == 0 {
+		// Create cluster ResourceGroup object(s) if it does not exist on cluster.
+		return icm.createResourceGroups(dc, mapper, statusPolicy)
+	}
+
+	sortResourceGroups(resourcegroups)
+
+	// Create a map that stores all managaged objects to determine if we have newer objects to be added
+	// to the ResourceGroup. We also store the index position to be able to store statuses as well by referencing
+	// the status slice index.
+	managedResources := make(map[object.ObjMetadata]struct{}, len(icm.objMetas))
+	for _, objMeta := range icm.objMetas {
+		managedResources[objMeta] = struct{}{}
+	}
+
+	var lastRG *unstructured.Unstructured
+	for _, rg := range resourcegroups {
+		rg := rg
+		lastRG = &rg
+		objs, err := icm.loadFrom(&rg)
+		if err != nil {
+			return err
+		}
+
+		for _, obj := range objs {
+			delete(managedResources, obj)
+		}
+	}
+
+	// All resources in local ResourceGroup is already being tracked on cluster.
+	if len(managedResources) == 0 {
+		if !shouldUpdate {
+			return nil
+		}
+
+		// Need to update existing ResourceGroup on-cluster to add label.
+		icm.addShardedLabel(lastRG)
+
+		_, err = namespacedClient.Update(context.TODO(), lastRG, metav1.UpdateOptions{})
+		return err
+	}
+
+	// Simply append managed resources to the cluster's last ResourceGroup object in the
+	// sharded series as it should be able to store the additional resources.
+	if icm.shardingDisabled() || getObjCount(lastRG) < icm.resourceCount {
+		items, _, _ := unstructured.NestedSlice(lastRG.Object, "spec", "resources")
+		statuses, _, _ := unstructured.NestedSlice(lastRG.Object, "status", "resourceStatuses")
+		for obj := range managedResources {
+			items = append(items, idToUnstructuredMap(obj))
+			statuses = append(statuses, statusToUnstructuredMap(icm.objStatus[obj]))
+			delete(managedResources, obj)
+
+			// Stop appending to item list if we need to shard to a new ResourceGroup.
+			if len(items) == icm.resourceCount && !icm.shardingDisabled() {
+				break
+			}
+		}
+
+		err = unstructured.SetNestedSlice(lastRG.Object, items, "spec", "resources")
+		if err != nil {
+			return err
+		}
+		appliedObj, err := namespacedClient.Update(context.TODO(), lastRG, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+
+		if statusPolicy == inventory.StatusPolicyAll {
+			if err := updateStatus(namespacedClient, lastRG, statuses, appliedObj); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Create newer ResourceGroups to keep storing more resources when sharding is enabled, and
+	// previous ResourceGroup is full.
+	for len(managedResources) > 0 {
+		newRG := icm.nextOf(lastRG)
+		items := make([]interface{}, 0, min(icm.resourceCount, len(managedResources)))
+		statuses := make([]interface{}, 0, min(icm.resourceCount, len(managedResources)))
+		for obj := range managedResources {
+			items = append(items, idToUnstructuredMap(obj))
+			statuses = append(statuses, statusToUnstructuredMap(icm.objStatus[obj]))
+			delete(managedResources, obj)
+
+			if len(items) == icm.resourceCount {
+				break
+			}
+		}
+		err = unstructured.SetNestedSlice(newRG.Object, items, "spec", "resources")
+		if err != nil {
+			return err
+		}
+
+		appliedObj, err := namespacedClient.Create(context.TODO(), newRG, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+
+		if statusPolicy == inventory.StatusPolicyAll {
+			if err := updateStatus(namespacedClient, newRG, statuses, appliedObj); err != nil {
+				return err
+			}
+		}
+
+		lastRG = newRG
+	}
+
+	return nil
+}
+
+// shardedName generates the formatted name in a series of sharded ResourceGroups.
+// The name should be formatted as `<resourcegroup_name>-<name-length-hash>-<index>`.
+// An example sharded name is: "resourcegroup-13-1"
+func shardedName(name string, idx int) string {
+	return fmt.Sprintf("%s-%d-%d", name, len(name), idx)
+}
+
+// shardedLabel genereates the formatted label name required for sharded ResourceGroups.
+// The label value should be formatted as `<resourcegroup_name>/id`.
+func (icm *InventoryResourceGroup) shardedLabel() string {
+	return fmt.Sprintf("%s/id", icm.Name())
+}
+
+func (icm *InventoryResourceGroup) shardingDisabled() bool {
+	return icm.resourceCount <= 0
+}
+
+// nextOf returns a new unstructured object with metadata that attributes it to the
+// next sharded ResourceGroup object.
+func (icm *InventoryResourceGroup) nextOf(curr *unstructured.Unstructured) *unstructured.Unstructured {
+	newRG := &unstructured.Unstructured{}
+	newRG.SetGroupVersionKind(ResourceGroupGVK)
+	newRG.SetNamespace(curr.GetNamespace())
+
+	// Add the required labels.
+	newRG.SetLabels(curr.GetLabels())
+
+	// Determine name of new ResourceGroup.
+	name := curr.GetName()
+	// Append the `<name_length_hash>-<index>` suffix to generate the next name in the series.
+	if name == icm.Name() {
+		newRG.SetName(shardedName(name, 1))
+		return newRG
+	}
+
+	// Extract the index of the current sharded ResourceGroup to be incremented on.
+	str := strings.TrimPrefix(name, fmt.Sprintf("%s-%d-", icm.Name(), len(icm.Name())))
+	currID, _ := strconv.Atoi(str)
+	newRG.SetName(shardedName(name, currID+1))
+	return newRG
+}
+
+// getObjCount returns the number of resources stored within the given ResourceGroup object.
+func getObjCount(rg *unstructured.Unstructured) int {
+	items, exists, err := unstructured.NestedSlice(rg.Object, "spec", "resources")
+	if err != nil || !exists {
+		return 0
+	}
+
+	return len(items)
+}
+
+// ApplyWithPrune applies the inventory objects with pruning logic.
+func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper meta.RESTMapper,
+	statusPolicy inventory.StatusPolicy, allObjs object.ObjMetadataSet) error {
+	namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// Get all cluster ResourceGroup objects using label selector.
+	resourceList, err := namespacedClient.List(context.TODO(), metav1.ListOptions{
+		LabelSelector: icm.shardedLabel(),
+	})
+	if err != nil {
+		return err
+	}
+	resourcegroups := resourceList.Items
+
+	// Fallback to using name lookup for backwards compatibility where a ResourceGroup already exists on cluster without
+	// the label selector. This occurs when the on cluster ResourceGroup was created with an older version of kpt.
+	if len(resourcegroups) == 0 {
+		rg, err := namespacedClient.Get(context.TODO(), icm.Name(), metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+
+		if rg != nil {
+			resourcegroups = []unstructured.Unstructured{*rg}
+		}
+	}
+
+	managedResources := make(map[object.ObjMetadata]struct{}, len(allObjs))
+	for _, id := range allObjs {
+		managedResources[id] = struct{}{}
+	}
+
+	needCollapse := false
+	for _, rg := range resourcegroups {
+		items, exists, err := unstructured.NestedSlice(rg.Object, "spec", "resources")
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+
+		var newItems []interface{}
+		var newStatuses []interface{}
+		for _, item := range items {
+			id, err := idFromUnstructuredField(item)
+			if err != nil {
+				return err
+			}
+
+			if _, exists := managedResources[id]; exists {
+				newItems = append(newItems, item)
+				newStatuses = append(newStatuses, statusToUnstructuredMap(icm.objStatus[id]))
+			} else {
+				needCollapse = true
+			}
+		}
+
+		err = unstructured.SetNestedSlice(rg.Object, newItems, "spec", "resources")
+		if err != nil {
+			return err
+		}
+
+		// Add sharded label in the event pruning occurs on an older ResourceGroup without the label.
+		icm.addShardedLabel(&rg)
+
+		appliedObj, err := namespacedClient.Update(context.TODO(), &rg, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+
+		if statusPolicy == inventory.StatusPolicyAll {
+			err := updateStatus(namespacedClient, &rg, newStatuses, appliedObj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if needCollapse {
+		// Reshuffle GKNNs to the start of ResourceGroup object series.
+		return icm.collapse(dc, mapper, statusPolicy)
+	}
+
+	return nil
+}
+
+// collapse the set of ResourceGroups into as few ResourceGroups as possible, given the
+// MaxResourceCount setting.
+func (icm *InventoryResourceGroup) collapse(dc dynamic.Interface, mapper meta.RESTMapper, statusPolicy inventory.StatusPolicy) error {
+	if icm.shardingDisabled() {
+		klog.V(4).Info("skipping re-balancing of ResourceGroups as sharding is disabled")
+		return nil
+	}
+
+	namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// Get all cluster ResourceGroup objects using label selector.
+	resourceList, err := namespacedClient.List(context.TODO(), metav1.ListOptions{
+		LabelSelector: icm.shardedLabel(),
+	})
+	if err != nil {
+		return err
+	}
+
+	resourcegroups := resourceList.Items
+	sortResourceGroups(resourcegroups)
+
+	// Get all GKNNs across all sharded ResourceGroups.
+	var items []interface{}
+	for _, rg := range resourcegroups {
+		resources, exists, err := unstructured.NestedSlice(rg.Object, "spec", "resources")
+		if err != nil || !exists {
+			continue
+		}
+
+		items = append(items, resources...)
+	}
+
+	count := len(items)
+
+	// Re-balance GKNN objects in sharded ResourceGroups.
+	objIdx := 0
+	for objIdx < count {
+		var currItems []interface{}
+
+		limitIdx := objIdx + icm.resourceCount
+		rgIdx := objIdx / icm.resourceCount
+		currRG := resourcegroups[rgIdx]
+
+		if limitIdx < len(items) {
+			currItems = items[objIdx:limitIdx]
+		} else {
+			currItems = items[objIdx:]
+		}
+
+		// Get the required statuses.
+		currStatuses, err := icm.getStatuses(currItems)
+		if err != nil {
+			return err
+		}
+
+		err = unstructured.SetNestedSlice(currRG.Object, currItems, "spec", "resources")
+		if err != nil {
+			return err
+		}
+		appliedObj, err := namespacedClient.Update(context.TODO(), &currRG, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+
+		if statusPolicy == inventory.StatusPolicyAll {
+			err := updateStatus(namespacedClient, &currRG, currStatuses, appliedObj)
+			if err != nil {
+				return err
+			}
+		}
+
+		objIdx += icm.resourceCount
+	}
+
+	// Delete ResourceGroups that contain duplicated GKNNs.
+	for rgIdx := len(resourcegroups) - 1; rgIdx >= objIdx/icm.resourceCount; rgIdx-- {
+		// Do not delete the first ResourceGroup in series. If we do reach rgIdx == 0, it indicates that
+		// kpt is not managing any GKNNs in its inventory.
+		if rgIdx == 0 {
+			break
+		}
+
+		err = namespacedClient.Delete(context.TODO(), resourcegroups[rgIdx].GetName(), metav1.DeleteOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getStatuses iterates through a list of unstructured GKNNs and returns a slice of statuses for the found objects.
+func (icm *InventoryResourceGroup) getStatuses(objMetas []interface{}) ([]interface{}, error) {
+	statuses := make([]interface{}, 0, len(objMetas))
+
+	for _, objMeta := range objMetas {
+		item, err := idFromUnstructuredField(objMeta)
+		if err != nil {
+			return nil, err
+		}
+
+		s, exists := icm.objStatus[item]
+		if !exists {
+			continue
+		}
+
+		statuses = append(statuses, statusToUnstructuredMap(s))
+	}
+
+	return statuses, nil
+}
+
+// createResourceGroups creates new ResourceGroup object(s) on cluster, and handles the sharding of managed
+// resources into multiple ResourceGroup objects.
+func (icm *InventoryResourceGroup) createResourceGroups(dc dynamic.Interface, mapper meta.RESTMapper, statusPolicy inventory.StatusPolicy) error {
+	namespacedClient, err := icm.getNamespacedClient(dc, mapper)
+	if err != nil {
+		return err
+	}
+
+	// totalStored tracks the total number of resources stored within all sharded ResourceGroups.
+	totalStored := 0
+
+	// Create ResourceGroups by partitioning the GKNNs to be stored, or create an empty
+	// ResourceGroup if we no GKNNs are being tracked.
+	for totalStored < len(icm.objMetas) || totalStored == 0 {
+		var items []interface{}
+		var statuses []interface{}
+
+		switch icm.shardingDisabled() {
+		case true:
+			for _, objMeta := range icm.objMetas {
+				items = append(items, idToUnstructuredMap(objMeta))
+			}
+
+			if statusPolicy == inventory.StatusPolicyAll {
+				for _, objStatus := range icm.objStatus {
+					statuses = append(statuses, statusToUnstructuredMap(objStatus))
+				}
+			}
+		default: // Split managed objects into current ResourceGroup.
+			for partitionCount := 0; partitionCount < icm.resourceCount && totalStored+partitionCount < len(icm.objMetas); partitionCount++ {
+				objMeta := icm.objMetas[totalStored+partitionCount]
+				items = append(items, idToUnstructuredMap(objMeta))
+
+				if statusPolicy == inventory.StatusPolicyAll {
+					objStatus := statusToUnstructuredMap(icm.objStatus[objMeta])
+					statuses = append(statuses, objStatus)
+				}
+			}
+		}
+
+		var rg *unstructured.Unstructured
+		switch totalStored {
+		case 0: // Initial RG in series.
+			rg = icm.inv
+			rg.SetResourceVersion("")
+		default:
+			rg = icm.inv.DeepCopy()
+			rg.SetResourceVersion("")
+			rg.SetName(shardedName(rg.GetName(), totalStored/icm.resourceCount))
+		}
+
+		icm.addShardedLabel(rg)
+
+		err := unstructured.SetNestedSlice(rg.Object, items, "spec", "resources")
+		if err != nil {
+			return err
+		}
+
+		appliedObj, err := namespacedClient.Create(context.TODO(), rg, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+
+		if statusPolicy == inventory.StatusPolicyAll {
+			if err := updateStatus(namespacedClient, rg, statuses, appliedObj); err != nil {
+				return err
+			}
+		}
+
+		totalStored += len(items)
+
+		// Exit loop if the ResourceGroup is empty.
+		if len(items) == 0 {
+			break
+		}
+	}
+
+	return nil
+}
+
+// updateStatus will update resourceStatuses on a live ResourceGroup on cluster by setting the required fields in the unstructured object.
+func updateStatus(namespacedClient dynamic.ResourceInterface, rg *unstructured.Unstructured, statuses []interface{}, appliedObj *unstructured.Unstructured) error {
+	switch len(statuses) {
+	case 0:
+		unstructured.RemoveNestedField(rg.Object, "status", "resourceStatuses")
+	default:
+		err := unstructured.SetNestedSlice(rg.Object, statuses, "status", "resourceStatuses")
+		if err != nil {
+			return fmt.Errorf("unable to set nested field for resourceStatuses: %w", err)
+		}
+	}
+
+	// Update ResourceGroup to have the latest ResourceVersion and Generation.
+	rg.SetResourceVersion(appliedObj.GetResourceVersion())
+	generation := appliedObj.GetGeneration()
+	err := unstructured.SetNestedField(rg.Object,
+		generation, "status", "observedGeneration")
+	if err != nil {
+		return fmt.Errorf("unable to set nested field for .status.observedGeneration: %w", err)
+	}
+
+	_, err = namespacedClient.UpdateStatus(context.TODO(), rg, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to update status: %w", err)
+	}
+
+	return nil
+}
+
+// getNamespacedClient returns a namespaced client for interacting with ResourceGroups on cluster.
+func (icm *InventoryResourceGroup) getNamespacedClient(dc dynamic.Interface, mapper meta.RESTMapper) (dynamic.ResourceInterface, error) {
+	invInfo, err := icm.GetObject()
+	if err != nil {
+		return nil, err
+	}
+	if invInfo == nil {
+		return nil, errors.New("attempting to interact with a nil inventory object")
+	}
+
+	mapping, err := mapper.RESTMapping(invInfo.GroupVersionKind().GroupKind(), invInfo.GroupVersionKind().Version)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create rest mapping for ResourceGroup: %w", err)
+	}
+
+	// Create client to interact with cluster.
+	namespacedClient := dc.Resource(mapping.Resource).Namespace(invInfo.GetNamespace())
+
+	return namespacedClient, nil
+}
+
+// idFromUnstructuredField serializes a nested field of stored GKNN resources within an unstructured ResourceGroup object,
+// to an ObjectMetadata.
+func idFromUnstructuredField(fields interface{}) (object.ObjMetadata, error) {
+	item, ok := fields.(map[string]interface{})
+	if !ok {
+		return object.ObjMetadata{}, fmt.Errorf("unable to cast field to the required map type for: %v", fields)
+	}
+
+	namespace, _, err := unstructured.NestedString(item, "namespace")
+	if err != nil {
+		return object.ObjMetadata{}, err
+	}
+	name, _, err := unstructured.NestedString(item, "name")
+	if err != nil {
+		return object.ObjMetadata{}, err
+	}
+	group, _, err := unstructured.NestedString(item, "group")
+	if err != nil {
+		return object.ObjMetadata{}, err
+	}
+	kind, _, err := unstructured.NestedString(item, "kind")
+	if err != nil {
+		return object.ObjMetadata{}, err
+	}
+	groupKind := schema.GroupKind{
+		Group: strings.TrimSpace(group),
+		Kind:  strings.TrimSpace(kind),
+	}
+
+	id := object.ObjMetadata{
+		GroupKind: groupKind,
+		Name:      name,
+		Namespace: namespace,
+	}
+
+	return id, nil
+}
+
+// idToUnstructuredMap serializes a given ObjMetadata into an unstructured interface of
+// GKNN to be tracked in a ResourceGroup.
+func idToUnstructuredMap(obj object.ObjMetadata) map[string]interface{} {
+	return map[string]interface{}{
+		"group":     obj.GroupKind.Group,
+		"kind":      obj.GroupKind.Kind,
+		"namespace": obj.Namespace,
+		"name":      obj.Name,
+	}
+}
+
+// statusToUnstructuredMap serializes a given ObjMetadata into an unstructured interface of
+// GKNN to be tracked in a ResourceGroup.
+func statusToUnstructuredMap(status actuation.ObjectStatus) map[string]interface{} {
+	return map[string]interface{}{
+		"group":     status.Group,
+		"kind":      status.Kind,
+		"namespace": status.Namespace,
+		"name":      status.Name,
+		"status":    "Unknown",
+		"actuation": status.Actuation.String(),
+		"reconcile": status.Reconcile.String(),
+		"strategy":  status.Strategy.String(),
+	}
+}
+
+// addShardedLabel adds a new label to the ResourceGroup object.
+func (icm *InventoryResourceGroup) addShardedLabel(resourcegroup *unstructured.Unstructured) {
+	labels := resourcegroup.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	labels[icm.shardedLabel()] = ""
+	resourcegroup.SetLabels(labels)
+}
+
+// min returns the minimum of 2 integers.
+func min(i, j int) int {
+	if i < j {
+		return i
+	}
+
+	return j
 }
 
 // IsResourceGroupInventory returns true if the passed object is

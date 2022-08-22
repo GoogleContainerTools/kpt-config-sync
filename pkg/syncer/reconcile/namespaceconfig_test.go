@@ -57,6 +57,12 @@ func namespaceConfig(name string, state v1.ConfigSyncState, opts ...core.MetaMut
 	return result
 }
 
+func namespaceConfigWithResourceVersion(obj *v1.NamespaceConfig, rv string) *v1.NamespaceConfig {
+	obj = obj.DeepCopy()
+	obj.ResourceVersion = rv
+	return obj
+}
+
 var (
 	eng              = "eng"
 	managedNamespace = namespace(eng, syncertest.ManagementEnabled, syncertest.TokenAnnotation)
@@ -82,8 +88,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			name:     "create from declared state",
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RollingUpdateDeploymentStrategyType, core.ResourceVersion("1"),
+					syncertest.ManagementEnabled, syncertest.TokenAnnotation),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -91,7 +98,7 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			name:     "do not create if management disabled",
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementDisabled),
 			want: []client.Object{
-				namespaceCfgSynced,
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
 			},
 		},
 		// The declared state is invalid, so take no action.
@@ -99,7 +106,7 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			name:     "do not create if declared managed invalid",
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementInvalid),
 			want: []client.Object{
-				namespaceCfgSynced,
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
 			},
 			wantEvent: testingfake.NewEvent(
 				deployment(appsv1.RollingUpdateDeploymentStrategyType),
@@ -110,8 +117,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementEnabled),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RollingUpdateDeploymentStrategyType, core.ResourceVersion("2"),
+					syncertest.ManagementEnabled, syncertest.TokenAnnotation),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -120,8 +128,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RollingUpdateDeploymentStrategyType, core.ResourceVersion("2"),
+					syncertest.ManagementEnabled, syncertest.TokenAnnotation),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -131,8 +140,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementInvalid),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RollingUpdateDeploymentStrategyType, core.ResourceVersion("2"),
+					syncertest.ManagementEnabled, syncertest.TokenAnnotation),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -142,8 +152,8 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementInvalid),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RecreateDeploymentStrategyType),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("1")),
 			},
 			wantEvent: testingfake.NewEvent(
 				deployment(appsv1.RollingUpdateDeploymentStrategyType),
@@ -154,8 +164,8 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementDisabled),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementEnabled),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RecreateDeploymentStrategyType),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("2")),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -164,15 +174,15 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			declared: deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementDisabled),
 			actual:   deployment(appsv1.RecreateDeploymentStrategyType),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RecreateDeploymentStrategyType),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("1")),
 			},
 		},
 		{
 			name:   "delete if managed",
 			actual: deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementEnabled),
 			want: []client.Object{
-				namespaceCfgSynced,
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
 			},
 			wantEvent: managedNamespaceReconcileComplete,
 		},
@@ -180,8 +190,8 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			name:   "do not delete if unmanaged",
 			actual: deployment(appsv1.RecreateDeploymentStrategyType),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RecreateDeploymentStrategyType),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("1")),
 			},
 		},
 		// There is no declared state, just an invalid annotation.
@@ -189,8 +199,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			name:   "unmanage noop",
 			actual: deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementInvalid),
 			want: []client.Object{
-				namespaceCfgSynced,
-				deployment(appsv1.RecreateDeploymentStrategyType, syncertest.ManagementInvalid),
+				namespaceConfigWithResourceVersion(namespaceCfgSynced, "2"),
+				deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("1"),
+					syncertest.ManagementInvalid),
 			},
 		},
 	}
@@ -204,14 +215,27 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 
 			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, tc.declared))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
-			actual := []client.Object{namespaceCfg, managedNamespace}
+			actual := []client.Object{
+				namespaceCfg.DeepCopy(),
+				managedNamespace.DeepCopy(),
+			}
 			if tc.actual != nil {
 				actual = append(actual, tc.actual)
 			}
+
 			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
-			s.AddKnownTypeWithName(kinds.Deployment(), &appsv1.Deployment{})
+			if err := corev1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := appsv1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := v1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+
 			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient.Now = syncertest.Now
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -231,7 +255,9 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			} else {
 				fakeEventRecorder.Check(t)
 			}
-			want := append([]client.Object{managedNamespace}, tc.want...)
+			wantNamespace := managedNamespace.DeepCopy()
+			wantNamespace.ResourceVersion = "2"
+			want := append([]client.Object{wantNamespace}, tc.want...)
 			fakeClient.Check(t, want...)
 		})
 	}
@@ -253,7 +279,7 @@ func TestUnmanagedNamespaceReconcile(t *testing.T) {
 			name:                  "clean up unmanaged Namespace with namespaceconfig",
 			actualNamespaceConfig: namespaceConfig("eng", v1.StateSynced, syncertest.NamespaceConfigImportToken(syncertest.Token), syncertest.NamespaceConfigSyncToken(), syncertest.ManagementDisabled),
 			namespace:             namespace("eng", syncertest.ManagementEnabled),
-			wantNamespace:         namespace("eng"),
+			wantNamespace:         namespace("eng", core.ResourceVersion("2")),
 		},
 		{
 			name:                  "do nothing to explicitly unmanaged resources",
@@ -261,18 +287,18 @@ func TestUnmanagedNamespaceReconcile(t *testing.T) {
 			namespace:             namespace("eng"),
 			declared:              deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementDisabled, core.Label("also not", "synced")),
 			actual:                deployment(appsv1.RecreateDeploymentStrategyType),
-			wantNamespace:         namespace("eng"),
-			want:                  deployment(appsv1.RecreateDeploymentStrategyType),
+			wantNamespace:         namespace("eng", core.ResourceVersion("1")),
+			want:                  deployment(appsv1.RecreateDeploymentStrategyType, core.ResourceVersion("1")),
 		},
 		{
 			name:                   "delete resources in unmanaged Namespace",
 			actualNamespaceConfig:  namespaceConfig("eng", v1.StateSynced, syncertest.ManagementDisabled),
 			namespace:              namespace("eng"),
-			updatedNamespaceConfig: namespaceConfig("eng", v1.StateSynced, syncertest.ManagementDisabled),
+			updatedNamespaceConfig: namespaceConfig("eng", v1.StateSynced, syncertest.ManagementDisabled, core.ResourceVersion("1")),
 			actual:                 deployment(appsv1.RollingUpdateDeploymentStrategyType, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
 			wantEvent: testingfake.NewEvent(namespaceConfig("eng", v1.StateSynced),
 				corev1.EventTypeNormal, v1.EventReasonReconcileComplete),
-			wantNamespace: namespace("eng"),
+			wantNamespace: namespace("eng", core.ResourceVersion("1")),
 		},
 	}
 
@@ -286,13 +312,25 @@ func TestUnmanagedNamespaceReconcile(t *testing.T) {
 
 			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
+
 			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
+			if err := corev1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := appsv1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := v1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+
 			actual := []client.Object{tc.actualNamespaceConfig, tc.namespace}
 			if tc.actual != nil {
 				actual = append(actual, tc.actual)
 			}
+
 			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient.Now = syncertest.Now
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -312,7 +350,9 @@ func TestUnmanagedNamespaceReconcile(t *testing.T) {
 			if tc.updatedNamespaceConfig != nil {
 				want = append(want, tc.updatedNamespaceConfig)
 			} else {
-				want = append(want, tc.actualNamespaceConfig)
+				objCopy := tc.actualNamespaceConfig.DeepCopy()
+				objCopy.ResourceVersion = "1"
+				want = append(want, objCopy)
 			}
 			if tc.want != nil {
 				want = append(want, tc.want)
@@ -341,8 +381,9 @@ func TestSpecialNamespaceReconcile(t *testing.T) {
 			declared: namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, syncertest.NamespaceConfigImportToken(syncertest.Token),
 				syncertest.NamespaceConfigImportTime(metav1.NewTime(mgrInitTime.Add(time.Minute)))),
 			actual:        namespace(metav1.NamespaceSystem, syncertest.ManagementEnabled),
-			wantNamespace: namespace(metav1.NamespaceSystem, syncertest.ManagementEnabled, syncertest.TokenAnnotation),
-			want: namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, syncertest.NamespaceConfigImportToken(syncertest.Token),
+			wantNamespace: namespace(metav1.NamespaceSystem, core.ResourceVersion("2"), syncertest.ManagementEnabled, syncertest.TokenAnnotation),
+			want: namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, core.ResourceVersion("2"),
+				syncertest.NamespaceConfigImportToken(syncertest.Token),
 				syncertest.NamespaceConfigImportTime(metav1.NewTime(mgrInitTime.Add(time.Minute))),
 				syncertest.NamespaceConfigSyncTime(), syncertest.NamespaceConfigSyncToken()),
 		},
@@ -350,15 +391,15 @@ func TestSpecialNamespaceReconcile(t *testing.T) {
 			name:          "unmanage kube-system",
 			declared:      namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, syncertest.ManagementDisabled),
 			actual:        namespace(metav1.NamespaceSystem, syncertest.ManagementEnabled),
-			wantNamespace: namespace(metav1.NamespaceSystem),
-			want:          namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, syncertest.ManagementDisabled),
+			wantNamespace: namespace(metav1.NamespaceSystem, core.ResourceVersion("2")),
+			want:          namespaceConfig(metav1.NamespaceSystem, v1.StateSynced, core.ResourceVersion("1"), syncertest.ManagementDisabled),
 		},
 		{
 			name:          "unmanage default",
 			declared:      namespaceConfig(metav1.NamespaceDefault, v1.StateSynced, syncertest.ManagementDisabled),
 			actual:        namespace(metav1.NamespaceDefault, syncertest.ManagementEnabled),
-			wantNamespace: namespace(metav1.NamespaceDefault),
-			want:          namespaceConfig(metav1.NamespaceDefault, v1.StateSynced, syncertest.ManagementDisabled),
+			wantNamespace: namespace(metav1.NamespaceDefault, core.ResourceVersion("2")),
+			want:          namespaceConfig(metav1.NamespaceDefault, v1.StateSynced, core.ResourceVersion("1"), syncertest.ManagementDisabled),
 		},
 	}
 
@@ -370,11 +411,16 @@ func TestSpecialNamespaceReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, nil))
+			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
+
 			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
+			if err := corev1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+
 			fakeClient := testingfake.NewClient(t, s, tc.declared, tc.actual)
+			fakeClient.Now = syncertest.Now
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -450,10 +496,12 @@ func TestNamespaceConfigReconcile(t *testing.T) {
 			},
 			want: []client.Object{
 				namespace(metav1.NamespaceDefault,
+					core.ResourceVersion("2"),
 					core.Annotation("some-user-annotation", "some-annotation-value"),
 					core.Label("some-user-label", "some-label-value"),
 				),
 				deployment(appsv1.RecreateDeploymentStrategyType,
+					core.ResourceVersion("1"),
 					core.Namespace(metav1.NamespaceDefault),
 					core.Name("your-deployment")),
 			},
@@ -496,10 +544,12 @@ func TestNamespaceConfigReconcile(t *testing.T) {
 			},
 			want: []client.Object{
 				namespace(metav1.NamespaceSystem,
+					core.ResourceVersion("2"),
 					core.Annotation("some-user-annotation", "some-annotation-value"),
 					core.Label("some-user-label", "some-label-value"),
 				),
 				deployment(appsv1.RecreateDeploymentStrategyType,
+					core.ResourceVersion("1"),
 					core.Namespace(metav1.NamespaceSystem),
 					core.Name("your-deployment")),
 			},
@@ -522,9 +572,20 @@ func TestNamespaceConfigReconcile(t *testing.T) {
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
 			actual := []client.Object{tc.namespaceConfig, tc.namespace}
 			actual = append(actual, tc.actual...)
+
 			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
+			if err := corev1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := appsv1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := v1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+
 			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient.Now = syncertest.Now
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)

@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -179,17 +180,19 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 		ntopts.WithDelegatedControl,
 	)
 
-	var rs v1beta1.RepoSync
-	if err := nt.Get(configsync.RepoSyncName, bsNamespace, &rs); err != nil {
-		nt.T.Fatal(err)
+	rs := &v1beta1.RepoSync{}
+	if err := nt.Get(configsync.RepoSyncName, bsNamespace, rs); err != nil {
+		nt.T.Fatalf("RepoSync get failed: %v", err)
 	}
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
 	// Delete RepoSync custom resource from the cluster.
-	err := nt.Delete(&rs)
+	err := nt.Delete(rs)
 	if err != nil {
 		nt.T.Fatalf("RepoSync delete failed: %v", err)
 	}
+	// Wait for finalizers to complete
+	nomostest.WaitToTerminateObject(nt, rs)
 
 	checkRepoSyncResourcesNotPresent(bsNamespace, secretNames, nt)
 
@@ -223,6 +226,10 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nsRepo := nt.NonRootRepos[nn]
 	delete(nt.NonRootRepos, nn)
 	nt.WaitForRepoSyncs()
+
+	// SYNCED means pruned objects were deleted, but not necessarily reconciled.
+	// Wait for RepoSync to be reconciled/terminated.
+	nomostest.WaitToTerminate(nt, kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace)
 
 	checkRepoSyncResourcesNotPresent(bsNamespace, secretNames, nt)
 
@@ -269,72 +276,50 @@ func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {
 }
 
 func checkRepoSyncResourcesNotPresent(namespace string, secretNames []string, nt *nomostest.NT) {
-	_, err := nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(configsync.RepoSyncName, namespace, fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName))
-	})
-	if err != nil {
-		nt.T.Errorf("RepoSync present after deletion: %v", err)
+	if err := nt.ValidateNotFound(configsync.RepoSyncName, namespace, fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)); err != nil {
+		nt.T.Errorf("RepoSync %s present after deletion: %v", configsync.RepoSyncName, err)
 	}
 
 	// Verify Namespace Reconciler deployment no longer present.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(core.NsReconcilerName(namespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, fake.DeploymentObject())
-	})
-	if err != nil {
-		nt.T.Errorf("Reconciler deployment present after deletion: %v", err)
+	reconcilerName := core.NsReconcilerName(namespace, configsync.RepoSyncName)
+	if err := nt.ValidateNotFound(reconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject()); err != nil {
+		nt.T.Errorf("Reconciler deployment %s present after deletion: %v", reconcilerName, err)
 	}
 
 	// Verify Namespace Reconciler configmaps no longer present.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound("ns-reconciler-bookstore-git-sync", configsync.ControllerNamespace, fake.ConfigMapObject())
-	})
-	if err != nil {
-		nt.T.Errorf("Configmap ns-reconciler-bookstore-git-sync present after deletion: %v", err)
+	cmNames := []string{
+		"ns-reconciler-bookstore-git-sync",
+		"ns-reconciler-bookstore-reconciler",
+		"ns-reconciler-bookstore-hydration-controller",
 	}
-
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound("ns-reconciler-bookstore-reconciler", configsync.ControllerNamespace, fake.ConfigMapObject())
-	})
-	if err != nil {
-		nt.T.Errorf("Configmap reconciler-bookstore-reconciler present after deletion: %v", err)
-	}
-
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound("ns-reconciler-bookstore-hydration-controller", configsync.ControllerNamespace, fake.ConfigMapObject())
-	})
-	if err != nil {
-		nt.T.Errorf("Configmap ns-reconciler-bookstore-hydration-controller present after deletion: %v", err)
+	for _, cmName := range cmNames {
+		if err := nt.ValidateNotFound(cmName, configsync.ControllerNamespace, fake.ConfigMapObject()); err != nil {
+			nt.T.Errorf("ConfigMap %s present after deletion: %v", cmName, err)
+		}
 	}
 
 	// Verify Namespace Reconciler service account no longer present.
-	saName := core.NsReconcilerName(namespace, configsync.RepoSyncName)
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(saName, configsync.ControllerNamespace, fake.ServiceAccountObject(saName))
-	})
-	if err != nil {
+	saName := reconcilerName
+	if err := nt.ValidateNotFound(saName, configsync.ControllerNamespace, fake.ServiceAccountObject(saName)); err != nil {
 		nt.T.Errorf("ServiceAccount %s present after deletion: %v", saName, err)
 	}
 
 	// Verify Namespace Reconciler role binding no longer present.
 	rbName := controllers.RepoSyncPermissionsName()
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(rbName, configsync.ControllerNamespace, fake.RoleBindingObject())
-	})
-	if err != nil {
+	if err := nt.ValidateNotFound(rbName, configsync.ControllerNamespace, fake.RoleBindingObject()); err != nil {
 		nt.T.Errorf("RoleBinding %s present after deletion: %v", rbName, err)
 	}
 
 	// Verify Namespace Reconciler secrets no longer present.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		for _, sName := range secretNames {
-			if err := nt.ValidateNotFound(sName, configsync.ControllerNamespace, fake.SecretObject(sName)); err != nil {
-				return err
-			}
+	for _, sName := range secretNames {
+		if err := nt.ValidateNotFound(sName, configsync.ControllerNamespace, fake.SecretObject(sName)); err != nil {
+			nt.T.Errorf("Secret %s present after deletion: %v", sName, err)
 		}
-		return nil
-	})
-	if err != nil {
-		nt.T.Errorf("ServiceAccount %s present after deletion: %v", saName, err)
+	}
+
+	// If any managed object still exist, fail the test.
+	if nt.T.Failed() {
+		nt.T.FailNow()
 	}
 }
 

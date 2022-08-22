@@ -33,7 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/importer/filesystem"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -253,7 +252,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(roleBindingName, backendNamespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WaitToTerminate(nt, kinds.Namespace(), backendNamespace, "")
+	nomostest.WaitToTerminateObject(nt, namespace)
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
@@ -321,7 +320,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(roleBindingName, backendNamespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WaitToTerminate(nt, kinds.Namespace(), backendNamespace, "")
+	nomostest.WaitToTerminateObject(nt, namespace)
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {

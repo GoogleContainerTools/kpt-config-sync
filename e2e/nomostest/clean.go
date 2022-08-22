@@ -149,9 +149,9 @@ func Clean(nt *NT, failOnError FailOnError) {
 
 		for _, u := range list {
 			if failOnError {
-				WaitToTerminate(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace())
+				WaitToTerminateObject(nt, &u)
 			} else {
-				WaitToTerminate(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace(), WaitNoFail())
+				WaitToTerminateObject(nt, &u, WaitNoFail())
 			}
 		}
 	}
@@ -289,9 +289,9 @@ func deleteImplicitNamespaces(nt *NT, failOnError FailOnError) {
 				errDeleting = true
 			}
 			if failOnError {
-				WaitToTerminate(nt, kinds.Namespace(), ns.Name, "")
+				WaitToTerminateObject(nt, &ns)
 			} else {
-				WaitToTerminate(nt, kinds.Namespace(), ns.Name, "", WaitNoFail())
+				WaitToTerminateObject(nt, &ns, WaitNoFail())
 			}
 		}
 	}
@@ -444,11 +444,20 @@ func FailIfUnknown(t testing.NTB, scheme *runtime.Scheme, o client.Object) {
 func WaitToTerminate(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {
 	nt.T.Helper()
 
-	Wait(nt.T, fmt.Sprintf("wait for %q %v to terminate", name, gvk), nt.DefaultWaitTimeout, func() error {
+	Wait(nt.T, fmt.Sprintf("wait for %s %s/%s to terminate", gvk.Kind, namespace, name), nt.DefaultWaitTimeout, func() error {
 		u := &unstructured.Unstructured{}
 		u.SetGroupVersionKind(gvk)
 		return nt.ValidateNotFound(name, namespace, u)
 	}, opts...)
+}
+
+// WaitToTerminateObject waits for the passed object to be deleted.
+// Immediately fails the test if the object is not deleted within the timeout.
+func WaitToTerminateObject(nt *NT, obj client.Object, opts ...WaitOption) {
+	nt.T.Helper()
+	key := client.ObjectKeyFromObject(obj)
+	gvk := nt.LookupGVK(obj)
+	WaitToTerminate(nt, gvk, key.Name, key.Namespace)
 }
 
 // DeleteRemoteRepos removes all remote repos on the Git provider.

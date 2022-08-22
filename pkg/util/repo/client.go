@@ -21,6 +21,8 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/status"
 	syncclient "kpt.dev/configsync/pkg/syncer/client"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
+	"kpt.dev/configsync/pkg/util/compare"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -72,6 +74,9 @@ func (c *Client) createRepo(ctx context.Context) (*v1.Repo, status.Error) {
 func (c *Client) UpdateImportStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
 	updateFn := func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
+		if cmp.Equal(newRepo.Status.Import, repo.Status.Import, compare.IgnoreTimestampUpdates) {
+			return newRepo, syncerclient.NoUpdateNeeded()
+		}
 		newRepo.Status.Import = repo.Status.Import
 		return newRepo, nil
 	}
@@ -86,6 +91,9 @@ func (c *Client) UpdateImportStatus(ctx context.Context, repo *v1.Repo) (*v1.Rep
 func (c *Client) UpdateSourceStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
 	updateFn := func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
+		if cmp.Equal(newRepo.Status.Source, repo.Status.Source, compare.IgnoreTimestampUpdates) {
+			return newRepo, syncerclient.NoUpdateNeeded()
+		}
 		newRepo.Status.Source = repo.Status.Source
 		return newRepo, nil
 	}
@@ -100,7 +108,7 @@ func (c *Client) UpdateSourceStatus(ctx context.Context, repo *v1.Repo) (*v1.Rep
 func (c *Client) UpdateSyncStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
 	updateFn := func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
-		if cmp.Equal(repo.Status.Sync, newRepo.Status.Sync) {
+		if cmp.Equal(repo.Status.Sync, newRepo.Status.Sync, compare.IgnoreTimestampUpdates) {
 			return newRepo, syncclient.NoUpdateNeeded()
 		}
 		newRepo.Status.Sync = repo.Status.Sync

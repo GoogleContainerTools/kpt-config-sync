@@ -39,64 +39,54 @@ import (
 func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, ntopts.SkipMonoRepo)
 
-	var rs v1beta1.RootSync
-	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &rs)
+	rs := &v1beta1.RootSync{}
+	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, rs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Delete RootSync custom resource from the cluster.
-	err = nt.Delete(&rs)
+	err = nt.Delete(rs)
 	if err != nil {
 		nt.T.Fatalf("deleting RootSync: %v", err)
 	}
+	// Wait for finalizers to complete
+	nomostest.WaitToTerminateObject(nt, rs)
 
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(configsync.RootSyncName, v1.NSConfigManagementSystem, fake.RootSyncObjectV1Beta1(configsync.RootSyncName))
-	})
-	if err != nil {
-		nt.T.Errorf("RootSync present after deletion: %v", err)
-	}
-
-	// Verify Root Reconciler deployment no longer present.
-	_, err = nomostest.Retry(20*time.Second, func() error {
-		return nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject())
-	})
+	// Validate Root Reconciler deployment no longer present.
+	err = nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject())
 	if err != nil {
 		nt.T.Errorf("Reconciler deployment present after deletion: %v", err)
 	}
 
-	// validate Root Reconciler configmaps are no longer present.
-	failNow := false
+	// Validate Root Reconciler configmaps are no longer present.
 	if err = nt.ValidateNotFound("root-reconciler-git-sync", v1.NSConfigManagementSystem, fake.ConfigMapObject()); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
 	if err = nt.ValidateNotFound("root-reconciler-reconciler", v1.NSConfigManagementSystem, fake.ConfigMapObject()); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
 	if err = nt.ValidateNotFound("root-reconciler-hydration-controller", v1.NSConfigManagementSystem, fake.ConfigMapObject()); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
 	if err = nt.ValidateNotFound("root-reconciler-source-format", v1.NSConfigManagementSystem, fake.ConfigMapObject()); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
-	// validate Root Reconciler ServiceAccount is no longer present.
+
+	// Validate Root Reconciler ServiceAccount is no longer present.
 	saName := core.RootReconcilerName(rs.Name)
 	if err = nt.ValidateNotFound(saName, v1.NSConfigManagementSystem, fake.ServiceAccountObject(saName)); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
-	// validate Root Reconciler ClusterRoleBinding is no longer present.
+
+	// Validate Root Reconciler ClusterRoleBinding is no longer present.
 	if err = nt.ValidateNotFound(controllers.RootSyncPermissionsName(), v1.NSConfigManagementSystem, fake.ClusterRoleBindingObject()); err != nil {
 		nt.T.Error(err)
-		failNow = true
 	}
-	if failNow {
-		t.FailNow()
+
+	// If any managed object still exist, fail the test.
+	if nt.T.Failed() {
+		nt.T.FailNow()
 	}
 
 	nt.T.Log("Test RootSync v1alpha1 version")

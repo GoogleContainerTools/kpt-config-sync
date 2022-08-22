@@ -31,6 +31,11 @@ import (
 )
 
 func TestClient_Create(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := rbacv1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
 	testCases := []struct {
 		name     string
 		declared client.Object
@@ -40,13 +45,13 @@ func TestClient_Create(t *testing.T) {
 		{
 			name:     "Creates if does not exist",
 			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
-			client:   syncertestfake.NewClient(t, runtime.NewScheme()),
+			client:   syncertestfake.NewClient(t, scheme),
 			wantErr:  nil,
 		},
 		{
 			name:     "Retriable if receives AlreadyExists",
 			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
-			client: syncertestfake.NewClient(t, runtime.NewScheme(),
+			client: syncertestfake.NewClient(t, scheme,
 				fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			),
 			wantErr: syncerclient.ConflictCreateAlreadyExists(errors.New("some error"),

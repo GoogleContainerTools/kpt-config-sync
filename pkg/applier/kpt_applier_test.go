@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -243,9 +244,16 @@ func TestSync(t *testing.T) {
 
 	for _, tc := range testcases {
 		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
 		u.SetNamespace("test-namespace")
 		u.SetName("rs")
-		fakeClient := testingfake.NewClient(t, runtime.NewScheme(), u)
+
+		s := runtime.NewScheme()
+		if err := appsv1.AddToScheme(s); err != nil {
+			t.Fatal(err)
+		}
+
+		fakeClient := testingfake.NewClient(t, s, u)
 		configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
 		applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
 			return &clientSet{

@@ -47,3 +47,10 @@ func ClusterConfigObject(opts ...ClusterConfigMutator) *v1.ClusterConfig {
 
 	return result
 }
+
+// ClusterConfigResourceVersion sets the ClusterConfig's resource version to the given value.
+func ClusterConfigResourceVersion(version string) ClusterConfigMutator {
+	return func(o *v1.ClusterConfig) {
+		o.SetResourceVersion(version)
+	}
+}

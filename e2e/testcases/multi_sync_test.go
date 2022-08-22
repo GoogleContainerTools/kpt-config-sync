@@ -522,6 +522,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		if err := nt.Delete(testNamespace); err != nil {
 			nt.T.Fatal(err)
 		}
+		nomostest.WaitToTerminateObject(nt, testNamespace)
 	})
 
 	rootSync := &v1beta1.RootSync{
@@ -543,6 +544,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		if err := nt.Delete(rootSync); err != nil {
 			nt.T.Fatal(err)
 		}
+		nomostest.WaitToTerminateObject(nt, rootSync)
 	})
 
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
@@ -554,6 +556,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	if err := nt.Delete(rs); err != nil {
 		nt.T.Fatal(err)
 	}
+	nomostest.WaitToTerminateObject(nt, rs)
 
 	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
 	for i := range longBytes {
@@ -572,6 +575,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		if err := nt.Delete(rs); err != nil {
 			nt.T.Fatal(err)
 		}
+		nomostest.WaitToTerminateObject(nt, rs)
 	})
 
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")

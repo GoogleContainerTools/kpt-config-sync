@@ -82,7 +82,7 @@ type NT struct {
 	//
 	// Most tests shouldn't need to talk directly to this, unless simulating
 	// direct interactions with the API Server.
-	Client client.Client
+	Client client.WithWatch
 
 	// IsGKEAutopilot indicates if the test cluster is a GKE Autopilot cluster.
 	IsGKEAutopilot bool
@@ -273,15 +273,45 @@ func (nt *NT) Update(obj client.Object, opts ...client.UpdateOption) error {
 	return nt.Client.Update(nt.Context, obj, opts...)
 }
 
-// Delete is identical to Delete defined for client.Client, but without requiring Context.
+// Delete is similar to Delete defined for client.Client, but without requiring Context.
+// If no policy is specified, foreground deletion is used.
 func (nt *NT) Delete(obj client.Object, opts ...client.DeleteOption) error {
+	policyFound := false
+	for _, opt := range opts {
+		if _, ok := opt.(client.PropagationPolicy); ok {
+			policyFound = true
+			break
+		}
+	}
+	// Default to foreground deletion if unspecified.
+	// This is almost always what people assume when they delete,
+	// and it should make tests less flakey.
+	if !policyFound {
+		opts = append(opts, client.PropagationPolicy(metav1.DeletePropagationForeground))
+	}
+
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("deleting %s", fmtObj(obj))
 	return nt.Client.Delete(nt.Context, obj, opts...)
 }
 
-// DeleteAllOf is identical to DeleteAllOf defined for client.Client, but without requiring Context.
+// DeleteAllOf is similar to DeleteAllOf defined for client.Client, but without requiring Context.
+// If no policy is specified, foreground deletion is used.
 func (nt *NT) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) error {
+	policyFound := false
+	for _, opt := range opts {
+		if _, ok := opt.(client.PropagationPolicy); ok {
+			policyFound = true
+			break
+		}
+	}
+	// Default to foreground deletion if unspecified.
+	// This is almost always what people assume when they delete,
+	// and it should make tests less flakey.
+	if !policyFound {
+		opts = append(opts, client.PropagationPolicy(metav1.DeletePropagationForeground))
+	}
+
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("deleting all of %T", obj)
 	return nt.Client.DeleteAllOf(nt.Context, obj, opts...)
@@ -419,9 +449,10 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Pr
 // 1) a struct pointer to the type of the object to search for, or
 // 2) an unstructured.Unstructured with the type information filled in.
 func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
+	gvk := nt.LookupGVK(o)
 	err := nt.Get(name, namespace, o)
 	if err == nil {
-		return errors.Errorf("%T %v %s/%s found", o, o.GetObjectKind().GroupVersionKind(), namespace, name)
+		return errors.Errorf("%s %s/%s found", gvk.Kind, namespace, name)
 	}
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -1346,6 +1377,15 @@ func (nt *NT) SupportV1Beta1CRD() (bool, error) {
 	return cmp < 0, nil
 }
 
+// LookupGVK returns the object's GVK or dies trying.
+func (nt *NT) LookupGVK(obj client.Object) schema.GroupVersionKind {
+	gvk, err := kinds.Lookup(obj, nt.scheme)
+	if err != nil {
+		nt.T.Fatalf("%v", err)
+	}
+	return gvk
+}
+
 // WaitOption is an optional parameter for Wait
 type WaitOption func(wait *waitSpec)
 
@@ -1353,6 +1393,18 @@ type waitSpec struct {
 	timeout time.Duration
 	// failOnError is the flag to control whether to fail the test or not when errors occur.
 	failOnError bool
+}
+
+// newWaitSpec returns a waitSpec with the options applied over the default options.
+// By default, failOnError is enabled.
+func newWaitSpec(opts ...WaitOption) *waitSpec {
+	wait := &waitSpec{
+		failOnError: true,
+	}
+	for _, opt := range opts {
+		opt(wait)
+	}
+	return wait
 }
 
 // WaitTimeout provides the timeout option to Wait.
@@ -1374,13 +1426,8 @@ func WaitNoFail() WaitOption {
 func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() error, opts ...WaitOption) {
 	t.Helper()
 
-	wait := waitSpec{
-		timeout:     timeout,
-		failOnError: true,
-	}
-	for _, opt := range opts {
-		opt(&wait)
-	}
+	opts = append(opts, WaitTimeout(timeout))
+	wait := newWaitSpec(opts...)
 
 	// Wait for the repository to report it is synced.
 	took, err := Retry(wait.timeout, condition)

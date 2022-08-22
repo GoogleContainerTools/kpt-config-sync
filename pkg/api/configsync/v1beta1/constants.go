@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package diff
+package v1beta1
 
 import (
-	"github.com/google/go-cmp/cmp"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
-var emptyTime = metav1.Time{}
-
-// IgnoreTimestampUpdates ignores timestamps when testing equality, unless one
-// is empty and the other is not.
-//
-// This is used to test R*Sync equality, because the timestamps get updated
-// every time, even if nothing else changed.
-var IgnoreTimestampUpdates = cmp.Comparer(func(x, y metav1.Time) bool {
-	return x == emptyTime && y == emptyTime ||
-		x != emptyTime && y != emptyTime
-})
+// SyncFinalizer is a finalizer handled by ReconcilerManager to ensure
+// deletion of managed resource objects complete before the RootSync/RepoSync is
+// deleted
+const SyncFinalizer = reconcilermanager.ManagerName + "." + configmanagement.GroupName

@@ -16,7 +16,9 @@ package crd
 
 import (
 	"github.com/pkg/errors"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -37,6 +39,13 @@ const crdControllerName = "crd-resources"
 
 // AddCRDController adds the CRD controller to the Manager.
 func AddCRDController(mgr manager.Manager, signal sync.RestartSignal) error {
+	// Register all known CRD types, including unversioned, for conversion between versions.
+	if err := apiextensions.AddToScheme(mgr.GetScheme()); err != nil {
+		return err
+	}
+	if err := apiextensionsv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
+		return err
+	}
 	if err := apiextensionsv1.AddToScheme(mgr.GetScheme()); err != nil {
 		return err
 	}

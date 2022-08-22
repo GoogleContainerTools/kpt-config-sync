@@ -39,6 +39,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/util"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -90,9 +91,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The Client built by ctrl.NewManager uses caching by default, and doesn't
+	// support the Watch method. So build another with shared config.
+	// This one can be used for watching and bypassing the cache, as needed.
+	// Use with discretion.
+	watcher, err := client.NewWithWatch(mgr.GetConfig(), client.Options{
+		Scheme: mgr.GetScheme(),
+		Mapper: mgr.GetRESTMapper(),
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create watching client")
+		os.Exit(1)
+	}
+
 	watchFleetMembership := fleetMembershipCRDExists(mgr.GetConfig(), mgr.GetRESTMapper())
 
-	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
+	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+		mgr.GetClient(), watcher,
 		ctrl.Log.WithName("controllers").WithName("RepoSync"),
 		mgr.GetScheme(), allowVerticalScale)
 	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
@@ -100,7 +115,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
+	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+		mgr.GetClient(), watcher,
 		ctrl.Log.WithName("controllers").WithName("RootSync"),
 		mgr.GetScheme(), allowVerticalScale)
 	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {

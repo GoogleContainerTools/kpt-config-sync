@@ -692,13 +692,14 @@ func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
 }
 
 func revokeRepoSyncClusterRoleBinding(nt *NT, nn types.NamespacedName) {
-	if err := nt.Delete(repoSyncClusterRoleBinding(nn)); err != nil {
+	crb := repoSyncClusterRoleBinding(nn)
+	if err := nt.Delete(crb); err != nil {
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		nt.T.Fatal(err)
 	}
-	WaitToTerminate(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, "")
+	WaitToTerminateObject(nt, crb)
 }
 
 func revokeRepoSyncNamespace(nt *NT, ns string) {
@@ -721,7 +722,7 @@ func revokeRepoSyncNamespace(nt *NT, ns string) {
 			nt.T.Fatal(err)
 		}
 	}
-	WaitToTerminate(nt, kinds.Namespace(), ns, "")
+	WaitToTerminateObject(nt, namespace)
 }
 
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
@@ -1342,8 +1343,10 @@ func deleteRootRepos(nt *NT) {
 		if err := nt.Delete(&rs); err != nil {
 			nt.T.Fatal(err)
 		}
+		// RootSync finalizer should block waiting for Deployment deletion,
+		// but wait for it explicitly here to log progress.
 		WaitToTerminate(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace)
-		WaitToTerminate(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+		WaitToTerminateObject(nt, &rs)
 	}
 }
 
@@ -1355,8 +1358,16 @@ func deleteNamespaceRepos(nt *NT) {
 	}
 
 	for _, rs := range repoSyncs.Items {
+		if err := nt.Delete(&rs); err != nil {
+			nt.T.Fatal(err)
+		}
+		// RepoSync finalizer should block waiting for Deployment deletion,
+		// but wait for it explicitly here to log progress.
+		WaitToTerminate(nt, kinds.Deployment(), core.NsReconcilerName(rs.Name, rs.Namespace), rs.Namespace)
+		WaitToTerminateObject(nt, &rs)
+
 		// revokeRepoSyncNamespace will delete the namespace of RepoSync, which
-		// auto-deletes the resources, including RepoSync, Deployment, RoleBinding, Secret, and etc.
+		// auto-deletes any remaining objects in the namespace.
 		revokeRepoSyncNamespace(nt, rs.Namespace)
 		nn := RepoSyncNN(rs.Namespace, rs.Name)
 		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
@@ -1368,7 +1379,7 @@ func deleteNamespaceRepos(nt *NT) {
 	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	}
-	WaitToTerminate(nt, kinds.ClusterRole(), rsClusterRole.Name, "")
+	WaitToTerminateObject(nt, rsClusterRole)
 }
 
 // SetPolicyDir updates the root-sync object with the provided policyDir.

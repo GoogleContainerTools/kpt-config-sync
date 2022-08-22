@@ -109,10 +109,5 @@ func kccResourceReady(o client.Object) error {
 }
 
 func validateKCCResourceNotFound(nt *nomostest.NT, gvk schema.GroupVersionKind, name, namespace string) {
-	nomostest.Wait(nt.T, fmt.Sprintf("wait for %q %v to terminate", name, gvk),
-		nt.DefaultWaitTimeout, func() error {
-			u := &unstructured.Unstructured{}
-			u.SetGroupVersionKind(gvk)
-			return nt.ValidateNotFound(name, namespace, u)
-		})
+	nomostest.WaitToTerminate(nt, gvk, name, namespace)
 }

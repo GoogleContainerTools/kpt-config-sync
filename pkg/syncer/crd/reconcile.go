@@ -25,11 +25,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	syncercache "kpt.dev/configsync/pkg/syncer/cache"
@@ -174,46 +176,69 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 	declVersions := make(map[string]string)
 	declaredCRDsV1Beta1 := grs[kinds.CustomResourceDefinitionV1Beta1()]
 	for _, decl := range declaredCRDsV1Beta1 {
+		klog.Infof("CRD of version %s specified in ClusterConfig: %v", versionV1beta1, core.IDOf(decl))
 		syncerreconcile.SyncedAt(decl, clusterConfig.Spec.Token)
 		declVersions[decl.GetName()] = versionV1beta1
 	}
 	declaredCRDsV1 := grs[kinds.CustomResourceDefinitionV1()]
 	for _, decl := range declaredCRDsV1 {
+		klog.Infof("CRD of version %s specified in ClusterConfig: %v", versionV1, core.IDOf(decl))
 		syncerreconcile.SyncedAt(decl, clusterConfig.Spec.Token)
 		declVersions[decl.GetName()] = versionV1
 	}
 
 	var syncErrs []v1.ConfigManagementError
 
-	actualCRDs, err := r.cache.UnstructuredList(ctx, kinds.CustomResourceDefinitionV1())
+	// Lookup which CRD version is preferred by the server.
+	mapping, err := r.client.RESTMapper().RESTMapping(kinds.CustomResourceDefinitionV1().GroupKind(), versionV1, versionV1beta1)
 	if err != nil {
-		mErr = status.Append(mErr, status.APIServerErrorf(err, "failed to list from config controller for %q", kinds.CustomResourceDefinitionV1Beta1()))
+		mErr = status.Append(mErr, errors.Wrap(err, "failed to list CRD mappings"))
 		syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
 		mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
 		return mErr
 	}
 
-	var actualV1Beta1 []*unstructured.Unstructured
-	for _, u := range actualCRDs {
-		// Default to v1beta1 if the CRD is not declared.
-		// We can't assume v1 as this is incompatible with Kubernetes <1.16
-		if declVersions[u.GetName()] == versionV1 {
-			continue
-		}
-		actualV1Beta1 = append(actualV1Beta1, u)
+	// Use the version preferred by the server.
+	actualCRDs, err := r.cache.UnstructuredList(ctx, mapping.GroupVersionKind)
+	if err != nil {
+		mErr = status.Append(mErr, errors.Wrapf(err, "failed to list from config controller for %q", mapping.GroupVersionKind))
+		syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
+		mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
+		return mErr
 	}
 
-	var actualV1 []*unstructured.Unstructured
+	actualVersionedCRDs := map[string][]*unstructured.Unstructured{
+		versionV1beta1: nil,
+		versionV1:      nil,
+	}
+
+	preferredCRDVersion := mapping.GroupVersionKind.Version
 	for _, u := range actualCRDs {
-		// Only keep CRDs declares as v1.
-		if declVersions[u.GetName()] == "v1" {
-			actualV1 = append(actualV1, u)
+		if declVersion, found := declVersions[u.GetName()]; found {
+			// Convert to declared version, if declared.
+			liveVersion := u.GetObjectKind().GroupVersionKind().Version
+			u, err = r.convertCRDToVersion(u, declVersion)
+			if err != nil {
+				mErr = status.Append(mErr, errors.Wrapf(err, "failed to convert CRD to declared version %q", declVersion))
+				syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
+				mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
+				return mErr
+			}
+			newVersion := u.GetObjectKind().GroupVersionKind().Version
+			if liveVersion != newVersion {
+				klog.Infof("Live CRD converted from version %s to version %s, for diff with object specified in ClusterConfig: %v",
+					liveVersion, newVersion, core.IDOf(u))
+			}
+			actualVersionedCRDs[declVersion] = append(actualVersionedCRDs[declVersion], u)
+		} else {
+			// Default to server preferred version, if not declared.
+			actualVersionedCRDs[preferredCRDVersion] = append(actualVersionedCRDs[preferredCRDVersion], u)
 		}
 	}
 
 	allDeclaredVersions := syncerreconcile.AllVersionNames(grs, kinds.CustomResourceDefinition())
-	diffsV1Beta1 := differ.Diffs(declaredCRDsV1Beta1, actualV1Beta1, allDeclaredVersions)
-	diffsV1 := differ.Diffs(declaredCRDsV1, actualV1, allDeclaredVersions)
+	diffsV1Beta1 := differ.Diffs(declaredCRDsV1Beta1, actualVersionedCRDs[versionV1beta1], allDeclaredVersions)
+	diffsV1 := differ.Diffs(declaredCRDsV1, actualVersionedCRDs[versionV1], allDeclaredVersions)
 	diffs := append(diffsV1Beta1, diffsV1...)
 
 	var reconcileCount int
@@ -264,4 +289,52 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 	}
 
 	return mErr
+}
+
+func (r *reconciler) convertCRDToVersion(obj *unstructured.Unstructured, version string) (*unstructured.Unstructured, error) {
+	objGVK := obj.GetObjectKind().GroupVersionKind()
+	targetGVK := objGVK.GroupKind().WithVersion(version)
+	if objGVK == targetGVK {
+		// No conversion necessary
+		return obj, nil
+	}
+
+	// Convert to desired unversioned
+	// All version conversions go through the unversioned internal version.
+	unversionedObj, err := r.client.Scheme().New(targetGVK.GroupKind().WithVersion(runtime.APIVersionInternal))
+	if err != nil {
+		return nil, err
+	}
+	klog.Infof("CRD converting from %s to %s: %v",
+		obj.GetObjectKind().GroupVersionKind().Version,
+		unversionedObj.GetObjectKind().GroupVersionKind().Version, core.IDOf(obj))
+	err = r.client.Scheme().Convert(obj, unversionedObj, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to desired version
+	versionedObj, err := r.client.Scheme().New(targetGVK)
+	if err != nil {
+		return nil, err
+	}
+	klog.Infof("CRD converting from %s to %s: %v",
+		unversionedObj.GetObjectKind().GroupVersionKind().Version,
+		versionedObj.GetObjectKind().GroupVersionKind().Version, core.IDOf(obj))
+	err = r.client.Scheme().Convert(unversionedObj, versionedObj, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to unstructured
+	uObj := &unstructured.Unstructured{}
+	uObj.SetGroupVersionKind(targetGVK)
+	klog.Infof("CRD converting from %T to %T: %v",
+		versionedObj, uObj, core.IDOf(obj))
+	err = r.client.Scheme().Convert(versionedObj, uObj, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return uObj, nil
 }

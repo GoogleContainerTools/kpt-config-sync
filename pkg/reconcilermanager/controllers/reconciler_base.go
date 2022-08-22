@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/util"
@@ -64,12 +65,20 @@ const (
 	logFieldKind      = "kind"
 	logFieldObject    = "object"
 	logFieldOperation = "operation"
+	logFieldSubject   = "subject"
 )
 
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
+	// client is a client implimentation.
+	// It's expected that this client WILL cache reads.
+	client client.Client
+
+	// watcher is a client implimentation with the Watch method.
+	// It's expected that this client will NOT cache reads.
+	watcher client.WithWatch
+
 	clusterName             string
-	client                  client.Client
 	log                     logr.Logger
 	scheme                  *runtime.Scheme
 	isAutopilotCluster      *bool
@@ -89,6 +98,9 @@ type reconcilerBase struct {
 	// if it's the latest or not. So this is just an optimization, not a guarantee.
 	// https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
 	lastReconciledResourceVersions map[types.NamespacedName]string
+
+	// syncs is a cache of the reconciled RepoSync/RootSync objects.
+	syncs map[types.NamespacedName]struct{}
 }
 
 func (r *reconcilerBase) upsertServiceAccount(
@@ -125,7 +137,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 	}
 	if op != controllerutil.OperationResultNone {
 		r.log.Info("Managed object upsert successful",
-			logFieldObject, childSA.String(),
+			logFieldObject, childSARef.String(),
 			logFieldKind, "ServiceAccount",
 			logFieldOperation, op)
 	}
@@ -166,7 +178,7 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	if err := mutateObject(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, err
 	}
-	op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
+	op, err := r.createOrUpdateDeployment(ctx, reconcilerDeployment)
 	if err != nil {
 		return reconcilerDeployment, op, err
 	}
@@ -179,10 +191,10 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	return reconcilerDeployment, op, nil
 }
 
-// createOrPatchDeployment() first call Get() on the object. If the
-// object does not exist, Create() will be called. If it does exist, Patch()
+// createOrUpdateDeployment() first call Get() on the object. If the
+// object does not exist, Create() will be called. If it does exist, Update()
 // will be called.
-func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (controllerutil.OperationResult, error) {
+func (r *reconcilerBase) createOrUpdateDeployment(ctx context.Context, declared *appsv1.Deployment) (controllerutil.OperationResult, error) {
 	dRef := client.ObjectKeyFromObject(declared)
 	kind := "Deployment"
 
@@ -225,12 +237,15 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	}
 
 	if reflect.DeepEqual(current.Labels, declared.Labels) && reflect.DeepEqual(current.Spec, declared.Spec) {
+		r.log.V(3).Info("Managed object found, no changes required",
+			logFieldObject, dRef.String(),
+			logFieldKind, kind)
 		return controllerutil.OperationResultNone, nil
 	}
-
 	r.log.V(3).Info("Managed object found, updating",
 		logFieldObject, dRef.String(),
 		logFieldKind, kind)
+
 	if err := r.client.Update(ctx, declared); err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
@@ -481,4 +496,27 @@ func (r *reconcilerBase) isLastReconciled(nn types.NamespacedName, resourceVersi
 		return false
 	}
 	return resourceVersion == lastReconciled
+}
+
+func (r *reconcilerBase) hasCachedSync(rsRef types.NamespacedName) bool {
+	_, ok := r.syncs[rsRef]
+	return ok
+}
+
+func (r *reconcilerBase) addCachedSync(rsRef types.NamespacedName) {
+	r.syncs[rsRef] = struct{}{}
+}
+
+func (r *reconcilerBase) deleteCachedSync(rsRef types.NamespacedName) {
+	delete(r.syncs, rsRef)
+}
+
+// addTypeInformationToObject adds GVK to a runtime.Object based upon the loaded scheme.Scheme
+func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
+	gvk, err := kinds.Lookup(obj, r.scheme)
+	if err != nil {
+		return err
+	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	return nil
 }

@@ -17,7 +17,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -68,22 +67,22 @@ func TestSwitchFromMultiRepoToMonoRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	var rs v1beta1.RootSync
-	err = nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &rs)
+	rs := &v1beta1.RootSync{}
+	err = nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, rs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Delete RootSync custom resource from the cluster.
-	err = nt.Delete(&rs)
+	err = nt.Delete(rs)
 	if err != nil {
 		nt.T.Fatalf("deleting RootSync: %v", err)
 	}
+	// Wait for finalizers to complete
+	nomostest.WaitToTerminateObject(nt, rs)
 
 	// Verify Root Reconciler deployment no longer present.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject())
-	})
+	err = nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject())
 	if err != nil {
 		nt.T.Errorf("Reconciler deployment present after deletion: %v", err)
 	}
@@ -165,14 +164,8 @@ func TestSwitchFromMonoRepoToMultiRepo(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("deleting Repo: %v", err)
 	}
-
-	// Verify git-importer no longer present.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(filesystem.GitImporterName, v1.NSConfigManagementSystem, fake.DeploymentObject())
-	})
-	if err != nil {
-		nt.T.Errorf("Git importer deployment present after deletion: %v", err)
-	}
+	// Wait for finalizers to complete
+	nomostest.WaitToTerminateObject(nt, d)
 
 	// Switch to multi-repo mode.
 	nomostest.SwitchMode(nt, nt.RootRepos[configsync.RootSyncName].Format)

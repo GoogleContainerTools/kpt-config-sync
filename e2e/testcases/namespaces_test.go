@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -738,13 +739,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(10*time.Second, func() error {
-		// It takes a few seconds for Namespaces to terminate.
-		return nt.ValidateNotFound("bar", "", &corev1.Namespace{})
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.WaitToTerminate(nt, kinds.Namespace(), "bar", "")
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
@@ -777,17 +772,11 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare safety Namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(10*time.Second, func() error {
-		// It takes a few seconds for Namespaces to terminate.
-		return nt.ValidateNotFound(safetyNs, "", &corev1.Namespace{})
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
 	err = nt.ValidateNotFound("bar", "", &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	nomostest.WaitToTerminate(nt, kinds.Namespace(), safetyNs, "")
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {

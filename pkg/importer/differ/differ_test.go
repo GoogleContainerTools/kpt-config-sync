@@ -131,13 +131,13 @@ func TestDiffer(t *testing.T) {
 		{
 			testName: "create Namespace node",
 			declared: []client.Object{namespaceConfig("foo")},
-			want:     []client.Object{namespaceConfig("foo")},
+			want:     []client.Object{namespaceConfig("foo", core.ResourceVersion("1"))},
 		},
 		{
 			testName: "no-op Namespace node",
 			actual:   []client.Object{namespaceConfig("foo")},
 			declared: []client.Object{namespaceConfig("foo")},
-			want:     []client.Object{namespaceConfig("foo")},
+			want:     []client.Object{namespaceConfig("foo", core.ResourceVersion("1"))},
 		},
 		{
 			testName: "update stalled Namespace nodes",
@@ -150,8 +150,8 @@ func TestDiffer(t *testing.T) {
 				stalledNamespaceConfig("bar", v1.StateStale),
 			},
 			want: []client.Object{
-				stalledNamespaceConfig("foo", v1.StateSynced),
-				stalledNamespaceConfig("bar", v1.StateStale),
+				stalledNamespaceConfig("foo", v1.StateSynced, core.ResourceVersion("1")),
+				stalledNamespaceConfig("bar", v1.StateStale, core.ResourceVersion("2")),
 			},
 		},
 		{
@@ -160,21 +160,21 @@ func TestDiffer(t *testing.T) {
 				core.Annotation("key", "old"))},
 			declared: []client.Object{namespaceConfig("foo",
 				core.Annotation("key", "new"))},
-			want: []client.Object{namespaceConfig("foo",
+			want: []client.Object{namespaceConfig("foo", core.ResourceVersion("2"),
 				core.Annotation("key", "new"))},
 		},
 		{
 			testName: "delete Namespace node",
 			actual:   []client.Object{namespaceConfig("foo")},
-			want:     []client.Object{namespaceConfig("foo", markedForDeletion)},
+			want:     []client.Object{namespaceConfig("foo", core.ResourceVersion("2"), markedForDeletion)},
 		},
 		{
 			testName: "replace one Namespace node",
 			actual:   []client.Object{namespaceConfig("foo")},
 			declared: []client.Object{namespaceConfig("bar")},
 			want: []client.Object{
-				namespaceConfig("foo", markedForDeletion),
-				namespaceConfig("bar"),
+				namespaceConfig("foo", core.ResourceVersion("2"), markedForDeletion),
+				namespaceConfig("bar", core.ResourceVersion("1")),
 			},
 		},
 		{
@@ -184,8 +184,8 @@ func TestDiffer(t *testing.T) {
 				namespaceConfig("bar"),
 			},
 			want: []client.Object{
-				namespaceConfig("foo"),
-				namespaceConfig("bar"),
+				namespaceConfig("foo", core.ResourceVersion("1")),
+				namespaceConfig("bar", core.ResourceVersion("1")),
 			},
 		},
 		{
@@ -201,36 +201,36 @@ func TestDiffer(t *testing.T) {
 				namespaceConfig("pim"),
 			},
 			want: []client.Object{
-				namespaceConfig("alp"),
-				namespaceConfig("foo", markedForDeletion),
-				namespaceConfig("bar", markedForDeletion),
-				namespaceConfig("qux"),
-				namespaceConfig("pim"),
+				namespaceConfig("alp", core.ResourceVersion("1")),
+				namespaceConfig("foo", core.ResourceVersion("2"), markedForDeletion),
+				namespaceConfig("bar", core.ResourceVersion("2"), markedForDeletion),
+				namespaceConfig("qux", core.ResourceVersion("1")),
+				namespaceConfig("pim", core.ResourceVersion("1")),
 			},
 		},
 		// ClusterConfig tests
 		{
 			testName: "create ClusterConfig",
 			declared: []client.Object{clusterConfig()},
-			want:     []client.Object{clusterConfig()},
+			want:     []client.Object{clusterConfig(fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "no-op ClusterConfig",
 			actual:   []client.Object{clusterConfig()},
 			declared: []client.Object{clusterConfig()},
-			want:     []client.Object{clusterConfig()},
+			want:     []client.Object{clusterConfig(fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "update stalled ClusterConfig to its original state",
 			actual:   []client.Object{stalledClusterConfig(v1.StateSynced)},
 			declared: []client.Object{stalledClusterConfig(v1.StateUnknown)},
-			want:     []client.Object{stalledClusterConfig(v1.StateSynced)},
+			want:     []client.Object{stalledClusterConfig(v1.StateSynced, fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "update stalled ClusterConfig to the desired state",
 			actual:   []client.Object{stalledClusterConfig(v1.StateSynced)},
 			declared: []client.Object{stalledClusterConfig(v1.StateStale)},
-			want:     []client.Object{stalledClusterConfig(v1.StateStale)},
+			want:     []client.Object{stalledClusterConfig(v1.StateStale, fake.ClusterConfigResourceVersion("2"))},
 		},
 		{
 			testName: "delete ClusterConfig",
@@ -239,25 +239,25 @@ func TestDiffer(t *testing.T) {
 		{
 			testName: "create CRD ClusterConfig",
 			declared: []client.Object{crdClusterConfig()},
-			want:     []client.Object{crdClusterConfig()},
+			want:     []client.Object{crdClusterConfig(fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "no-op CRD ClusterConfig",
 			actual:   []client.Object{crdClusterConfig()},
 			declared: []client.Object{crdClusterConfig()},
-			want:     []client.Object{crdClusterConfig()},
+			want:     []client.Object{crdClusterConfig(fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "update stalled CRD ClusterConfig to its original state",
 			actual:   []client.Object{stalledCRDClusterConfig(v1.StateSynced)},
 			declared: []client.Object{stalledCRDClusterConfig(v1.StateUnknown)},
-			want:     []client.Object{stalledCRDClusterConfig(v1.StateSynced)},
+			want:     []client.Object{stalledCRDClusterConfig(v1.StateSynced, fake.ClusterConfigResourceVersion("1"))},
 		},
 		{
 			testName: "update stalled CRD ClusterConfig to the desired state",
 			actual:   []client.Object{stalledCRDClusterConfig(v1.StateSynced)},
 			declared: []client.Object{stalledCRDClusterConfig(v1.StateStale)},
-			want:     []client.Object{stalledCRDClusterConfig(v1.StateStale)},
+			want:     []client.Object{stalledCRDClusterConfig(v1.StateStale, fake.ClusterConfigResourceVersion("2"))},
 		},
 		{
 			testName: "delete CRD ClusterConfig",
@@ -267,17 +267,19 @@ func TestDiffer(t *testing.T) {
 		{
 			testName: "create Sync",
 			declared: []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
-			want:     []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
+			want:     []client.Object{fake.SyncObject(kinds.Anvil().GroupKind(), core.ResourceVersion("1"))},
 		},
 		{
 			testName: "no-op Sync",
 			actual:   []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
 			declared: []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
-			want:     []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
+			want:     []client.Object{fake.SyncObject(kinds.Anvil().GroupKind(), core.ResourceVersion("1"))},
 		},
 		{
 			testName: "delete Sync",
 			actual:   []client.Object{fake.SyncObject(kinds.Anvil().GroupKind())},
+			want: []client.Object{fake.SyncObject(kinds.Anvil().GroupKind(), core.ResourceVersion("2"),
+				core.DeletionTimestamp(now()))},
 		},
 		// Test all at once
 		{
@@ -293,10 +295,10 @@ func TestDiffer(t *testing.T) {
 				namespaceConfig("qux"),
 			},
 			want: []client.Object{
-				clusterConfig(),
-				namespaceConfig("foo"),
-				namespaceConfig("bar", markedForDeletion),
-				namespaceConfig("qux"),
+				clusterConfig(fake.ClusterConfigResourceVersion("1")),
+				namespaceConfig("foo", core.ResourceVersion("1")),
+				namespaceConfig("bar", core.ResourceVersion("2"), markedForDeletion),
+				namespaceConfig("qux", core.ResourceVersion("1")),
 			},
 		},
 		{
@@ -317,13 +319,13 @@ func TestDiffer(t *testing.T) {
 				stalledNamespaceConfig("quux", v1.StateUnknown),
 			},
 			want: []client.Object{
-				stalledClusterConfig(v1.StateStale),
-				stalledCRDClusterConfig(v1.StateSynced),
-				stalledNamespaceConfig("foo", v1.StateStale),
-				stalledNamespaceConfig("bar", v1.StateSynced),
-				stalledNamespaceConfig("baz", v1.StateSynced, markedForDeletion),
-				stalledNamespaceConfig("qux", v1.StateStale),
-				stalledNamespaceConfig("quux", v1.StateUnknown),
+				stalledClusterConfig(v1.StateStale, fake.ClusterConfigResourceVersion("2")),
+				stalledCRDClusterConfig(v1.StateSynced, fake.ClusterConfigResourceVersion("1")),
+				stalledNamespaceConfig("foo", v1.StateStale, core.ResourceVersion("2")),
+				stalledNamespaceConfig("bar", v1.StateSynced, core.ResourceVersion("1")),
+				stalledNamespaceConfig("baz", v1.StateSynced, core.ResourceVersion("2"), markedForDeletion),
+				stalledNamespaceConfig("qux", v1.StateStale, core.ResourceVersion("1")),
+				stalledNamespaceConfig("quux", v1.StateUnknown, core.ResourceVersion("1")),
 			},
 		},
 	}
@@ -331,6 +333,7 @@ func TestDiffer(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.testName, func(t *testing.T) {
 			fakeClient := testingfake.NewClient(t, runtime.NewScheme(), tc.actual...)
+			fakeClient.Now = now
 
 			actual := allConfigs(t, tc.actual)
 

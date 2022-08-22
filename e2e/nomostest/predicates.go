@@ -28,10 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Predicate evaluates a client.Object, returning an error if it fails validation.
@@ -402,7 +402,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = kinds.Lookup(obj, nt.scheme)
 			if err != nil {
 				return err
 			}
@@ -446,7 +446,7 @@ func IsNotManaged(nt *NT) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = kinds.Lookup(obj, nt.scheme)
 			if err != nil {
 				return err
 			}
@@ -483,7 +483,7 @@ func ResourceVersionEquals(nt *NT, expected string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = kinds.Lookup(obj, nt.scheme)
 			if err != nil {
 				return err
 			}
@@ -505,7 +505,7 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = kinds.Lookup(obj, nt.scheme)
 			if err != nil {
 				return err
 			}
@@ -523,7 +523,7 @@ func StatusEquals(nt *NT, expected status.Status) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = kinds.Lookup(obj, nt.scheme)
 			if err != nil {
 				return err
 			}

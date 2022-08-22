@@ -119,6 +119,9 @@ func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.Namespace
 			return nil, e
 		}
 		newObj.ResourceVersion = oldObj.ResourceVersion
+		if namespaceConfigsEqual(oldObj, newObj) {
+			return oldObj, syncerclient.NoUpdateNeeded()
+		}
 		return newObj, nil
 	})
 	if err != nil {
@@ -133,6 +136,9 @@ func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.Namespace
 		oldObj.Status.DeepCopyInto(&newObj.Status)
 		if !newSyncState.IsUnknown() {
 			newObj.Status.SyncState = newSyncState
+		}
+		if namespaceConfigStatusEqual(oldObj, newObj) {
+			return oldObj, syncerclient.NoUpdateNeeded()
 		}
 		return newObj, nil
 	})
@@ -179,6 +185,9 @@ func (d *differ) updateClusterConfig(ctx context.Context, decoder decode.Decoder
 			oldObj := obj.(*v1.ClusterConfig)
 			newObj := desired.DeepCopy()
 			newObj.ResourceVersion = oldObj.ResourceVersion
+			if clusterConfigsEqual(oldObj, newObj) {
+				return oldObj, syncerclient.NoUpdateNeeded()
+			}
 			return newObj, nil
 		})
 		d.errs = status.Append(d.errs, err)
@@ -191,6 +200,9 @@ func (d *differ) updateClusterConfig(ctx context.Context, decoder decode.Decoder
 			oldObj.Status.DeepCopyInto(&newObj.Status)
 			if !newSyncState.IsUnknown() {
 				newObj.Status.SyncState = newSyncState
+			}
+			if clusterConfigStatusEqual(oldObj, newObj) {
+				return oldObj, syncerclient.NoUpdateNeeded()
 			}
 			return newObj, nil
 		})
@@ -207,6 +219,9 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 					oldObj := obj.(*v1.Sync)
 					newObj := newSync.DeepCopy()
 					newObj.ResourceVersion = oldObj.ResourceVersion
+					if syncsEqual(oldObj, newObj) {
+						return oldObj, syncerclient.NoUpdateNeeded()
+					}
 					return newObj, nil
 				})
 				d.errs = status.Append(d.errs, err)
@@ -226,6 +241,26 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 	}
 
 	klog.Infof("Sync operations: %d updates, %d creates, %d deletes", updates, creates, deletes)
+}
+
+// namespaceConfigsEqual returns true if the NamespaceConfigs are equivalent.
+func namespaceConfigsEqual(l *v1.NamespaceConfig, r *v1.NamespaceConfig) bool {
+	return cmp.Equal(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
+}
+
+// namespaceConfigStatusEqual returns true if the NamespaceConfigs are equivalent.
+func namespaceConfigStatusEqual(l *v1.NamespaceConfig, r *v1.NamespaceConfig) bool {
+	return cmp.Equal(l.Status, r.Status)
+}
+
+// clusterConfigsEqual returns true if the ClusterConfigs are equivalent.
+func clusterConfigsEqual(l *v1.ClusterConfig, r *v1.ClusterConfig) bool {
+	return cmp.Equal(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
+}
+
+// clusterConfigStatusEqual returns true if the ClusterConfigs are equivalent.
+func clusterConfigStatusEqual(l *v1.ClusterConfig, r *v1.ClusterConfig) bool {
+	return cmp.Equal(l.Status, r.Status)
 }
 
 // syncsEqual returns true if the syncs are equivalent.

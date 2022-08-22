@@ -38,11 +38,11 @@ import (
 )
 
 // connect creates a client.Client to the cluster
-func connect(t testing.NTB, cfg *rest.Config, scheme *runtime.Scheme) client.Client {
+func connect(t testing.NTB, cfg *rest.Config, scheme *runtime.Scheme) client.WithWatch {
 	t.Helper()
 
 	t.Log("creating Client")
-	c, err := client.New(cfg, client.Options{
+	c, err := client.NewWithWatch(cfg, client.Options{
 		// The Scheme is client-side, but this automatically fetches the RestMapper
 		// from the cluster.
 		Scheme: scheme,

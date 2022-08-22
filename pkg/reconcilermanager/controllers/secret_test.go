@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -190,7 +191,8 @@ func TestCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sKey, err := upsertAuthSecret(context.Background(), tc.reposync, tc.client, nsReconcilerKey)
+			log := logr.Discard()
+			sKey, err := upsertAuthSecret(context.Background(), log, tc.reposync, tc.client, nsReconcilerKey)
 			assert.Equal(t, tc.wantKey, sKey, "unexpected secret key returned")
 			if tc.wantError {
 				assert.Error(t, err, "expected upsertSecrets to error")

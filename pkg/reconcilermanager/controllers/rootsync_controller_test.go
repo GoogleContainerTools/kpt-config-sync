@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -1587,10 +1586,7 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 		requests := make([]reconcile.Request, len(rootSyncs[secretName]))
 		for i, rs := range rootSyncs[secretName] {
 			requests[i] = reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      rs.GetName(),
-					Namespace: rs.GetNamespace(),
-				},
+				NamespacedName: client.ObjectKeyFromObject(rs),
 			}
 		}
 		return requests

@@ -586,8 +586,51 @@ func consistentOrder(nsAndNames []types.NamespacedName, resourcegroups []*unstru
 		if !found {
 			rgs[i] = nil
 		} else {
+			iterateShardedRGs(indexMap, nn, resourcegroups, idx)
 			rgs[i] = resourcegroups[idx]
 		}
 	}
 	return rgs
+}
+
+// iterateShardedRGs loops through all found ResourceGroups and iterates through the index map to determine if there are also sharded
+// ResourceGroups present. If there are, the function will agregate all spec and statuses into 1 ResourceGroup.
+func iterateShardedRGs(indexMap map[types.NamespacedName]int, nn types.NamespacedName, resourcegroups []*unstructured.Unstructured, startRGIdx int) {
+	// Get initial statuses and spec. If any contents are empty, we should paginate and append information
+	// from sharded ResourceGroups.
+	allStatuses, _, _ := unstructured.NestedSlice(resourcegroups[startRGIdx].Object, "status", "resourceStatuses")
+	allConditions, _, _ := unstructured.NestedSlice(resourcegroups[startRGIdx].Object, "status", "conditions")
+	allResources, _, _ := unstructured.NestedSlice(resourcegroups[startRGIdx].Object, "spec", "resources")
+
+	// Iterate through all sharded ResourceGroups.
+	shardIdx := 1
+	for {
+		idx, found := indexMap[types.NamespacedName{
+			Name:      fmt.Sprintf("%s-%d-%d", nn.Name, len(nn.Name), shardIdx),
+			Namespace: nn.Namespace,
+		}]
+		if !found {
+			// Next sharded ResourceGroup not found.
+			break
+		}
+
+		rawStatuses, found, err := unstructured.NestedSlice(resourcegroups[idx].Object, "status", "resourceStatuses")
+		if err == nil && found {
+			allStatuses = append(allStatuses, rawStatuses...)
+		}
+		rawConditions, found, err := unstructured.NestedSlice(resourcegroups[idx].Object, "status", "conditions")
+		if err == nil && found {
+			allConditions = append(allStatuses, rawConditions...)
+		}
+		rawObjs, found, err := unstructured.NestedSlice(resourcegroups[idx].Object, "spec", "resources")
+		if err == nil && found {
+			allResources = append(allResources, rawObjs...)
+		}
+
+		shardIdx++
+	}
+
+	_ = unstructured.SetNestedSlice(resourcegroups[startRGIdx].Object, allStatuses, "status", "resourceStatuses")
+	_ = unstructured.SetNestedSlice(resourcegroups[startRGIdx].Object, allConditions, "status", "conditions")
+	_ = unstructured.SetNestedSlice(resourcegroups[startRGIdx].Object, allResources, "spec", "resources")
 }

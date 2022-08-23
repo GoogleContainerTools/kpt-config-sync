@@ -15,7 +15,7 @@
 package core
 
 import (
-	"encoding/json"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -47,17 +47,12 @@ func init() {
 func RemarshalToStructured(u *unstructured.Unstructured) (runtime.Object, error) {
 	result, err := scheme.Scheme.New(u.GetObjectKind().GroupVersionKind())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get concrete type for object: %w", err)
 	}
 
-	jsn, err := u.MarshalJSON()
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), result)
 	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(jsn, result)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to convert resource to its concrete type: %w", err)
 	}
 
 	return result, nil

@@ -36,8 +36,6 @@ var (
 		"the name of the helm chart being synced")
 	flVersion = flag.String("version", os.Getenv(reconcilermanager.HelmChartVersion),
 		"the version of the helm chart being synced")
-	flValuesFiles = flag.String("values-files", os.Getenv(reconcilermanager.HelmValuesFiles),
-		"helm values files url")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
 		"set the helm chart values, will be used in helm template --set key=value")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
@@ -73,7 +71,7 @@ func main() {
 	utillog.Setup()
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
-		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot, "--values-files", *flValuesFiles,
+		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
 		"--values", *flValues, "--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures)
@@ -111,7 +109,6 @@ func main() {
 			ReleaseName: *flReleaseName,
 			Namespace:   *flNamespace,
 			Values:      *flValues,
-			ValuesFiles: *flValuesFiles,
 			IncludeCRDs: *flIncludeCRDs,
 			Auth:        configsync.AuthType(*flAuth),
 			HydrateRoot: *flRoot,

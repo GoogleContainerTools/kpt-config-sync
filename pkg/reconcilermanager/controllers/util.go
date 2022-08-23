@@ -210,10 +210,6 @@ const (
 func helmSyncEnvs(helm *v1beta1.Helm) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	helmValues := ""
-	helmValuesFiles := ""
-	if len(helm.ValuesFiles) > 0 {
-		helmValuesFiles = strings.Join(helm.ValuesFiles, ",")
-	}
 	if helm.Values != nil {
 		var vals []string
 		for key, val := range helm.Values.Object {
@@ -240,9 +236,6 @@ func helmSyncEnvs(helm *v1beta1.Helm) []corev1.EnvVar {
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmValues,
 		Value: helmValues,
-	}, corev1.EnvVar{
-		Name:  reconcilermanager.HelmValuesFiles,
-		Value: helmValuesFiles,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmIncludeCRDs,
 		Value: fmt.Sprint(helm.IncludeCRDs),

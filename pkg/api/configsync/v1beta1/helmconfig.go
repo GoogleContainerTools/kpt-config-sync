@@ -44,11 +44,6 @@ type Helm struct {
 	// +optional
 	Values *unstructured.Unstructured `json:"values,omitempty"`
 
-	// valuesFiles is a list of URL to Helm value files.
-	// Values files must be in the same repository with the Helm chart or in a public repository.
-	// +optional
-	ValuesFiles []string `json:"valuesFiles,omitempty"`
-
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
 	// Default: false.
@@ -58,7 +53,8 @@ type Helm struct {
 	// period is the time duration between consecutive syncs. Default: 15s.
 	// Use string to specify this field value, like "30s", "5m".
 	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-	// Chart will not be re-synced if version is specified and it is not "latest"
+	// Chart will not be resynced if version is specified.
+	// Note: Resyncing chart for "latest" version is not supported in feature preview.
 	// +optional
 	Period metav1.Duration `json:"period,omitempty"`
 

@@ -38,7 +38,6 @@ type Hydrator struct {
 	ReleaseName string
 	Namespace   string
 	Values      string
-	ValuesFiles string
 	IncludeCRDs string
 	HydrateRoot string
 	Dest        string
@@ -69,12 +68,6 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 	}
 	if h.Version != "" {
 		args = append(args, "--version", h.Version)
-	}
-	if len(h.ValuesFiles) > 0 {
-		valuesFiles := strings.Split(h.ValuesFiles, ",")
-		for _, fileURL := range valuesFiles {
-			args = append(args, "-f", fileURL)
-		}
 	}
 	if len(h.Values) > 0 {
 		args = append(args, "--set", h.Values)

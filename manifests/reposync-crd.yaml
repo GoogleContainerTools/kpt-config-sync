@@ -196,8 +196,8 @@ spec:
                     description: 'period is the time duration between consecutive
                       syncs. Default: 15s. Use string to specify this field value,
                       like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Chart will not be re-synced if version is specified and it is
-                      not "latest"'
+                      Chart will not be resynced if version is specified. Note: Resyncing
+                      chart for "latest" version is not supported in feature preview.'
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -217,13 +217,6 @@ spec:
                     description: values to use instead of default values that accompany
                       the chart
                     type: object
-                  valuesFiles:
-                    description: valuesFiles is a list of URL to Helm value files.
-                      Values files must be in the same repository with the Helm chart
-                      or in a public repository.
-                    items:
-                      type: string
-                    type: array
                   version:
                     description: version is the chart version. If this is not specified,
                       the latest version is used
@@ -1170,8 +1163,8 @@ spec:
                     description: 'period is the time duration between consecutive
                       syncs. Default: 15s. Use string to specify this field value,
                       like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Chart will not be re-synced if version is specified and it is
-                      not "latest"'
+                      Chart will not be resynced if version is specified. Note: Resyncing
+                      chart for "latest" version is not supported in feature preview.'
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -1191,13 +1184,6 @@ spec:
                     description: values to use instead of default values that accompany
                       the chart
                     type: object
-                  valuesFiles:
-                    description: valuesFiles is a list of URL to Helm value files.
-                      Values files must be in the same repository with the Helm chart
-                      or in a public repository.
-                    items:
-                      type: string
-                    type: array
                   version:
                     description: version is the chart version. If this is not specified,
                       the latest version is used

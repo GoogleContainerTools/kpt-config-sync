@@ -76,6 +76,7 @@ type RepoState struct {
 	sourceType v1beta1.SourceType
 	git        *v1beta1.Git
 	oci        *v1beta1.Oci
+	helm       *v1beta1.Helm
 	status     string
 	commit     string
 	errors     []string
@@ -85,7 +86,7 @@ type RepoState struct {
 }
 
 func (r *RepoState) printRows(writer io.Writer) {
-	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci))
+	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
 	fmt.Fprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
 
 	if r.errorSummary != nil && r.errorSummary.TotalCount > 0 {
@@ -125,9 +126,14 @@ func (r *RepoState) printRows(writer io.Writer) {
 	}
 }
 
-func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci) string {
-	if sourceType == v1beta1.OciSource {
+func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.Helm) string {
+	switch sourceType {
+	case v1beta1.OciSource:
 		return ociString(oci)
+	case v1beta1.HelmSource:
+		return helmString(helm)
+	case v1beta1.GitSource:
+		return gitString(git)
 	}
 	return gitString(git)
 }
@@ -167,6 +173,20 @@ func ociString(oci *v1beta1.Oci) string {
 		ociStr = strings.TrimSuffix(oci.Image, "/") + "/" + path.Clean(strings.TrimPrefix(oci.Dir, "/"))
 	}
 	return ociStr
+}
+
+func helmString(helm *v1beta1.Helm) string {
+	var helmStr string
+	if helm == nil {
+		return "N/A"
+	}
+	helmStr = strings.TrimSuffix(helm.Repo, "/") + "/" + helm.Chart
+	if helm.Version != "" {
+		helmStr = fmt.Sprintf("%s:%s", helmStr, helm.Version)
+	} else {
+		helmStr = fmt.Sprintf("%s:latest", helmStr)
+	}
+	return helmStr
 }
 
 // monoRepoStatus converts the given Git config and mono-repo status into a RepoState.
@@ -283,6 +303,7 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
+		helm:       rs.Spec.Helm,
 		commit:     emptyCommit,
 	}
 
@@ -378,6 +399,7 @@ func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncing
 		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
+		helm:       rs.Spec.Helm,
 		commit:     emptyCommit,
 	}
 	stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)

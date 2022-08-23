@@ -15,8 +15,8 @@
 package v1beta1
 
 import (
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
@@ -42,7 +42,7 @@ type Helm struct {
 
 	// values to use instead of default values that accompany the chart
 	// +optional
-	Values *unstructured.Unstructured `json:"values,omitempty"`
+	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.

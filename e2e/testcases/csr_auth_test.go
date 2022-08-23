@@ -288,7 +288,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
 			v1beta1.OciSource, tenant, testSpec.sourceRepo, testSpec.gsaEmail))
 	case v1beta1.HelmSource:
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns", "values": {"image.pullPolicy": "Always"}}, "git": null}}`,
 			v1beta1.HelmSource, testSpec.sourceChart, testSpec.sourceRepo, testSpec.sourceVersion, testSpec.gsaEmail))
 	}
 
@@ -301,7 +301,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
 			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: testSpec.sourceChart}))
 		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-			containerImagePullPolicy("IfNotPresent")); err != nil {
+			containerImagePullPolicy("Always")); err != nil {
 			nt.T.Error(err)
 		}
 	} else {

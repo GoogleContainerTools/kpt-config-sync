@@ -98,6 +98,13 @@ echo "+++ Most recent RC of version $CS_VERSION: $RC"
 NEXT_RC=$(increment_rc_of_semver "$RC")
 echo "+++ Incremented RC.  NEXT_RC: $NEXT_RC"
 
+read -rp "This will create ${NEXT_RC} - Proceed (yes/no)? " choice
+case "${choice}" in
+  yes) ;;
+  no) exit 1 ;;
+  *) err "Unrecognized choice ${choice}"
+esac
+
 git tag -a "$NEXT_RC" -m "Release candidate $NEXT_RC"
 echo "+++ Successfully tagged commit $(git rev-parse HEAD) as ${NEXT_RC}"
 

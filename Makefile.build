@@ -137,6 +137,38 @@ push-to-gcr-nomos: image-nomos
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
 
+# Pushes the specified component's docker image to gcr.io.
+promote-gcr-nomos:
+	@echo "+++ Promoting nomos image to gcr.io"
+	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
+	@echo "+++ Using account:"
+	gcloud config get-value account
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	docker pull $(NOMOS_GCR):$(RC_TAG)
+	docker pull $(RECONCILER_GCR):$(RC_TAG)
+	docker pull $(RECONCILER_MANAGER_GCR):$(RC_TAG)
+	docker pull $(ADMISSION_WEBHOOK_GCR):$(RC_TAG)
+	docker pull $(HYDRATION_CONTROLLER_GCR):$(RC_TAG)
+	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(RC_TAG)
+	docker pull $(OCI_SYNC_GCR):$(RC_TAG)
+	docker pull $(HELM_SYNC_GCR):$(RC_TAG)
+	docker tag $(NOMOS_GCR):$(RC_TAG) $(NOMOS_TAG)
+	docker tag $(RECONCILER_GCR):$(RC_TAG) $(RECONCILER_TAG)
+	docker tag $(RECONCILER_MANAGER_GCR):$(RC_TAG) $(RECONCILER_MANAGER_TAG)
+	docker tag $(ADMISSION_WEBHOOK_GCR):$(RC_TAG) $(ADMISSION_WEBHOOK_TAG)
+	docker tag $(HYDRATION_CONTROLLER_GCR):$(RC_TAG) $(HYDRATION_CONTROLLER_TAG)
+	docker tag $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(RC_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
+	docker tag $(OCI_SYNC_GCR):$(RC_TAG) $(OCI_SYNC_TAG)
+	docker tag $(HELM_SYNC_GCR):$(RC_TAG) $(HELM_SYNC_TAG)
+	docker push $(NOMOS_TAG)
+	docker push $(RECONCILER_TAG)
+	docker push $(RECONCILER_MANAGER_TAG)
+	docker push $(ADMISSION_WEBHOOK_TAG)
+	docker push $(HYDRATION_CONTROLLER_TAG)
+	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
+	docker push $(OCI_SYNC_TAG)
+	docker push $(HELM_SYNC_TAG)
+
 ###################################
 # Deployment generation
 ###################################
@@ -233,6 +265,20 @@ __config-sync-manifest-oss:
 # config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
 .PHONY: config-sync-manifest
 config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
+	@echo "+++ Preparing config-sync-manifest.yaml"
+	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
+	rm -rf $(OUTPUT_DIR)/manifests
+	rsync manifests/* .output/manifests/
+	@echo "++++ Add yaml files to config-sync-manifest.yaml"
+	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
+		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
+		$(OUTPUT_DIR)/manifests \
+		$(OUTPUT_DIR)/deployment
+	$(MAKE) __config-sync-manifest-oss
+
+# config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
+.PHONY: config-sync-manifest-promote
+config-sync-manifest-promote: $(OUTPUT_DIR) promote-gcr-nomos generate-deployments
 	@echo "+++ Preparing config-sync-manifest.yaml"
 	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
 	rm -rf $(OUTPUT_DIR)/manifests

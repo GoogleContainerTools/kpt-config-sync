@@ -26,6 +26,30 @@ __build-release-candidate: __tag-release-candidate
 	$(MAKE) __upload-manifest RELEASE_PATH=$(RELEASE_PATH)
 	$(MAKE) __upload-cli RELEASE_PATH=$(RELEASE_PATH)
 
+.PHONY: __promote-rc-tag
+__promote-rc-tag:
+	@echo "+++ Promoting release candidate tag"
+	RC_TAG="$(RC_TAG)" ./scripts/tag-promotion.sh
+
+.PHONY: __promote-rc-artifacts
+__promote-rc-artifacts:
+	@echo "+++ Promoting release candidate artifacts"
+	@$(eval GCR_PREFIX := "config-management-release")
+	@test -n "$(CS_VERSION)" || (echo "CS_VERSION unset" ; exit 1)
+	$(eval RC_TAG != git tag --points-at "$(CS_VERSION)^{}" --list "$(CS_VERSION)-rc.*" | sort -V | tail -n 1)
+	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
+
+	$(MAKE) config-sync-manifest-promote \
+		VERSION=$(CS_VERSION) \
+		GCR_PREFIX=$(GCR_PREFIX) \
+		IMAGE_TAG=$(CS_VERSION) \
+		RC_TAG=$(RC_TAG)
+	$(MAKE) build-cli VERSION=$(CS_VERSION)
+
+	$(eval RELEASE_PATH = "gs://config-management-release/config-sync/tag/$(CS_VERSION)")
+	$(MAKE) __upload-manifest RELEASE_PATH=$(RELEASE_PATH)
+	$(MAKE) __upload-cli RELEASE_PATH=$(RELEASE_PATH)
+
 
 ####################################################################################################
 # SUPPORTING COMMANDS

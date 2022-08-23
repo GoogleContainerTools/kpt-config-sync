@@ -488,18 +488,11 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		if rs.Spec.Oci != nil {
-			return validate.RedundantOciSpec(rs)
-		}
 		return r.validateGitSpec(ctx, rs, log)
 	case v1beta1.OciSource:
-		if rs.Spec.Git != nil {
-			return validate.RedundantGitSpec(rs)
-		}
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		//TODO: add Helm Source Validation
-		return nil
+		return validate.HelmSpec(rs.Spec.Helm, rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}

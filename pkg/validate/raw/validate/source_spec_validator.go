@@ -28,18 +28,14 @@ import (
 const gcpSASuffix = ".iam.gserviceaccount.com"
 
 // SourceSpec validates the source specification for any obvious problems.
-func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, rs client.Object) status.Error {
+func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.Helm, rs client.Object) status.Error {
 	switch v1beta1.SourceType(sourceType) {
 	case v1beta1.GitSource:
-		if oci != nil {
-			return RedundantOciSpec(rs)
-		}
 		return GitSpec(git, rs)
 	case v1beta1.OciSource:
-		if git != nil {
-			return RedundantGitSpec(rs)
-		}
 		return OciSpec(oci, rs)
+	case v1beta1.HelmSource:
+		return HelmSpec(helm, rs)
 	default:
 		return InvalidSourceType(rs)
 	}
@@ -121,6 +117,50 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	return nil
 }
 
+// HelmSpec validates the Helm specification for any obvious problems.
+func HelmSpec(helm *v1beta1.Helm, rs client.Object) status.Error {
+	if helm == nil {
+		return MissingHelmSpec(rs)
+	}
+
+	// We can't locate the helm chart if we don't have the URL.
+	if helm.Repo == "" {
+		return MissingHelmRepo(rs)
+	}
+
+	// We can't locate the helm chart if we don't have the chart name.
+	if helm.Chart == "" {
+		return MissingHelmChart(rs)
+	}
+
+	// Ensure auth is a valid value.
+	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
+	// will fail to apply.
+	switch helm.Auth {
+	case configsync.AuthGCENode, configsync.AuthNone:
+		if helm.SecretRef.Name != "" {
+			return IllegalSecretRef(rs)
+		}
+	case configsync.AuthToken:
+		if helm.SecretRef.Name == "" {
+			return MissingSecretRef(rs)
+		}
+	case configsync.AuthGCPServiceAccount:
+		if helm.SecretRef.Name != "" {
+			return IllegalSecretRef(rs)
+		}
+		if helm.GCPServiceAccountEmail == "" {
+			return MissingGCPSAEmail(rs)
+		}
+		if !validGCPServiceAccountEmail(helm.GCPServiceAccountEmail) {
+			return InvalidGCPSAEmail(rs)
+		}
+	default:
+		return InvalidHelmAuthType(rs)
+	}
+	return nil
+}
+
 // InvalidSyncCode is the code for an invalid declared RootSync/RepoSync.
 var InvalidSyncCode = "1061"
 
@@ -186,7 +226,8 @@ func MissingSecretRef(o client.Object) status.Error {
 }
 
 // InvalidGCPSAEmail reports that a RepoSync/RootSync Resource doesn't have the
-//  correct gcp service account suffix.
+//
+//	correct gcp service account suffix.
 func InvalidGCPSAEmail(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
@@ -260,20 +301,40 @@ func InvalidOciAuthType(o client.Object) status.Error {
 		BuildWithResources(o)
 }
 
-// RedundantGitSpec reports that a RootSync/RepoSync declares the Git spec
-// when spec.sourceType is set to `oci`.
-func RedundantGitSpec(o client.Object) status.Error {
+// MissingHelmSpec reports that a RootSync/RepoSync doesn't declare the Helm spec
+// when spec.sourceType is set to `helm`.
+func MissingHelmSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must not specify spec.git when spec.sourceType is %q", kind, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, v1beta1.HelmSource).
 		BuildWithResources(o)
 }
 
-// RedundantOciSpec reports that a RootSync/RepoSync declares the OCI spec
-// when spec.sourceType is set to `git`.
-func RedundantOciSpec(o client.Object) status.Error {
+// MissingHelmRepo reports that a RootSync/RepoSync doesn't declare the Helm repository it is
+// supposed to download chart from.
+func MissingHelmRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must not specify spec.oci when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		BuildWithResources(o)
+}
+
+// MissingHelmChart reports that a RootSync/RepoSync doesn't declare the Helm chart name it is
+// supposed to rendering.
+func MissingHelmChart(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		BuildWithResources(o)
+}
+
+// InvalidHelmAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
+// methods for Helm.
+func InvalidHelmAuthType(o client.Object) status.Error {
+	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthNone), string(configsync.AuthToken)}
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.helm.auth to be one of %s", kind,
+			strings.Join(types, ",")).
 		BuildWithResources(o)
 }

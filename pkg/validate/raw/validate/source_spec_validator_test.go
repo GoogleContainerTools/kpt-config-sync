@@ -36,6 +36,12 @@ func ociAuth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
 	}
 }
 
+func helmAuth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Helm.Auth = authType
+	}
+}
+
 func named(name string) func(*v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
 		sync.Name = name
@@ -68,6 +74,14 @@ func missingImage(rs *v1beta1.RepoSync) {
 	rs.Spec.Oci.Image = ""
 }
 
+func missingHelmRepo(rs *v1beta1.RepoSync) {
+	rs.Spec.Helm.Repo = ""
+}
+
+func missingHelmChart(rs *v1beta1.RepoSync) {
+	rs.Spec.Helm.Chart = ""
+}
+
 func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
 	rs.Spec.SourceType = string(v1beta1.GitSource)
@@ -91,6 +105,18 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	}
 	return rs
 }
+func repoSyncWithHelm(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
+	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.Helm{
+		Repo:  "fake repo",
+		Chart: "fake chart",
+	}
+	for _, opt := range opts {
+		opt(rs)
+	}
+	return rs
+}
 
 func withGit() func(*v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
@@ -104,7 +130,13 @@ func withOci() func(*v1beta1.RepoSync) {
 	}
 }
 
-func TestValidateGitSpec(t *testing.T) {
+func withHelm() func(*v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Helm = &v1beta1.Helm{}
+	}
+}
+
+func TestValidateSourceSpec(t *testing.T) {
 	testCases := []struct {
 		name    string
 		obj     *v1beta1.RepoSync
@@ -211,11 +243,41 @@ func TestValidateGitSpec(t *testing.T) {
 			obj:     repoSyncWithOci(withGit()),
 			wantErr: fake.Error(InvalidSyncCode),
 		},
+		// Validate Helm spec
+		{
+			name: "valid helm",
+			obj:  repoSyncWithHelm(helmAuth(configsync.AuthNone)),
+		},
+		{
+			name:    "missing helm repo",
+			obj:     repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmRepo),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "missing helm chart",
+			obj:     repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmChart),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "invalid auth type",
+			obj:     repoSyncWithHelm(helmAuth("invalid auth")),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "missing GCP serviceaccount email for Helm",
+			obj:     repoSyncWithHelm(helmAuth(configsync.AuthGCPServiceAccount)),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name:    "redundant Helm spec",
+			obj:     repoSyncWithGit(withHelm()),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := SourceSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj)
+			err := SourceSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj.Spec.Helm, tc.obj)
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("Got SourceSpec() error %v, want %v", err, tc.wantErr)
 			}

@@ -2122,9 +2122,10 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	t.Log("Deployment successfully created")
 
 	// Test updating RepoSync resources with None auth type
-	rs.Spec.Helm.Auth = configsync.AuthNone
+	rs = repoSyncWithHelm(reposyncNs, reposyncName,
+		reposyncHelmAuthType(configsync.AuthNone))
 	if err := fakeClient.Update(ctx, rs); err != nil {
-		t.Fatalf("failed to update the root sync request, got error: %v", err)
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
@@ -2370,6 +2371,20 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Error(err)
 	}
 
+	// verify missing Helm
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
+	if err := validateRepoSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
 	// verify missing OCI image
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{}
@@ -2386,8 +2401,6 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 
 	// verify invalid OCI Auth
-	// Mock out parseDeployment for testing.
-	parseDeployment = parsedDeployment
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -2402,33 +2415,48 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Error(err)
 	}
 
-	// verify redundant source specification
-	rs.Spec.SourceType = string(v1beta1.GitSource)
-	rs.Spec.Git = &v1beta1.Git{}
-	rs.Spec.Oci = &v1beta1.Oci{}
+	// verify missing Helm repo
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Oci = nil
+	rs.Spec.Helm = &v1beta1.Helm{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
-		t.Fatalf("failed to update the root sync request, got error: %v", err)
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.RedundantOciSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
 	if err := validateRepoSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
 	}
 
-	rs.Spec.SourceType = string(v1beta1.OciSource)
-	rs.Spec.Git = &v1beta1.Git{}
-	rs.Spec.Oci = &v1beta1.Oci{}
+	// verify missing Helm chart
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo}
 	if err := fakeClient.Update(ctx, rs); err != nil {
-		t.Fatalf("failed to update the root sync request, got error: %v", err)
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.RedundantGitSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
+	if err := validateRepoSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify invalid Helm Auth
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo, Chart: helmChart}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
 	if err := validateRepoSyncStatus(wantRs, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2436,7 +2464,32 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	// verify valid OCI spec
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Git = nil
+	rs.Spec.Helm = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	// Clear the stalled condition
+	rs.Status = v1beta1.RepoSyncStatus{}
+	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	wantRs.Status.Reconciler = nsReconcilerName
+	wantRs.Status.Conditions = nil // clear the stalled condition
+	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	if err := validateRepoSyncStatus(wantRs, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// verify valid Helm spec
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Git = nil
+	rs.Spec.Oci = nil
+	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}

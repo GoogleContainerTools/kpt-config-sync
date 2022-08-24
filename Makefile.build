@@ -246,7 +246,6 @@ __config-sync-manifest-oss:
 		--exclude='admission-webhook.yaml' \
 		.output/deployment/* .output/oss/cloned/deployment/
 	rsync \
-		--exclude='acm-psp.yaml' \
 		--exclude='policy-controller-psp.yaml' \
 		--exclude='cluster-config-crd.yaml' \
 		--exclude='hierarchyconfig-crd.yaml' \

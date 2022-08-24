@@ -9,11 +9,9 @@ __tag-release-candidate:
 	CS_VERSION="$(CS_VERSION)" ./scripts/tag-release-candidate.sh
 
 .PHONY: __build-release-candidate
-__build-release-candidate: __tag-release-candidate
+__build-release-candidate:
 	@echo "+++ Building release candidate"
 	@$(eval GCR_PREFIX := "config-management-release")
-	@test -n "$(CS_VERSION)" || (echo "CS_VERSION unset" ; exit 1)
-	$(eval RC_TAG != git tag --points-at "HEAD" --list "$(CS_VERSION)-rc.*" | sort -V | tail -n 1)
 	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
 
 	$(MAKE) config-sync-manifest \

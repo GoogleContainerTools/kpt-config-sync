@@ -216,7 +216,7 @@ spec:
                   values:
                     description: values to use instead of default values that accompany
                       the chart
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   version:
                     description: version is the chart version. If this is not specified,
                       the latest version is used
@@ -1183,7 +1183,7 @@ spec:
                   values:
                     description: values to use instead of default values that accompany
                       the chart
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   version:
                     description: version is the chart version. If this is not specified,
                       the latest version is used

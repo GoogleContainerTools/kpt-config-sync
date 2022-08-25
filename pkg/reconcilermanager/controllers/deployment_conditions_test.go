@@ -159,11 +159,11 @@ func TestComputeDeploymentStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotResult, err := computeDeploymentStatus(tc.reconcilerDeployment)
+			gotResult, err := ComputeDeploymentStatus(tc.reconcilerDeployment)
 			if tc.wantError && err == nil {
-				t.Errorf("computeDeploymentStatus() got error: %q, want error", err)
+				t.Errorf("ComputeDeploymentStatus() got error: %q, want error", err)
 			} else if !tc.wantError && err != nil {
-				t.Errorf("computeDeploymentStatus() got error: %q, want error: nil", err)
+				t.Errorf("ComputeDeploymentStatus() got error: %q, want error: nil", err)
 			}
 			if !tc.wantError {
 				testutil.AssertEqual(t, tc.wantStatus, gotResult, "unexpected status")

@@ -18,18 +18,19 @@ import (
 	"encoding/json"
 	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/policy/v1beta1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/pkg/metrics"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -87,21 +88,24 @@ func isAvailableDeployment(o client.Object) error {
 		return WrongTypeErr(o, d)
 	}
 
-	// The desired number of replicas defaults to 1 if unspecified.
-	var want int32 = 1
-	if d.Spec.Replicas != nil {
-		want = *d.Spec.Replicas
+	result, err := controllers.ComputeDeploymentStatus(d)
+	if err != nil {
+		// Display the full state of the malfunctioning Deployment to aid in debugging.
+		jsn, e := json.MarshalIndent(d, "", "  ")
+		if e != nil {
+			return e
+		}
+		return fmt.Errorf("%w for deployment/%s in namespace %s: status check failed %v\n\n%s",
+			ErrFailedPredicate, d.GetName(), d.GetNamespace(), err, string(jsn))
 	}
-
-	available := d.Status.AvailableReplicas
-	if available != want {
+	if result.Status != kstatus.CurrentStatus {
 		// Display the full state of the malfunctioning Deployment to aid in debugging.
 		jsn, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("%w for deployment/%s in namespace %s: got %d available replicas, want %d\n\n%s",
-			ErrFailedPredicate, d.GetName(), d.GetNamespace(), available, want, string(jsn))
+		return fmt.Errorf("%w for deployment/%s in namespace %s: got status %s, want %s\n\n%s",
+			ErrFailedPredicate, d.GetName(), d.GetNamespace(), result.Status.String(), kstatus.CurrentStatus.String(), string(jsn))
 	}
 
 	// otel_controller.go:configureGooglecloudConfigMap creates or updates `otel-collector-googlecloud` configmap

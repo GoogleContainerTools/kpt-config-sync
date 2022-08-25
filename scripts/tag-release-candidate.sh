@@ -92,21 +92,28 @@ REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
 git fetch "${REMOTE}" --tags > /dev/null
 echo "+++ Successfully fetched tags"
 
+# Cut from tip of main for minor versions
+branch="main"
+# Cut from tip of release branch for patch versions
+[[ "${CS_VERSION}" =~ ^v[0-9]+\.[0-9]+\.0$ ]] || branch="${CS_VERSION%.*}"
+echo "+++ Finding latest commit from ${branch}"
+remote_sha=$(git ls-remote --exit-code --heads "${REMOTE}" "${branch}" | cut -f 1)
+
 RC=$(latest_rc_of_version "$CS_VERSION")
 echo "+++ Most recent RC of version $CS_VERSION: $RC"
 
 NEXT_RC=$(increment_rc_of_semver "$RC")
 echo "+++ Incremented RC.  NEXT_RC: $NEXT_RC"
 
-read -rp "This will create ${NEXT_RC} - Proceed (yes/no)? " choice
+read -rp "This will tag commit ${remote_sha} from branch ${branch} as ${NEXT_RC} - Proceed (yes/no)? " choice
 case "${choice}" in
   yes) ;;
   no) exit 1 ;;
   *) err "Unrecognized choice ${choice}"
 esac
 
-git tag -a "$NEXT_RC" -m "Release candidate $NEXT_RC"
-echo "+++ Successfully tagged commit $(git rev-parse HEAD) as ${NEXT_RC}"
+git tag -a "${NEXT_RC}" -m "Release candidate ${NEXT_RC}" "${remote_sha}"
+echo "+++ Successfully tagged commit ${remote_sha} as ${NEXT_RC}"
 
 echo "+++ Pushing RC tag"
 git push "${REMOTE}" "${NEXT_RC}"

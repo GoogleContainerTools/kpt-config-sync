@@ -194,6 +194,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             sharedNT.GitProvider,
 		RemoteRepositories:      sharedNT.RemoteRepositories,
+		WebhookDisabled:         sharedNt.WebhookDisabled,
 	}
 
 	t.Cleanup(func() {
@@ -202,12 +203,7 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		nt.T.Log("`resetSyncedRepos` after a test as a part of `Cleanup` on SharedTestEnv")
 		resetSyncedRepos(nt, opts)
 		if t.Failed() {
-			// Print the logs for the current container instances.
-			nt.testLogs(false)
-			// print the logs for the previous container instances if they exist.
-			nt.testLogs(true)
-			nt.testPods()
-			nt.describeNotRunningTestPods(configmanagement.ControllerNamespace)
+			nt.printTestLogs()
 		}
 	})
 
@@ -276,6 +272,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		kubeconfigPath = os.Getenv(ntopts.Kubeconfig)
 	}
 
+	webhookDisabled := false
 	nt := &NT{
 		Context:                 ctx,
 		T:                       t,
@@ -294,6 +291,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
+		WebhookDisabled:         &webhookDisabled,
 	}
 
 	if *e2e.ImagePrefix == e2e.DefaultImagePrefix {
@@ -306,7 +304,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 
 	nt.IsGKEAutopilot = skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 	if nt.IsGKEAutopilot {
-		nt.DefaultWaitTimeout = 6 * time.Minute
+		nt.DefaultWaitTimeout = 10 * time.Minute
 	} else {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
@@ -356,12 +354,7 @@ func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 
 	t.Cleanup(func() {
 		if t.Failed() {
-			// Print the logs for the current container instances.
-			nt.testLogs(false)
-			// print the logs for the previous container instances if they exist.
-			nt.testLogs(true)
-			nt.testPods()
-			nt.describeNotRunningTestPods(configmanagement.ControllerNamespace)
+			nt.printTestLogs()
 		}
 	})
 

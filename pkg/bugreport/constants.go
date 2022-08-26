@@ -34,17 +34,11 @@ const (
 	ResourceGroup = Product("Resource Group")
 )
 
-// Resource Group constants
-const (
-	// RGControllerNamespace is the namespace used for the resource-group controller
-	RGControllerNamespace = "resource-group-system"
-)
-
 var (
 	productNamespaces = map[Product]string{
 		PolicyController:     policycontroller.NamespaceSystem,
 		ConfigSync:           configmanagement.ControllerNamespace,
-		ResourceGroup:        RGControllerNamespace,
+		ResourceGroup:        configmanagement.RGControllerNamespace,
 		ConfigSyncMonitoring: metrics.MonitoringNamespace,
 	}
 )

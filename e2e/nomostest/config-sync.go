@@ -213,7 +213,7 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) {
 // waitForConfigSync validates if the config sync deployment is ready.
 func waitForConfigSync(nt *NT, nomos ntopts.Nomos) error {
 	if nomos.MultiRepo {
-		return validateMultiRepoDeployments(nt)
+		return ValidateMultiRepoDeployments(nt)
 	}
 	return validateMonoRepoDeployments(nt)
 }
@@ -457,7 +457,8 @@ func validateMonoRepoDeployments(nt *NT) error {
 	return nil
 }
 
-func validateMultiRepoDeployments(nt *NT) error {
+// ValidateMultiRepoDeployments validates if all Config Sync Components are available.
+func ValidateMultiRepoDeployments(nt *NT) error {
 	for name := range nt.RootRepos {
 		// Create a RootSync to initialize the root reconciler.
 		rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
@@ -469,10 +470,11 @@ func validateMultiRepoDeployments(nt *NT) error {
 	}
 
 	deployments := map[client.ObjectKey]time.Duration{
-		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}: nt.DefaultWaitTimeout,
-		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:     nt.DefaultWaitTimeout,
-		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout,
-		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:              nt.DefaultWaitTimeout,
+		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout,
+		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:           nt.DefaultWaitTimeout,
+		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:             nt.DefaultWaitTimeout * 2,
+		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:                    nt.DefaultWaitTimeout,
+		{Name: configmanagement.RGControllerName, Namespace: configmanagement.RGControllerNamespace}: nt.DefaultWaitTimeout,
 	}
 
 	var wg sync.WaitGroup
@@ -511,16 +513,81 @@ func validateMultiRepoDeployments(nt *NT) error {
 		return errs
 	}
 
-	// Validate the webhook config seperately, since it's not a Deployment.
-	took, err := Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
-	})
-	if err != nil {
-		return err
+	// Validate the webhook config separately, since it's not a Deployment.
+	if !*nt.WebhookDisabled {
+		took, err := Retry(nt.DefaultWaitTimeout, func() error {
+			return nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
+		})
+		if err != nil {
+			return err
+		}
+		nt.T.Logf("took %v to wait for %s %s", took, "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io")
 	}
-	nt.T.Logf("took %v to wait for %s %s", took, "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io")
 
+	return validateMultiRepoPods(nt)
+}
+
+// validateMultiRepoPods validates if all Config Sync Pods are healthy. It doesn't retry
+// because it is supposed to be invoked after validateMultiRepoDeployments succeeds.
+func validateMultiRepoPods(nt *NT) error {
+	for _, ns := range CSNamespaces {
+		pods := corev1.PodList{}
+		if err := nt.List(&pods, client.InNamespace(ns)); err != nil {
+			return err
+		}
+		for _, pod := range pods.Items {
+			// Check if the Pod (running Pod only) has any former abnormally terminated container.
+			// If the Pod is already in a terminating state (with a deletion timestamp) due to clean up, ignore the check.
+			// It uses pod.DeletionTimestamp instead of pod.Status.Phase because the Pod may not be scheduled to evict yet.
+			if pod.DeletionTimestamp == nil {
+				if err := nt.Validate(pod.Name, pod.Namespace, &corev1.Pod{}, noOOMKilledContainer(nt)); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
+}
+
+// noOOMKilledContainer is a predicate to validate if the Pod has a container that was terminated due to OOMKilled
+// It doesn't check other non-zero exit code because the admission-webhook sometimes exits with 1 and then recovers after restart.
+// Example log:
+//
+//	kubectl logs admission-webhook-5c79b59f86-fzqgl -n config-management-system -p
+//	I0826 07:54:47.435824       1 setup.go:31] Build Version: v1.13.0-rc.5-2-gef2d1ac-dirty
+//	I0826 07:54:47.435992       1 logr.go:249] setup "msg"="starting manager"
+//	E0826 07:55:17.436921       1 logr.go:265]  "msg"="Failed to get API Group-Resources" "error"="Get \"https://10.96.0.1:443/api?timeout=32s\": dial tcp 10.96.0.1:443: i/o timeout"
+//	E0826 07:55:17.436945       1 logr.go:265] setup "msg"="starting manager" "error"="Get \"https://10.96.0.1:443/api?timeout=32s\": dial tcp 10.96.0.1:443: i/o timeout"
+func noOOMKilledContainer(nt *NT) Predicate {
+	return func(o client.Object) error {
+		pod, ok := o.(*corev1.Pod)
+		if !ok {
+			return WrongTypeErr(o, pod)
+		}
+
+		for _, cs := range pod.Status.ContainerStatuses {
+			terminated := cs.LastTerminationState.Terminated
+			if terminated != nil && terminated.ExitCode != 0 && terminated.Reason == "OOMKilled" {
+				// Display the full state of the malfunctioning Pod to aid in debugging.
+				jsn, err := json.MarshalIndent(pod, "", "  ")
+				if err != nil {
+					return err
+				}
+				// Display the logs for the previous instance of the container.
+				args := []string{"logs", pod.Name, "-n", pod.Namespace, "-p"}
+				out, err := nt.Kubectl(args...)
+				// Print a standardized header before each printed log to make ctrl+F-ing the
+				// log you want easier.
+				cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
+				if err != nil {
+					nt.T.Logf("failed to run %q: %v\n%s", cmd, err, out)
+				}
+				return fmt.Errorf("%w for pod/%s in namespace %q, container %q terminated with exit code %d and reason %q\n\n%s\n\n%s",
+					ErrFailedPredicate, pod.Name, pod.Namespace, cs.Name, terminated.ExitCode, terminated.Reason, string(jsn), fmt.Sprintf("%s\n%s", cmd, out))
+			}
+		}
+		return nil
+	}
 }
 
 func setupRootSync(nt *NT, rsName string) {

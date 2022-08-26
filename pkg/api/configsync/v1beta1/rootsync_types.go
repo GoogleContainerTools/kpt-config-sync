@@ -71,7 +71,7 @@ type RootSyncSpec struct {
 
 	// helm contains configuration specific to importing resources from a Helm repo.
 	// +optional
-	Helm *Helm `json:"helm,omitempty"`
+	Helm *HelmRootSync `json:"helm,omitempty"`
 
 	// override allows to override the settings for a root reconciler.
 	// +nullable

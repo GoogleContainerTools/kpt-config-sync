@@ -76,7 +76,7 @@ type RepoState struct {
 	sourceType v1beta1.SourceType
 	git        *v1beta1.Git
 	oci        *v1beta1.Oci
-	helm       *v1beta1.Helm
+	helm       *v1beta1.HelmBase
 	status     string
 	commit     string
 	errors     []string
@@ -126,7 +126,7 @@ func (r *RepoState) printRows(writer io.Writer) {
 	}
 }
 
-func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.Helm) string {
+func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmBase) string {
 	switch sourceType {
 	case v1beta1.OciSource:
 		return ociString(oci)
@@ -175,7 +175,7 @@ func ociString(oci *v1beta1.Oci) string {
 	return ociStr
 }
 
-func helmString(helm *v1beta1.Helm) string {
+func helmString(helm *v1beta1.HelmBase) string {
 	var helmStr string
 	if helm == nil {
 		return "N/A"
@@ -303,7 +303,7 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
-		helm:       rs.Spec.Helm,
+		helm:       reposync.GetHelmBase(rs.Spec.Helm),
 		commit:     emptyCommit,
 	}
 
@@ -399,7 +399,7 @@ func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncing
 		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
-		helm:       rs.Spec.Helm,
+		helm:       rootsync.GetHelmBase(rs.Spec.Helm),
 		commit:     emptyCommit,
 	}
 	stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)

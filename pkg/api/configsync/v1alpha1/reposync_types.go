@@ -41,7 +41,41 @@ type RepoSync struct {
 
 // RepoSyncSpec defines the desired state of a RepoSync.
 type RepoSyncSpec struct {
-	Spec `json:",inline"`
+	// sourceFormat specifies how the repository is formatted.
+	// See documentation for specifics of what these options do.
+	//
+	// Must be one of hierarchy, unstructured. Optional. Set to
+	// hierarchy if not specified.
+	//
+	// The validation of this is case-sensitive.
+	// +kubebuilder:validation:Pattern=^(unstructured|)$
+	// +optional
+	SourceFormat string `json:"sourceFormat,omitempty"`
+
+	// sourceType specifies the type of the source of truth.
+	//
+	// Must be one of git, oci, helm. Optional. Set to git if not specified.
+	// +kubebuilder:validation:Pattern=^(git|oci|helm)$
+	// +kubebuilder:default:=git
+	// +optional
+	SourceType string `json:"sourceType,omitempty"`
+
+	// git contains configuration specific to importing resources from a Git repo.
+	// +optional
+	*Git `json:"git,omitempty"`
+
+	// oci contains configuration specific to importing resources from an OCI package.
+	// +optional
+	Oci *Oci `json:"oci,omitempty"`
+
+	// helm contains configuration specific to importing resources from a Helm repo.
+	// +optional
+	Helm *HelmRepoSync `json:"helm,omitempty"`
+
+	// override allows to override the settings for a reconciler.
+	// +nullable
+	// +optional
+	Override OverrideSpec `json:"override,omitempty"`
 }
 
 // RepoSyncStatus defines the observed state of a RepoSync.

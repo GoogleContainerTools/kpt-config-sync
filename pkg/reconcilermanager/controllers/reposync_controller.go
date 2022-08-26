@@ -671,7 +671,7 @@ func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile
 func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)),
+		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -689,7 +689,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm)
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace)
 	}
 	return result
 }
@@ -701,7 +701,7 @@ func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoS
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		return validate.HelmSpec(rs.Spec.Helm, rs)
+		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}

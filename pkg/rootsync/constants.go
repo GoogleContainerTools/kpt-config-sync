@@ -16,6 +16,7 @@ package rootsync
 
 import (
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -25,4 +26,12 @@ func ObjectKey(name string) client.ObjectKey {
 		Namespace: configsync.ControllerNamespace,
 		Name:      name,
 	}
+}
+
+// GetHelmBase returns the spec.helm.helmBase when spec.helm is not nil
+func GetHelmBase(helm *v1beta1.HelmRootSync) *v1beta1.HelmBase {
+	if helm == nil {
+		return nil
+	}
+	return &helm.HelmBase
 }

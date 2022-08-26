@@ -463,7 +463,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.Override.StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.Override.ReconcileTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -481,7 +481,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(rs.Spec.Helm)
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace)
 	}
 	return result
 }
@@ -493,7 +493,7 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		return validate.HelmSpec(rs.Spec.Helm, rs)
+		return validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}

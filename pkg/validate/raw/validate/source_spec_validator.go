@@ -27,8 +27,8 @@ import (
 // https://cloud.google.com/iam/docs/service-accounts#user-managed
 const gcpSASuffix = ".iam.gserviceaccount.com"
 
-// SourceSpec validates the source specification for any obvious problems.
-func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.Helm, rs client.Object) status.Error {
+// SourceSpec validates the Root Sync source specification for any obvious problems.
+func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	switch v1beta1.SourceType(sourceType) {
 	case v1beta1.GitSource:
 		return GitSpec(git, rs)
@@ -118,7 +118,7 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 }
 
 // HelmSpec validates the Helm specification for any obvious problems.
-func HelmSpec(helm *v1beta1.Helm, rs client.Object) status.Error {
+func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	if helm == nil {
 		return MissingHelmSpec(rs)
 	}

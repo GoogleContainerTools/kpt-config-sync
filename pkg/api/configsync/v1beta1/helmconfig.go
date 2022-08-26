@@ -20,8 +20,21 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
-// Helm contains the configuration specific to locate, download and template a Helm chart.
-type Helm struct {
+// HelmRootSync contains the configuration specific to locate, download and template a Helm chart for RootSync.
+type HelmRootSync struct {
+	HelmBase `json:",inline"`
+	// namespace sets the target namespace for a release
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// HelmRepoSync contains the configuration specific to locate, download and template a Helm chart for RepoSync.
+type HelmRepoSync struct {
+	HelmBase `json:",inline"`
+}
+
+// HelmBase contains the configuration specific to locate, download and template a Helm chart.
+type HelmBase struct {
 	// repo is the helm repository URL to sync from. Required.
 	Repo string `json:"repo"`
 
@@ -35,10 +48,6 @@ type Helm struct {
 	// releaseName is the name of the Helm release.
 	// +optional
 	ReleaseName string `json:"releaseName,omitempty"`
-
-	// namespace sets the target namespace for a release
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
 
 	// values to use instead of default values that accompany the chart
 	// +optional

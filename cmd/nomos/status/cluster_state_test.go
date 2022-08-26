@@ -42,7 +42,7 @@ var (
 		Dir:   "test",
 	}
 
-	helm = &v1beta1.Helm{
+	helm = &v1beta1.HelmBase{
 		Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
 		Chart:   "test",
 		Version: "0.1.0",
@@ -443,7 +443,7 @@ func toOciStatus(oci *v1beta1.Oci) *v1beta1.OciStatus {
 	}
 }
 
-func toHelmStatus(oci *v1beta1.Helm) *v1beta1.HelmStatus {
+func toHelmStatus(oci *v1beta1.HelmBase) *v1beta1.HelmStatus {
 	return &v1beta1.HelmStatus{
 		Repo:    helm.Repo,
 		Chart:   helm.Chart,
@@ -495,7 +495,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		syncingConditionSupported bool
 		gitSpec                   *v1beta1.Git
 		ociSpec                   *v1beta1.Oci
-		helmSpec                  *v1beta1.Helm
+		helmSpec                  *v1beta1.HelmBase
 		sourceType                v1beta1.SourceType
 		conditions                []v1beta1.RepoSyncCondition
 		sourceStatus              v1beta1.SourceStatus
@@ -1758,7 +1758,9 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			repoSync := fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)
 			repoSync.Spec.Git = tc.gitSpec
 			repoSync.Spec.Oci = tc.ociSpec
-			repoSync.Spec.Helm = tc.helmSpec
+			if tc.helmSpec != nil {
+				repoSync.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: *tc.helmSpec}
+			}
 			repoSync.Spec.SourceType = string(tc.sourceType)
 			if repoSync.Spec.SourceType == "" {
 				repoSync.Spec.SourceType = string(v1beta1.GitSource)
@@ -2950,7 +2952,7 @@ gke_sample-project_europe-west1-b_cluster-2
 						scope:      "<root>",
 						syncName:   "root-sync",
 						sourceType: v1beta1.HelmSource,
-						helm: &v1beta1.Helm{
+						helm: &v1beta1.HelmBase{
 							Repo:  "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
 							Chart: "test",
 						},
@@ -2961,7 +2963,7 @@ gke_sample-project_europe-west1-b_cluster-2
 						scope:      "bookstore",
 						syncName:   "repos-sync",
 						sourceType: v1beta1.HelmSource,
-						helm: &v1beta1.Helm{
+						helm: &v1beta1.HelmBase{
 							Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
 							Chart:   "test",
 							Version: "0.2.0",

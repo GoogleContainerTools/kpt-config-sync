@@ -46,18 +46,8 @@ func TestNamespace(t *testing.T) {
 			wantErr: nonhierarchical.InvalidNamespaceError(fake.Role()),
 		},
 		{
-			name:    "Role with illegal namespace",
-			obj:     fake.Role(core.Namespace(configmanagement.ControllerNamespace)),
-			wantErr: nonhierarchical.ObjectInIllegalNamespace(fake.Role()),
-		},
-		{
 			name: "RootSync with config-management-system namespace",
 			obj:  fake.RootSyncV1Beta1("foo"),
-		},
-		{
-			name:    "RepoSync with config-management-system namespace",
-			obj:     fake.RepoSyncV1Beta1(configmanagement.ControllerNamespace, "foo"),
-			wantErr: nonhierarchical.ObjectInIllegalNamespace(fake.RepoSyncV1Beta1(configmanagement.ControllerNamespace, "foo")),
 		},
 		{
 			name: "Valid namespace",

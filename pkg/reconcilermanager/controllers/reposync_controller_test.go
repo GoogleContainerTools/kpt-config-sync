@@ -74,6 +74,7 @@ const (
 var filesystemPollingPeriod time.Duration
 var hydrationPollingPeriod time.Duration
 var nsReconcilerName = core.NsReconcilerName(reposyncNs, reposyncName)
+var allowVerticalScale = false
 
 var parsedDeployment = func(de *appsv1.Deployment) error {
 	de.TypeMeta = fake.ToTypeMeta(kinds.Deployment())
@@ -281,6 +282,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("RepoSync"),
 		s,
+		allowVerticalScale,
 	)
 	return fakeClient, testReconciler
 }
@@ -2583,6 +2585,72 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
 	require.Equal(t, reconcilingCondition.Status, metav1.ConditionTrue, "unexpected Stalled condition status")
 	require.Contains(t, reconcilingCondition.Message, "RepoSyncs must specify spec.git when spec.sourceType is \"git\"", "unexpected Stalled condition message")
+}
+
+func TestUpdateReconcilerWithAllowVerticalScale(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	// mock allow vertical scale setting
+	allowVerticalScale = true
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+	)
+
+	updatedCPU := "249m"
+	updatedMemory := "259Mi"
+	deploymentCoreObject := fakeClient.Objects[core.IDOf(repoDeployment)]
+	updatedDeployment := deploymentCoreObject.(*appsv1.Deployment)
+	containerName := updatedDeployment.Spec.Template.Spec.Containers[0].Name
+	var updatedReplica int32 = 20
+	*updatedDeployment.Spec.Replicas = updatedReplica
+	// mock VPA behavior of changing deployment resources
+	updatedDeployment.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse(updatedCPU),
+		corev1.ResourceMemory: resource.MustParse(updatedMemory),
+	}
+
+	if err := fakeClient.Update(ctx, updatedDeployment); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// when allow vertical scale is enabled, original deployment resource should not be updated
+	// other updated deployment should be reverted
+	expectedResource := []v1beta1.ContainerResourcesSpec{
+		{
+			ContainerName: containerName,
+			CPURequest:    resource.MustParse(updatedCPU),
+			MemoryRequest: resource.MustParse(updatedMemory),
+		},
+	}
+
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment2 := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(expectedResource),
+		containerEnvMutator(repoContainerEnv),
+	)
+
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment2): repoDeployment2}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	allowVerticalScale = false
 }
 
 func validateRepoSyncStatus(want *v1beta1.RepoSync, fakeClient *syncerFake.Client) error {

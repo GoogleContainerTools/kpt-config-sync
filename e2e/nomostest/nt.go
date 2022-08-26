@@ -147,11 +147,21 @@ type NT struct {
 	// It includes both root repo and namespace repos and can be shared among test cases.
 	// It is used to reuse existing repositories instead of creating new ones.
 	RemoteRepositories map[types.NamespacedName]*Repository
+
+	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
+	WebhookDisabled *bool
 }
 
 const (
 	shared = "shared"
 )
+
+// CSNamespaces is the namespaces of the Config Sync components.
+var CSNamespaces = []string{
+	configmanagement.ControllerNamespace,
+	ocmetrics.MonitoringNamespace,
+	configmanagement.RGControllerNamespace,
+}
 
 // DefaultRootReconcilerName is the root-reconciler name of the default RootSync object: "root-sync".
 var DefaultRootReconcilerName = core.RootReconcilerName(configsync.RootSyncName)
@@ -570,6 +580,9 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 	syncTimeout := waitForRepoSyncsOptions.timeout
 
 	if nt.MultiRepo {
+		if err := ValidateMultiRepoDeployments(nt); err != nil {
+			nt.T.Fatal(err)
+		}
 		for name := range nt.RootRepos {
 			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, RootSyncNN(name))
 			nt.WaitForSync(kinds.RootSyncV1Beta1(), name,
@@ -827,6 +840,20 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	nt.T.Logf("%s\n%s", cmd, out)
 }
 
+// printTestLogs prints test logs and pods information for debugging.
+func (nt *NT) printTestLogs() {
+	// Print the logs for the current container instances.
+	nt.testLogs(false)
+	// print the logs for the previous container instances if they exist.
+	nt.testLogs(true)
+	for _, ns := range CSNamespaces {
+		nt.testPods(ns)
+	}
+	for _, ns := range CSNamespaces {
+		nt.describeNotRunningTestPods(ns)
+	}
+}
+
 // testLogs print the logs for the current container instances when `previousPodLog` is false.
 // testLogs print the logs for the previous container instances if they exist when `previousPodLog` is true.
 func (nt *NT) testLogs(previousPodLog bool) {
@@ -862,11 +889,11 @@ func (nt *NT) testLogs(previousPodLog bool) {
 // two commands can be used to get more information:
 //  1. kubectl get pods -n config-management-system -o yaml
 //  2. kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
-func (nt *NT) testPods() {
-	out, err := nt.Kubectl("get", "pods", "-n", configmanagement.ControllerNamespace)
+func (nt *NT) testPods(ns string) {
+	out, err := nt.Kubectl("get", "pods", "-n", ns)
 	// Print a standardized header before each printed log to make ctrl+F-ing the
 	// log you want easier.
-	nt.T.Logf("kubectl get pods -n %s: \n%s", configmanagement.ControllerNamespace, string(out))
+	nt.T.Logf("kubectl get pods -n %s: \n%s", ns, string(out))
 	if err != nil {
 		nt.T.Log("error running `kubectl get pods`:", err)
 	}

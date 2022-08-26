@@ -80,6 +80,7 @@ func StopWebhook(nt *NT) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	*nt.WebhookDisabled = true
 }
 
 func installWebhook(nt *NT, nomos ntopts.Nomos) {
@@ -99,4 +100,5 @@ func installWebhook(nt *NT, nomos ntopts.Nomos) {
 			nt.T.Fatal(err)
 		}
 	}
+	*nt.WebhookDisabled = false
 }

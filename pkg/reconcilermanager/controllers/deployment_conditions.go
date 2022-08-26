@@ -22,9 +22,9 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
-// computeDeploymentStatus uses kstatus to compute the deployment status based
+// ComputeDeploymentStatus uses kstatus to compute the deployment status based
 // on its conditions and other status fields.
-func computeDeploymentStatus(depObj *appsv1.Deployment) (*kstatus.Result, error) {
+func ComputeDeploymentStatus(depObj *appsv1.Deployment) (*kstatus.Result, error) {
 	objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depObj)
 	if err != nil {
 		return nil, err

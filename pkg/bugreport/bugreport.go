@@ -439,7 +439,7 @@ func (b *BugReporter) FetchCMSystemPods(ctx context.Context) (rd []Readable) {
 	var namespaces = []string{
 		configmanagement.ControllerNamespace,
 		metav1.NamespaceSystem,
-		RGControllerNamespace,
+		configmanagement.RGControllerNamespace,
 		metrics.MonitoringNamespace,
 		policycontroller.NamespaceSystem,
 	}

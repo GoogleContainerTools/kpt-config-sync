@@ -53,6 +53,12 @@ const (
 
 	// HierarchyConfigKind is the string constant for the HierarchyConfig GroupVersionKind
 	HierarchyConfigKind = "HierarchyConfig"
+
+	// RGControllerNamespace is the namespace used for the resource-group controller
+	RGControllerNamespace = "resource-group-system"
+
+	// RGControllerName is the name used for the resource-group controller
+	RGControllerName = "resource-group-controller-manager"
 )
 
 // IsControllerNamespace returns true if the namespace is the ACM Controller Namespace.

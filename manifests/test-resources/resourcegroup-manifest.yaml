@@ -503,7 +503,7 @@ spec:
         resources:
           requests:
             cpu: 100m
-            memory: 50Mi
+            memory: 200Mi
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

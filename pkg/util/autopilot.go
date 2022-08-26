@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"go.uber.org/multierr"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -49,6 +50,13 @@ var AutopilotManagedKinds = []schema.GroupVersionKind{
 	admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingWebhookConfigurationList"),
 }
 
+var autopilotWebhooks = []string{
+	// The legacy webhook to determine an Autopilot cluster, which is renamed to the one below.
+	"policycontrollerv2.config.common-webhooks.networking.gke.io",
+	// The new webhook to determine an Autopilot cluster.
+	"gkepolicy.config.common-webhooks.networking.gke.io",
+}
+
 // IsAutopilotManagedNamespace returns if the input object is a namespace managed by the Autopilot cluster.
 func IsAutopilotManagedNamespace(o client.Object) bool {
 	if o.GetObjectKind().GroupVersionKind().GroupKind() != kinds.Namespace().GroupKind() {
@@ -76,15 +84,19 @@ func IsGKEAutopilotCluster(c client.Client) (bool, error) {
 		return false, nil
 	}
 
-	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{}
-	objectKey := client.ObjectKey{Name: "policycontrollerv2.config.common-webhooks.networking.gke.io"}
-	err := c.Get(context.Background(), objectKey, webhook)
-	if err == nil {
-		return true, nil
-	} else if apierrors.IsNotFound(err) {
-		return false, nodesErr
+	var errs error
+	errs = multierr.Append(errs, nodesErr)
+	for _, webhookName := range autopilotWebhooks {
+		webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{}
+		objectKey := client.ObjectKey{Name: webhookName}
+		err := c.Get(context.Background(), objectKey, webhook)
+		if err == nil {
+			return true, nil
+		} else if !apierrors.IsNotFound(err) {
+			errs = multierr.Append(errs, nodesErr)
+		}
 	}
-	return false, err
+	return false, errs
 }
 
 // ContainerResources describes the container's resource requirements.

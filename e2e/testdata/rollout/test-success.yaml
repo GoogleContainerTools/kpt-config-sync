@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: simpletest
+spec:
+  metrics:
+  - name: simpletest
+    provider:
+      job:
+        spec:
+          backoffLimit: 1
+          template:
+            spec:
+              containers:
+              - name: simpletest
+                image: debian:stable-slim
+                command: ["/bin/sh"]
+                args: ["-c", "exit 0"]
+              restartPolicy: Never

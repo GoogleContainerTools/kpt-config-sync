@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
+	kptstatus "github.com/GoogleContainerTools/kpt/pkg/status"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -61,13 +62,23 @@ func newClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		klog.Infof("Disabled status reporting")
 		statusPolicy = inventory.StatusPolicyNone
 	}
-	invClient, err := inventory.NewClient(f, live.WrapInventoryObj, live.InvToUnstructuredFunc, statusPolicy)
+	invClient, err := inventory.NewClient(f, live.WrapInventoryObj,
+		live.InvToUnstructuredFunc, statusPolicy, live.ResourceGroupGVK)
+	if err != nil {
+		return nil, err
+	}
+
+	statusWatcher, err := kptstatus.NewStatusWatcher(f)
 	if err != nil {
 		return nil, err
 	}
 
 	builder := apply.NewApplierBuilder()
-	applier, err := builder.WithInventoryClient(invClient).WithFactory(f).Build()
+	applier, err := builder.
+		WithInventoryClient(invClient).
+		WithFactory(f).
+		WithStatusWatcher(statusWatcher).
+		Build()
 	if err != nil {
 		return nil, err
 	}

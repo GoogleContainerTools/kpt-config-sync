@@ -628,6 +628,7 @@ func TestAllowVerticalScaleResourceAdjustment(t *testing.T) {
 	if err := nt.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
+	initialGeneration := reconcilerDeployment.Generation
 
 	// allow vertical scale
 	_, err := nt.Kubectl("patch", "deployment", "reconciler-manager", "-n", "config-management-system", "-p", "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"args\":[\"--enable-leader-election\", \"--allow-vertical-scale\"],\"name\":\"reconciler-manager\"}]}}}}")
@@ -641,17 +642,17 @@ func TestAllowVerticalScaleResourceAdjustment(t *testing.T) {
 	initialMinReadySeconds := reconcilerDeployment.Spec.MinReadySeconds
 
 	// simulating VPA update to deployment
-	// this will increment root-reconciler generation to 2
+	// this will increment root-reconciler generation by 1
 	_, err = nt.Kubectl("patch", "deployment", "root-reconciler", "-n", "config-management-system", "-p", fmt.Sprintf("{\"spec\":{\"minReadySeconds\":25,\"template\":{\"spec\":{\"containers\":[{\"name\":\"%s\",\"resources\":{\"requests\":{\"cpu\":\"%dm\",\"memory\":\"%dMi\"}}}]}}}}", "hydration-controller", updatedFirstContainerCPURequest, updatedFirstContainerMemoryRequest))
 	if err != nil {
 		nt.T.Fatalf("Error simulating VPA deployment update", err)
 	}
 
 	// update to container resource CPU and memory should be maintained, others (i.e minReadySeconds) will be reverted back
-	// the minReadySeconds reversal will increment root-reconciler generation to 3
+	// the minReadySeconds reversal will increment root-reconciler generation by 1
 	nomostest.Wait(nt.T, "Waiting for deployment update", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate("root-reconciler", v1.NSConfigManagementSystem, &appsv1.Deployment{},
-			hasGeneration(3), firstContainerCPURequestIs(updatedFirstContainerCPURequest),
+			hasGeneration(initialGeneration+2), firstContainerCPURequestIs(updatedFirstContainerCPURequest),
 			firstContainerMemoryRequestIs(updatedFirstContainerMemoryRequest), minReadySecondsIs(initialMinReadySeconds))
 	})
 }

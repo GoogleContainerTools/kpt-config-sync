@@ -189,9 +189,6 @@ spec:
                       false, no CustomeResourceDefinition will be generated. Default:
                       false.'
                     type: boolean
-                  namespace:
-                    description: namespace sets the target namespace for a release
-                    type: string
                   period:
                     description: 'period is the time duration between consecutive
                       syncs. Default: 15s. Use string to specify this field value,
@@ -357,7 +354,7 @@ spec:
                   See documentation for specifics of what these options do. \n Must
                   be one of hierarchy, unstructured. Optional. Set to hierarchy if
                   not specified. \n The validation of this is case-sensitive."
-                pattern: ^(hierarchy|unstructured|)$
+                pattern: ^(unstructured|)$
                 type: string
               sourceType:
                 default: git
@@ -1156,9 +1153,6 @@ spec:
                       false, no CustomeResourceDefinition will be generated. Default:
                       false.'
                     type: boolean
-                  namespace:
-                    description: namespace sets the target namespace for a release
-                    type: string
                   period:
                     description: 'period is the time duration between consecutive
                       syncs. Default: 15s. Use string to specify this field value,

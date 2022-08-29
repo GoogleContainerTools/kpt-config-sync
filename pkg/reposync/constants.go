@@ -15,6 +15,7 @@
 package reposync
 
 import (
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,4 +27,12 @@ func ObjectKey(scope declared.Scope, name string) client.ObjectKey {
 		Namespace: string(scope),
 		Name:      name,
 	}
+}
+
+// GetHelmBase returns the spec.helm.helmBase when spec.helm is not nil
+func GetHelmBase(helm *v1beta1.HelmRepoSync) *v1beta1.HelmBase {
+	if helm == nil {
+		return nil
+	}
+	return &helm.HelmBase
 }

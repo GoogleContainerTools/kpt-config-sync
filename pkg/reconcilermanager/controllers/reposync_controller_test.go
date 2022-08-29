@@ -231,11 +231,11 @@ func repoSyncWithOCI(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.
 func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1(ns, name)
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.Helm{
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 		Repo:    helmRepo,
 		Chart:   helmChart,
 		Version: helmVersion,
-	}
+	}}
 	for _, opt := range opts {
 		opt(rs)
 	}
@@ -2420,7 +2420,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	// verify missing Helm repo
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Oci = nil
-	rs.Spec.Helm = &v1beta1.Helm{}
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -2435,7 +2435,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 
 	// verify missing Helm chart
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo}
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo}}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -2450,7 +2450,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 
 	// verify invalid Helm Auth
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo, Chart: helmChart}
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart}}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -2491,7 +2491,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Git = nil
 	rs.Spec.Oci = nil
-	rs.Spec.Helm = &v1beta1.Helm{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}

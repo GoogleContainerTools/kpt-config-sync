@@ -80,7 +80,7 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.Helm, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
+func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
@@ -209,13 +209,13 @@ const (
 )
 
 // helmSyncEnvs returns the environment variables for the helm-sync container.
-func helmSyncEnvs(helm *v1beta1.Helm) []corev1.EnvVar {
+func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	helmValues := ""
 	var values map[string]interface{}
 
-	if helm.Values != nil {
-		err := json.Unmarshal(helm.Values.Raw, &values)
+	if helmBase.Values != nil {
+		err := json.Unmarshal(helmBase.Values.Raw, &values)
 		klog.Errorf("failed to unmarshal helm.values, error: %w", err)
 		var vals []string
 		for key, val := range values {
@@ -225,31 +225,31 @@ func helmSyncEnvs(helm *v1beta1.Helm) []corev1.EnvVar {
 	}
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.HelmRepo,
-		Value: helm.Repo,
+		Value: helmBase.Repo,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChart,
-		Value: helm.Chart,
+		Value: helmBase.Chart,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChartVersion,
-		Value: helm.Version,
+		Value: helmBase.Version,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseName,
-		Value: helm.ReleaseName,
+		Value: helmBase.ReleaseName,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseNamespace,
-		Value: helm.Namespace,
+		Value: releaseNamespace,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmValues,
 		Value: helmValues,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmIncludeCRDs,
-		Value: fmt.Sprint(helm.IncludeCRDs),
+		Value: fmt.Sprint(helmBase.IncludeCRDs),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmAuthType,
-		Value: string(helm.Auth),
+		Value: string(helmBase.Auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmSyncWait,
-		Value: fmt.Sprintf("%f", v1beta1.GetPeriodSecs(helm.Period)),
+		Value: fmt.Sprintf("%f", v1beta1.GetPeriodSecs(helmBase.Period)),
 	})
 	return result
 }

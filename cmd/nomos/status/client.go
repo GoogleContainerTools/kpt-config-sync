@@ -255,10 +255,16 @@ func (c *ClusterClient) multiRepoClusterStatus(ctx context.Context, cs *ClusterS
 		}
 	}
 
-	if len(rootSyncs) != 0 {
+	if len(rootSyncs) != len(rootRGs) {
+		errs = append(errs, fmt.Sprintf("expected the number of RootSyncs and ResourceGroups to be equal, but found %d RootSyncs and %d ResourceGroups", len(rootSyncs), len(rootRGs)))
+	} else if len(rootSyncs) != 0 {
 		var repos []*RepoState
 		for i, rs := range rootSyncs {
 			rg := rootRGs[i]
+			if rg == nil {
+				// We always expect a ResourceGroup, even if we have no managed resources.
+				errs = append(errs, rgNotFoundErrMsg(rootSyncNsAndNames[i].Name, rootSyncNsAndNames[i].Namespace))
+			}
 			repos = append(repos, RootRepoStatus(rs, rg, syncingConditionSupported))
 		}
 		sort.Slice(repos, func(i, j int) bool {
@@ -279,10 +285,16 @@ func (c *ClusterClient) multiRepoClusterStatus(ctx context.Context, cs *ClusterS
 		}
 	}
 
-	if len(repoSyncs) != 0 {
+	if len(repoSyncs) != len(namespaceRGs) {
+		errs = append(errs, fmt.Sprintf("expected the number of RepoSyncs and ResourceGroups to be equal, but found %d RepoSyncs and %d ResourceGroups", len(repoSyncs), len(namespaceRGs)))
+	} else if len(repoSyncs) != 0 {
 		var repos []*RepoState
 		for i, rs := range repoSyncs {
 			rg := namespaceRGs[i]
+			if rg == nil {
+				// We always expect a ResourceGroup, even if we have no managed resources.
+				errs = append(errs, rgNotFoundErrMsg(repoSyncNsAndNames[i].Name, repoSyncNsAndNames[i].Namespace))
+			}
 			repos = append(repos, namespaceRepoStatus(rs, rg, syncingConditionSupported))
 		}
 		sort.Slice(repos, func(i, j int) bool {
@@ -317,10 +329,16 @@ func (c *ClusterClient) namespaceRepoClusterStatus(ctx context.Context, cs *Clus
 		}
 	}
 
-	if len(syncs) != 0 {
+	if len(syncs) != len(rgs) {
+		errs = append(errs, fmt.Sprintf("expected the number of RepoSyncs and ResourceGroups to be equal, but found %d RepoSyncs and %d ResourceGroups", len(syncs), len(rgs)))
+	} else if len(syncs) != 0 {
 		var repos []*RepoState
 		for i, rs := range syncs {
 			rg := rgs[i]
+			if rg == nil {
+				// We always expect a ResourceGroup, even if we have no managed resources.
+				errs = append(errs, rgNotFoundErrMsg(nsAndNames[i].Name, nsAndNames[i].Namespace))
+			}
 			repos = append(repos, namespaceRepoStatus(rs, rg, syncingConditionSupported))
 		}
 		sort.Slice(repos, func(i, j int) bool {
@@ -583,11 +601,13 @@ func consistentOrder(nsAndNames []types.NamespacedName, resourcegroups []*unstru
 	rgs := make([]*unstructured.Unstructured, len(nsAndNames))
 	for i, nn := range nsAndNames {
 		idx, found := indexMap[nn]
-		if !found {
-			rgs[i] = nil
-		} else {
+		if found {
 			rgs[i] = resourcegroups[idx]
 		}
 	}
 	return rgs
+}
+
+func rgNotFoundErrMsg(name, ns string) string {
+	return fmt.Sprintf("resourcegroups.kpt.dev %q not found in namespace %q", name, ns)
 }

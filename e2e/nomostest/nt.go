@@ -549,16 +549,14 @@ func DefaultRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 }
 
 // DefaultRepoSha1Fn is the default function to retrieve the commit hash of the namespace repo.
-func DefaultRepoSha1Fn() Sha1Func {
-	return func(nt *NT, nn types.NamespacedName) (string, error) {
-		// Get the repository this RepoSync is syncing to, and ensure it is synced
-		// to HEAD.
-		repo, exists := nt.NonRootRepos[nn]
-		if !exists {
-			return "", fmt.Errorf("checked if nonexistent repo is synced")
-		}
-		return repo.Hash(), nil
+func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
+	// Get the repository this RepoSync is syncing to, and ensure it is synced
+	// to HEAD.
+	repo, exists := nt.NonRootRepos[nn]
+	if !exists {
+		return "", fmt.Errorf("checked if nonexistent repo is synced")
 	}
+	return repo.Hash(), nil
 }
 
 // WaitForRepoSyncs is a convenience method that waits for all repositories
@@ -572,7 +570,7 @@ func DefaultRepoSha1Fn() Sha1Func {
 func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 	nt.T.Helper()
 
-	waitForRepoSyncsOptions := newWaitForRepoSyncsOptions(nt.DefaultWaitTimeout, DefaultRootSha1Fn)
+	waitForRepoSyncsOptions := newWaitForRepoSyncsOptions(nt.DefaultWaitTimeout, DefaultRootSha1Fn, DefaultRepoSha1Fn)
 	for _, option := range options {
 		option(&waitForRepoSyncsOptions)
 	}
@@ -596,7 +594,7 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 			for nn := range nt.NonRootRepos {
 				syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
 				nt.WaitForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
-					syncTimeout, DefaultRepoSha1Fn(), RepoSyncHasStatusSyncCommit,
+					syncTimeout, waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
 					&SyncDirPredicatePair{syncDir, RepoSyncHasStatusSyncDirectory})
 			}
 		}
@@ -1434,14 +1432,16 @@ type waitForRepoSyncsOptions struct {
 	timeout            time.Duration
 	syncNamespaceRepos bool
 	rootSha1Fn         Sha1Func
+	repoSha1Fn         Sha1Func
 	syncDirectoryMap   map[types.NamespacedName]string
 }
 
-func newWaitForRepoSyncsOptions(timeout time.Duration, fn Sha1Func) waitForRepoSyncsOptions {
+func newWaitForRepoSyncsOptions(timeout time.Duration, rootFn, repoFn Sha1Func) waitForRepoSyncsOptions {
 	return waitForRepoSyncsOptions{
 		timeout:            timeout,
 		syncNamespaceRepos: true,
-		rootSha1Fn:         fn,
+		rootSha1Fn:         rootFn,
+		repoSha1Fn:         repoFn,
 		syncDirectoryMap:   map[types.NamespacedName]string{},
 	}
 }
@@ -1459,10 +1459,17 @@ func WithTimeout(timeout time.Duration) WaitForRepoSyncsOption {
 // Sha1Func is the function type that retrieves the commit sha1.
 type Sha1Func func(nt *NT, nn types.NamespacedName) (string, error)
 
-// WithRootSha1Func provides the function to get commit sha1 to WaitForRepoSyncs.
+// WithRootSha1Func provides the function to get RootSync commit sha1 to WaitForRepoSyncs.
 func WithRootSha1Func(fn Sha1Func) WaitForRepoSyncsOption {
 	return func(options *waitForRepoSyncsOptions) {
 		options.rootSha1Fn = fn
+	}
+}
+
+// WithRepoSha1Func provides the function to get RepoSync commit sha1 to WaitForRepoSyncs.
+func WithRepoSha1Func(fn Sha1Func) WaitForRepoSyncsOption {
+	return func(options *waitForRepoSyncsOptions) {
+		options.repoSha1Fn = fn
 	}
 }
 

@@ -1322,7 +1322,7 @@ func resetNamespaceRepos(nt *NT) {
 				}
 			}
 			nt.WaitForSync(kinds.RepoSyncV1Beta1(), nr.Name, nr.Namespace,
-				nt.DefaultWaitTimeout, DefaultRepoSha1Fn(), RepoSyncHasStatusSyncCommit, nil)
+				nt.DefaultWaitTimeout, DefaultRepoSha1Fn, RepoSyncHasStatusSyncCommit, nil)
 		}
 	}
 }

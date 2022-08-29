@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
@@ -399,23 +398,5 @@ func ServiceAccountObject(name string, opts ...core.MetaMutator) *corev1.Service
 	mutate(result, core.Name(name))
 	mutate(result, opts...)
 
-	return result
-}
-
-// NodeObject returns an fake Node.
-func NodeObject(name string, opts ...core.MetaMutator) *corev1.Node {
-	result := &corev1.Node{TypeMeta: ToTypeMeta(kinds.Node())}
-	defaultMutate(result)
-	mutate(result, core.Name(name))
-	mutate(result, opts...)
-	return result
-}
-
-// ValidatingWebhookObject returns an fake ValidatingWebhook.
-func ValidatingWebhookObject(name string, opts ...core.MetaMutator) *admissionregistrationv1.ValidatingWebhookConfiguration {
-	result := &admissionregistrationv1.ValidatingWebhookConfiguration{TypeMeta: ToTypeMeta(kinds.ValidatingWebhookConfiguration())}
-	defaultMutate(result)
-	mutate(result, core.Name(name))
-	mutate(result, opts...)
 	return result
 }

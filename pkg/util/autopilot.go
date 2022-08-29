@@ -17,9 +17,7 @@ package util
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
-	"go.uber.org/multierr"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,11 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	// only Autopilot clusters have nodes with the prefix “gk3-“.
-	autopilotPrefix = "gk3-"
 )
 
 // AutopilotManagedNamespaces tracks the namespaces that are managed by GKE autopilot.
@@ -50,12 +43,8 @@ var AutopilotManagedKinds = []schema.GroupVersionKind{
 	admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingWebhookConfigurationList"),
 }
 
-var autopilotWebhooks = []string{
-	// The legacy webhook to determine an Autopilot cluster, which is renamed to the one below.
-	"policycontrollerv2.config.common-webhooks.networking.gke.io",
-	// The new webhook to determine an Autopilot cluster.
-	"gkepolicy.config.common-webhooks.networking.gke.io",
-}
+// The mutating webhook to determine an Autopilot cluster.
+const autopilotWebhook = "workload-defaulter.config.common-webhooks.networking.gke.io"
 
 // IsAutopilotManagedNamespace returns if the input object is a namespace managed by the Autopilot cluster.
 func IsAutopilotManagedNamespace(o client.Object) bool {
@@ -66,37 +55,16 @@ func IsAutopilotManagedNamespace(o client.Object) bool {
 }
 
 // IsGKEAutopilotCluster returns if the cluster is an autopilot cluster.
-// Currently, only Autopilot clusters have node with the prefix `gk3-`, so we
-// can use the node prefix to check the cluster type.
-// GKE Autopilot scales to zero nodes since 1.21 when there is no user workloads.
-// In the case of zero node, check the existence of the
-// policycontrollerv2.config.common-webhooks.networking.gke.io validatingWebhookConfiguration.
-// It exists on Autopilot clusters after GKE 1.20.
+// It leverages the existence of the workload-defaulter mutating webhook configuration, which exists and only exists on the Autopilot clusters.
 func IsGKEAutopilotCluster(c client.Client) (bool, error) {
-	nodes := &corev1.NodeList{}
-	nodesErr := c.List(context.Background(), nodes)
-	if nodesErr == nil && len(nodes.Items) > 0 {
-		for _, node := range nodes.Items {
-			if strings.HasPrefix(node.Name, autopilotPrefix) {
-				return true, nil
-			}
-		}
+	err := c.Get(context.Background(), client.ObjectKey{Name: autopilotWebhook}, &admissionregistrationv1.MutatingWebhookConfiguration{})
+	if err == nil {
+		return true, nil
+	}
+	if apierrors.IsNotFound(err) {
 		return false, nil
 	}
-
-	var errs error
-	errs = multierr.Append(errs, nodesErr)
-	for _, webhookName := range autopilotWebhooks {
-		webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{}
-		objectKey := client.ObjectKey{Name: webhookName}
-		err := c.Get(context.Background(), objectKey, webhook)
-		if err == nil {
-			return true, nil
-		} else if !apierrors.IsNotFound(err) {
-			errs = multierr.Append(errs, nodesErr)
-		}
-	}
-	return false, errs
+	return false, err
 }
 
 // ContainerResources describes the container's resource requirements.

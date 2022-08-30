@@ -866,6 +866,7 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	if nt.MultiRepo {
 		nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 		nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
+		nt.PodLogs("resource-group-system", "resource-group-controller-manager", "manager", false)
 		for name := range nt.RootRepos {
 			nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
 				reconcilermanager.Reconciler, previousPodLog)

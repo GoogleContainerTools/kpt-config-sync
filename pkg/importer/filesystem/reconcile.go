@@ -179,12 +179,12 @@ func (c *reconciler) filesystemError(ctx context.Context, rev string) (reconcile
 
 // Reconcile implements Reconciler.
 // It does the following:
-//   * Checks for updates to the filesystem that stores config source of truth.
-//   * When there are updates, parses the filesystem into AllConfigs, an in-memory
+//   - Checks for updates to the filesystem that stores config source of truth.
+//   - When there are updates, parses the filesystem into AllConfigs, an in-memory
 //     representation of desired configs.
-//   * Gets the Nomos CRs currently stored in Kubernetes API server.
-//   * Compares current and desired Nomos CRs.
-//   * Writes updates to make current match desired.
+//   - Gets the Nomos CRs currently stored in Kubernetes API server.
+//   - Compares current and desired Nomos CRs.
+//   - Writes updates to make current match desired.
 func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, reconcileTimeout)
 	defer cancel()
@@ -339,9 +339,10 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 	desiredConfigs.ClusterConfig.Status.SyncState = v1.StateStale
 
-	if err = c.updateDecoderWithAPIResources(currentConfigs.Syncs, desiredConfigs.Syncs); err != nil {
+	if err := c.updateDecoderWithAPIResources(currentConfigs.Syncs, desiredConfigs.Syncs); err != nil {
 		klog.Warningf("Failed to parse sync resources: %v", err)
-		return reconcile.Result{}, nil
+		c.updateSourceStatus(ctx, nil, status.ToCME(err)...)
+		return reconcile.Result{}, err
 	}
 
 	if errs := differ.Update(ctx, c.client, c.decoder, *currentConfigs, *desiredConfigs, c.initTime); errs != nil {
@@ -439,17 +440,18 @@ func (c *reconciler) updateSourceStatus(ctx context.Context, token *string, errs
 
 // updateDecoderWithAPIResources uses the discovery API and the set of existing
 // syncs on cluster to update the set of resource types the Decoder is able to decode.
-func (c *reconciler) updateDecoderWithAPIResources(syncMaps ...map[string]v1.Sync) error {
+func (c *reconciler) updateDecoderWithAPIResources(syncMaps ...map[string]v1.Sync) status.MultiError {
+	var errs status.MultiError
 	resources, discoveryErr := utildiscovery.GetResources(c.discoveryClient)
 	if discoveryErr != nil {
-		return discoveryErr
+		return status.Append(errs, discoveryErr)
 	}
 
 	// We need to populate the scheme with the latest resources on cluster in order to decode GenericResources in
 	// NamespaceConfigs and ClusterConfigs.
 	apiInfo, err := utildiscovery.NewAPIInfo(resources)
 	if err != nil {
-		return errors.Wrap(err, "failed to parse server resources")
+		return status.Append(errs, errors.Wrap(err, "failed to parse server resources"))
 	}
 
 	var syncList []*v1.Sync

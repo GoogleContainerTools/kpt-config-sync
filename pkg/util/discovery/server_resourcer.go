@@ -47,7 +47,7 @@ type invalidatable interface {
 
 // GetResources gets the APIResourceLists from an existing DiscoveryClient.
 // Invalidates the cache if possible as the server may have new resources since the client was created.
-func GetResources(discoveryClient ServerResourcer) ([]*metav1.APIResourceList, status.MultiError) {
+func GetResources(discoveryClient ServerResourcer) ([]*metav1.APIResourceList, status.Error) {
 	if invalidatableDiscoveryClient, isInvalidatable := discoveryClient.(invalidatable); isInvalidatable {
 		// Non-cached DiscoveryClients aren't invalidatable, so we have to allow for this possibility.
 		invalidatableDiscoveryClient.Invalidate()

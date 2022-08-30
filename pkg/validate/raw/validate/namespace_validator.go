@@ -27,7 +27,6 @@ import (
 // to the following rules:
 // - if the object is a Namespace, it must not be `config-management-system`
 // - if the object has a metadata namespace, it must be a valid k8s namespace
-//   and it must not be in `config-management-system`
 func Namespace(obj ast.FileObject) status.Error {
 	if obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind() {
 		return validateNamespace(obj)
@@ -52,10 +51,6 @@ func validateObjectNamespace(obj ast.FileObject) status.Error {
 	}
 	if !isValidNamespace(ns) {
 		return nonhierarchical.InvalidNamespaceError(obj)
-	}
-	if configmanagement.IsControllerNamespace(ns) &&
-		obj.GetKind() != kinds.RootSyncV1Beta1().Kind {
-		return nonhierarchical.ObjectInIllegalNamespace(obj)
 	}
 	return nil
 }

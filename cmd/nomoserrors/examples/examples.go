@@ -200,8 +200,6 @@ func Generate() AllExamples {
 
 	// 1034
 	result.add(nonhierarchical.IllegalNamespace(fake.Namespace("namespaces/" + configmanagement.ControllerNamespace)))
-	result.add(nonhierarchical.ObjectInIllegalNamespace(fake.RoleAtPath("namespaces/"+configmanagement.ControllerNamespace+"/role.yaml",
-		core.Namespace("namespaces/"+configmanagement.ControllerNamespace))))
 
 	// 1035 is Deprecated.
 	result.markDeprecated("1035")

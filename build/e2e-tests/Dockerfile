@@ -54,21 +54,10 @@ RUN go install github.com/filmil/gotopt2/cmd/gotopt2@v0.1.2
 # v0.10.0
 RUN go install sigs.k8s.io/kind@v0.14.0
 
-# Build intermediate image for gcloud / kubectl
-FROM marketplace.gcr.io/google/ubuntu1804 as gcloud-install
-
-ENV PATH /opt/gcloud/google-cloud-sdk/bin:$PATH
-RUN apt-get update && apt-get install -y curl python
-ARG DL_GOOGLE_COM="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads"
-RUN curl ${DL_GOOGLE_COM}/google-cloud-sdk-255.0.0-linux-x86_64.tar.gz \
-	> /tmp/google-cloud-sdk.tar.gz
-# Verify SHA256 sum for the downloaded archive for reproducibility.
-RUN echo "18fcbc81b3b095ff5ef92fd41286a045f782c18d99a976c0621140a8fde3fbad /tmp/google-cloud-sdk.tar.gz" | \
-		sha256sum --check -
-RUN mkdir -p /opt/gcloud && \
-    tar -C /opt/gcloud -xf /tmp/google-cloud-sdk.tar.gz && \
-    /opt/gcloud/google-cloud-sdk/install.sh --quiet && \
-    gcloud components install alpha beta
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:398.0.0 as gcloud-install
+RUN apt-get update \
+  && apt-get install -y \
+       google-cloud-sdk-gke-gcloud-auth-plugin
 
 # Build e2e image
 FROM marketplace.gcr.io/google/ubuntu1804 as e2e-base
@@ -121,7 +110,7 @@ RUN curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add 
   && apt-get install -y kubectl=1.20.4-00
 
 # Copy installed gcloud into image
-COPY --from=gcloud-install /opt/gcloud/google-cloud-sdk /opt/gcloud/google-cloud-sdk
+COPY --from=gcloud-install /usr/lib/google-cloud-sdk /opt/gcloud/google-cloud-sdk
 ENV PATH /opt/gcloud/google-cloud-sdk/bin:$PATH
 
 # Copy the filmil stuff (gotopt2 and tap2junit) into /opt/bin then add it to

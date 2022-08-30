@@ -474,7 +474,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.T.Logf("Only RepoSync %s reports the conflict error because kpt_applier won't update the resource", repoSyncNN2)
 	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "declared in another repository")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), repoSyncNN1.Name, repoSyncNN1.Namespace,
-		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn(), nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
 	nt.T.Logf("The Role resource version should not be changed")
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		nomostest.ResourceVersionEquals(nt, roleResourceVersion))
@@ -486,7 +486,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nomostest.StopWebhook(nt)
 	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "declared in another repository")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), repoSyncNN1.Name, repoSyncNN1.Namespace,
-		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn(), nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
 
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
 	nsReconcilerName2 := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)

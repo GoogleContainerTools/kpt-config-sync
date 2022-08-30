@@ -25,13 +25,19 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
-	privateARHelmRegistry   = "oci://us-docker.pkg.dev/stolos-dev/configsync-ci-ar-helm"
-	privateHelmChartVersion = "1.13.3"
-	privateHelmChart        = "coredns"
+	privateARHelmRegistry     = "oci://us-docker.pkg.dev/stolos-dev/configsync-ci-ar-helm"
+	privateHelmChartVersion   = "1.13.3"
+	privateHelmChart          = "coredns"
+	privateNSHelmChart        = "ns-chart"
+	privateNSHelmChartVersion = "0.1.0"
+	publicHelmRepo            = "https://kubernetes.github.io/ingress-nginx"
+	publicHelmChart           = "ingress-nginx"
+	publicHelmChartVersion    = "4.0.5"
 )
 
 // TestPublicHelm can run on both Kind and GKE clusters.
@@ -53,6 +59,58 @@ func TestPublicHelm(t *testing.T) {
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
 	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}); err != nil {
+		nt.T.Error(err)
+	}
+}
+
+// TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully
+// sync the namespace scoped resources, and assign the RepoSync namespace to these resources.
+// This test will work only with following pre-requisites:
+// Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+// A JSON key file is generated for this service account and stored in Secret Manager
+func TestHelmNamespaceRepo(t *testing.T) {
+	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
+	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.RequireGKE(t),
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt.T.Log("Update RepoSync to sync from a public Helm Chart")
+	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
+		Repo:    publicHelmRepo,
+		Chart:   publicHelmChart,
+		Auth:    configsync.AuthNone,
+		Version: publicHelmChartVersion,
+	}}
+	rs.Spec.Git = nil
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type")
+	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
+
+	nt.T.Log("Fetch password from Secret Manager")
+	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Create secret for authentication")
+	_, err = nt.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", repoSyncNN.Namespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	if err != nil {
+		nt.T.Fatalf("failed to create secret, err: %v", err)
+	}
+	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
+		Repo:        privateARHelmRegistry,
+		Chart:       privateNSHelmChart,
+		Auth:        configsync.AuthToken,
+		Version:     privateNSHelmChartVersion,
+		ReleaseName: "test",
+		SecretRef:   v1beta1.SecretReference{Name: "foo"},
+	}}
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Git = nil
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources")
+	nt.WaitForRepoSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChart+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: privateNSHelmChart}))
+	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+privateNSHelmChart, testNs, &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}
 }

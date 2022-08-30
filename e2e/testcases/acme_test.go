@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -188,6 +190,27 @@ func TestAcmeCorpRepo(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
 	nt.WaitForRepoSyncs()
+}
+
+// TestObjectInCMSNamespace will test that user can sync object to CMS namespace
+func TestObjectInCMSNamespace(t *testing.T) {
+	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured)
+
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace")
+	nt.WaitForRepoSyncs()
+
+	// validate the resources synced successfully in CMS namespace
+	namespace := configmanagement.ControllerNamespace
+	err := nt.Validate("cms-configmap", namespace, &corev1.ConfigMap{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err = nt.Validate("cms-roles", namespace, &rbacv1.Role{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func checkResourceCount(nt *nomostest.NT, gvk schema.GroupVersionKind, namespace string, count int, labels, annotations map[string]string) {

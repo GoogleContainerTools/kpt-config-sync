@@ -35,14 +35,24 @@ const (
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt := nomostest.New(t, ntopts.Unstructured, ntopts.RequireGKE(t))
 	t.Cleanup(func() {
+		nt.MustKubectl("delete", "-f", "../testdata/apiservice/rbac.yaml", "--ignore-not-found")
+		nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace.yaml", "--ignore-not-found")
 		if t.Failed() {
 			nt.PodLogs(adapterNamespace, adapterName, "pod-custom-metrics-stackdriver-adapter", true)
 		}
 	})
 	nt.T.Log("Creating commit with APIService and Deployment")
+	if nt.MultiRepo {
+		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml")
+	} else {
+		// In mono repo mode the necessary ClusterRole and ClusterRolebinding
+		// in rbac.yaml is blocked from being removed from git repo by git-importer in
+		// sharedTestEnv, so manually deploying them ahead.
+		nt.MustKubectl("apply", "-f", "../testdata/apiservice/namespace.yaml")
+		nt.MustKubectl("apply", "-f", "../testdata/apiservice/rbac.yaml")
+	}
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace.yaml", "acme/namespaces/custom-metrics/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-custom-metrics.yaml", "acme/namespaces/custom-metrics/namespace-custom-metrics.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding apiservice resources")
 	nt.T.Log("Waiting for nomos to sync new APIService")

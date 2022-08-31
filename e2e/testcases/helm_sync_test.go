@@ -81,11 +81,9 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		Auth:    configsync.AuthNone,
 		Version: publicHelmChartVersion,
 	}}
-	rs.Spec.Git = nil
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type")
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
-
 	nt.T.Log("Fetch password from Secret Manager")
 	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
 	if err != nil {
@@ -105,14 +103,16 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		ReleaseName: "test",
 		SecretRef:   v1beta1.SecretReference{Name: "foo"},
 	}}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Git = nil
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources")
 	nt.WaitForRepoSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChart+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: privateNSHelmChart}))
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+privateNSHelmChart, testNs, &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}
+	// Change the RepoSync to sync from the original git source to make test works in the shared test environment.
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from the original git repository")
 }
 
 // TestHelmARFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).

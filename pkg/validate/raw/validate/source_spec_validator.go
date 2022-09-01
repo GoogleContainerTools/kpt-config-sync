@@ -268,7 +268,7 @@ func validGCPServiceAccountEmail(email string) bool {
 func InvalidSourceType(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.sourceType to be either %q or %q", kind, v1beta1.GitSource, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, v1beta1.GitSource, v1beta1.OciSource, v1beta1.HelmSource).
 		BuildWithResources(o)
 }
 

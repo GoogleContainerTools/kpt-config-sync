@@ -35,8 +35,10 @@ const (
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt := nomostest.New(t, ntopts.Unstructured, ntopts.RequireGKE(t))
 	t.Cleanup(func() {
-		nt.MustKubectl("delete", "-f", "../testdata/apiservice/rbac.yaml", "--ignore-not-found")
-		nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace.yaml", "--ignore-not-found")
+		if !nt.MultiRepo {
+			nt.MustKubectl("delete", "-f", "../testdata/apiservice/rbac.yaml", "--ignore-not-found")
+			nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace.yaml", "--ignore-not-found")
+		}
 		if t.Failed() {
 			nt.PodLogs(adapterNamespace, adapterName, "pod-custom-metrics-stackdriver-adapter", true)
 		}

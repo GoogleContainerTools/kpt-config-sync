@@ -38,7 +38,9 @@ func TestValidateSecretExist(t *testing.T) {
 			name:            "Secret present",
 			secretNamespace: "bookinfo",
 			secretReference: "ssh-key",
-			wantSecret:      secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")),
+			wantSecret: secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource,
+				core.Namespace("bookinfo"),
+				core.ResourceVersion("1")),
 		},
 
 		{

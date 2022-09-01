@@ -20,8 +20,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -33,8 +35,8 @@ import (
 )
 
 const (
-	depAnnotationGooglecloud = "a794ae695e09d5dbf9029ead8487ee35"
-	depAnnotationCustom      = "9182661d55e260a55da649363c03c187"
+	depAnnotationGooglecloud = "b22b2b7fedd85383855e396f667bd0c4"
+	depAnnotationCustom      = "7021ec2418429875d452e1cd5455724a"
 )
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
@@ -54,6 +56,7 @@ func TestOtelReconciler(t *testing.T) {
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
+		core.ResourceVersion("1"),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
@@ -76,11 +79,17 @@ func TestOtelReconciler(t *testing.T) {
 	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 
 	// compare ConfigMap
-	gotConfigMap := fakeClient.Objects[core.IDOf(cm)]
+	cmKey := client.ObjectKeyFromObject(cm)
+	gotConfigMap := &corev1.ConfigMap{}
+	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
+	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
 	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
 
 	// compare Deployment annotation
-	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
+	deployKey := client.ObjectKeyFromObject(cm)
+	gotDeployment := &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
 	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
 
 	t.Log("ConfigMap and Deployment successfully updated")
@@ -91,6 +100,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
+		core.ResourceVersion("1"),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
@@ -119,6 +129,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 			metadata.SystemLabel: "true",
 			metadata.ArchLabel:   "csmr",
 		}),
+		core.ResourceVersion("1"),
 	)
 
 	wantDeployment := fake.DeploymentObject(
@@ -130,11 +141,17 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 
 	// compare ConfigMap
-	gotConfigMap := fakeClient.Objects[core.IDOf(wantConfigMap)]
+	cmKey := client.ObjectKeyFromObject(wantConfigMap)
+	gotConfigMap := &corev1.ConfigMap{}
+	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
+	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
 	asserter.Equal(t, wantConfigMap, gotConfigMap, "ConfigMap")
 
 	// compare Deployment annotation
-	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
+	deployKey := client.ObjectKeyFromObject(wantDeployment)
+	gotDeployment := &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
 	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
 
 	t.Log("ConfigMap and Deployment successfully updated")
@@ -167,17 +184,24 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	wantDeployment := fake.DeploymentObject(
 		core.Namespace(metrics.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
+		core.ResourceVersion("1"),
 	)
 	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationCustom)
 
 	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 
 	// compare ConfigMap
-	gotConfigMap := fakeClient.Objects[core.IDOf(cm)]
+	cmKey := client.ObjectKeyFromObject(cm)
+	gotConfigMap := &corev1.ConfigMap{}
+	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
+	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
 	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
 
 	// compare Deployment annotation
-	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
+	deployKey := client.ObjectKeyFromObject(wantDeployment)
+	gotDeployment := &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
 	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
 
 	t.Log("Deployment successfully updated")

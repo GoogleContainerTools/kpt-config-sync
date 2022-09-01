@@ -287,25 +287,6 @@ func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructu
 	return u
 }
 
-// ToCustomResourceDefinitionV1Object converts a v1beta1.CustomResourceDefinition
-// to an Unstructured masquerading as a v1.CRD.
-// Deprecated: Use CustomResourceDefinitionV1Object instead.
-func ToCustomResourceDefinitionV1Object(o *v1beta1.CustomResourceDefinition) *unstructured.Unstructured {
-	jsn, err := json.Marshal(o)
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	return u
-}
-
 // AnvilAtPath returns an Anvil Custom Resource.
 func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 	obj := &v1beta1.CustomResourceDefinition{

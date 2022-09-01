@@ -17,9 +17,9 @@ package watch
 
 import (
 	"context"
-	"reflect"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -119,7 +119,7 @@ func (m *subManager) context() context.Context {
 }
 
 func (m *subManager) needsRestart(toWatch map[schema.GroupVersionKind]bool) bool {
-	return !reflect.DeepEqual(m.watching, toWatch)
+	return !equality.Semantic.DeepEqual(m.watching, toWatch)
 }
 
 // Restart implements RestartableManager.

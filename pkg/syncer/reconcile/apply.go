@@ -17,11 +17,11 @@ package reconcile
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -452,5 +452,5 @@ func equal(dryrunState, currentState *unstructured.Unstructured) bool {
 	obj2 := currentState.DeepCopy()
 	cleanFields(obj1)
 	cleanFields(obj2)
-	return reflect.DeepEqual(obj1.Object, obj2.Object)
+	return equality.Semantic.DeepEqual(obj1.Object, obj2.Object)
 }

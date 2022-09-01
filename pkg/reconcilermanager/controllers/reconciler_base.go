@@ -19,13 +19,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -224,7 +224,7 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 			"mutator", mutator)
 	}
 
-	if reflect.DeepEqual(current.Labels, declared.Labels) && reflect.DeepEqual(current.Spec, declared.Spec) {
+	if equality.Semantic.DeepEqual(current.Labels, declared.Labels) && equality.Semantic.DeepEqual(current.Spec, declared.Spec) {
 		return controllerutil.OperationResultNone, nil
 	}
 
@@ -330,7 +330,7 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 	for _, existingContainer := range current.Spec.Template.Spec.Containers {
 		for i, desiredContainer := range declared.Spec.Template.Spec.Containers {
 			if existingContainer.Name == desiredContainer.Name &&
-				!reflect.DeepEqual(declared.Spec.Template.Spec.Containers[i].Resources, existingContainer.Resources) {
+				!equality.Semantic.DeepEqual(declared.Spec.Template.Spec.Containers[i].Resources, existingContainer.Resources) {
 				declared.Spec.Template.Spec.Containers[i].Resources = existingContainer.Resources
 				resourceChanged = true
 			}

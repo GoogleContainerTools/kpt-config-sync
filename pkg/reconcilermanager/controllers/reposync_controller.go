@@ -39,12 +39,12 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -791,7 +791,7 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	rs.Status.ObservedGeneration = rs.Generation
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, diff.IgnoreTimestampUpdates) {
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(3).Infof("Skipping status update for RepoSync %s (ResourceVersion: %s)",
 			client.ObjectKeyFromObject(rs), rs.ResourceVersion)
 		return false, nil

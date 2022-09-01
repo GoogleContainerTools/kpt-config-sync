@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
 
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -172,11 +171,11 @@ func filterContextCancelled(err error) error {
 		}
 	}
 	c := errors.Cause(err)
-	if reflect.DeepEqual(c, context.Canceled) {
+	if errors.Is(c, context.Canceled) {
 		return nil
 	}
 	// http client errors don't implement causer. The underlying error is in one of the struct's fields.
-	if ue, ok := c.(*url.Error); ok && reflect.DeepEqual(ue.Err, context.Canceled) {
+	if ue, ok := c.(*url.Error); ok && errors.Is(ue.Err, context.Canceled) {
 		return nil
 	}
 	return err

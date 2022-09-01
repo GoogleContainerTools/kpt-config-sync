@@ -17,13 +17,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	traceapi "cloud.google.com/go/trace/apiv2"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
@@ -167,7 +167,7 @@ func (r *OtelReconciler) updateDeploymentAnnotation(ctx context.Context, hash []
 	// creates/updates.
 	core.SetAnnotation(&dep.Spec.Template, metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", hash))
 
-	if reflect.DeepEqual(existing, dep) {
+	if equality.Semantic.DeepEqual(existing, dep) {
 		return nil
 	}
 

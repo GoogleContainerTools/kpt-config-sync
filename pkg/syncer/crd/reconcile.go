@@ -16,12 +16,12 @@ package crd
 
 import (
 	"context"
-	"reflect"
 	"time"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -244,7 +244,7 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 		mErr = status.Append(mErr, err)
 	} else {
 		allCrds := r.toCrdSet(crdList)
-		if !reflect.DeepEqual(r.allCrds, allCrds) {
+		if !equality.Semantic.DeepEqual(r.allCrds, allCrds) {
 			needRestart = true
 			r.recorder.Eventf(clusterConfig, corev1.EventTypeNormal, v1.EventReasonCRDChange,
 				"crds changed on the cluster restarting syncer controllers")

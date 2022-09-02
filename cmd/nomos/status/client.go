@@ -28,11 +28,9 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -42,10 +40,10 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -466,17 +464,6 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 	clientMap := make(map[string]*ClusterClient)
 	unreachableClusters := false
 
-	s := runtime.NewScheme()
-	if sErr := v1.AddToScheme(s); sErr != nil {
-		return nil, err
-	}
-	if sErr := v1beta1.AddToScheme(s); sErr != nil {
-		return nil, err
-	}
-	if sErr := apiextensionsv1.AddToScheme(s); sErr != nil {
-		return nil, err
-	}
-
 	for name, cfg := range configs {
 		mapper, err := apiutil.NewDynamicRESTMapper(cfg)
 		if err != nil {
@@ -484,7 +471,10 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 			continue
 		}
 
-		cl, err := client.New(cfg, client.Options{Scheme: s, Mapper: mapper})
+		cl, err := client.New(cfg, client.Options{
+			Scheme: core.Scheme,
+			Mapper: mapper,
+		})
 		if err != nil {
 			fmt.Printf("Failed to generate runtime client for %q: %v\n", name, err)
 			continue

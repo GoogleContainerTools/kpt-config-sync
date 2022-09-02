@@ -27,9 +27,9 @@ import (
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -270,7 +270,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		Files:     wantFiles,
 	}
 
-	decoder := decode.NewGenericResourceDecoder(scheme.Scheme)
+	decoder := decode.NewGenericResourceDecoder(core.Scheme)
 	syncedCRDs, err := clusterconfig.GetCRDs(decoder, currentConfigs.CRDClusterConfig)
 	if err != nil {
 		klog.Error(err)

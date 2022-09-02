@@ -20,7 +20,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -51,11 +50,7 @@ func TestValidateSecretExist(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	fakeClient := syncerFake.NewClient(t, s, secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")))
+	fakeClient := syncerFake.NewClient(t, core.Scheme, secretObj(t, "ssh-key", configsync.AuthSSH, v1beta1.GitSource, core.Namespace("bookinfo")))
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

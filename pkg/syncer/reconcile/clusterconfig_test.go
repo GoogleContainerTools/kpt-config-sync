@@ -21,7 +21,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -218,15 +217,13 @@ func TestClusterConfigReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, tc.declared))
+			fakeDecoder := testingfake.NewDecoder(syncertest.ObjectToUnstructuredList(t, core.Scheme, tc.declared))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
-			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.PersistentVolume(), &corev1.PersistentVolume{})
 			actual := []client.Object{clusterCfg}
 			if tc.actual != nil {
 				actual = append(actual, tc.actual)
 			}
-			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient := testingfake.NewClient(t, core.Scheme, actual...)
 
 			testReconciler := syncerreconcile.NewClusterConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -291,9 +288,9 @@ func TestInvalidClusterConfig(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, nil))
+			fakeDecoder := testingfake.NewDecoder(nil)
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
-			fakeClient := testingfake.NewClient(t, runtime.NewScheme(), tc.actual)
+			fakeClient := testingfake.NewClient(t, core.Scheme, tc.actual)
 			testReconciler := syncerreconcile.NewClusterConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
 

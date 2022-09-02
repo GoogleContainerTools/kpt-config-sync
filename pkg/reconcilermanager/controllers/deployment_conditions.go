@@ -16,8 +16,7 @@ package controllers
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
@@ -25,17 +24,12 @@ import (
 // ComputeDeploymentStatus uses kstatus to compute the deployment status based
 // on its conditions and other status fields.
 func ComputeDeploymentStatus(depObj *appsv1.Deployment) (*kstatus.Result, error) {
-	objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depObj)
+	uObj, err := kinds.ToUnstructured(depObj, core.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	obj := &unstructured.Unstructured{Object: objMap}
 
-	// kstatus.Compute requires the group & kind to be set to trigger
-	// deployment-specific exceptions, but ToUnstructured doesn't set it.
-	obj.SetGroupVersionKind(kinds.Deployment())
-
-	result, err := kstatus.Compute(obj)
+	result, err := kstatus.Compute(uObj)
 	if err != nil {
 		return nil, err
 	}

@@ -58,6 +58,7 @@ func connect(t testing.NTB, cfg *rest.Config, scheme *runtime.Scheme) client.Cli
 func newScheme(t testing.NTB) *runtime.Scheme {
 	t.Helper()
 
+	// TODO: use core.Scheme?
 	s := runtime.NewScheme()
 
 	// It is always safe to add new schemes so long as there are no GVK or struct

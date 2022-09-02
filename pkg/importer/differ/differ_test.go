@@ -20,7 +20,6 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -330,7 +329,7 @@ func TestDiffer(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.testName, func(t *testing.T) {
-			fakeClient := testingfake.NewClient(t, runtime.NewScheme(), tc.actual...)
+			fakeClient := testingfake.NewClient(t, core.Scheme, tc.actual...)
 
 			actual := allConfigs(t, tc.actual)
 

@@ -22,16 +22,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/profiler"
@@ -52,7 +48,6 @@ var (
 	hydrationPollingPeriod = flag.Duration("hydration-polling-period", controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
 		"How often the hydration-controller should poll the filesystem for rendering the DRY configs.")
 
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
 
@@ -60,12 +55,6 @@ func init() {
 	// klogr flags
 	_ = flag.Set("v", "1")
 	_ = flag.Set("logtostderr", "true")
-
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = configmanagementv1.AddToScheme(scheme)
-	_ = v1beta1.AddToScheme(scheme)
-	_ = hubv1.AddToScheme(scheme)
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
@@ -83,7 +72,7 @@ func main() {
 	ctrl.SetLogger(klogr.New())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
+		Scheme: core.Scheme,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

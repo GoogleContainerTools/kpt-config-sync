@@ -20,10 +20,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,9 +33,6 @@ import (
 const Token = "b38239ea8f58eaed17af6734bd6a025eeafccda1"
 
 var (
-	// Converter is an unstructured.Unstructured converter used for testing.
-	Converter = runtime.NewTestUnstructuredConverter(conversion.EqualitiesOrDie())
-
 	// ManagementEnabled sets management labels and annotations on the object.
 	ManagementEnabled core.MetaMutator = func(obj client.Object) {
 		core.SetAnnotation(obj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
@@ -50,28 +47,17 @@ var (
 	TokenAnnotation = core.Annotation(metadata.SyncTokenAnnotationKey, Token)
 )
 
-// ToUnstructured converts the object to an unstructured.Unstructured.
-func toUnstructured(t *testing.T, converter runtime.UnstructuredConverter, obj client.Object) *unstructured.Unstructured {
+// ObjectToUnstructuredList converts the object to unstructured and returns as a list.
+// If the object is nil, the empty nil list is resurned.
+func ObjectToUnstructuredList(t *testing.T, s *runtime.Scheme, obj client.Object) []*unstructured.Unstructured {
 	if obj == nil {
-		return &unstructured.Unstructured{}
+		return nil
 	}
-	u, err := converter.ToUnstructured(obj)
-	// We explicitly remove the status field from objects during reconcile. So,
-	// we need to do the same for test objects we convert to unstructured.Unstructured.
-	unstructured.RemoveNestedField(u, "status")
+	uObj, err := kinds.ToUnstructured(obj, s)
 	if err != nil {
-		t.Fatalf("could not convert to unstructured type: %#v", obj)
+		t.Fatal(err)
 	}
-	return &unstructured.Unstructured{Object: u}
-}
-
-// ToUnstructuredList converts the objects to an unstructured.UnstructedList.
-func ToUnstructuredList(t *testing.T, converter runtime.UnstructuredConverter, objs ...client.Object) []*unstructured.Unstructured {
-	result := make([]*unstructured.Unstructured, len(objs))
-	for i, obj := range objs {
-		result[i] = toUnstructured(t, converter, obj)
-	}
-	return result
+	return []*unstructured.Unstructured{uObj}
 }
 
 // ClusterConfigImportToken adds an import token to a ClusterConfig.

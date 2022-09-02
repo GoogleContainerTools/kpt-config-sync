@@ -24,13 +24,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -113,28 +111,15 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 
 func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *RootSyncReconciler) {
 	t.Helper()
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := appsv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := rbacv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := admissionregistrationv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
 
-	fakeClient := syncerFake.NewClient(t, s, objs...)
+	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
 	testReconciler := NewRootSyncReconciler(
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("RootSync"),
-		s,
+		fakeClient.Scheme(),
 		allowVerticalScale,
 	)
 	return fakeClient, testReconciler

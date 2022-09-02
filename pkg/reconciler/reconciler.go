@@ -18,12 +18,11 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -125,14 +124,6 @@ func Run(opts Options) {
 		klog.Fatalf("Error creating discovery client: %v", err)
 	}
 
-	s := scheme.Scheme
-	if err := v1.AddToScheme(s); err != nil {
-		klog.Fatalf("Error adding configmanagement resources to scheme: %v", err)
-	}
-	if err := v1beta1.AddToScheme(s); err != nil {
-		klog.Fatalf("Error adding configsync resources to scheme: %v", err)
-	}
-
 	// Use the DynamicRESTMapper as the default RESTMapper does not detect when
 	// new types become available.
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
@@ -141,7 +132,7 @@ func Run(opts Options) {
 	}
 
 	cl, err := client.New(cfg, client.Options{
-		Scheme: s,
+		Scheme: core.Scheme,
 		Mapper: mapper,
 	})
 	if err != nil {

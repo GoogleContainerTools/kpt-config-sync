@@ -25,9 +25,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -520,22 +520,12 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 // status.
 func StatusEquals(nt *NT, expected status.Status) Predicate {
 	return func(obj client.Object) error {
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		if gvk.Empty() {
-			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
-			if err != nil {
-				return err
-			}
-			obj.GetObjectKind().SetGroupVersionKind(gvk)
-		}
-
-		uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		uObj, err := kinds.ToUnstructured(obj, nt.scheme)
 		if err != nil {
-			return errors.Wrapf(err, "failed to convert %s %s to unstructured",
-				gvk.Kind, core.ObjectNamespacedName(obj))
+			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
+				obj, core.ObjectNamespacedName(obj))
 		}
-		uObj := &unstructured.Unstructured{Object: uMap}
+		gvk := obj.GetObjectKind().GroupVersionKind()
 
 		result, err := status.Compute(uObj)
 		if err != nil {

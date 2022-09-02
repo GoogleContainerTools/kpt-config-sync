@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,7 +80,7 @@ func AddController(ctx context.Context, clusterName string, mgr manager.Manager,
 		format = SourceFormatHierarchy
 	}
 
-	decoder := decode.NewGenericResourceDecoder(runtime.NewScheme())
+	decoder := decode.NewGenericResourceDecoder(core.Scheme)
 	r, err := newReconciler(clusterName, gitDir, policyDirRelative, cfgParser,
 		syncerClient, dc, mgr.GetCache(), decoder, format)
 	if err != nil {

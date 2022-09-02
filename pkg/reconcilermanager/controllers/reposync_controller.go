@@ -39,6 +39,7 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -631,26 +632,13 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 	return requests
 }
 
-// addTypeInformationToObject adds TypeMeta information to a runtime.Object based upon the loaded scheme.Scheme
-// inspired by: https://github.com/kubernetes/cli-runtime/blob/v0.19.2/pkg/printers/typesetter.go#L41.
-// Note: The function only works for GVKs registered with the local scheme with exact version matching.
+// addTypeInformationToObject looks up and adds GVK to a runtime.Object based upon the loaded Scheme
 func (r *RepoSyncReconciler) addTypeInformationToObject(obj runtime.Object) error {
-	gvks, _, err := r.scheme.ObjectKinds(obj)
+	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
 		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
 	}
-
-	for _, gvk := range gvks {
-		if len(gvk.Kind) == 0 {
-			continue
-		}
-		if len(gvk.Version) == 0 || gvk.Version == runtime.APIVersionInternal {
-			continue
-		}
-		obj.GetObjectKind().SetGroupVersionKind(gvk)
-		break
-	}
-
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
 	return nil
 }
 

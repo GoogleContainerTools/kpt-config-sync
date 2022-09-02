@@ -22,11 +22,11 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/cmd/nomos/flags"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -104,15 +104,14 @@ func PrintFile(file, extension string, objects []*unstructured.Unstructured) (er
 	return err
 }
 
-func toUnstructured(o client.Object) (*unstructured.Unstructured, error) {
+func toUnstructured(obj client.Object) (*unstructured.Unstructured, error) {
 	// Must convert or else fields like status automatically get written.
-	unstructuredObject, err := runtime.DefaultUnstructuredConverter.ToUnstructured(o)
+	uObj, err := kinds.ToUnstructured(obj, core.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	u := &unstructured.Unstructured{Object: unstructuredObject}
-	rmBadFields(u)
-	return u, nil
+	rmBadFields(uObj)
+	return uObj, nil
 }
 
 func toYAML(objects []*unstructured.Unstructured) (string, error) {
@@ -129,25 +128,16 @@ func toYAML(objects []*unstructured.Unstructured) (string, error) {
 }
 
 func toJSON(objects []*unstructured.Unstructured) (string, error) {
-	list := &corev1.List{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "List",
-			APIVersion: "v1",
-		},
-	}
+	uList := &unstructured.UnstructuredList{}
+	uList.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("List"))
 	for _, obj := range objects {
-		u, err := toUnstructured(obj)
+		uObj, err := toUnstructured(obj)
 		if err != nil {
 			return "", err
 		}
-		raw := runtime.RawExtension{Object: u}
-		list.Items = append(list.Items, raw)
+		uList.Items = append(uList.Items, *uObj)
 	}
-	unstructuredList, err := runtime.DefaultUnstructuredConverter.ToUnstructured(list)
-	if err != nil {
-		return "", err
-	}
-	content, err := json.MarshalIndent(unstructuredList, "", "\t")
+	content, err := json.MarshalIndent(uList, "", "\t")
 	if err != nil {
 		return "", err
 	}

@@ -19,11 +19,8 @@ import (
 	"time"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
-	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/decode"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
@@ -55,15 +52,8 @@ func GetSyncedCRDs(ctx context.Context, skipAPIServer bool) ([]*v1beta1.CustomRe
 		return nil, getSyncedCRDsError(err, "failed to create mapper")
 	}
 
-	s := runtime.NewScheme()
-	if sErr := v1.AddToScheme(s); sErr != nil {
-		return nil, getSyncedCRDsError(sErr, "could not add configmanagement types to scheme")
-	}
-	if sErr := configsyncv1beta1.AddToScheme(s); sErr != nil {
-		return nil, getSyncedCRDsError(sErr, "could not add configsync types to scheme")
-	}
 	c, cErr := client.New(config, client.Options{
-		Scheme: s,
+		Scheme: core.Scheme,
 		Mapper: mapper,
 	})
 	if cErr != nil {
@@ -75,7 +65,7 @@ func GetSyncedCRDs(ctx context.Context, skipAPIServer bool) ([]*v1beta1.CustomRe
 		return nil, decorateErr
 	}
 
-	decoder := decode.NewGenericResourceDecoder(scheme.Scheme)
+	decoder := decode.NewGenericResourceDecoder(core.Scheme)
 	syncedCRDs, crdErr := clusterconfig.GetCRDs(decoder, configs.ClusterConfig)
 	if crdErr != nil {
 		// We were unable to parse the CRDs from the current ClusterConfig, so bail out.

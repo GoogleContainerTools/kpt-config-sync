@@ -23,7 +23,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"kpt.dev/configsync/clientgen/apis/scheme"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/decode"
@@ -77,7 +76,7 @@ func TestGetCRDs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decoder := decode.NewGenericResourceDecoder(scheme.Scheme)
+			decoder := decode.NewGenericResourceDecoder(core.Scheme)
 			cc := testoutput.ClusterConfig(tc.objs...)
 			actual, err := GetCRDs(decoder, cc)
 

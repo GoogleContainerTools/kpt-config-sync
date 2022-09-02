@@ -19,11 +19,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -236,22 +232,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 
 func fakeClient(t *testing.T, actual ...client.Object) *testingfake.Client {
 	t.Helper()
-	s := runtime.NewScheme()
-	err := corev1.AddToScheme(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = rbacv1.AddToScheme(s)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	err = rbacv1beta1.AddToScheme(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c := testingfake.NewClient(t, s)
+	c := testingfake.NewClient(t, core.Scheme)
 	for _, a := range actual {
 		if a == nil {
 			continue

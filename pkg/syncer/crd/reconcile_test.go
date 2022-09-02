@@ -25,7 +25,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -354,7 +353,7 @@ func TestClusterConfigReconcile(t *testing.T) {
 }
 
 func (tc crdTestCase) run(t *testing.T) {
-	fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, tc.declared))
+	fakeDecoder := testingfake.NewDecoder(syncertest.ObjectToUnstructuredList(t, core.Scheme, tc.declared))
 	fakeEventRecorder := testingfake.NewEventRecorder(t)
 	fakeSignal := RestartSignalRecorder{}
 	actual := []client.Object{clusterCfg}
@@ -365,11 +364,7 @@ func (tc crdTestCase) run(t *testing.T) {
 		actual = append(actual, crd.DeepCopy())
 	}
 
-	s := runtime.NewScheme()
-	s.AddKnownTypeWithName(kinds.CustomResourceDefinitionV1Beta1(), &v1beta1.CustomResourceDefinition{})
-	// TODO: Replace v1beta1 stand-ins with v1.CustomResourceDefinitions.
-	s.AddKnownTypeWithName(kinds.CustomResourceDefinitionV1(), &apiextensionsv1.CustomResourceDefinition{})
-	fakeClient := testingfake.NewClient(t, s, actual...)
+	fakeClient := testingfake.NewClient(t, core.Scheme, actual...)
 
 	testReconciler := newReconciler(syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder,
 		fakeDecoder, syncertest.Now, &fakeSignal)

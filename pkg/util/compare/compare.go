@@ -15,9 +15,8 @@
 package compare
 
 import (
-	"reflect"
-
 	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/api/equality"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/decode"
@@ -26,7 +25,8 @@ import (
 
 // ObjectMetaEqual returns true if the Meta field of left and right objects are equal.
 func ObjectMetaEqual(left client.Object, right client.Object) bool {
-	return reflect.DeepEqual(left.GetLabels(), right.GetLabels()) && reflect.DeepEqual(left.GetAnnotations(), right.GetAnnotations())
+	return equality.Semantic.DeepEqual(left.GetLabels(), right.GetLabels()) &&
+		equality.Semantic.DeepEqual(left.GetAnnotations(), right.GetAnnotations())
 }
 
 // GenericResourcesEqual returns true if the GenericResources slices are

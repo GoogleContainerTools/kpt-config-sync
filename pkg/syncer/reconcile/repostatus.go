@@ -16,12 +16,12 @@ package reconcile
 
 import (
 	"context"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -228,13 +228,13 @@ func (s syncState) merge(repoStatus *v1.RepoStatus, now func() metav1.Time) {
 	})
 
 	nonEmpty := len(repoStatus.Sync.InProgress) > 0 || len(inProgress) > 0
-	if nonEmpty && !reflect.DeepEqual(repoStatus.Sync.InProgress, inProgress) {
+	if nonEmpty && !equality.Semantic.DeepEqual(repoStatus.Sync.InProgress, inProgress) {
 		repoStatus.Sync.InProgress = inProgress
 		updated = true
 	}
 
 	nonEmpty = len(repoStatus.Sync.ResourceConditions) > 0 || len(s.resourceConditions) > 0
-	if nonEmpty && !reflect.DeepEqual(repoStatus.Sync.ResourceConditions, s.resourceConditions) {
+	if nonEmpty && !equality.Semantic.DeepEqual(repoStatus.Sync.ResourceConditions, s.resourceConditions) {
 		repoStatus.Sync.ResourceConditions = s.resourceConditions
 		updated = true
 	}

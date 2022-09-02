@@ -18,8 +18,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -230,5 +230,5 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 
 // syncsEqual returns true if the syncs are equivalent.
 func syncsEqual(l *v1.Sync, r *v1.Sync) bool {
-	return cmp.Equal(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
+	return equality.Semantic.DeepEqual(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
 }

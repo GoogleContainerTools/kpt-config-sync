@@ -43,6 +43,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/compare"
 	utildiscovery "kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -376,7 +377,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 	}
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, diff.IgnoreTimestampUpdates) {
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping status update for RootSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}

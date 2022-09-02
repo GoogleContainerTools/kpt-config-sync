@@ -17,10 +17,10 @@ package sync
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -170,7 +170,7 @@ func (r *metaReconciler) reconcileSyncs(ctx context.Context, request reconcile.R
 		ss.Status = v1.Syncing
 
 		// Check if status changed before updating.
-		if !reflect.DeepEqual(sync.Status, ss) {
+		if !equality.Semantic.DeepEqual(sync.Status, ss) {
 			updateFn := func(obj client.Object) (client.Object, error) {
 				s := obj.(*v1.Sync)
 				s.Status = ss

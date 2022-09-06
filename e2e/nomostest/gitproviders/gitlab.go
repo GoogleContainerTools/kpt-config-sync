@@ -29,6 +29,8 @@ import (
 
 const (
 	projectNameMaxLength = 256
+	groupID              = 15698791
+	groupName            = "configsync"
 )
 
 // GitlabClient is the client that will call Gitlab REST APIs.
@@ -60,7 +62,7 @@ func (g *GitlabClient) RemoteURL(port int, name string) string {
 
 // SyncURL returns a URL for Config Sync to sync from.
 func (g *GitlabClient) SyncURL(name string) string {
-	return fmt.Sprintf("git@gitlab.com:%s/%s.git", GitUser, name)
+	return fmt.Sprintf("git@gitlab.com:%s/%s.git", groupName, name)
 }
 
 // CreateRepository calls the POST API to create a project/repository on Gitlab.
@@ -79,11 +81,10 @@ func (g *GitlabClient) CreateRepository(name string) (string, error) {
 		repoName = repoName[:projectNameMaxLength]
 	}
 
-	// since the first created branch is protected
-	// this will create a dummy master branch
-	// and the rest of the test can work with the main branch
+	// Projects created under the `configsync` group (namespaceId: 15698791) has
+	// no protected branch.
 	out, err := exec.Command("curl", "-s", "--request", "POST",
-		fmt.Sprintf("https://gitlab.com/api/v4/projects?name=%s&initialize_with_readme=true&default_branch=master", repoName),
+		fmt.Sprintf("https://gitlab.com/api/v4/projects?name=%s&namespace_id=%d&initialize_with_readme=true", repoName, groupID),
 		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 	if err != nil {

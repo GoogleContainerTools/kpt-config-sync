@@ -30,6 +30,21 @@ applied directly to your cluster.
 ```shell
 kubectl apply -f ./.output/oss/manifests
 ```
+3. If the Pod is in a `ImagePullBackoff` or `ErrImagePull` state, that indicates
+   the Compute Engine default service account doesn't have permission to pull
+   the image from your private registry. You need to grant the `Storage Object
+   Viewer` role to the service account.
+
+   * Using Cloud Console: Find the compute service account by going to IAM &
+     Admin on your project and grant the `Storage Object Viewer` role. The
+     service account should look like
+     `<project-number>-compute@developer.gserviceaccount.com`.
+
+   * Using gcloud:
+
+     ```
+     gcloud projects add-iam-policy-binding [*PROJECT_ID*] --member=serviceAccount:[*PROJECT_NUMBER*]-compute@developer.gserviceaccount.com --role=roles/storage.objectViewer
+     ```
 
 [releases page]: https://github.com/GoogleContainerTools/kpt-config-sync/releases
 [development instructions]: development.md

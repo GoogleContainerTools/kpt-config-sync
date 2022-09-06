@@ -25,6 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -36,12 +37,8 @@ import (
 )
 
 func TestResourceConditionAnnotations(t *testing.T) {
-	nt := nomostest.New(t)
-
-	if nt.MultiRepo {
-		// TODO: Re-enable this test when multi-repo supports resource condition annotations.
-		return
-	}
+	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
+	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
 	ns := "rc-annotations"
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns),
@@ -211,22 +208,19 @@ func TestResourceConditionAnnotations(t *testing.T) {
 }
 
 func TestConstraintTemplateStatusAnnotations(t *testing.T) {
-	nt := nomostest.New(t)
+	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
+	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
-	if nt.MultiRepo {
-		// TODO: Re-enable this test when multi-repo supports resource condition annotations.
-		return
-	}
 	support, err := nt.SupportV1Beta1CRD()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
 	// Skip this test when the v1beta1 CRD is not supported in the testing cluster.
 	if !support {
-		return
+		t.Skip("Test skipped: CRD v1beta1 not supported by API server")
 	}
 
-	if err := nt.ApplyGatekeeperTestData("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
+	if err := nt.ApplyGatekeeperCRD("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint template CRD: %v", err)
 	}
 
@@ -257,6 +251,7 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 			},
 		},
 	}
+
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/constraint-template.yaml", ct)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add gatekeeper ConstraintTemplate")
 	nt.WaitForRepoSyncs()
@@ -274,29 +269,27 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Delete the constraint template before deleting CRD to avoid resource_conflicts error to be recorded
+	// Delete the ConstraintTemplate before deleting CRDs
+	// to avoid resource_conflicts errors from the webhook.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove constraint template")
 	nt.WaitForRepoSyncs()
 }
 
 func TestConstraintStatusAnnotations(t *testing.T) {
-	nt := nomostest.New(t)
+	// TODO: Re-enable this test when multi-repo supports resource condition annotations.
+	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
-	if nt.MultiRepo {
-		// TODO: Re-enable this test when multi-repo supports resource condition annotations.
-		return
-	}
 	support, err := nt.SupportV1Beta1CRD()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
 	// Skip this test when v1beta1 CRD is not supported in the testing cluster.
 	if !support {
-		return
+		t.Skip("Test skipped: CRD v1beta1 not supported by API server")
 	}
 
-	if err := nt.ApplyGatekeeperTestData("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
+	if err := nt.ApplyGatekeeperCRD("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
 	}
 

@@ -791,7 +791,9 @@ func (nt *NT) MustKubectl(args ...string) []byte {
 
 	out, err := nt.Kubectl(args...)
 	if err != nil {
-		nt.T.Log(append([]string{"kubectl"}, args...))
+		if !*e2e.Debug {
+			nt.T.Logf("kubectl %s", strings.Join(args, " "))
+		}
 		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
@@ -945,12 +947,17 @@ func (nt *NT) printNotReadyContainerLogs(pod corev1.Pod) {
 	}
 }
 
-// ApplyGatekeeperTestData is an exception to the "all test data is specified inline"
-// rule. It isn't informative to literally have the CRD specifications in the
-// test code, and we have strict type requirements on how the CRD is laid out.
-func (nt *NT) ApplyGatekeeperTestData(file, crd string) error {
-	nt.T.Logf("Adding gatekeeper CRD %s", crd)
+// ApplyGatekeeperCRD applies the specified gatekeeper testdata file and waits
+// for the specified CRD to be established, then resets the client RESTMapper.
+func (nt *NT) ApplyGatekeeperCRD(file, crd string) error {
+	nt.T.Logf("Applying gatekeeper CRD %s", crd)
 	absPath := filepath.Join(baseDir, "e2e", "testdata", "gatekeeper", file)
+
+	nt.T.Cleanup(func() {
+		nt.MustDeleteGatekeeperTestData(file, fmt.Sprintf("CRD %s", crd))
+		// Refresh the client to reset the RESTMapper to update discovered CRDs.
+		nt.RenewClient()
+	})
 
 	// We have to set validate=false because the default Gatekeeper YAMLs include
 	// fields introduced in 1.13 and can't be applied without it, and we aren't
@@ -958,12 +965,23 @@ func (nt *NT) ApplyGatekeeperTestData(file, crd string) error {
 	nt.MustKubectl("apply", "-f", absPath, "--validate=false")
 	err := WaitForCRDs(nt, []string{crd})
 	if err != nil {
+		// Refresh the client to reset the RESTMapper to update discovered CRDs.
 		nt.RenewClient()
 	}
-	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "-f", absPath, "--ignore-not-found")
-	})
 	return err
+}
+
+// MustDeleteGatekeeperTestData deletes the specified gatekeeper testdata file,
+// then resets the client RESTMapper.
+func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
+	absPath := filepath.Join(baseDir, "e2e", "testdata", "gatekeeper", file)
+	out, err := nt.Kubectl("get", "-f", absPath)
+	if err != nil {
+		nt.T.Logf("Skipping cleanup of gatekeeper %s: %s", name, out)
+		return
+	}
+	nt.T.Logf("Deleting gatekeeper %s", name)
+	nt.MustKubectl("delete", "-f", absPath, "--ignore-not-found", "--wait")
 }
 
 // PortForwardOtelCollector forwards the otel-collector pod.

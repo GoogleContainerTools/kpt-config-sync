@@ -197,14 +197,18 @@ func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
 		WebhookDisabled:         sharedNt.WebhookDisabled,
 	}
 
+	// Print container logs in its own cleanup block to catch fatal errors from
+	// tests and test setup (including resetSyncedRepos).
+	t.Cleanup(func() {
+		if t.Failed() {
+			nt.printTestLogs()
+		}
+	})
 	t.Cleanup(func() {
 		// Reset the otel-collector pod name to get a new forwarding port because the current process is killed.
 		nt.otelCollectorPodName = ""
 		nt.T.Log("`resetSyncedRepos` after a test as a part of `Cleanup` on SharedTestEnv")
 		resetSyncedRepos(nt, opts)
-		if t.Failed() {
-			nt.printTestLogs()
-		}
 	})
 
 	skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)

@@ -23,41 +23,61 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/policycontroller/constrainttemplate"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
-	nt := nomostest.New(t, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
 
-	if err := nt.ApplyGatekeeperTestData("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
-		nt.T.Fatalf("Failed to create constraint template CRD: %v", err)
+	// Simulate install of Gatekeeper with just the ConstraintTemplate CRD
+	if err := nt.ApplyGatekeeperCRD("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
+		nt.T.Fatalf("Failed to create ConstraintTemplate CRD: %v", err)
 	}
 
-	nt.T.Log("Adding CT/C in one commit")
+	nt.T.Log("Adding ConstraintTemplate & Constraint in one commit")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint-template.yaml", "acme/cluster/constraint-template.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint.yaml", "acme/cluster/constraint.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add CT/C in one commit")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add ConstraintTemplate & Constraint")
+
+	// Cleanup if waiting for sync error fails.
+	nt.T.Cleanup(func() {
+		if nt.T.Failed() {
+			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
+			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint.yaml")
+			// Apply a cluster-scoped resource to pass the safety check (KNV2006).
+			// Will be removed by the normal root repo cleanup.
+			nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
+			nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
+			nt.WaitForRepoSyncs()
+		}
+	})
+
 	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, `No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
+		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
+			`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
 	} else {
 		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
 	}
-	nomostest.Wait(nt.T, "CT on API server", time.Minute*2, func() error {
+
+	// Simulate Gatekeeper's controller behavior.
+	// Wait for the ConstraintTemplate to be applied, then apply the Constraint CRD.
+	nomostest.Wait(nt.T, "ConstraintTemplate on API server", 2*time.Minute, func() error {
 		ct := constrainttemplate.EmptyConstraintTemplate()
 		return nt.Validate("k8sallowedrepos", "", &ct)
 	})
-
-	if err := nt.ApplyGatekeeperTestData("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
+	if err := nt.ApplyGatekeeperCRD("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
 	}
+	// Sync should eventually succeed on retry, now that all the required CRDs exist.
 	nt.WaitForRepoSyncs()
 
-	// Delete the constraint template and constraint before deleting CRDs to avoid resource_conflicts error to be recorded
-	// Remove them in two separate commits to avoid the safety check failure.
+	// Cleanup before deleting the CRDs to avoid resource conflict errors from the webhook.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove constraint template")
-	nt.WaitForRepoSyncs()
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove constraint")
+	// Apply a cluster-scoped resource to pass the safety check (KNV2006).
+	// Will be removed by the normal root repo cleanup.
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
 	nt.WaitForRepoSyncs()
 }

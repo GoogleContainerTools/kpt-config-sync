@@ -92,16 +92,29 @@ func TestResourceConditionAnnotations(t *testing.T) {
 	nt.MustKubectl("annotate", "configmap", cmName, "-n", ns,
 		`configmanagement.gke.io/errors=["CrashLoopBackOff"]`)
 
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
+	if err != nil {
+		nt.T.Fatal("failed to check the supported RBAC versions")
+	}
 	// Ensure error conditions are added.
-	_, err1 = nomostest.Retry(20*time.Second, func() error {
-		// We expect three errors even though we only supplied two.
+	_, err1 = nomostest.Retry(40*time.Second, func() error {
+		if support {
+			// We expect three errors even though we only supplied two.
+			return nt.Validate("repo", "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError), string(v1.ResourceStateError)))
+		}
 		return nt.Validate("repo", "", &v1.Repo{},
-			hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError), string(v1.ResourceStateError)))
+			hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
 	})
 	// The ClusterConfig error from the ClusterRole gets duplicated.
 	// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
-	err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-		hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
+	if support {
+		err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+			hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
+	} else {
+		err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+			hasConditions(string(v1.ResourceStateError)))
+	}
 	err3 = nt.Validate(ns, "", &v1.NamespaceConfig{},
 		hasConditions(string(v1.ResourceStateError)))
 	if err1 != nil || err2 != nil || err3 != nil {
@@ -154,15 +167,24 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		`configmanagement.gke.io/reconciling=["ClusterRole needs... something..."]`)
 
 	// Ensure reconciling conditions are added.
-	_, err1 = nomostest.Retry(20*time.Second, func() error {
-		// We expect three reconciling conditions even though we only supplied two.
+	_, err1 = nomostest.Retry(40*time.Second, func() error {
+		if support {
+			// We expect three reconciling conditions even though we only supplied two.
+			return nt.Validate("repo", "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+		}
 		return nt.Validate("repo", "", &v1.Repo{},
-			hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+			hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
 	})
 	// The ClusterConfig condition from the ClusterRole gets duplicated.
 	// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
-	err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-		hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+	if support {
+		err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+			hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+	} else {
+		err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+			hasConditions(string(v1.ResourceStateReconciling)))
+	}
 	err3 = nt.Validate(ns, "", &v1.NamespaceConfig{},
 		hasConditions(string(v1.ResourceStateReconciling)))
 	if err1 != nil || err2 != nil || err3 != nil {
@@ -185,7 +207,7 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		`configmanagement.gke.io/reconciling-`)
 
 	// Ensure reconciling conditions are removed.
-	_, err1 = nomostest.Retry(20*time.Second, func() error {
+	_, err1 = nomostest.Retry(40*time.Second, func() error {
 		return nt.Validate("repo", "", &v1.Repo{},
 			hasConditions())
 	})
@@ -211,7 +233,7 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
 	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -280,7 +302,7 @@ func TestConstraintStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test when multi-repo supports resource condition annotations.
 	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}

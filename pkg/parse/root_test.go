@@ -25,8 +25,11 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	discovery "k8s.io/client-go/discovery"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -44,6 +47,9 @@ import (
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
+	discoveryutil "kpt.dev/configsync/pkg/util/discovery"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
+
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -443,6 +449,245 @@ func TestRoot_Parse(t *testing.T) {
 			if err := parseAndUpdate(context.Background(), parser, triggerReimport, &state); err != nil {
 				t.Fatal(err)
 			}
+
+			if diff := cmp.Diff(tc.want, state.cache.objsToApply, cmpopts.EquateEmpty(), ast.CompareFileObject, cmpopts.SortSlices(sortObjects)); diff != "" {
+				t.Error(diff)
+			}
+		})
+	}
+}
+
+func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
+	crd := fake.CustomResourceDefinitionV1Object(opts...)
+	crd.Spec.Group = "acme.com"
+	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
+		Plural:   "anvils",
+		Singular: "anvil",
+		Kind:     "Anvil",
+	}
+	crd.Spec.Scope = apiextensionsv1.NamespaceScoped
+	crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{
+		{
+			Name:    "v1",
+			Served:  true,
+			Storage: false,
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:     "object",
+							Required: []string{"lbs"},
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"lbs": {
+									Type:    "integer",
+									Minimum: pointer.Float64Ptr(1.0),
+									Maximum: pointer.Float64Ptr(9000.0),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return fake.FileObject(crd, "cluster/crd.yaml")
+}
+
+func fakeFileObjects() []ast.FileObject {
+	var fileObjects []ast.FileObject
+	for i := 0; i < 500; i++ {
+		fileObjects = append(fileObjects, fake.RoleAtPath(fmt.Sprintf("namespaces/foo/role%v.yaml", i), core.Namespace("foo")))
+	}
+	return fileObjects
+}
+
+func fakeGVKs() []schema.GroupVersionKind {
+	var gvks []schema.GroupVersionKind
+	for i := 0; i < 500; i++ {
+		gvks = append(gvks, schema.GroupVersionKind{Group: fmt.Sprintf("acme%v.com", i), Version: "v1", Kind: "APIService"})
+	}
+	return gvks
+}
+
+func fakeParseError(err error, gvks ...schema.GroupVersionKind) error {
+	groups := make(map[schema.GroupVersion]error)
+	for _, gvk := range gvks {
+		gv := gvk.GroupVersion()
+		groups[gv] = err
+	}
+	return status.APIServerError(&discovery.ErrGroupDiscoveryFailed{Groups: groups}, "API discovery failed")
+}
+
+func TestRoot_Parse_Discovery(t *testing.T) {
+	testCases := []struct {
+		name            string
+		parsed          []ast.FileObject
+		want            []ast.FileObject
+		discoveryClient discoveryutil.ServerResourcer
+		expectedError   error
+	}{
+		{
+			// unknown scoped object should not be skipped when sending to applier when discovery call fails
+			name:            "unknown scoped object with discovery failure of deadline exceeded error",
+			discoveryClient: syncertest.NewDiscoveryClientWithError(context.DeadlineExceeded, kinds.Namespace(), kinds.Role()),
+			expectedError:   fakeParseError(context.DeadlineExceeded, kinds.Namespace(), kinds.Role()),
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+			},
+			want: []ast.FileObject{},
+		},
+		{
+			// unknown scoped object should not be skipped when sending to applier when discovery call fails
+			name:            "unknown scoped object with discovery failure of http request canceled failure",
+			discoveryClient: syncertest.NewDiscoveryClientWithError(errors.New("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), kinds.Namespace(), kinds.Role()),
+			expectedError:   fakeParseError(errors.New("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), kinds.Namespace(), kinds.Role()),
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+			},
+			want: []ast.FileObject{},
+		},
+		{
+			// unknown scoped object should not be skipped when sending to applier when discovery call fails
+			name:            "unknown scoped object with discovery failure of 500 deadline exceeded failure",
+			discoveryClient: syncertest.NewDiscoveryClientWithError(context.DeadlineExceeded, fakeGVKs()...),
+			expectedError:   fakeParseError(context.DeadlineExceeded, fakeGVKs()...),
+			parsed:          append(fakeFileObjects(), fake.Unstructured(kinds.Anvil(), core.Name("deploy"))),
+			want:            []ast.FileObject{},
+		},
+		{
+			// unknown scoped object get skipped when sending to applier when discovery call is good
+			name:            "unknown scoped object without discovery failure",
+			discoveryClient: syncertest.NewDiscoveryClientWithError(nil, kinds.Namespace(), kinds.Role()),
+			expectedError:   status.UnknownObjectKindError(fake.Unstructured(kinds.Anvil(), core.Name("deploy"))),
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+			},
+			want: []ast.FileObject{
+				fake.UnstructuredAtPath(kinds.Namespace(),
+					"",
+					core.Name("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+		{
+			// happy path condition
+			name:            "known scoped object without discovery failure",
+			discoveryClient: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+			expectedError:   nil,
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+				fakeCRD(core.Name("anvils.acme.com")),
+				fake.Unstructured(kinds.Anvil(), core.Name("deploy"), core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.UnstructuredAtPath(kinds.Namespace(),
+					"",
+					core.Name("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+				fakeCRD(core.Name("anvils.acme.com"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:group":{},"f:names":{"f:kind":{},"f:plural":{},"f:singular":{}},"f:scope":{},"f:versions":{}},"f:status":{"f:acceptedNames":{"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "cluster/crd.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "apiextensions.k8s.io_customresourcedefinition_anvils.acme.com"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName)),
+				fake.Unstructured(kinds.Anvil(),
+					core.Name("deploy"),
+					core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}}}`),
+					core.Annotation(metadata.ResourceManagerKey, ":root_my-rs"),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "acme.com_anvil_foo_deploy"),
+				),
+			},
+		},
+	}
+
+	converter, err := declared.ValueConverterForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := &root{
+				sourceFormat: filesystem.SourceFormatUnstructured,
+				opts: opts{
+					parser:             &fakeParser{parse: tc.parsed},
+					syncName:           rootSyncName,
+					reconcilerName:     rootReconcilerName,
+					client:             syncertest.NewClient(t, runtime.NewScheme(), fake.RootSyncObjectV1Beta1(rootSyncName)),
+					discoveryInterface: tc.discoveryClient,
+					converter:          converter,
+					updater: updater{
+						scope:      declared.RootReconciler,
+						resources:  &declared.Resources{},
+						remediator: &noOpRemediator{},
+						applier:    &fakeApplier{},
+					},
+					mux: &sync.Mutex{},
+				},
+			}
+			state := reconcilerState{}
+			err := parseAndUpdate(context.Background(), parser, triggerReimport, &state)
+			testutil.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := cmp.Diff(tc.want, state.cache.objsToApply, cmpopts.EquateEmpty(), ast.CompareFileObject, cmpopts.SortSlices(sortObjects)); diff != "" {
 				t.Error(diff)

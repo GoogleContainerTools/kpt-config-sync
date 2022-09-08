@@ -15,5 +15,15 @@ Cloud CLI.
 We welcome contributions to Config Sync from the community. Take a look at our
 [contribution guide] to get started.
 
+## Community, discussion and support
+You can reach the maintainers of this project at:
+
+* [github.com/GoogleContainerTools/kpt-config-sync discussions]
+* [github.com/GoogleContainerTools/kpt-config-sync issues]
+* #kpt channel on [k8s slack]
+
 [installation guide]: docs/installation.md
 [contribution guide]: docs/contributing.md
+[k8s slack]: slack.k8s.io
+[github.com/GoogleContainerTools/kpt-config-sync issues]: github.com/GoogleContainerTools/kpt-config-sync/issues
+[github.com/GoogleContainerTools/kpt-config-sync discussions]: github.com/GoogleContainerTools/kpt-config-sync/discussions

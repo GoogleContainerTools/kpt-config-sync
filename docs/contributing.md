@@ -1,11 +1,23 @@
 # How to Contribute
 
-ConfigSync follows the [Kubernetes contribution process].  If you
-are looking to contribute to this project please fork it, create a change
-and then submit a PR against the `main` branch which is the HEAD of development.
+Contributions are greatly appreciated. The maintainers of Config Sync monitor issues
+and PRs and strive to provide timely feedback and reviews. For any questions or 
+suggestions, reach to to the Config Sync maintainers on [github.com/GoogleContainerTools/kpt-config-sync issues]
+or [github.com/GoogleContainerTools/kpt-config-sync discussions].
+
+For small bug fixes and doc updates, just create a PR with your change. 
+ConfigSync follows the [Kubernetes contribution process], so fork the project,
+create a change and then submit a PR against the `main` branch which is
+the HEAD of development.
 
 For larger changes and for anything that has a change to the CLI and API please
-write a [design document] first.
+write a [design document] first. This is to make sure the change is aligned with
+the direction of the project and doesn't conflict with other planned features.
+If you want input from the maintainers or the community before the design is
+completed, just create a WIP PR.
+
+For faster reviews on PRs, make sure that the PR doesn't contain any conflicts
+and that all the checks are passing.
 
 ## Contributor License Agreement
 
@@ -34,3 +46,8 @@ Guidelines](https://opensource.google/conduct/).
 [developer guide]: development.md
 [design document]: design-docs/00-template.md
 [Kubernetes contribution process]: https://github.com/kubernetes/community/blob/master/contributors/guide/github-workflow.md
+[slack]: slack.k8s.io
+[github.com/GoogleContainerTools/kpt-config-sync issues]: github.com/GoogleContainerTools/kpt-config-sync/issues
+[github.com/GoogleContainerTools/kpt-config-sync discussions]: github.com/GoogleContainerTools/kpt-config-sync/discussions
+
+https://kubernetes.slack.com/archives/C0155NSPJSZ

@@ -23,6 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -379,8 +380,10 @@ func hasConditions(want ...string) nomostest.Predicate {
 			return errors.Wrapf(nomostest.ErrWrongType, "got %T, expect one of (%T, %T, %T)",
 				o, &v1.NamespaceConfig{}, &v1.ClusterConfig{}, &v1.Repo{})
 		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			return errors.Errorf("unexpected resource condition diff: %s", diff)
+		// Use semantic equality to allow nil array to equal empty slice
+		if !equality.Semantic.DeepEqual(want, got) {
+			return errors.Errorf("unexpected resource condition diff: %s",
+				cmp.Diff(want, got))
 		}
 		return nil
 	}

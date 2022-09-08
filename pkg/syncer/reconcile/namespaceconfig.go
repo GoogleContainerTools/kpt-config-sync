@@ -341,8 +341,7 @@ func (r *namespaceConfigReconciler) setNamespaceConfigStatus(ctx context.Context
 		klog.V(3).Infof("Skipping status update for NamespaceConfig %q; status is already up-to-date.", config.Name)
 		return nil
 	}
-
-	updateFn := func(obj client.Object) (client.Object, error) {
+	_, err := r.client.ApplyStatus(ctx, config, func(obj client.Object) (client.Object, error) {
 		newPN := obj.(*v1.NamespaceConfig)
 		newPN.Status.Token = config.Spec.Token
 		newPN.Status.SyncTime = r.now()
@@ -353,11 +352,9 @@ func (r *namespaceConfigReconciler) setNamespaceConfigStatus(ctx context.Context
 		} else {
 			newPN.Status.SyncState = v1.StateSynced
 		}
-
 		newPN.SetGroupVersionKind(kinds.NamespaceConfig())
 		return newPN, nil
-	}
-	_, err := r.client.UpdateStatus(ctx, config, updateFn)
+	})
 	// TODO: Missing error monitoring like util.go/SetClusterConfigStatus.
 	return err
 }

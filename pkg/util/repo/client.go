@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/status"
 	syncclient "kpt.dev/configsync/pkg/syncer/client"
@@ -71,12 +72,15 @@ func (c *Client) createRepo(ctx context.Context) (*v1.Repo, status.Error) {
 
 // UpdateImportStatus updates the portion of the RepoStatus related to the importer.
 func (c *Client) UpdateImportStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
-	updateFn := func(obj client.Object) (client.Object, error) {
+	newObj, err := c.client.ApplyStatus(ctx, repo, func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
+		if cmp.Equal(newRepo.Status.Import, repo.Status.Import,
+			compare.IgnoreTimestampUpdates, cmpopts.EquateEmpty()) {
+			return newRepo, syncclient.NoUpdateNeeded()
+		}
 		newRepo.Status.Import = repo.Status.Import
 		return newRepo, nil
-	}
-	newObj, err := c.client.UpdateStatus(ctx, repo, updateFn)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -85,12 +89,15 @@ func (c *Client) UpdateImportStatus(ctx context.Context, repo *v1.Repo) (*v1.Rep
 
 // UpdateSourceStatus updates the portion of the RepoStatus related to the source of truth.
 func (c *Client) UpdateSourceStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
-	updateFn := func(obj client.Object) (client.Object, error) {
+	newObj, err := c.client.ApplyStatus(ctx, repo, func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
+		if cmp.Equal(newRepo.Status.Source, repo.Status.Source,
+			compare.IgnoreTimestampUpdates, cmpopts.EquateEmpty()) {
+			return newRepo, syncclient.NoUpdateNeeded()
+		}
 		newRepo.Status.Source = repo.Status.Source
 		return newRepo, nil
-	}
-	newObj, err := c.client.UpdateStatus(ctx, repo, updateFn)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -99,15 +106,15 @@ func (c *Client) UpdateSourceStatus(ctx context.Context, repo *v1.Repo) (*v1.Rep
 
 // UpdateSyncStatus updates the portion of the RepoStatus related to the syncer.
 func (c *Client) UpdateSyncStatus(ctx context.Context, repo *v1.Repo) (*v1.Repo, status.Error) {
-	updateFn := func(obj client.Object) (client.Object, error) {
+	newObj, err := c.client.ApplyStatus(ctx, repo, func(obj client.Object) (client.Object, error) {
 		newRepo := obj.(*v1.Repo)
-		if cmp.Equal(repo.Status.Sync, newRepo.Status.Sync, compare.IgnoreTimestampUpdates) {
+		if cmp.Equal(repo.Status.Sync, newRepo.Status.Sync,
+			compare.IgnoreTimestampUpdates, cmpopts.EquateEmpty()) {
 			return newRepo, syncclient.NoUpdateNeeded()
 		}
 		newRepo.Status.Sync = repo.Status.Sync
 		return newRepo, nil
-	}
-	newObj, err := c.client.UpdateStatus(ctx, repo, updateFn)
+	})
 	if err != nil {
 		return nil, err
 	}

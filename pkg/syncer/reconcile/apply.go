@@ -168,7 +168,7 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 // RemoveNomosMeta implements Applier.
 func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured) (bool, status.Error) {
 	var changed bool
-	_, err := c.client.Update(ctx, u, func(obj client.Object) (client.Object, error) {
+	_, err := c.client.Apply(ctx, u, func(obj client.Object) (client.Object, error) {
 		changed = metadata.RemoveConfigSyncMetadata(obj)
 		if !changed {
 			return obj, syncerclient.NoUpdateNeeded()

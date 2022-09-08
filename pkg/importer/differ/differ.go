@@ -99,8 +99,11 @@ func (d *differ) updateNamespaceConfigs(ctx context.Context, decoder decode.Deco
 // deleteNamespaceConfig marks the given NamespaceConfig for deletion by the syncer. This tombstone is more explicit
 // than having the importer just delete the NamespaceConfig directly.
 func (d *differ) deleteNamespaceConfig(ctx context.Context, nc *v1.NamespaceConfig) status.Error {
-	_, err := d.client.Update(ctx, nc, func(obj client.Object) (client.Object, error) {
-		newObj := obj.(*v1.NamespaceConfig).DeepCopy()
+	_, err := d.client.Apply(ctx, nc, func(obj client.Object) (client.Object, error) {
+		newObj := obj.(*v1.NamespaceConfig)
+		if !newObj.Spec.DeleteSyncedTime.IsZero() {
+			return obj, syncerclient.NoUpdateNeeded()
+		}
 		newObj.Spec.DeleteSyncedTime = now()
 		return newObj, nil
 	})
@@ -109,7 +112,7 @@ func (d *differ) deleteNamespaceConfig(ctx context.Context, nc *v1.NamespaceConf
 
 // updateNamespaceConfig writes the given NamespaceConfig to storage as it is specified.
 func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.NamespaceConfig) status.Error {
-	_, err := d.client.Update(ctx, intent, func(obj client.Object) (client.Object, error) {
+	_, err := d.client.Apply(ctx, intent, func(obj client.Object) (client.Object, error) {
 		oldObj := obj.(*v1.NamespaceConfig)
 		newObj := intent.DeepCopy()
 		if !oldObj.Spec.DeleteSyncedTime.IsZero() {
@@ -125,7 +128,7 @@ func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.Namespace
 		return err
 	}
 
-	_, err = d.client.UpdateStatus(ctx, intent, func(obj client.Object) (client.Object, error) {
+	_, err = d.client.ApplyStatus(ctx, intent, func(obj client.Object) (client.Object, error) {
 		oldObj := obj.(*v1.NamespaceConfig)
 		newObj := intent.DeepCopy()
 		newObj.ResourceVersion = oldObj.ResourceVersion
@@ -175,15 +178,18 @@ func (d *differ) updateClusterConfig(ctx context.Context, decoder decode.Decoder
 	}
 
 	if d.clusterConfigNeedsUpdate(decoder, current, desired, initTime) {
-		_, err := d.client.Update(ctx, desired, func(obj client.Object) (client.Object, error) {
+		_, err := d.client.Apply(ctx, desired, func(obj client.Object) (client.Object, error) {
 			oldObj := obj.(*v1.ClusterConfig)
 			newObj := desired.DeepCopy()
 			newObj.ResourceVersion = oldObj.ResourceVersion
+			if clusterConfigEqual(oldObj, newObj) {
+				return obj, syncerclient.NoUpdateNeeded()
+			}
 			return newObj, nil
 		})
 		d.errs = status.Append(d.errs, err)
 
-		_, err = d.client.UpdateStatus(ctx, desired, func(obj client.Object) (client.Object, error) {
+		_, err = d.client.ApplyStatus(ctx, desired, func(obj client.Object) (client.Object, error) {
 			oldObj := obj.(*v1.ClusterConfig)
 			newObj := desired.DeepCopy()
 			newObj.ResourceVersion = oldObj.ResourceVersion
@@ -191,6 +197,9 @@ func (d *differ) updateClusterConfig(ctx context.Context, decoder decode.Decoder
 			oldObj.Status.DeepCopyInto(&newObj.Status)
 			if !newSyncState.IsUnknown() {
 				newObj.Status.SyncState = newSyncState
+			}
+			if clusterConfigStatusEqual(oldObj, newObj) {
+				return obj, syncerclient.NoUpdateNeeded()
 			}
 			return newObj, nil
 		})
@@ -203,10 +212,13 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 	for name, newSync := range desired.Syncs {
 		if oldSync, exists := current.Syncs[name]; exists {
 			if !syncsEqual(&newSync, &oldSync) {
-				_, err := d.client.Update(ctx, &newSync, func(obj client.Object) (client.Object, error) {
+				_, err := d.client.Apply(ctx, &newSync, func(obj client.Object) (client.Object, error) {
 					oldObj := obj.(*v1.Sync)
 					newObj := newSync.DeepCopy()
 					newObj.ResourceVersion = oldObj.ResourceVersion
+					if syncsEqual(oldObj, newObj) {
+						return obj, syncerclient.NoUpdateNeeded()
+					}
 					return newObj, nil
 				})
 				d.errs = status.Append(d.errs, err)
@@ -226,6 +238,16 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 	}
 
 	klog.Infof("Sync operations: %d updates, %d creates, %d deletes", updates, creates, deletes)
+}
+
+// clusterConfigEqual returns true if the ClusterConfigs are equivalent.
+func clusterConfigEqual(l *v1.ClusterConfig, r *v1.ClusterConfig) bool {
+	return equality.Semantic.DeepEqual(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
+}
+
+// clusterConfigStatusEqual returns true if the ClusterConfigs are equivalent.
+func clusterConfigStatusEqual(l *v1.ClusterConfig, r *v1.ClusterConfig) bool {
+	return equality.Semantic.DeepEqual(l.Status, r.Status)
 }
 
 // syncsEqual returns true if the syncs are equivalent.

@@ -100,8 +100,7 @@ func SetClusterConfigStatus(ctx context.Context, c *syncerclient.Client, config 
 		klog.V(3).Infof("Status for ClusterConfig %q is already up-to-date.", config.Name)
 		return nil
 	}
-
-	updateFn := func(obj client.Object) (client.Object, error) {
+	_, err := c.ApplyStatus(ctx, config, func(obj client.Object) (client.Object, error) {
 		newConfig := obj.(*v1.ClusterConfig)
 		newConfig.Status.Token = config.Spec.Token
 		newConfig.Status.SyncTime = now()
@@ -112,10 +111,8 @@ func SetClusterConfigStatus(ctx context.Context, c *syncerclient.Client, config 
 		} else {
 			newConfig.Status.SyncState = v1.StateSynced
 		}
-
 		return newConfig, nil
-	}
-	_, err := c.UpdateStatus(ctx, config, updateFn)
+	})
 	return err
 }
 

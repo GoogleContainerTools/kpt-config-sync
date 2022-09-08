@@ -31,11 +31,13 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
+	syncclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	utildiscovery "kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -171,13 +173,15 @@ func (r *metaReconciler) reconcileSyncs(ctx context.Context, request reconcile.R
 
 		// Check if status changed before updating.
 		if !equality.Semantic.DeepEqual(sync.Status, ss) {
-			updateFn := func(obj client.Object) (client.Object, error) {
+			sync.SetGroupVersionKind(kinds.Sync())
+			_, err := r.client.ApplyStatus(ctx, sync, func(obj client.Object) (client.Object, error) {
 				s := obj.(*v1.Sync)
+				if equality.Semantic.DeepEqual(s.Status, ss) {
+					return s, syncclient.NoUpdateNeeded()
+				}
 				s.Status = ss
 				return s, nil
-			}
-			sync.SetGroupVersionKind(kinds.Sync())
-			_, err := r.client.UpdateStatus(ctx, sync, updateFn)
+			})
 			if err != nil {
 				mErr = status.Append(mErr, status.APIServerError(err, "could not update sync status"))
 			}
@@ -188,29 +192,22 @@ func (r *metaReconciler) reconcileSyncs(ctx context.Context, request reconcile.R
 }
 
 func (r *metaReconciler) finalizeSync(ctx context.Context, sync *v1.Sync, gvks map[schema.GroupVersionKind]bool) status.MultiError {
-	var newFinalizers []string
-	var needsFinalize bool
-	for _, f := range sync.Finalizers {
-		if f == v1.SyncFinalizer {
-			needsFinalize = true
-		} else {
-			newFinalizers = append(newFinalizers, f)
-		}
-	}
-
 	// Check if Syncer finalizer is present before finalize.
-	if !needsFinalize {
+	if !controllerutil.ContainsFinalizer(sync, v1.SyncFinalizer) {
 		klog.V(2).Infof("Sync %s already finalized", sync.Name)
 		return nil
 	}
 
-	sync = sync.DeepCopy()
-	sync.Finalizers = newFinalizers
 	klog.Infof("beginning Sync finalize for %s", sync.Name)
 	if err := r.gcResources(ctx, sync, gvks); err != nil {
 		return err
 	}
-	err := r.client.Upsert(ctx, sync)
+	_, err := r.client.Apply(ctx, sync, func(obj client.Object) (client.Object, error) {
+		if !controllerutil.RemoveFinalizer(obj, v1.SyncFinalizer) {
+			return obj, syncerclient.NoUpdateNeeded()
+		}
+		return obj, nil
+	})
 	if err != nil {
 		return err
 	}

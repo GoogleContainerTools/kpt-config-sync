@@ -26,7 +26,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	m "kpt.dev/configsync/pkg/metrics"
@@ -122,20 +121,26 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 	return nil
 }
 
-// Update updates the given obj in the Kubernetes cluster.
-func (c *Client) Update(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
-	return c.update(ctx, obj, updateFn, c.Client.Update)
+// Apply gets the current object state, modifies it with the provided updateFn,
+// and posts the update to the server.
+// Return the current object state and a NoUpdateNeeded error from the updateFn
+// to skip posting the update if no changes are required.
+func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
+	return c.apply(ctx, obj, updateFn, c.Client.Update)
 }
 
-// UpdateStatus updates the given obj's status in the Kubernetes cluster.
-func (c *Client) UpdateStatus(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
-	return c.update(ctx, obj, updateFn, c.Client.Status().Update)
+// ApplyStatus gets the current object status, modifies it with the provided
+// updateFn, and posts the update to the server.
+// Return the current object state and a NoUpdateNeeded error from the updateFn
+// to skip posting the update if no changes are required.
+func (c *Client) ApplyStatus(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
+	return c.apply(ctx, obj, updateFn, c.Client.Status().Update)
 }
 
-// update updates the given obj in the Kubernetes cluster using clientUpdateFn and records prometheus
-// metrics. In the event of a conflicting update, it will retry.
+// apply updates the given obj in the Kubernetes cluster using clientUpdateFn and records prometheus
+// metrics. In the event of a conflicting apply, it will retry.
 // This operation always involves retrieving the resource from API Server before actually updating it.
-func (c *Client) update(ctx context.Context, obj client.Object, updateFn update,
+func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 	clientUpdateFn clientUpdateFn) (client.Object, status.Error) {
 	// We only want to modify the argument after successfully making an update to API Server.
 	workingObj := obj.DeepCopyObject().(client.Object)
@@ -197,33 +202,28 @@ func (c *Client) update(ctx context.Context, obj client.Object, updateFn update,
 	return nil, status.ResourceWrap(lastErr, "exceeded max tries to update", obj)
 }
 
-// Upsert creates or updates the given obj in the Kubernetes cluster and records prometheus metrics.
-// This operation always involves retrieving the resource from API Server before actually creating or updating it.
-func (c *Client) Upsert(ctx context.Context, obj client.Object) status.Error {
+// Update posts the update to the server and records latency metrics.
+// Specify a ResourceVersion to avoid overwriting asynchronous changes.
+func (c *Client) Update(ctx context.Context, obj client.Object) status.Error {
 	description := getResourceInfo(obj)
-	namespacedName := getNamespacedName(obj)
-
-	// We don't actually care about the object on the cluster, we just want to
-	// check if it exists before deciding whether to create or update it.
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-	if err := c.Client.Get(ctx, namespacedName, u); err != nil {
-		if apierrors.IsNotFound(err) {
-			return c.Create(ctx, obj)
-		}
-		return status.ResourceWrap(err, "failed to get resource for update", obj)
-	}
-
 	klog.V(1).Infof("Will update %s to %s", description, spew.Sdump(obj))
+	oldV := resourceVersion(obj)
 	start := time.Now()
 	err := c.Client.Update(ctx, obj)
 	c.recordLatency(start, "update", obj.GetObjectKind().GroupVersionKind().Kind, metrics.StatusLabel(err))
 	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), start)
-
-	if err != nil {
+	switch {
+	case apierrors.IsNotFound(err):
+		return ConflictUpdateDoesNotExist(err, obj)
+	case err != nil:
 		return status.ResourceWrap(err, "failed to update", obj)
 	}
-	klog.Infof("Updated %s via upsert", description)
+	newV := resourceVersion(obj)
+	if oldV == newV {
+		klog.Warningf("ResourceVersion for %s did not change during update (noop)", description)
+	} else {
+		klog.Infof("Updated %s from ResourceVersion %s to %s", description, oldV, newV)
+	}
 	return nil
 }
 

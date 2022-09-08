@@ -72,6 +72,50 @@ func TestClient_Create(t *testing.T) {
 	}
 }
 
+func TestClient_Apply(t *testing.T) {
+	testCases := []struct {
+		name     string
+		declared client.Object
+		client   client.Client
+		wantErr  status.Error
+	}{
+		{
+			name:     "Conflict error if not found",
+			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
+			client: syncertestfake.NewErrorClient(apierrors.NewNotFound(
+				rbacv1.Resource("Role"), "admin")),
+			wantErr: syncerclient.ConflictUpdateDoesNotExist(errors.New("not found"),
+				fake.RoleObject(core.Name("admin"), core.Namespace("billing"))),
+		},
+		{
+			name:     "Generic error if other error",
+			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
+			client:   syncertestfake.NewErrorClient(errors.New("some error")),
+			wantErr: status.ResourceWrap(errors.New("some error"), "message",
+				fake.RoleObject()),
+		},
+		{
+			name:     "No error if client does not return error",
+			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
+			client:   syncertestfake.NewErrorClient(nil),
+			wantErr:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := syncerclient.New(tc.client, nil)
+
+			_, err := sc.Apply(context.Background(), tc.declared, noOpUpdate)
+			if !errors.Is(tc.wantErr, err) {
+				t.Fatalf("got err %v, want err %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func noOpUpdate(o client.Object) (object client.Object, err error) { return o, nil }
+
 func TestClient_Update(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -106,12 +150,10 @@ func TestClient_Update(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sc := syncerclient.New(tc.client, nil)
 
-			_, err := sc.Update(context.Background(), tc.declared, noOpUpdate)
+			err := sc.Update(context.Background(), tc.declared)
 			if !errors.Is(tc.wantErr, err) {
 				t.Fatalf("got err %v, want err %v", err, tc.wantErr)
 			}
 		})
 	}
 }
-
-func noOpUpdate(o client.Object) (object client.Object, err error) { return o, nil }

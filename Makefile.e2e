@@ -3,7 +3,7 @@
 E2E_PARAMS := \
 	IMAGE_TAG=$(IMAGE_TAG) \
 	GCP_PROJECT=$(GCP_PROJECT) \
-	GCR_PREFIX=$(GCR_PREFIX) \
+	REGISTRY=$(REGISTRY) \
 
 # The directory for e2e test related files
 E2E_DIR := $(OUTPUT_DIR)/nomos
@@ -72,7 +72,7 @@ ensure-image-e2e-tests:
 
 # Clean, ensure and run e2e tests for all importers.
 # Clean cluster after running.
-test-e2e-nobuild: push-to-gcr-nomos ensure-image-e2e-tests e2e-staging
+test-e2e-nobuild: image-nomos push-to-gcr-nomos ensure-image-e2e-tests e2e-staging
 	$(MAKE) __test-e2e-run \
 		$(E2E_PARAMS) \
 		E2E_FLAGS="\

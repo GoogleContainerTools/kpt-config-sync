@@ -34,7 +34,7 @@ import (
 func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
 
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -222,7 +222,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 func TestSyncUpdateCustomResource(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}

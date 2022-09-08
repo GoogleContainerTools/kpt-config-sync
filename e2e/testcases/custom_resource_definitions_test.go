@@ -97,7 +97,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 }
 func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -168,7 +168,7 @@ func TestAddAndRemoveCustomResourceV1(t *testing.T) {
 
 func TestAddAndRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -231,7 +231,7 @@ func TestMustRemoveUnManagedCustomResourceV1(t *testing.T) {
 
 func TestMustRemoveUnManagedCustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -316,7 +316,7 @@ func TestAddUpdateRemoveClusterScopedCRDV1(t *testing.T) {
 
 func TestAddUpdateRemoveClusterScopedCRDV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -414,7 +414,7 @@ func TestAddUpdateNamespaceScopedCRDV1(t *testing.T) {
 
 func TestAddUpdateNamespaceScopedCRDV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}

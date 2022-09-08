@@ -1345,9 +1345,10 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 		})
 }
 
-// SupportV1Beta1CRD checks if v1beta1 CRD is supported
+// SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are supported
 // in the current testing cluster.
-func (nt *NT) SupportV1Beta1CRD() (bool, error) {
+// v1beta1 APIs for CRD and RBAC resources are deprecated in K8s 1.22.
+func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 	dc, err := discovery.NewDiscoveryClientForConfig(nt.Config)
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to create discoveryclient")

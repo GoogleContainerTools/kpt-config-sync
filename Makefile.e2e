@@ -170,10 +170,10 @@ test-e2e-go-ephemeral: __push-local-image
 	@docker run -v /var/run/docker.sock:/var/run/docker.sock --network="host" prow-image make __test-e2e-go-nobuild-prow
 test-e2e-go-ephemeral-mono-repo: __push-local-image
 	kind delete clusters --all
-	./scripts/e2e-go-ephemeral.sh --timeout 60m --parallel 18 --image-tag=$(LATEST_IMAGE_TAG)
+	./scripts/e2e-go-ephemeral.sh --timeout 60m --parallel 23 --image-tag=$(LATEST_IMAGE_TAG) --test.run TestIncreaseParallel*
 test-e2e-go-ephemeral-multi-repo: __push-local-image
 	kind delete clusters --all
-	./scripts/e2e-go-ephemeral.sh --multirepo --timeout 60m --parallel 18 --image-tag=$(LATEST_IMAGE_TAG)
+	./scripts/e2e-go-ephemeral.sh --multirepo --timeout 60m --parallel 23 --image-tag=$(LATEST_IMAGE_TAG) --test.run TestIncreaseParallel*
 
 # Runs the Go e2e tests against multi-repo Config Sync.
 # Rebuilds the nomos image, so use this when you're actively modifying the Nomos

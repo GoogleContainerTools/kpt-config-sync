@@ -510,6 +510,9 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 		errs = status.Append(errs, err)
 	}
 	if errs != nil {
+		for deployment := range deployments {
+			nt.Kubectl("describe", "deploy", deployment.Name, "-n", deployment.Namespace)
+		}
 		return errs
 	}
 

@@ -35,7 +35,7 @@ import (
 
 func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t)
-	support, err := nt.SupportV1Beta1CRD()
+	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}
@@ -293,7 +293,7 @@ func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
 
 func TestMultipleVersions_RoleBinding(t *testing.T) {
 	nt := nomostest.New(t)
-	supportV1beta1, err := nt.SupportV1Beta1CRD()
+	supportV1beta1, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
 	}

@@ -2,8 +2,8 @@
 
 Contributions are greatly appreciated. The maintainers of Config Sync monitor issues
 and PRs and strive to provide timely feedback and reviews. For any questions or 
-suggestions, reach to to the Config Sync maintainers on [github.com/GoogleContainerTools/kpt-config-sync issues]
-or [github.com/GoogleContainerTools/kpt-config-sync discussions].
+suggestions, reach to to the Config Sync maintainers on [issues]
+or [discussions].
 
 For small bug fixes and doc updates, just create a PR with your change. 
 ConfigSync follows the [Kubernetes contribution process], so fork the project,
@@ -46,8 +46,6 @@ Guidelines](https://opensource.google/conduct/).
 [developer guide]: development.md
 [design document]: design-docs/00-template.md
 [Kubernetes contribution process]: https://github.com/kubernetes/community/blob/master/contributors/guide/github-workflow.md
-[slack]: slack.k8s.io
-[github.com/GoogleContainerTools/kpt-config-sync issues]: github.com/GoogleContainerTools/kpt-config-sync/issues
-[github.com/GoogleContainerTools/kpt-config-sync discussions]: github.com/GoogleContainerTools/kpt-config-sync/discussions
-
-https://kubernetes.slack.com/archives/C0155NSPJSZ
+[slack]: https://slack.k8s.io
+[issues]: https://github.com/GoogleContainerTools/kpt-config-sync/issues
+[discussions]: https://github.com/GoogleContainerTools/kpt-config-sync/discussions

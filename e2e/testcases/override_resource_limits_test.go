@@ -19,18 +19,17 @@ import (
 	"testing"
 	"time"
 
-	"go.opencensus.io/tag"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/metrics"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -261,10 +260,10 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		if err := nt.ValidateResourceOverrideCount(string(controllers.RootReconcilerType), "git-sync", "cpu", 1); err != nil {
 			return err
 		}
-		if err := nt.ValidateResourceOverrideCountMissingTags([]tag.Tag{
-			{Key: metrics.KeyReconcilerType, Value: string(controllers.RootReconcilerType)},
-			{Key: metrics.KeyContainer, Value: "reconciler"},
-			{Key: metrics.KeyResourceType, Value: "memory"},
+		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
+			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
+			{Key: ocmetrics.KeyContainer.Name(), Value: "reconciler"},
+			{Key: ocmetrics.KeyResourceType.Name(), Value: "memory"},
 		}); err != nil {
 			return err
 		}
@@ -343,8 +342,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCountMissingTags([]tag.Tag{
-			{Key: metrics.KeyReconcilerType, Value: string(controllers.RootReconcilerType)},
+		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
+			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
 		}); err != nil {
 			return err
 		}
@@ -567,10 +566,10 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		if err := nt.ValidateResourceOverrideCount(string(controllers.RootReconcilerType), "git-sync", "cpu", 1); err != nil {
 			return err
 		}
-		if err := nt.ValidateResourceOverrideCountMissingTags([]tag.Tag{
-			{Key: metrics.KeyReconcilerType, Value: string(controllers.RootReconcilerType)},
-			{Key: metrics.KeyContainer, Value: "reconciler"},
-			{Key: metrics.KeyResourceType, Value: "memory"},
+		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
+			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
+			{Key: ocmetrics.KeyContainer.Name(), Value: "reconciler"},
+			{Key: ocmetrics.KeyResourceType.Name(), Value: "memory"},
 		}); err != nil {
 			return err
 		}
@@ -649,8 +648,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCountMissingTags([]tag.Tag{
-			{Key: metrics.KeyReconcilerType, Value: string(controllers.RootReconcilerType)},
+		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
+			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
 		}); err != nil {
 			return err
 		}

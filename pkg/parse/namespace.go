@@ -82,6 +82,18 @@ type namespace struct {
 
 var _ Parser = &namespace{}
 
+func (p *namespace) SyncKind() string {
+	return "RepoSync"
+}
+
+func (p *namespace) SyncName() string {
+	return p.options().syncName
+}
+
+func (p *namespace) SyncNamespace() string {
+	return string(p.scope)
+}
+
 func (p *namespace) options() *opts {
 	return &(p.opts)
 }

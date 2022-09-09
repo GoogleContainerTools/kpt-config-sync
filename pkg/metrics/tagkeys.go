@@ -61,6 +61,11 @@ var (
 
 	// KeyResourceType groups metris by their resource types. Possible values: cpu, memory.
 	KeyResourceType, _ = tag.NewKey("resource")
+
+	KeySyncKind, _       = tag.NewKey("sync_kind")
+	KeySyncName, _       = tag.NewKey("sync_name")
+	KeySyncNamespace, _  = tag.NewKey("sync_namespace")
+	KeyReconcilerName, _ = tag.NewKey("reconciler_name")
 )
 
 // StatusTagKey returns a string representation of the error, if it exists, otherwise success.

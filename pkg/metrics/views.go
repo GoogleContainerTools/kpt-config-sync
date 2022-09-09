@@ -21,13 +21,15 @@ import (
 
 var distributionBounds = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
 
+var globalTagKeys = []tag.Key{KeySyncKind, KeySyncName, KeySyncNamespace, KeyReconcilerName}
+
 var (
 	// APICallDurationView aggregates the APICallDuration metric measurements.
 	APICallDurationView = &view.View{
 		Name:        APICallDuration.Name(),
 		Measure:     APICallDuration,
 		Description: "The latency distribution of API server calls",
-		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
+		TagKeys:     append([]tag.Key{KeyOperation, KeyStatus}, globalTagKeys...),
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -36,7 +38,7 @@ var (
 		Name:        ReconcilerErrors.Name(),
 		Measure:     ReconcilerErrors,
 		Description: "The current number of errors in the RootSync and RepoSync reconcilers",
-		TagKeys:     []tag.Key{KeyComponent, KeyErrorClass},
+		TagKeys:     append([]tag.Key{KeyComponent, KeyErrorClass}, globalTagKeys...),
 		Aggregation: view.LastValue(),
 	}
 
@@ -45,7 +47,7 @@ var (
 		Name:        PipelineError.Name(),
 		Measure:     PipelineError,
 		Description: "A boolean indicates if any error happens from different stages when syncing a commit",
-		TagKeys:     []tag.Key{KeyName, KeyReconcilerType, KeyComponent},
+		TagKeys:     append([]tag.Key{KeyName, KeyReconcilerType, KeyComponent}, globalTagKeys...),
 		Aggregation: view.LastValue(),
 	}
 
@@ -54,7 +56,7 @@ var (
 		Name:        ReconcileDuration.Name(),
 		Measure:     ReconcileDuration,
 		Description: "The latency distribution of RootSync and RepoSync reconcile events",
-		TagKeys:     []tag.Key{KeyStatus},
+		TagKeys:     append([]tag.Key{KeyStatus}, globalTagKeys...),
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -63,7 +65,7 @@ var (
 		Name:        ParserDuration.Name(),
 		Measure:     ParserDuration,
 		Description: "The latency distribution of the parse-apply-watch loop",
-		TagKeys:     []tag.Key{KeyStatus, KeyTrigger, KeyParserSource},
+		TagKeys:     append([]tag.Key{KeyStatus, KeyTrigger, KeyParserSource}, globalTagKeys...),
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -72,6 +74,7 @@ var (
 		Name:        LastSync.Name(),
 		Measure:     LastSync,
 		Description: "The timestamp of the most recent sync from Git",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.LastValue(),
 	}
 
@@ -80,6 +83,7 @@ var (
 		Name:        DeclaredResources.Name(),
 		Measure:     DeclaredResources,
 		Description: "The current number of declared resources parsed from Git",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.LastValue(),
 	}
 
@@ -88,7 +92,7 @@ var (
 		Name:        ApplyOperations.Name() + "_total",
 		Measure:     ApplyOperations,
 		Description: "The total number of operations that have been performed to sync resources to source of truth",
-		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
+		TagKeys:     append([]tag.Key{KeyOperation, KeyStatus}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -97,7 +101,7 @@ var (
 		Name:        ApplyDuration.Name(),
 		Measure:     ApplyDuration,
 		Description: "The latency distribution of applier resource sync events",
-		TagKeys:     []tag.Key{KeyStatus},
+		TagKeys:     append([]tag.Key{KeyStatus}, globalTagKeys...),
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -106,7 +110,7 @@ var (
 		Name:        LastApply.Name(),
 		Measure:     LastApply,
 		Description: "The timestamp of the most recent applier resource sync event",
-		TagKeys:     []tag.Key{KeyStatus, KeyCommit},
+		TagKeys:     append([]tag.Key{KeyStatus, KeyCommit}, globalTagKeys...),
 		Aggregation: view.LastValue(),
 	}
 
@@ -115,6 +119,7 @@ var (
 		Name:        ResourceFights.Name() + "_total",
 		Measure:     ResourceFights,
 		Description: "The total number of resources that are being synced too frequently",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -123,7 +128,7 @@ var (
 		Name:        RemediateDuration.Name(),
 		Measure:     RemediateDuration,
 		Description: "The latency distribution of remediator reconciliation events",
-		TagKeys:     []tag.Key{KeyStatus},
+		TagKeys:     append([]tag.Key{KeyStatus}, globalTagKeys...),
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -132,6 +137,7 @@ var (
 		Name:        ResourceConflicts.Name() + "_total",
 		Measure:     ResourceConflicts,
 		Description: "The total number of resource conflicts resulting from a mismatch between the cached resources and cluster resources",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -140,7 +146,7 @@ var (
 		Name:        InternalErrors.Name() + "_total",
 		Measure:     InternalErrors,
 		Description: "The total number of internal errors triggered by Config Sync",
-		TagKeys:     []tag.Key{KeyInternalErrorSource},
+		TagKeys:     append([]tag.Key{KeyInternalErrorSource}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -149,6 +155,7 @@ var (
 		Name:        RenderingCount.Name() + "_total",
 		Measure:     RenderingCount,
 		Description: "The total number of renderings that are performed",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -157,6 +164,7 @@ var (
 		Name:        SkipRenderingCount.Name() + "_total",
 		Measure:     SkipRenderingCount,
 		Description: "The total number of renderings that are skipped",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -165,7 +173,7 @@ var (
 		Name:        ResourceOverrideCount.Name() + "_total",
 		Measure:     ResourceOverrideCount,
 		Description: "The total number of RootSync/RepoSync objects including the `spec.override.resources` field",
-		TagKeys:     []tag.Key{KeyContainer, KeyResourceType},
+		TagKeys:     append([]tag.Key{KeyContainer, KeyResourceType}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -174,6 +182,7 @@ var (
 		Name:        GitSyncDepthOverrideCount.Name() + "_total",
 		Measure:     GitSyncDepthOverrideCount,
 		Description: "The total number of RootSync/RepoSync objects including the `spec.override.gitSyncDepth` field",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 
@@ -182,6 +191,7 @@ var (
 		Name:        NoSSLVerifyCount.Name() + "_total",
 		Measure:     NoSSLVerifyCount,
 		Description: "The number of RootSync/RepoSync objects whose `spec.git.noSSLVerify` field is set to `true`",
+		TagKeys:     append([]tag.Key{}, globalTagKeys...),
 		Aggregation: view.Count(),
 	}
 )

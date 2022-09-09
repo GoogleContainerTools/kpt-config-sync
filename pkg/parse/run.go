@@ -19,6 +19,7 @@ import (
 	"os"
 	"time"
 
+	"go.opencensus.io/tag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
@@ -55,6 +56,15 @@ const (
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
 func Run(ctx context.Context, p Parser) {
 	opts := p.options()
+
+	// Add global metrics tags.
+	// These tags are conerted to resource attributes by the otel agent sidecar.
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(metrics.KeySyncKind, p.SyncKind()),
+		tag.Upsert(metrics.KeySyncName, p.SyncName()),
+		tag.Upsert(metrics.KeySyncNamespace, p.SyncNamespace()),
+		tag.Upsert(metrics.KeyReconcilerName, opts.reconcilerName))
+
 	tickerPoll := time.NewTicker(opts.pollingFrequency)
 	tickerResync := time.NewTicker(opts.resyncPeriod)
 	tickerRetryOrWatchUpdate := time.NewTicker(time.Second)

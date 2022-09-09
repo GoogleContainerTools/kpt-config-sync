@@ -90,6 +90,18 @@ type root struct {
 
 var _ Parser = &root{}
 
+func (p *root) SyncKind() string {
+	return "RootSync"
+}
+
+func (p *root) SyncName() string {
+	return p.options().syncName
+}
+
+func (p *root) SyncNamespace() string {
+	return configsync.ControllerNamespace
+}
+
 func (p *root) options() *opts {
 	return &(p.opts)
 }

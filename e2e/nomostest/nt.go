@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -58,6 +59,7 @@ import (
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // NT represents the test environment for a single Nomos end-to-end test case.
@@ -474,15 +476,15 @@ func (nt *NT) ValidateErrorMetricsNotFound() error {
 
 // ValidateResourceOverrideCount validates that the `resource_override_count` metric exists
 // for the correct reconciler.
-func (nt *NT) ValidateResourceOverrideCount(reconciler, containerName, resourceType string, count int) error {
+func (nt *NT) ValidateResourceOverrideCount(reconcilerType, containerName, resourceType string, count int) error {
 	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconciler, containerName, resourceType, count)
+		return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconcilerType, containerName, resourceType, count)
 	}
 	return nil
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
-func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []tag.Tag) error {
+func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []metrics.Tag) error {
 	if nt.MultiRepo {
 		return nt.ReconcilerMetrics.ValidateResourceOverrideCountMissingTags(tags)
 	}
@@ -517,7 +519,7 @@ func (nt *NT) ValidateMetricNotFound(metricName string) error {
 
 // ValidateReconcilerErrors validates that the `reconciler_error` metric exists
 // for the correct reconciler and the tagged component has the correct value.
-func (nt *NT) ValidateReconcilerErrors(reconciler, component string) error {
+func (nt *NT) ValidateReconcilerErrors(reconcilerName, component string) error {
 	if nt.MultiRepo {
 		var sourceCount, syncCount int
 		switch component {
@@ -533,7 +535,7 @@ func (nt *NT) ValidateReconcilerErrors(reconciler, component string) error {
 		default:
 			return errors.Errorf("unexpected component tag value: %v", component)
 		}
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(reconciler, sourceCount, syncCount)
+		return nt.ReconcilerMetrics.ValidateReconcilerErrors(reconcilerName, sourceCount, syncCount)
 	}
 	return nil
 }
@@ -636,6 +638,12 @@ func (nt *NT) GetCurrentMetrics(syncOptions ...MetricsSyncOption) (time.Duration
 		if err != nil {
 			nt.T.Fatalf("unable to get latest metrics: %v", err)
 		}
+
+		metricsYamlBytes, err := yaml.Marshal(metrics)
+		if err != nil {
+			nt.T.Fatalf("unable to convert latest metrics to yaml: %v", err)
+		}
+		nt.T.Logf("Metrics parsed:\n%s", string(metricsYamlBytes))
 
 		return took, metrics
 	}
@@ -1434,16 +1442,16 @@ func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 }
 
 // SyncMetricsToReconcilerSourceError syncs metrics to a reconciler source error
-func SyncMetricsToReconcilerSourceError(reconciler string) MetricsSyncOption {
+func SyncMetricsToReconcilerSourceError(reconcilerName string) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconciler, 1, 0)
+		return metrics.ValidateReconcilerErrors(reconcilerName, 1, 0)
 	}
 }
 
 // SyncMetricsToReconcilerSyncError syncs metrics to a reconciler sync error
-func SyncMetricsToReconcilerSyncError(reconciler string) MetricsSyncOption {
+func SyncMetricsToReconcilerSyncError(reconcilerName string) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconciler, 0, 1)
+		return metrics.ValidateReconcilerErrors(reconcilerName, 0, 1)
 	}
 }
 

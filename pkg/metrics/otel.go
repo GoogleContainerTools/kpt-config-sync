@@ -41,6 +41,9 @@ exporters:
   prometheus:
     endpoint: :8675
     namespace: config_sync
+    resource_to_telemetry_conversion:
+      enabled: true
+    metric_expiration: 5m
   googlecloud:
     metric:
       prefix: "custom.googleapis.com/opencensus/config_sync/"

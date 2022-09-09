@@ -33,6 +33,24 @@ data:
           insecure: true
     processors:
       batch:
+      # Generate resource attributes from metric tags.
+      # This is done in the sidecar instead of the reconciler, because
+      # attributes are not otherwise mutable after constructing a metrics
+      # emitter.
+      attributes/sync:
+        actions:
+          - key: configsync.sync.kind
+            action: insert
+            from_context: sync_kind
+          - key: configsync.sync.name
+            action: insert
+            from_context: sync_name
+          - key: configsync.sync.namespace
+            action: insert
+            from_context: sync_namespace
+          - key: configsync.reconciler.name
+            action: insert
+            from_context: reconciler_name
     extensions:
       health_check:
     service:
@@ -40,5 +58,5 @@ data:
       pipelines:
         metrics:
           receivers: [opencensus]
-          processors: [batch]
+          processors: [batch, attributes/sync]
           exporters: [opencensus]

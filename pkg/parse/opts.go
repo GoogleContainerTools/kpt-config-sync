@@ -87,6 +87,15 @@ type Parser interface {
 	RemediatorConflictErrors() []status.ManagementConflictError
 	// K8sClient returns the Kubernetes client that talks to the API server.
 	K8sClient() client.Client
+	// SyncKind returns the kind of the sync object that generated this
+	// reconciler: RootSync or RepoSync
+	SyncKind() string
+	// SyncKind returns the name of the sync object that generated this
+	// reconciler.
+	SyncName() string
+	// SyncNamespace returns the namespace of the sync object that generated
+	// this reconciler.
+	SyncNamespace() string
 }
 
 func (o *opts) k8sClient() client.Client {

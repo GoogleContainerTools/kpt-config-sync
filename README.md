@@ -18,12 +18,12 @@ We welcome contributions to Config Sync from the community. Take a look at our
 ## Community, discussion and support
 You can reach the maintainers of this project at:
 
-* [github.com/GoogleContainerTools/kpt-config-sync discussions]
-* [github.com/GoogleContainerTools/kpt-config-sync issues]
+* [Config Sync discussions]
+* [Config Sync issues]
 * #kpt channel on [k8s slack]
 
 [installation guide]: docs/installation.md
 [contribution guide]: docs/contributing.md
-[k8s slack]: slack.k8s.io
-[github.com/GoogleContainerTools/kpt-config-sync issues]: github.com/GoogleContainerTools/kpt-config-sync/issues
-[github.com/GoogleContainerTools/kpt-config-sync discussions]: github.com/GoogleContainerTools/kpt-config-sync/discussions
+[k8s slack]: https://slack.k8s.io
+[Config Sync issues]: https://github.com/GoogleContainerTools/kpt-config-sync/issues
+[Config Sync discussions]: https://github.com/GoogleContainerTools/kpt-config-sync/discussions

@@ -23,11 +23,14 @@ import (
 // CurrentVersion is the version of the format for the ConfigManagement Repo.
 const CurrentVersion = "1.0.0"
 
+// DefaultName is the name of the default cluster-scope Repo in mono-repo mode.
+const DefaultName = "repo"
+
 // Default returns a default Repo in case one is not defined in the source of truth.
 func Default() *v1.Repo {
 	return setTypeMeta(&v1.Repo{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "repo",
+			Name: DefaultName,
 		},
 		Spec: v1.RepoSpec{
 			Version: CurrentVersion,

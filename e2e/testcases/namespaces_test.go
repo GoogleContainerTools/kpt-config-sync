@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/repo"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -698,7 +699,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		})
 	} else {
 		_, err = nomostest.Retry(60*time.Second, func() error {
-			return nt.Validate("repo", "",
+			return nt.Validate(repo.DefaultName, "",
 				&v1.Repo{}, repoHasErrors("KNV"+status.EmptySourceErrorCode))
 		})
 	}

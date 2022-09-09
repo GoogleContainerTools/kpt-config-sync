@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/policycontroller/constraint"
 	"kpt.dev/configsync/pkg/policycontroller/constrainttemplate"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/repo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -66,7 +67,7 @@ func TestResourceConditionAnnotations(t *testing.T) {
 	// Ensure we don't already have error conditions.
 	// In this test, and so below, it is sufficient to block on the Repo object reporting
 	// the conditions, as all it is doing is aggregating conditions from ClusterConfig/NamespaceConfigs.
-	err1 := nt.Validate("repo", "", &v1.Repo{},
+	err1 := nt.Validate(repo.DefaultName, "", &v1.Repo{},
 		hasConditions())
 	err2 := nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
 		hasConditions())
@@ -101,10 +102,10 @@ func TestResourceConditionAnnotations(t *testing.T) {
 	_, err1 = nomostest.Retry(40*time.Second, func() error {
 		if support {
 			// We expect three errors even though we only supplied two.
-			return nt.Validate("repo", "", &v1.Repo{},
+			return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError), string(v1.ResourceStateError)))
 		}
-		return nt.Validate("repo", "", &v1.Repo{},
+		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 			hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
 	})
 	// The ClusterConfig error from the ClusterRole gets duplicated.
@@ -139,7 +140,7 @@ func TestResourceConditionAnnotations(t *testing.T) {
 
 	// Ensure error conditions are removed.
 	_, err1 = nomostest.Retry(20*time.Second, func() error {
-		return nt.Validate("repo", "", &v1.Repo{},
+		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 			hasConditions())
 	})
 	err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
@@ -171,10 +172,10 @@ func TestResourceConditionAnnotations(t *testing.T) {
 	_, err1 = nomostest.Retry(40*time.Second, func() error {
 		if support {
 			// We expect three reconciling conditions even though we only supplied two.
-			return nt.Validate("repo", "", &v1.Repo{},
+			return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
 		}
-		return nt.Validate("repo", "", &v1.Repo{},
+		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 			hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
 	})
 	// The ClusterConfig condition from the ClusterRole gets duplicated.
@@ -209,7 +210,7 @@ func TestResourceConditionAnnotations(t *testing.T) {
 
 	// Ensure reconciling conditions are removed.
 	_, err1 = nomostest.Retry(40*time.Second, func() error {
-		return nt.Validate("repo", "", &v1.Repo{},
+		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
 			hasConditions())
 	})
 	err2 = nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},

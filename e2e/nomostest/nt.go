@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
+	"kpt.dev/configsync/pkg/util/repo"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -599,7 +600,7 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 			}
 		}
 	} else {
-		nt.WaitForSync(kinds.Repo(), "repo", "", syncTimeout,
+		nt.WaitForSync(kinds.Repo(), repo.DefaultName, "", syncTimeout,
 			waitForRepoSyncsOptions.rootSha1Fn, RepoHasStatusSyncLatestToken, nil)
 	}
 }
@@ -663,27 +664,18 @@ func (nt *NT) GetCurrentMetrics(syncOptions ...MetricsSyncOption) (time.Duration
 func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration,
 	sha1Func Sha1Func, syncSha1 func(string) Predicate, syncDirPair *SyncDirPredicatePair) {
 	nt.T.Helper()
-
 	// Wait for the repository to report it is synced.
 	took, err := Retry(timeout, func() error {
-		obj, err := nt.scheme.New(gvk)
-		if err != nil {
-			return fmt.Errorf("%w: got unrecognized GVK %v", ErrWrongType, gvk)
-		}
-		o, ok := obj.(client.Object)
-		if !ok {
-			// This means the GVK corresponded to a type registered in the Scheme
-			// which is not a valid Kubernetes object. We expect the only way this
-			// can happen is if gvk is for a List type, like NamespaceList.
-			return errors.Wrapf(ErrWrongType, "trying to wait for List type to sync: %T", o)
-		}
-
 		var nn types.NamespacedName
 		if namespace == "" {
-			// If namespace is empty, that is the monorepo mode. So using the default root-sync.
+			// If namespace is empty, that is the monorepo mode.
+			// So using the sha1 from the default RootSync, not the Repo.
 			nn = DefaultRootRepoNamespacedName
 		} else {
-			nn = RepoSyncNN(namespace, name)
+			nn = types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			}
 		}
 		sha1, err := sha1Func(nt, nn)
 		if err != nil {
@@ -693,8 +685,7 @@ func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, t
 		if syncDirPair != nil {
 			isSynced = append(isSynced, syncDirPair.Predicate(syncDirPair.Dir))
 		}
-
-		return nt.Validate(name, namespace, o, isSynced...)
+		return nt.ValidateSyncObject(gvk, name, namespace, isSynced...)
 	})
 	if err != nil {
 		nt.T.Logf("failed after %v to wait for %s/%s %v to be synced", took, namespace, name, gvk)
@@ -709,6 +700,30 @@ func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, t
 	if gvk == kinds.Repo() || gvk == kinds.RepoSyncV1Beta1() {
 		nt.RenewClient()
 	}
+}
+
+// ValidateSyncObject validates the specified object satisfies the specified
+// constraints.
+//
+// gvk specifies the GroupVersionKind of the object to retrieve and validate.
+//
+// name and namespace identify the specific object to check.
+//
+// predicates are functions that return an error if the object is invalid.
+func (nt *NT) ValidateSyncObject(gvk schema.GroupVersionKind, name, namespace string,
+	predicates ...Predicate) error {
+	rObj, err := nt.scheme.New(gvk)
+	if err != nil {
+		return fmt.Errorf("%w: got unrecognized GVK %v", ErrWrongType, gvk)
+	}
+	cObj, ok := rObj.(client.Object)
+	if !ok {
+		// This means the GVK corresponded to a type registered in the Scheme
+		// which is not a valid Kubernetes object. We expect the only way this
+		// can happen is if gvk is for a List type, like NamespaceList.
+		return errors.Wrapf(ErrWrongType, "trying to wait for List type to sync: %T", cObj)
+	}
+	return nt.Validate(name, namespace, cObj, predicates...)
 }
 
 // WaitForNamespace waits for a namespace to exist and be ready to use
@@ -1211,12 +1226,12 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("Repo source error code %s", code), nt.DefaultWaitTimeout,
 		func() error {
-			repo := &v1.Repo{}
-			err := nt.Get("repo", "", repo)
+			obj := &v1.Repo{}
+			err := nt.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
-			errs := repo.Status.Source.Errors
+			errs := obj.Status.Source.Errors
 			if len(errs) == 0 {
 				return errors.Errorf("no errors present")
 			}
@@ -1237,12 +1252,12 @@ func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
 func (nt *NT) WaitForRepoSourceErrorClear(opts ...WaitOption) {
 	Wait(nt.T, "Repo source errors cleared", nt.DefaultWaitTimeout,
 		func() error {
-			repo := &v1.Repo{}
-			err := nt.Get("repo", "", repo)
+			obj := &v1.Repo{}
+			err := nt.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
-			errs := repo.Status.Source.Errors
+			errs := obj.Status.Source.Errors
 			if len(errs) == 0 {
 				return nil
 			}
@@ -1260,13 +1275,12 @@ func (nt *NT) WaitForRepoSourceErrorClear(opts ...WaitOption) {
 func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("Repo import error code %s", code), nt.DefaultWaitTimeout,
 		func() error {
-			r := &v1.Repo{}
-			err := nt.Get("repo", "", r)
-
+			obj := &v1.Repo{}
+			err := nt.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
-			errs := r.Status.Import.Errors
+			errs := obj.Status.Import.Errors
 			if len(errs) == 0 {
 				return errors.Errorf("no errors present")
 			}

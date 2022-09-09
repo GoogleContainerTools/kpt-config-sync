@@ -130,22 +130,14 @@ include Makefile.e2e.ci
 # For use with the Go e2e tests. See e2e/doc.go.
 __push-local-image: image-nomos
 	@bash scripts/docker-registry.sh
-	@docker tag $(NOMOS_TAG) localhost:5000/nomos:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/nomos:$(LATEST_IMAGE_TAG)
-	@docker tag $(RECONCILER_TAG) localhost:5000/reconciler:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/reconciler:$(LATEST_IMAGE_TAG)
-	@docker tag $(HYDRATION_CONTROLLER_TAG) localhost:5000/hydration-controller:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/hydration-controller:$(LATEST_IMAGE_TAG)
-	@docker tag $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) localhost:5000/hydration-controller-with-shell:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/hydration-controller-with-shell:$(LATEST_IMAGE_TAG)
-	@docker tag $(RECONCILER_MANAGER_TAG) localhost:5000/reconciler-manager:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/reconciler-manager:$(LATEST_IMAGE_TAG)
-	@docker tag $(ADMISSION_WEBHOOK_TAG) localhost:5000/admission-webhook:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/admission-webhook:$(LATEST_IMAGE_TAG)
-	@docker tag $(OCI_SYNC_TAG) localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/oci-sync:$(LATEST_IMAGE_TAG)
-	@docker tag $(HELM_SYNC_TAG) localhost:5000/helm-sync:$(LATEST_IMAGE_TAG)
-	@docker push localhost:5000/helm-sync:$(LATEST_IMAGE_TAG)
+	$(MAKE) retag-images \
+		OLD_REGISTRY=$(REGISTRY) \
+		OLD_IMAGE_TAG=$(IMAGE_TAG) \
+		REGISTRY=localhost:5000 \
+		IMAGE_TAG=$(LATEST_IMAGE_TAG)
+	$(MAKE) push-to-gcr-nomos \
+		REGISTRY=localhost:5000 \
+		IMAGE_TAG=$(LATEST_IMAGE_TAG)
 
 __install-nomos-local:
 	@GO111MODULE=on go install ./cmd/nomos/nomos.go

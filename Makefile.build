@@ -136,26 +136,45 @@ push-to-gcr-nomos:
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
 
+# Pulls all Config Sync images from REGISTRY
+.PHONY: pull-config-sync-images
+pull-config-sync-images:
+	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
+	docker pull $(NOMOS_TAG)
+	docker pull $(RECONCILER_TAG)
+	docker pull $(RECONCILER_MANAGER_TAG)
+	docker pull $(ADMISSION_WEBHOOK_TAG)
+	docker pull $(HYDRATION_CONTROLLER_TAG)
+	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
+	docker pull $(OCI_SYNC_TAG)
+	docker pull $(HELM_SYNC_TAG)
+
+# Retags previously built Config Sync images
+.PHONY: retag-images
+retag-images:
+	@echo "+++ Retagging Config Sync images from $(OLD_REGISTRY)/*:$(OLD_IMAGE_TAG) to $(REGISTRY)/*:$(IMAGE_TAG)"
+	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
+	docker tag $(OLD_REGISTRY)/$(RECONCILER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_TAG)
+	docker tag $(OLD_REGISTRY)/$(RECONCILER_MANAGER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_MANAGER_TAG)
+	docker tag $(OLD_REGISTRY)/$(ADMISSION_WEBHOOK_IMAGE):$(OLD_IMAGE_TAG) $(ADMISSION_WEBHOOK_TAG)
+	docker tag $(OLD_REGISTRY)/$(HYDRATION_CONTROLLER_IMAGE):$(OLD_IMAGE_TAG) $(HYDRATION_CONTROLLER_TAG)
+	docker tag $(OLD_REGISTRY)/$(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE):$(OLD_IMAGE_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
+	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
+	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
+
 # Pushes the specified component's docker image to gcr.io.
+.PHONY: retag-rc-images
 retag-rc-images:
 	@echo "+++ Promoting Config Sync images to $(REGISTRY)"
 	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
-	docker pull $(NOMOS_GCR):$(RC_TAG)
-	docker pull $(RECONCILER_GCR):$(RC_TAG)
-	docker pull $(RECONCILER_MANAGER_GCR):$(RC_TAG)
-	docker pull $(ADMISSION_WEBHOOK_GCR):$(RC_TAG)
-	docker pull $(HYDRATION_CONTROLLER_GCR):$(RC_TAG)
-	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(RC_TAG)
-	docker pull $(OCI_SYNC_GCR):$(RC_TAG)
-	docker pull $(HELM_SYNC_GCR):$(RC_TAG)
-	docker tag $(NOMOS_GCR):$(RC_TAG) $(NOMOS_TAG)
-	docker tag $(RECONCILER_GCR):$(RC_TAG) $(RECONCILER_TAG)
-	docker tag $(RECONCILER_MANAGER_GCR):$(RC_TAG) $(RECONCILER_MANAGER_TAG)
-	docker tag $(ADMISSION_WEBHOOK_GCR):$(RC_TAG) $(ADMISSION_WEBHOOK_TAG)
-	docker tag $(HYDRATION_CONTROLLER_GCR):$(RC_TAG) $(HYDRATION_CONTROLLER_TAG)
-	docker tag $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(RC_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
-	docker tag $(OCI_SYNC_GCR):$(RC_TAG) $(OCI_SYNC_TAG)
-	docker tag $(HELM_SYNC_GCR):$(RC_TAG) $(HELM_SYNC_TAG)
+	$(MAKE) pull-config-sync-images \
+		REGISTRY=$(OLD_REGISTRY) \
+		IMAGE_TAG=$(RC_TAG)
+	$(MAKE) retag-images \
+		OLD_REGISTRY=$(OLD_REGISTRY) \
+		OLD_IMAGE_TAG=$(RC_TAG) \
+		REGISTRY=$(REGISTRY) \
+		IMAGE_TAG=$(IMAGE_TAG)
 
 ###################################
 # Deployment generation

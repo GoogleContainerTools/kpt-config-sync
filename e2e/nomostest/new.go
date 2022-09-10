@@ -33,9 +33,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
+	"kpt.dev/configsync/pkg/util/repo"
 )
 
 // fileMode is the file mode to use for all operations.
@@ -243,6 +245,14 @@ func resetSyncedRepos(nt *NT, opts *ntopts.New) {
 		}
 		nt.WaitForRepoSyncs()
 	} else {
+		// MonoRepo will stop syncing new commits if any commit fails to sync.
+		// So catch this case and fail subsequent tests without waiting.
+		err := nt.ValidateSyncObject(kinds.Repo(), repo.DefaultName, "", MonoRepoSyncNotInProgress)
+		if _, ok := err.(*SyncInProgressError); ok {
+			nt.T.Fatalf("Sync still in progress during test reset: %v", err)
+		}
+		// else ignore, reset, and wait for sync
+
 		nt.NonRootRepos = map[types.NamespacedName]*Repository{}
 		nt.RootRepos[configsync.RootSyncName] = resetRepository(nt, RootRepo, DefaultRootRepoNamespacedName, opts.UpstreamURL, opts.SourceFormat)
 		// It sets POLICY_DIR to always be `acme` because the initial mono-repo's sync directory is configured to be `acme`.

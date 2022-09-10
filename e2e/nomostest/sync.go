@@ -27,6 +27,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// SyncInProgressError wraps a lists of changes with sync still in progress.
+type SyncInProgressError struct {
+	InProgress []v1.RepoSyncChangeStatus
+}
+
+// NewSyncInProgressError constructs a new SyncInProgressError
+func NewSyncInProgressError(inProgress ...v1.RepoSyncChangeStatus) *SyncInProgressError {
+	return &SyncInProgressError{
+		InProgress: inProgress,
+	}
+}
+
+// Error constructs an error string
+func (sipe *SyncInProgressError) Error() string {
+	return fmt.Sprintf("status.sync.inProgress contains changes that haven't been synced: %+v",
+		sipe.InProgress)
+}
+
+// MonoRepoSyncNotInProgress ensures the Repo does not have a sync in-progress.
+func MonoRepoSyncNotInProgress(o client.Object) error {
+	repo, ok := o.(*v1.Repo)
+	if !ok {
+		return WrongTypeErr(o, &v1.Repo{})
+	}
+	// Ensure there aren't any pending changes to sync.
+	if len(repo.Status.Sync.InProgress) > 0 {
+		return NewSyncInProgressError(repo.Status.Sync.InProgress...)
+	}
+	return nil
+}
+
 // RepoHasStatusSyncLatestToken ensures ACM has reported all objects were
 // successfully synced to the repository.
 func RepoHasStatusSyncLatestToken(sha1 string) Predicate {
@@ -45,8 +76,7 @@ func RepoHasStatusSyncLatestToken(sha1 string) Predicate {
 
 		// Ensure there aren't any pending changes to sync.
 		if len(repo.Status.Sync.InProgress) > 0 {
-			return fmt.Errorf("status.sync.inProgress contains changes that haven't been synced: %+v",
-				repo.Status.Sync.InProgress)
+			return NewSyncInProgressError(repo.Status.Sync.InProgress...)
 		}
 
 		// Check the Sync.LatestToken as:

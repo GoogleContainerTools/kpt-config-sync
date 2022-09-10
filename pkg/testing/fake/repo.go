@@ -34,7 +34,7 @@ func RepoVersion(version string) core.MetaMutator {
 func RepoObject(opts ...core.MetaMutator) *v1.Repo {
 	result := &v1.Repo{TypeMeta: ToTypeMeta(kinds.Repo())}
 	defaultMutate(result)
-	mutate(result, core.Name("repo"))
+	mutate(result, core.Name(repo.DefaultName))
 	RepoVersion(repo.CurrentVersion)(result)
 	for _, opt := range opts {
 		opt(result)

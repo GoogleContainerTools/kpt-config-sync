@@ -69,7 +69,8 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+4, // 4 for the test Namespace, CRD & Anvils
 			metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Namespace"),
 			metrics.GVKMetric{
 				GVK:   "Anvil",
@@ -105,7 +106,8 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+4, // 4 for the test Namespace, CRD & Anvils
 			metrics.ResourcePatched("Namespace", 2),
 			metrics.GVKMetric{
 				GVK:   "Anvil",

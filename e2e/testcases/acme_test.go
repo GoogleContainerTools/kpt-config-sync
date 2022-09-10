@@ -24,7 +24,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/testing/fake"
 
 	corev1 "k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -71,8 +70,8 @@ func TestAcmeCorpRepo(t *testing.T) {
 		checkNamespaceExists(nt, namespace, configSyncManagementLabels(namespace, folder), configSyncManagementAnnotations)
 	}
 
-	// Check ClusterRoles
-	checkResourceCount(nt, kinds.ClusterRole(), "", 3, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
+	// Check ClusterRoles (add one for the 'safety' ClusterRole)
+	checkResourceCount(nt, kinds.ClusterRole(), "", 4, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
 	checkResourceCount(nt, kinds.ClusterRole(), "", 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
 	if err := checkResource(nt, &rbacv1.ClusterRole{}, "", "acme-admin", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
 		nt.T.Fatal(err)
@@ -186,9 +185,9 @@ func TestAcmeCorpRepo(t *testing.T) {
 
 	checkLegacyMetricsPages(nt)
 
-	// gracefully delete cluster-scoped resources to pass the safety check (KNV2006).
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
+	// Add back the safety ClusterRole to pass the safety check (KNV2006).
+	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
 	nt.WaitForRepoSyncs()
 }

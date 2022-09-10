@@ -24,7 +24,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/policycontroller/constrainttemplate"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
@@ -44,11 +43,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	// Cleanup if waiting for sync error fails.
 	nt.T.Cleanup(func() {
 		if nt.T.Failed() {
-			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
-			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint.yaml")
-			// Apply a cluster-scoped resource to pass the safety check (KNV2006).
-			// Will be removed by the normal root repo cleanup.
-			nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
+			// Cleanup before deleting the ConstraintTemplate CRDs to avoid resource conflict errors from the webhook.
+			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+			// Add back the safety ClusterRole to pass the safety check (KNV2006).
+			nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
 			nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
 			nt.WaitForRepoSyncs()
 		}
@@ -73,12 +71,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	// Sync should eventually succeed on retry, now that all the required CRDs exist.
 	nt.WaitForRepoSyncs()
 
-	// Cleanup before deleting the CRDs to avoid resource conflict errors from the webhook.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint-template.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/constraint.yaml")
-	// Apply a cluster-scoped resource to pass the safety check (KNV2006).
-	// Will be removed by the normal root repo cleanup.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/test-clusterrole.yaml", fake.ClusterRoleObject())
+	// Cleanup before deleting the ConstraintTemplate and Constraint CRDs to avoid resource conflict errors from the webhook.
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+	// Add back the safety ClusterRole to pass the safety check (KNV2006).
+	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
 	nt.WaitForRepoSyncs()
 }

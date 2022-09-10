@@ -197,7 +197,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 2, metrics.ResourceCreated("ClusterRole"))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test ClusterRole
+			metrics.ResourceCreated("ClusterRole"))
 		if err != nil {
 			return err
 		}
@@ -228,7 +230,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 2, metrics.ResourcePatched("ClusterRole", 2))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test ClusterRole
+			metrics.ResourcePatched("ClusterRole", 2))
 		if err != nil {
 			return err
 		}
@@ -250,7 +254,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 1, metrics.ResourceDeleted("ClusterRole"))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount(),
+			metrics.ResourceDeleted("ClusterRole"))
 		if err != nil {
 			return err
 		}

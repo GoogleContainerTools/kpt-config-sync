@@ -109,6 +109,25 @@ func ResourceDeleted(gvk string) GVKMetric {
 	}
 }
 
+// FilterByReconciler returns a new ConfigSyncMetrics with only the metrics from
+// the specified reconciler, filtered using tag values.
+func (csm ConfigSyncMetrics) FilterByReconciler(reconcilerName string) ConfigSyncMetrics {
+	filteredMetrics := ConfigSyncMetrics{}
+	for mName, mList := range csm {
+		validator := hasReconcilerNameTag(mName, reconcilerName)
+		var filteredList []Measurement
+		for _, m := range mList {
+			if validator(m) == nil {
+				filteredList = append(filteredList, m)
+			}
+		}
+		if len(filteredList) > 0 {
+			filteredMetrics[mName] = filteredList
+		}
+	}
+	return filteredMetrics
+}
+
 // ValidateReconcilerManagerMetrics validates the `reconcile_duration_seconds`
 // metric from the reconciler manager.
 func (csm ConfigSyncMetrics) ValidateReconcilerManagerMetrics() error {
@@ -121,58 +140,81 @@ func (csm ConfigSyncMetrics) ValidateReconcilerManagerMetrics() error {
 
 // ValidateReconcilerMetrics validates the non-error and non-GVK metrics produced
 // by the reconcilers.
-func (csm ConfigSyncMetrics) ValidateReconcilerMetrics(reconciler string, numResources int) error {
+func (csm ConfigSyncMetrics) ValidateReconcilerMetrics(reconcilerName string, numResources int) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
 	// These metrics have non-deterministic values, so we just validate that the
-	// metric exists for the correct reconciler and has a "success" status tag.
+	// metric exists for the correct reconciler with the status=success tag.
 	metrics := []string{
 		ocmetrics.ApplyDurationView.Name,
 		ocmetrics.LastApplyTimestampView.Name,
 		ocmetrics.LastSyncTimestampView.Name,
 	}
 	for _, m := range metrics {
-		if err := csm.validateSuccessTag(reconciler, m); err != nil {
+		if err := reconcilerMetrics.validateSuccessTag(m); err != nil {
 			return err
 		}
 	}
-	return csm.ValidateDeclaredResources(reconciler, numResources)
+	return errors.Wrapf(reconcilerMetrics.ValidateDeclaredResources(numResources), "for reconciler %s", reconcilerName)
 }
 
 // ValidateGVKMetrics validates all the metrics that have a GVK "type" tag key.
-func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconciler string, gvkMetric GVKMetric) error {
+func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconcilerName string, gvkMetric GVKMetric) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
 	if gvkMetric.APIOp != "" {
-		if err := csm.validateAPICallDuration(reconciler, gvkMetric.APIOp, gvkMetric.GVK); err != nil {
+		if err := reconcilerMetrics.validateAPICallDuration(gvkMetric.APIOp, gvkMetric.GVK); err != nil {
 			return err
 		}
 	}
 	for _, applyOp := range gvkMetric.ApplyOps {
-		if err := csm.validateApplyOperations(reconciler, applyOp.Name, gvkMetric.GVK, applyOp.Count); err != nil {
+		if err := reconcilerMetrics.validateApplyOperations(applyOp.Name, gvkMetric.GVK, applyOp.Count); err != nil {
 			return err
 		}
 	}
-	return csm.validateRemediateDuration(reconciler, gvkMetric.GVK)
+	return errors.Wrapf(reconcilerMetrics.validateRemediateDuration(gvkMetric.GVK), "for reconciler %s", reconcilerName)
 }
 
 // ValidateMetricsCommitSynced checks that the `last_sync_timestamp` metric has
 // been recorded for a particular commit hash.
-func (csm ConfigSyncMetrics) ValidateMetricsCommitSynced(commitHash string) error {
+func (csm ConfigSyncMetrics) ValidateMetricsCommitSynced(reconcilerName, commitHash string) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
 	metric := ocmetrics.LastSyncTimestampView.Name
 	validation := hasTags(metric, []Tag{
 		{Key: ocmetrics.KeyCommit.Name(), Value: commitHash},
 	})
 
-	for _, measurement := range csm[metric] {
+	for _, measurement := range reconcilerMetrics[metric] {
 		if validation(measurement) == nil {
 			return nil
 		}
 	}
 
-	return errors.Errorf("commit hash %s not found in config sync metrics", commitHash)
+	return errors.Errorf("commit hash %s not found in config sync metrics for reconciler %s", commitHash, reconcilerName)
+}
+
+// ValidateMetricsCommitSyncedWithSuccess checks that the `last_sync_timestamp`
+// metric has been recorded for a particular commit hash with status=success.
+func (csm ConfigSyncMetrics) ValidateMetricsCommitSyncedWithSuccess(reconcilerName, commitHash string) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
+	metric := ocmetrics.LastSyncTimestampView.Name
+	validation := hasTags(metric, []Tag{
+		{Key: ocmetrics.KeyCommit.Name(), Value: commitHash},
+		{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
+	})
+
+	for _, measurement := range reconcilerMetrics[metric] {
+		if validation(measurement) == nil {
+			return nil
+		}
+	}
+
+	return errors.Errorf("commit hash %s with success status not found in config sync metrics for reconciler %s", commitHash, reconcilerName)
 }
 
 // ValidateErrorMetrics checks for the absence of all the error metrics except
 // for the `reconciler_errors` metric. This metric is aggregated as a LastValue,
 // so we check that the values are 0 instead.
-func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconciler string) error {
+func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconcilerName string) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
 	metrics := []string{
 		ocmetrics.ResourceFightsView.Name,
 		// TODO: (b/236191762) Re-enable the validation for the resource_conflicts error
@@ -182,34 +224,36 @@ func (csm ConfigSyncMetrics) ValidateErrorMetrics(reconciler string) error {
 		ocmetrics.InternalErrorsView.Name,
 	}
 	for _, m := range metrics {
-		if measurement, ok := csm[m]; ok {
-			return errors.Errorf("validating error metrics: expected no error metrics but found %v: %+v", m, measurement)
+		if measurement, ok := reconcilerMetrics[m]; ok {
+			return errors.Errorf("validating error metrics: expected no error metrics for reconciler %s but found %v: %+v", reconcilerName, m, measurement)
 		}
 	}
-	return csm.ValidateReconcilerErrors(reconciler, 0, 0)
+	return errors.Wrapf(reconcilerMetrics.ValidateReconcilerErrors(reconcilerName, 0, 0), "for reconciler %s", reconcilerName)
 }
 
 // ValidateReconcilerErrors checks that the `reconciler_errors` metric is recorded
 // for the correct reconciler with the expected values for each of its component tags.
-func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconciler string, sourceValue, syncValue int) error {
+func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconcilerName string, sourceValue, syncValue int) error {
+	reconcilerMetrics := csm.FilterByReconciler(reconcilerName)
 	metric := ocmetrics.ReconcilerErrorsView.Name
-	if _, ok := csm[metric]; ok {
-		for _, measurement := range csm[metric] {
-			// If the measurement has a "source" tag, validate the values match.
-			if hasTags(metric, []Tag{
-				{Key: ocmetrics.KeyComponent.Name(), Value: "source"},
-			})(measurement) == nil {
-				if err := valueEquals(metric, sourceValue)(measurement); err != nil {
-					return err
-				}
+	if _, ok := reconcilerMetrics[metric]; !ok {
+		return nil
+	}
+	for _, measurement := range reconcilerMetrics[metric] {
+		// If the measurement has a "source" tag, validate the values match.
+		if hasTags(metric, []Tag{
+			{Key: ocmetrics.KeyComponent.Name(), Value: "source"},
+		})(measurement) == nil {
+			if err := valueEquals(metric, sourceValue)(measurement); err != nil {
+				return errors.Wrapf(err, "for reconciler %s", reconcilerName)
 			}
-			// If the measurement has a "sync" tag, validate the values match.
-			if hasTags(metric, []Tag{
-				{Key: ocmetrics.KeyComponent.Name(), Value: "sync"},
-			})(measurement) == nil {
-				if err := valueEquals(metric, syncValue)(measurement); err != nil {
-					return err
-				}
+		}
+		// If the measurement has a "sync" tag, validate the values match.
+		if hasTags(metric, []Tag{
+			{Key: ocmetrics.KeyComponent.Name(), Value: "sync"},
+		})(measurement) == nil {
+			if err := valueEquals(metric, syncValue)(measurement); err != nil {
+				return errors.Wrapf(err, "for reconciler %s", reconcilerName)
 			}
 		}
 	}
@@ -218,20 +262,20 @@ func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconciler string, sourceV
 
 // ValidateResourceOverrideCount checks that the `resource_override_count` metric is recorded
 // for the correct reconciler, container name, and resource type, and checks the metric value is correct.
-func (csm ConfigSyncMetrics) ValidateResourceOverrideCount(reconciler, containerName, resourceType string, count int) error {
+func (csm ConfigSyncMetrics) ValidateResourceOverrideCount(reconcilerType, containerName, resourceType string, count int) error {
 	metric := ocmetrics.ResourceOverrideCountView.Name
-	if _, ok := csm[metric]; ok {
-		validations := []Validation{
-			hasTags(metric, []Tag{
-				{Key: ocmetrics.KeyReconcilerType.Name(), Value: reconciler},
-				{Key: ocmetrics.KeyContainer.Name(), Value: containerName},
-				{Key: ocmetrics.KeyResourceType.Name(), Value: resourceType},
-			}),
-			valueEquals(metric, count),
-		}
-		return csm.validateMetric(metric, validations...)
+	if _, ok := csm[metric]; !ok {
+		return nil
 	}
-	return nil
+	validations := []Validation{
+		hasTags(metric, []Tag{
+			{Key: ocmetrics.KeyReconcilerType.Name(), Value: reconcilerType},
+			{Key: ocmetrics.KeyContainer.Name(), Value: containerName},
+			{Key: ocmetrics.KeyResourceType.Name(), Value: resourceType},
+		}),
+		valueEquals(metric, count),
+	}
+	return csm.validateMetric(metric, validations...)
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
@@ -270,9 +314,8 @@ func (csm ConfigSyncMetrics) ValidateNoSSLVerifyCount(count int) error {
 	return nil
 }
 
-// validateSuccessTag checks that the metric is recorded for the correct reconciler
-// and has a "success" tag value.
-func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error {
+// validateSuccessTag checks that the metric has the status=success tag.
+func (csm ConfigSyncMetrics) validateSuccessTag(metric string) error {
 	validation := hasTags(metric, []Tag{
 		{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 	})
@@ -280,8 +323,8 @@ func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error
 }
 
 // validateAPICallDuration checks that the `api_duration_seconds` metric is recorded
-// and has the correct reconciler, operation, status, and type tags.
-func (csm ConfigSyncMetrics) validateAPICallDuration(reconciler, operation, gvk string) error {
+// and has the correct operation, status, and type tags.
+func (csm ConfigSyncMetrics) validateAPICallDuration(operation, gvk string) error {
 	metric := ocmetrics.APICallDurationView.Name
 	validation := hasTags(metric, []Tag{
 		{Key: ocmetrics.KeyOperation.Name(), Value: operation},
@@ -292,7 +335,7 @@ func (csm ConfigSyncMetrics) validateAPICallDuration(reconciler, operation, gvk 
 
 // ValidateDeclaredResources checks that the declared_resources metric is recorded
 // and has the expected value.
-func (csm ConfigSyncMetrics) ValidateDeclaredResources(reconciler string, value int) error {
+func (csm ConfigSyncMetrics) ValidateDeclaredResources(value int) error {
 	metric := ocmetrics.DeclaredResourcesView.Name
 	validations := []Validation{
 		valueEquals(metric, value),
@@ -301,10 +344,10 @@ func (csm ConfigSyncMetrics) ValidateDeclaredResources(reconciler string, value 
 }
 
 // validateApplyOperations checks that the `apply_operations` metric is recorded
-// and has the correct reconciler, operation, status, and type tag values. Because
+// and has the correct operation, status, and type tag values. Because
 // controllers may fail and retry successfully, the recorded value of this metric may
 // fluctuate, so we check that it is greater than or equal to the expected value.
-func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk string, value int) error {
+func (csm ConfigSyncMetrics) validateApplyOperations(operation, gvk string, value int) error {
 	metric := ocmetrics.ApplyOperationsView.Name
 	validations := []Validation{
 		hasTags(metric, []Tag{
@@ -318,7 +361,7 @@ func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk 
 
 // validateRemediateDuration checks that the `remediate_duration_seconds` metric
 // is recorded and has the correct status and type tags.
-func (csm ConfigSyncMetrics) validateRemediateDuration(reconciler, gvk string) error {
+func (csm ConfigSyncMetrics) validateRemediateDuration(gvk string) error {
 	metric := ocmetrics.RemediateDurationView.Name
 	validations := []Validation{
 		hasTags(metric, []Tag{
@@ -351,6 +394,15 @@ func (csm ConfigSyncMetrics) validateMetric(name string, validations ...Validati
 		return errors.Wrapf(errs, "validating metric %q", name)
 	}
 	return errors.Errorf("validating metric %q: metric not found", name)
+}
+
+// hasReconcilerNameTag checks that the measurement contains all the tags
+// expected from the reconciler deployment by name.
+func hasReconcilerNameTag(metricName, reconcilerName string) Validation {
+	tags := []Tag{
+		{Key: ocmetrics.ResourceKeyDeploymentName.Name(), Value: reconcilerName},
+	}
+	return hasTags(metricName, tags)
 }
 
 // hasTags checks that the measurement contains all the expected tags.

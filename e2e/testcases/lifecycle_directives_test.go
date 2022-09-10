@@ -65,7 +65,8 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Role
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Role"))
 		if err != nil {
 			return err
@@ -96,7 +97,8 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 1,
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount(),
 			metrics.ResourceDeleted("Role"))
 		if err != nil {
 			return err

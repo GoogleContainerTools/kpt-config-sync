@@ -16,8 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -201,16 +199,17 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role")
 	nt.WaitForRepoSyncs()
 
+	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
 	// Validate multi-repo metrics from root reconciler.
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		var err error
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 7, metrics.ResourceCreated("Role"))
-		} else {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 6, metrics.ResourceCreated("Role"))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Role managed by the RootSync
+			metrics.ResourceCreated("Role"))
+		if err != nil {
+			return err
 		}
+		err = nt.ValidateMultiRepoMetrics(nsReconcilerName,
+			0) // 0 for the test Role NOT managed by the RepoSync
 		if err != nil {
 			return err
 		}
@@ -232,7 +231,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name), "sync")
+		return nt.ValidateReconcilerErrors(nsReconcilerName, "sync")
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -261,14 +260,14 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	// Validate multi-repo metrics from root reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		var err error
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 6, metrics.ResourceDeleted("Role"))
-		} else {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5, metrics.ResourceDeleted("Role"))
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount(), // 0 for the test Role NOT managed by the RootSync
+			metrics.ResourceDeleted("Role"))
+		if err != nil {
+			return err
 		}
+		err = nt.ValidateMultiRepoMetrics(nsReconcilerName,
+			1) // 1 for the test Role managed by the RepoSync
 		if err != nil {
 			return err
 		}
@@ -299,7 +298,14 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
 	// Validate multi-repo metrics from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nsReconcilerName, 1, metrics.ResourceCreated("Role"))
+		err := nt.ValidateMultiRepoMetrics(nsReconcilerName,
+			1, // 1 for the test Role managed by the RepoSync
+			metrics.ResourceCreated("Role"))
+		if err != nil {
+			return err
+		}
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()) // 0 for the test Role NOT managed by the RootSync
 		if err != nil {
 			return err
 		}
@@ -349,7 +355,13 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	// Validate multi-repo metrics from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nsReconcilerName, 0)
+		err := nt.ValidateMultiRepoMetrics(nsReconcilerName,
+			0) // 0 for the test Role NOT managed by the RepoSync
+		if err != nil {
+			return err
+		}
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1) // 1 for the test Role managed by the RootSync
 		if err != nil {
 			return err
 		}
@@ -450,15 +462,15 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	// Validate multi-repo metrics from namespace reconciler.
 	nsReconcilerName1 := core.NsReconcilerName(repoSyncNN1.Namespace, repoSyncNN1.Name)
+	nsReconcilerName2 := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		var err error
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
-			err = nt.ValidateMultiRepoMetrics(nsReconcilerName1, 9, metrics.ResourceCreated("Role"))
-		} else {
-			err = nt.ValidateMultiRepoMetrics(nsReconcilerName1, 7, metrics.ResourceCreated("Role"))
+		err := nt.ValidateMultiRepoMetrics(nsReconcilerName1,
+			1) // 1 for the test Role managed by the 1st RepoSync
+		if err != nil {
+			return err
 		}
+		err = nt.ValidateMultiRepoMetrics(nsReconcilerName2,
+			0) // 0 for the test Role NOT managed by the 2st RepoSync
 		if err != nil {
 			return err
 		}
@@ -490,7 +502,6 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		nt.DefaultWaitTimeout, nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
 
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
-	nsReconcilerName2 := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateReconcilerErrors(nsReconcilerName2, "sync")
 	})
@@ -509,6 +520,24 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN2.Namespace), repoSyncNN2.Name))
 	if err != nil {
 		nt.T.Fatal(err)
+	}
+
+	// Validate multi-repo metrics from namespace reconciler.
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		err := nt.ValidateMultiRepoMetrics(nsReconcilerName1,
+			0) // 0 for the test Role NOT managed by the 1st RepoSync
+		if err != nil {
+			return err
+		}
+		err = nt.ValidateMultiRepoMetrics(nsReconcilerName2,
+			1) // 1 for the test Role managed by the 2st RepoSync
+		if err != nil {
+			return err
+		}
+		return nt.ValidateErrorMetricsNotFound()
+	})
+	if err != nil {
+		nt.T.Error(err)
 	}
 }
 

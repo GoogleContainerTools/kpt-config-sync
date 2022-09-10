@@ -25,6 +25,7 @@ var (
 	KeyName, _ = tag.NewKey("name")
 
 	// KeyReconcilerType groups metrics by the reconciler type. Possible values: root, namespace.
+	// TODO: replace with configsync.sync.kind resource attribute
 	KeyReconcilerType, _ = tag.NewKey("reconciler")
 
 	// KeyOperation groups metrics by their operation. Possible values: create, patch, update, delete.
@@ -58,29 +59,27 @@ var (
 	KeyCommit, _ = tag.NewKey("commit")
 
 	// KeyContainer groups metrics by their container names. Possible values: reconciler, git-sync.
+	// TODO: replace with k8s.container.name resource attribute
 	KeyContainer, _ = tag.NewKey("container")
 
 	// KeyResourceType groups metris by their resource types. Possible values: cpu, memory.
 	KeyResourceType, _ = tag.NewKey("resource")
+)
 
+// The following metric tag keys are available from the otel-collector
+// Prometheus exporter. They are created from resource attributes using the
+// resource_to_telemetry_conversion feature.
+var (
 	// ResourceKeySyncKind groups metrics by the Sync kind. Possible values: RootSync, RepoSync.
-	// This metric tag is populated from the configsync.sync.kind resource
-	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
 	ResourceKeySyncKind, _ = tag.NewKey("configsync_sync_kind")
 
 	// ResourceKeySyncName groups metrics by the Sync name.
-	// This metric tag is populated from the configsync.sync.kind resource
-	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
 	ResourceKeySyncName, _ = tag.NewKey("configsync_sync_name")
 
 	// ResourceKeySyncNamespace groups metrics by the Sync namespace.
-	// This metric tag is populated from the configsync.sync.kind resource
-	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
 	ResourceKeySyncNamespace, _ = tag.NewKey("configsync_sync_namespace")
 
 	// ResourceKeyDeploymentName groups metrics by k8s deployment name.
-	// This metric tag is populated from the configsync.sync.kind resource
-	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
 	ResourceKeyDeploymentName, _ = tag.NewKey("k8s_deployment_name")
 )
 

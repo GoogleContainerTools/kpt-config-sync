@@ -839,14 +839,14 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		}
 
 		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			err := nt.ValidateMultiRepoMetrics(rootReconciler, 1)
+			err := nt.ValidateMultiRepoMetrics(rootReconciler, nt.DefaultRootSyncObjectCount())
 			if err != nil {
 				return err
 			}
 			return nt.ValidateErrorMetricsNotFound()
 		})
 		if err != nil {
-			nt.T.Error(err)
+			nt.T.Fatal(err)
 		}
 	}
 
@@ -861,7 +861,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 			return nt.ValidateMultiRepoMetrics(nsReconciler, 0)
 		})
 		if err != nil {
-			nt.T.Error(err)
+			nt.T.Fatal(err)
 		}
 	}
 }
@@ -1122,30 +1122,24 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 
 	// Validate multi-repo metrics.
 	err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-		var err error
-		if strings.Contains(cluster, "psp") {
-			err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
-				// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole, and
-				// 3 is for the resources created for every namespace: RepoSync, RoleBinding, ClusterRoleBinding
-				2+len(rsNamespaces)+rsCount*3,
-				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated(configsync.RepoSyncKind),
-				testmetrics.ResourceCreated("ClusterRoleBinding"))
-		} else {
-			err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
-				// 2 is for the `safety` namespace and the `configsync.gke.io:ns-reconciler` clusterrole,
-				// and 2 is for the resources created for every namespace: RepoSync and RoleBinding
-				2+len(rsNamespaces)+rsCount*2,
-				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated(configsync.RepoSyncKind))
+		gvkMetrics := []testmetrics.GVKMetric{
+			testmetrics.ResourceCreated("Namespace"),
+			testmetrics.ResourceCreated("ClusterRole"),
+			testmetrics.ResourceCreated("RoleBinding"),
+			testmetrics.ResourceCreated(configsync.RepoSyncKind),
 		}
+		if strings.Contains(cluster, "psp") {
+			gvkMetrics = append(gvkMetrics, testmetrics.ResourceCreated("ClusterRoleBinding"))
+		}
+		numObjects := nt.DefaultRootSyncObjectCount()
+		err := nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName, numObjects, gvkMetrics...)
 		if err != nil {
 			return err
 		}
 		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -1287,9 +1281,10 @@ func resetRootRepos(nt *NT, upstream string, sourceFormat filesystem.SourceForma
 			resetRootRepo(nt, name, nt.RootRepos[name].UpstreamRepoURL, nt.RootRepos[name].Format)
 			nt.WaitForSync(kinds.RootSyncV1Beta1(), name, configsync.ControllerNamespace,
 				nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
-			// Now the repo is back to the initial commit, we can delete the safety check namespace
-			nt.RootRepos[name].Remove(nt.RootRepos[name].SafetyNSPath)
-			nt.RootRepos[name].CommitAndPush("delete the safety check namespace")
+			// Now the repo is back to the initial commit, we can delete the safety check Namespace & ClusterRole
+			nt.RootRepos[name].RemoveSafetyNamespace()
+			nt.RootRepos[name].RemoveSafetyClusterRole()
+			nt.RootRepos[name].CommitAndPush("delete the safety check Namespace & ClusterRole")
 			nt.WaitForSync(kinds.RootSyncV1Beta1(), name, configsync.ControllerNamespace,
 				nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
 		}

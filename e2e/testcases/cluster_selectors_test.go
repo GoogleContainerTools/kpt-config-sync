@@ -228,7 +228,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err
@@ -258,7 +259,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 1,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount(),
 			metrics.ResourceDeleted("RoleBinding"))
 		if err != nil {
 			return err
@@ -281,7 +283,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 2,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -303,7 +306,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
 			metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err
@@ -326,7 +330,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 1,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount(),
 			metrics.ResourceDeleted("RoleBinding"))
 		if err != nil {
 			return err
@@ -348,7 +353,8 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err

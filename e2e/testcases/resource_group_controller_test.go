@@ -28,7 +28,7 @@ import (
 )
 
 func TestResourceGroupController(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.InstallResourceGroupController)
+	nt := nomostest.New(t, ntopts.SkipMonoRepo)
 
 	ns := "rg-test"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/rg-test/ns.yaml",

@@ -54,9 +54,6 @@ type MultiRepo struct {
 	// SkipMonoRepo will skip the test if run in mono repo mode.
 	SkipMonoRepo bool
 
-	// ResourceGroup indicates that NT should also install the resource-group controller
-	ResourceGroup bool
-
 	// ReconcileTimeout sets spec.override.reconcileTimeout on each R*Sync
 	// Default: 5m.
 	ReconcileTimeout *time.Duration
@@ -122,11 +119,6 @@ func SkipMonoRepo(opt *New) {
 // SkipNonLocalGitProvider will skip the test with non-local GitProvider types
 func SkipNonLocalGitProvider(opt *New) {
 	opt.SkipNonLocalGitProvider = true
-}
-
-// InstallResourceGroupController installs the resource-group controller.
-func InstallResourceGroupController(opts *New) {
-	opts.ResourceGroup = true
 }
 
 // WithDelegatedControl will specify the Delegated Control Pattern.

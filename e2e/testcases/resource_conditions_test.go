@@ -235,15 +235,6 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
 	nt := nomostest.New(t, ntopts.SkipMultiRepo)
 
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	// Skip this test when the v1beta1 CRD is not supported in the testing cluster.
-	if !support {
-		t.Skip("Test skipped: CRD v1beta1 not supported by API server")
-	}
-
 	if err := nt.ApplyGatekeeperCRD("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint template CRD: %v", err)
 	}
@@ -283,7 +274,7 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 	// In the real world, this annotation would be removed once PolicyController
 	// created the CRD corresponding to this ConstraintTemplate. Thus, this test
 	// requires Gatekeeper to not be installed to test this path in a non-flaky way.
-	_, err = nomostest.Retry(20*time.Second, func() error {
+	_, err := nomostest.Retry(20*time.Second, func() error {
 		// This happens asynchronously with syncing the repo; so the Repo may report
 		// "synced" before this appears.
 		return nt.Validate(ctName, "", fake.UnstructuredObject(ctGVK),
@@ -303,15 +294,6 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 func TestConstraintStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test when multi-repo supports resource condition annotations.
 	nt := nomostest.New(t, ntopts.SkipMultiRepo)
-
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	// Skip this test when v1beta1 CRD is not supported in the testing cluster.
-	if !support {
-		t.Skip("Test skipped: CRD v1beta1 not supported by API server")
-	}
 
 	if err := nt.ApplyGatekeeperCRD("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
@@ -344,7 +326,7 @@ func TestConstraintStatusAnnotations(t *testing.T) {
 	// In the real world, this annotation would be removed once PolicyController
 	// began enforcing it. Thus, this test requires Gatekeeper to not be installed
 	// to test this path in a non-flaky way.
-	_, err = nomostest.Retry(20*time.Second, func() error {
+	_, err := nomostest.Retry(20*time.Second, func() error {
 		// This happens asynchronously with syncing the repo; so the Repo may report
 		// "synced" before this appears.
 		return nt.Validate(constraintName, "", fake.UnstructuredObject(constraintGVK),

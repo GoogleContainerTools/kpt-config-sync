@@ -192,6 +192,9 @@ data:
           - /otelcol-contrib
           args:
           - "--config=/conf/otel-agent-config.yaml"
+          # TODO: Remove this feature gate when opentelemetry semantic conventions are used
+          # in the collector code.
+          - "--feature-gates=-exporter.googlecloud.OTLPDirect"
           resources:
             limits:
               cpu: 500m

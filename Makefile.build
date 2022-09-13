@@ -20,20 +20,6 @@ push-buildenv: build-buildenv
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
 	@docker push $(BUILDENV_IMAGE)
 
-GCB_DOCKER_GCLOUD_VERSION := v20220617-174ad91c3a
-GCP_DOCKER_GCLOUD_TAG := gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:$(GCB_DOCKER_GCLOUD_VERSION)
-DOCKER_BUILDENV_TAG ?= $(REGISTRY)/docker-buildenv:$(GCB_DOCKER_GCLOUD_VERSION)
-# Build the docker-buildenv image that can be used for containerized building of Config Sync artifacts
-build-docker-buildenv: build/docker-buildenv/Dockerfile
-	@echo "+++ Creating the docker container for $(DOCKER_BUILDENV_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) build/docker-buildenv \
- 		-t $(DOCKER_BUILDENV_TAG) \
- 		--build-arg BASE_IMAGE=$(GCP_DOCKER_GCLOUD_TAG)
-# Push the docker-buildenv image
-push-docker-buildenv: build-docker-buildenv
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	@docker push $(DOCKER_BUILDENV_TAG)
-
 .PHONY: install-kustomize
 # install kustomize binary
 install-kustomize:

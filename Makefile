@@ -74,6 +74,9 @@ GCR_PREFIX ?= $(GCP_PROJECT)/$(USER)/$(DATE)
 # Allow arbitrary registry name, but default to GCR with prefix if not provided
 REGISTRY ?= gcr.io/$(GCR_PREFIX)
 
+# Registry used for retagging previously built images
+OLD_REGISTRY ?= $(REGISTRY)
+
 # Docker image used for build and test. This image does not support CGO.
 BUILDENV_IMAGE ?= gcr.io/stolos-dev/buildenv:v0.2.11
 
@@ -115,6 +118,8 @@ GCLOUD_QUIET := --quiet
 DATE := $(shell date +'%s')
 LATEST_IMAGE_TAG ?= $(shell ./scripts/get-docker-tag.sh)
 IMAGE_TAG ?= $(LATEST_IMAGE_TAG)
+# Tag used for retagging previously built images
+OLD_IMAGE_TAG ?= $(IMAGE_TAG)
 
 # Base image names as given on gcr.io
 NOMOS_GCR := $(REGISTRY)/$(NOMOS_IMAGE)

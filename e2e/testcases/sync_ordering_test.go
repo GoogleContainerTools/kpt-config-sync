@@ -35,7 +35,7 @@ import (
 // This file includes e2e tests for sync ordering.
 // The sync ordering feature is only supported in the multi-repo mode.
 
-func TestSyncOrdering(t *testing.T) {
+func TestMultiDependencies(t *testing.T) {
 	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
 
 	namespaceName := "bookstore"
@@ -219,14 +219,14 @@ func TestSyncOrdering(t *testing.T) {
 
 	// There are 1 configmap in the namespace at this point: cm0.
 
-	nt.T.Log("Add cm0, cm1, cm2, and cm3")
+	nt.T.Log("Add cm1, cm2, and cm3")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm0, cm1, cm2, and cm3")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1, cm2, and cm3")
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Verify that cm1 has the dependsOn annotation, and depends on cm0")
@@ -307,6 +307,17 @@ func TestSyncOrdering(t *testing.T) {
 	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
+
+}
+
+func TestExternalDependencyError(t *testing.T) {
+	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+
+	namespaceName := "bookstore"
+	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
+	nt.MustKubectl("delete", "ns", namespaceName, "--ignore-not-found")
+	cm0Name := "cm0"
+	cm1Name := "cm1"
 
 	// TestCase: cm1 depends on cm0; both are managed by ConfigSync.
 	// Both exist in the repo and in the cluster.
@@ -391,6 +402,14 @@ func TestSyncOrdering(t *testing.T) {
 	if err := nt.ValidateNotFound("cm4", namespaceName, &corev1.ConfigMap{}); err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func TestDependencyWithReconciliation(t *testing.T) {
+	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+
+	namespaceName := "bookstore"
+	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
+	nt.MustKubectl("delete", "ns", namespaceName, "--ignore-not-found")
 
 	// Add two pods in the namespace: pod1 and pod2, pod2 depends on pod1.
 	nt.T.Log("add the namespace, pod1 and pod2, pod2 depends on pod1")

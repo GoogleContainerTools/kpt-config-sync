@@ -151,6 +151,8 @@ type NT struct {
 
 	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
 	WebhookDisabled *bool
+
+	EnableWebhook bool
 }
 
 const (
@@ -579,7 +581,7 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 	syncTimeout := waitForRepoSyncsOptions.timeout
 
 	if nt.MultiRepo {
-		if err := ValidateMultiRepoDeployments(nt); err != nil {
+		if err := ValidateMultiRepoDeployments(nt, !*nt.WebhookDisabled); err != nil {
 			nt.T.Fatal(err)
 		}
 		for name := range nt.RootRepos {

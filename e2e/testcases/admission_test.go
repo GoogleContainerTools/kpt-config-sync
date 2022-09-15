@@ -35,7 +35,7 @@ import (
 //  * the configsync.gke.io/delcared-version label
 
 func TestAdmission(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo, ntopts.EnableWebhook)
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
 		fake.NamespaceObject("hello",
@@ -153,7 +153,7 @@ metadata:
     configmanagement.gke.io/arch: "csmr"
 `)
 
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo, ntopts.EnableWebhook)
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")

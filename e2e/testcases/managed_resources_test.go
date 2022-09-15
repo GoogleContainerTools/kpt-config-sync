@@ -128,7 +128,7 @@ metadata:
 // TestKubectlCreatesManagedNamespaceResourceMultiRepo tests the drift correction regarding kubectl
 // tries to create a managed namespace in the the multi-repo mode.
 func TestKubectlCreatesManagedNamespaceResourceMultiRepo(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -257,7 +257,7 @@ metadata:
 // TestKubectlCreatesManagedConfigMapResource tests the drift correction regarding kubectl
 // tries to create a managed non-namespace resource in both the mono-repo mode and the multi-repo mode.
 func TestKubectlCreatesManagedConfigMapResource(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -437,7 +437,7 @@ metadata:
 // TestDeleteManagedResources deletes an object managed by Config Sync,
 // and verifies that Config Sync recreates the deleted object.
 func TestDeleteManagedResources(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -499,7 +499,7 @@ func TestDeleteManagedResources(t *testing.T) {
 // and having the `client.lifecycle.config.k8s.io/mutation` annotation,
 // and verifies that Config Sync recreates the deleted object.
 func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -560,7 +560,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 // TestAddFieldsIntoManagedResources adds a new field with kubectl into a resource
 // managed by Config Sync, and verifies that Config Sync does not remove this field.
 func TestAddFieldsIntoManagedResources(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -615,7 +615,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 // managed by Config Sync and having the `client.lifecycle.config.k8s.io/mutation` annotation,
 // and verifies that Config Sync does not remove this field.
 func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -639,7 +639,7 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 
 // TestModifyManagedFields modifies a managed field, and verifies that Config Sync corrects it.
 func TestModifyManagedFields(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -697,7 +697,7 @@ func TestModifyManagedFields(t *testing.T) {
 // TestModifyManagedFieldsWithIgnoreMutationAnnotation modifies a managed field of a resource having
 // the `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that Config Sync does not correct it.
 func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.SkipMonoRepo, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
@@ -743,7 +743,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 
 // TestDeleteManagedFields deletes a managed field, and verifies that Config Sync corrects it.
 func TestDeleteManagedFields(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
@@ -799,7 +799,7 @@ func TestDeleteManagedFields(t *testing.T) {
 // TestDeleteManagedFieldsWithIgnoreMutationAnnotation deletes a managed field of a resource having
 // the `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that Config Sync does not correct it.
 func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured, ntopts.SkipMonoRepo, ntopts.EnableWebhook)
 
 	namespace := fake.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),

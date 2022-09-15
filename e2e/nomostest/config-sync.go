@@ -190,10 +190,19 @@ func parseManifests(nt *NT, nomos ntopts.Nomos) []client.Object {
 
 // installConfigSync installs ConfigSync on the test cluster, and returns a
 // callback for checking that the installation succeeded.
-func installConfigSync(nt *NT, nomos ntopts.Nomos) {
+func installConfigSync(nt *NT, nomos ntopts.Nomos, enableWebhook bool) {
 	nt.T.Helper()
 	objs := parseManifests(nt, nomos)
 	for _, o := range objs {
+		if !enableWebhook {
+			// skip webhook objects
+			labels := o.GetLabels()
+			if labels != nil && labels["app"] == "admission-webhook" {
+				nt.T.Logf("Skip installing webhook obj: %v", core.GKNN(o))
+				continue
+			}
+		}
+
 		nt.T.Logf("installConfigSync obj: %v", core.GKNN(o))
 		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.ConfigMap().GroupKind() && o.GetName() == reconcilermanager.SourceFormat {
 			cm := o.(*corev1.ConfigMap)
@@ -208,12 +217,18 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) {
 			nt.T.Fatal(err)
 		}
 	}
+
+	if enableWebhook {
+		*nt.WebhookDisabled = false
+	} else {
+		*nt.WebhookDisabled = true
+	}
 }
 
 // waitForConfigSync validates if the config sync deployment is ready.
-func waitForConfigSync(nt *NT, nomos ntopts.Nomos) error {
+func waitForConfigSync(nt *NT, nomos ntopts.Nomos, enableWebhook bool) error {
 	if nomos.MultiRepo {
-		return ValidateMultiRepoDeployments(nt)
+		return ValidateMultiRepoDeployments(nt, enableWebhook)
 	}
 	return validateMonoRepoDeployments(nt)
 }
@@ -458,7 +473,7 @@ func validateMonoRepoDeployments(nt *NT) error {
 }
 
 // ValidateMultiRepoDeployments validates if all Config Sync Components are available.
-func ValidateMultiRepoDeployments(nt *NT) error {
+func ValidateMultiRepoDeployments(nt *NT, enableWebhook bool) error {
 	for name := range nt.RootRepos {
 		// Create a RootSync to initialize the root reconciler.
 		rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
@@ -472,9 +487,12 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 	deployments := map[client.ObjectKey]time.Duration{
 		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout,
 		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:           nt.DefaultWaitTimeout,
-		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:             nt.DefaultWaitTimeout * 2,
 		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:                    nt.DefaultWaitTimeout,
 		{Name: configmanagement.RGControllerName, Namespace: configmanagement.RGControllerNamespace}: nt.DefaultWaitTimeout,
+	}
+
+	if enableWebhook {
+		deployments[client.ObjectKey{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}] = nt.DefaultWaitTimeout * 2
 	}
 
 	var wg sync.WaitGroup
@@ -514,7 +532,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 	}
 
 	// Validate the webhook config separately, since it's not a Deployment.
-	if !*nt.WebhookDisabled {
+	if enableWebhook {
 		took, err := Retry(nt.DefaultWaitTimeout, func() error {
 			return nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
 		})

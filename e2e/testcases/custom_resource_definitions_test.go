@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
@@ -97,7 +98,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 }
 func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.EnableWebhook)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -108,7 +109,7 @@ func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
 }
 
 func TestMustRemoveCustomResourceWithDefinitionV1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.EnableWebhook)
 	mustRemoveCustomResourceWithDefinition(nt, anvilV1CRD())
 }
 

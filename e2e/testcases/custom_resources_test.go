@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -33,7 +34,7 @@ import (
 )
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.EnableWebhook)
 
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
@@ -132,7 +133,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 }
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.EnableWebhook)
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "clusteranvil-crd.yaml")

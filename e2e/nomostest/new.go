@@ -197,6 +197,17 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             sharedNT.GitProvider,
 		RemoteRepositories:      sharedNT.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
+		EnableWebhook:           opts.EnableWebhook,
+	}
+
+	// If the webhook is currently disabled but needed for this test, install the webhook.
+	if *nt.WebhookDisabled && opts.EnableWebhook {
+		installWebhook(nt, opts.Nomos)
+	}
+
+	// If the webhook is enabled currently but not needed for this test, uninstall the webhook.
+	if !*nt.WebhookDisabled && !opts.EnableWebhook {
+		uninstallWebhook(nt, opts.Nomos)
 	}
 
 	// Print container logs in its own cleanup block to catch fatal errors from
@@ -217,9 +228,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	nt.T.Log("`resetSyncedRepos` before a test on SharedTestEnv")
 	resetSyncedRepos(nt, opts)
-	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
-	// with the webhook enabled.
-	installWebhook(nt, opts.Nomos)
 	setupTestCase(nt, opts)
 	return nt
 }
@@ -286,7 +294,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		kubeconfigPath = os.Getenv(ntopts.Kubeconfig)
 	}
 
-	webhookDisabled := false
+	webhookDisabled := true
 	nt := &NT{
 		Context:                 ctx,
 		T:                       t,
@@ -306,6 +314,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
+		EnableWebhook:           opts.EnableWebhook,
 	}
 
 	if *e2e.ImagePrefix == e2e.DefaultImagePrefix {
@@ -372,8 +381,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		}
 	})
 
-	installConfigSync(nt, opts.Nomos)
-
+	installConfigSync(nt, opts.Nomos, opts.EnableWebhook)
 	setupTestCase(nt, opts)
 	return nt
 }
@@ -422,7 +430,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// understand the Repo and RootSync types as ConfigSync is now installed.
 	nt.RenewClient()
 
-	if err := waitForConfigSync(nt, opts.Nomos); err != nil {
+	if err := waitForConfigSync(nt, opts.Nomos, opts.EnableWebhook); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}
 
@@ -448,7 +456,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 func SwitchMode(nt *NT, sourceFormat filesystem.SourceFormat) {
 	nt.MultiRepo = !nt.MultiRepo
 	nm := ntopts.Nomos{SourceFormat: sourceFormat, MultiRepo: nt.MultiRepo}
-	installConfigSync(nt, nm)
+	installConfigSync(nt, nm, false)
 	var err error
 	if nt.MultiRepo {
 		err = WaitForCRDs(nt, multiRepoCRDs)
@@ -458,7 +466,7 @@ func SwitchMode(nt *NT, sourceFormat filesystem.SourceFormat) {
 	if err != nil {
 		nt.T.Fatalf("waiting for ConfigSync CRDs to become established: %v", err)
 	}
-	err = waitForConfigSync(nt, nm)
+	err = waitForConfigSync(nt, nm, false)
 	if err != nil {
 		nt.T.Errorf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

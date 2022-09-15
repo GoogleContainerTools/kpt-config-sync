@@ -102,3 +102,23 @@ func installWebhook(nt *NT, nomos ntopts.Nomos) {
 	}
 	*nt.WebhookDisabled = false
 }
+
+func uninstallWebhook(nt *NT, nomos ntopts.Nomos) {
+	nt.T.Helper()
+	objs := parseManifests(nt, nomos)
+	for _, o := range objs {
+		labels := o.GetLabels()
+		if labels == nil || labels["app"] != "admission-webhook" {
+			continue
+		}
+		nt.T.Logf("uninstallWebhook obj: %v", core.GKNN(o))
+		err := nt.Delete(o)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			nt.T.Fatal(err)
+		}
+	}
+	*nt.WebhookDisabled = true
+}

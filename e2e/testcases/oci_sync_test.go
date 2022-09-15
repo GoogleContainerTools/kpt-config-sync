@@ -406,8 +406,6 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
 
-	// Stop the Config Sync webhook to delete the implicit namespace manually
-	nomostest.StopWebhook(nt)
 	if err := nt.Delete(implictNs); err != nil {
 		{
 			nt.T.Error(err)

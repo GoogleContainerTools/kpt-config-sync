@@ -60,6 +60,9 @@ type MultiRepo struct {
 
 	// SkipNonLocalGitProvider will skip the test if run with a GitProvider type other than local.
 	SkipNonLocalGitProvider bool
+
+	// EnableWebhook
+	EnableWebhook bool
 }
 
 // NamespaceRepo tells the test case that a Namespace Repo should be configured
@@ -119,6 +122,11 @@ func SkipMonoRepo(opt *New) {
 // SkipNonLocalGitProvider will skip the test with non-local GitProvider types
 func SkipNonLocalGitProvider(opt *New) {
 	opt.SkipNonLocalGitProvider = true
+}
+
+// EnableWebhook will enable the CS admission webhook.
+func EnableWebhook(opt *New) {
+	opt.EnableWebhook = true
 }
 
 // WithDelegatedControl will specify the Delegated Control Pattern.

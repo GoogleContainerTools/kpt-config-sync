@@ -26,7 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+<<<<<<< HEAD
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+=======
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
+>>>>>>> bf08ab2 (Disable the CS admission webhook by default)
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -238,7 +242,7 @@ aggregationRule:
 // annotation.
 // TODO: Remove this test once all users are past 1.4.0.
 func TestPreserveLastApplied(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation2)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.EnableWebhook)
 
 	// Declare a ClusterRole and wait for it to sync.
 	nsViewerName := "namespace-viewer"

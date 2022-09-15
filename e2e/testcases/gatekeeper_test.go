@@ -20,6 +20,7 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/policycontroller/constrainttemplate"
 	"kpt.dev/configsync/pkg/status"
@@ -28,7 +29,7 @@ import (
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
 
 	// Simulate install of Gatekeeper with just the ConstraintTemplate CRD
 	if err := nt.ApplyGatekeeperCRD("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {

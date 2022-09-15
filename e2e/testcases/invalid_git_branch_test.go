@@ -21,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
@@ -28,7 +29,7 @@ import (
 )
 
 func TestInvalidRootSyncBranchStatus(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
 
 	// Update RootSync to invalid branch name
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -59,7 +60,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 }
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
 
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
@@ -92,7 +93,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 }
 
 func TestInvalidMonoRepoBranchStatus(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMultiRepo)
 
 	resetGitBranch(nt, "invalid-branch")
 
@@ -103,7 +104,7 @@ func TestInvalidMonoRepoBranchStatus(t *testing.T) {
 }
 
 func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	// Add audit namespace.
 	auditNS := "audit"

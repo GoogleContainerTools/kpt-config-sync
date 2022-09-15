@@ -21,6 +21,7 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -34,7 +35,7 @@ import (
 //  * the configsync.gke.io/delcared-version label
 
 func TestAdmission(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo)
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
 		fake.NamespaceObject("hello",
@@ -152,7 +153,7 @@ metadata:
     configmanagement.gke.io/arch: "csmr"
 `)
 
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SkipMonoRepo)
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")

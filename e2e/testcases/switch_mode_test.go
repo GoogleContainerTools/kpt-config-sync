@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -32,7 +33,7 @@ import (
 )
 
 func TestSwitchFromMultiRepoToMonoRepo(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
 
 	// Declare the Namespace
 	ns := "switch-to-mono"
@@ -118,7 +119,7 @@ func TestSwitchFromMultiRepoToMonoRepo(t *testing.T) {
 }
 
 func TestSwitchFromMonoRepoToMultiRepo(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMultiRepo)
 
 	// Declare the Namespace
 	ns := "switch-to-csmr"

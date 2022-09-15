@@ -25,6 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -68,7 +69,7 @@ func managerFieldsNonEmpty() nomostest.Predicate {
 // TestRevertClusterRole ensures that we revert conflicting manually-applied
 // changes to cluster-scoped objects.
 func TestRevertClusterRole(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.DriftControl)
 
 	crName := "e2e-test-clusterrole"
 
@@ -155,7 +156,7 @@ func TestRevertClusterRole(t *testing.T) {
 // TestClusterRoleLifecycle ensures we can add/update/delete cluster-scoped
 // resources.
 func TestClusterRoleLifecycle(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	crName := "e2e-test-clusterrole"
 

@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -34,7 +35,7 @@ import (
 )
 
 func TestPreserveGeneratedServiceFields(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Declare the Service's Namespace
 	ns := "autogen-fields"
@@ -152,7 +153,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 }
 
 func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nsViewerName := "namespace-viewer"
 	nsViewer := fake.ClusterRoleObject(core.Name(nsViewerName),
@@ -237,7 +238,7 @@ aggregationRule:
 // annotation.
 // TODO: Remove this test once all users are past 1.4.0.
 func TestPreserveLastApplied(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Declare a ClusterRole and wait for it to sync.
 	nsViewerName := "namespace-viewer"
@@ -308,7 +309,7 @@ func TestPreserveLastApplied(t *testing.T) {
 }
 
 func TestAddUpdateDeleteLabels(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-labels"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml",
@@ -364,7 +365,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 }
 
 func TestAddUpdateDeleteAnnotations(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-annotations"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml",

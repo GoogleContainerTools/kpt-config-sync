@@ -19,6 +19,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 
 	"kpt.dev/configsync/e2e/nomostest"
@@ -27,7 +28,7 @@ import (
 )
 
 func TestDeclaredFieldsPod(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMonoRepo, ntopts.Unstructured)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)

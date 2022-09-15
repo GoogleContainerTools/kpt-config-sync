@@ -51,6 +51,9 @@ type New struct {
 	// InitialCommit commit to create before the initial sync
 	InitialCommit *Commit
 
+	// TestFeature is the feature that the test verifies
+	TestFeature testing.Feature
+
 	Nomos
 	MultiRepo
 	TestType

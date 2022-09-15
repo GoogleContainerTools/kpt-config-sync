@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -40,7 +41,7 @@ import (
 
 func TestResourceConditionAnnotations(t *testing.T) {
 	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
-	nt := nomostest.New(t, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	ns := "rc-annotations"
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns),
@@ -233,7 +234,7 @@ func TestResourceConditionAnnotations(t *testing.T) {
 
 func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test if/when multi-repo supports resource condition annotations.
-	nt := nomostest.New(t, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
@@ -302,7 +303,7 @@ func TestConstraintTemplateStatusAnnotations(t *testing.T) {
 
 func TestConstraintStatusAnnotations(t *testing.T) {
 	// TODO: Re-enable this test when multi-repo supports resource condition annotations.
-	nt := nomostest.New(t, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {

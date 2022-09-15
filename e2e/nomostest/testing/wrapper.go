@@ -21,10 +21,25 @@ type Wrapper struct {
 	t NTB
 }
 
+// NewShared creates a new instance of the Testing Wrapper that provides additional
+// functionality beyond the standard testing package.
+// It doesn't require the testFeature param.
+func NewShared(t NTB) *Wrapper {
+	t.Helper()
+	tw := &Wrapper{
+		t: t,
+	}
+	return tw
+}
+
 // New creates a new instance of the Testing Wrapper that provides additional
 // functionality beyond the standard testing package.
-func New(t NTB) *Wrapper {
+func New(t NTB, testFeature Feature) *Wrapper {
 	t.Helper()
+
+	if !KnownFeature(testFeature) {
+		t.Fatalf("Test failed because the feature %q is unknown", testFeature)
+	}
 
 	tw := &Wrapper{
 		t: t,

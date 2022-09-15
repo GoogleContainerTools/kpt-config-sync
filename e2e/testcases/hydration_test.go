@@ -29,6 +29,7 @@ import (
 	nomosstatus "kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -47,6 +48,7 @@ var expectedKrmFnOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  ap
 
 func TestHydrateKustomizeComponents(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.Hydration,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
@@ -112,6 +114,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 
 func TestHydrateHelmComponents(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.Hydration,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
@@ -196,6 +199,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 
 func TestHydrateHelmOverlay(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.Hydration,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
@@ -290,6 +294,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 func TestHydrateRemoteResources(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.Hydration,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
@@ -360,6 +365,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 
 func TestHydrateResourcesInRelativePath(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.Hydration,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)

@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -53,7 +54,7 @@ func secretDataPatch(key, value string) string {
 }
 
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -163,7 +164,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 }
 
 func TestCACertSecretRefV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -279,7 +280,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 }
 
 func TestCACertSecretWatch(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 	key := "GIT_SSL_CAINFO"

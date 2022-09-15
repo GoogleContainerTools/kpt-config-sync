@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
@@ -80,7 +81,7 @@ func defaultResourceRequestsLimits(nt *nomostest.NT) (reconcilerRequests, reconc
 }
 
 func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
@@ -386,7 +387,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 }
 
 func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()

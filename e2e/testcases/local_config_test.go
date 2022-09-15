@@ -19,6 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -27,7 +28,7 @@ import (
 )
 
 func TestLocalConfig(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	ns := "local-config"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/local-config/ns.yaml",
@@ -73,7 +74,7 @@ func TestLocalConfig(t *testing.T) {
 }
 
 func TestLocalConfigWithManagementDisabled(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	ns := "local-config"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/local-config/ns.yaml",

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -70,6 +71,7 @@ import (
 // 4. R*Sync status isn't updated after sync without external input.
 func TestComposition(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 		ntopts.WithDelegatedControl,

@@ -49,8 +49,6 @@ case "${choice}" in
 esac
 
 REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
-# Use Github access token if provided
-[[ -n "${GH_TOKEN}" ]] && REMOTE="https://${GH_TOKEN}@github.com/GoogleContainerTools/kpt-config-sync.git"
 # Fetch all existing tags
 git fetch "${REMOTE}" --tags > /dev/null
 echo "+++ Successfully fetched tags"

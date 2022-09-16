@@ -15,15 +15,12 @@
 package controllers
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -212,16 +209,8 @@ const (
 func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	helmValues := ""
-	var values map[string]interface{}
-
 	if helmBase.Values != nil {
-		err := json.Unmarshal(helmBase.Values.Raw, &values)
-		klog.Errorf("failed to unmarshal helm.values, error: %w", err)
-		var vals []string
-		for key, val := range values {
-			vals = append(vals, fmt.Sprintf("%s=%v", key, val))
-		}
-		helmValues = strings.Join(vals, ",")
+		helmValues = string(helmBase.Values.Raw)
 	}
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.HelmRepo,

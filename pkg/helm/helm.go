@@ -16,6 +16,7 @@ package helm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,13 +71,28 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 		args = append(args, "--version", h.Version)
 	}
 	if len(h.Values) > 0 {
-		args = append(args, "--set", h.Values)
+		args, err = h.appendValuesArgs(args)
+		if err != nil {
+			return []string{}, err
+		}
 	}
 	includeCRDs, _ := strconv.ParseBool(h.IncludeCRDs)
 	if includeCRDs {
 		args = append(args, "--include-crds")
 	}
 	args = append(args, "--output-dir", destDir)
+	return args, nil
+}
+
+func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
+	var values map[string]interface{}
+	err := json.Unmarshal([]byte(h.Values), &values)
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to unmarshal helm.values, error: %w", err)
+	}
+	for key, val := range values {
+		args = append(args, "--set", fmt.Sprintf("%s=%v", key, val))
+	}
 	return args, nil
 }
 

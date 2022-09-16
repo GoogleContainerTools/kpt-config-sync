@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -166,7 +167,9 @@ func TestHelmARTokenAuth(t *testing.T) {
 		nt.T.Fatalf("failed to create secret, err: %v", err)
 	}
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns",
+                                                                                                "values": {"image.pullPolicy": "Always", "resources.requests.memory": "250Mi", "resources.requests.cpu": "150m", "resources.limits.memory": "300Mi", "resources.limits.cpu": 1},
+                                                                                                "secretRef": {"name" : "foo"}}}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
@@ -176,7 +179,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("IfNotPresent")); err != nil {
+		containerImagePullPolicy("Always"), nomostest.HasCorrectResourceRequestsLimits("coredns", resource.MustParse("150m"), resource.MustParse("1"), resource.MustParse("250Mi"), resource.MustParse("300Mi"))); err != nil {
 		nt.T.Error(err)
 	}
 }

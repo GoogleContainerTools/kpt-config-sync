@@ -196,18 +196,18 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             sharedNT.GitProvider,
 		RemoteRepositories:      sharedNT.RemoteRepositories,
-		WebhookDisabled:         sharedNt.WebhookDisabled,
-		EnableWebhook:           opts.EnableWebhook,
+		webhookDisabled:         sharedNt.webhookDisabled,
+		enableWebhook:           opts.EnableWebhook,
 	}
 
 	// If the webhook is currently disabled but needed for this test, install the webhook.
-	if *nt.WebhookDisabled && opts.EnableWebhook {
-		installWebhook(nt, opts.Nomos)
+	if *nt.webhookDisabled && opts.EnableWebhook {
+		installWebhook(nt)
 	}
 
 	// If the webhook is enabled currently but not needed for this test, uninstall the webhook.
-	if !*nt.WebhookDisabled && !opts.EnableWebhook {
-		uninstallWebhook(nt, opts.Nomos)
+	if !*nt.webhookDisabled && !opts.EnableWebhook {
+		uninstallWebhook(nt)
 	}
 
 	// Print container logs in its own cleanup block to catch fatal errors from
@@ -313,8 +313,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
-		WebhookDisabled:         &webhookDisabled,
-		EnableWebhook:           opts.EnableWebhook,
+		webhookDisabled:         &webhookDisabled,
+		enableWebhook:           opts.EnableWebhook,
 	}
 
 	if *e2e.ImagePrefix == e2e.DefaultImagePrefix {

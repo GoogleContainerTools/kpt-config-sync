@@ -149,10 +149,13 @@ type NT struct {
 	// It is used to reuse existing repositories instead of creating new ones.
 	RemoteRepositories map[types.NamespacedName]*Repository
 
-	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
-	WebhookDisabled *bool
+	// webhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
+	webhookDisabled *bool
 
-	EnableWebhook bool
+	// enableWebhook indicates whether the webhook is required for this test.
+	enableWebhook bool
+
+	webhookObjs []client.Object
 }
 
 const (
@@ -581,7 +584,7 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 	syncTimeout := waitForRepoSyncsOptions.timeout
 
 	if nt.MultiRepo {
-		if err := ValidateMultiRepoDeployments(nt, !*nt.WebhookDisabled); err != nil {
+		if err := ValidateMultiRepoDeployments(nt, !*nt.webhookDisabled); err != nil {
 			nt.T.Fatal(err)
 		}
 		for name := range nt.RootRepos {

@@ -21,7 +21,6 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -80,17 +79,12 @@ func StopWebhook(nt *NT) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	*nt.WebhookDisabled = true
+	*nt.webhookDisabled = true
 }
 
-func installWebhook(nt *NT, nomos ntopts.Nomos) {
+func installWebhook(nt *NT) {
 	nt.T.Helper()
-	objs := parseManifests(nt, nomos)
-	for _, o := range objs {
-		labels := o.GetLabels()
-		if labels == nil || labels["app"] != "admission-webhook" {
-			continue
-		}
+	for _, o := range nt.webhookObjs {
 		nt.T.Logf("installWebhook obj: %v", core.GKNN(o))
 		err := nt.Create(o)
 		if err != nil {
@@ -100,17 +94,12 @@ func installWebhook(nt *NT, nomos ntopts.Nomos) {
 			nt.T.Fatal(err)
 		}
 	}
-	*nt.WebhookDisabled = false
+	*nt.webhookDisabled = false
 }
 
-func uninstallWebhook(nt *NT, nomos ntopts.Nomos) {
+func uninstallWebhook(nt *NT) {
 	nt.T.Helper()
-	objs := parseManifests(nt, nomos)
-	for _, o := range objs {
-		labels := o.GetLabels()
-		if labels == nil || labels["app"] != "admission-webhook" {
-			continue
-		}
+	for _, o := range nt.webhookObjs {
 		nt.T.Logf("uninstallWebhook obj: %v", core.GKNN(o))
 		err := nt.Delete(o)
 		if err != nil {
@@ -120,5 +109,5 @@ func uninstallWebhook(nt *NT, nomos ntopts.Nomos) {
 			nt.T.Fatal(err)
 		}
 	}
-	*nt.WebhookDisabled = true
+	*nt.webhookDisabled = true
 }

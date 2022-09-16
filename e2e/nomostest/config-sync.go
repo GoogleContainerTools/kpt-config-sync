@@ -178,6 +178,17 @@ func parseManifests(nt *NT, nomos ntopts.Nomos) []client.Object {
 
 	objs := installationManifests(nt, tmpManifestsDir, nomos)
 	objs = convertObjects(nt, objs)
+
+	// select webhook objects
+	var webhookObjs []client.Object
+	for _, o := range objs {
+		labels := o.GetLabels()
+		if labels != nil && labels["app"] == "admission-webhook" {
+			webhookObjs = append(webhookObjs, o)
+		}
+	}
+	nt.webhookObjs = webhookObjs
+
 	if nomos.MultiRepo {
 		reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
 		hydrationPollingPeriod = nt.HydrationPollingPeriod
@@ -219,9 +230,9 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos, enableWebhook bool) {
 	}
 
 	if enableWebhook {
-		*nt.WebhookDisabled = false
+		*nt.webhookDisabled = false
 	} else {
-		*nt.WebhookDisabled = true
+		*nt.webhookDisabled = true
 	}
 }
 

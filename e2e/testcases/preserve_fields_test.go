@@ -26,11 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
-<<<<<<< HEAD
-	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-=======
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
->>>>>>> bf08ab2 (Disable the CS admission webhook by default)
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"

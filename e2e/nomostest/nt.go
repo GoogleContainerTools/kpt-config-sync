@@ -579,9 +579,6 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 	syncTimeout := waitForRepoSyncsOptions.timeout
 
 	if nt.MultiRepo {
-		if err := ValidateMultiRepoDeployments(nt); err != nil {
-			nt.T.Fatal(err)
-		}
 		for name := range nt.RootRepos {
 			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, RootSyncNN(name))
 			nt.WaitForSync(kinds.RootSyncV1Beta1(), name,

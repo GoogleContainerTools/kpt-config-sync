@@ -100,7 +100,11 @@ var ShareTestEnv = flag.Bool("share-test-env", false,
 
 // GitProvider is the provider that hosts the Git repositories.
 var GitProvider = flag.String("git-provider", Local,
-	"The git provider that hosts the Git repositories. Defaults to local")
+	"The git provider that hosts the Git repositories. Defaults to local.")
+
+// TestFeatures is the list of features to run.
+var TestFeatures = flag.String("test-features", "",
+	"A list of features to run, separated by comma. Defaults to empty, which should run all tests.")
 
 const (
 	// RunAll runs all tests whether skipped or not

@@ -452,6 +452,9 @@ data:
           insecure: true
     processors:
       batch:
+      # Populate resource attributes using the GCE metadata service, if available.
+      resourcedetection:
+        detectors: [gcp]
     extensions:
       health_check:
     service:
@@ -459,7 +462,7 @@ data:
       pipelines:
         metrics:
           receivers: [opencensus]
-          processors: [batch]
+          processors: [batch, resourcedetection]
           exporters: [opencensus]
 kind: ConfigMap
 metadata:

@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -32,7 +33,7 @@ import (
 )
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
@@ -131,7 +132,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 }
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "clusteranvil-crd.yaml")
@@ -221,7 +222,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 }
 
 func TestSyncUpdateCustomResource(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")

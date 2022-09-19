@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -36,7 +37,7 @@ import (
 // The sync ordering feature is only supported in the multi-repo mode.
 
 func TestMultiDependencies(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -311,7 +312,7 @@ func TestMultiDependencies(t *testing.T) {
 }
 
 func TestExternalDependencyError(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -405,7 +406,7 @@ func TestExternalDependencyError(t *testing.T) {
 }
 
 func TestDependencyWithReconciliation(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)

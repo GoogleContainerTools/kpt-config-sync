@@ -195,7 +195,7 @@ func NewSharedNT() *NT {
 		fmt.Printf("failed to remove the shared test directory: %v\n", err)
 		os.Exit(1)
 	}
-	fakeNTB := testing.New(&testing.FakeNTB{})
+	fakeNTB := testing.NewShared(&testing.FakeNTB{})
 	opts := NewOptStruct(shared, tmpDir, fakeNTB)
 	sharedNT = FreshTestEnv(fakeNTB, opts)
 	return sharedNT

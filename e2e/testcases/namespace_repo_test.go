@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -40,6 +41,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 
 	nt := nomostest.New(
 		t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
@@ -128,6 +130,7 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 
 	nt := nomostest.New(
 		t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespaceRepo, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
@@ -174,6 +177,7 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	nt := nomostest.New(
 		t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
@@ -207,6 +211,7 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	nt := nomostest.New(
 		t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
@@ -342,6 +347,7 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	bsNamespace := "bookstore"
 	nt := nomostest.New(
 		t,
+		nomostesting.MultiRepos,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,

@@ -19,13 +19,14 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 	"kpt.dev/configsync/pkg/status"
 )
 
 func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "")
 
@@ -37,7 +38,7 @@ func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
 }
 
 func TestPolicyDirUnset(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.SyncSource)
 	// There are 6 cluster-scoped objects under `../../examples/acme/cluster`.
 	//
 	// Copying the whole `../../examples/acme/cluster` dir would cause the Config Sync mono-repo mode CI job to fail,
@@ -59,7 +60,7 @@ func TestPolicyDirUnset(t *testing.T) {
 }
 
 func TestInvalidPolicyDir(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	nt.T.Log("Break the policydir in the repo")
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "some-nonexistent-policydir")

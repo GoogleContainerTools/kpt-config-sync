@@ -46,7 +46,7 @@ func (bt *BatsTest) batsPath() string {
 
 func (bt *BatsTest) Run(t *testing.T) {
 	e2e.EnableParallel(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.Reconciliation2)
 
 	countCmd := exec.Command(bt.batsPath(), "--count", bt.fileName)
 	out, err := countCmd.CombinedOutput()
@@ -76,7 +76,7 @@ func (bt *BatsTest) runTest(testNum int) func(t *testing.T) {
 		if bt.skipAutopilotCluster != nil && bt.skipAutopilotCluster(testNum) {
 			opts = append(opts, ntopts.SkipAutopilotCluster)
 		}
-		nt := nomostest.New(t, opts...)
+		nt := nomostest.New(t, nomostesting.Reconciliation2, opts...)
 
 		// Factored out for accessing deprecated functions that only exist for supporting bats tests.
 		privateKeyPath := nt.GitPrivateKeyPath() //nolint:staticcheck
@@ -190,7 +190,7 @@ func TestBats(t *testing.T) {
 
 	nomosDir, err := filepath.Abs("../..")
 	if err != nil {
-		tw := nomostesting.New(t)
+		tw := nomostesting.New(t, nomostesting.Reconciliation2)
 		tw.Fatal("Failed to get nomos dir: ", err)
 	}
 

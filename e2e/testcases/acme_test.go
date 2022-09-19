@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -52,7 +53,7 @@ func configSyncManagementLabels(namespace, folder string) map[string]string {
 }
 
 func TestAcmeCorpRepo(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	nsToFolder := map[string]string{
 		"analytics": "eng",
@@ -194,7 +195,7 @@ func TestAcmeCorpRepo(t *testing.T) {
 
 // TestObjectInCMSNamespace will test that user can sync object to CMS namespace
 func TestObjectInCMSNamespace(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMonoRepo, ntopts.Unstructured)
 
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace")

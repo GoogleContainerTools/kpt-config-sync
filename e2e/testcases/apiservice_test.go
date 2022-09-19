@@ -22,6 +22,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -33,7 +34,7 @@ const (
 )
 
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.RequireGKE(t))
 	t.Cleanup(func() {
 		if !nt.MultiRepo {
 			nt.MustKubectl("delete", "-f", "../testdata/apiservice/rbac.yaml", "--ignore-not-found")
@@ -79,7 +80,7 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 }
 
 func TestImporterAndSyncerResilientToFlakyAPIService(t *testing.T) {
-	nt := nomostest.New(t, ntopts.RequireGKE(t), ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t), ntopts.Unstructured)
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/apiservice.yaml", "--ignore-not-found")
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml", "--ignore-not-found")

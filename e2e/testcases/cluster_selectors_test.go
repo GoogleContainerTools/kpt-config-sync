@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -94,7 +95,7 @@ func namespaceObject(name string, annotations map[string]string) *corev1.Namespa
 }
 
 func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 	configMapName := clusterNameConfigMapName(nt)
 
 	nt.T.Log("Add test cluster, and cluster registry data")
@@ -142,7 +143,7 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 }
 
 func TestClusterSelectorOnObjects(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	configMapName := clusterNameConfigMapName(nt)
 
@@ -204,7 +205,7 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 }
 
 func TestClusterSelectorOnNamespaces(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	configMapName := clusterNameConfigMapName(nt)
 
@@ -360,7 +361,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 }
 
 func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, inlineProdClusterSelectorAnnotation)
@@ -392,7 +393,7 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 }
 
 func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	nt.T.Log("Add prod cluster, and cluster registry data")
 	prodCluster := clusterObject(prodClusterName, environmentLabelKey, prodEnvironment)
@@ -431,7 +432,7 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 }
 
 func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	nt.T.Log("Add test cluster, and cluster registry data")
 	testCluster := clusterObject(testClusterName, environmentLabelKey, testEnvironment)
@@ -464,6 +465,7 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 
 func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.ClusterSelector,
 		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName),
 	)
@@ -512,7 +514,7 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 }
 
 func TestInlineClusterSelectorFormat(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	configMapName := clusterNameConfigMapName(nt)
 	renameCluster(nt, configMapName, "")
@@ -589,7 +591,7 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 }
 
 func TestClusterSelectorAnnotationConflicts(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	nt.T.Log("Add both cluster selector annotations to a role binding")
 	nt.RootRepos[configsync.RootSyncName].Add(
@@ -617,7 +619,7 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 }
 
 func TestClusterSelectorForCRD(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	nt.T.Log("Add CRD without ClusterSelectors or cluster-name-selector annotation")
 	crd := anvilV1CRD()

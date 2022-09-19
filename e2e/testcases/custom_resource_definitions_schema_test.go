@@ -22,12 +22,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	oldCRDFile := filepath.Join(".", "..", "testdata", "customresources", "changed_schema_crds", "old_schema_crd.yaml")
 	newCRDFile := filepath.Join(".", "..", "testdata", "customresources", "changed_schema_crds", "new_schema_crd.yaml")

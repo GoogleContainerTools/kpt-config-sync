@@ -19,12 +19,13 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestIgnoreKptfiles(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	// Add multiple Kptfiles
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/Kptfile", []byte("random content"))

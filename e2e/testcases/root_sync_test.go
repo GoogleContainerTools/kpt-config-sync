@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -37,7 +38,7 @@ import (
 )
 
 func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
 
 	var rs v1beta1.RootSync
 	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &rs)
@@ -110,7 +111,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 }
 
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
 
 	// Validate RootSync is present.
 	var rs v1beta1.RootSync
@@ -202,7 +203,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 }
 
 func TestUpdateRootSyncGitBranch(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
 
 	// Add audit namespace.
 	auditNS := "audit"
@@ -300,7 +301,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 }
 
 func TestForceRevert(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
 
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/system/repo.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Cause source error")
@@ -329,7 +330,7 @@ func TestForceRevert(t *testing.T) {
 }
 
 func TestRootSyncReconcilingStatus(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
 
 	// Validate status condition "Reconciling" is set to "False" after the Reconciler
 	// Deployment is successfully created.

@@ -21,13 +21,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestAdoptClientSideAppliedResource(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.DriftControl)
 
 	// Declare a ClusterRole and `kubectl apply -f` it to the cluster.
 	nsViewerName := "ns-viewer"

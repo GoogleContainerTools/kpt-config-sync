@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/syncer/differ"
@@ -35,7 +36,7 @@ import (
 var preventDeletion = core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)
 
 func TestPreventDeletionNamespace(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping", "", &corev1.Namespace{})
@@ -113,7 +114,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 }
 
 func TestPreventDeletionRole(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{})
@@ -163,7 +164,7 @@ func TestPreventDeletionRole(t *testing.T) {
 }
 
 func TestPreventDeletionClusterRole(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the ClusterRole doesn't already exist.
 	err := nt.ValidateNotFound("test-admin", "", &rbacv1.ClusterRole{})
@@ -212,7 +213,7 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 }
 
 func TestPreventDeletionImplicitNamespace(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMultiRepo)
 
 	const implicitNamespace = "delivery"
 
@@ -259,7 +260,7 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 }
 
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
 
 	for ns := range differ.SpecialNamespaces {
 		if !skipAutopilotManagedNamespace(nt, ns) {

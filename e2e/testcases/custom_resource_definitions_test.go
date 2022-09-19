@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -96,7 +97,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 }
 func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -107,7 +108,7 @@ func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
 }
 
 func TestMustRemoveCustomResourceWithDefinitionV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	mustRemoveCustomResourceWithDefinition(nt, anvilV1CRD())
 }
 
@@ -162,12 +163,12 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 }
 
 func TestAddAndRemoveCustomResourceV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addAndRemoveCustomResource(nt, "v1_crds", "anvil-crd.yaml")
 }
 
 func TestAddAndRemoveCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -225,12 +226,12 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	}
 }
 func TestMustRemoveUnManagedCustomResourceV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	mustRemoveUnManagedCustomResource(nt, "v1_crds", "anvil-crd.yaml")
 }
 
 func TestMustRemoveUnManagedCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -310,12 +311,12 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 }
 func TestAddUpdateRemoveClusterScopedCRDV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addUpdateRemoveClusterScopedCRD(nt, "v1_crds", "clusteranvil-crd.yaml")
 }
 
 func TestAddUpdateRemoveClusterScopedCRDV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -408,12 +409,12 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 }
 func TestAddUpdateNamespaceScopedCRDV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addUpdateNamespaceScopedCRD(nt, "v1_crds", "anvil-crd.yaml")
 }
 
 func TestAddUpdateNamespaceScopedCRDV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -424,7 +425,7 @@ func TestAddUpdateNamespaceScopedCRDV1Beta1(t *testing.T) {
 }
 
 func TestLargeCRD(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	for _, file := range []string{"challenges-acme-cert-manager-io.yaml", "solrclouds-solr-apache-org.yaml"} {
 		crdFile := filepath.Join(".", "..", "testdata", "customresources", file)

@@ -27,6 +27,7 @@ import (
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -34,7 +35,7 @@ import (
 )
 
 func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")
@@ -166,7 +167,7 @@ func anvilV1Beta1CRD() *apiextensionsv1beta1.CustomResourceDefinition {
 }
 
 func TestMultipleVersions_CustomResourceV1(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	// Add the Anvil CRD.
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", anvilV1CRD())
@@ -292,7 +293,7 @@ func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
 }
 
 func TestMultipleVersions_RoleBinding(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	supportV1beta1, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
 		nt.T.Fatal("failed to check the supported CRD versions")

@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -30,7 +31,7 @@ import (
 )
 
 func TestNoSSLVerifyV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -122,7 +123,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 }
 
 func TestNoSSLVerifyV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 

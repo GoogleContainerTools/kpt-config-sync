@@ -14,6 +14,12 @@
 
 package testing
 
+import (
+	"strings"
+
+	"kpt.dev/configsync/e2e"
+)
+
 const errorPrefix = "ERROR:"
 
 // Wrapper implements NTB.
@@ -21,10 +27,56 @@ type Wrapper struct {
 	t NTB
 }
 
+// NewShared creates a new instance of the Testing Wrapper that provides additional
+// functionality beyond the standard testing package.
+// It doesn't require the testFeature param.
+func NewShared(t NTB) *Wrapper {
+	t.Helper()
+
+	testFeaturesFlag := *e2e.TestFeatures
+	if testFeaturesFlag != "" {
+		features := strings.Split(testFeaturesFlag, ",")
+		for _, f := range features {
+			sanitizedFeature := strings.TrimSpace(f)
+			if !KnownFeature(Feature(sanitizedFeature)) {
+				t.Fatalf("Test failed because the test-features flag has an unknown feature %q", sanitizedFeature)
+			}
+		}
+	}
+
+	tw := &Wrapper{
+		t: t,
+	}
+	return tw
+}
+
 // New creates a new instance of the Testing Wrapper that provides additional
 // functionality beyond the standard testing package.
-func New(t NTB) *Wrapper {
+func New(t NTB, testFeature Feature) *Wrapper {
 	t.Helper()
+
+	if !KnownFeature(testFeature) {
+		t.Fatalf("Test failed because the feature %q is unknown", testFeature)
+	}
+
+	skip := true
+	testFeaturesFlag := *e2e.TestFeatures
+	if testFeaturesFlag == "" {
+		skip = false
+	} else {
+		features := strings.Split(testFeaturesFlag, ",")
+		for _, f := range features {
+			sanitizedFeature := strings.TrimSpace(f)
+			if !KnownFeature(Feature(sanitizedFeature)) {
+				t.Fatalf("Test failed because the test-features flag has an unknown feature %q", sanitizedFeature)
+			} else if Feature(f) == testFeature {
+				skip = false
+			}
+		}
+	}
+	if skip {
+		t.Skipf("Skip the test because the feature %q is not included in the test-features flag %q", testFeature, testFeaturesFlag)
+	}
 
 	tw := &Wrapper{
 		t: t,

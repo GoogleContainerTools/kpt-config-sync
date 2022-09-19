@@ -20,6 +20,7 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -31,7 +32,7 @@ import (
 // or disable status in the kpt applier.
 
 func TestStatusEnabledAndDisabled(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured, ntopts.SkipMonoRepo)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)

@@ -54,7 +54,7 @@ func TestNomosInitVet(t *testing.T) {
 	// 2) nomos init
 	// 3) nomos vet --no-api-server-check
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	out, err := exec.Command("git", "init", tmpDir).CombinedOutput()
 	if err != nil {
@@ -84,7 +84,7 @@ func TestNomosInitHydrate(t *testing.T) {
 	// 4) nomos hydrate --no-api-server-check
 	// 5) nomos vet --no-api-server-check --path=<hydrated-dir>
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	out, err := exec.Command("git", "init", tmpDir).CombinedOutput()
 	if err != nil {
@@ -178,7 +178,7 @@ func TestNomosHydrateWithClusterSelectorsUnstructured(t *testing.T) {
 
 func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourceFormat filesystem.SourceFormat) {
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	_ = nomostest.NewOptStruct(nomostest.TestClusterName(tw), tmpDir, tw)
 
@@ -414,7 +414,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 }
 
 func testSyncFromNomosHydrateOutput(t *testing.T, config string) {
-	nt := nomostest.New(t, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
 
 	if err := nt.ValidateNotFound("bookstore1", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
@@ -479,7 +479,7 @@ func TestSyncFromNomosHydrateOutputJSONDir(t *testing.T) {
 
 func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.SourceFormat, outputFormat string) {
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	configPath := fmt.Sprintf("../../examples/%s-repo-with-cluster-selectors", sourceFormat)
 	compiledConfigFile := fmt.Sprintf("%s/compiled.%s", tmpDir, outputFormat)
@@ -525,7 +525,7 @@ func TestSyncFromNomosHydrateUnstructuredOutputWithClusterSelectorYAMLFlat(t *te
 
 func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	_ = nomostest.NewOptStruct(nomostest.TestClusterName(tw), tmpDir, tw)
 
@@ -604,7 +604,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 
 func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	testCases := []struct {
 		name            string
@@ -782,7 +782,7 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 }
 
 func TestNomosVetNamespaceRepo(t *testing.T) {
-	tw := nomostesting.New(t)
+	tw := nomostesting.New(t, nomostesting.NomosCLI)
 
 	testCases := []struct {
 		name           string

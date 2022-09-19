@@ -28,7 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
-	testing2 "kpt.dev/configsync/e2e/nomostest/testing"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/client/restconfig"
@@ -53,7 +53,7 @@ const fileMode = os.ModePerm
 const NomosE2E = "nomos-e2e"
 
 // NewOptStruct initializes the nomostest options.
-func NewOptStruct(testName, tmpDir string, t testing2.NTB, ntOptions ...ntopts.Opt) *ntopts.New {
+func NewOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntopts.Opt) *ntopts.New {
 	// TODO: we should probably put ntopts.New members inside of NT use the go-convention of mutating NT with option functions.
 	optsStruct := &ntopts.New{
 		Name:   testName,
@@ -154,10 +154,10 @@ func skipTestOnAutopilotCluster(nt *NT, skipAutopilot bool) bool {
 }
 
 // New establishes a connection to a test cluster and prepares it for testing.
-func New(t *testing.T, ntOptions ...ntopts.Opt) *NT {
+func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) *NT {
 	t.Helper()
 	e2e.EnableParallel(t)
-	tw := testing2.New(t)
+	tw := nomostesting.New(t, testFeature)
 
 	optsStruct := NewOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
 	if *e2e.ShareTestEnv {
@@ -167,7 +167,7 @@ func New(t *testing.T, ntOptions ...ntopts.Opt) *NT {
 }
 
 // SharedTestEnv connects to a shared test cluster.
-func SharedTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
+func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	sharedNt := SharedNT()
@@ -274,7 +274,7 @@ func resetSyncedRepos(nt *NT, opts *ntopts.New) {
 // 1) A connection to the Kubernetes cluster.
 // 2) A functioning git server hosted on the cluster.
 // 3) A fresh ACM installation.
-func FreshTestEnv(t testing2.NTB, opts *ntopts.New) *NT {
+func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	scheme := newScheme(t)
@@ -467,7 +467,7 @@ func SwitchMode(nt *NT, sourceFormat filesystem.SourceFormat) {
 // TestDir creates a unique temporary directory for the E2E test.
 //
 // Returned directory is absolute and OS-specific.
-func TestDir(t testing2.NTB) string {
+func TestDir(t nomostesting.NTB) string {
 	t.Helper()
 
 	name := testDirName(t)

@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -43,7 +44,7 @@ import (
 
 // TestDeclareNamespace runs a test that ensures ACM syncs Namespaces to clusters.
 func TestDeclareNamespace(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	err := nt.ValidateNotFound("foo", "", &corev1.Namespace{})
 	if err != nil {
@@ -76,7 +77,7 @@ func TestDeclareNamespace(t *testing.T) {
 }
 
 func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create foo namespace without any labels or annotations.
 	fooNamespace := fake.NamespaceObject("foo")
@@ -179,7 +180,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 }
 
 func TestNamespaceExistsAndDeclared(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create namespace using kubectl first then commit.
 	namespace := fake.NamespaceObject("decl-namespace-annotation-none")
@@ -209,7 +210,7 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 }
 
 func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create namespace with managed annotation using kubectl.
 	namespace := fake.NamespaceObject("undeclared-annotation-enabled")
@@ -241,7 +242,7 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 
 // TestManagementDisabledNamespace tests https://cloud.google.com/anthos-config-management/docs/how-to/managing-objects#unmanaged-namespaces.
 func TestManagementDisabledNamespace(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	namespacesToTest := []string{"foo", "default"}
 	for _, nsName := range namespacesToTest {
@@ -358,7 +359,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	cm2 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"), core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))
 	cm3 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm3"))
 
-	nt := nomostest.New(t, ntopts.WithInitialCommit(ntopts.Commit{
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.WithInitialCommit(ntopts.Commit{
 		Message: "Create namespace and configmaps",
 		Files: map[string]client.Object{
 			"acme/namespaces/foo/ns.yaml":  fooNamespace,
@@ -463,7 +464,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 }
 
 func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipAutopilotCluster)
 
 	// Update kube-system namespace to be managed.
 	kubeSystemNamespace := fake.NamespaceObject("kube-system")
@@ -546,7 +547,7 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 }
 
 func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create namespace using kubectl with managed by helm label.
 	helmManagedNamespace := fake.NamespaceObject("helm-managed-namespace")
@@ -579,7 +580,7 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 }
 
 func TestDeclareImplicitNamespace(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.Unstructured)
 
 	var unixMilliseconds = time.Now().UnixNano() / 1000000
 	var implicitNamespace = "shipping-" + fmt.Sprint(unixMilliseconds)
@@ -647,7 +648,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 }
 
 func TestDontDeleteAllNamespaces(t *testing.T) {
-	nt := nomostest.New(t)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Test Setup + Preconditions.
 	// Declare two Namespaces.

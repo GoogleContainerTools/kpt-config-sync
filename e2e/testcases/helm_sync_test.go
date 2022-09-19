@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -46,7 +47,7 @@ const (
 // It tests Config Sync can pull from public Helm repo without any authentication.
 func TestPublicHelm(t *testing.T) {
 	publicHelmRepo := "https://kubernetes.github.io/ingress-nginx"
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured)
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -72,7 +73,7 @@ func TestPublicHelm(t *testing.T) {
 // A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.RequireGKE(t),
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.RequireGKE(t),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	nt.T.Log("Update RepoSync to sync from a public Helm Chart")
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
@@ -207,7 +208,7 @@ func TestHelmARGKEWorkloadIdentity(t *testing.T) {
 // 2. The Compute Engine default service account `PROJECT_ID-compute@developer.gserviceaccount.com` needs to have the following role:
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 func TestHelmGCENode(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipMonoRepo, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
@@ -236,6 +237,7 @@ func TestHelmGCENode(t *testing.T) {
 // A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmARTokenAuth(t *testing.T) {
 	nt := nomostest.New(t,
+		nomostesting.SyncSource,
 		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 		ntopts.RequireGKE(t),

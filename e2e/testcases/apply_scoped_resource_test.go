@@ -22,12 +22,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestApplyScopedResourcesHierarchicalMode(t *testing.T) {
-	nt := nomostest.New(t, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipAutopilotCluster)
 
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces")
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/kubevirt/.", "acme")
@@ -95,7 +96,7 @@ func TestApplyScopedResourcesHierarchicalMode(t *testing.T) {
 }
 
 func TestApplyScopedResourcesUnstructuredMode(t *testing.T) {
-	nt := nomostest.New(t, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
 
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/kubevirt-compiled/.", "acme")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add kubevirt configs")

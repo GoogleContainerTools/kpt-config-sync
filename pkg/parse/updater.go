@@ -73,8 +73,8 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// Update the declared resources so that the Remediator immediately
 	// starts enforcing the updated state.
 	if !cache.resourceDeclSetUpdated {
-		objs, err := u.resources.Update(ctx, objs)
-		metrics.RecordDeclaredResources(ctx, len(objs))
+		var err status.MultiError
+		objs, err = u.resources.Update(ctx, objs)
 		if err != nil {
 			klog.Infof("Terminate the reconciliation (failed to update the declared resources): %v", err)
 			return err
@@ -91,10 +91,6 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	} else {
 		var applyErrs status.MultiError
 		applyStart := time.Now()
-		// TODO: This will show users a transient error if they apply a
-		//  CRD + CR in the same commit. The caller should check for KNV2007, and
-		//  retry without updating the respective status field as this is an expected
-		//  path.
 		gvks, applyErrs = u.applier.Apply(ctx, objs)
 		metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(applyErrs), cache.source.commit, applyStart)
 		if applyErrs == nil && cache.parserErrs == nil {

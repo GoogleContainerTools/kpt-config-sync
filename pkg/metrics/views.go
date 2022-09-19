@@ -72,6 +72,7 @@ var (
 		Name:        LastSync.Name(),
 		Measure:     LastSync,
 		Description: "The timestamp of the most recent sync from Git",
+		TagKeys:     []tag.Key{KeyStatus, KeyCommit},
 		Aggregation: view.LastValue(),
 	}
 

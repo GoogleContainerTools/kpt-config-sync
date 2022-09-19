@@ -86,9 +86,12 @@ func RecordParserDuration(ctx context.Context, trigger, source, status string, s
 }
 
 // RecordLastSync produces a measurement for the LastSync view.
-func RecordLastSync(ctx context.Context, commit string, timestamp time.Time) {
+func RecordLastSync(ctx context.Context, status, commit string, timestamp time.Time) {
+	tagCtx, _ := tag.New(ctx,
+		tag.Upsert(KeyStatus, status),
+		tag.Upsert(KeyCommit, commit))
 	measurement := LastSync.M(timestamp.Unix())
-	record(ctx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordDeclaredResources produces a measurement for the DeclaredResources view.

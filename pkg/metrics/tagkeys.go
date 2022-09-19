@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"go.opencensus.io/tag"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
 
 var (
@@ -63,10 +64,26 @@ var (
 	KeyResourceType, _ = tag.NewKey("resource")
 )
 
+const (
+	// StatusSuccess is the string value for the status key indicating success
+	StatusSuccess = "success"
+	// StatusError is the string value for the status key indicating failure/errors
+	StatusError = "error"
+)
+
 // StatusTagKey returns a string representation of the error, if it exists, otherwise success.
 func StatusTagKey(err error) string {
 	if err == nil {
-		return "success"
+		return StatusSuccess
 	}
-	return "error"
+	return StatusError
+}
+
+// StatusTagValueFromSummary returns error if the summary indicates at least 1
+// error, otherwise success.
+func StatusTagValueFromSummary(summary *v1beta1.ErrorSummary) string {
+	if summary.TotalCount == 0 {
+		return StatusSuccess
+	}
+	return StatusError
 }

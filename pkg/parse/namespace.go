@@ -283,7 +283,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
 	if !syncing {
-		metrics.RecordLastSync(ctx, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
+		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {

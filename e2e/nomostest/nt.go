@@ -345,6 +345,8 @@ func (nt *NT) updateMetrics(prev testmetrics.ConfigSyncMetrics, parsedMetrics te
 		ocmetrics.ReconcileDurationView.Name,
 		ocmetrics.RemediateDurationView.Name,
 		ocmetrics.DeclaredResourcesView.Name,
+		ocmetrics.LastApplyTimestampView.Name,
+		ocmetrics.LastSyncTimestampView.Name,
 	}
 
 	// Diff the metrics if previous metrics exist
@@ -1466,17 +1468,17 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 // MetricsSyncOption determines where metrics will be synced to
 type MetricsSyncOption func(csm *testmetrics.ConfigSyncMetrics) error
 
-// SyncMetricsToLatestCommit syncs metrics to the latest commit
+// SyncMetricsToLatestCommit syncs metrics to the latest synced commit
 func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
 		for nn := range nt.RootRepos {
-			if err := metrics.ValidateMetricsCommitApplied(nt.RootRepos[nn].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSynced(nt.RootRepos[nn].Hash()); err != nil {
 				return err
 			}
 		}
 
 		for ns := range nt.NonRootRepos {
-			if err := metrics.ValidateMetricsCommitApplied(nt.NonRootRepos[ns].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSynced(nt.NonRootRepos[ns].Hash()); err != nil {
 				return err
 			}
 		}

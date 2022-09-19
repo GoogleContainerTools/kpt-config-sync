@@ -379,7 +379,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
 	if !syncing {
-		metrics.RecordLastSync(ctx, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
+		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {

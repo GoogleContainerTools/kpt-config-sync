@@ -264,12 +264,6 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 
 	setSyncStatus(&rs.Status.Status, status.ToCSE(errs), denominator)
 
-	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
-	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
-	if !syncing {
-		metrics.RecordLastSync(ctx, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
-	}
-
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
 	if syncing {
 		reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
@@ -284,6 +278,12 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping status update for RepoSync %s/%s", rs.Namespace, rs.Name)
 		return nil
+	}
+
+	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
+	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
+	if !syncing {
+		metrics.RecordLastSync(ctx, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {

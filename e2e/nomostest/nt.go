@@ -16,6 +16,7 @@ package nomostest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -38,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/tag"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -430,6 +433,22 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 	return err
 }
 
+// ValidateNotFoundOrNoMatch returns an error if the indicated object is
+// neither NotFound nor NoMatchFound (GVK not found).
+//
+// Use this instead of ValidateNotFound when deleting a CRD or APIService at the
+// same time as a custom resource, to avoid the race between possible errors.
+func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object) error {
+	err := nt.Get(name, namespace, o)
+	if err == nil {
+		return errors.Errorf("%T %v %s/%s found", o, o.GetObjectKind().GroupVersionKind(), namespace, name)
+	}
+	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+		return nil
+	}
+	return err
+}
+
 // ValidateMultiRepoMetrics validates all the multi-repo metrics.
 // It checks all non-error metrics are recorded with the correct tags and values.
 func (nt *NT) ValidateMultiRepoMetrics(reconciler string, numResources int, gvkMetrics ...testmetrics.GVKMetric) error {
@@ -483,7 +502,7 @@ func (nt *NT) ValidateResourceOverrideCount(reconciler, containerName, resourceT
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
-func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []tag.Tag) error {
+func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []metrics.Tag) error {
 	if nt.MultiRepo {
 		return nt.ReconcilerMetrics.ValidateResourceOverrideCountMissingTags(tags)
 	}
@@ -638,10 +657,29 @@ func (nt *NT) GetCurrentMetrics(syncOptions ...MetricsSyncOption) (time.Duration
 			nt.T.Fatalf("unable to get latest metrics: %v", err)
 		}
 
+		nt.DebugLogMetrics(metrics)
+
 		return took, metrics
 	}
 
 	return 0, nil
+}
+
+// DebugLogMetrics logs metrics to the debug log, if enabled
+func (nt *NT) DebugLogMetrics(metrics testmetrics.ConfigSyncMetrics) {
+	if !*e2e.Debug {
+		return
+	}
+	nt.DebugLog("Logging all received metrics...")
+	for name, ms := range metrics {
+		for _, m := range ms {
+			tagsJSONBytes, err := json.Marshal(m.TagMap())
+			if err != nil {
+				nt.T.Fatalf("unable to convert latest tags to json for metric %q: %v", name, err)
+			}
+			nt.DebugLogf("Metric received: { \"Name\": %q, \"Value\": %#v, \"Tags\": %s }", name, m.Value, string(tagsJSONBytes))
+		}
+	}
 }
 
 // WaitForSync waits for the specified object to be synced.

@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"go.opencensus.io/tag"
 )
 
 // ParseMetrics connects to the local port where metrics are being forwarded to
@@ -71,8 +70,8 @@ func parseMetricName(m string) (string, error) {
 }
 
 // parseTags filters for the metric tag keys and values.
-func parseTags(m string) []tag.Tag {
-	var tags []tag.Tag
+func parseTags(m string) []Tag {
+	var tags []Tag
 	// match all tags: {operation="create",status="success",type="Namespace"}
 	regex := regexp.MustCompile(`{(.*?)}`)
 	ss := regex.FindStringSubmatch(m)
@@ -83,9 +82,8 @@ func parseTags(m string) []tag.Tag {
 			regex = regexp.MustCompile(`(.*?)="(.*?)"`)
 			ss = regex.FindStringSubmatch(t)
 			if ss != nil {
-				key, _ := tag.NewKey(ss[1])
-				tags = append(tags, tag.Tag{
-					Key:   key,
+				tags = append(tags, Tag{
+					Key:   ss[1],
 					Value: ss[2],
 				})
 			}

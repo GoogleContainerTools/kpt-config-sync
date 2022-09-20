@@ -21,6 +21,7 @@ import (
 
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -46,21 +47,30 @@ func RecordKustomizeFieldCountData(ctx context.Context, fieldCountData *Kustomiz
 	recordKustomizeTopTierMetrics(ctx, fieldCountData.TopTierCount)
 }
 
+func record(ctx context.Context, ms ...stats.Measurement) {
+	stats.Record(ctx, ms...)
+	if klog.V(5).Enabled() {
+		for _, m := range ms {
+			klog.Infof("Metric recorded: { \"Name\": %q, \"Value\": %#v, \"Tags\": %s }", m.Measure().Name(), m.Value(), tag.FromContext(ctx))
+		}
+	}
+}
+
 // RecordKustomizeResourceCount produces measurement for KustomizeResourceCount view
 func RecordKustomizeResourceCount(ctx context.Context, resourceCount int) {
-	stats.Record(ctx, KustomizeResourceCount.M(int64(resourceCount)))
+	record(ctx, KustomizeResourceCount.M(int64(resourceCount)))
 }
 
 // RecordKustomizeExecutionTime produces measurement for KustomizeExecutionTime view
 func RecordKustomizeExecutionTime(ctx context.Context, executionTime float64) {
-	stats.Record(ctx, KustomizeExecutionTime.M(executionTime))
+	record(ctx, KustomizeExecutionTime.M(executionTime))
 }
 
 // recordKustomizeFieldCount produces measurement for KustomizeFieldCount view
 func recordKustomizeFieldCount(ctx context.Context, fieldCount map[string]int) {
 	for field, count := range fieldCount {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyFieldName, field))
-		stats.Record(tagCtx, KustomizeFieldCount.M(int64(count)))
+		record(tagCtx, KustomizeFieldCount.M(int64(count)))
 	}
 }
 
@@ -68,7 +78,7 @@ func recordKustomizeFieldCount(ctx context.Context, fieldCount map[string]int) {
 func recordKustomizeDeprecatingFields(ctx context.Context, deprecationMetrics map[string]int) {
 	for field, count := range deprecationMetrics {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyDeprecatingField, field))
-		stats.Record(tagCtx, KustomizeDeprecatingFields.M(int64(count)))
+		record(tagCtx, KustomizeDeprecatingFields.M(int64(count)))
 	}
 }
 
@@ -76,7 +86,7 @@ func recordKustomizeDeprecatingFields(ctx context.Context, deprecationMetrics ma
 func recordKustomizeSimplification(ctx context.Context, simplMetrics map[string]int) {
 	for field, count := range simplMetrics {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keySimplificationAdoption, field))
-		stats.Record(tagCtx, KustomizeSimplification.M(int64(count)))
+		record(tagCtx, KustomizeSimplification.M(int64(count)))
 	}
 }
 
@@ -84,7 +94,7 @@ func recordKustomizeSimplification(ctx context.Context, simplMetrics map[string]
 func recordKustomizeK8sMetadata(ctx context.Context, k8sMetadata map[string]int) {
 	for field, count := range k8sMetadata {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyK8sMetadata, field))
-		stats.Record(tagCtx, KustomizeK8sMetadata.M(int64(count)))
+		record(tagCtx, KustomizeK8sMetadata.M(int64(count)))
 	}
 }
 
@@ -92,7 +102,7 @@ func recordKustomizeK8sMetadata(ctx context.Context, k8sMetadata map[string]int)
 func recordKustomizeHelmMetrics(ctx context.Context, helmMetrics map[string]int) {
 	for helmInflator, count := range helmMetrics {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyHelmMetrics, helmInflator))
-		stats.Record(tagCtx, KustomizeHelmMetrics.M(int64(count)))
+		record(tagCtx, KustomizeHelmMetrics.M(int64(count)))
 	}
 }
 
@@ -100,7 +110,7 @@ func recordKustomizeHelmMetrics(ctx context.Context, helmMetrics map[string]int)
 func recordKustomizeBaseCount(ctx context.Context, baseCount map[string]int) {
 	for baseSource, count := range baseCount {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyBaseCount, baseSource))
-		stats.Record(tagCtx, KustomizeBaseCount.M(int64(count)))
+		record(tagCtx, KustomizeBaseCount.M(int64(count)))
 	}
 }
 
@@ -108,7 +118,7 @@ func recordKustomizeBaseCount(ctx context.Context, baseCount map[string]int) {
 func recordKustomizePatchCount(ctx context.Context, patchCount map[string]int) {
 	for patchType, count := range patchCount {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyPatchCount, patchType))
-		stats.Record(tagCtx, KustomizePatchCount.M(int64(count)))
+		record(tagCtx, KustomizePatchCount.M(int64(count)))
 	}
 }
 
@@ -116,6 +126,6 @@ func recordKustomizePatchCount(ctx context.Context, patchCount map[string]int) {
 func recordKustomizeTopTierMetrics(ctx context.Context, topTierCount map[string]int) {
 	for field, count := range topTierCount {
 		tagCtx, _ := tag.New(ctx, tag.Upsert(keyTopTierCount, field))
-		stats.Record(tagCtx, KustomizeTopTierMetrics.M(int64(count)))
+		record(tagCtx, KustomizeTopTierMetrics.M(int64(count)))
 	}
 }

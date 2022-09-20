@@ -19,7 +19,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-	"go.opencensus.io/tag"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -29,7 +28,23 @@ type ConfigSyncMetrics map[string][]Measurement
 
 // Measurement is a recorded data point with a list of tags and a value.
 type Measurement struct {
-	Tags  []tag.Tag
+	Tags  []Tag
+	Value string
+}
+
+// TagMap returns a new map of tag keys to values.
+func (m Measurement) TagMap() map[string]string {
+	tagMap := make(map[string]string, len(m.Tags))
+	for _, tag := range m.Tags {
+		tagMap[tag.Key] = tag.Value
+	}
+	return tagMap
+}
+
+// Tag is a replacement for OpenCensus Tag, which has a private name field,
+// which makes it hard to test and print.
+type Tag struct {
+	Key   string
 	Value string
 }
 
@@ -98,8 +113,8 @@ func ResourceDeleted(gvk string) GVKMetric {
 // metric from the reconciler manager.
 func (csm ConfigSyncMetrics) ValidateReconcilerManagerMetrics() error {
 	metric := ocmetrics.ReconcileDurationView.Name
-	validation := hasTags(metric, []tag.Tag{
-		{Key: ocmetrics.KeyStatus, Value: "success"},
+	validation := hasTags(metric, []Tag{
+		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
 	})
 	return csm.validateMetric(metric, validation)
 }
@@ -139,8 +154,8 @@ func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconciler string, gvkMetric GVK
 // recorded for a particular commit hash.
 func (csm ConfigSyncMetrics) ValidateMetricsCommitApplied(commitHash string) error {
 	metric := ocmetrics.LastApplyTimestampView.Name
-	validation := hasTags(metric, []tag.Tag{
-		{Key: ocmetrics.KeyCommit, Value: commitHash},
+	validation := hasTags(metric, []Tag{
+		{Key: ocmetrics.KeyCommit.Name(), Value: commitHash},
 	})
 
 	for _, measurement := range csm[metric] {
@@ -179,16 +194,16 @@ func (csm ConfigSyncMetrics) ValidateReconcilerErrors(reconciler string, sourceV
 	if _, ok := csm[metric]; ok {
 		for _, measurement := range csm[metric] {
 			// If the measurement has a "source" tag, validate the values match.
-			if hasTags(metric, []tag.Tag{
-				{Key: ocmetrics.KeyComponent, Value: "source"},
+			if hasTags(metric, []Tag{
+				{Key: ocmetrics.KeyComponent.Name(), Value: "source"},
 			})(measurement) == nil {
 				if err := valueEquals(metric, sourceValue)(measurement); err != nil {
 					return err
 				}
 			}
 			// If the measurement has a "sync" tag, validate the values match.
-			if hasTags(metric, []tag.Tag{
-				{Key: ocmetrics.KeyComponent, Value: "sync"},
+			if hasTags(metric, []Tag{
+				{Key: ocmetrics.KeyComponent.Name(), Value: "sync"},
 			})(measurement) == nil {
 				if err := valueEquals(metric, syncValue)(measurement); err != nil {
 					return err
@@ -205,10 +220,10 @@ func (csm ConfigSyncMetrics) ValidateResourceOverrideCount(reconciler, container
 	metric := ocmetrics.ResourceOverrideCountView.Name
 	if _, ok := csm[metric]; ok {
 		validations := []Validation{
-			hasTags(metric, []tag.Tag{
-				{Key: ocmetrics.KeyReconcilerType, Value: reconciler},
-				{Key: ocmetrics.KeyContainer, Value: containerName},
-				{Key: ocmetrics.KeyResourceType, Value: resourceType},
+			hasTags(metric, []Tag{
+				{Key: ocmetrics.KeyReconcilerType.Name(), Value: reconciler},
+				{Key: ocmetrics.KeyContainer.Name(), Value: containerName},
+				{Key: ocmetrics.KeyResourceType.Name(), Value: resourceType},
 			}),
 			valueEquals(metric, count),
 		}
@@ -218,7 +233,7 @@ func (csm ConfigSyncMetrics) ValidateResourceOverrideCount(reconciler, container
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
-func (csm ConfigSyncMetrics) ValidateResourceOverrideCountMissingTags(tags []tag.Tag) error {
+func (csm ConfigSyncMetrics) ValidateResourceOverrideCountMissingTags(tags []Tag) error {
 	metric := ocmetrics.ResourceOverrideCountView.Name
 	if _, ok := csm[metric]; ok {
 		validations := []Validation{
@@ -256,8 +271,8 @@ func (csm ConfigSyncMetrics) ValidateNoSSLVerifyCount(count int) error {
 // validateSuccessTag checks that the metric is recorded for the correct reconciler
 // and has a "success" tag value.
 func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error {
-	validation := hasTags(metric, []tag.Tag{
-		{Key: ocmetrics.KeyStatus, Value: "success"},
+	validation := hasTags(metric, []Tag{
+		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
 	})
 	return csm.validateMetric(metric, validation)
 }
@@ -266,9 +281,9 @@ func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error
 // and has the correct reconciler, operation, status, and type tags.
 func (csm ConfigSyncMetrics) validateAPICallDuration(reconciler, operation, gvk string) error {
 	metric := ocmetrics.APICallDurationView.Name
-	validation := hasTags(metric, []tag.Tag{
-		{Key: ocmetrics.KeyOperation, Value: operation},
-		{Key: ocmetrics.KeyStatus, Value: "success"},
+	validation := hasTags(metric, []Tag{
+		{Key: ocmetrics.KeyOperation.Name(), Value: operation},
+		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
 	})
 	return errors.Wrapf(csm.validateMetric(metric, validation), "%s %s operation", gvk, operation)
 }
@@ -290,9 +305,9 @@ func (csm ConfigSyncMetrics) ValidateDeclaredResources(reconciler string, value 
 func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk string, value int) error {
 	metric := ocmetrics.ApplyOperationsView.Name
 	validations := []Validation{
-		hasTags(metric, []tag.Tag{
-			{Key: ocmetrics.KeyOperation, Value: operation},
-			{Key: ocmetrics.KeyStatus, Value: "success"},
+		hasTags(metric, []Tag{
+			{Key: ocmetrics.KeyOperation.Name(), Value: operation},
+			{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
 		}),
 		valueGTE(metric, value),
 	}
@@ -304,8 +319,8 @@ func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk 
 func (csm ConfigSyncMetrics) validateRemediateDuration(reconciler, gvk string) error {
 	metric := ocmetrics.RemediateDurationView.Name
 	validations := []Validation{
-		hasTags(metric, []tag.Tag{
-			{Key: ocmetrics.KeyStatus, Value: "success"},
+		hasTags(metric, []Tag{
+			{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
 		}),
 	}
 	return errors.Wrap(csm.validateMetric(metric, validations...), gvk)
@@ -337,9 +352,9 @@ func (csm ConfigSyncMetrics) validateMetric(name string, validations ...Validati
 }
 
 // hasTags checks that the measurement contains all the expected tags.
-func hasTags(name string, tags []tag.Tag) Validation {
+func hasTags(name string, tags []Tag) Validation {
 	return func(metric Measurement) error {
-		contains := func(tts []tag.Tag, t tag.Tag) bool {
+		contains := func(tts []Tag, t Tag) bool {
 			for _, tt := range tts {
 				if tt == t {
 					return true
@@ -359,9 +374,9 @@ func hasTags(name string, tags []tag.Tag) Validation {
 }
 
 // missingTags checks that the measurement misses all the specific tags.
-func missingTags(name string, tags []tag.Tag) Validation {
+func missingTags(name string, tags []Tag) Validation {
 	return func(metric Measurement) error {
-		contains := func(tts []tag.Tag, t tag.Tag) bool {
+		contains := func(tts []Tag, t Tag) bool {
 			for _, tt := range tts {
 				if tt == t {
 					return true

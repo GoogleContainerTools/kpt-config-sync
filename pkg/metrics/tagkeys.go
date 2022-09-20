@@ -62,6 +62,26 @@ var (
 
 	// KeyResourceType groups metris by their resource types. Possible values: cpu, memory.
 	KeyResourceType, _ = tag.NewKey("resource")
+
+	// ResourceKeySyncKind groups metrics by the Sync kind. Possible values: RootSync, RepoSync.
+	// This metric tag is populated from the configsync.sync.kind resource
+	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
+	ResourceKeySyncKind, _ = tag.NewKey("configsync_sync_kind")
+
+	// ResourceKeySyncName groups metrics by the Sync name.
+	// This metric tag is populated from the configsync.sync.kind resource
+	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
+	ResourceKeySyncName, _ = tag.NewKey("configsync_sync_name")
+
+	// ResourceKeySyncNamespace groups metrics by the Sync namespace.
+	// This metric tag is populated from the configsync.sync.kind resource
+	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
+	ResourceKeySyncNamespace, _ = tag.NewKey("configsync_sync_namespace")
+
+	// ResourceKeyDeploymentName groups metrics by k8s deployment name.
+	// This metric tag is populated from the configsync.sync.kind resource
+	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
+	ResourceKeyDeploymentName, _ = tag.NewKey("k8s_deployment_name")
 )
 
 const (

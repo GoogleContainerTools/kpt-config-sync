@@ -237,9 +237,11 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
 		// available on GKE.
 		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5, metrics.ResourceDeleted("RepoSync"))
+			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5,
+				metrics.ResourceDeleted(configsync.RepoSyncKind))
 		} else {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4, metrics.ResourceDeleted("RepoSync"))
+			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4,
+				metrics.ResourceDeleted(configsync.RepoSyncKind))
 		}
 		if err != nil {
 			return err

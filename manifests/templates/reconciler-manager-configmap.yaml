@@ -45,6 +45,9 @@ data:
          labels:
            app: reconciler
            configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
+           configsync.gke.io/sync-kind: "" # this field will be assigned dynamically by the reconciler-manager
+           configsync.gke.io/sync-name: "" # this field will be assigned dynamically by the reconciler-manager
+           configsync.gke.io/sync-namespace: "" # this field will be assigned dynamically by the reconciler-manager
          annotations:
            cluster-autoscaler.kubernetes.io/safe-to-evict: "true" # this annotation is needed so that pods doesn't block scale down
        spec:
@@ -227,6 +230,66 @@ data:
            terminationMessagePath: "/dev/termination-log"
            terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
+           # These KUBE env vars help populate OTEL_RESOURCE_ATTRIBUTES which
+           # is used by the otel-agent to populate resource attributes when
+           # emiting metrics to the otel-collector. This is more efficient than
+           # having the otel-collector look them up from the apiserver.
+           env:
+           - name: KUBE_POD_NAME
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.name
+           - name: KUBE_POD_NAMESPACE
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.namespace
+           - name: KUBE_POD_UID
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.uid
+           - name: KUBE_POD_IP
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: status.podIP
+           - name: KUBE_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: spec.nodeName
+           - name: KUBE_DEPLOYMENT_NAME
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.labels['configsync.gke.io/deployment-name']
+           - name: CONFIGSYNC_SYNC_KIND
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.labels['configsync.gke.io/sync-kind']
+           - name: CONFIGSYNC_SYNC_NAME
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.labels['configsync.gke.io/sync-name']
+           - name: CONFIGSYNC_SYNC_NAMESPACE
+             valueFrom:
+               fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.labels['configsync.gke.io/sync-namespace']
+           - name: OTEL_RESOURCE_ATTRIBUTES
+             value: "k8s.pod.name=$(KUBE_POD_NAME),\
+               k8s.pod.namespace=$(KUBE_POD_NAMESPACE),\
+               k8s.pod.uid=$(KUBE_POD_UID),\
+               k8s.pod.ip=$(KUBE_POD_IP),\
+               k8s.node.name=$(KUBE_NODE_NAME),\
+               k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME),\
+               configsync.sync.kind=$(CONFIGSYNC_SYNC_KIND),\
+               configsync.sync.name=$(CONFIGSYNC_SYNC_NAME),\
+               configsync.sync.namespace=$(CONFIGSYNC_SYNC_NAMESPACE)"
          restartPolicy: Always
          terminationGracePeriodSeconds: 30
          dnsPolicy: ClusterFirst

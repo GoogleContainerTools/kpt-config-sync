@@ -78,6 +78,15 @@ func RequireGKE(t testing.NTB) Opt {
 	if *e2e.TestCluster != e2e.GKE {
 		t.Skip("The --test-cluster flag must be set to `gke` to run this test.")
 	}
+	if testing.GCPProjectIDFromEnv == "" {
+		t.Fatal("Environment variable 'GCP_PROJECT' is required for this test case")
+	}
+	if testing.GCPClusterFromEnv == "" {
+		t.Fatal("Environment variable 'GCP_CLUSTER' is required for this test case")
+	}
+	if testing.GCPRegionFromEnv == "" && testing.GCPZoneFromEnv == "" {
+		t.Fatal("Environment variable 'GCP_REGION' or 'GCP_ZONE' is required for this test case")
+	}
 	return func(opt *New) {}
 }
 

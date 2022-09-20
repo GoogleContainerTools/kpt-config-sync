@@ -35,7 +35,6 @@ import (
 )
 
 const (
-	privateARHelmRegistry     = "oci://us-docker.pkg.dev/stolos-dev/configsync-ci-ar-helm"
 	privateHelmChartVersion   = "1.13.3"
 	privateHelmChart          = "coredns"
 	privateNSHelmChart        = "ns-chart"
@@ -44,6 +43,8 @@ const (
 	publicHelmChart           = "ingress-nginx"
 	publicHelmChartVersion    = "4.0.5"
 )
+
+var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", nomostesting.GCPProjectIDFromEnv)
 
 // TestPublicHelm can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public Helm repo without any authentication.
@@ -87,7 +88,7 @@ func TestPublicHelm(t *testing.T) {
 // TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully
 // sync the namespace scoped resources, and assign the RepoSync namespace to these resources.
 // This test will work only with following pre-requisites:
-// Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 // A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
@@ -143,13 +144,13 @@ func TestHelmNamespaceRepo(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestHelmARFleetWISameProject(t *testing.T) {
@@ -170,13 +171,13 @@ func TestHelmARFleetWISameProject(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
 //	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The cross-project fleet host project 'cs-dev-hub' is created.
 // 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
@@ -198,13 +199,13 @@ func TestHelmARFleetWIDifferentProject(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestHelmARGKEWorkloadIdentity(t *testing.T) {
@@ -251,7 +252,7 @@ func TestHelmGCENode(t *testing.T) {
 
 // TestHelmARTokenAuth verifies Config Sync can pull Helm chart from private Artifact Registry with Token auth type.
 // This test will work only with following pre-requisites:
-// Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 // A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmARTokenAuth(t *testing.T) {
 	nt := nomostest.New(t,

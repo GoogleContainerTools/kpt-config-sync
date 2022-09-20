@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
 const (
@@ -34,9 +35,6 @@ const (
 
 	// PrivateSSHKey is secret name of the private SSH key stored in the Cloud Secret Manager.
 	PrivateSSHKey = "config-sync-ci-ssh-private-key"
-
-	// secretManagerProject is the project id of the Secret Manager that stores the secrets.
-	secretManagerProject = "stolos-dev"
 
 	repoNameMaxLength = 62
 )
@@ -191,7 +189,7 @@ func (b *BitbucketClient) refreshAccessToken() (string, error) {
 // FetchCloudSecret fetches secret from Google Cloud Secret Manager.
 func FetchCloudSecret(name string) (string, error) {
 	out, err := exec.Command("gcloud", "secrets", "versions",
-		"access", "latest", "--project", secretManagerProject, "--secret", name).CombinedOutput()
+		"access", "latest", "--project", testing.GCPProjectIDFromEnv, "--secret", name).CombinedOutput()
 	if err != nil {
 		return "", errors.Wrap(err, string(out))
 	}

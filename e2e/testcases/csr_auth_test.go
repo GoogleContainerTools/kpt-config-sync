@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -38,10 +37,17 @@ import (
 )
 
 const (
-	csrRepo                    = "https://source.developers.google.com/p/stolos-dev/r/csr-auth-test"
-	gsaCSRReaderEmail          = "e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com"
 	syncBranch                 = "main"
 	crossProjectFleetProjectID = "cs-dev-hub"
+)
+
+var (
+	// The CSR repo was built from the directory e2e/testdata/hydration/kustomize-components,
+	// which includes a kustomization.yaml file in the root directory that
+	// references resources for tenant-a, tenant-b, and tenant-c.
+	// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
+	csrRepo           = fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", nomostesting.GCPProjectIDFromEnv)
+	gsaCSRReaderEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
 )
 
 // TestGCENode tests the `gcenode` auth type.
@@ -77,12 +83,12 @@ func TestGCENode(t *testing.T) {
 //  The test will run on a GKE cluster only with following pre-requisites
 // 1. Workload Identity is enabled.
 // 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
 // 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //      --role roles/iam.workloadIdentityUser \
-//      --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com
+//      --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 // 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
@@ -99,12 +105,12 @@ func TestGKEWorkloadIdentity(t *testing.T) {
 //  The test will run on a GKE cluster only with following pre-requisites
 // 1. Workload Identity is enabled.
 // 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
 // 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //      --role roles/iam.workloadIdentityUser \
-//      --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com
+//      --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 // 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestFleetWISameProject(t *testing.T) {
 	testWorkloadIdentity(t,
@@ -122,12 +128,12 @@ func TestFleetWISameProject(t *testing.T) {
 //  The test will run on a GKE cluster only with following pre-requisites
 // 1. Workload Identity is enabled.
 // 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
 // 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //      --role roles/iam.workloadIdentityUser \
 //      --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@stolos-dev.iam.gserviceaccount.com
+//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 // 5. The cross-project fleet host project 'cs-dev-hub' is created.
 // 6. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestFleetWIDifferentProject(t *testing.T) {
@@ -210,47 +216,42 @@ type workloadIdentityTestSpec struct {
 	rootCommitFn  nomostest.Sha1Func
 }
 
+func truncateStringByLength(s string, l int) string {
+	if len(s) > l {
+		return s[:l]
+	}
+	return s
+}
+
 func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RequireGKE(t))
 
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
-	gcpProject := os.Getenv("GCP_PROJECT")
-	if gcpProject == "" {
-		t.Fatal("Environment variable 'GCP_PROJECT' is required for this test case")
-	}
-	gcpCluster := os.Getenv("GCP_CLUSTER")
-	if gcpCluster == "" {
-		t.Fatal("Environment variable 'GCP_CLUSTER' is required for this test case")
-	}
-	gkeRegion := os.Getenv("GCP_REGION")
-	gkeZone := os.Getenv("GCP_ZONE")
-	if gkeRegion == "" && gkeZone == "" {
-		t.Fatal("Environment variable 'GCP_REGION' or 'GCP_ZONE' is required for this test case")
-	}
-	fleetMembership := fmt.Sprintf("%s-%s", gcpProject, gcpCluster)
-	gkeURI := "https://container.googleapis.com/v1/projects/" + gcpProject
-	if gkeRegion != "" {
-		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", gkeRegion, gcpCluster)
+	// Truncate the fleetMembership length to be at most 63 characters.
+	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(nomostesting.GCPProjectIDFromEnv, 20), nomostesting.GCPClusterFromEnv), 63)
+	gkeURI := "https://container.googleapis.com/v1/projects/" + nomostesting.GCPProjectIDFromEnv
+	if nomostesting.GCPRegionFromEnv != "" {
+		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", nomostesting.GCPRegionFromEnv, nomostesting.GCPClusterFromEnv)
 	} else {
-		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", gkeZone, gcpCluster)
+		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", nomostesting.GCPZoneFromEnv, nomostesting.GCPClusterFromEnv)
 	}
 
-	cleanMembershipInfo(nt, fleetMembership, gcpProject, gkeURI)
+	cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that the remaining tests can run in the shared test environment.
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
-		cleanMembershipInfo(nt, fleetMembership, gcpProject, gkeURI)
+		cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
 	})
 
 	tenant := "tenant-a"
 
 	// Register the cluster for fleet workload identity test
 	if testSpec.fleetWITest {
-		fleetProject := gcpProject
+		fleetProject := nomostesting.GCPProjectIDFromEnv
 		if testSpec.crossProject {
 			fleetProject = crossProjectFleetProjectID
 		}

@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: configsync.gke.io/v1beta1
-kind: RepoSync
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccountKey
 metadata:
-  name: repo-sync
-  namespace: bookinfo
+  name: pubsub-key
+  namespace: foo
 spec:
-  sourceType: oci
-  oci:
-    image: us-docker.pkg.dev/stolos-dev/config-sync-ci-public/namespace-repo-bookinfo
-    auth: none
+  publicKeyType: TYPE_X509_PEM_FILE
+  keyAlgorithm: KEY_ALG_RSA_2048
+  privateKeyType: TYPE_GOOGLE_CREDENTIALS_FILE
+  serviceAccountRef:
+    name: pubsub-app
+

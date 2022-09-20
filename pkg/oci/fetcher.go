@@ -33,7 +33,7 @@ import (
 
 // FetchPackage fetches the package from the OCI repository and write it to the destination.
 func FetchPackage(ctx context.Context, imageName, ociRoot, rev string, auth authn.Authenticator) error {
-	image, err := pullImage(imageName, remote.WithContext(ctx), remote.WithAuth(auth))
+	image, err := PullImage(imageName, remote.WithContext(ctx), remote.WithAuth(auth))
 	if err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func FetchPackage(ctx context.Context, imageName, ociRoot, rev string, auth auth
 	return util.UpdateSymlink(ociRoot, linkPath, destDir, oldDir)
 }
 
-// pullImage pulls image from source using provided options for auth credentials
-func pullImage(imageName string, options ...remote.Option) (v1.Image, error) {
+// PullImage pulls image from source using provided options for auth credentials
+func PullImage(imageName string, options ...remote.Option) (v1.Image, error) {
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse reference %q: %v", imageName, err)

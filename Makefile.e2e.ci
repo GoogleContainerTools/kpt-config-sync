@@ -142,7 +142,7 @@ test-e2e-gke-multi-repo-test-group1:
 
 # The CI target that runs the second group of tests with the multi-repo mode on GKE cluster.
 test-e2e-gke-multi-repo-test-group2:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --multirepo" --test-features=cluster-selector,hydration" \
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --multirepo --test-features=cluster-selector,hydration" \
 		test-e2e-go-gke-ci
 
 # The CI target that runs the third group of tests with the multi-repo mode on GKE cluster.

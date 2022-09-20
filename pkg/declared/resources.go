@@ -63,6 +63,9 @@ func (r *Resources) Update(ctx context.Context, objects []client.Object) ([]clie
 		newObjects = append(newObjects, obj)
 	}
 
+	// Record the declared_resources metric, after parsing but before validation.
+	metrics.RecordDeclaredResources(ctx, len(newObjects))
+
 	previousSet := r.getObjectSet()
 	if err := deletesAllNamespaces(previousSet, newSet); err != nil {
 		return nil, err

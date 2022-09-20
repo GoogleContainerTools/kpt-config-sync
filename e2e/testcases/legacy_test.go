@@ -177,16 +177,6 @@ func TestBats(t *testing.T) {
 	allTests := func(int) bool {
 		return true
 	}
-	testNums := func(nums ...int) func(int) bool {
-		return func(num int) bool {
-			for _, n := range nums {
-				if n == num {
-					return true
-				}
-			}
-			return false
-		}
-	}
 
 	nomosDir, err := filepath.Abs("../..")
 	if err != nil {
@@ -202,15 +192,8 @@ func TestBats(t *testing.T) {
 		//{fileName: "acme.bats"},
 		// Converted to apiservice_test.go.
 		//{fileName: "apiservice.bats"},
-		{
-			fileName: "basic.bats",
-			multiRepoIncompatible: testNums(
-				1, // tests internals of namespaceconfig
-				2, // tests internals of syncs
-				3, // tests internals of clusterconfigs
-			),
-			skipAutopilotCluster: testNums(10), // ignore the test that mutates the kube-system namespace
-		},
+		// Converted to basic_test.go
+		// {fileName: "basic.bats"}
 		{
 			fileName:      "cli.bats",
 			skipMultiRepo: allTests, // TODO: implement nomos status in CLI, this may be a go rewrite

@@ -114,7 +114,7 @@ func ResourceDeleted(gvk string) GVKMetric {
 func (csm ConfigSyncMetrics) ValidateReconcilerManagerMetrics() error {
 	metric := ocmetrics.ReconcileDurationView.Name
 	validation := hasTags(metric, []Tag{
-		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
+		{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 	})
 	return csm.validateMetric(metric, validation)
 }
@@ -126,6 +126,8 @@ func (csm ConfigSyncMetrics) ValidateReconcilerMetrics(reconciler string, numRes
 	// metric exists for the correct reconciler and has a "success" status tag.
 	metrics := []string{
 		ocmetrics.ApplyDurationView.Name,
+		ocmetrics.LastApplyTimestampView.Name,
+		ocmetrics.LastSyncTimestampView.Name,
 	}
 	for _, m := range metrics {
 		if err := csm.validateSuccessTag(reconciler, m); err != nil {
@@ -150,10 +152,10 @@ func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconciler string, gvkMetric GVK
 	return csm.validateRemediateDuration(reconciler, gvkMetric.GVK)
 }
 
-// ValidateMetricsCommitApplied checks that the `last_apply_timestamp` metric has been
-// recorded for a particular commit hash.
-func (csm ConfigSyncMetrics) ValidateMetricsCommitApplied(commitHash string) error {
-	metric := ocmetrics.LastApplyTimestampView.Name
+// ValidateMetricsCommitSynced checks that the `last_sync_timestamp` metric has
+// been recorded for a particular commit hash.
+func (csm ConfigSyncMetrics) ValidateMetricsCommitSynced(commitHash string) error {
+	metric := ocmetrics.LastSyncTimestampView.Name
 	validation := hasTags(metric, []Tag{
 		{Key: ocmetrics.KeyCommit.Name(), Value: commitHash},
 	})
@@ -272,7 +274,7 @@ func (csm ConfigSyncMetrics) ValidateNoSSLVerifyCount(count int) error {
 // and has a "success" tag value.
 func (csm ConfigSyncMetrics) validateSuccessTag(reconciler, metric string) error {
 	validation := hasTags(metric, []Tag{
-		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
+		{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 	})
 	return csm.validateMetric(metric, validation)
 }
@@ -283,7 +285,7 @@ func (csm ConfigSyncMetrics) validateAPICallDuration(reconciler, operation, gvk 
 	metric := ocmetrics.APICallDurationView.Name
 	validation := hasTags(metric, []Tag{
 		{Key: ocmetrics.KeyOperation.Name(), Value: operation},
-		{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
+		{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 	})
 	return errors.Wrapf(csm.validateMetric(metric, validation), "%s %s operation", gvk, operation)
 }
@@ -307,7 +309,7 @@ func (csm ConfigSyncMetrics) validateApplyOperations(reconciler, operation, gvk 
 	validations := []Validation{
 		hasTags(metric, []Tag{
 			{Key: ocmetrics.KeyOperation.Name(), Value: operation},
-			{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
+			{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 		}),
 		valueGTE(metric, value),
 	}
@@ -320,7 +322,7 @@ func (csm ConfigSyncMetrics) validateRemediateDuration(reconciler, gvk string) e
 	metric := ocmetrics.RemediateDurationView.Name
 	validations := []Validation{
 		hasTags(metric, []Tag{
-			{Key: ocmetrics.KeyStatus.Name(), Value: "success"},
+			{Key: ocmetrics.KeyStatus.Name(), Value: ocmetrics.StatusSuccess},
 		}),
 	}
 	return errors.Wrap(csm.validateMetric(metric, validations...), gvk)

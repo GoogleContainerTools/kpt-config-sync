@@ -90,11 +90,18 @@ func init() {
 	)
 }
 
+const (
+	// StatusSuccess is the string value for the status key indicating success
+	StatusSuccess = "success"
+	// StatusError is the string value for the status key indicating failure/errors
+	StatusError = "error"
+)
+
 // StatusLabel returns a string representation of the given error appropriate for the status label
 // of a Prometheus metric.
 func StatusLabel(err error) string {
 	if err == nil {
-		return "success"
+		return StatusSuccess
 	}
-	return "error"
+	return StatusError
 }

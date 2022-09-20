@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/git"
 	"kpt.dev/configsync/pkg/importer/reader"
+	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
@@ -155,7 +156,7 @@ func newReconciler(clusterName string, gitDir string, policyDir string, parser C
 
 // dirError updates repo source status with an error due to failure to read mounted git repo.
 func (c *reconciler) dirError(ctx context.Context, startTime time.Time, err error, errorFilePath string) (reconcile.Result, error) {
-	importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+	importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 	gitSyncError := git.SyncError(reconcilermanager.GitSync, errorFilePath, "app=git-importer")
 	errBuilder := status.SourceError
 	if err != nil {
@@ -224,7 +225,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	token, err := git.CommitHash(absGitDir.OSPath())
 	if err != nil {
 		klog.Warningf("Invalid format for config directory format: %v", err)
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		c.updateSourceStatus(ctx, nil, status.SourceError.Wrap(err).Sprintf("unable to parse commit hash").Build().ToCME())
 		return reconcile.Result{}, nil
 	}
@@ -241,7 +242,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	currentConfigs, err := namespaceconfig.ListConfigs(ctx, c.cache)
 	if err != nil {
 		klog.Errorf("failed to list current configs: %v", err)
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		return reconcile.Result{}, nil
 	}
 
@@ -280,7 +281,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	fileObjects, mErr := c.parser.Parse(filePaths)
 	if mErr != nil {
 		klog.Warningf("Failed to parse: %v", status.FormatSingleLine(mErr))
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(mErr))
 		return reconcile.Result{}, nil
 	}
@@ -303,7 +304,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 	if validationErrs != nil {
 		klog.Warningf("Failed to validate: %v", status.FormatSingleLine(validationErrs))
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(validationErrs))
 		if status.HasBlockingErrors(validationErrs) {
 			return reconcile.Result{}, nil
@@ -347,7 +348,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	if errs := differ.Update(ctx, c.client, c.decoder, *currentConfigs, *desiredConfigs, c.initTime); errs != nil {
 		klog.Warningf("Failed to apply actions: %v", status.FormatSingleLine(errs))
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		if validationErrs != nil {
 			// append non-blocking validation errors
 			errs = status.Append(errs, validationErrs)
@@ -360,7 +361,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	if validationErrs != nil {
 		// report non-blocking validation errors
-		importer.Metrics.CycleDuration.WithLabelValues("error").Observe(time.Since(startTime).Seconds())
+		importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusError).Observe(time.Since(startTime).Seconds())
 		c.updateImportStatus(ctx, repoObj, token, startTime, status.ToCME(validationErrs))
 
 		klog.V(4).Infof("Reconcile completed with non-blocking validation errors")
@@ -368,7 +369,7 @@ func (c *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	c.appliedGitDir = absGitDir.OSPath()
-	importer.Metrics.CycleDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
+	importer.Metrics.CycleDuration.WithLabelValues(metrics.StatusSuccess).Observe(time.Since(startTime).Seconds())
 	c.updateImportStatus(ctx, repoObj, token, startTime, nil)
 
 	klog.V(4).Infof("Reconcile completed")

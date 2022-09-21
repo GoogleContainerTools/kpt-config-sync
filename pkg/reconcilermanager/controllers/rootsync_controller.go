@@ -59,8 +59,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const kindRootSync = "RootSync"
-
 // ReconcilerType defines the type of a reconciler
 type ReconcilerType string
 
@@ -88,7 +86,7 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
-			syncKind:                kindRootSync,
+			syncKind:                configsync.RootSyncKind,
 			allowVerticalScale:      allowVerticalScale,
 		},
 	}
@@ -179,6 +177,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	labelMap := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
+		metadata.SyncKindLabel:      r.syncKind,
 	}
 
 	// Overwrite reconciler pod ServiceAccount.

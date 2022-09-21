@@ -359,7 +359,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 
 	return &v1beta1.RootSync{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "RootSync",
+			Kind:       configsync.RootSyncKind,
 			APIVersion: v1beta1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{

@@ -1129,7 +1129,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 				// 3 is for the resources created for every namespace: RepoSync, RoleBinding, ClusterRoleBinding
 				2+len(rsNamespaces)+rsCount*3,
 				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"),
+				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated(configsync.RepoSyncKind),
 				testmetrics.ResourceCreated("ClusterRoleBinding"))
 		} else {
 			err = nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName,
@@ -1137,7 +1137,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 				// and 2 is for the resources created for every namespace: RepoSync and RoleBinding
 				2+len(rsNamespaces)+rsCount*2,
 				testmetrics.ResourceCreated("Namespace"), testmetrics.ResourceCreated("ClusterRole"),
-				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated("RepoSync"))
+				testmetrics.ResourceCreated("RoleBinding"), testmetrics.ResourceCreated(configsync.RepoSyncKind))
 		}
 		if err != nil {
 			return err

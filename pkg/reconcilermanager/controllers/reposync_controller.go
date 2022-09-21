@@ -58,8 +58,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const kindRepoSync = "RepoSync"
-
 // RepoSyncReconciler reconciles a RepoSync object.
 type RepoSyncReconciler struct {
 	reconcilerBase
@@ -79,7 +77,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
-			syncKind:                kindRepoSync,
+			syncKind:                configsync.RepoSyncKind,
 			allowVerticalScale:      allowVerticalScale,
 		},
 		repoSyncs: make(map[types.NamespacedName]struct{}),
@@ -228,6 +226,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	labelMap := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
+		metadata.SyncKindLabel:      r.syncKind,
 	}
 
 	// Overwrite reconciler pod ServiceAccount.

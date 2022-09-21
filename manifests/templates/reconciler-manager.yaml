@@ -33,6 +33,7 @@ spec:
     metadata:
       labels:
         app: reconciler-manager
+        configsync.gke.io/deployment-name: reconciler-manager
     spec:
       serviceAccountName: reconciler-manager
       containers:
@@ -90,6 +91,48 @@ spec:
           httpGet:
             path: /
             port: 13133 # Health Check extension default port.
+        # These KUBE env vars help populate OTEL_RESOURCE_ATTRIBUTES which
+        # is used by the otel-agent to populate resource attributes when
+        # emiting metrics to the otel-collector. This is more efficient than
+        # having the otel-collector look them up from the apiserver.
+        env:
+        - name: KUBE_POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: KUBE_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: KUBE_POD_UID
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        - name: KUBE_POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: KUBE_DEPLOYMENT_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.labels['configsync.gke.io/deployment-name']
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "k8s.pod.name=$(KUBE_POD_NAME),\
+            k8s.pod.namespace=$(KUBE_POD_NAMESPACE),\
+            k8s.pod.uid=$(KUBE_POD_UID),\
+            k8s.pod.ip=$(KUBE_POD_IP),\
+            k8s.node.name=$(KUBE_NODE_NAME),\
+            k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)"
       terminationGracePeriodSeconds: 10
       volumes:
       - name: configs

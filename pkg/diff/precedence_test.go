@@ -135,11 +135,11 @@ func TestValidateManager(t *testing.T) {
 		ObjectKey: client.ObjectKey{Namespace: "ns-1", Name: "cm-1"},
 	}
 	rootSyncID := core.ID{
-		GroupKind: schema.GroupKind{Group: configsync.GroupName, Kind: "RootSync"},
+		GroupKind: schema.GroupKind{Group: configsync.GroupName, Kind: configsync.RootSyncKind},
 		ObjectKey: client.ObjectKey{Namespace: "ns-1", Name: "rootsync-1"},
 	}
 	repoSyncID := core.ID{
-		GroupKind: schema.GroupKind{Group: configsync.GroupName, Kind: "RepoSync"},
+		GroupKind: schema.GroupKind{Group: configsync.GroupName, Kind: configsync.RepoSyncKind},
 		ObjectKey: client.ObjectKey{Namespace: "ns-1", Name: "reposync-1"},
 	}
 	testCases := []struct {

@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
@@ -208,22 +209,22 @@ func StatefulSet() schema.GroupVersionKind {
 
 // RepoSyncV1Alpha1 returns the canonical RepoSync GroupVersionKind.
 func RepoSyncV1Alpha1() schema.GroupVersionKind {
-	return v1alpha1.SchemeGroupVersion.WithKind("RepoSync")
+	return v1alpha1.SchemeGroupVersion.WithKind(configsync.RepoSyncKind)
 }
 
 // RepoSyncV1Beta1 returns the v1beta1 RepoSync GroupVersionKind.
 func RepoSyncV1Beta1() schema.GroupVersionKind {
-	return configsyncv1beta1.SchemeGroupVersion.WithKind("RepoSync")
+	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RepoSyncKind)
 }
 
 // RootSyncV1Alpha1 returns the canonical RootSync GroupVersionKind.
 func RootSyncV1Alpha1() schema.GroupVersionKind {
-	return v1alpha1.SchemeGroupVersion.WithKind("RootSync")
+	return v1alpha1.SchemeGroupVersion.WithKind(configsync.RootSyncKind)
 }
 
 // RootSyncV1Beta1 returns the v1beta1 RootSync GroupVersionKind.
 func RootSyncV1Beta1() schema.GroupVersionKind {
-	return configsyncv1beta1.SchemeGroupVersion.WithKind("RootSync")
+	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RootSyncKind)
 }
 
 // Service returns the canonical Service GroupVersionKind.

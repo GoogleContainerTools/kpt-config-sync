@@ -46,6 +46,9 @@ const (
 	// SyncNameLabel indicates the name of RootSync or RepoSync.
 	SyncNameLabel = configsync.ConfigSyncPrefix + "sync-name"
 
+	// SyncKindLabel indicates the RSync kind: RootSync or RepoSync.
+	SyncKindLabel = configsync.ConfigSyncPrefix + "sync-kind"
+
 	// DeploymentNameLabel indicates the name of the Deployment.
 	// This is used to enable selecting pods by label, primarily for printing logs.
 	// Example: kubectl logs deployment/<deploy-name> <container-name> -n config-management-system

@@ -78,9 +78,11 @@ type Applier struct {
 	errs status.MultiError
 	// syncing indicates whether the applier is syncing.
 	syncing bool
-	// name and namespace of the RootSync|RepoSync object
-	// for the current applier.
-	syncName      string
+	// syncKind is the Kind of the RSync object: RootSync or RepoSync
+	syncKind string
+	// syncName is the name of RSync object
+	syncName string
+	// syncNamespace is the namespace of RSync object
 	syncNamespace string
 	// mux is an Applier-level mutext to prevent concurrent Apply() and Refresh()
 	mux sync.Mutex
@@ -110,7 +112,8 @@ var _ Interface = &Applier{}
 // NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
 // the API server.
 func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, namespace declared.Scope, syncName string, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
-	u := newInventoryUnstructured(syncName, string(namespace), statusMode)
+	syncKind := configsync.RepoSyncKind
+	u := newInventoryUnstructured(syncKind, syncName, string(namespace), statusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
 	if err := annotateStatusMode(context.TODO(), c, u, statusMode); err != nil {
@@ -128,6 +131,7 @@ func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigF
 		configFlags:      configFlags,
 		clientSetFunc:    newClientSet,
 		policy:           inventory.PolicyAdoptIfNoInventory,
+		syncKind:         syncKind,
 		syncName:         syncName,
 		syncNamespace:    string(namespace),
 		statusMode:       statusMode,
@@ -139,7 +143,8 @@ func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigF
 
 // NewRootApplier initializes an applier that can fetch all resources from the API server.
 func NewRootApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, syncName, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
-	u := newInventoryUnstructured(syncName, configmanagement.ControllerNamespace, statusMode)
+	syncKind := configsync.RootSyncKind
+	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, statusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
 	if err := annotateStatusMode(context.TODO(), c, u, statusMode); err != nil {
@@ -157,6 +162,9 @@ func NewRootApplier(c client.Client, configFlags *genericclioptions.ConfigFlags,
 		configFlags:      configFlags,
 		clientSetFunc:    newClientSet,
 		policy:           inventory.PolicyAdoptAll,
+		syncKind:         syncKind,
+		syncName:         syncName,
+		syncNamespace:    string(configmanagement.ControllerNamespace),
 		statusMode:       statusMode,
 		reconcileTimeout: reconcileTimeout,
 	}
@@ -370,7 +378,7 @@ func handleMetrics(ctx context.Context, operation string, err error, gvk schema.
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
 func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client) {
-	u := newInventoryUnstructured(a.syncName, a.syncNamespace, a.statusMode)
+	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.statusMode)
 	err := c.Get(ctx, client.ObjectKey{Namespace: a.syncNamespace, Name: a.syncName}, u)
 	if err == nil {
 		size, err := getObjectSize(u)
@@ -552,12 +560,13 @@ func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (m
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.
-func newInventoryUnstructured(name, namespace, statusMode string) *unstructured.Unstructured {
+func newInventoryUnstructured(kind, name, namespace, statusMode string) *unstructured.Unstructured {
 	id := InventoryID(name, namespace)
 	u := resourcegroup.Unstructured(name, namespace, id)
 	core.SetLabel(u, metadata.ManagedByKey, metadata.ManagedByValue)
 	core.SetLabel(u, metadata.SyncNamespaceLabel, namespace)
 	core.SetLabel(u, metadata.SyncNameLabel, name)
+	core.SetLabel(u, metadata.SyncKindLabel, kind)
 	core.SetAnnotation(u, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
 	core.SetAnnotation(u, StatusModeKey, statusMode)
 	return u

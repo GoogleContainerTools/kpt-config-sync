@@ -36,6 +36,10 @@ const (
 	RepoSyncName = "repo-sync"
 	// RootSyncName is the expected name of any RootSync CR.
 	RootSyncName = "root-sync"
+	// RepoSyncKind is the kind of the RepoSync resource.
+	RepoSyncKind = "RepoSync"
+	// RootSyncKind is the kind of the RepoSync resource.
+	RootSyncKind = "RootSync"
 )
 
 const (

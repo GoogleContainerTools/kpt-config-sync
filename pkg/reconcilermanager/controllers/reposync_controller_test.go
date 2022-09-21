@@ -280,7 +280,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
 		fakeClient,
-		controllerruntime.Log.WithName("controllers").WithName("RepoSync"),
+		controllerruntime.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		s,
 		allowVerticalScale,
 	)
@@ -1109,6 +1109,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	label := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(
@@ -1288,13 +1289,13 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	label1 := map[string]string{
 		metadata.SyncNamespaceLabel: rs1.Namespace,
 		metadata.SyncNameLabel:      rs1.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	serviceAccount1 := fake.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.Label(metadata.SyncNamespaceLabel, label1[metadata.SyncNamespaceLabel]),
-		core.Label(metadata.SyncNameLabel, label1[metadata.SyncNameLabel]),
+		core.Labels(label1),
 	)
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
 
@@ -1341,6 +1342,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	label2 := map[string]string{
 		metadata.SyncNamespaceLabel: rs2.Namespace,
 		metadata.SyncNameLabel:      rs2.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	repoContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
@@ -1393,6 +1395,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	label3 := map[string]string{
 		metadata.SyncNamespaceLabel: rs3.Namespace,
 		metadata.SyncNameLabel:      rs3.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	repoContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
@@ -1448,6 +1451,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	label4 := map[string]string{
 		metadata.SyncNamespaceLabel: rs4.Namespace,
 		metadata.SyncNameLabel:      rs4.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	repoContainerEnv4 := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4)
@@ -1503,6 +1507,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	label5 := map[string]string{
 		metadata.SyncNamespaceLabel: rs5.Namespace,
 		metadata.SyncNameLabel:      rs5.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	repoContainerEnv5 := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5)
@@ -2171,6 +2176,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	label := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(

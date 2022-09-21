@@ -15,26 +15,12 @@
 package metrics
 
 import (
-	"fmt"
-	"os"
-
 	"contrib.go.opencensus.io/exporter/ocagent"
 	"go.opencensus.io/stats/view"
-	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 // RegisterOCAgentExporter creates the OC Agent metrics exporter.
 func RegisterOCAgentExporter() (*ocagent.Exporter, error) {
-	// Update OC_RESOURCE_LABELS defined in go.opencensus.io/resource/resource.go
-	// So that each OC agent will have corresponding resource labels
-	// Adding pod name and namespace name can have metrics identified as container_pod
-	// Cluster name & cluster location & project name are attached automatically
-	reconcilerName := os.Getenv(reconcilermanager.ReconcilerNameKey)
-	namespace := os.Getenv(reconcilermanager.NamespaceNameKey)
-	err := os.Setenv("OC_RESOURCE_LABELS", fmt.Sprintf("k8s.namespace.name=%q,k8s.pod.name=%q", namespace, reconcilerName))
-	if err != nil {
-		return nil, err
-	}
 	oce, err := ocagent.NewExporter(
 		ocagent.WithInsecure(),
 	)

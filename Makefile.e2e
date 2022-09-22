@@ -201,7 +201,7 @@ test-e2e-kind-multi-repo-test-group2:
 
 # This target runs the third group of e2e tests with the multi-repo mode.
 test-e2e-kind-multi-repo-test-group3:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2" test-e2e-kind-multi-repo
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2,multi-repos,override-api,hydration" test-e2e-kind-multi-repo
 
 # Runs the Go e2e tests against multi-repo Config Sync.
 # Rebuilds the nomos image, so use this when you're actively modifying the Nomos

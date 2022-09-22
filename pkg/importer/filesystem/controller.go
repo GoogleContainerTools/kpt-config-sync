@@ -15,6 +15,7 @@
 package filesystem
 
 import (
+	"context"
 	"os"
 	"path"
 	"time"
@@ -56,7 +57,7 @@ const (
 )
 
 // AddController adds the git-importer controller to the manager.
-func AddController(clusterName string, mgr manager.Manager, gitDir, policyDirRelative string,
+func AddController(ctx context.Context, clusterName string, mgr manager.Manager, gitDir, policyDirRelative string,
 	pollPeriod time.Duration) error {
 	syncerClient := syncerclient.New(mgr.GetClient(), metrics.APICallDuration)
 
@@ -109,7 +110,7 @@ func AddController(clusterName string, mgr manager.Manager, gitDir, policyDirRel
 		return errors.Wrapf(err, "could not watch Syncs in the %q controller", GitImporterName)
 	}
 
-	return watchFileSystem(c, pollPeriod)
+	return watchFileSystem(ctx, c, pollPeriod)
 }
 
 // ValidateInstallation checks to see if Nomos is installed on a server,
@@ -126,15 +127,22 @@ func ValidateInstallation(dc utildiscovery.ServerResourcer) status.MultiError {
 }
 
 // watchFileSystem issues a reconcile.Request after every pollPeriod.
-func watchFileSystem(c controller.Controller, pollPeriod time.Duration) error {
+func watchFileSystem(ctx context.Context, c controller.Controller, pollPeriod time.Duration) error {
 	pollCh := make(chan event.GenericEvent)
 	go func() {
-		ticker := time.NewTicker(pollPeriod)
-		for range ticker.C {
-			// TODO: Not an intended use case for GenericEvent. Refactor.
-			u := &unstructured.Unstructured{}
-			u.SetName(pollFilesystem)
-			pollCh <- event.GenericEvent{Object: u}
+		pollTimer := time.NewTimer(pollPeriod)
+		defer pollTimer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-pollTimer.C:
+				// TODO: Not an intended use case for GenericEvent. Refactor.
+				u := &unstructured.Unstructured{}
+				u.SetName(pollFilesystem)
+				pollCh <- event.GenericEvent{Object: u}
+				pollTimer.Reset(pollPeriod)
+			}
 		}
 	}()
 

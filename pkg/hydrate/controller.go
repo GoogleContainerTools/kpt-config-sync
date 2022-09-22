@@ -69,21 +69,27 @@ type Hydrator struct {
 
 // Run runs the hydration process periodically.
 func (h *Hydrator) Run(ctx context.Context) {
-	tickerPoll := time.NewTicker(h.PollingFrequency)
-	tickerRehydrate := time.NewTicker(h.RehydrateFrequency)
+	// Use timers, not tickers.
+	// Tickers can cause memory leaks and continuous execution, when execution
+	// takes longer than the tick duration.
+	runTimer := time.NewTimer(h.PollingFrequency)
+	defer runTimer.Stop()
+	rehydrateTimer := time.NewTimer(h.RehydrateFrequency)
+	defer rehydrateTimer.Stop()
 	absSourceDir := h.SourceRoot.Join(cmpath.RelativeSlash(h.SourceLink))
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-tickerRehydrate.C:
+		case <-rehydrateTimer.C:
 			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
 				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
 			} else {
 				h.rehydrateOnError(commit, syncDir.OSPath())
 			}
-		case <-tickerPoll.C:
+			rehydrateTimer.Reset(h.RehydrateFrequency) // Schedule rehydrate attempt
+		case <-runTimer.C:
 			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
 				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
@@ -96,6 +102,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v", commit, err)
 				}
 			}
+			runTimer.Reset(h.PollingFrequency) // Schedule re-run attempt
 		}
 	}
 }

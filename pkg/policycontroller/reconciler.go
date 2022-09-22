@@ -140,13 +140,17 @@ func (t *throttler) start(ctx context.Context, mgr watch.RestartableManager) {
 	var lastGVKs map[schema.GroupVersionKind]bool
 	var gvks map[schema.GroupVersionKind]bool
 	var dirty bool
-	ticker := time.NewTicker(3 * time.Second)
+	restartPeriod := 3 * time.Second
+	restartTimer := time.NewTimer(restartPeriod)
+	defer restartTimer.Stop()
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case gvks = <-t.input:
 			dirty = !reflect.DeepEqual(lastGVKs, gvks)
-		case <-ticker.C:
+		case <-restartTimer.C:
 			if dirty {
 				klog.Infof("Restarting manager with GVKs: %v", gvks)
 				if _, err := mgr.Restart(gvks, false); err != nil {
@@ -156,9 +160,7 @@ func (t *throttler) start(ctx context.Context, mgr watch.RestartableManager) {
 					dirty = false
 				}
 			}
-		case <-ctx.Done():
-			ticker.Stop()
-			return
+			restartTimer.Reset(restartPeriod)
 		}
 	}
 }

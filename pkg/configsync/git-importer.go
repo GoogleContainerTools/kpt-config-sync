@@ -76,12 +76,14 @@ func RunImporter() {
 	// expected.
 	dir := strings.TrimPrefix(*policyDirRelative, "/")
 
+	ctx := signals.SetupSignalHandler()
+
 	// Set up controllers.
 	if err := meta.AddControllers(mgr); err != nil {
 		klog.Fatalf("Error adding Sync controller: %+v", err)
 	}
 
-	if err := filesystem.AddController(*clusterName, mgr, *gitDir,
+	if err := filesystem.AddController(ctx, *clusterName, mgr, *gitDir,
 		dir, *pollPeriod); err != nil {
 		klog.Fatalf("Error adding Importer controller: %+v", err)
 	}
@@ -90,7 +92,6 @@ func RunImporter() {
 		klog.Fatalf("Error adding RepoStatus controller: %+v", err)
 	}
 
-	ctx := signals.SetupSignalHandler()
 	if err := policycontroller.AddControllers(ctx, mgr); err != nil {
 		klog.Fatalf("Error adding PolicyController controller: %+v", err)
 	}

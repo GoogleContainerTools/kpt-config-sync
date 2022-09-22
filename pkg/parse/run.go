@@ -55,9 +55,15 @@ const (
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
 func Run(ctx context.Context, p Parser) {
 	opts := p.options()
-	tickerPoll := time.NewTicker(opts.pollingFrequency)
-	tickerResync := time.NewTicker(opts.resyncPeriod)
-	tickerRetryOrWatchUpdate := time.NewTicker(time.Second)
+	// Use timers, not tickers.
+	// Tickers can cause memory leaks and continuous execution, when execution
+	// takes longer than the tick duration.
+	runTimer := time.NewTimer(opts.pollingFrequency)
+	defer runTimer.Stop()
+	resyncTimer := time.NewTimer(opts.resyncPeriod)
+	defer resyncTimer.Stop()
+	retryTimer := time.NewTimer(time.Second)
+	defer retryTimer.Stop()
 	state := &reconcilerState{}
 	for {
 		select {
@@ -66,19 +72,23 @@ func Run(ctx context.Context, p Parser) {
 
 		// it is time to reapply the configuration even if no changes have been detected
 		// This case should be checked first since it resets the cache
-		case <-tickerResync.C:
+		case <-resyncTimer.C:
 			klog.Infof("It is time for a force-resync")
 			// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 			state.resetAllButSourceState()
 			run(ctx, p, triggerResync, state)
+			resyncTimer.Reset(opts.resyncPeriod) // Schedule resync attempt
+			retryTimer.Reset(time.Second)        // Schedule retry attempt
 
 		// it is time to re-import the configuration from the filesystem
-		case <-tickerPoll.C:
+		case <-runTimer.C:
 			run(ctx, p, triggerReimport, state)
+			runTimer.Reset(opts.pollingFrequency) // Schedule re-run attempt
+			retryTimer.Reset(time.Second)         // Schedule retry attempt
 
 		// it is time to check whether the last parse-apply-watch loop failed or any watches need to be updated
-		case <-tickerRetryOrWatchUpdate.C:
+		case <-retryTimer.C:
 			var trigger string
 			if opts.managementConflict() {
 				// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
@@ -94,9 +104,11 @@ func Run(ctx context.Context, p Parser) {
 				klog.Infof("Some watches need to be updated")
 				trigger = triggerWatchUpdate
 			} else {
+				// Don't reset the retry timer if there's nothing to retry.
 				continue
 			}
 			run(ctx, p, trigger, state)
+			retryTimer.Reset(time.Second)
 		}
 	}
 }
@@ -369,23 +381,24 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 
 // updateSyncStatus update the sync status periodically until the cancellation function of the context is called.
 func updateSyncStatus(ctx context.Context, p Parser) {
-	ticker := time.NewTicker(5 * time.Second)
+	updatePeriod := 5 * time.Second
+	updateTimer := time.NewTimer(updatePeriod)
+	defer updateTimer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			// ctx.Done() is closed when the cancellation function of the context is called.
 			return
 
-		case <-ticker.C:
+		case <-updateTimer.C:
 			if err := p.SetSyncStatus(ctx, p.options().updater.applier.Errors()); err != nil {
 				klog.Warningf("failed to update sync status: %v", err)
 			}
 			remediatorErrs := p.options().updater.remediator.ConflictErrors()
-			if len(remediatorErrs) == 0 {
-				continue
+			if len(remediatorErrs) > 0 {
+				UpdateConflictManagerStatus(ctx, remediatorErrs, p.K8sClient())
 			}
-			UpdateConflictManagerStatus(ctx, remediatorErrs, p.K8sClient())
-
+			updateTimer.Reset(updatePeriod)
 		}
 	}
 }

@@ -237,21 +237,23 @@ func Run(opts Options) {
 
 // updateStatus update the status periodically until the cancellation function of the context is called.
 func updateStatus(ctx context.Context, p parse.Parser) {
-	ticker := time.NewTicker(5 * time.Second)
+	updatePeriod := 5 * time.Second
+	updateTimer := time.NewTimer(updatePeriod)
+	defer updateTimer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			// ctx.Done() is closed when the cancellation function of the context is called.
 			return
-
-		case <-ticker.C:
+		case <-updateTimer.C:
 			if !p.Reconciling() {
 				if err := p.SetSyncStatus(ctx, p.ApplierErrors()); err != nil {
 					klog.Warningf("failed to update remediator errors: %v", err)
 				}
 				parse.UpdateConflictManagerStatus(ctx, p.RemediatorConflictErrors(), p.K8sClient())
 			}
-			// if `p.Reconciling` is true, `parse.Run` would update the status periodically.
+			// else if `p.Reconciling` is true, `parse.Run` will update the status periodically.
+			updateTimer.Reset(updatePeriod)
 		}
 	}
 }

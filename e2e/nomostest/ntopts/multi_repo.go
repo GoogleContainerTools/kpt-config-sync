@@ -41,7 +41,7 @@ type MultiRepo struct {
 	RootRepos map[string]RepoOpts
 
 	// Control indicates options for configuring Namespace Repos.
-	Control repoControl
+	Control RepoControl
 
 	// SkipMultiRepo will skip the test if run in multi repo mode.  This stutters because we decided to embed
 	// this struct inside of the "New" struct rather than have it as a member.
@@ -131,8 +131,8 @@ func WithCentralizedControl(opt *New) {
 	opt.Control = CentralControl
 }
 
-// repoControl indicates the type of control for Namespace repos.
-type repoControl string
+// RepoControl indicates the type of control for Namespace repos.
+type RepoControl string
 
 const (
 	// DelegatedControl indicates the central admin only declares the Namespace

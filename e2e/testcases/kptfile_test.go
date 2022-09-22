@@ -43,7 +43,8 @@ func TestIgnoreKptfiles(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 2,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err

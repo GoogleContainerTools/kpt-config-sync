@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -82,8 +83,14 @@ type Repository struct {
 	// SafetyNSPath is the path to the safety namespace yaml file.
 	SafetyNSPath string
 
-	// SafetyNS is the name of the safety namespace.
+	// SafetyNSName is the name of the safety namespace.
 	SafetyNSName string
+
+	// SafetyClusterRolePath is the path to the safety namespace yaml file.
+	SafetyClusterRolePath string
+
+	// SafetyClusterRoleName is the name of the safety namespace.
+	SafetyClusterRoleName string
 
 	// RemoteRepoName is the name of the remote repository.
 	// It is the same as Name for the testing git-server.
@@ -109,18 +116,20 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstream 
 	nt.T.Helper()
 
 	namespacedName := nn.String()
-	safetyNs := fmt.Sprintf("safety-%s", strings.ReplaceAll(namespacedName, "/", "-"))
+	safetyName := fmt.Sprintf("safety-%s", strings.ReplaceAll(namespacedName, "/", "-"))
 
 	localDir := filepath.Join(nt.TmpDir, "repos", namespacedName)
 
 	g := &Repository{
-		Root:         localDir,
-		Format:       sourceFormat,
-		T:            nt.T,
-		Type:         repoType,
-		SafetyNSName: safetyNs,
-		SafetyNSPath: fmt.Sprintf("acme/namespaces/%s/ns.yaml", safetyNs),
-		Scheme:       nt.scheme,
+		Root:                  localDir,
+		Format:                sourceFormat,
+		T:                     nt.T,
+		Type:                  repoType,
+		SafetyNSName:          safetyName,
+		SafetyNSPath:          fmt.Sprintf("acme/namespaces/%s/ns.yaml", safetyName),
+		SafetyClusterRoleName: safetyName,
+		SafetyClusterRolePath: fmt.Sprintf("acme/cluster/cluster-role-%s.yaml", safetyName),
+		Scheme:                nt.scheme,
 	}
 
 	repoName, err := nt.GitProvider.CreateRepository(namespacedName)
@@ -176,8 +185,10 @@ func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) {
 	// Add .gitkeep to retain dir when empty, otherwise configsync will error.
 	g.AddEmptyDir(AcmeDir)
 	if g.Type == RootRepo {
-		// Keep a safety namespace to avoid failing the safety check.
-		g.Add(g.SafetyNSPath, fake.NamespaceObject(g.SafetyNSName))
+		// Add safety Namespace and ClusterRole to avoid errors from the safety
+		// check (KNV2006) when deleting all the other remaining objects.
+		g.AddSafetyNamespace()
+		g.AddSafetyClusterRole()
 	}
 	switch sourceFormat {
 	case filesystem.SourceFormatHierarchy:
@@ -512,4 +523,30 @@ func (g *Repository) Hash() string {
 		g.T.Fatal(err)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// AddSafetyNamespace adds a Namespace to prevent the mono-repo safety check
+// (KNV2006) from preventing deletion of other objects.
+func (g *Repository) AddSafetyNamespace() {
+	g.T.Helper()
+	g.Add(g.SafetyNSPath, fake.NamespaceObject(g.SafetyNSName))
+}
+
+// RemoveSafetyNamespace removes the safety Namespace.
+func (g *Repository) RemoveSafetyNamespace() {
+	g.T.Helper()
+	g.Remove(g.SafetyNSPath)
+}
+
+// AddSafetyClusterRole adds a ClusterRole to prevent the mono-repo safety check
+// (KNV2006) from preventing deletion of other objects.
+func (g *Repository) AddSafetyClusterRole() {
+	g.T.Helper()
+	g.Add(g.SafetyClusterRolePath, fake.ClusterRoleObject(core.Name(g.SafetyClusterRoleName)))
+}
+
+// RemoveSafetyClusterRole removes the safety ClusterRole.
+func (g *Repository) RemoveSafetyClusterRole() {
+	g.T.Helper()
+	g.Remove(g.SafetyClusterRolePath)
 }

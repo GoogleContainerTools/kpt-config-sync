@@ -181,6 +181,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
 		DefaultReconcileTimeout: sharedNt.DefaultReconcileTimeout,
+		DefaultMetricsTimeout:   sharedNt.DefaultMetricsTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
 		MultiRepo:               sharedNt.MultiRepo,
 		ReconcilerPollingPeriod: sharedNT.ReconcilerPollingPeriod,
@@ -295,6 +296,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Config:                  opts.RESTConfig,
 		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
+		DefaultMetricsTimeout:   1 * time.Minute,
 		kubeconfigPath:          kubeconfigPath,
 		MultiRepo:               opts.Nomos.MultiRepo,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
@@ -428,12 +430,14 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 
 	nt.PortForwardOtelCollector()
 
+	nt.Control = opts.Control
 	switch opts.Control {
 	case ntopts.DelegatedControl:
 		setupDelegatedControl(nt, opts)
 	case ntopts.CentralControl:
 		setupCentralizedControl(nt, opts)
 	default:
+		nt.Control = ntopts.CentralControl
 		// Most tests don't care about centralized/delegated control, but can
 		// specify the behavior if that distinction is under test.
 		setupCentralizedControl(nt, opts)

@@ -84,7 +84,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Anvil
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
 		if err != nil {
 			return err
@@ -174,7 +175,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Anvil
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
 		if err != nil {
 			return err

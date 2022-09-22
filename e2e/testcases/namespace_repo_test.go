@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +87,9 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 
 	// Validate multi-repo metrics from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespace, configsync.RepoSyncName), 1, metrics.ResourceCreated("ServiceAccount"))
+		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespace, configsync.RepoSyncName),
+			1, // 1 for the test ServiceAccount
+			metrics.ResourceCreated("ServiceAccount"))
 		if err != nil {
 			return err
 		}
@@ -161,7 +162,9 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 
 	// Validate multi-repo metrics from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespaceRepo, configsync.RepoSyncName), 1, metrics.ResourceCreated("ServiceAccount"))
+		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespaceRepo, configsync.RepoSyncName),
+			1, // 1 for the test ServiceAccount
+			metrics.ResourceCreated("ServiceAccount"))
 		if err != nil {
 			return err
 		}
@@ -219,9 +222,15 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
+	// Calculate the expected number of managed resource objects before removing the RepoSync.
+	// This accounts for all the other objects in the RootSync repo from CentralizedControl.
+	numObjects := nt.DefaultRootSyncObjectCount()
+	numObjects-- // -1 because the RepoSync will be deleted manually
+
 	// Remove RepoSync resource from Root Repository.
 	nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(bsNamespace, configsync.RepoSyncName))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RepoSync from the Root Repository")
+
 	// Remove from NamespaceRepos so we don't try to check that it is syncing,
 	// as we've just deleted it.
 	nn := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
@@ -233,16 +242,9 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	// Validate multi-repo metrics from root reconciler.
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		var err error
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 5,
-				metrics.ResourceDeleted(configsync.RepoSyncKind))
-		} else {
-			err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4,
-				metrics.ResourceDeleted(configsync.RepoSyncKind))
-		}
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			numObjects,
+			metrics.ResourceDeleted(configsync.RepoSyncKind))
 		if err != nil {
 			return err
 		}

@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -98,6 +99,12 @@ type NT struct {
 	// for object reconcilition.
 	DefaultReconcileTimeout time.Duration
 
+	// DefaultMetricsTimeout is the default timeout for tests to wait for
+	// metrics to match expectations. This needs to be long enough to account
+	// for batched metrics in the agent and collector, but short enough that
+	// the metrics don't expire in the collector.
+	DefaultMetricsTimeout time.Duration
+
 	// RootRepos is the root repositories the cluster is syncing to.
 	// The key is the RootSync name and the value points to the corresponding Repository object.
 	// Each test case was set up with a default RootSync (`root-sync`) installed.
@@ -154,6 +161,9 @@ type NT struct {
 
 	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
 	WebhookDisabled *bool
+
+	// Control indicates how the test case was setup.
+	Control ntopts.RepoControl
 }
 
 const (
@@ -383,7 +393,7 @@ func (nt *NT) ValidateMetrics(syncOption MetricsSyncOption, fn func() error) err
 		nt.T.Log("validating metrics...")
 		prevMetrics := nt.ReconcilerMetrics
 		var once sync.Once
-		duration, err := Retry(nt.DefaultWaitTimeout, func() error {
+		duration, err := Retry(nt.DefaultMetricsTimeout, func() error {
 			duration, currentMetrics := nt.GetCurrentMetrics(syncOption)
 			nt.updateMetrics(prevMetrics, currentMetrics)
 			once.Do(func() {
@@ -451,21 +461,54 @@ func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object)
 	return err
 }
 
+// DefaultRootSyncObjectCount returns the number of objects expected to be in
+// the default RootSync repo, based on how many RepoSyncs it's managing.
+func (nt *NT) DefaultRootSyncObjectCount() int {
+	numObjects := 2 // 2 for the 'safety' Namespace & 'safety' ClusteRole
+
+	// Count the number of unique RepoSyncs
+	numRepoSyncs := len(nt.NonRootRepos)
+
+	// Account for objects added to the default RootRepo by setupCentralizedControl
+	if nt.Control == ntopts.CentralControl && numRepoSyncs > 0 {
+		numObjects++                             // 1 for the ClusterRole, shared by all RepoSyncs
+		numObjects += nt.NumRepoSyncNamespaces() // 1 for each unique RepoSync Namespace
+		numObjects += numRepoSyncs               // 1 for each RepoSync
+		numObjects += numRepoSyncs               // 1 for each RepoSync RoleBinding
+		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
+			numObjects += numRepoSyncs // 1 for each RepoSync ClusterRoleBinding
+		}
+	}
+	return numObjects
+}
+
+// NumRepoSyncNamespaces returns the number of unique namespaces managed by RepoSyncs.
+func (nt *NT) NumRepoSyncNamespaces() int {
+	if len(nt.NonRootRepos) == 0 {
+		return 0
+	}
+	rsNamespaces := map[string]struct{}{}
+	for nn := range nt.NonRootRepos {
+		rsNamespaces[nn.Namespace] = struct{}{}
+	}
+	return len(rsNamespaces)
+}
+
 // ValidateMultiRepoMetrics validates all the multi-repo metrics.
 // It checks all non-error metrics are recorded with the correct tags and values.
-func (nt *NT) ValidateMultiRepoMetrics(reconciler string, numResources int, gvkMetrics ...testmetrics.GVKMetric) error {
+func (nt *NT) ValidateMultiRepoMetrics(reconcilerName string, numResources int, gvkMetrics ...testmetrics.GVKMetric) error {
 	if nt.MultiRepo {
 		// Validate metrics emitted from the reconciler-manager.
 		if err := nt.ReconcilerMetrics.ValidateReconcilerManagerMetrics(); err != nil {
 			return err
 		}
 		// Validate non-typed and non-error metrics in the given reconciler.
-		if err := nt.ReconcilerMetrics.ValidateReconcilerMetrics(reconciler, numResources); err != nil {
+		if err := nt.ReconcilerMetrics.ValidateReconcilerMetrics(reconcilerName, numResources); err != nil {
 			return err
 		}
 		// Validate metrics that have a GVK "type" TagKey.
 		for _, tm := range gvkMetrics {
-			if err := nt.ReconcilerMetrics.ValidateGVKMetrics(reconciler, tm); err != nil {
+			if err := nt.ReconcilerMetrics.ValidateGVKMetrics(reconcilerName, tm); err != nil {
 				return errors.Wrapf(err, "%s %s operation", tm.GVK, tm.APIOp)
 			}
 		}
@@ -496,9 +539,9 @@ func (nt *NT) ValidateErrorMetricsNotFound() error {
 
 // ValidateResourceOverrideCount validates that the `resource_override_count` metric exists
 // for the correct reconciler.
-func (nt *NT) ValidateResourceOverrideCount(reconciler, containerName, resourceType string, count int) error {
+func (nt *NT) ValidateResourceOverrideCount(reconcilerType, containerName, resourceType string, count int) error {
 	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconciler, containerName, resourceType, count)
+		return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconcilerType, containerName, resourceType, count)
 	}
 	return nil
 }
@@ -539,7 +582,7 @@ func (nt *NT) ValidateMetricNotFound(metricName string) error {
 
 // ValidateReconcilerErrors validates that the `reconciler_error` metric exists
 // for the correct reconciler and the tagged component has the correct value.
-func (nt *NT) ValidateReconcilerErrors(reconciler, component string) error {
+func (nt *NT) ValidateReconcilerErrors(reconcilerName, component string) error {
 	if nt.MultiRepo {
 		var sourceCount, syncCount int
 		switch component {
@@ -555,7 +598,7 @@ func (nt *NT) ValidateReconcilerErrors(reconciler, component string) error {
 		default:
 			return errors.Errorf("unexpected component tag value: %v", component)
 		}
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(reconciler, sourceCount, syncCount)
+		return nt.ReconcilerMetrics.ValidateReconcilerErrors(reconcilerName, sourceCount, syncCount)
 	}
 	return nil
 }
@@ -1471,14 +1514,38 @@ type MetricsSyncOption func(csm *testmetrics.ConfigSyncMetrics) error
 // SyncMetricsToLatestCommit syncs metrics to the latest synced commit
 func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		for nn := range nt.RootRepos {
-			if err := metrics.ValidateMetricsCommitSynced(nt.RootRepos[nn].Hash()); err != nil {
+		for syncName := range nt.RootRepos {
+			reconcilerName := core.RootReconcilerName(syncName)
+			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, nt.RootRepos[syncName].Hash()); err != nil {
 				return err
 			}
 		}
 
-		for ns := range nt.NonRootRepos {
-			if err := metrics.ValidateMetricsCommitSynced(nt.NonRootRepos[ns].Hash()); err != nil {
+		for syncNN := range nt.NonRootRepos {
+			reconcilerName := core.NsReconcilerName(syncNN.Namespace, syncNN.Name)
+			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, nt.NonRootRepos[syncNN].Hash()); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
+
+// SyncMetricsToLatestCommitSyncedWithSuccess syncs metrics to the latest
+// commit that was applied without errors.
+func SyncMetricsToLatestCommitSyncedWithSuccess(nt *NT) MetricsSyncOption {
+	return func(metrics *testmetrics.ConfigSyncMetrics) error {
+		for syncName := range nt.RootRepos {
+			reconcilerName := core.RootReconcilerName(syncName)
+			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, nt.RootRepos[syncName].Hash()); err != nil {
+				return err
+			}
+		}
+
+		for syncNN := range nt.NonRootRepos {
+			reconcilerName := core.NsReconcilerName(syncNN.Namespace, syncNN.Name)
+			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, nt.NonRootRepos[syncNN].Hash()); err != nil {
 				return err
 			}
 		}
@@ -1488,16 +1555,16 @@ func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 }
 
 // SyncMetricsToReconcilerSourceError syncs metrics to a reconciler source error
-func SyncMetricsToReconcilerSourceError(reconciler string) MetricsSyncOption {
+func SyncMetricsToReconcilerSourceError(reconcilerName string) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconciler, 1, 0)
+		return metrics.ValidateReconcilerErrors(reconcilerName, 1, 0)
 	}
 }
 
 // SyncMetricsToReconcilerSyncError syncs metrics to a reconciler sync error
-func SyncMetricsToReconcilerSyncError(reconciler string) MetricsSyncOption {
+func SyncMetricsToReconcilerSyncError(reconcilerName string) MetricsSyncOption {
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconciler, 0, 1)
+		return metrics.ValidateReconcilerErrors(reconcilerName, 0, 1)
 	}
 }
 

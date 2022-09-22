@@ -19,7 +19,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,12 +29,13 @@ import (
 	"kpt.dev/configsync/pkg/metrics"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	depAnnotationGooglecloud = "64124da69731e38a713109f63d837749"
+	depAnnotationGooglecloud = "6ba29d7cac4cdd7b23c0e1a6f355d0f5"
 	depAnnotationCustom      = "9182661d55e260a55da649363c03c187"
 )
 
@@ -82,16 +82,16 @@ func TestOtelReconciler(t *testing.T) {
 		core.Name(metrics.OtelCollectorName),
 	)
 
-	// compare ConfigMap. Expect no change in the ConfigMap.
-	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(cm)], cm, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("ConfigMap diff %s", diff)
-	}
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 
-	// compare Deployment annotation. Expect no annotation.
+	// compare ConfigMap
+	gotConfigMap := fakeClient.Objects[core.IDOf(cm)]
+	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
+
+	// compare Deployment annotation
 	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
-	if diff := cmp.Diff(gotDeployment.Spec.Template.Annotations, wantDeployment.Spec.Template.Annotations, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("Deployment diff %s", diff)
-	}
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
 	t.Log("ConfigMap and Deployment successfully updated")
 }
 
@@ -136,16 +136,16 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	)
 	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationGooglecloud)
 
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+
 	// compare ConfigMap
-	if diff := cmp.Diff(fakeClient.Objects[core.IDOf(wantConfigMap)], wantConfigMap, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("ConfigMap diff %s", diff)
-	}
+	gotConfigMap := fakeClient.Objects[core.IDOf(wantConfigMap)]
+	asserter.Equal(t, wantConfigMap, gotConfigMap, "ConfigMap")
 
 	// compare Deployment annotation
 	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
-	if diff := cmp.Diff(gotDeployment.Spec.Template.Annotations, wantDeployment.Spec.Template.Annotations, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("Deployment diff %s", diff)
-	}
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
 	t.Log("ConfigMap and Deployment successfully updated")
 }
 
@@ -179,10 +179,15 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	)
 	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationCustom)
 
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+
+	// compare ConfigMap
+	gotConfigMap := fakeClient.Objects[core.IDOf(cm)]
+	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
+
 	// compare Deployment annotation
 	gotDeployment := fakeClient.Objects[core.IDOf(wantDeployment)].(*appsv1.Deployment)
-	if diff := cmp.Diff(gotDeployment.Spec.Template.Annotations, wantDeployment.Spec.Template.Annotations, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("Deployment diff %s", diff)
-	}
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
 	t.Log("Deployment successfully updated")
 }

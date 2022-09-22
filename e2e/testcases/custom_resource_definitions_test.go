@@ -57,9 +57,19 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 
 	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4,
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Anvil"))
+	// The "declared_resources" metric only includes the count of objects with
+	// known resources. On the first apply pass, the Anvil CR will be excluded,
+	// and the metric will be recorded with status=error. The second apply pass
+	// should include the Anvil CR, but will be reported as the same commit. So
+	// syncing to the latest commit isn't enough to ensure the metrics are up to
+	// date. We also have to make sure status=success.
+	// Unfortunately, this means failure will always time out.
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
+		return nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+3, // 3 for the test Namespace, CustomResourceDefinition & Anvil
+			metrics.ResourceCreated("Namespace"),
+			metrics.ResourceCreated("CustomResourceDefinition"),
+			metrics.ResourceCreated("Anvil"))
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -89,7 +99,17 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.WaitForRepoSyncs()
 
 	// Validate reconciler error is cleared.
+	// The applier can prune both the CR and CRD in the same pass. So for this
+	// validation we can just wait for the commit to match, which will
+	// allow faster failure on error.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			metrics.ResourceDeleted("CustomResourceDefinition"),
+			metrics.ResourceDeleted("Anvil"))
+		if err != nil {
+			return err
+		}
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "")
 	})
 	if err != nil {
@@ -132,7 +152,8 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+3, // 3 for the test Namespace, CustomResourceDefinition & Anvil
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Anvil"))
 		if err != nil {
 			return err
@@ -193,7 +214,8 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	// TODO: Fix the multi-repo metrics error.
 	// Validate multi-repo metrics.
 	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+	//	err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+	//		nt.DefaultRootSyncObjects()+2, // 2 for the test Namespace & CustomResourceDefinition
 	//		metrics.ResourceCreated("CustomResourceDefinition"),
 	//		metrics.ResourceCreated("Namespace"))
 	//	return err
@@ -259,8 +281,16 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+	// The "declared_resources" metric only includes the count of objects with
+	// known resources. On the first apply pass, the Anvil CR will be excluded,
+	// and the metric will be recorded with status=error. The second apply pass
+	// should include the Anvil CR, but will be reported as the same commit. So
+	// syncing to the latest commit isn't enough to ensure the metrics are up to
+	// date. We also have to make sure status=success.
+	// Unfortunately, this means failure will always time out.
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test CustomResourceDefinition & Anvil
 			metrics.ResourceCreated("CustomResourceDefinition"),
 			metrics.ResourceCreated("ClusterAnvil"))
 		if err != nil {
@@ -284,30 +314,32 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 
 	err = nt.Validate("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), hasTwoVersions)
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
 	}
 	err = nt.Validate("e2e-test-clusteranvil", "", clusteranvilCR("v2", "", 10))
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
 	}
 
-	// Remove the CR and CRD so that they can be deleted after the test
-	// Remove the CustomResource first to avoid the safety check failure (KNV2006).
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusteranvil.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CR but leaving Anvil CRD")
-	nt.WaitForRepoSyncs()
-	err = nt.ValidateNotFound("e2e-test-clusteranvil", "prod", clusteranvilCR("v2", "", 10))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Remove the CustomResourceDefinition.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusteranvil-crd.yaml")
+	// Remove the CR and CRD.
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+	// Add back the safety ClusterRole to pass the safety check (KNV2006).
+	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well")
 	nt.WaitForRepoSyncs()
+	err = nt.ValidateNotFoundOrNoMatch("e2e-test-clusteranvil", "prod", clusteranvilCR("v2", "", 10))
+	if err != nil {
+		nt.T.Error(err)
+	}
 	err = nt.ValidateNotFound("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
 	}
 }
 func TestAddUpdateRemoveClusterScopedCRDV1(t *testing.T) {
@@ -345,8 +377,16 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 4,
+	// The "declared_resources" metric only includes the count of objects with
+	// known resources. On the first apply pass, the Anvil CR will be excluded,
+	// and the metric will be recorded with status=error. The second apply pass
+	// should include the Anvil CR, but will be reported as the same commit. So
+	// syncing to the latest commit isn't enough to ensure the metrics are up to
+	// date. We also have to make sure status=success.
+	// Unfortunately, this means failure will always time out.
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+3, // 3 for the test Namespace, CustomResourceDefinition & Anvil
 			metrics.ResourceCreated("CustomResourceDefinition"),
 			metrics.ResourceCreated("Anvil"),
 			metrics.ResourceCreated("Namespace"))
@@ -450,7 +490,8 @@ func TestLargeCRD(t *testing.T) {
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName, 3,
+		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test CustomResourceDefinitions
 			metrics.ResourceCreated("CustomResourceDefinition"),
 			metrics.ResourceCreated("CustomResourceDefinition"))
 		if err != nil {

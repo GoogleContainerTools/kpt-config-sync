@@ -46,7 +46,7 @@ const (
 
 var crLog = logf.Log.WithName("cert-rotation")
 
-//WebhookType it the type of webhook, either validating/mutating webhook or a CRD conversion webhook
+// WebhookType it the type of webhook, either validating/mutating webhook or a CRD conversion webhook
 type WebhookType int
 
 const (
@@ -60,7 +60,7 @@ const (
 
 var _ manager.Runnable = &CertRotator{}
 
-//WebhookInfo is used by the rotator to receive info about resources to be updated with certificates
+// WebhookInfo is used by the rotator to receive info about resources to be updated with certificates
 type WebhookInfo struct {
 	//Name is the name of the webhook for a validating or mutating webhook, or the CRD name in case of a CRD conversion webhook
 	Name string
@@ -298,7 +298,7 @@ func injectCertToWebhook(wh *unstructured.Unstructured, certPem []byte) error {
 		return err
 	}
 	if !found {
-		return errors.New("`webhooks` field not found in ValidatingWebhookConfiguration")
+		return nil
 	}
 	for i, h := range webhooks {
 		hook, ok := h.(map[string]interface{})

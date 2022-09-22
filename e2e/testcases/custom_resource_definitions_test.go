@@ -211,18 +211,17 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	nt.WaitForRepoSyncs()
 	nt.RenewClient()
 
-	// TODO: Fix the multi-repo metrics error.
 	// Validate multi-repo metrics.
-	//err = nt.ValidateMetrics(nomostest.MetricsLatestCommit, func() error {
-	//	err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-	//		nt.DefaultRootSyncObjects()+2, // 2 for the test Namespace & CustomResourceDefinition
-	//		metrics.ResourceCreated("CustomResourceDefinition"),
-	//		metrics.ResourceCreated("Namespace"))
-	//	return err
-	//})
-	//if err != nil {
-	//	nt.T.Errorf("validating metrics: %v", err)
-	//}
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
+			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & CustomResourceDefinition
+			metrics.ResourceCreated("CustomResourceDefinition"),
+			metrics.ResourceCreated("Namespace"))
+		return err
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
 
 	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
 	if err != nil {

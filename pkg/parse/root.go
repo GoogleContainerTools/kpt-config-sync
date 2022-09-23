@@ -169,20 +169,35 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 
+	currentRS := rs.DeepCopy()
+
 	setSourceStatus(&rs.Status.Source, p, newStatus, denominator)
 
-	continueSyncing := true
-	if rs.Status.Source.ErrorSummary.TotalCount > 0 {
-		continueSyncing = false
-	}
-	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "source", rs.Status.Source.ErrorSummary.TotalCount)
+	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
-	if rs.Status.Source.Errors != nil {
+	if len(rs.Status.Source.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
 	}
 	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
 
-	metrics.RecordReconcilerErrors(ctx, "source", status.ToCSE(newStatus.errs))
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping source status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	csErrs := status.ToCSE(newStatus.errs)
+	metrics.RecordReconcilerErrors(ctx, "source", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "source", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New source errors for RootSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
+
+	if klog.V(5).Enabled() {
+		klog.Infof("Updating source status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+	}
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
@@ -255,7 +270,31 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 
-	if rs.Status.Rendering.Commit != newStatus.commit {
+	currentRS := rs.DeepCopy()
+
+	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
+
+	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
+	var errorSource []v1beta1.ErrorSource
+	if len(rs.Status.Rendering.Errors) > 0 {
+		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
+	}
+	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping rendering status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	csErrs := status.ToCSE(newStatus.errs)
+	metrics.RecordReconcilerErrors(ctx, "rendering", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "rendering", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New rendering errors for RootSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
+	if currentRS.Status.Rendering.Commit != newStatus.commit {
 		if newStatus.message == RenderingSkipped {
 			metrics.RecordSkipRenderingCount(ctx)
 		} else {
@@ -263,19 +302,10 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 		}
 	}
 
-	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
-
-	continueSyncing := true
-	if rs.Status.Rendering.ErrorSummary.TotalCount > 0 {
-		metrics.RecordReconcilerErrors(ctx, "rendering", status.ToCSE(newStatus.errs))
-		continueSyncing = false
+	if klog.V(5).Enabled() {
+		klog.Infof("Updating rendering status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
-	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "rendering", rs.Status.Rendering.ErrorSummary.TotalCount)
-	var errorSource []v1beta1.ErrorSource
-	if rs.Status.Rendering.Errors != nil {
-		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
-	}
-	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
@@ -372,18 +402,23 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 
 	// Avoid unnecessary status updates.
 	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
-		klog.V(5).Infof("Skipping status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		klog.V(5).Infof("Skipping sync status update for RootSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}
 
-	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
-	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
+	csErrs := status.ToCSE(errs)
+	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New sync errors for RootSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
 	if !syncing {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating sync status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 

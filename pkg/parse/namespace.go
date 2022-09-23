@@ -158,23 +158,38 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
+	currentRS := rs.DeepCopy()
+
 	setSourceStatus(&rs.Status.Source, p, newStatus, denominator)
 
-	continueSyncing := true
-	if rs.Status.Source.ErrorSummary.TotalCount > 0 {
-		continueSyncing = false
-	}
-	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "source", rs.Status.Source.ErrorSummary.TotalCount)
+	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
-	if rs.Status.Source.Errors != nil {
+	if len(rs.Status.Source.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
 	}
 	reposync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
 
-	metrics.RecordReconcilerErrors(ctx, "source", status.ToCSE(newStatus.errs))
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping source status update for RepoSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	csErrs := status.ToCSE(newStatus.errs)
+	metrics.RecordReconcilerErrors(ctx, "source", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "source", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New source errors for RepoSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
+
+	if klog.V(5).Enabled() {
+		klog.Infof("Updating source status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+	}
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
-		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
+		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
 			return p.setSourceStatusWithRetries(ctx, newStatus, denominator*2)
@@ -205,7 +220,31 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
-	if rs.Status.Rendering.Commit != newStatus.commit {
+	currentRS := rs.DeepCopy()
+
+	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
+
+	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
+	var errorSource []v1beta1.ErrorSource
+	if len(rs.Status.Rendering.Errors) > 0 {
+		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
+	}
+	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+
+	// Avoid unnecessary status updates.
+	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+		klog.V(5).Infof("Skipping rendering status update for RepoSync %s/%s", rs.Namespace, rs.Name)
+		return nil
+	}
+
+	csErrs := status.ToCSE(newStatus.errs)
+	metrics.RecordReconcilerErrors(ctx, "rendering", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "rendering", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New rendering errors for RepoSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
+	if currentRS.Status.Rendering.Commit != newStatus.commit {
 		if newStatus.message == RenderingSkipped {
 			metrics.RecordSkipRenderingCount(ctx)
 		} else {
@@ -213,22 +252,13 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		}
 	}
 
-	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
+	if klog.V(5).Enabled() {
+		klog.Infof("Updating rendering status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+	}
 
-	continueSyncing := true
-	if rs.Status.Rendering.ErrorSummary.TotalCount > 0 {
-		// If rendering errors exist, it should only have one error, so use cse[0] to get the error code.
-		metrics.RecordReconcilerErrors(ctx, "rendering", status.ToCSE(newStatus.errs))
-		continueSyncing = false
-	}
-	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "rendering", rs.Status.Rendering.ErrorSummary.TotalCount)
-	var errorSource []v1beta1.ErrorSource
-	if rs.Status.Rendering.Errors != nil {
-		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
-	}
-	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
-		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
+		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
 			return p.setRenderingStatusWithRetires(ctx, newStatus, denominator*2)
@@ -280,8 +310,13 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 		return nil
 	}
 
-	metrics.RecordReconcilerErrors(ctx, "sync", status.ToCSE(errs))
-	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", rs.Status.Sync.ErrorSummary.TotalCount)
+	csErrs := status.ToCSE(errs)
+	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
+	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", len(csErrs))
+	if len(csErrs) > 0 {
+		klog.Infof("New sync errors for RepoSync %s/%s: %+v",
+			rs.Namespace, rs.Name, csErrs)
+	}
 	if !syncing {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
@@ -292,7 +327,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	}
 
 	if err := p.client.Status().Update(ctx, rs); err != nil {
-		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
+		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, errs, denominator*2)

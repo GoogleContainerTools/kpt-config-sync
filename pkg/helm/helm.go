@@ -66,6 +66,8 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 	}
 	if h.Namespace != "" {
 		args = append(args, "--namespace", h.Namespace)
+	} else {
+		args = append(args, "--namespace", configsync.DefaultHelmReleaseNamespace)
 	}
 	if h.Version != "" {
 		args = append(args, "--version", h.Version)

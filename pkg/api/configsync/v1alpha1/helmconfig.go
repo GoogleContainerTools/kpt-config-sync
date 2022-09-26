@@ -23,7 +23,8 @@ import (
 // HelmRootSync contains the configuration specific to locate, download and template a Helm chart.
 type HelmRootSync struct {
 	HelmBase `json:",inline"`
-	// namespace sets the target namespace for a release
+	// namespace sets the target namespace for a release.
+	// Default: "default".
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 }

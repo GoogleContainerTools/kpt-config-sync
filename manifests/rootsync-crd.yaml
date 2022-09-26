@@ -190,7 +190,8 @@ spec:
                       false.'
                     type: boolean
                   namespace:
-                    description: namespace sets the target namespace for a release
+                    description: 'namespace sets the target namespace for a release.
+                      Default: "default".'
                     type: string
                   period:
                     description: 'period is the time duration between consecutive
@@ -1157,7 +1158,8 @@ spec:
                       false.'
                     type: boolean
                   namespace:
-                    description: namespace sets the target namespace for a release
+                    description: 'namespace sets the target namespace for a release.
+                      Default: "default".'
                     type: string
                   period:
                     description: 'period is the time duration between consecutive

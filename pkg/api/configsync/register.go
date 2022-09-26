@@ -56,6 +56,9 @@ const (
 
 	// DefaultReconcileTimeout defines the timeout of kpt applier reconcile/prune task
 	DefaultReconcileTimeout = 5 * time.Minute
+
+	// DefaultHelmReleaseNamespace is the default namespace for a Helm Release which does not have a namespace specified
+	DefaultHelmReleaseNamespace = "default"
 )
 
 // AuthType specifies the type to authenticate to a repository.

@@ -255,6 +255,8 @@ __config-sync-manifest-oss:
 		--exclude='nomos-repo-crd.yaml' \
 		--exclude='sync-declaration-crd.yaml' \
 		.output/manifests/* .output/oss/cloned/manifests/
+	rsync \
+		manifests/test-resources/* .output/oss/cloned/manifests/
 	@echo "++++ Add OSS yaml files to config-sync-manifest.yaml"
 	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
 		--destination=${OSS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \

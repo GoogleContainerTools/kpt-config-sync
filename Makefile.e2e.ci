@@ -65,7 +65,7 @@ PROBER_DOCKER_ARGS ?= -v $(PROBER_CREDS):$(SA_KEY_FILE) --env GCP_PROBER_CREDS=$
 # Run the golang e2e tests sequentially (--parallel 1) on a GKE cluster.
 # It requires a GKE cluster to be installed in `$(GCP_PROJECT)` and `$(GCP_ZONE)`/`$(GCP_REGION)`.
 # The cluster name should follow the pattern `$(USER)-cluster-1`.
-__docker-run-e2e-go-gke: image-nomos push-to-gcr-nomos __build-e2e-go-container
+__docker-run-e2e-go-gke: build-images push-images __build-e2e-go-container
 	@echo "+++ Running go e2e tests $(E2E_ARGS)"
 	@echo "GCP_PROJECT=$(GCP_PROJECT)"
 	@echo "GCP_CLUSTER=$(GCP_CLUSTER)"
@@ -90,7 +90,7 @@ __docker-run-e2e-go-gke: image-nomos push-to-gcr-nomos __build-e2e-go-container
 			--p 1 \
 			--test-cluster=gke \
 			--image-prefix=$(REGISTRY) \
-			--image-tag=$(LATEST_IMAGE_TAG)
+			--image-tag=$(IMAGE_TAG)
 
 # The CI target that runs the golang e2e test on a GKE cluster in prow with various E2E_ARGS.
 # Examples:

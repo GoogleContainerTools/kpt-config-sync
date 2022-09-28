@@ -352,12 +352,6 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return depObj, nil
 }
 
-func mutateContainerArgs(ctx context.Context, c *corev1.Container, override v1beta1.OverrideSpec, reconcilerType string) {
-	if override.APIServerTimeout != nil {
-		c.Args = append(c.Args, "--api-server-timeout", override.APIServerTimeout.Duration.String())
-	}
-}
-
 func mutateContainerResource(ctx context.Context, c *corev1.Container, override v1beta1.OverrideSpec, reconcilerType string) {
 	for _, override := range override.Resources {
 		if override.ContainerName == c.Name {

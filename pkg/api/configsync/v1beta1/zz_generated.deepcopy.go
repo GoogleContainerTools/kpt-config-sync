@@ -218,6 +218,11 @@ func (in *OverrideSpec) DeepCopyInto(out *OverrideSpec) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.APIServerTimeout != nil {
+		in, out := &in.APIServerTimeout, &out.APIServerTimeout
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	if in.EnableShellInRendering != nil {
 		in, out := &in.EnableShellInRendering, &out.EnableShellInRendering
 		*out = new(bool)

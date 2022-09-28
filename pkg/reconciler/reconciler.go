@@ -97,6 +97,8 @@ type Options struct {
 	// Root reconciler.
 	// Unset for Namespace repositories.
 	*RootOptions
+	// APIServerTimeout is the client-side timeout used for talking to the API server
+	APIServerTimeout time.Duration
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -110,7 +112,7 @@ func Run(opts Options) {
 	reconcile.SetFightThreshold(opts.FightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
-	cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+	cfg, err := restconfig.NewRestConfig(opts.APIServerTimeout)
 	if err != nil {
 		klog.Fatalf("Error creating rest config: %v", err)
 	}

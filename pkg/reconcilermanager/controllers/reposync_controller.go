@@ -873,6 +873,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			switch container.Name {
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
+				mutateContainerArgs(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 				mutateContainerResource(ctx, &container, rs.Spec.Override, string(NamespaceReconcilerType))
 			case reconcilermanager.HydrationController:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)

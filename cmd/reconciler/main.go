@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -87,6 +88,8 @@ var (
 	// Enable the applier to inject actuation status data into the ResourceGroup object
 	statusMode = flag.String(flags.statusMode, os.Getenv(reconcilermanager.StatusMode),
 		"When the value is enabled or empty, the applier injects actuation status data into the ResourceGroup object")
+
+	apiServerTimeout = flag.Duration("api-server-timeout", restconfig.DefaultTimeout, "The client-side timeout for requests to the API server")
 
 	debug = flag.Bool("debug", false,
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
@@ -178,6 +181,7 @@ func main() {
 		ReconcilerName:             *reconcilerName,
 		StatusMode:                 *statusMode,
 		ReconcileTimeout:           *reconcileTimeout,
+		APIServerTimeout:           *apiServerTimeout,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

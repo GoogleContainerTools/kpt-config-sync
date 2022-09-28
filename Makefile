@@ -69,7 +69,9 @@ GCP_PROJECT ?= stolos-dev
 # operator requires that the prefix of the image be unique to the build,
 # and pulling of new versions is forced by setting a timestamp (DATE) in the
 # image path.
-GCR_PREFIX ?= $(GCP_PROJECT)/$(USER)/$(DATE)
+# Use BUILD_ID as a unique identifier for prow jobs, otherwise default to USER
+BUILD_ID ?= $(USER)
+GCR_PREFIX ?= $(GCP_PROJECT)/$(BUILD_ID)/$(DATE)
 
 # Allow arbitrary registry name, but default to GCR with prefix if not provided
 REGISTRY ?= gcr.io/$(GCR_PREFIX)

@@ -131,10 +131,6 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+privateNSHelmChart, testNs, &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}
-	// Change the RepoSync to sync from the original git source to make test works in the shared test environment.
-	rs.Spec.SourceType = string(v1beta1.GitSource)
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from the original git repository")
 }
 
 // TestHelmARFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).

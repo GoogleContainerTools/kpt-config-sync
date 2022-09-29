@@ -167,7 +167,7 @@ endif
 
 ##### SETUP #####
 
-.DEFAULT_GOAL := test
+.DEFAULT_GOAL := all
 
 .PHONY: $(OUTPUT_DIR)
 $(OUTPUT_DIR):
@@ -206,6 +206,8 @@ include Makefile.oss.prow
 include Makefile.reconcilermanager
 -include Makefile.release
 
+all: test deps
+
 # Cleans all artifacts.
 clean:
 	@echo "+++ Cleaning $(OUTPUT_DIR)"
@@ -221,7 +223,7 @@ test: test-unit lint
 # The presubmits have made side-effects in the past, which makes their
 # validation suspect (as the repository they are validating is different
 # than what is checked in).  Run `test` but verify that repository is clean.
-test-presubmit: test
+test-presubmit: all
 	@./scripts/fail-if-dirty-repo.sh
 
 # Runs all tests.
@@ -235,6 +237,14 @@ fmt-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) gofmt -s -w $(NOMOS_CODE_DIRS)
 	@docker run $(DOCKER_RUN_ARGS) goimports -w $(NOMOS_CODE_DIRS)
 
+tidy:
+	go mod tidy -compat=1.17
+
+vendor:
+	go mod vendor
+
+deps: tidy vendor
+
 lint: lint-go lint-bash lint-yaml lint-license lint-license-headers
 
 lint-go: pull-buildenv buildenv-dirs
@@ -244,7 +254,7 @@ lint-bash:
 	@./scripts/lint-bash.sh
 
 .PHONY: license
-license:
+license: deps
 	@./scripts/prepare-licenses.sh
 
 .PHONY: lint-license

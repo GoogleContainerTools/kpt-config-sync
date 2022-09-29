@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
 // OverrideSpec allows to override the settings for a reconciler pod
@@ -54,6 +55,14 @@ type OverrideSpec struct {
 	// +optional
 	ReconcileTimeout *metav1.Duration `json:"reconcileTimeout,omitempty"`
 
+	// apiServerTimeout allows one to override the client-side timeout for requests to the API server.
+	// Default: 5s.
+	// Use string to specify this field value, like "30s", "1m".
+	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+	// Recommended apiServerTimeout range is from "3s" to "1m".
+	// +optional
+	APIServerTimeout *metav1.Duration `json:"apiServerTimeout,omitempty"`
+
 	// enableShellInRendering specifies whether to enable or disable the shell access in rendering process. Default: false.
 	// Kustomize remote bases requires shell access. Setting this field to true will enable shell in the rendering process and
 	// support pulling remote bases from public repositories.
@@ -87,6 +96,14 @@ type ContainerResourcesSpec struct {
 func GetReconcileTimeout(d *metav1.Duration) string {
 	if d == nil || d.Duration == 0 {
 		return configsync.DefaultReconcileTimeout.String()
+	}
+	return d.Duration.String()
+}
+
+// GetAPIServerTimeout returns the API server timeout in string, defaulting to 5s if empty
+func GetAPIServerTimeout(d *metav1.Duration) string {
+	if d == nil || d.Duration == 0 {
+		return restconfig.DefaultTimeout.String()
 	}
 	return d.Duration.String()
 }

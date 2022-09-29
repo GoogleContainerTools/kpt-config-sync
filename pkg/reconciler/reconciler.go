@@ -93,6 +93,8 @@ type Options struct {
 	StatusMode string
 	// ReconcileTimeout controls the reconcile/prune Timeout in kpt applier
 	ReconcileTimeout string
+	// APIServerTimeout is the client-side timeout used for talking to the API server
+	APIServerTimeout string
 	// RootOptions is the set of options to fill in if this is configuring the
 	// Root reconciler.
 	// Unset for Namespace repositories.
@@ -110,7 +112,14 @@ func Run(opts Options) {
 	reconcile.SetFightThreshold(opts.FightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
-	cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+	apiServerTimeout, err := time.ParseDuration(opts.APIServerTimeout)
+	if err != nil {
+		klog.Fatalf("Error parsing applier reconcile/prune task timeout: %v", err)
+	}
+	if apiServerTimeout <= 0 {
+		klog.Fatalf("Invalid apiServerTimeout: %v, timeout should be positive", apiServerTimeout)
+	}
+	cfg, err := restconfig.NewRestConfig(apiServerTimeout)
 	if err != nil {
 		klog.Fatalf("Error creating rest config: %v", err)
 	}

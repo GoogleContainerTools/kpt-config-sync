@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -204,6 +205,12 @@ func rootsyncOverrideGitSyncDepth(depth int64) func(*v1beta1.RootSync) {
 func rootsyncOverrideReconcileTimeout(reconcileTimeout metav1.Duration) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
 		rs.Spec.Override.ReconcileTimeout = &reconcileTimeout
+	}
+}
+
+func rootsyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1beta1.RootSync) {
+	return func(rs *v1beta1.RootSync) {
+		rs.Spec.Override.APIServerTimeout = &apiServerTimout
 	}
 }
 
@@ -954,6 +961,116 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 }
 
 func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerEnvMutator(rootContainerEnv),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
+
+	// Test overriding the reconcile timeout to 50s
+	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
+	rs.Spec.Override.ReconcileTimeout = &reconcileTimeout
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerEnvMutator(rootContainerEnv),
+	)
+
+	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// Set rs.Spec.Override.ReconcileTimeout to nil.
+	rs.Spec.Override.ReconcileTimeout = nil
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// Clear rs.Spec.Override
+	rs.Spec.Override = v1beta1.OverrideSpec{}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("No need to update Deployment.")
+}
+
+func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+
+	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerEnvMutator(rootContainerEnvs),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+}
+
+func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
@@ -2262,6 +2379,103 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
 	require.Equal(t, reconcilingCondition.Status, metav1.ConditionTrue, "unexpected Stalled condition status")
 	require.Contains(t, reconcilingCondition.Message, "RootSyncs must specify spec.git when spec.sourceType is \"git\"", "unexpected Stalled condition message")
+}
+
+func TestPopulateRootContainerEnvs(t *testing.T) {
+	defaults := map[string]map[string]string{
+		reconcilermanager.HydrationController: {
+			reconcilermanager.HydrationPollingPeriod: hydrationPollingPeriod.String(),
+			reconcilermanager.NamespaceNameKey:       ":root",
+			reconcilermanager.ReconcilerNameKey:      rootReconcilerName,
+			reconcilermanager.ScopeKey:               ":root",
+			reconcilermanager.SourceTypeKey:          string(gitSource),
+			reconcilermanager.SyncDirKey:             rootsyncDir,
+		},
+		reconcilermanager.Reconciler: {
+			reconcilermanager.ClusterNameKey:          testCluster,
+			reconcilermanager.ScopeKey:                ":root",
+			reconcilermanager.SyncNameKey:             rootsyncName,
+			reconcilermanager.NamespaceNameKey:        ":root",
+			reconcilermanager.ReconcilerNameKey:       rootReconcilerName,
+			reconcilermanager.SyncDirKey:              rootsyncDir,
+			reconcilermanager.SourceRepoKey:           rootsyncRepo,
+			reconcilermanager.SourceTypeKey:           string(gitSource),
+			filesystem.SourceFormatKey:                "",
+			reconcilermanager.StatusMode:              "enabled",
+			reconcilermanager.SourceBranchKey:         "master",
+			reconcilermanager.SourceRevKey:            "HEAD",
+			reconcilermanager.APIServerTimeout:        "5s",
+			reconcilermanager.ReconcileTimeout:        "5m0s",
+			reconcilermanager.ReconcilerPollingPeriod: "50ms",
+		},
+		reconcilermanager.GitSync: {
+			"GIT_KNOWN_HOSTS": "false",
+			"GIT_SYNC_REPO":   rootsyncRepo,
+			"GIT_SYNC_DEPTH":  "1",
+			"GIT_SYNC_WAIT":   "15.000000",
+		},
+	}
+
+	createEnv := func(overrides map[string]map[string]string) map[string][]corev1.EnvVar {
+		envs := map[string]map[string]string{}
+
+		for container, env := range defaults {
+			envs[container] = map[string]string{}
+			for k, v := range env {
+				envs[container][k] = v
+			}
+		}
+		for container, env := range overrides {
+			if _, ok := envs[container]; !ok {
+				envs[container] = map[string]string{}
+			}
+			for k, v := range env {
+				envs[container][k] = v
+			}
+		}
+
+		result := map[string][]corev1.EnvVar{}
+		for container, env := range envs {
+			result[container] = []corev1.EnvVar{}
+			for k, v := range env {
+				result[container] = append(result[container], corev1.EnvVar{Name: k, Value: v})
+			}
+		}
+		return result
+	}
+
+	testCases := []struct {
+		name     string
+		rootSync *v1beta1.RootSync
+		expected map[string][]corev1.EnvVar
+	}{
+		{
+			name:     "no override uses default value",
+			rootSync: rootSync(rootsyncName),
+			expected: createEnv(map[string]map[string]string{}),
+		},
+		{
+			name:     "override uses override value",
+			rootSync: rootSync(rootsyncName, rootsyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
+			expected: createEnv(map[string]map[string]string{reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"}}),
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, testReconciler := setupRootReconciler(t, tc.rootSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.rootSync.Namespace)))
+
+			env := testReconciler.populateContainerEnvs(ctx, tc.rootSync, rootReconcilerName)
+
+			for container, vars := range env {
+				if diff := cmp.Diff(vars, tc.expected[container], cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b corev1.EnvVar) bool { return a.Name < b.Name })); diff != "" {
+					t.Errorf("%s/%s: unexpected env; diff: %s", tc.name, container, diff)
+				}
+			}
+		})
+	}
 }
 
 func validateRootSyncStatus(want *v1beta1.RootSync, fakeClient *syncerFake.Client) error {

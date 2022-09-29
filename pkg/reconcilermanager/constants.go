@@ -71,6 +71,9 @@ const (
 	// ReconcileTimeout is to control the kpt applier reconcile/prune task timeout
 	ReconcileTimeout = "RECONCILE_TIMEOUT"
 
+	// APIServerTimeout is to control the client-side timeout when talking to the API server
+	APIServerTimeout = "API_SERVER_TIMEOUT"
+
 	// StatusMode is to control if the kpt applier needs to inject the actuation data
 	// into the ResourceGroup object.
 	StatusMode = "STATUS_MODE"

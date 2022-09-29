@@ -45,6 +45,7 @@ var (
 	fightDetectionThreshold = flag.Float64(
 		"fight_detection_threshold", 5.0,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
+	apiServerTimeout = flag.Duration("api-server-timeout", restconfig.DefaultTimeout, "The client-side timeout for requests to the API server")
 )
 
 // RunImporter encapsulates the main() logic for the importer.
@@ -52,7 +53,7 @@ func RunImporter() {
 	reconcile.SetFightThreshold(*fightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
-	cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+	cfg, err := restconfig.NewRestConfig(*apiServerTimeout)
 	if err != nil {
 		klog.Fatalf("failed to create rest config: %+v", err)
 	}

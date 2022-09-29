@@ -77,7 +77,7 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string) []corev1.EnvVar {
+func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string, apiServerTimeout string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
@@ -158,7 +158,12 @@ func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScop
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcilerPollingPeriod,
 			Value: pollPeriod,
-		})
+		},
+		corev1.EnvVar{
+			Name:  reconcilermanager.APIServerTimeout,
+			Value: apiServerTimeout,
+		},
+	)
 
 	if syncBranch != "" {
 		result = append(result, corev1.EnvVar{

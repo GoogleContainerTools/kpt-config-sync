@@ -54,6 +54,14 @@ type OverrideSpec struct {
 	// +optional
 	ReconcileTimeout *metav1.Duration `json:"reconcileTimeout,omitempty"`
 
+	// apiServerTimeout allows one to override the client-side timeout for requests to the API server.
+	// Default: 5s.
+	// Use string to specify this field value, like "30s", "1m".
+	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+	// Recommended apiServerTimeout range is from "3s" to "1m".
+	// +optional
+	APIServerTimeout *metav1.Duration `json:"apiServerTimeout,omitempty"`
+
 	// enableShellInRendering specifies whether to enable or disable the shell access in rendering process. Default: false.
 	// Kustomize remote bases requires shell access. Setting this field to true will enable shell in the rendering process and
 	// support pulling remote bases from public repositories.

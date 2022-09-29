@@ -190,6 +190,12 @@ func reposyncOverrideReconcileTimeout(reconcileTimeout metav1.Duration) func(*v1
 	}
 }
 
+func reposyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		rs.Spec.Override.APIServerTimeout = &apiServerTimout
+	}
+}
+
 func reposyncNoSSLVerify() func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.NoSSLVerify = true
@@ -1054,6 +1060,121 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
 	rs.Spec.Override.ReconcileTimeout = nil
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// Clear rs.Spec.Override
+	rs.Spec.Override = v1beta1.OverrideSpec{}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("No need to update Deployment.")
+}
+
+func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideAPIServerTimeout(metav1.Duration{Duration: 50 * time.Second}))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+}
+
+func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+
+	// Test overriding the api server timeout to 50s
+	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
+	rs.Spec.Override.APIServerTimeout = &reconcileTimeout
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	updatedRepoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = updatedRepoDeployment
+
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully updated")
+
+	// Set rs.Spec.Override.APIServerTimeout to nil.
+	rs.Spec.Override.APIServerTimeout = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
@@ -2657,6 +2778,102 @@ func TestUpdateReconcilerWithAllowVerticalScale(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	allowVerticalScale = false
+}
+
+func TestPopulateRepoContainerEnvs(t *testing.T) {
+	defaults := map[string]map[string]string{
+		reconcilermanager.HydrationController: {
+			reconcilermanager.HydrationPollingPeriod: hydrationPollingPeriod.String(),
+			reconcilermanager.NamespaceNameKey:       reposyncNs,
+			reconcilermanager.ReconcilerNameKey:      nsReconcilerName,
+			reconcilermanager.ScopeKey:               reposyncNs,
+			reconcilermanager.SourceTypeKey:          string(gitSource),
+			reconcilermanager.SyncDirKey:             reposyncDir,
+		},
+		reconcilermanager.Reconciler: {
+			reconcilermanager.ClusterNameKey:          testCluster,
+			reconcilermanager.ScopeKey:                reposyncNs,
+			reconcilermanager.SyncNameKey:             reposyncName,
+			reconcilermanager.NamespaceNameKey:        reposyncNs,
+			reconcilermanager.ReconcilerNameKey:       nsReconcilerName,
+			reconcilermanager.SyncDirKey:              reposyncDir,
+			reconcilermanager.SourceRepoKey:           reposyncRepo,
+			reconcilermanager.SourceTypeKey:           string(gitSource),
+			reconcilermanager.StatusMode:              "enabled",
+			reconcilermanager.SourceBranchKey:         "master",
+			reconcilermanager.SourceRevKey:            "HEAD",
+			reconcilermanager.APIServerTimeout:        "5s",
+			reconcilermanager.ReconcileTimeout:        "5m0s",
+			reconcilermanager.ReconcilerPollingPeriod: "50ms",
+		},
+		reconcilermanager.GitSync: {
+			"GIT_KNOWN_HOSTS": "false",
+			"GIT_SYNC_REPO":   reposyncRepo,
+			"GIT_SYNC_DEPTH":  "1",
+			"GIT_SYNC_WAIT":   "15.000000",
+		},
+	}
+
+	createEnv := func(overrides map[string]map[string]string) map[string][]corev1.EnvVar {
+		envs := map[string]map[string]string{}
+
+		for container, env := range defaults {
+			envs[container] = map[string]string{}
+			for k, v := range env {
+				envs[container][k] = v
+			}
+		}
+		for container, env := range overrides {
+			if _, ok := envs[container]; !ok {
+				envs[container] = map[string]string{}
+			}
+			for k, v := range env {
+				envs[container][k] = v
+			}
+		}
+
+		result := map[string][]corev1.EnvVar{}
+		for container, env := range envs {
+			result[container] = []corev1.EnvVar{}
+			for k, v := range env {
+				result[container] = append(result[container], corev1.EnvVar{Name: k, Value: v})
+			}
+		}
+		return result
+	}
+
+	testCases := []struct {
+		name     string
+		repoSync *v1beta1.RepoSync
+		expected map[string][]corev1.EnvVar
+	}{
+		{
+			name:     "no override uses default value",
+			repoSync: repoSync(reposyncNs, reposyncName),
+			expected: createEnv(map[string]map[string]string{}),
+		},
+		{
+			name:     "override uses override value",
+			repoSync: repoSync(reposyncNs, reposyncName, reposyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
+			expected: createEnv(map[string]map[string]string{reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"}}),
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, testReconciler := setupNSReconciler(t, tc.repoSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.repoSync.Namespace)))
+
+			env := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName)
+
+			for container, vars := range env {
+				if diff := cmp.Diff(vars, tc.expected[container], cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b corev1.EnvVar) bool { return a.Name < b.Name })); diff != "" {
+					t.Errorf("%s/%s: unexpected env; diff: %s", tc.name, container, diff)
+				}
+			}
+		})
+	}
 }
 
 func validateRepoSyncStatus(want *v1beta1.RepoSync, fakeClient *syncerFake.Client) error {

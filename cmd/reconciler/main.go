@@ -88,6 +88,8 @@ var (
 	statusMode = flag.String(flags.statusMode, os.Getenv(reconcilermanager.StatusMode),
 		"When the value is enabled or empty, the applier injects actuation status data into the ResourceGroup object")
 
+	apiServerTimeout = flag.String("api-server-timeout", os.Getenv(reconcilermanager.APIServerTimeout), "The client-side timeout for requests to the API server")
+
 	debug = flag.Bool("debug", false,
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
 			"Do not use in production.")
@@ -178,6 +180,7 @@ func main() {
 		ReconcilerName:             *reconcilerName,
 		StatusMode:                 *statusMode,
 		ReconcileTimeout:           *reconcileTimeout,
+		APIServerTimeout:           *apiServerTimeout,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

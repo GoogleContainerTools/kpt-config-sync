@@ -1,4 +1,3 @@
-#!/bin/bash
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,16 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+apiVersion: pubsub.cnrm.cloud.google.com/v1beta1
+kind: PubSubSubscription
+metadata:
+  name: test-cs-read
+  namespace: foo
+spec:
+  topicRef:
+    name: test-cs
 
-echo "+++ Building build/test-e2e-go/kind/Dockerfile prow-image"
-docker build . -f build/test-e2e-go/kind/Dockerfile -t prow-image
-# The .sock volume allows you to connect to the Docker daemon of the host.
-# Part of the docker-in-docker pattern.
-
-echo "+++ Running go e2e tests with" "$@"
-docker run \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$ARTIFACTS":/logs/artifacts \
-  --env GCP_PROJECT="${GCP_PROJECT}" \
-  --network="host" prow-image \
-  ./build/test-e2e-go/e2e.sh "$@"

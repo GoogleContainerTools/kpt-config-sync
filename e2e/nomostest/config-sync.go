@@ -809,7 +809,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		// it will only grant usage for pods being run in the same namespace as the binding.
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
 		// available on GKE.
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
+		if strings.Contains(testing.GCPClusterFromEnv, "psp") {
 			if err := nt.Create(repoSyncClusterRoleBinding(nn)); err != nil {
 				nt.T.Fatal(err)
 			}
@@ -1040,7 +1040,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 // A default root repo (root-sync) manages all other root repos and namespace repos.
 func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	rsCount := 0
-	cluster := os.Getenv("GCP_CLUSTER")
+	cluster := testing.GCPClusterFromEnv
 
 	// Add any RootSyncs specified by the test options
 	for rsName := range opts.RootRepos {
@@ -1354,7 +1354,7 @@ func deleteNamespaceRepos(nt *NT) {
 		// auto-deletes the resources, including RepoSync, Deployment, RoleBinding, Secret, and etc.
 		revokeRepoSyncNamespace(nt, rs.Namespace)
 		nn := RepoSyncNN(rs.Namespace, rs.Name)
-		if strings.Contains(os.Getenv("GCP_CLUSTER"), "psp") {
+		if strings.Contains(testing.GCPClusterFromEnv, "psp") {
 			revokeRepoSyncClusterRoleBinding(nt, nn)
 		}
 	}

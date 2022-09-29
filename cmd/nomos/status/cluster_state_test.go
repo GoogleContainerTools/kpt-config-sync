@@ -43,7 +43,7 @@ var (
 	}
 
 	helm = &v1beta1.HelmBase{
-		Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+		Repo:    "oci://us-central1-docker.pkg.dev/your-dev-project/sample",
 		Chart:   "test",
 		Version: "0.1.0",
 	}
@@ -296,7 +296,7 @@ func TestRepoState_PrintRows(t *testing.T) {
 				errors:       []string{"error1", "error2"},
 				errorSummary: errorSummayWithTwoErrors,
 			},
-			"  bookstore:repo-sync\toci://us-central1-docker.pkg.dev/stolos-dev/sample/test:0.1.0\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
+			"  bookstore:repo-sync\toci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.1.0\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
 		},
 		{
 			"Git field is missing when sourceType is git",
@@ -2953,7 +2953,7 @@ gke_sample-project_europe-west1-b_cluster-2
 						syncName:   "root-sync",
 						sourceType: v1beta1.HelmSource,
 						helm: &v1beta1.HelmBase{
-							Repo:  "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+							Repo:  "oci://us-central1-docker.pkg.dev/your-dev-project/sample",
 							Chart: "test",
 						},
 						status: "SYNCED",
@@ -2964,7 +2964,7 @@ gke_sample-project_europe-west1-b_cluster-2
 						syncName:   "repos-sync",
 						sourceType: v1beta1.HelmSource,
 						helm: &v1beta1.HelmBase{
-							Repo:    "oci://us-central1-docker.pkg.dev/stolos-dev/sample",
+							Repo:    "oci://us-central1-docker.pkg.dev/your-dev-project/sample",
 							Chart:   "test",
 							Version: "0.2.0",
 						},
@@ -2976,10 +2976,10 @@ gke_sample-project_europe-west1-b_cluster-2
 			`
 gke_sample-project_europe-west1-b_cluster-2
   --------------------
-  <root>:root-sync	oci://us-central1-docker.pkg.dev/stolos-dev/sample/test:latest	
+  <root>:root-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:latest	
   SYNCED	abc123	
   --------------------
-  bookstore:repos-sync	oci://us-central1-docker.pkg.dev/stolos-dev/sample/test:0.2.0	
+  bookstore:repos-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.2.0	
   SYNCED	abc123	
 `,
 		},

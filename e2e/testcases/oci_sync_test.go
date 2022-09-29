@@ -15,9 +15,13 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/v1/google"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,60 +33,33 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	// All the following images include a kustomization.yaml file in the root directory,
-	// which includes resources for tenant-a, tenant-b, tenant-c, tenant-d.
-	// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
-	// Image structure:
-	// .
-	//├── base
-	//│   ├── kustomization.yaml
-	//│   ├── namespace.yaml
-	//│   ├── networkpolicy.yaml
-	//│   ├── rolebinding.yaml
-	//│   └── role.yaml
-	//├── kustomization.yaml
-	//├── README.md
-	//├── tenant-a
-	//│   └── kustomization.yaml
-	//├── tenant-b
-	//│   └── kustomization.yaml
-	//├── tenant-c
-	//│   └── kustomization.yaml
-	//└── tenant-d
-	//    └── kustomization.yaml
-	// Root kustomization.yaml content:
-	// #kustomization.yaml
-	// resources:
-	// - tenant-a
-	// - tenant-b
-	// - tenant-c
-	// - tenant-d
-	// Base kustomization.yaml content:
-	// resources:
-	// - namespace.yaml
-	// - rolebinding.yaml
-	// - role.yaml
-	// - networkpolicy.yaml
-	// commonLabels:
-	//  test-case: hydration
+// All the following images were built from the directory e2e/testdata/hydration/kustomize-components,
+// which includes a kustomization.yaml file in the root directory that
+// references resources for tenant-a, tenant-b, and tenant-c.
+// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
 
+var (
 	// publicGCRImage pulls the public OCI image by the default `latest` tag
-	publicGCRImage = "gcr.io/stolos-dev/config-sync-ci/kustomize-components"
+	publicGCRImage = fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components", nomostesting.GCPProjectIDFromEnv)
+
 	// publicARImage pulls the public OCI image by the default `latest` tag
-	publicARImage = "us-docker.pkg.dev/stolos-dev/config-sync-ci-public/kustomize-components"
-	// privateGCRImage pulls the private OCI image by digest
-	privateGCRImage = "us.gcr.io/stolos-dev/config-sync-ci/kustomize-components@sha256:e5b67f70a0cb3e7afb539521739baece7b8918282ccd6ef6be7caa061df95a3b"
+	publicARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/kustomize-components", nomostesting.GCPProjectIDFromEnv)
+
+	// privateGCRImage pulls the private OCI image by tag
+	privateGCRImage = fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", nomostesting.GCPProjectIDFromEnv)
+
 	// privateARImage pulls the private OCI image by tag
-	privateARImage    = "us-docker.pkg.dev/stolos-dev/config-sync-ci-private/kustomize-components:v1"
-	imageDigest       = "e5b67f70a0cb3e7afb539521739baece7b8918282ccd6ef6be7caa061df95a3b"
-	gsaARReaderEmail  = "e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com"
-	gsaGCRReaderEmail = "e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com"
+	privateARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", nomostesting.GCPProjectIDFromEnv)
+
+	gsaARReaderEmail = fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
+
+	gsaGCRReaderEmail = fmt.Sprintf("e2e-test-gcr-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
 )
 
 // TestPublicOCI can run on both Kind and GKE clusters.
@@ -100,14 +77,14 @@ func TestPublicOCI(t *testing.T) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicARImage, true)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
-	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c", "tenant-d")
+	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, publicGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage, true)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "tenant-a"}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
@@ -134,14 +111,14 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateARImage, false)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 
 	tenant = "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(imageDigest)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage, false)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
@@ -151,13 +128,13 @@ func TestGCENodeOCI(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestOCIARGKEWorkloadIdentity(t *testing.T) {
@@ -167,7 +144,7 @@ func TestOCIARGKEWorkloadIdentity(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateARImage, false),
 	})
 }
 
@@ -176,13 +153,13 @@ func TestOCIARGKEWorkloadIdentity(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
@@ -192,7 +169,7 @@ func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateGCRImage, false),
 	})
 }
 
@@ -201,13 +178,13 @@ func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestOCIARFleetWISameProject(t *testing.T) {
@@ -217,7 +194,7 @@ func TestOCIARFleetWISameProject(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateARImage, false),
 	})
 }
 
@@ -226,13 +203,13 @@ func TestOCIARFleetWISameProject(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:stolos-dev.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
+//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestOCIGCRFleetWISameProject(t *testing.T) {
@@ -242,7 +219,7 @@ func TestOCIGCRFleetWISameProject(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateGCRImage, false),
 	})
 }
 
@@ -251,13 +228,13 @@ func TestOCIGCRFleetWISameProject(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
+// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
 //	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@stolos-dev.iam.gserviceaccount.com
+//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The cross-project fleet host project 'cs-dev-hub' is created.
 // 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
@@ -268,7 +245,7 @@ func TestOCIARFleetWIDifferentProject(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateARImage, false),
 	})
 }
 
@@ -277,13 +254,13 @@ func TestOCIARFleetWIDifferentProject(t *testing.T) {
 //	The test will run on a GKE cluster only with following pre-requisites
 //
 // 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
+// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 // 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
 //
-//	gcloud iam service-accounts add-iam-policy-binding --project=stolos-dev \
+//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
 //	   --role roles/iam.workloadIdentityUser \
 //	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@stolos-dev.iam.gserviceaccount.com
+//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
 //
 // 4. The cross-project fleet host project 'cs-dev-hub' is created.
 // 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
@@ -294,7 +271,7 @@ func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: fixedOCIDigest(imageDigest),
+		rootCommitFn: imageDigestFunc(privateGCRImage, false),
 	})
 }
 
@@ -304,12 +281,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	managerScope := string(declared.RootReconciler)
 	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
 	rsGitYAMLFile := "../testdata/reconciler-manager/reposync-sample.yaml"
-	// file path to the local RepoSync YAML file which syncs from a public OCI image that contains a role.
-	rsOCIYAMLFile := "../testdata/reconciler-manager/reposync-oci.yaml"
 	// file path to the RepoSync config in the root repository.
 	repoResourcePath := "acme/reposync-bookinfo.yaml"
-	// The Sha1Func that returns the fixed OCI digest of the namespace repo package.
-	nsRepoOCIDigestShaFunc := fixedOCIDigest("e118253937b078ea35032c665855f9c51ba23715302445bea663cae61a2a34f9")
 
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
@@ -338,7 +311,14 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	nt.RootRepos[configsync.RootSyncName].Copy(rsOCIYAMLFile, repoResourcePath)
+	repoSync := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	repoSync.Spec.SourceType = string(v1beta1.OciSource)
+	imageURL := fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", nomostesting.GCPProjectIDFromEnv)
+	repoSync.Spec.Oci = &v1beta1.Oci{
+		Image: imageURL,
+		Auth:  configsync.AuthNone,
+	}
+	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSync)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository")
 	nt.WaitForRepoSyncs()
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
@@ -346,7 +326,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	nt.T.Log("Verify the namespace objects are updated")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, nsRepoOCIDigestShaFunc, nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, imageDigestFunc(imageURL, true), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -382,13 +362,14 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Switch from Git to OCI
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
-	nt.MustKubectl("apply", "-f", rsOCIYAMLFile)
+	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
+		v1beta1.OciSource, imageURL, configsync.AuthNone))
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, nsRepoOCIDigestShaFunc, nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, imageDigestFunc(imageURL, true), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -432,8 +413,8 @@ func isSourceType(sourceType v1beta1.SourceType) nomostest.Predicate {
 
 /*
 // TestDigestUpdateInAR tests if the oci-sync container can pull new digests with the same tag.
-// The test requires permission to push new image to `config-sync-ci-public` in the Artifact Registry,
-// and permission to push new image to `config-sync-ci-public` in the Container Registry.
+// The test requires permission to push new image to `config-sync-test-public` in the Artifact Registry,
+// and permission to push new image to `config-sync-test-public` in the Container Registry.
 // The test uses the current credentials (gcloud auth) when running on the GKE clusters to push new images.
 func TestDigestUpdate(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RequireGKE(t))
@@ -447,10 +428,10 @@ func TestDigestUpdate(t *testing.T) {
 	})
 
 	nt.T.Log("Test oci-sync pulling the latest image from AR when digest changes")
-	testDigestUpdate(nt, "us-docker.pkg.dev/stolos-dev/config-sync-ci-public/digest-update")
+	testDigestUpdate(nt, "us-docker.pkg.dev/${GCP_PROJECT}/config-sync-test-public/digest-update")
 
 	nt.T.Log("Test oci-sync pulling the latest image from GCR when digest changes")
-	testDigestUpdate(nt, "gcr.io/stolos-dev/config-sync-ci/digest-update")
+	testDigestUpdate(nt, "gcr.io/${GCP_PROJECT}/config-sync-test/digest-update")
 }
 
 func testDigestUpdate(nt *nomostest.NT, image string) {
@@ -481,9 +462,33 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 }
 */
 
-func fixedOCIDigest(digest string) nomostest.Sha1Func {
+func getImageDigest(imageName string, publicImage bool) (string, error) {
+	var auth authn.Authenticator
+	if publicImage {
+		auth = authn.Anonymous
+	} else {
+		a, err := google.NewEnvAuthenticator()
+		if err != nil {
+			return "", err
+		}
+		auth = a
+	}
+	image, err := oci.PullImage(imageName, remote.WithContext(context.TODO()), remote.WithAuth(auth))
+	if err != nil {
+		return "", err
+	}
+
+	// Determine the digest of the image that was extracted
+	imageDigestHash, err := image.Digest()
+	if err != nil {
+		return "", err
+	}
+	return imageDigestHash.Hex, nil
+}
+
+func imageDigestFunc(imageName string, publicImage bool) nomostest.Sha1Func {
 	return func(*nomostest.NT, types.NamespacedName) (string, error) {
-		return digest, nil
+		return getImageDigest(imageName, publicImage)
 	}
 }
 

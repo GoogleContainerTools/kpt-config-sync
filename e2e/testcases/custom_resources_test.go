@@ -119,7 +119,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 1)
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -210,7 +210,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 1)
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)

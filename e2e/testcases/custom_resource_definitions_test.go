@@ -85,9 +85,9 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		nt.WaitForRepoImportErrorCode(nonhierarchical.UnsupportedCRDRemovalErrorCode)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nomostest.DefaultRootReconcilerName), func() error {
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -110,7 +110,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		if err != nil {
 			return err
 		}
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)

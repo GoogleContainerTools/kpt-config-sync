@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -37,9 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/util/repo"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-	"go.opencensus.io/tag"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -317,85 +316,15 @@ func (nt *NT) MustMergePatch(obj client.Object, patch string, opts ...client.Pat
 	}
 }
 
-// updateMetrics performs a diff between the current metrics and the previously
-// recorded metrics to get all the metrics with new or changed measurements.
-// If unchanged, the `declared_resources` and `watches` metrics are also added
-// to the map because `ValidateMultiRepoMetrics` always validates those metrics.
-//
-// Diffing the metrics allows us to validate incremental changes to the metrics
-// instead of having to validate against the entire set of metrics every time.
-func (nt *NT) updateMetrics(prev testmetrics.ConfigSyncMetrics, parsedMetrics testmetrics.ConfigSyncMetrics) {
-	newCsm := make(testmetrics.ConfigSyncMetrics)
-	containsMetric := func(metrics []string, metric string) bool {
-		for _, m := range metrics {
-			if m == metric {
-				return true
-			}
-		}
-		return false
-	}
-	containsMeasurement := func(entries []testmetrics.Measurement, me testmetrics.Measurement) bool {
-		for _, e := range entries {
-			opt := cmp.Comparer(func(x, y tag.Tag) bool {
-				return reflect.DeepEqual(x, y)
-			})
-			if cmp.Equal(me, e, opt) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// These metrics are always validated so we need to add them to the map even
-	// if their measurements haven't changed.
-	validatedMetrics := []string{
-		ocmetrics.APICallDurationView.Name,
-		ocmetrics.ApplyDurationView.Name,
-		ocmetrics.ApplyOperationsView.Name,
-		ocmetrics.ReconcileDurationView.Name,
-		ocmetrics.RemediateDurationView.Name,
-		ocmetrics.DeclaredResourcesView.Name,
-		ocmetrics.LastApplyTimestampView.Name,
-		ocmetrics.LastSyncTimestampView.Name,
-	}
-
-	// Diff the metrics if previous metrics exist
-	if prev != nil {
-		for metric, measurements := range parsedMetrics {
-			if containsMetric(validatedMetrics, metric) {
-				newCsm[metric] = measurements
-			} else {
-				// Check whether the previous metrics map has the metric.
-				if prevMeasurements, ok := prev[metric]; ok {
-					for _, measurement := range measurements {
-						// Check that the previous measurements for the metric does not have the
-						// new measurement.
-						if !containsMeasurement(prevMeasurements, measurement) {
-							newCsm[metric] = append(newCsm[metric], measurement)
-						}
-					}
-				} else {
-					newCsm[metric] = measurements
-				}
-			}
-		}
-	} else {
-		newCsm = parsedMetrics
-	}
-	// Save the result
-	nt.ReconcilerMetrics = newCsm
-}
-
 // ValidateMetrics pulls the latest metrics, updates the metrics on NT and
 // executes the parameter function.
 func (nt *NT) ValidateMetrics(syncOption MetricsSyncOption, fn func() error) error {
 	if nt.MultiRepo {
 		nt.T.Log("validating metrics...")
-		prevMetrics := nt.ReconcilerMetrics
 		var once sync.Once
 		duration, err := Retry(nt.DefaultMetricsTimeout, func() error {
 			duration, currentMetrics := nt.GetCurrentMetrics(syncOption)
-			nt.updateMetrics(prevMetrics, currentMetrics)
+			nt.ReconcilerMetrics = currentMetrics
 			once.Do(func() {
 				// Only log this once. Afterwards GetCurrentMetrics will return immediately.
 				nt.T.Logf("waited %v for metrics to be current", duration)
@@ -520,16 +449,17 @@ func (nt *NT) ValidateMultiRepoMetrics(reconcilerName string, numResources int, 
 // any of the reconcilers.
 func (nt *NT) ValidateErrorMetricsNotFound() error {
 	if nt.MultiRepo {
-		if err := nt.ReconcilerMetrics.ValidateErrorMetrics(DefaultRootReconcilerName); err != nil {
-			return err
-		}
 		for name := range nt.RootRepos {
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(core.RootReconcilerName(name)); err != nil {
+			reconcilerName := core.RootReconcilerName(name)
+			pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
 				return err
 			}
 		}
 		for nn := range nt.NonRootRepos {
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(core.NsReconcilerName(nn.Namespace, nn.Name)); err != nil {
+			reconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
+			pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
 				return err
 			}
 		}
@@ -581,24 +511,11 @@ func (nt *NT) ValidateMetricNotFound(metricName string) error {
 }
 
 // ValidateReconcilerErrors validates that the `reconciler_error` metric exists
-// for the correct reconciler and the tagged component has the correct value.
-func (nt *NT) ValidateReconcilerErrors(reconcilerName, component string) error {
+// for the correct reconciler pod and the tagged component has the correct value.
+func (nt *NT) ValidateReconcilerErrors(reconcilerName string, sourceCount, syncCount int) error {
 	if nt.MultiRepo {
-		var sourceCount, syncCount int
-		switch component {
-		case "source":
-			sourceCount = 1
-			syncCount = 0
-		case "sync":
-			sourceCount = 0
-			syncCount = 1
-		case "":
-			sourceCount = 0
-			syncCount = 0
-		default:
-			return errors.Errorf("unexpected component tag value: %v", component)
-		}
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(reconcilerName, sourceCount, syncCount)
+		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		return nt.ReconcilerMetrics.ValidateReconcilerErrors(pod.Name, sourceCount, syncCount)
 	}
 	return nil
 }
@@ -1461,6 +1378,43 @@ func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 	return cmp < 0, nil
 }
 
+// GetDeploymentPod is a convenience method to look up the pod for a deployment.
+// It requires that exactly one pod exist and that the deoployment uses label
+// selectors to uniquely identify its pods.
+// This is promarily useful for finding the current pod for a reconciler or
+// other single-replica controller deployments.
+// Any error will cause a fatal test failure.
+func (nt *NT) GetDeploymentPod(deploymentName, namespace string) *corev1.Pod {
+	deployment := &appsv1.Deployment{}
+	if err := nt.Get(deploymentName, namespace, deployment); err != nil {
+		nt.T.Fatal(err)
+	}
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	if selector.Empty() {
+		nt.T.Fatal("deployment has no label selectors: %s/%s", namespace, deploymentName)
+	}
+
+	pods := &corev1.PodList{}
+	Wait(nt.T, fmt.Sprintf("listing pods for deployment %s/%s", namespace, deploymentName), 1*time.Minute, func() error {
+		err = nt.List(pods, client.InNamespace(namespace), client.MatchingLabelsSelector{
+			Selector: selector,
+		})
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) != 1 {
+			return errors.Errorf("deployment has %d pods but expected %d: %s/%s", len(pods.Items), 1, namespace, deploymentName)
+		}
+		return nil
+	})
+	pod := pods.Items[0]
+	nt.DebugLogf("Found deployment pod: %s/%s", pod.Namespace, pod.Name)
+	return &pod
+}
+
 // WaitOption is an optional parameter for Wait
 type WaitOption func(wait *waitSpec)
 
@@ -1528,6 +1482,7 @@ func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 			}
 		}
 
+		nt.DebugLog(`Found "last_sync_timestamp" metric with commit="<latest>" and status="<any>" for all active reconcilers`)
 		return nil
 	}
 }
@@ -1550,21 +1505,38 @@ func SyncMetricsToLatestCommitSyncedWithSuccess(nt *NT) MetricsSyncOption {
 			}
 		}
 
+		nt.DebugLog(`Found "last_sync_timestamp" metric with commit="<latest>" and status="success" for all active reconcilers`)
 		return nil
 	}
 }
 
 // SyncMetricsToReconcilerSourceError syncs metrics to a reconciler source error
-func SyncMetricsToReconcilerSourceError(reconcilerName string) MetricsSyncOption {
+func SyncMetricsToReconcilerSourceError(nt *NT, reconcilerName string) MetricsSyncOption {
+	ntPtr := nt
+	reconcilerNameCopy := reconcilerName
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconcilerName, 1, 0)
+		pod := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
+		err := metrics.ValidateReconcilerErrors(pod.Name, 1, 0)
+		if err != nil {
+			return err
+		}
+		ntPtr.DebugLog(`Found "reconciler_errors" metric with component="source" and value="1"`)
+		return nil
 	}
 }
 
 // SyncMetricsToReconcilerSyncError syncs metrics to a reconciler sync error
-func SyncMetricsToReconcilerSyncError(reconcilerName string) MetricsSyncOption {
+func SyncMetricsToReconcilerSyncError(nt *NT, reconcilerName string) MetricsSyncOption {
+	ntPtr := nt
+	reconcilerNameCopy := reconcilerName
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		return metrics.ValidateReconcilerErrors(reconcilerName, 0, 1)
+		pod := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
+		err := metrics.ValidateReconcilerErrors(pod.Name, 0, 1)
+		if err != nil {
+			return err
+		}
+		ntPtr.DebugLog(`Found "reconciler_errors" metric with component="sync" and value="1"`)
+		return nil
 	}
 }
 

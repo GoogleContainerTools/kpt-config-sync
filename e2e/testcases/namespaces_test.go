@@ -768,7 +768,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	numDeclaredObjs -= 2 // -2 for the removed test Namespaces
 	numDeclaredObjs--    // -1 for the removed safety Namespace
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSyncError(nomostest.DefaultRootReconcilerName), func() error {
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSyncError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		rootReconcilerMetrics := nt.ReconcilerMetrics.FilterByReconciler(nomostest.DefaultRootReconcilerName)
 		err := rootReconcilerMetrics.ValidateDeclaredResources(numDeclaredObjs)
 		return errors.Wrapf(err, "for reconciler %s", nomostest.DefaultRootReconcilerName)

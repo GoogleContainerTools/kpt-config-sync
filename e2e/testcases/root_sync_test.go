@@ -311,9 +311,9 @@ func TestForceRevert(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nomostest.DefaultRootReconcilerName), func() error {
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -325,7 +325,7 @@ func TestForceRevert(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)

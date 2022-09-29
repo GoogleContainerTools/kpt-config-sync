@@ -16,6 +16,8 @@
 package main
 
 import (
+	"flag"
+
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/client/restconfig"
@@ -31,7 +33,9 @@ func main() {
 	log.Setup()
 	ctrl.SetLogger(klogr.New())
 
-	cfg, err := restconfig.MonoRepoRestClient(restconfig.DefaultTimeout)
+	apiServerTimeout := flag.Duration("api-server-timeout", restconfig.DefaultTimeout, "Client-side timeout for talking to the API server")
+
+	cfg, err := restconfig.MonoRepoRestClient(*apiServerTimeout)
 	if err != nil {
 		klog.Fatalf("Failed to create rest config: %v", err)
 	}

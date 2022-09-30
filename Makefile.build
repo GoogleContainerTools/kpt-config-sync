@@ -22,7 +22,7 @@ push-buildenv: build-buildenv
 
 GCB_DOCKER_GCLOUD_VERSION := v20220617-174ad91c3a
 GCP_DOCKER_GCLOUD_TAG := gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:$(GCB_DOCKER_GCLOUD_VERSION)
-DOCKER_BUILDENV_TAG ?= gcr.io/$(GCR_PREFIX)/docker-buildenv:$(GCB_DOCKER_GCLOUD_VERSION)
+DOCKER_BUILDENV_TAG ?= $(REGISTRY)/docker-buildenv:$(GCB_DOCKER_GCLOUD_VERSION)
 # Build the docker-buildenv image that can be used for containerized building of Config Sync artifacts
 build-docker-buildenv: build/docker-buildenv/Dockerfile
 	@echo "+++ Creating the docker container for $(DOCKER_BUILDENV_TAG)"
@@ -121,10 +121,9 @@ image-nomos: license
 		--build-arg VERSION=${VERSION} \
 		.
 
-
 # Pushes the specified component's docker image to gcr.io.
-push-to-gcr-nomos: image-nomos
-	@echo "+++ Pushing nomos image to gcr.io"
+push-to-gcr-nomos:
+	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
 	@echo "+++ Using account:"
 	gcloud config get-value account
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
@@ -138,12 +137,9 @@ push-to-gcr-nomos: image-nomos
 	docker push $(HELM_SYNC_TAG)
 
 # Pushes the specified component's docker image to gcr.io.
-promote-gcr-nomos:
-	@echo "+++ Promoting nomos image to gcr.io"
+retag-rc-images:
+	@echo "+++ Promoting Config Sync images to $(REGISTRY)"
 	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
-	@echo "+++ Using account:"
-	gcloud config get-value account
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
 	docker pull $(NOMOS_GCR):$(RC_TAG)
 	docker pull $(RECONCILER_GCR):$(RC_TAG)
 	docker pull $(RECONCILER_MANAGER_GCR):$(RC_TAG)
@@ -160,14 +156,6 @@ promote-gcr-nomos:
 	docker tag $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(RC_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker tag $(OCI_SYNC_GCR):$(RC_TAG) $(OCI_SYNC_TAG)
 	docker tag $(HELM_SYNC_GCR):$(RC_TAG) $(HELM_SYNC_TAG)
-	docker push $(NOMOS_TAG)
-	docker push $(RECONCILER_TAG)
-	docker push $(RECONCILER_MANAGER_TAG)
-	docker push $(ADMISSION_WEBHOOK_TAG)
-	docker push $(HYDRATION_CONTROLLER_TAG)
-	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
-	docker push $(OCI_SYNC_TAG)
-	docker push $(HELM_SYNC_TAG)
 
 ###################################
 # Deployment generation
@@ -238,7 +226,8 @@ $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
 ###################################
 
 # Copy the subset of Config Sync multirepo/OSS manifests from previously constructed ACM manifests
-__config-sync-manifest-oss:
+.PHONY: __config-sync-manifest-oss
+__config-sync-manifest-oss: __config-sync-manifest
 	@echo "+++ Copying manifests for OSS deployments"
 	rm -rf $(OUTPUT_DIR)/oss/cloned
 	mkdir -p $(OUTPUT_DIR)/oss/cloned
@@ -263,9 +252,9 @@ __config-sync-manifest-oss:
 		$(OUTPUT_DIR)/oss/cloned/manifests \
 		$(OUTPUT_DIR)/oss/cloned/deployment
 
-# config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
-.PHONY: config-sync-manifest
-config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
+# __config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
+.PHONY: __config-sync-manifest
+__config-sync-manifest: generate-deployments
 	@echo "+++ Preparing config-sync-manifest.yaml"
 	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
 	rm -rf $(OUTPUT_DIR)/manifests
@@ -275,21 +264,15 @@ config-sync-manifest: $(OUTPUT_DIR) push-to-gcr-nomos generate-deployments
 		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
 		$(OUTPUT_DIR)/manifests \
 		$(OUTPUT_DIR)/deployment
-	$(MAKE) __config-sync-manifest-oss
+
+# config-sync-manifest-no-push creates the config-sync-manifest.yaml and builds images without pushing
+.PHONY: config-sync-manifest-no-push
+config-sync-manifest-no-push: $(OUTPUT_DIR) image-nomos __config-sync-manifest-oss
 
 # config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
-.PHONY: config-sync-manifest-promote
-config-sync-manifest-promote: $(OUTPUT_DIR) promote-gcr-nomos generate-deployments
-	@echo "+++ Preparing config-sync-manifest.yaml"
-	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
-	rm -rf $(OUTPUT_DIR)/manifests
-	rsync manifests/* .output/manifests/
-	@echo "++++ Add yaml files to config-sync-manifest.yaml"
-	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
-		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
-		$(OUTPUT_DIR)/manifests \
-		$(OUTPUT_DIR)/deployment
-	$(MAKE) __config-sync-manifest-oss
+# and retags images without publishing
+.PHONY: config-sync-manifest-promote-no-push
+config-sync-manifest-promote-no-push: $(OUTPUT_DIR) retag-rc-images __config-sync-manifest-oss
 
 # config-sync-manifest-e2e adds additional resources that are necessary for the e2e tests
 .PHONY: config-sync-manifest-e2e
@@ -303,6 +286,15 @@ config-sync-manifest-e2e: config-sync-manifest
 		${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
 		mono-repo-configmaps.copy.yaml
 	rm mono-repo-configmaps.copy.yaml
+
+# config-sync-manifest creates config sync manifest and pushes its docker images
+.PHONY: config-sync-manifest
+config-sync-manifest: config-sync-manifest-no-push push-to-gcr-nomos
+
+# config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
+# and pushes the promoted images
+.PHONY: config-sync-manifest-promote
+config-sync-manifest-promote: config-sync-manifest-promote-no-push push-to-gcr-nomos
 
 ###################################
 # E2E Git Server

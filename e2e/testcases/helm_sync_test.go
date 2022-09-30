@@ -20,6 +20,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -52,7 +53,7 @@ func TestPublicHelm(t *testing.T) {
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "ingress-nginx", "auth": "none", "version": "4.0.5", "releaseName": "my-ingress-nginx", "namespace": "ingress-nginx"}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "ingress-nginx", "auth": "none", "version": "4.0.5", "releaseName": "my-ingress-nginx", "namespace": "ingress-nginx", "values": {"serviceAccount.name": "1234"}}, "git": null}}`,
 		v1beta1.HelmSource, publicHelmRepo))
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
@@ -62,6 +63,9 @@ func TestPublicHelm(t *testing.T) {
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
 	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("1234", "ingress-nginx", &corev1.ServiceAccount{}); err != nil {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")

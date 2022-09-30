@@ -68,5 +68,5 @@ gcloud iam service-accounts add-iam-policy-binding --project="${GCP_PROJECT}" \
 
 echo "Granting the prober-runner service account of the {GCP_PROJECT} project the 'roles/gkehub.admin' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud projects add-iam-policy-binding "${FLEET_HOST_PROJECT}" \
-  --member "serviceAccount:prober-runner@${GCP_PROJECT}.iam.gserviceaccount.com	" \
+  --member "serviceAccount:prober-runner@${GCP_PROJECT}.iam.gserviceaccount.com" \
   --role roles/gkehub.admin

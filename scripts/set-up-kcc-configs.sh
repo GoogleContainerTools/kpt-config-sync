@@ -71,7 +71,7 @@ gcloud services enable cloudresourcemanager.googleapis.com --project="${KCC_MANA
 echo "Configuring IAM service account for KCC integration test"
 SERVICE_ACCOUNT_NAME=kcc-integration
 
-gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" --project="${KCC_MANAGED_PROJECT}"
+gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" --project="${KCC_MANAGED_PROJECT}" || true
 
 gcloud projects add-iam-policy-binding "${KCC_MANAGED_PROJECT}" \
  --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \

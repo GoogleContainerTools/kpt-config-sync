@@ -367,6 +367,7 @@ set-up-workload-identity-test:
 install-helm:
 	wget https://get.helm.sh/helm-$(HELM_VERSION)-linux-amd64.tar.gz -O /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 	tar -zxvf /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz -C /tmp
+	mkdir -p $(HELM) || true
 	mv /tmp/linux-amd64/helm $(HELM)
 	rm /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 

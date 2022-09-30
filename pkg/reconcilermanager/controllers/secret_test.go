@@ -20,7 +20,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"kpt.dev/configsync/pkg/core"
@@ -100,11 +99,7 @@ func secretData(t *testing.T, data string, auth configsync.AuthType, sourceType 
 
 func fakeClient(t *testing.T, objs ...client.Object) *syncerFake.Client {
 	t.Helper()
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	return syncerFake.NewClient(t, s, objs...)
+	return syncerFake.NewClient(t, core.Scheme, objs...)
 }
 
 func TestCreate(t *testing.T) {

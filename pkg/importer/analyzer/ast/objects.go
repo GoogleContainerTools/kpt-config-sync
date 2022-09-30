@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -68,7 +69,7 @@ func (o *FileObject) DeepCopy() FileObject {
 // validation code requires the structured format, we can convert it here
 // separate from the raw unstructured representation.
 func (o *FileObject) Structured() (runtime.Object, status.Error) {
-	obj, err := core.RemarshalToStructured(o.Unstructured)
+	obj, err := kinds.ToTypedObject(o.Unstructured, core.Scheme)
 	if err != nil {
 		return nil, status.ObjectParseError(o.Unstructured, err)
 	}

@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/dirwatcher"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/policycontroller"
@@ -60,15 +60,11 @@ func RunImporter() {
 
 	// Create a new Manager to provide shared dependencies and start components.
 	mgr, err := manager.New(cfg, manager.Options{
+		Scheme:     core.Scheme,
 		SyncPeriod: resyncPeriod,
 	})
 	if err != nil {
 		klog.Fatalf("Failed to create manager: %+v", err)
-	}
-
-	// Set up Scheme for nomos resources.
-	if err := v1.AddToScheme(mgr.GetScheme()); err != nil {
-		klog.Fatalf("Error adding configmanagement resources to scheme: %v", err)
 	}
 
 	// Normalize policyDirRelative.

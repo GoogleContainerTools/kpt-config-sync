@@ -19,13 +19,11 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
@@ -128,15 +126,15 @@ func TestReconcile(t *testing.T) {
 			for i := range tc.actual {
 				actual = append(actual, &tc.actual[i])
 			}
-			fakeClient := fake.NewClient(t, runtime.NewScheme(), actual...)
+			fakeClient := fake.NewClient(t, core.Scheme, actual...)
 
 			discoveryClient := fake.NewDiscoveryClient(
 				kinds.ConfigMap(),
 				kinds.Deployment(),
-				corev1.SchemeGroupVersion.WithKind("Secret"),
-				corev1.SchemeGroupVersion.WithKind("Service"),
+				kinds.Secret(),
+				kinds.Service(),
 				kinds.Role(),
-				rbacv1beta1.SchemeGroupVersion.WithKind("Role"),
+				kinds.Sync(),
 			)
 			restartable := &fake.RestartableManagerRecorder{}
 

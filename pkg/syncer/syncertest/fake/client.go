@@ -297,16 +297,16 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 	return nil
 }
 
-func toUnstructured(obj client.Object) (unstructured.Unstructured, error) {
-	innerObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+func (c *Client) toUnstructured(obj client.Object) (unstructured.Unstructured, error) {
+	uObj, err := kinds.ToUnstructured(obj, c.Scheme())
 	if err != nil {
 		return unstructured.Unstructured{}, err
 	}
-	return unstructured.Unstructured{Object: innerObj}, nil
+	return *uObj, nil
 }
 
-func getStatusFromObject(obj client.Object) (map[string]interface{}, bool, error) {
-	u, err := toUnstructured(obj)
+func (c *Client) getStatusFromObject(obj client.Object) (map[string]interface{}, bool, error) {
+	u, err := c.toUnstructured(obj)
 	if err != nil {
 		return nil, false, err
 	}
@@ -314,7 +314,7 @@ func getStatusFromObject(obj client.Object) (map[string]interface{}, bool, error
 }
 
 func (c *Client) updateObjectStatus(obj client.Object, status map[string]interface{}) (client.Object, error) {
-	u, err := toUnstructured(obj)
+	u, err := c.toUnstructured(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		return newNotFound(id)
 	}
 
-	oldStatus, hasStatus, err := getStatusFromObject(c.Objects[id])
+	oldStatus, hasStatus, err := c.getStatusFromObject(c.Objects[id])
 	if err != nil {
 		return err
 	}
@@ -426,7 +426,7 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 		return newNotFound(id)
 	}
 
-	newStatus, hasStatus, err := getStatusFromObject(obj)
+	newStatus, hasStatus, err := s.Client.getStatusFromObject(obj)
 	if err != nil {
 		return err
 	}
@@ -641,7 +641,7 @@ func (c *Client) listRootSyncs(list *configsyncv1beta1.RootSyncList, options cli
 			if len(fieldSelector) != 2 {
 				return errors.Errorf("fake.Client.List for RootSyncList only supports OneTermEqualSelector FieldSelector option, but got: %+v", options)
 			}
-			uo, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+			uObj, err := c.toUnstructured(obj)
 			if err != nil {
 				return err
 			}
@@ -651,7 +651,7 @@ func (c *Client) listRootSyncs(list *configsyncv1beta1.RootSyncList, options cli
 					fs = append(fs, s)
 				}
 			}
-			val, found, err := unstructured.NestedString(uo, fs...)
+			val, found, err := unstructured.NestedString(uObj.Object, fs...)
 			if err != nil || !found {
 				continue
 			}
@@ -687,7 +687,7 @@ func (c *Client) listRepoSyncs(list *configsyncv1beta1.RepoSyncList, options cli
 			if len(fieldSelector) != 2 {
 				return errors.Errorf("fake.Client.List for RepoSyncList only supports OneTermEqualSelector FieldSelector option, but got: %+v", options)
 			}
-			uo, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+			uObj, err := c.toUnstructured(obj)
 			if err != nil {
 				return err
 			}
@@ -697,7 +697,7 @@ func (c *Client) listRepoSyncs(list *configsyncv1beta1.RepoSyncList, options cli
 					fs = append(fs, s)
 				}
 			}
-			val, found, err := unstructured.NestedString(uo, fs...)
+			val, found, err := unstructured.NestedString(uObj.Object, fs...)
 			if err != nil || !found {
 				continue
 			}
@@ -762,11 +762,11 @@ func (c *Client) listUnstructured(list *unstructured.UnstructuredList, options c
 				continue
 			}
 		}
-		uo, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		uObj, err := c.toUnstructured(obj)
 		if err != nil {
 			return err
 		}
-		list.Items = append(list.Items, unstructured.Unstructured{Object: uo})
+		list.Items = append(list.Items, uObj)
 	}
 	return nil
 }

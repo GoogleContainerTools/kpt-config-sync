@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 )
 
 func TestVersion(t *testing.T) {
@@ -115,7 +116,7 @@ func TestVersion(t *testing.T) {
 				return test.version
 			}
 			util.DynamicClient = func(c *rest.Config) (dynamic.Interface, error) {
-				return fake.NewSimpleDynamicClient(runtime.NewScheme(), test.objects...), nil
+				return fake.NewSimpleDynamicClient(core.Scheme, test.objects...), nil
 			}
 			restconfig.CurrentContextName = func() (string, error) {
 				return test.currentContext, nil

@@ -26,13 +26,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -266,28 +264,15 @@ func rolebinding(name, reconcilerName string, opts ...core.MetaMutator) *rbacv1.
 
 func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *RepoSyncReconciler) {
 	t.Helper()
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := appsv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := rbacv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := admissionregistrationv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
 
-	fakeClient := syncerFake.NewClient(t, s, objs...)
+	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
 	testReconciler := NewRepoSyncReconciler(
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
-		s,
+		fakeClient.Scheme(),
 		allowVerticalScale,
 	)
 	return fakeClient, testReconciler

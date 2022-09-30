@@ -19,8 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes/scheme"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -50,7 +50,7 @@ func AddController(mgr manager.Manager, rc RestartChannel) error {
 			return nil, errors.Wrapf(err2, "failed to create mapper during gc")
 		}
 		return client.New(cfg, client.Options{
-			Scheme: scheme.Scheme,
+			Scheme: core.Scheme,
 			Mapper: mapper,
 		})
 	}

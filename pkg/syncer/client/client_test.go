@@ -21,7 +21,6 @@ import (
 	"github.com/pkg/errors"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
@@ -40,13 +39,13 @@ func TestClient_Create(t *testing.T) {
 		{
 			name:     "Creates if does not exist",
 			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
-			client:   syncertestfake.NewClient(t, runtime.NewScheme()),
+			client:   syncertestfake.NewClient(t, core.Scheme),
 			wantErr:  nil,
 		},
 		{
 			name:     "Retriable if receives AlreadyExists",
 			declared: fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
-			client: syncertestfake.NewClient(t, runtime.NewScheme(),
+			client: syncertestfake.NewClient(t, core.Scheme,
 				fake.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			),
 			wantErr: syncerclient.ConflictCreateAlreadyExists(errors.New("some error"),

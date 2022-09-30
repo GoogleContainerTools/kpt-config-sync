@@ -22,8 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -41,19 +39,12 @@ const (
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
 	t.Helper()
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	if err := appsv1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
 
-	fakeClient := syncerFake.NewClient(t, s, objs...)
+	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
 	testReconciler := NewOtelReconciler("",
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("Otel"),
-		s,
+		fakeClient.Scheme(),
 	)
 	return fakeClient, testReconciler
 }

@@ -28,7 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"kpt.dev/configsync/pkg/core"
@@ -243,9 +242,11 @@ func TestSync(t *testing.T) {
 
 	for _, tc := range testcases {
 		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
 		u.SetNamespace("test-namespace")
 		u.SetName("rs")
-		fakeClient := testingfake.NewClient(t, runtime.NewScheme(), u)
+
+		fakeClient := testingfake.NewClient(t, core.Scheme, u)
 		configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
 		applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
 			return &clientSet{

@@ -22,7 +22,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -202,16 +201,13 @@ func TestManagedNamespaceConfigReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, tc.declared))
+			fakeDecoder := testingfake.NewDecoder(syncertest.ObjectToUnstructuredList(t, core.Scheme, tc.declared))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
 			actual := []client.Object{namespaceCfg, managedNamespace}
 			if tc.actual != nil {
 				actual = append(actual, tc.actual)
 			}
-			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
-			s.AddKnownTypeWithName(kinds.Deployment(), &appsv1.Deployment{})
-			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient := testingfake.NewClient(t, core.Scheme, actual...)
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -284,15 +280,13 @@ func TestUnmanagedNamespaceReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter))
+			fakeDecoder := testingfake.NewDecoder(syncertest.ObjectToUnstructuredList(t, core.Scheme, tc.declared))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
-			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
 			actual := []client.Object{tc.actualNamespaceConfig, tc.namespace}
 			if tc.actual != nil {
 				actual = append(actual, tc.actual)
 			}
-			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient := testingfake.NewClient(t, core.Scheme, actual...)
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -370,11 +364,9 @@ func TestSpecialNamespaceReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, nil))
+			fakeDecoder := testingfake.NewDecoder(syncertest.ObjectToUnstructuredList(t, core.Scheme, tc.declared))
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
-			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
-			fakeClient := testingfake.NewClient(t, s, tc.declared, tc.actual)
+			fakeClient := testingfake.NewClient(t, core.Scheme, tc.declared, tc.actual)
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)
@@ -518,13 +510,11 @@ func TestNamespaceConfigReconcile(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			fakeDecoder := testingfake.NewDecoder(syncertest.ToUnstructuredList(t, syncertest.Converter, nil))
+			fakeDecoder := testingfake.NewDecoder(nil)
 			fakeEventRecorder := testingfake.NewEventRecorder(t)
 			actual := []client.Object{tc.namespaceConfig, tc.namespace}
 			actual = append(actual, tc.actual...)
-			s := runtime.NewScheme()
-			s.AddKnownTypeWithName(kinds.Namespace(), &corev1.Namespace{})
-			fakeClient := testingfake.NewClient(t, s, actual...)
+			fakeClient := testingfake.NewClient(t, core.Scheme, actual...)
 
 			testReconciler := syncerreconcile.NewNamespaceConfigReconciler(
 				syncerclient.New(fakeClient, metrics.APICallDuration), fakeClient.Applier(), fakeClient, fakeEventRecorder, fakeDecoder, syncertest.Now, toSync, mgrInitTime)

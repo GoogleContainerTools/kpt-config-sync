@@ -60,6 +60,7 @@ __download_prober_creds:
 GCP_CLUSTER ?= $(USER)-cluster-1
 GCP_ZONE ?= us-central1-a
 GKE_E2E_TIMEOUT ?= 6h
+PROBER_DOCKER_ARGS ?= -v $(PROBER_CREDS):$(SA_KEY_FILE) --env GCP_PROBER_CREDS=$(SA_KEY_FILE)
 
 # Run the golang e2e tests sequentially (--parallel 1) on a GKE cluster.
 # It requires a GKE cluster to be installed in `$(GCP_PROJECT)` and `$(GCP_ZONE)`/`$(GCP_REGION)`.
@@ -74,10 +75,9 @@ __docker-run-e2e-go-gke: image-nomos push-to-gcr-nomos __build-e2e-go-container
 	@echo "ARTIFACTS=$(ARTIFACTS)"
 	@echo "GKE_E2E_TIMEOUT=$(GKE_E2E_TIMEOUT)"
 	@docker run \
-		-v $(PROBER_CREDS):$(SA_KEY_FILE) \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
-		--env GCP_PROBER_CREDS=$(SA_KEY_FILE) \
+		$(PROBER_DOCKER_ARGS) \
 		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--env GCP_CLUSTER=$(GCP_CLUSTER) \
 		--env GCP_ZONE=$(GCP_ZONE) \

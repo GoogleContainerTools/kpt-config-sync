@@ -40,11 +40,14 @@ var (
 		Aggregation: view.LastValue(),
 	}
 
-	// PipelineErrorView aggregates the PipelineError metric measurements
+	// PipelineErrorView aggregates the PipelineError metric measurements.
+	// Definition here must exactly match the definition in the resource-group
+	// controller, or the Prometheus exporter will error. b/247516388
+	// https://github.com/GoogleContainerTools/kpt-resource-group/blob/main/controllers/metrics/views.go#L123
 	PipelineErrorView = &view.View{
 		Name:        PipelineError.Name(),
 		Measure:     PipelineError,
-		Description: "A boolean indicates if any error happens from different stages when syncing a commit",
+		Description: "A boolean value indicates if error happened from different stages when syncing a commit",
 		TagKeys:     []tag.Key{KeyName, KeyReconcilerType, KeyComponent},
 		Aggregation: view.LastValue(),
 	}

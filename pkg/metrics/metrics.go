@@ -29,10 +29,13 @@ var (
 		"The number of errors in the reconciler",
 		stats.UnitDimensionless)
 
-	// PipelineError metric measures the error by components when syncing a commit
+	// PipelineError metric measures the error by components when syncing a commit.
+	// Definition here must exactly match the definition in the resource-group
+	// controller, or the Prometheus exporter will error. b/247516388
+	// https://github.com/GoogleContainerTools/kpt-resource-group/blob/main/controllers/metrics/metrics.go#L88
 	PipelineError = stats.Int64(
 		"pipeline_error_observed",
-		"A boolean indicates if any error happens from different stages when syncing a commit",
+		"A boolean value indicates if error happened at readiness stage when syncing a commit",
 		stats.UnitDimensionless)
 
 	// ReconcileDuration metric measures the latency of reconcile events.

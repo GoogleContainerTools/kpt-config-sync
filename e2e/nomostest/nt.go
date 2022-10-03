@@ -404,7 +404,7 @@ func (nt *NT) DefaultRootSyncObjectCount() int {
 		numObjects += nt.NumRepoSyncNamespaces() // 1 for each unique RepoSync Namespace
 		numObjects += numRepoSyncs               // 1 for each RepoSync
 		numObjects += numRepoSyncs               // 1 for each RepoSync RoleBinding
-		if strings.Contains(testing.GCPClusterFromEnv, "psp") {
+		if isPSPCluster() {
 			numObjects += numRepoSyncs // 1 for each RepoSync ClusterRoleBinding
 		}
 	}

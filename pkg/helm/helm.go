@@ -93,7 +93,12 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 		return []string{}, fmt.Errorf("failed to unmarshal helm.values, error: %w", err)
 	}
 	for key, val := range values {
-		args = append(args, "--set", fmt.Sprintf("%s=%v", key, val))
+		switch v := val.(type) {
+		case string:
+			args = append(args, "--set-string", fmt.Sprintf("%s=%v", key, v))
+		default:
+			args = append(args, "--set", fmt.Sprintf("%s=%v", key, v))
+		}
 	}
 	return args, nil
 }

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -48,14 +49,14 @@ var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-
 // TestPublicHelm can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public Helm repo without any authentication.
 func TestPublicHelm(t *testing.T) {
-	publicHelmRepo := "https://kubernetes.github.io/ingress-nginx"
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured)
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "ingress-nginx", "auth": "none", "version": "4.0.5", "releaseName": "my-ingress-nginx", "namespace": "ingress-nginx"}, "git": null}}`,
-		v1beta1.HelmSource, publicHelmRepo))
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace and multiple inline values")
+	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
+	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
+	nt.MustKubectl("apply", "-f", rootSyncFilePath)
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
@@ -63,7 +64,16 @@ func TestPublicHelm(t *testing.T) {
 	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
-	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}); err != nil {
+	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+		nomostest.HasCorrectResourceRequestsLimits("controller", resource.MustParse("150m"), resource.MustParse("1"), resource.MustParse("250Mi"), resource.MustParse("300Mi")),
+		nomostest.HasExactlyImage("controller", "ingress-nginx/controller", "v1.4.0", "sha256:54f7fe2c6c5a9db9a0ebf1131797109bb7a4d91f56b9b362bde2abd237dd1974")); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("my-ingress-nginx-defaultbackend", "ingress-nginx", &appsv1.Deployment{},
+		nomostest.HasExactlyImage("ingress-nginx-default-backend", "defaultbackend-amd64", "1.4", "")); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("my-ingress-nginx-controller-metrics", "ingress-nginx", &corev1.Service{}, nomostest.HasAnnotation("prometheus.io/port", "10254"), nomostest.HasAnnotation("prometheus.io/scrape", "true")); err != nil {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")

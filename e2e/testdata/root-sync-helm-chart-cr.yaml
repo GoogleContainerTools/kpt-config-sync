@@ -1,0 +1,44 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: configsync.gke.io/v1beta1
+kind: RootSync
+metadata:
+  name: root-sync
+  namespace: config-management-system
+spec:
+  sourceFormat: unstructured
+  sourceType: helm
+  helm:
+    repo: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx
+    version: 4.0.5
+    values:
+      controller.resources.requests.cpu: 150m
+      controller.resources.requests.memory: 250Mi
+      controller.resources.limits.cpu: 1
+      controller.resources.limits.memory: 300Mi
+      controller.metrics.enabled: true
+      controller.metrics.service.annotations.prometheus\.io/scrape: "true"
+      controller.metrics.service.annotations.prometheus\.io/port: "10254"
+      controller.image.pullPolicy: Always
+      controller.image.image: ingress-nginx/controller
+      controller.image.tag: "v1.4.0"
+      controller.image.digest: sha256:54f7fe2c6c5a9db9a0ebf1131797109bb7a4d91f56b9b362bde2abd237dd1974
+      defaultBackend.enabled: true
+      defaultBackend.image.image: defaultbackend-amd64
+      defaultBackend.image.tag: "1.4"
+    releaseName: my-ingress-nginx
+    namespace: "ingress-nginx"
+    auth: none

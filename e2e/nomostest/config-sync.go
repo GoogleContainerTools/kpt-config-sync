@@ -125,7 +125,7 @@ var (
 		"rootsyncs.configsync.gke.io":                true,
 		metrics.OtelAgentName:                        true,
 		metrics.OtelCollectorName:                    true,
-		"acm-psp":                                    true,
+		"acm-psp":                                    isPSPCluster(),
 		"configmanagement.gke.io:otel-collector-psp": true,
 		// ResourceGroup CRD
 		"resourcegroups.kpt.dev": true,
@@ -208,6 +208,10 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) {
 			nt.T.Fatal(err)
 		}
 	}
+}
+
+func isPSPCluster() bool {
+	return strings.Contains(testing.GCPClusterFromEnv, "psp")
 }
 
 // waitForConfigSync validates if the config sync deployment is ready.
@@ -630,12 +634,14 @@ func RepoSyncClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{rbacv1.ResourceAll},
 			Verbs:     []string{rbacv1.VerbAll},
 		},
-		{
+	}
+	if isPSPCluster() {
+		cr.Rules = append(cr.Rules, rbacv1.PolicyRule{
 			APIGroups:     []string{"policy"},
 			Resources:     []string{"podsecuritypolicies"},
 			ResourceNames: []string{"acm-psp"},
 			Verbs:         []string{"use"},
-		},
+		})
 	}
 	return cr
 }
@@ -809,7 +815,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		// it will only grant usage for pods being run in the same namespace as the binding.
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
 		// available on GKE.
-		if strings.Contains(testing.GCPClusterFromEnv, "psp") {
+		if isPSPCluster() {
 			if err := nt.Create(repoSyncClusterRoleBinding(nn)); err != nil {
 				nt.T.Fatal(err)
 			}
@@ -1040,7 +1046,6 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 // A default root repo (root-sync) manages all other root repos and namespace repos.
 func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	rsCount := 0
-	cluster := testing.GCPClusterFromEnv
 
 	// Add any RootSyncs specified by the test options
 	for rsName := range opts.RootRepos {
@@ -1074,7 +1079,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		rsNamespaces[ns] = struct{}{}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), RepoSyncRoleBinding(nn))
-		if strings.Contains(cluster, "psp") {
+		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
 			// when the cluster has PodSecurityPolicy enabled.
 			// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
@@ -1128,7 +1133,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			testmetrics.ResourceCreated("RoleBinding"),
 			testmetrics.ResourceCreated(configsync.RepoSyncKind),
 		}
-		if strings.Contains(cluster, "psp") {
+		if isPSPCluster() {
 			gvkMetrics = append(gvkMetrics, testmetrics.ResourceCreated("ClusterRoleBinding"))
 		}
 		numObjects := nt.DefaultRootSyncObjectCount()
@@ -1354,7 +1359,7 @@ func deleteNamespaceRepos(nt *NT) {
 		// auto-deletes the resources, including RepoSync, Deployment, RoleBinding, Secret, and etc.
 		revokeRepoSyncNamespace(nt, rs.Namespace)
 		nn := RepoSyncNN(rs.Namespace, rs.Name)
-		if strings.Contains(testing.GCPClusterFromEnv, "psp") {
+		if isPSPCluster() {
 			revokeRepoSyncClusterRoleBinding(nt, nn)
 		}
 	}

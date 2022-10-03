@@ -119,13 +119,18 @@ func isAvailableDeployment(o client.Object) error {
 func gitServer() []client.Object {
 	// Remember that we've already created the git-server's Namespace since the
 	// SSH key must exist before we apply the Deployment.
-	return []client.Object{
-		gitPodSecurityPolicy(),
-		gitRole(),
-		gitRoleBinding(),
+	objs := []client.Object{
 		gitService(),
 		gitDeployment(),
 	}
+	if isPSPCluster() {
+		objs = append(objs, []client.Object{
+			gitPodSecurityPolicy(),
+			gitRole(),
+			gitRoleBinding(),
+		}...)
+	}
+	return objs
 }
 
 func gitNamespace() *corev1.Namespace {

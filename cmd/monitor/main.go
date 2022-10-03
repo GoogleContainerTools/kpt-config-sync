@@ -31,7 +31,7 @@ func main() {
 	log.Setup()
 	ctrl.SetLogger(klogr.New())
 
-	cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+	cfg, err := restconfig.NewRestConfigWithThrottling(restconfig.DefaultTimeout)
 	if err != nil {
 		klog.Fatalf("Failed to create rest config: %v", err)
 	}

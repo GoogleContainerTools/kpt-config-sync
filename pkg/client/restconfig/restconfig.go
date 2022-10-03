@@ -49,10 +49,24 @@ var configSources = []configSource{
 	},
 }
 
-// NewRestConfig will attempt to create a new rest config from all configured options and return
-// the first successfully created configuration.  The flag restConfigSource, if specified, will
-// change the behavior to attempt to create from only the configured source.
+// NewRestConfigWithThrottling will attempt to create a new rest config from all
+// configured options and return the first successfully created configuration.
+// It forces to enable the client-side throttling to fix the commit stuck in the
+// inProgress state issue.
+func NewRestConfigWithThrottling(timeout time.Duration) (*rest.Config, error) {
+	return newRestConfig(timeout, true)
+}
+
+// NewRestConfig will attempt to create a new rest config from all configured
+// options and return the first successfully created configuration.
+// The client-side throttling is only determined by if server-side flow control
+// is enabled or not. If server-side flow control is enabled, then client-side
+// throttling is disabled, vice versa.
 func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
+	return newRestConfig(timeout, false)
+}
+
+func newRestConfig(timeout time.Duration, forceThrottling bool) (*rest.Config, error) {
 	var errorStrs []string
 
 	for _, source := range configSources {
@@ -61,7 +75,7 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 			klog.V(1).Infof("Created rest config from source %s", source.name)
 			klog.V(7).Infof("Config: %#v", *config)
 
-			UpdateQPS(config)
+			UpdateQPS(config, forceThrottling)
 
 			config.Timeout = timeout
 			return config, nil
@@ -77,32 +91,40 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 // UpdateQPS modifies a rest.Config to update the client-side throttling QPS and
 // Burst QPS.
 //
-// If Flow Control is enabled on the apiserver, client-side throttling is
-// disabled!
+// If Flow Control is enabled on the apiserver, and client-side throttling is
+// not forced to be enabled, client-side throttling is disabled!
 //
 // If Flow Control is disabled or undetected on the apiserver, client-side
 // throttling QPS will be increased to at least 30 (burst: 60).
 //
+// If client-side throttling is forced to be enabled, no matter whether Flow
+// Control is enabled or not, client-side throttling QPS will be increased to
+// at least 30 (burst: 60).
+//
 // Flow Control is enabled by default on Kubernetes v1.20+.
 // https://kubernetes.io/docs/concepts/cluster-administration/flow-control/
-func UpdateQPS(config *rest.Config) {
+func UpdateQPS(config *rest.Config, forceThrottling bool) {
 	// Timeout if the query takes too long, defaulting to the lower QPS limits.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	enabled, err := flowcontrol.IsEnabled(ctx, config)
+	flowControlEnabled, err := flowcontrol.IsEnabled(ctx, config)
 	if err != nil {
 		klog.Warning("Failed to query apiserver to check for flow control enablement: %v", err)
 		// Default to the lower QPS limits.
 	}
-	if enabled {
+	if flowControlEnabled && !forceThrottling {
 		config.QPS = -1
 		config.Burst = -1
 		klog.V(1).Infof("Flow control enabled on apiserver: client-side throttling QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
 	} else {
 		config.QPS = maxIfNotNegative(config.QPS, 30)
 		config.Burst = int(maxIfNotNegative(float32(config.Burst), 60))
-		klog.V(1).Infof("Flow control disabled on apiserver: client-side throttling QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
+		if !flowControlEnabled {
+			klog.V(1).Infof("Flow control disabled on apiserver, client-side throttling: QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
+		} else {
+			klog.V(1).Infof("Flow control enabled on apiserver, but force to enable client-side throttling: QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
+		}
 	}
 }
 

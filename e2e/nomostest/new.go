@@ -136,7 +136,7 @@ func NewOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		optsStruct.RESTConfig.Burst = 75
 
 		// Disable client-side throttling for the test client, if server-side throttling is enabled.
-		restconfig.UpdateQPS(optsStruct.RESTConfig)
+		restconfig.UpdateQPS(optsStruct.RESTConfig, false)
 	}
 
 	return optsStruct

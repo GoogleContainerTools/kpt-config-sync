@@ -32,16 +32,7 @@ fi
 TAG="${TAG:-"latest"}"
 
 echo "+++ Building and pushing images"
-NOMOS_TAG="gcr.io/${GCP_PROJECT}/configsync/nomos:${TAG}"
-MGR_TAG="gcr.io/${GCP_PROJECT}/configsync/reconciler-manager:${TAG}"
-HC_TAG="gcr.io/${GCP_PROJECT}/configsync/hydration-controller:${TAG}"
-HC_WITH_SHELL_TAG="gcr.io/${GCP_PROJECT}/configsync/hydration-controller-with-shell:${TAG}"
-REC_TAG="gcr.io/${GCP_PROJECT}/configsync/reconciler:${TAG}"
-WEBHOOK_TAG="gcr.io/${GCP_PROJECT}/configsync/admission-webhook:${TAG}"
-OCI_TAG="gcr.io/${GCP_PROJECT}/configsync/oci-sync:${TAG}"
-HELM_TAG="gcr.io/${GCP_PROJECT}/configsync/helm-sync:${TAG}"
-
-make -C "${REPO_DIR}" image-nomos \
+make -C "${REPO_DIR}" image-nomos oss-manifests \
   NOMOS_TAG="${NOMOS_TAG}" \
   RECONCILER_TAG="${REC_TAG}" \
   HYDRATION_CONTROLLER_TAG="${HC_TAG}" \
@@ -57,33 +48,3 @@ docker push "${REC_TAG}"
 docker push "${WEBHOOK_TAG}"
 docker push "${OCI_TAG}"
 docker push "${HELM_TAG}"
-
-echo "+++ Generating manifests"
-cp "${REPO_DIR}"/manifests/test-resources/00-namespace.yaml "${MANIFEST_DIR}"/00-namespace.yaml
-cp "${REPO_DIR}"/manifests/namespace-selector-crd.yaml "${MANIFEST_DIR}"/namespace-selector-crd.yaml
-cp "${REPO_DIR}"/manifests/cluster-selector-crd.yaml "${MANIFEST_DIR}"/cluster-selector-crd.yaml
-cp "${REPO_DIR}"/manifests/cluster-registry-crd.yaml "${MANIFEST_DIR}"/cluster-registry-crd.yaml
-cp "${REPO_DIR}"/manifests/reconciler-manager-service-account.yaml "${MANIFEST_DIR}"/reconciler-manager-service-account.yaml
-cp "${REPO_DIR}"/manifests/otel-agent-cm.yaml "${MANIFEST_DIR}"/otel-agent-cm.yaml
-cp "${REPO_DIR}"/manifests/test-resources/resourcegroup-manifest.yaml "${MANIFEST_DIR}"/resourcegroup-manifest.yaml
-
-sed -e "s|RECONCILER_IMAGE_NAME|$REC_TAG|" \
-  -e "s|OCI_SYNC_IMAGE_NAME|$OCI_TAG|" \
-  -e "s|HELM_SYNC_IMAGE_NAME|$HELM_TAG|" \
-  -e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$HC_TAG|" \
-  "${REPO_DIR}"/manifests/templates/reconciler-manager-configmap.yaml \
-  > "${MANIFEST_DIR}"/reconciler-manager-configmap.yaml
-
-cp "${REPO_DIR}"/manifests/reposync-crd.yaml "${MANIFEST_DIR}"/reposync-crd.yaml
-cp "${REPO_DIR}"/manifests/rootsync-crd.yaml "${MANIFEST_DIR}"/rootsync-crd.yaml
-
-sed -e "s|IMAGE_NAME|$MGR_TAG|g" "${REPO_DIR}"/manifests/templates/reconciler-manager.yaml \
-  > "${MANIFEST_DIR}"/reconciler-manager.yaml
-
-cp "${REPO_DIR}"/manifests/templates/otel-collector.yaml "${MANIFEST_DIR}"/otel-collector.yaml
-cp "${REPO_DIR}"/manifests/templates/reconciler-manager/dev.yaml "${MANIFEST_DIR}"/dev.yaml
-
-sed -e "s|IMAGE_NAME|$WEBHOOK_TAG|g" "${REPO_DIR}"/manifests/templates/admission-webhook.yaml \
-  > "${MANIFEST_DIR}"/admission-webhook.yaml
-
-echo "+++ Manifests generated in ${MANIFEST_DIR}"

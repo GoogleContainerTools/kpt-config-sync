@@ -27,6 +27,52 @@ $(OSS_MANIFEST_DIR): $(OUTPUT_DIR)
 build-oss: $(OSS_MANIFEST_DIR) pull-buildenv
 	MANIFEST_DIR=$(OSS_MANIFEST_DIR) ./scripts/build-oss.sh
 
+.PHONY: oss-manifest
+oss-manifests: NOMOS_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/nomos:$(TAG)
+oss-manifests: MGR_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler-manager:$(TAG)
+oss-manifests: HC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller:$(TAG)
+oss-manifests: HC_WITH_SHELL_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller-with-shell:$(TAG)
+oss-manifests: REC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler:$(TAG)
+oss-manifests: WEBHOOK_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/admission-webhook:$(TAG)
+oss-manifests: OCI_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/oci-sync:$(TAG)
+oss-manifests: HELM_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/helm-sync:$(TAG)
+oss-manifests: $(OSS_MANIFEST_DIR)
+	@ echo "+++ Generating manifests in $(OSS_MANIFEST_DIR)"
+	@ echo "    Using these tags:"
+	@ echo "    NOMOS_TAG: $(NOMOS_TAG)"
+	@ echo "    MGR_TAG: $(MGR_TAG)"
+	@ echo "    HC_TAG: $(HC_TAG)"
+	@ echo "    HC_WITH_SHELL_TAG: $(HC_WITH_SHELL_TAG)"
+	@ echo "    REC_TAG: $(REC_TAG)"
+	@ echo "    WEBHOOK_TAG: $(WEBHOOK_TAG)"
+	@ echo "    OCI_TAG: $(OCI_TAG)"
+	@ echo "    HELM_TAG: $(HELM_TAG)"
+	@ cp manifests/test-resources/00-namespace.yaml $(OSS_MANIFEST_DIR)/00-namespace.yaml
+	@ cp manifests/namespace-selector-crd.yaml $(OSS_MANIFEST_DIR)/namespace-selector-crd.yaml
+	@ cp manifests/cluster-selector-crd.yaml $(OSS_MANIFEST_DIR)/cluster-selector-crd.yaml
+	@ cp manifests/cluster-registry-crd.yaml $(OSS_MANIFEST_DIR)/cluster-registry-crd.yaml
+	@ cp manifests/reconciler-manager-service-account.yaml $(OSS_MANIFEST_DIR)/reconciler-manager-service-account.yaml
+	@ cp manifests/otel-agent-cm.yaml $(OSS_MANIFEST_DIR)/otel-agent-cm.yaml
+	@ cp manifests/test-resources/resourcegroup-manifest.yaml $(OSS_MANIFEST_DIR)/resourcegroup-manifest.yaml
+	@ sed -e "s|RECONCILER_IMAGE_NAME|$(REC_TAG)|" \
+		-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_TAG)|" \
+		-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_TAG)|" \
+		-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HC_TAG)|" \
+		manifests/templates/reconciler-manager-configmap.yaml \
+		> $(OSS_MANIFEST_DIR)/reconciler-manager-configmap.yaml
+	@ cp manifests/reposync-crd.yaml $(OSS_MANIFEST_DIR)/reposync-crd.yaml
+	@ cp manifests/rootsync-crd.yaml $(OSS_MANIFEST_DIR)/rootsync-crd.yaml
+	@ sed -e "s|IMAGE_NAME|$(MGR_TAG)|g" manifests/templates/reconciler-manager.yaml \
+		> $(OSS_MANIFEST_DIR)/reconciler-manager.yaml
+
+	@ cp manifests/templates/otel-collector.yaml $(OSS_MANIFEST_DIR)/otel-collector.yaml
+	@ cp manifests/templates/reconciler-manager/dev.yaml $(OSS_MANIFEST_DIR)/dev.yaml
+
+	@ sed -e "s|IMAGE_NAME|$(WEBHOOK_TAG)|g" manifests/templates/admission-webhook.yaml \
+		> $(OSS_MANIFEST_DIR)/admission-webhook.yaml
+
+	@ echo "+++ Manifests generated in $(OSS_MANIFEST_DIR)"
+
 .PHONY: run-oss
 run-oss: build-oss
 	kubectl apply -f $(OSS_MANIFEST_DIR)

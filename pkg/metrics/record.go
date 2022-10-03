@@ -87,6 +87,10 @@ func RecordParserDuration(ctx context.Context, trigger, source, status string, s
 
 // RecordLastSync produces a measurement for the LastSync view.
 func RecordLastSync(ctx context.Context, status, commit string, timestamp time.Time) {
+	if commit == "" {
+		// TODO: Remove default value when otel-collector supports empty tag values correctly.
+		commit = CommitNone
+	}
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
 		tag.Upsert(KeyCommit, commit))
@@ -113,6 +117,10 @@ func RecordApplyOperation(ctx context.Context, operation, status string, gvk sch
 
 // RecordApplyDuration produces measurements for the ApplyDuration and LastApplyTimestamp views.
 func RecordApplyDuration(ctx context.Context, status, commit string, startTime time.Time) {
+	if commit == "" {
+		// TODO: Remove default value when otel-collector supports empty tag values correctly.
+		commit = CommitNone
+	}
 	now := time.Now()
 	lastApplyTagCtx, _ := tag.New(ctx, tag.Upsert(KeyStatus, status), tag.Upsert(KeyCommit, commit))
 	tagCtx, _ := tag.New(ctx,

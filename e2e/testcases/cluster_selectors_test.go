@@ -615,9 +615,9 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 		nt.WaitForRepoImportErrorCode(selectors.ClusterSelectorAnnotationConflictErrorCode)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nomostest.DefaultRootReconcilerName), func() error {
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)

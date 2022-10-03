@@ -24,6 +24,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -37,9 +38,9 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nomostest.DefaultRootReconcilerName), func() error {
+	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
+		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -70,9 +71,14 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
 
+	nsReconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, "source")
+		err := nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
+		if err != nil {
+			return err
+		}
+		return nt.ValidateReconcilerErrors(nsReconcilerName, 1, 0)
 	})
 	if err != nil {
 		nt.T.Error(err)

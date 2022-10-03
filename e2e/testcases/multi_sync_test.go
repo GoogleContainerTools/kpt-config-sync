@@ -231,7 +231,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(nsReconcilerName, "sync")
+		return nt.ValidateReconcilerErrors(nsReconcilerName, 0, 1)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -326,7 +326,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	// Validate reconciler error metric is emitted from namespace reconciler.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(nsReconcilerName, "sync")
+		return nt.ValidateReconcilerErrors(nsReconcilerName, 0, 1)
 	})
 	if err != nil {
 		nt.T.Error(err)
@@ -503,7 +503,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(nsReconcilerName2, "sync")
+		return nt.ValidateReconcilerErrors(nsReconcilerName2, 0, 1)
 	})
 	if err != nil {
 		nt.T.Error(err)

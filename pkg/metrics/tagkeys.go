@@ -81,6 +81,9 @@ var (
 
 	// ResourceKeyDeploymentName groups metrics by k8s deployment name.
 	ResourceKeyDeploymentName, _ = tag.NewKey("k8s_deployment_name")
+
+	// ResourceKeyDeploymentName groups metrics by k8s pod name.
+	ResourceKeyPodName, _ = tag.NewKey("k8s_pod_name")
 )
 
 const (
@@ -88,6 +91,9 @@ const (
 	StatusSuccess = "success"
 	// StatusError is the string value for the status key indicating failure/errors
 	StatusError = "error"
+	// CommitNone is the string value for the commit key indicating that no
+	// commit has been synced.
+	CommitNone = "NONE"
 )
 
 // StatusTagKey returns a string representation of the error, if it exists, otherwise success.

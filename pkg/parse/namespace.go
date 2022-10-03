@@ -170,7 +170,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	reposync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+	if !currentRS.Status.Source.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping source status update for RepoSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}
@@ -232,7 +232,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+	if !currentRS.Status.Rendering.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping rendering status update for RepoSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}
@@ -305,7 +305,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	}
 
 	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+	if !currentRS.Status.Sync.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
 		klog.V(5).Infof("Skipping status update for RepoSync %s/%s", rs.Namespace, rs.Name)
 		return nil
 	}

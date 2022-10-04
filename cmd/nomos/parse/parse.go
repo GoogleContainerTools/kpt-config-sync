@@ -42,7 +42,7 @@ func GetSyncedCRDs(ctx context.Context, skipAPIServer bool) ([]*v1beta1.CustomRe
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	config, err := restconfig.NewRestConfigWithThrottling(restconfig.DefaultTimeout)
+	config, err := restconfig.MonoRepoRestClient(restconfig.DefaultTimeout)
 	if err != nil {
 		return nil, getSyncedCRDsError(err, "failed to create rest config")
 	}

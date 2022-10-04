@@ -9,12 +9,10 @@ kubernetes cluster.
 manifest bundle from the release assets.
 2. Install the released version by applying the manifest to your cluster.
 ```shell
-# Create a directory to store the manifest bundle
-mkdir -p <MANIFEST_DIR>
-# Extract the manifest bundle
-tar -xzf <MANIFEST_BUNDLE> -C <MANIFEST_DIR>
-# Apply the manifests to your cluster
-kubectl apply -f <MANIFEST_DIR>
+# Apply core Config Sync manifests to your cluster
+kubectl apply -f path/to/config-sync-manifest.yaml
+# Optional: apply acm-psp.yaml to your cluster (for k8s < 1.25)
+kubectl apply -f path/to/acm-psp.yaml
 ```
 
 ## Building and Installing from source

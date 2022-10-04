@@ -16,7 +16,6 @@ package helm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +28,11 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
+)
+
+const (
+	// valuesFile is the name of the file created to override defualt chart values.
+	valuesFile = "chart-values.yaml"
 )
 
 // Hydrator runs the helm hydration process.
@@ -61,7 +65,7 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 		args = append(args, "--repo", h.Repo)
 		args, err = h.appendAuthArgs(ctx, args)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 	}
 	if h.Namespace != "" {
@@ -75,7 +79,7 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 	if len(h.Values) > 0 {
 		args, err = h.appendValuesArgs(args)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 	}
 	includeCRDs, _ := strconv.ParseBool(h.IncludeCRDs)
@@ -87,14 +91,11 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 }
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
-	var values map[string]interface{}
-	err := json.Unmarshal([]byte(h.Values), &values)
-	if err != nil {
-		return []string{}, fmt.Errorf("failed to unmarshal helm.values, error: %w", err)
+	valuesPath := filepath.Join(os.TempDir(), valuesFile)
+	if err := os.WriteFile(valuesPath, []byte(h.Values), 0644); err != nil {
+		return nil, fmt.Errorf("failed to create values file: %w", err)
 	}
-	for key, val := range values {
-		args = append(args, "--set", fmt.Sprintf("%s=%v", key, val))
-	}
+	args = append(args, "--values", valuesPath)
 	return args, nil
 }
 
@@ -102,7 +103,7 @@ func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
 	args := []string{"registry", "login"}
 	args, err := h.appendAuthArgs(ctx, args)
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 	res := strings.Split(strings.TrimPrefix(h.Repo, "oci://"), "/")
 	args = append(args, "https://"+res[0])
@@ -168,7 +169,7 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
 		token, err := fetchNewToken(ctx)
 		if err != nil {
-			return []string{}, fmt.Errorf("failed to fetch new token: %w", err)
+			return nil, fmt.Errorf("failed to fetch new token: %w", err)
 		}
 		args = append(args, "--username", "oauth2accesstoken")
 		args = append(args, "--password", token.AccessToken)

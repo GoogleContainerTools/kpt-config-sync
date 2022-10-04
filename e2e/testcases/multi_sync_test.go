@@ -412,7 +412,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Stop the admission webhook, the remediator should report the conflicts")
 	nomostest.StopWebhook(nt)
 	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
-	if _, err := nomostest.Retry(60*time.Second, func() error {
+	if _, err := nomostest.Retry(90*time.Second, func() error {
 		return nt.Validate("pods", testNs, &rbacv1.Role{},
 			nomostest.ResourceVersionNotEquals(nt, roleResourceVersion))
 	}); err != nil {

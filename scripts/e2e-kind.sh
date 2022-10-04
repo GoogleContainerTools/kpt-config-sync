@@ -23,6 +23,7 @@ echo "+++ Running go e2e tests with" "$@"
 docker run \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$ARTIFACTS":/logs/artifacts \
+  --env ARTIFACTS="/logs/artifacts" \
   --env GCP_PROJECT="${GCP_PROJECT}" \
   --network="host" prow-image \
   ./build/test-e2e-go/e2e.sh "$@"

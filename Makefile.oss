@@ -47,29 +47,15 @@ oss-manifests: $(OSS_MANIFEST_DIR)
 	@ echo "    WEBHOOK_TAG: $(WEBHOOK_TAG)"
 	@ echo "    OCI_TAG: $(OCI_TAG)"
 	@ echo "    HELM_TAG: $(HELM_TAG)"
-	@ cp manifests/test-resources/00-namespace.yaml $(OSS_MANIFEST_DIR)/00-namespace.yaml
-	@ cp manifests/namespace-selector-crd.yaml $(OSS_MANIFEST_DIR)/namespace-selector-crd.yaml
-	@ cp manifests/cluster-selector-crd.yaml $(OSS_MANIFEST_DIR)/cluster-selector-crd.yaml
-	@ cp manifests/cluster-registry-crd.yaml $(OSS_MANIFEST_DIR)/cluster-registry-crd.yaml
-	@ cp manifests/reconciler-manager-service-account.yaml $(OSS_MANIFEST_DIR)/reconciler-manager-service-account.yaml
-	@ cp manifests/otel-agent-cm.yaml $(OSS_MANIFEST_DIR)/otel-agent-cm.yaml
-	@ cp manifests/test-resources/resourcegroup-manifest.yaml $(OSS_MANIFEST_DIR)/resourcegroup-manifest.yaml
-	@ sed -e "s|RECONCILER_IMAGE_NAME|$(REC_TAG)|" \
-		-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_TAG)|" \
-		-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_TAG)|" \
-		-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HC_TAG)|" \
-		manifests/templates/reconciler-manager-configmap.yaml \
-		> $(OSS_MANIFEST_DIR)/reconciler-manager-configmap.yaml
-	@ cp manifests/reposync-crd.yaml $(OSS_MANIFEST_DIR)/reposync-crd.yaml
-	@ cp manifests/rootsync-crd.yaml $(OSS_MANIFEST_DIR)/rootsync-crd.yaml
-	@ sed -e "s|IMAGE_NAME|$(MGR_TAG)|g" manifests/templates/reconciler-manager.yaml \
-		> $(OSS_MANIFEST_DIR)/reconciler-manager.yaml
-
-	@ cp manifests/templates/otel-collector.yaml $(OSS_MANIFEST_DIR)/otel-collector.yaml
-	@ cp manifests/templates/reconciler-manager/dev.yaml $(OSS_MANIFEST_DIR)/dev.yaml
-
-	@ sed -e "s|IMAGE_NAME|$(WEBHOOK_TAG)|g" manifests/templates/admission-webhook.yaml \
-		> $(OSS_MANIFEST_DIR)/admission-webhook.yaml
+	@ rm $(OSS_MANIFEST_DIR)/*
+	@ kustomize build --load-restrictor=LoadRestrictionsNone manifests/oss \
+	| sed -e "s|RECONCILER_IMAGE_NAME|$(REC_TAG)|" \
+				-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_TAG)|" \
+				-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_TAG)|" \
+				-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HC_TAG)|" \
+				-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(MGR_TAG)|g" \
+				-e "s|WEBHOOK_IMAGE_NAME|$(WEBHOOK_TAG)|g" \
+		> $(OSS_MANIFEST_DIR)/config-sync.yaml
 
 	@ echo "+++ Manifests generated in $(OSS_MANIFEST_DIR)"
 

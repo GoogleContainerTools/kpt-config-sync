@@ -39,7 +39,7 @@ spec:
         - /admission-webhook
         - --graceful-shutdown-timeout=10s
         - --health-probe-bind-addr=:10258
-        image: IMAGE_NAME
+        image: WEBHOOK_IMAGE_NAME
         ports:
           - name: admission
             containerPort: 10250

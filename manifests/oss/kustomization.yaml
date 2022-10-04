@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../test-resources/00-namespace.yaml
+- ../namespace-selector-crd.yaml
+- ../cluster-selector-crd.yaml
+- ../cluster-registry-crd.yaml
+- ../reconciler-manager-service-account.yaml
+- ../otel-agent-cm.yaml
+- ../test-resources/resourcegroup-manifest.yaml
+- ../templates/reconciler-manager-configmap.yaml
+- ../reposync-crd.yaml
+- ../rootsync-crd.yaml
+- ../templates/reconciler-manager.yaml
+- ../templates/otel-collector.yaml
+- ../templates/admission-webhook.yaml
+- ../ns-reconciler-cluster-role.yaml

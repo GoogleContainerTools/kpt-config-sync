@@ -173,8 +173,10 @@ func cleanMembershipInfo(nt *nomostest.NT, fleetMembership, gcpProject, gkeURI s
 		}
 		nt.T.Logf("The membership exits, unregistering the cluster from project %q to clean up the membership", fleetProject)
 		if err = unregisterCluster(fleetMembership, fleetProject, gkeURI); err != nil {
-			nt.T.Errorf("failed to unregister the cluster: %v", err)
-			nt.T.Skip("Skip the test because unable to unregister the cluster")
+			nt.T.Logf("failed to unregister the cluster: %v", err)
+			if err = deleteMembership(fleetMembership, fleetProject); err != nil {
+				nt.T.Logf("failed to delete the membership %q: %v", fleetMembership, err)
+			}
 			membershipExists, _, err = getMembershipIdentityProvider(nt)
 			if err != nil {
 				nt.T.Error(err)
@@ -342,6 +344,15 @@ func fwiAnnotationAbsent(pod corev1.Pod) error {
 // unregisterCluster unregisters a cluster from a fleet.
 func unregisterCluster(fleetMembership, gcpProject, gkeURI string) error {
 	out, err := exec.Command("gcloud", "container", "hub", "memberships", "unregister", fleetMembership, "--quiet", "--project", gcpProject, "--gke-uri", gkeURI).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %v", string(out), err)
+	}
+	return nil
+}
+
+// deleteMembership deletes the membership from the cluster.
+func deleteMembership(fleetMembership, gcpProject string) error {
+	out, err := exec.Command("gcloud", "container", "hub", "memberships", "delete", fleetMembership, "--quiet", "--project", gcpProject).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %v", string(out), err)
 	}

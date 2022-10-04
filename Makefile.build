@@ -258,6 +258,9 @@ __config-sync-manifest-oss: __config-sync-manifest
 		--destination=${OSS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
 		$(OUTPUT_DIR)/oss/cloned/manifests \
 		$(OUTPUT_DIR)/oss/cloned/deployment
+	@echo "+++ Add separate acm-psp.yaml manifest so it can be applied independently"
+	rsync \
+		.output/manifests/acm-psp.yaml ${OSS_MANIFEST_STAGING_DIR}/acm-psp.yaml
 
 # __config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
 .PHONY: __config-sync-manifest

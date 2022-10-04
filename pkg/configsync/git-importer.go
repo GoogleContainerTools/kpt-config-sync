@@ -52,7 +52,7 @@ func RunImporter() {
 	reconcile.SetFightThreshold(*fightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
-	cfg, err := restconfig.NewRestConfigWithThrottling(restconfig.DefaultTimeout)
+	cfg, err := restconfig.MonoRepoRestClient(restconfig.DefaultTimeout)
 	if err != nil {
 		klog.Fatalf("failed to create rest config: %+v", err)
 	}

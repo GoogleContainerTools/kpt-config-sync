@@ -55,9 +55,11 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	if nt.MultiRepo {
 		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
 			`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
-	} else {
-		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
 	}
+	// TODO: uncomment error expectation when b/250956101 is fixed
+	// } else {
+	//	nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
+	// }
 
 	// Simulate Gatekeeper's controller behavior.
 	// Wait for the ConstraintTemplate to be applied, then apply the Constraint CRD.

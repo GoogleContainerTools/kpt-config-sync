@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -512,7 +513,9 @@ func TestLargeCRD(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for one CRD")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("challenges.acme.cert-manager.io", "", fake.CustomResourceDefinitionV1Object(), nomostest.HasLabel("random-key", "random-value"))
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		return nt.Validate("challenges.acme.cert-manager.io", "", fake.CustomResourceDefinitionV1Object(), nomostest.HasLabel("random-key", "random-value"))
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

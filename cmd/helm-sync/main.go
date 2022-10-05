@@ -37,7 +37,7 @@ var (
 	flVersion = flag.String("version", os.Getenv(reconcilermanager.HelmChartVersion),
 		"the version of the helm chart being synced")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
-		"set the helm chart values, will be used in helm template --set key=value")
+		"set the helm chart values, will be used to override the default values")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
 		"include CRDs in the helm rendering output")
 	flAuth = flag.String("auth", util.EnvString(reconcilermanager.HelmAuthType, string(configsync.AuthNone)),

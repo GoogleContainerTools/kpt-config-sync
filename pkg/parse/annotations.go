@@ -33,11 +33,16 @@ type sourceContext struct {
 	Rev    string `json:"rev,omitempty"`
 }
 
+const (
+	skipOwningInventoryAnnotations = "configsync.gke.io/skip-owning-inventory-annotations"
+)
+
 func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncName string, sc sourceContext, commitHash string) error {
 	gcVal, err := json.Marshal(sc)
 	if err != nil {
 		return fmt.Errorf("marshaling sourceContext: %w", err)
 	}
+
 	var inventoryID string
 	if scope == declared.RootReconciler {
 		inventoryID = applier.InventoryID(syncName, configmanagement.ControllerNamespace)
@@ -45,6 +50,20 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 		inventoryID = applier.InventoryID(syncName, string(scope))
 	}
 	for _, obj := range objs {
+		if string(core.GetAnnotation(obj, skipOwningInventoryAnnotations)) == "true" {
+			// Don't expose this annotation on the applied object
+			core.RemoveAnnotations(obj, skipOwningInventoryAnnotations)
+
+			// FIXME: Setting labels to an empty map to make tests pass
+			//        This is required because the normalization that happens on fake objects at pkg/testing/fake/build.go:83
+			if obj.GetLabels() == nil {
+				obj.SetLabels(make(map[string]string))
+			}
+
+			// Skip setting all the other annotations
+			continue
+		}
+
 		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
 		core.SetAnnotation(obj, metadata.GitContextKey, string(gcVal))
 		core.SetAnnotation(obj, metadata.ResourceManagerKey, declared.ResourceManager(scope, syncName))

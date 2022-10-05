@@ -122,6 +122,9 @@ func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.Namespace
 			return nil, e
 		}
 		newObj.ResourceVersion = oldObj.ResourceVersion
+		if namespaceConfigEqual(oldObj, newObj) {
+			return oldObj, syncerclient.NoUpdateNeeded()
+		}
 		return newObj, nil
 	})
 	if err != nil {
@@ -136,6 +139,9 @@ func (d *differ) updateNamespaceConfig(ctx context.Context, intent *v1.Namespace
 		oldObj.Status.DeepCopyInto(&newObj.Status)
 		if !newSyncState.IsUnknown() {
 			newObj.Status.SyncState = newSyncState
+		}
+		if namespaceConfigStatusEqual(oldObj, newObj) {
+			return oldObj, syncerclient.NoUpdateNeeded()
 		}
 		return newObj, nil
 	})
@@ -238,6 +244,16 @@ func (d *differ) updateSyncs(ctx context.Context, current, desired namespaceconf
 	}
 
 	klog.Infof("Sync operations: %d updates, %d creates, %d deletes", updates, creates, deletes)
+}
+
+// namespaceConfigEqual returns true if the NamespaceConfigs are equivalent.
+func namespaceConfigEqual(l *v1.NamespaceConfig, r *v1.NamespaceConfig) bool {
+	return equality.Semantic.DeepEqual(l.Spec, r.Spec) && compare.ObjectMetaEqual(l, r)
+}
+
+// namespaceConfigStatusEqual returns true if the NamespaceConfigs are equivalent.
+func namespaceConfigStatusEqual(l *v1.NamespaceConfig, r *v1.NamespaceConfig) bool {
+	return equality.Semantic.DeepEqual(l.Status, r.Status)
 }
 
 // clusterConfigEqual returns true if the ClusterConfigs are equivalent.

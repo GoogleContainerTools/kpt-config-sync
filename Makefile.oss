@@ -59,6 +59,24 @@ oss-manifests: $(OSS_MANIFEST_DIR)
 
 	@ echo "+++ Manifests generated in $(OSS_MANIFEST_DIR)"
 
+.PHONY: oss-push-images
+oss-push-images: NOMOS_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/nomos:$(TAG)
+oss-push-images: MGR_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler-manager:$(TAG)
+oss-push-images: HC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller:$(TAG)
+oss-push-images: HC_WITH_SHELL_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller-with-shell:$(TAG)
+oss-push-images: REC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler:$(TAG)
+oss-push-images: WEBHOOK_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/admission-webhook:$(TAG)
+oss-push-images: OCI_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/oci-sync:$(TAG)
+oss-push-images: HELM_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/helm-sync:$(TAG)
+oss-push-images: image-nomos
+	@ docker push "$(MGR_TAG)"
+	@ docker push "$(HC_TAG)"
+	@ docker push "$(HC_WITH_SHELL_TAG)"
+	@ docker push "$(REC_TAG)"
+	@ docker push "$(WEBHOOK_TAG)"
+	@ docker push "$(OCI_TAG)"
+	@ docker push "$(HELM_TAG)"
+
 .PHONY: run-oss
 run-oss: build-oss
 	kubectl apply -f $(OSS_MANIFEST_DIR)

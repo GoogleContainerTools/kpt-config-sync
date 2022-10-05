@@ -32,19 +32,4 @@ fi
 TAG="${TAG:-"latest"}"
 
 echo "+++ Building and pushing images"
-make -C "${REPO_DIR}" image-nomos oss-manifests \
-  NOMOS_TAG="${NOMOS_TAG}" \
-  RECONCILER_TAG="${REC_TAG}" \
-  HYDRATION_CONTROLLER_TAG="${HC_TAG}" \
-  HYDRATION_CONTROLLER_WITH_SHELL_TAG="${HC_WITH_SHELL_TAG}"\
-  RECONCILER_MANAGER_TAG="${MGR_TAG}" \
-  ADMISSION_WEBHOOK_TAG="${WEBHOOK_TAG}" \
-  OCI_SYNC_TAG="${OCI_TAG}" \
-  HELM_SYNC_TAG="${HELM_TAG}"
-docker push "${MGR_TAG}"
-docker push "${HC_TAG}"
-docker push "${HC_WITH_SHELL_TAG}"
-docker push "${REC_TAG}"
-docker push "${WEBHOOK_TAG}"
-docker push "${OCI_TAG}"
-docker push "${HELM_TAG}"
+make -C "${REPO_DIR}" oss-manifests oss-push-images GCP_PROJECT="${GCP_PROJECT}" TAG="${TAG}"

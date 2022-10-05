@@ -46,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	discoveryutil "kpt.dev/configsync/pkg/util/discovery"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -415,7 +416,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 	}
 
-	converter, err := declared.ValueConverterForTest()
+	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -660,7 +661,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 		},
 	}
 
-	converter, err := declared.ValueConverterForTest()
+	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}

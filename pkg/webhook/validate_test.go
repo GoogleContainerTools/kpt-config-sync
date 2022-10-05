@@ -28,10 +28,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -638,7 +638,7 @@ func TestValidator_Handle(t *testing.T) {
 }
 
 func validatorForTest(t *testing.T) *Validator {
-	vc, err := declared.ValueConverterForTest()
+	vc, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatalf("Failed to create ValueConverter: %v", err)
 	}

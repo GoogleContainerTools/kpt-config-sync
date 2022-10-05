@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation"
@@ -43,6 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/discoverytest"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -873,7 +873,7 @@ func TestHierarchical(t *testing.T) {
 		},
 	}
 
-	converter, err := declared.ValueConverterForTest()
+	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1169,7 +1169,7 @@ func TestUnstructured(t *testing.T) {
 		},
 	}
 
-	converter, err := declared.ValueConverterForTest()
+	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,9 +20,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -110,7 +110,7 @@ func TestObjectDiffer_Structured(t *testing.T) {
 		},
 	}
 
-	vc, err := declared.ValueConverterForTest()
+	vc, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatalf("Failed to create ValueConverter: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestObjectDiffer_Unstructured(t *testing.T) {
 		},
 	}
 
-	vc, err := declared.ValueConverterForTest()
+	vc, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatalf("Failed to create ValueConverter: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestConfigSyncMetadata(t *testing.T) {
 		},
 	}
 
-	vc, err := declared.ValueConverterForTest()
+	vc, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatalf("Failed to create ValueConverter: %v", err)
 	}

@@ -169,8 +169,8 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 	}
 }
 
-// HasExactlyImageName ensures a container has the expected image name
-func HasExactlyImageName(containerName string, expectImageName string) Predicate {
+// HasExactlyImage ensures a container has the expected image.
+func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImageDigest string) Predicate {
 	return func(o client.Object) error {
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
@@ -178,15 +178,24 @@ func HasExactlyImageName(containerName string, expectImageName string) Predicate
 		}
 		for _, container := range dep.Spec.Template.Spec.Containers {
 			if containerName == container.Name {
-				if !strings.Contains(container.Image, "/"+expectImageName+":") {
-					return errors.Errorf(" Expected %q container image name is %q, however the actual image is %q", container.Name, expectImageName, container.Image)
+				expectImage := ""
+				if expectImageName != "" {
+					expectImage = "/" + expectImageName
+				}
+				if expectImageTag != "" {
+					expectImage += ":" + expectImageTag
+				}
+				if expectImageDigest != "" {
+					expectImage += "@" + expectImageDigest
+				}
+				if !strings.Contains(container.Image, expectImage) {
+					return errors.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
 				}
 				return nil
 			}
 		}
 		return errors.Errorf("Container %q not found", containerName)
 	}
-
 }
 
 // HasCorrectResourceRequestsLimits verify a root/namespace reconciler container has the correct resource requests and limits.

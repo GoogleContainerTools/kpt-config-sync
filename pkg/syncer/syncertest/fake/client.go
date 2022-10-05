@@ -41,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,6 +55,7 @@ var _ client.StatusWriter = &statusWriter{}
 // Client is a fake implementation of client.Client.
 type Client struct {
 	scheme  *runtime.Scheme
+	mapper  meta.RESTMapper
 	Objects map[core.ID]client.Object
 }
 
@@ -66,24 +68,25 @@ var _ client.Client = &Client{}
 func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Client {
 	t.Helper()
 
+	err := v1.AddToScheme(scheme)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
+	}
+
+	err = configsyncv1beta1.AddToScheme(scheme)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
+	}
+
+	err = corev1.AddToScheme(scheme)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
+	}
+
 	result := Client{
 		scheme:  scheme,
+		mapper:  testutil.NewFakeRESTMapper(allKnownGVKs(scheme)...),
 		Objects: make(map[core.ID]client.Object),
-	}
-
-	err := v1.AddToScheme(result.scheme)
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
-	}
-
-	err = configsyncv1beta1.AddToScheme(result.scheme)
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
-	}
-
-	err = corev1.AddToScheme(result.scheme)
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
 	}
 
 	for _, o := range objs {
@@ -94,6 +97,16 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	}
 
 	return &result
+}
+
+// allKnownGVKs returns an unsorted list of GVKs known by the scheme and mapper.
+func allKnownGVKs(scheme *runtime.Scheme) []schema.GroupVersionKind {
+	typeMap := scheme.AllKnownTypes()
+	gvkList := make([]schema.GroupVersionKind, 0, len(typeMap))
+	for gvk := range typeMap {
+		gvkList = append(gvkList, gvk)
+	}
+	return gvkList
 }
 
 func toGR(gk schema.GroupKind) schema.GroupResource {
@@ -784,5 +797,5 @@ func (c *Client) Scheme() *runtime.Scheme {
 
 // RESTMapper implements client.Client.
 func (c *Client) RESTMapper() meta.RESTMapper {
-	panic("fake.Client does not support RESTMapper()")
+	return c.mapper
 }

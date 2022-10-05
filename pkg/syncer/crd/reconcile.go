@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	syncercache "kpt.dev/configsync/pkg/syncer/cache"
@@ -169,6 +170,12 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 		return mErr
 	}
 
+	declaredKinds := make([]schema.GroupVersionKind, 0, len(grs))
+	for gvk := range grs {
+		declaredKinds = append(declaredKinds, gvk)
+	}
+	klog.V(3).Infof("Declared Kinds (%d): %v", len(grs), declaredKinds)
+
 	// Keep track of what version the declarations are in.
 	// We only want to compute diffs between CRDs of the same declared/actual version.
 	declVersions := make(map[string]string)
@@ -182,38 +189,63 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 		syncerreconcile.SyncedAt(decl, clusterConfig.Spec.Token)
 		declVersions[decl.GetName()] = versionV1
 	}
+	klog.V(3).Infof("Declared CRDs: %d v1 & %d v1beta1", len(declaredCRDsV1), len(declaredCRDsV1Beta1))
 
 	var syncErrs []v1.ConfigManagementError
 
-	actualCRDs, err := r.cache.UnstructuredList(ctx, kinds.CustomResourceDefinitionV1())
+	// Lookup which CRD apiVersion is preferred by the server.
+	mapping, err := r.client.RESTMapper().RESTMapping(kinds.CustomResourceDefinitionV1().GroupKind(), versionV1, versionV1beta1)
 	if err != nil {
-		mErr = status.Append(mErr, status.APIServerErrorf(err, "failed to list from config controller for %q", kinds.CustomResourceDefinitionV1Beta1()))
+		mErr = status.Append(mErr, errors.Wrap(err, "failed to list CRD mappings"))
+		syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
+		mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
+		return mErr
+	}
+	klog.V(3).Infof("APIServer prefers CRD version %s", mapping.GroupVersionKind.Version)
+
+	// Lookup the cluster's CRDs using the apiVersion preferred by the server.
+	actualCRDs, err := r.cache.UnstructuredList(ctx, mapping.GroupVersionKind)
+	if err != nil {
+		mErr = status.Append(mErr, status.APIServerErrorf(err, "failed to list from config controller for %q", mapping.GroupVersionKind))
 		syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
 		mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
 		return mErr
 	}
 
-	var actualV1Beta1 []*unstructured.Unstructured
-	for _, u := range actualCRDs {
-		// Default to v1beta1 if the CRD is not declared.
-		// We can't assume v1 as this is incompatible with Kubernetes <1.16
-		if declVersions[u.GetName()] == versionV1 {
-			continue
-		}
-		actualV1Beta1 = append(actualV1Beta1, u)
+	// For CRDs that are both delared and found on the cluster,
+	// convert the cluster CRD to the apiVersion used by the delared CRD.
+	// This will make diffing cleaner later.
+	actualVersionedCRDs := map[string][]*unstructured.Unstructured{
+		versionV1beta1: nil,
+		versionV1:      nil,
 	}
-
-	var actualV1 []*unstructured.Unstructured
+	preferredCRDVersion := mapping.GroupVersionKind.Version
 	for _, u := range actualCRDs {
-		// Only keep CRDs declares as v1.
-		if declVersions[u.GetName()] == "v1" {
-			actualV1 = append(actualV1, u)
+		if declVersion, found := declVersions[u.GetName()]; found {
+			// Convert to declared version, if declared.
+			liveVersion := u.GetObjectKind().GroupVersionKind().Version
+			u, err = r.convertCRDToVersion(u, declVersion)
+			if err != nil {
+				mErr = status.Append(mErr, errors.Wrapf(err, "failed to convert CRD to declared version %q", declVersion))
+				syncErrs = append(syncErrs, syncerreconcile.NewConfigManagementError(clusterConfig, err))
+				mErr = status.Append(mErr, syncerreconcile.SetClusterConfigStatus(ctx, r.client, clusterConfig, r.initTime, r.now, syncErrs, nil))
+				return mErr
+			}
+			newVersion := u.GetObjectKind().GroupVersionKind().Version
+			if liveVersion != newVersion {
+				klog.Infof("Live CRD converted from version %s to version %s, for diff with object specified in ClusterConfig: %v",
+					liveVersion, newVersion, core.IDOf(u))
+			}
+			actualVersionedCRDs[declVersion] = append(actualVersionedCRDs[declVersion], u)
+		} else {
+			// Default to server preferred version, if not declared.
+			actualVersionedCRDs[preferredCRDVersion] = append(actualVersionedCRDs[preferredCRDVersion], u)
 		}
 	}
 
 	allDeclaredVersions := syncerreconcile.AllVersionNames(grs, kinds.CustomResourceDefinition())
-	diffsV1Beta1 := differ.Diffs(declaredCRDsV1Beta1, actualV1Beta1, allDeclaredVersions)
-	diffsV1 := differ.Diffs(declaredCRDsV1, actualV1, allDeclaredVersions)
+	diffsV1Beta1 := differ.Diffs(declaredCRDsV1Beta1, actualVersionedCRDs[versionV1beta1], allDeclaredVersions)
+	diffsV1 := differ.Diffs(declaredCRDsV1, actualVersionedCRDs[versionV1], allDeclaredVersions)
 	diffs := append(diffsV1Beta1, diffsV1...)
 
 	var reconcileCount int
@@ -264,4 +296,10 @@ func (r *reconciler) reconcile(ctx context.Context, name string) status.MultiErr
 	}
 
 	return mErr
+}
+
+// convertCRDToVersion converts the specified CRD to the specified apiVersion.
+func (r *reconciler) convertCRDToVersion(obj *unstructured.Unstructured, version string) (*unstructured.Unstructured, error) {
+	targetGVK := obj.GetObjectKind().GroupVersionKind().GroupKind().WithVersion(version)
+	return kinds.ToUnstructuredWithVersion(obj, targetGVK, r.client.Scheme())
 }

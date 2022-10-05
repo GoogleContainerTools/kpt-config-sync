@@ -28,54 +28,38 @@ build-oss: $(OSS_MANIFEST_DIR) pull-buildenv
 	MANIFEST_DIR=$(OSS_MANIFEST_DIR) ./scripts/build-oss.sh
 
 .PHONY: oss-manifest
-oss-manifests: NOMOS_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/nomos:$(TAG)
-oss-manifests: MGR_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler-manager:$(TAG)
-oss-manifests: HC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller:$(TAG)
-oss-manifests: HC_WITH_SHELL_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller-with-shell:$(TAG)
-oss-manifests: REC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler:$(TAG)
-oss-manifests: WEBHOOK_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/admission-webhook:$(TAG)
-oss-manifests: OCI_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/oci-sync:$(TAG)
-oss-manifests: HELM_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/helm-sync:$(TAG)
 oss-manifests: $(OSS_MANIFEST_DIR)
 	@ echo "+++ Generating manifests in $(OSS_MANIFEST_DIR)"
 	@ echo "    Using these tags:"
-	@ echo "    NOMOS_TAG: $(NOMOS_TAG)"
-	@ echo "    MGR_TAG: $(MGR_TAG)"
-	@ echo "    HC_TAG: $(HC_TAG)"
-	@ echo "    HC_WITH_SHELL_TAG: $(HC_WITH_SHELL_TAG)"
-	@ echo "    REC_TAG: $(REC_TAG)"
-	@ echo "    WEBHOOK_TAG: $(WEBHOOK_TAG)"
-	@ echo "    OCI_TAG: $(OCI_TAG)"
-	@ echo "    HELM_TAG: $(HELM_TAG)"
+	@ echo "    $(NOMOS_IMAGE): $(NOMOS_TAG)"
+	@ echo "    $(RECONCILER_MANAGER_IMAGE): $(RECONCILER_MANAGER_TAG)"
+	@ echo "    $(HYDRATION_CONTROLLER_IMAGE): $(HYDRATION_CONTROLLER_TAG)"
+	@ echo "    $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE): $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
+	@ echo "    $(RECONCILER_IMAGE): $(RECONCILER_TAG)"
+	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
+	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
+	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
 	@ rm $(OSS_MANIFEST_DIR)/*
 	@ kustomize build --load-restrictor=LoadRestrictionsNone manifests/oss \
-	| sed -e "s|RECONCILER_IMAGE_NAME|$(REC_TAG)|" \
-				-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_TAG)|" \
-				-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_TAG)|" \
-				-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HC_TAG)|" \
-				-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(MGR_TAG)|g" \
-				-e "s|WEBHOOK_IMAGE_NAME|$(WEBHOOK_TAG)|g" \
+	| sed -e "s|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|" \
+				-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|" \
+				-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|" \
+				-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|" \
+				-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
+				-e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
 		> $(OSS_MANIFEST_DIR)/config-sync.yaml
 
 	@ echo "+++ Manifests generated in $(OSS_MANIFEST_DIR)"
 
 .PHONY: oss-push-images
-oss-push-images: NOMOS_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/nomos:$(TAG)
-oss-push-images: MGR_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler-manager:$(TAG)
-oss-push-images: HC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller:$(TAG)
-oss-push-images: HC_WITH_SHELL_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/hydration-controller-with-shell:$(TAG)
-oss-push-images: REC_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/reconciler:$(TAG)
-oss-push-images: WEBHOOK_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/admission-webhook:$(TAG)
-oss-push-images: OCI_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/oci-sync:$(TAG)
-oss-push-images: HELM_TAG ?= gcr.io/$(GCP_PROJECT)/configsync/helm-sync:$(TAG)
 oss-push-images: image-nomos
-	@ docker push "$(MGR_TAG)"
-	@ docker push "$(HC_TAG)"
-	@ docker push "$(HC_WITH_SHELL_TAG)"
-	@ docker push "$(REC_TAG)"
-	@ docker push "$(WEBHOOK_TAG)"
-	@ docker push "$(OCI_TAG)"
-	@ docker push "$(HELM_TAG)"
+	@ docker push "$(RECONCILER_MANAGER_TAG)"
+	@ docker push "$(HYDRATION_CONTROLLER_TAG)"
+	@ docker push "$(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
+	@ docker push "$(RECONCILER_TAG)"
+	@ docker push "$(ADMISSION_WEBHOOK_TAG)"
+	@ docker push "$(OCI_SYNC_TAG)"
+	@ docker push "$(HELM_SYNC_TAG)"
 
 .PHONY: run-oss
 run-oss: build-oss

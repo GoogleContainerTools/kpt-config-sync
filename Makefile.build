@@ -51,56 +51,56 @@ build-cli: pull-buildenv buildenv-dirs
 # Creates a docker image for the specified nomos component.
 image-nomos: license
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	@echo "+++ Building the nomos image"
+	@echo "+++ Building the nomos image: $(NOMOS_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(NOMOS_IMAGE) \
 		-t $(NOMOS_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Reconciler image"
+	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \
 		-t $(RECONCILER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Reconciler Manager image"
+	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_MANAGER_IMAGE) \
 		-t $(RECONCILER_MANAGER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Admission Webhook image"
+	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(ADMISSION_WEBHOOK_IMAGE) \
 		-t $(ADMISSION_WEBHOOK_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Hydration Controller image"
+	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Hydration Controller image with shell"
+	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the OCI-sync image"
+	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(OCI_SYNC_IMAGE) \
 		-t $(OCI_SYNC_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Helm-sync image"
+	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HELM_SYNC_IMAGE) \
 		-t $(HELM_SYNC_TAG) \

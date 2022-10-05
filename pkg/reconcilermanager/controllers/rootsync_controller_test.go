@@ -1626,7 +1626,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 	// Subject for rs1 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = updateSubjects(crb.Subjects, rs1.Name)
+	crb.Subjects = updateSubjects(crb.Subjects, rootReconcilerName)
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -1639,7 +1639,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 	// Subject for rs2 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = updateSubjects(crb.Subjects, rs2.Name)
+	crb.Subjects = updateSubjects(crb.Subjects, rootReconcilerName2)
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -1652,7 +1652,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 	// Subject for rs3 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = updateSubjects(crb.Subjects, rs3.Name)
+	crb.Subjects = updateSubjects(crb.Subjects, rootReconcilerName3)
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -1665,7 +1665,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 	// Subject for rs4 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = updateSubjects(crb.Subjects, rs4.Name)
+	crb.Subjects = updateSubjects(crb.Subjects, rootReconcilerName4)
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}

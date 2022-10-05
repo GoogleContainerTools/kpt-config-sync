@@ -171,13 +171,22 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 	}
 	crbName := RootSyncPermissionsName()
 	if len(rootsyncList.Items) == 0 {
+		// Delete the whole CRB
 		return r.cleanup(ctx, crbName, kinds.ClusterRoleBinding())
 	}
+
+	// Update the CRB to delete the subject for the deleted RootSync's reconciler
 	crb := &rbacv1.ClusterRoleBinding{}
 	if err := r.client.Get(ctx, client.ObjectKey{Name: crbName}, crb); err != nil {
 		return errors.Wrapf(err, "failed to get the ClusterRoleBinding object %s", crbName)
 	}
-	return r.updateClusterRoleBindingSubjects(crb, rootsyncList, reconcilerNamespace)
+	if err := r.updateClusterRoleBindingSubjects(crb, rootsyncList, reconcilerNamespace); err != nil {
+		return errors.Wrapf(err, "failed to update the subjects of ClusterRoleBinding %s", crbName)
+	}
+	if err := r.client.Update(ctx, crb); err != nil {
+		return errors.Wrapf(err, "failed to update the ClusterRoleBinding object %s", crbName)
+	}
+	return nil
 }
 
 // cleanup cleans up cluster-scoped resources that are created for RootSync.

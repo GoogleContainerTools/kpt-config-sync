@@ -14,8 +14,9 @@ development environment. We recommend that you [create your own fork], but we wi
 keep things simple here.
 
 ```
-git clone git@github.com:GoogleContainerTools/kpt-config-sync.git kpt.dev
-cd kpt.dev
+mkdir kpt.dev
+git clone git@github.com:GoogleContainerTools/kpt-config-sync.git kpt.dev/configsync
+cd kpt.dev/configsync
 ```
 
 ## Run tests

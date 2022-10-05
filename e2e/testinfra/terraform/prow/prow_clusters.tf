@@ -106,6 +106,49 @@ module "mono-repo-rapid-latest" {
   num_clusters = 3
 }
 
+# Release branch clusters
+# These will need to be switched to test groups for v1.14
+module "mono-repo-release-regular" {
+  source = "../modules/e2ecluster"
+  name = "release-mono-repo-regular"
+  channel = "regular"
+  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
+  network = google_compute_network.e2e-network.name
+}
+
+module "multi-repo-release-stable" {
+  source = "../modules/e2ecluster"
+  name = "release-multi-repo-stable"
+  channel = "stable"
+  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
+  network = google_compute_network.e2e-network.name
+}
+
+module "multi-repo-release-regular" {
+  source = "../modules/e2ecluster"
+  name = "release-multi-repo-regular"
+  channel = "regular"
+  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
+  network = google_compute_network.e2e-network.name
+}
+
+module "multi-repo-release-rapid" {
+  source = "../modules/e2ecluster"
+  name = "release-multi-repo-rapid"
+  channel = "rapid"
+  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
+  network = google_compute_network.e2e-network.name
+}
+
+module "multi-repo-release-rapid-latest" {
+  source = "../modules/e2ecluster"
+  name = "release-multi-repo-rapid-latest"
+  channel = "rapid"
+  min_master_version = "latest"
+  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
+  network = google_compute_network.e2e-network.name
+}
+
 # One off clusters
 module "multi-repo-kind" {
   source = "../modules/e2ecluster"

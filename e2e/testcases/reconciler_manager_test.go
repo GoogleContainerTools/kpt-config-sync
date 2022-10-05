@@ -76,7 +76,7 @@ func TestManagingReconciler(t *testing.T) {
 		d.Spec.Template.Spec.Containers[0].Image = newImage
 	})
 	nt.T.Log("Verify the container image should be reverted by the reconciler-manager")
-	generation += 2
+	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
 	nomostest.Wait(nt.T, "the container image to be reverted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -88,7 +88,7 @@ func TestManagingReconciler(t *testing.T) {
 	newReplicas := managedReplicas - 1
 	nt.MustMergePatch(reconcilerDeployment, fmt.Sprintf(`{"spec": {"replicas": %d}}`, newReplicas))
 	nt.T.Log("Verify the reconciler-manager should revert the replicas change")
-	generation += 2
+	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
 	nomostest.Wait(nt.T, "the replicas to be reverted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -109,7 +109,7 @@ func TestManagingReconciler(t *testing.T) {
 		}
 	})
 	nt.T.Log("Verify the reconciler-manager should revert the memory limit change")
-	generation += 2
+	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
 	nomostest.Wait(nt.T, "the memory limit to be reverted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -127,7 +127,7 @@ func TestManagingReconciler(t *testing.T) {
 		resetReconcilerDeploymentManifests(nt, managedImage, generation)
 	})
 	nt.T.Log("Verify the reconciler Deployment has been updated to the new manifest")
-	generation++
+	generation++ // generation bumped by 1 to apply the new change in the default manifests declared in the Config Map
 	nomostest.Wait(nt.T, "the deployment manifest to be updated", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -139,7 +139,7 @@ func TestManagingReconciler(t *testing.T) {
 	nt.T.Log("Switch the auth type from ssh to none")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 	nt.T.Log("Verify the git-creds volume is gone")
-	generation++
+	generation++ // generation bumped by 1 to delete the git-creds volume
 	nomostest.Wait(nt.T, "the git-creds volume to be deleted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -150,7 +150,11 @@ func TestManagingReconciler(t *testing.T) {
 	nt.T.Log("Switch the auth type from none to gcpserviceaccount")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"gcpserviceaccount","secretRef":{"name":""},"gcpServiceAccountEmail":"test-gcp-sa-email@test-project.iam.gserviceaccount.com"}}}`)
 	nt.T.Log("Verify the gcenode-askpass-sidecar container should be added")
-	generation++
+	if nt.IsGKEAutopilot {
+		generation += 2 // generation bumped by 2 because the sidecar container will first be added and then the resource requirements will be adjusted by autopilot
+	} else {
+		generation++ // generation bumped by 1 to apply the new sidecar container
+	}
 	nomostest.Wait(nt.T, "the gcenode-askpass-sidecar container to be added", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),
@@ -161,7 +165,7 @@ func TestManagingReconciler(t *testing.T) {
 	nt.T.Log("Switch the auth type gcpserviceaccount to ssh")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"ssh","secretRef":{"name":"git-creds"}}}}`)
 	nt.T.Log("Verify the git-creds volume exists and the gcenode-askpass-sidecar container is gone")
-	generation++
+	generation++ // generation bumped by 1 to add the git-cred volume again
 	nomostest.Wait(nt.T, "the git-creds volume to be added and the gcenode-askpass-sidecar container to be deleted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 			&appsv1.Deployment{}, hasGeneration(generation),

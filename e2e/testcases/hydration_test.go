@@ -301,7 +301,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 
 	nt.T.Log("Check hydration controller default image name")
 	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImageName(reconcilermanager.HydrationController, reconcilermanager.HydrationController))
+		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": true}}}`)
 	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImageName(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell))
+		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -357,7 +357,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImageName(reconcilermanager.HydrationController, reconcilermanager.HydrationController))
+		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

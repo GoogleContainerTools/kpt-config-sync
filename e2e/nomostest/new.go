@@ -253,7 +253,7 @@ func resetSyncedRepos(nt *NT, opts *ntopts.New) {
 		nt.NonRootRepos = map[types.NamespacedName]*Repository{}
 		nt.RootRepos[configsync.RootSyncName] = resetRepository(nt, RootRepo, DefaultRootRepoNamespacedName, opts.UpstreamURL, opts.SourceFormat)
 		// It sets POLICY_DIR to always be `acme` because the initial mono-repo's sync directory is configured to be `acme`.
-		ResetMonoRepoSpec(nt, opts.SourceFormat, AcmeDir)
+		ResetMonoRepoSpec(nt, opts.SourceFormat, MainBranch, AcmeDir)
 		nt.WaitForRepoSyncs()
 	}
 }

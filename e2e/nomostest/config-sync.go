@@ -1206,8 +1206,9 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 	}, WaitTimeout(nt.DefaultWaitTimeout))
 }
 
-// ResetMonoRepoSpec sets the mono repo's SOURCE_FORMAT and POLICY_DIR. It might cause the git-importer to restart.
-func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir string) {
+// ResetMonoRepoSpec sets the mono repo's SOURCE_FORMAT, GIT_SYNC_BRANCH, and POLICY_DIR.
+// It might cause the git-importer & monitor pods to restart.
+func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, gitBranch, policyDir string) {
 	restartPod := false
 
 	importerCM := &corev1.ConfigMap{}
@@ -1226,6 +1227,15 @@ func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir s
 	if sourceFormatCM.Data["SOURCE_FORMAT"] != string(sourceFormat) {
 		restartPod = true
 		nt.MustMergePatch(sourceFormatCM, fmt.Sprintf(`{"data":{"SOURCE_FORMAT":"%s"}}`, sourceFormat))
+	}
+
+	gitSyncCM := &corev1.ConfigMap{}
+	if err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM); err != nil {
+		nt.T.Fatal(err)
+	}
+	if gitSyncCM.Data["GIT_SYNC_BRANCH"] != gitBranch {
+		restartPod = true
+		nt.MustMergePatch(gitSyncCM, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, gitBranch))
 	}
 
 	if restartPod {
@@ -1268,9 +1278,16 @@ func resetRootRepo(nt *NT, rsName, upstream string, sourceFormat filesystem.Sour
 	}
 }
 
-// resetRootRepos resets all RootSync objects to the initial commit to delete managed testing resources.
-// For the default RootSync, it sets its SOURCE_FORMAT and POLICY_DIR. It might cause the root-reconciler to restart.
-// It sets POLICY_DIR to always be `acme` because the initial root-repo's sync directory is configured to be `acme`.
+// resetRootRepos resets all RootSync objects to the initial commit to delete
+// managed testing resources.
+//
+// The spec.sourceFormat is reset to the specified format, to ensure the
+// remaining objects are deleted without erroring from format mismatch.
+//
+// The spec.git.dir is reset to "acme", which is created by
+// NewRepository and Repository.ReInit and must still exist.
+//
+// TODO: reset everything else, including the branch
 func resetRootRepos(nt *NT, upstream string, sourceFormat filesystem.SourceFormat) {
 	// Reset the default root repo first so that other managed RootSyncs can be re-created and initialized.
 	rootRepo := nt.RootRepos[configsync.RootSyncName]
@@ -1372,13 +1389,63 @@ func deleteNamespaceRepos(nt *NT) {
 }
 
 // SetPolicyDir updates the root-sync object with the provided policyDir.
-func SetPolicyDir(nt *NT, name, policyDir string) {
+func SetPolicyDir(nt *NT, syncName, policyDir string) {
 	nt.T.Logf("Set policyDir to %q", policyDir)
 	if nt.MultiRepo {
-		rs := fake.RootSyncObjectV1Beta1(name)
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, policyDir))
+		rs := fake.RootSyncObjectV1Beta1(syncName)
+		if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+			nt.T.Fatal(err)
+		}
+		if rs.Spec.Git.Dir != policyDir {
+			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, policyDir))
+		}
 	} else {
-		ResetMonoRepoSpec(nt, filesystem.SourceFormatHierarchy, policyDir)
+		restartPod := false
+
+		importerCM := &corev1.ConfigMap{}
+		if err := nt.Get("importer", configmanagement.ControllerNamespace, importerCM); err != nil {
+			nt.T.Fatal(err)
+		}
+		if importerCM.Data["POLICY_DIR"] != policyDir {
+			restartPod = true
+			nt.MustMergePatch(importerCM, fmt.Sprintf(`{"data":{"POLICY_DIR":"%s"}}`, policyDir))
+		}
+
+		if restartPod {
+			DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
+			DeletePodByLabel(nt, "app", "monitor", false)
+		}
+	}
+}
+
+// SetGitBranch updates the root-sync object with the provided git branch
+func SetGitBranch(nt *NT, syncName, branch string) {
+	nt.T.Logf("Change git branch to %q", branch)
+	if nt.MultiRepo {
+		rs := fake.RootSyncObjectV1Beta1(syncName)
+		if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+			nt.T.Fatal(err)
+		}
+		if rs.Spec.Git.Branch != branch {
+			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, branch))
+		}
+	} else {
+		restartPod := false
+
+		gitSyncCM := &corev1.ConfigMap{}
+		err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		if gitSyncCM.Data["GIT_SYNC_BRANCH"] != branch {
+			restartPod = true
+			nt.MustMergePatch(gitSyncCM, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, branch))
+		}
+
+		if restartPod {
+			DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
+			DeletePodByLabel(nt, "app", "monitor", false)
+		}
 	}
 }
 

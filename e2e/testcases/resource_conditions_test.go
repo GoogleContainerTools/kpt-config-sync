@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"go.uber.org/multierr"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -70,25 +71,12 @@ func TestResourceConditionAnnotations(t *testing.T) {
 	// Ensure we don't already have error conditions.
 	// In this test, and so below, it is sufficient to block on the Repo object reporting
 	// the conditions, as all it is doing is aggregating conditions from ClusterConfig/NamespaceConfigs.
-	err1 := nt.Validate(repo.DefaultName, "", &v1.Repo{},
-		hasConditions())
-	err2 := nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-		hasConditions())
-	err3 := nt.Validate(ns, "", &v1.NamespaceConfig{},
-		hasConditions())
-	if err1 != nil || err2 != nil || err3 != nil {
-		// There isn't a concise way of saying "If one of these three conditions fail,
-		// show all errors and then fail the test."
-		if err1 != nil {
-			nt.T.Error(err1)
-		}
-		if err2 != nil {
-			nt.T.Error(err2)
-		}
-		if err3 != nil {
-			nt.T.Error(err3)
-		}
-		t.FailNow()
+	var errs error
+	errs = multierr.Append(errs, nt.Validate(repo.DefaultName, "", &v1.Repo{}, hasConditions()))
+	errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{}, hasConditions()))
+	errs = multierr.Append(errs, nt.Validate(ns, "", &v1.NamespaceConfig{}, hasConditions()))
+	if errs != nil {
+		nt.T.Fatal(errs)
 	}
 
 	// Test adding error annotations.
@@ -102,40 +90,27 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		nt.T.Fatal("failed to check the supported RBAC versions")
 	}
 	// Ensure error conditions are added.
-	_, err1 = nomostest.Retry(waitTimeout, func() error {
+	_, err = nomostest.Retry(waitTimeout, func() error {
+		var errs error
 		if support {
-			// We expect three errors even though we only supplied two.
-			return nt.Validate(repo.DefaultName, "", &v1.Repo{},
-				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError), string(v1.ResourceStateError)))
+			errs = multierr.Append(errs, nt.Validate(repo.DefaultName, "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError), string(v1.ResourceStateError))))
+			// The ClusterConfig error from the ClusterRole gets duplicated.
+			// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
+			errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError))))
+		} else {
+			errs = multierr.Append(errs, nt.Validate(repo.DefaultName, "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError))))
+			errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+				hasConditions(string(v1.ResourceStateError))))
 		}
-		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
-			hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
+		errs = multierr.Append(errs, nt.Validate(ns, "", &v1.NamespaceConfig{},
+			hasConditions(string(v1.ResourceStateError))))
+		return errs
 	})
-	// The ClusterConfig error from the ClusterRole gets duplicated.
-	// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
-	_, err2 = nomostest.Retry(waitTimeout, func() error {
-		if support {
-			return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-				hasConditions(string(v1.ResourceStateError), string(v1.ResourceStateError)))
-		}
-		return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-			hasConditions(string(v1.ResourceStateError)))
-	})
-	_, err3 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(ns, "", &v1.NamespaceConfig{},
-			hasConditions(string(v1.ResourceStateError)))
-	})
-	if err1 != nil || err2 != nil || err3 != nil {
-		if err1 != nil {
-			nt.T.Error(err1)
-		}
-		if err2 != nil {
-			nt.T.Error(err2)
-		}
-		if err3 != nil {
-			nt.T.Error(err3)
-		}
-		t.FailNow()
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Test removing error annotations.
@@ -145,31 +120,15 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		`configmanagement.gke.io/errors-`)
 
 	// Ensure error conditions are removed.
-	_, err1 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate("repo", "", &v1.Repo{},
-			hasConditions())
+	_, err = nomostest.Retry(waitTimeout, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.Validate("repo", "", &v1.Repo{}, hasConditions()))
+		errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{}, hasConditions()))
+		errs = multierr.Append(errs, nt.Validate(ns, "", &v1.NamespaceConfig{}, hasConditions()))
+		return errs
 	})
-	_, err2 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-			hasConditions())
-	})
-	_, err3 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(ns, "", &v1.NamespaceConfig{},
-			hasConditions())
-	})
-	if err1 != nil || err2 != nil || err3 != nil {
-		// There isn't a concise way of saying "If one of these three conditions fail,
-		// show all errors and then fail the test."
-		if err1 != nil {
-			nt.T.Error(err1)
-		}
-		if err2 != nil {
-			nt.T.Error(err2)
-		}
-		if err3 != nil {
-			nt.T.Error(err3)
-		}
-		t.FailNow()
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Test adding reconciling annotations
@@ -179,40 +138,28 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		`configmanagement.gke.io/reconciling=["ClusterRole needs... something..."]`)
 
 	// Ensure reconciling conditions are added.
-	_, err1 = nomostest.Retry(waitTimeout, func() error {
+	_, err = nomostest.Retry(waitTimeout, func() error {
+		var errs error
 		if support {
 			// We expect three reconciling conditions even though we only supplied two.
-			return nt.Validate(repo.DefaultName, "", &v1.Repo{},
-				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+			errs = multierr.Append(errs, nt.Validate(repo.DefaultName, "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling))))
+			// The ClusterConfig condition from the ClusterRole gets duplicated.
+			// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
+			errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling))))
+		} else {
+			errs = multierr.Append(errs, nt.Validate(repo.DefaultName, "", &v1.Repo{},
+				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling))))
+			errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
+				hasConditions(string(v1.ResourceStateReconciling))))
 		}
-		return nt.Validate(repo.DefaultName, "", &v1.Repo{},
-			hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
+		errs = multierr.Append(errs, nt.Validate(ns, "", &v1.NamespaceConfig{},
+			hasConditions(string(v1.ResourceStateReconciling))))
+		return errs
 	})
-	// The ClusterConfig condition from the ClusterRole gets duplicated.
-	// This will be obsolete with ConfigSync v2, so no need to fix (b/154226839).
-	_, err2 = nomostest.Retry(waitTimeout, func() error {
-		if support {
-			return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-				hasConditions(string(v1.ResourceStateReconciling), string(v1.ResourceStateReconciling)))
-		}
-		return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-			hasConditions(string(v1.ResourceStateReconciling)))
-	})
-	_, err3 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(ns, "", &v1.NamespaceConfig{},
-			hasConditions(string(v1.ResourceStateReconciling)))
-	})
-	if err1 != nil || err2 != nil || err3 != nil {
-		if err1 != nil {
-			nt.T.Error(err1)
-		}
-		if err2 != nil {
-			nt.T.Error(err2)
-		}
-		if err3 != nil {
-			nt.T.Error(err3)
-		}
-		t.FailNow()
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Test removing reconciling annotations.
@@ -222,29 +169,15 @@ func TestResourceConditionAnnotations(t *testing.T) {
 		`configmanagement.gke.io/reconciling-`)
 
 	// Ensure reconciling conditions are removed.
-	_, err1 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate("repo", "", &v1.Repo{},
-			hasConditions())
+	_, err = nomostest.Retry(waitTimeout, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.Validate("repo", "", &v1.Repo{}, hasConditions()))
+		errs = multierr.Append(errs, nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{}, hasConditions()))
+		errs = multierr.Append(errs, nt.Validate(ns, "", &v1.NamespaceConfig{}, hasConditions()))
+		return errs
 	})
-	_, err2 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(v1.ClusterConfigName, "", &v1.ClusterConfig{},
-			hasConditions())
-	})
-	_, err3 = nomostest.Retry(waitTimeout, func() error {
-		return nt.Validate(ns, "", &v1.NamespaceConfig{},
-			hasConditions())
-	})
-	if err1 != nil || err2 != nil || err3 != nil {
-		if err1 != nil {
-			nt.T.Error(err1)
-		}
-		if err2 != nil {
-			nt.T.Error(err2)
-		}
-		if err3 != nil {
-			nt.T.Error(err3)
-		}
-		t.FailNow()
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

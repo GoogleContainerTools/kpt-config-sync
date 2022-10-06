@@ -240,6 +240,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	}
 
 	cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
+	cleanMembershipInfo(nt, fleetMembership, crossProjectFleetProjectID, gkeURI)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
@@ -247,6 +248,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 		cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
+		cleanMembershipInfo(nt, fleetMembership, crossProjectFleetProjectID, gkeURI)
 	})
 
 	tenant := "tenant-a"

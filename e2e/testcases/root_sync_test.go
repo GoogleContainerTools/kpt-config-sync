@@ -238,9 +238,22 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 		nt.T.Errorf("%s present: %v", testNS, err)
 	}
 
-	// Set branch to "test-branch"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, testBranch)
+	// Update RootSync.
+	//
+	// Get RootSync and then perform Update.
+	rootsync := &v1beta1.RootSync{}
+	err = nt.Get(configsync.RootSyncName, v1.NSConfigManagementSystem, rootsync)
+	if err != nil {
+		nt.T.Fatalf("%v", err)
+	}
 
+	// Update the branch in RootSync Custom Resource.
+	rootsync.Spec.Git.Branch = testBranch
+
+	err = nt.Update(rootsync)
+	if err != nil {
+		nt.T.Fatalf("%v", err)
+	}
 	nt.WaitForRepoSyncs()
 
 	// Validate namespace 'audit-test' created after updating rootsync.
@@ -249,9 +262,20 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	// Set branch to "main"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+	// Get RootSync and then perform Update.
+	rs := &v1beta1.RootSync{}
+	err = nt.Get(configsync.RootSyncName, v1.NSConfigManagementSystem, rs)
+	if err != nil {
+		nt.T.Fatalf("%v", err)
+	}
 
+	// Switch back to 'main' branch.
+	rs.Spec.Git.Branch = nomostest.MainBranch
+
+	err = nt.Update(rs)
+	if err != nil {
+		nt.T.Fatalf("%v", err)
+	}
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
 	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
 	nt.WaitForRepoSyncs()

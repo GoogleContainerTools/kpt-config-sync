@@ -1206,8 +1206,7 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 	}, WaitTimeout(nt.DefaultWaitTimeout))
 }
 
-// ResetMonoRepoSpec sets the mono repo's SOURCE_FORMAT, POLICY_DIR, and GIT_SYNC_BRANCH.
-// It might cause the git-importer & monitor pods to restart.
+// ResetMonoRepoSpec sets the mono repo's SOURCE_FORMAT and POLICY_DIR. It might cause the git-importer to restart.
 func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir string) {
 	restartPod := false
 
@@ -1217,10 +1216,7 @@ func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir s
 	}
 	if importerCM.Data["POLICY_DIR"] != policyDir {
 		restartPod = true
-		importerCM.Data["POLICY_DIR"] = policyDir
-		if err := nt.Update(importerCM); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.MustMergePatch(importerCM, fmt.Sprintf(`{"data":{"POLICY_DIR":"%s"}}`, policyDir))
 	}
 
 	sourceFormatCM := &corev1.ConfigMap{}
@@ -1229,22 +1225,7 @@ func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, policyDir s
 	}
 	if sourceFormatCM.Data["SOURCE_FORMAT"] != string(sourceFormat) {
 		restartPod = true
-		sourceFormatCM.Data["SOURCE_FORMAT"] = string(sourceFormat)
-		if err := nt.Update(sourceFormatCM); err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-
-	gitSyncCM := &corev1.ConfigMap{}
-	if err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM); err != nil {
-		nt.T.Fatal(err)
-	}
-	if gitSyncCM.Data["GIT_SYNC_BRANCH"] != MainBranch {
-		restartPod = true
-		gitSyncCM.Data["GIT_SYNC_BRANCH"] = MainBranch
-		if err := nt.Update(gitSyncCM); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.MustMergePatch(sourceFormatCM, fmt.Sprintf(`{"data":{"SOURCE_FORMAT":"%s"}}`, sourceFormat))
 	}
 
 	if restartPod {
@@ -1265,19 +1246,25 @@ func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstrea
 
 func resetRootRepo(nt *NT, rsName, upstream string, sourceFormat filesystem.SourceFormat) {
 	rs := fake.RootSyncObjectV1Beta1(rsName)
-	_, err := nt.CreateOrUpdate(rs, func() error {
-		rs.Spec.SourceFormat = string(sourceFormat)
-		rs.Spec.Git = &v1beta1.Git{
-			Repo:      nt.GitProvider.SyncURL(nt.RootRepos[rsName].RemoteRepoName),
-			Branch:    MainBranch,
-			Dir:       AcmeDir,
-			Auth:      "ssh",
-			SecretRef: v1beta1.SecretReference{Name: controllers.GitCredentialVolume},
-		}
-		return nil
-	})
-	if err != nil {
+	if err := nt.Get(rs.Name, rs.Namespace, rs); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
+	} else {
+		nt.RootRepos[rsName] = resetRepository(nt, RootRepo, RootSyncNN(rsName), upstream, sourceFormat)
+		if err == nil {
+			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "%s", "git": {"dir": "%s"}}}`, sourceFormat, AcmeDir))
+		} else {
+			rs.Spec.SourceFormat = string(sourceFormat)
+			rs.Spec.Git = &v1beta1.Git{
+				Repo:      nt.GitProvider.SyncURL(nt.RootRepos[rsName].RemoteRepoName),
+				Branch:    MainBranch,
+				Dir:       AcmeDir,
+				Auth:      "ssh",
+				SecretRef: v1beta1.SecretReference{Name: controllers.GitCredentialVolume},
+			}
+			if err = nt.Create(rs); err != nil {
+				nt.T.Fatal(err)
+			}
+		}
 	}
 }
 
@@ -1398,27 +1385,5 @@ func SetPolicyDir(nt *NT, name, policyDir string) {
 func toMetav1Duration(t time.Duration) *metav1.Duration {
 	return &metav1.Duration{
 		Duration: t,
-	}
-}
-
-// SetGitBranch updates the git branch
-func SetGitBranch(nt *NT, syncName, branch string) {
-	nt.T.Logf("Change git branch to %q", branch)
-	if nt.MultiRepo {
-		rs := fake.RootSyncObjectV1Beta1(syncName)
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, branch))
-	} else {
-		gitSyncCM := &corev1.ConfigMap{}
-		err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		gitSyncCM.Data["GIT_SYNC_BRANCH"] = branch
-		if err := nt.Update(gitSyncCM); err != nil {
-			nt.T.Fatal(err)
-		}
-
-		DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
-		DeletePodByLabel(nt, "app", "monitor", false)
 	}
 }

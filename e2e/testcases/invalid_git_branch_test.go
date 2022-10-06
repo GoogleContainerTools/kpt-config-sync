@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -31,7 +33,8 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
 
 	// Update RootSync to invalid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, "invalid-branch")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"branch": "invalid-branch"}}}`)
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
@@ -44,7 +47,8 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	}
 
 	// Update RootSync to valid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+	rs = fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"branch": "main"}}}`)
 
 	nt.WaitForRepoSyncs()
 
@@ -97,11 +101,11 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 func TestInvalidMonoRepoBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMultiRepo)
 
-	nomostest.SetGitBranch(nt, "unused", "invalid-branch")
+	resetGitBranch(nt, "invalid-branch")
 
 	nt.WaitForRepoSourceError(status.SourceErrorCode)
 
-	nomostest.SetGitBranch(nt, "unused", "main")
+	resetGitBranch(nt, "main")
 	nt.WaitForRepoSourceErrorClear()
 }
 
@@ -120,7 +124,12 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add namespace to acme directory", devBranch)
 
 	// Update RootSync to sync from the dev branch
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, devBranch)
+	if nt.MultiRepo {
+		rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, devBranch))
+	} else {
+		resetGitBranch(nt, devBranch)
+	}
 	nt.WaitForRepoSyncs()
 
 	// Validate namespace 'acme' created.
@@ -140,4 +149,29 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	// Change the remote branch name back to the original name.
 	nt.RootRepos[configsync.RootSyncName].RenameBranch("invalid-branch", devBranch)
 	nt.WaitForRepoSyncs()
+	// Reset RootSync because the cleanup stage will check if RootSync is synced from the main branch.
+	if nt.MultiRepo {
+		rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, nomostest.MainBranch))
+	} else {
+		resetGitBranch(nt, nomostest.MainBranch)
+	}
+}
+
+// resetGitBranch updates GIT_SYNC_BRANCH in the config map and restart the reconcilers.
+func resetGitBranch(nt *nomostest.NT, branch string) {
+	nt.T.Logf("Change the GIT_SYNC_BRANCH name to %q", branch)
+	cm := &corev1.ConfigMap{}
+	err := nt.Get("git-sync", configmanagement.ControllerNamespace, cm)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.MustMergePatch(cm, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, branch))
+
+	if nt.MultiRepo {
+		nomostest.DeletePodByLabel(nt, "app", "reconciler-manager", true)
+	} else {
+		nomostest.DeletePodByLabel(nt, "app", "git-importer", false)
+		nomostest.DeletePodByLabel(nt, "app", "monitor", false)
+	}
 }

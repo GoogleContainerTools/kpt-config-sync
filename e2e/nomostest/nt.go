@@ -62,7 +62,6 @@ import (
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // NT represents the test environment for a single Nomos end-to-end test case.
@@ -299,18 +298,6 @@ func (nt *NT) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) e
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("deleting all of %T", obj)
 	return nt.Client.DeleteAllOf(nt.Context, obj, opts...)
-}
-
-// CreateOrUpdate is identical to controllerutil.CreateOrUpdate, but without
-// requiring Context or client.Client.
-func (nt *NT) CreateOrUpdate(obj client.Object, mutateFn func() error) (controllerutil.OperationResult, error) {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("creating or updating %s", fmtObj(obj))
-	return controllerutil.CreateOrUpdate(nt.Context, nt.Client, obj, func() error {
-		err := mutateFn()
-		AddTestLabel(obj)
-		return err
-	})
 }
 
 // MergePatch uses the object to construct a merge patch for the fields provided.

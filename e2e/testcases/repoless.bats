@@ -11,10 +11,6 @@ load "../lib/nomos"
 
 FILE_NAME="$(basename "${BATS_TEST_FILENAME}" '.bats')"
 
-test_teardown() {
-  nomos::reset_mono_repo_configmaps
-}
-
 @test "${FILE_NAME}: Syncs correctly with explicit namespace declarations" {
   kubectl apply -f "${MANIFEST_DIR}/source-format_unstructured.yaml"
   kubectl apply -f "${MANIFEST_DIR}/importer_repoless.yaml"

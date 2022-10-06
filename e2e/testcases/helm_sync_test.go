@@ -64,8 +64,27 @@ func TestPublicHelm(t *testing.T) {
 	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
+	var expectedCPURequest string
+	var expectedCPULimit string
+	var expectedMemoryRequest string
+	var expectedMemoryLimit string
+	if nt.IsGKEAutopilot {
+		expectedCPURequest = "250m"
+		expectedCPULimit = expectedCPURequest
+		expectedMemoryRequest = "512Mi"
+		expectedMemoryLimit = expectedMemoryRequest
+	} else {
+		expectedCPURequest = "150m"
+		expectedCPULimit = "1"
+		expectedMemoryRequest = "250Mi"
+		expectedMemoryLimit = "300Mi"
+	}
 	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
-		nomostest.HasCorrectResourceRequestsLimits("controller", resource.MustParse("150m"), resource.MustParse("1"), resource.MustParse("250Mi"), resource.MustParse("300Mi")),
+		nomostest.HasCorrectResourceRequestsLimits("controller",
+			resource.MustParse(expectedCPURequest),
+			resource.MustParse(expectedCPULimit),
+			resource.MustParse(expectedMemoryRequest),
+			resource.MustParse(expectedMemoryLimit)),
 		nomostest.HasExactlyImage("controller", "ingress-nginx/controller", "v1.4.0", "sha256:54f7fe2c6c5a9db9a0ebf1131797109bb7a4d91f56b9b362bde2abd237dd1974"),
 		nomostest.DeploymentHasEnvVar("controller", "TEST_1", "val1"), nomostest.DeploymentHasEnvVar("controller", "TEST_2", "val2")); err != nil {
 		nt.T.Error(err)

@@ -50,7 +50,7 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 		inventoryID = applier.InventoryID(syncName, string(scope))
 	}
 	for _, obj := range objs {
-		if string(core.GetAnnotation(obj, skipOwningInventoryAnnotations)) == "true" {
+		if core.GetAnnotation(obj, skipOwningInventoryAnnotations) == "true" {
 			// Don't expose this annotation on the applied object
 			core.RemoveAnnotations(obj, skipOwningInventoryAnnotations)
 

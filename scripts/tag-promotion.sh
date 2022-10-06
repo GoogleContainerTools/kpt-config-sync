@@ -50,7 +50,7 @@ esac
 
 REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
 # Fetch all existing tags
-git fetch "${REMOTE}" --tags > /dev/null
+git fetch "${REMOTE}" "${RC_TAG}" --tags > /dev/null
 echo "+++ Successfully fetched tags"
 
 echo "+++ Promoting ${RC_TAG} to ${CS_VERSION}"

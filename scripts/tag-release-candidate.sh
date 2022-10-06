@@ -86,16 +86,17 @@ if ! [[ "${CS_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
-# Fetch all existing tags
-git fetch "${REMOTE}" --tags > /dev/null
-echo "+++ Successfully fetched tags"
 
 # Cut from tip of main for minor versions
 branch="main"
 # Cut from tip of release branch for patch versions
 [[ "${CS_VERSION}" =~ ^v[0-9]+\.[0-9]+\.0$ ]] || branch="${CS_VERSION%.*}"
 echo "+++ Finding latest commit from ${branch}"
-remote_sha=$(git ls-remote --exit-code --heads "${REMOTE}" "${branch}" | cut -f 1)
+
+# Fetch all existing tags
+git fetch "${REMOTE}" "${branch}" --tags > /dev/null
+echo "+++ Successfully fetched tags"
+remote_sha=$(git rev-parse FETCH_HEAD)
 
 RC=$(latest_rc_of_version "$CS_VERSION")
 echo "+++ Most recent RC of version $CS_VERSION: $RC"

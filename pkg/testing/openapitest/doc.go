@@ -15,16 +15,27 @@
 package openapitest
 
 import (
+	"fmt"
 	"io/ioutil"
+	"path/filepath"
+	"runtime"
+
 	// The openapi Document type does not satisfy the proto.Message interface in
 	// the new non-deprecated proto library.
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	openapiv2 "github.com/google/gnostic/openapiv2"
+	"kpt.dev/configsync/pkg/declared"
 )
+
+const openapiFile = "openapi_v2.txt"
 
 // Doc returns an openapi Document intialized from a static file of openapi
 // schemas.
-func Doc(path string) (*openapiv2.Document, error) {
+func Doc() (*openapiv2.Document, error) {
+	path, err := pathToTestFile()
+	if err != nil {
+		return nil, err
+	}
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -36,4 +47,23 @@ func Doc(path string) (*openapiv2.Document, error) {
 	}
 
 	return doc, err
+}
+
+func pathToTestFile() (string, error) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("failed to get path to %s", openapiFile)
+	}
+	return filepath.Join(filepath.Dir(filename), openapiFile), nil
+}
+
+type fakeOpenAPIInterface struct{}
+
+func (f fakeOpenAPIInterface) OpenAPISchema() (*openapiv2.Document, error) {
+	return Doc()
+}
+
+// ValueConverterForTest returns a ValueConverter initialized for unit tests.
+func ValueConverterForTest() (*declared.ValueConverter, error) {
+	return declared.NewValueConverter(fakeOpenAPIInterface{})
 }

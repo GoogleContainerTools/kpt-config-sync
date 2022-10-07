@@ -16,8 +16,6 @@ package declared
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	openapiv2 "github.com/google/gnostic/openapiv2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -26,20 +24,19 @@ import (
 	"k8s.io/kube-openapi/pkg/schemaconv"
 	"k8s.io/kube-openapi/pkg/util/proto"
 	"k8s.io/kubectl/pkg/util/openapi"
-	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
 
 // ValueConverter converts a runtime.Object into a TypedValue.
 type ValueConverter struct {
-	discoveryClient  discovery.DiscoveryInterface
+	discoveryClient  discovery.OpenAPISchemaInterface
 	openAPIResources openapi.Resources
 	parser           *typed.Parser
 }
 
 // NewValueConverter returns a ValueConverter initialized with the given
 // discovery client.
-func NewValueConverter(dc discovery.DiscoveryInterface) (*ValueConverter, error) {
+func NewValueConverter(dc discovery.OpenAPISchemaInterface) (*ValueConverter, error) {
 	v := &ValueConverter{discoveryClient: dc}
 	if err := v.Refresh(); err != nil {
 		return nil, err
@@ -111,41 +108,4 @@ func typedParser(doc *openapiv2.Document) (*typed.Parser, error) {
 	// This fails the copylocks lint check, but this is exactly how the API server
 	// does it so I'm not sure what else to do.
 	return &typed.Parser{Schema: *typeSchema}, nil //nolint:govet
-}
-
-// ValueConverterForTest returns a ValueConverter initialized for unit tests.
-func ValueConverterForTest() (*ValueConverter, error) {
-	doc, err := openapitest.Doc(pathToTestFile())
-	if err != nil {
-		return nil, err
-	}
-	oa, err := openapi.NewOpenAPIData(doc)
-	if err != nil {
-		return nil, err
-	}
-
-	parser, err := typedParser(doc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ValueConverter{nil, oa, parser}, nil
-}
-
-func pathToTestFile() string {
-	path, err := os.Getwd()
-	if err != nil {
-		return err.Error()
-	}
-
-	// All of our code sits in subdirectories (pkg, cmd, etc) under this path:
-	// kpt.dev/configsync/...
-	// Some unit tests run from pkg and some from cmd, so we climb up from the
-	// working directory to "kpt.dev", and then specify back down to the file. We
-	// can't use "nomos" because that directory name is repeated in:
-	// kpt.dev/configsync/cmd/nomos
-	for filepath.Base(path) != "kpt.dev" {
-		path = filepath.Dir(path)
-	}
-	return filepath.Join(path, "configsync", "pkg", "testing", "openapitest", "openapi_v2.txt")
 }

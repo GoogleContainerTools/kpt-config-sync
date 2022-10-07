@@ -15,6 +15,7 @@
 package nomostest
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,7 +25,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -574,6 +577,32 @@ func SecretMissingKey(key string) Predicate {
 		_, ok := secret.Data[key]
 		if ok {
 			return errors.Errorf("expected key %s to be missing from secret %s/%s, but was found", key, secret.GetNamespace(), secret.GetName())
+		}
+		return nil
+	}
+}
+
+func NamspaceConfigHasMetadataName(expectedName string) Predicate {
+	return func(o client.Object) error {
+		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+		dep := &appsv1.Deployment{}
+		json.Unmarshal(raw, &dep)
+		actualName := dep.GetName()
+		if actualName != expectedName {
+			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+		}
+		return nil
+	}
+}
+
+func NamspaceConfigHasMetadataCreationTimestamp(expectedTime metav1.Time) Predicate {
+	return func(o client.Object) error {
+		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+		dep := &appsv1.Deployment{}
+		json.Unmarshal(raw, &dep)
+		actualTime := dep.GetCreationTimestamp()
+		if actualTime != expectedTime {
+			return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
 		}
 		return nil
 	}

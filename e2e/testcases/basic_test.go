@@ -19,9 +19,14 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
@@ -30,7 +35,7 @@ const (
 )
 
 func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	nt.T.Log("Add a deployment")
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
@@ -39,34 +44,23 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Check that the deployment was created")
-	_, err := nt.Kubectl("get", "deployment", "hello-world", "-n", "dir")
-	if err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Check that specified field name is present")
-	selector := ".spec.resources[0].versions[0].objects[0].metadata.name"
-	name, err := nt.Kubectl("get", "namespaceconfig", "dir", "-o", fmt.Sprintf("jsonpath={%s}", selector))
-	if err != nil {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, nomostest.NamspaceConfigHasMetadataName("hello-world")); err != nil {
 		nt.T.Fatal(err)
-	}
-	if string(name) != "hello-world" {
-		nt.T.Fatal("NamespaceConfig is missing Deployment hello-world")
 	}
 
 	nt.T.Log("Check that unspecified field creationTimestamp is not present")
-	selector = ".spec.resources[0].versions[0].objects[0].metadata.creationTimestamp"
-	ct, err := nt.Kubectl("get", "namespaceconfig", "dir", "-o", fmt.Sprintf("jsonpath={%s}", selector))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if len(ct) != 0 {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, nomostest.NamspaceConfigHasMetadataCreationTimestamp(metav1.Time{})); err != nil {
 		nt.T.Fatal("NamespaceConfig has default field creationTimestamp which was not specified")
 	}
 }
 
 func TestRecreateSyncDeletedByUser(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	nt.T.Log("Add a deployment to a directory")
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
@@ -75,23 +69,22 @@ func TestRecreateSyncDeletedByUser(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Ensure that the system created a sync for the deployment")
-	_, err := nt.Kubectl("get", "sync", "deployment.apps")
-	if err != nil {
+	if err := nt.Validate("deployment.apps", "default", &v1.Sync{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Force-delete the sync from the cluster")
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("delete", "sync", "deployment.apps")
-		return err
-	})
-	if err != nil {
+	sync := &v1.Sync{}
+	if err := nt.Get("deployment.apps", "default", sync); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Delete(sync); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Ensure that the system re-created the force-deleted sync")
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("get", "sync", "deployment.apps")
+	_, err := nomostest.Retry(60*time.Second, func() error {
+		err := nt.Validate("deployment.apps", "default", &v1.Sync{})
 		return err
 	})
 	if err != nil {
@@ -100,20 +93,31 @@ func TestRecreateSyncDeletedByUser(t *testing.T) {
 }
 
 func TestDeletingClusterConfigRecoverable(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
 
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add dir namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err := nt.Kubectl("get", "ns", "dir")
-	if err != nil {
+	if err := nt.Validate("dir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Forcefully delete clusterconfigs and verify recovery")
-	_, err = nt.Kubectl("delete", "clusterconfig", "--all")
-	if err != nil {
+	cmClusterConfig := &v1.ClusterConfig{}
+
+	if err := nt.Get("config-management-cluster-config", "", cmClusterConfig); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Delete(cmClusterConfig); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	cmCRDCLusterConfig := &v1.ClusterConfig{}
+	if err := nt.Get("config-management-crd-cluster-config", "", cmCRDCLusterConfig); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Delete(cmCRDCLusterConfig); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -121,23 +125,19 @@ func TestDeletingClusterConfigRecoverable(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add admin clusterrole")
 	nt.WaitForRepoSyncs()
 
-	_, err = nt.Kubectl("get", "clusterconfig", "config-management-cluster-config")
-	if err != nil {
+	if err := nt.Validate("config-management-cluster-config", "", &v1.ClusterConfig{}); err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
 func TestNamespaceGarbageCollection(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/accounting-namespace.yaml", yamlDir), "acme/namespaces/accounting/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add accounting namespace")
 	nt.WaitForRepoSyncs()
-	_, err := nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("get", "ns", "accounting")
-		return err
-	})
-	if err != nil {
+
+	if err := nt.Validate("accounting", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -145,21 +145,19 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove accounting namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err = nt.Kubectl("get", "ns", "accounting")
-	if err == nil {
+	if err := nt.ValidateNotFound("accounting", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal("Namespace still exist when it should have been garbage collected")
 	}
 }
 
 func TestNamespacePolicyspaceConversion(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add dir namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err := nt.Kubectl("get", "ns", "dir")
-	if err != nil {
+	if err := nt.Validate("dir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -168,22 +166,17 @@ func TestNamespacePolicyspaceConversion(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove dir namespace, add subdir namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("get", "ns", "subdir")
-		return err
-	})
-	if err != nil {
+	if err := nt.Validate("subdir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nt.Kubectl("get", "ns", "dir")
-	if err == nil {
+	if err := nt.ValidateNotFound("dir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal("Namespace still exist when it should have been converted")
 	}
 }
 
 func TestSyncDeploymentAndReplicaSet(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Test the ability to fix a mistake: overlapping replicaset and deployment.
 	// Readiness behavior is undefined for this race condition.
@@ -199,8 +192,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	// So this wait timeout must be longer than the reconcile timeout (5m).
 	nt.WaitForRepoSyncs()
 	nt.T.Log("check that the replicaset was created")
-	_, err := nt.Kubectl("get", "replicaset", "-n", "dir", "-l", "app=hello-world")
-	if err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world")); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -210,8 +202,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("check that the deployment was created")
-	_, err = nt.Kubectl("get", "deployment", "hello-world", "-n", "dir")
-	if err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -221,12 +212,11 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("check that the deployment was removed and replicaset remains")
-	_, err = nt.Kubectl("get", "deployment", "hello-world", "-n", "dir")
-	if err == nil {
+	if err := nt.ValidateNotFound("hello-world", "dir", &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("get", "replicaset", "-n", "dir", "-l", "app=hello-world")
+	_, err := nomostest.Retry(60*time.Second, func() error {
+		err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world"))
 		return err
 	})
 	if err != nil {
@@ -235,14 +225,13 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 }
 
 func TestRolebindingsUpdated(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/namespace.yaml", "acme/namespaces/eng/backend/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding")
 	nt.WaitForRepoSyncs()
-	_, err := nt.Kubectl("get", "rolebinding", "-n", "backend", "bob-rolebinding")
-	if err != nil {
+	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 
@@ -250,13 +239,11 @@ func TestRolebindingsUpdated(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Replace bob with robert rolebinding")
 	nt.WaitForRepoSyncs()
 
-	_, err = nt.Kubectl("get", "rolebinding", "-n", "backend", "bob-rolebinding")
-	if err == nil {
+	if err := nt.ValidateNotFound("bob-rolebinding", "backend", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal("bob-rolebinding is not deleted")
 	}
 
-	_, err = nt.Kubectl("get", "rolebinding", "-n", "backend", "robert-rolebinding")
-	if err != nil {
+	if err := nt.Validate("robert-rolebinding", "backend", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal("robert-rolebinding not found")
 	}
 }
@@ -277,8 +264,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Wait until managed service appears on the cluster")
-	_, err = nt.Kubectl("get", "services", "some-service", fmt.Sprintf("--namespace=%s", namespace))
-	if err != nil {
+	if err := nt.Validate("some-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -288,21 +274,22 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Wait until the managed resource disappears from the cluster")
-	_, err = nt.Kubectl("get", "services", "some-service", fmt.Sprintf("--namespace=%s", namespace))
-	if err == nil {
+	if err := nt.ValidateNotFound("some-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Ensure that the unmanaged service remained")
-	_, err = nt.Kubectl("get", "services", "some-other-service", fmt.Sprintf("--namespace=%s", namespace))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	_, err = nt.Kubectl("delete", "service", "some-other-service", "--ignore-not-found", fmt.Sprintf("--namespace=%s", namespace))
-	if err != nil {
+	if err := nt.Validate("some-other-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
+	someOtherService := &corev1.Service{}
+	if err := nt.Get("some-other-service", namespace, someOtherService); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Delete(someOtherService); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func unmanageNamespace(nt *nomostest.NT, namespace string) {
@@ -313,19 +300,19 @@ func unmanageNamespace(nt *nomostest.NT, namespace string) {
 }
 
 func TestNamespaceDefaultCanBeManaged(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 	manageNamespace(nt, "default")
 	unmanageNamespace(nt, "default")
 }
 
 func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipAutopilotCluster)
 	manageNamespace(nt, "kube-system")
 	unmanageNamespace(nt, "kube-system")
 }
 
 func TestNamespaceKubePublicCanBeManaged(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMultiRepo)
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
 	manageNamespace(nt, "default")
 	unmanageNamespace(nt, "kube-public")
 }

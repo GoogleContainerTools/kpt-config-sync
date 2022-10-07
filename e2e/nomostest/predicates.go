@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -582,11 +583,14 @@ func SecretMissingKey(key string) Predicate {
 	}
 }
 
+// NamspaceConfigHasMetadataName will check the metadata name and compare it with the expected value
 func NamspaceConfigHasMetadataName(expectedName string) Predicate {
 	return func(o client.Object) error {
 		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
 		dep := &appsv1.Deployment{}
-		json.Unmarshal(raw, &dep)
+		if err := json.Unmarshal(raw, &dep); err != nil {
+			return errors.Errorf("Failed to get raw JSON, %s", err)
+		}
 		actualName := dep.GetName()
 		if actualName != expectedName {
 			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
@@ -595,14 +599,28 @@ func NamspaceConfigHasMetadataName(expectedName string) Predicate {
 	}
 }
 
+// NamspaceConfigHasMetadataCreationTimestamp will check the creation timestamp and compare it with the expected time
 func NamspaceConfigHasMetadataCreationTimestamp(expectedTime metav1.Time) Predicate {
 	return func(o client.Object) error {
 		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
 		dep := &appsv1.Deployment{}
-		json.Unmarshal(raw, &dep)
+		if err := json.Unmarshal(raw, &dep); err != nil {
+			return errors.Errorf("Failed to get raw JSON, %s", err)
+		}
 		actualTime := dep.GetCreationTimestamp()
 		if actualTime != expectedTime {
 			return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
+		}
+		return nil
+	}
+}
+
+// RoleBindingsHasName will check the Rolebindings name and compare it with expected value
+func RoleBindingsHasName(expectedName string) Predicate {
+	return func(o client.Object) error {
+		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
+		if actualName != expectedName {
+			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 		}
 		return nil
 	}

@@ -231,7 +231,7 @@ func TestRolebindingsUpdated(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding")
 	nt.WaitForRepoSyncs()
-	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}); err != nil {
+	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, nomostest.RoleBindingsHasName("acme-admin")); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 

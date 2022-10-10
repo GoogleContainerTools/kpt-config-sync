@@ -231,17 +231,16 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt.T.Log("Remove the deployment")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/dir/deployment.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove deployment")
+	// This sync may block until reconcile timeout is reached,
+	// because the ReplicaSet is re-applied before deleting the Deployment.
+	// So this wait timeout must be longer than the reconcile timeout (5m).
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("check that the deployment was removed and replicaset remains")
 	if err := nt.ValidateNotFound("hello-world", "dir", &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err := nomostest.Retry(60*time.Second, func() error {
-		err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world"))
-		return err
-	})
-	if err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world")); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -296,7 +295,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Start managing the namespace")
 	nt.WaitForRepoSyncs()
 
-	nt.T.Log("Wait until managed service appears on the cluster")
+	nt.T.Log("Validate managed service appears on the cluster")
 	if err := nt.Validate("some-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -306,7 +305,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the namespace from the managed set of namespaces")
 	nt.WaitForRepoSyncs()
 
-	nt.T.Log("Wait until the managed resource disappears from the cluster")
+	nt.T.Log("Validate managed service disappears from the cluster")
 	if err := nt.ValidateNotFound("some-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -340,11 +339,17 @@ func TestNamespaceDefaultCanBeManaged(t *testing.T) {
 
 func TestNamespaceGatekeeperSystemCanBeManaged(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	// namespace::create gatekeeper-system
-	// manage_namespace "gatekeeper-system"
-	// kubectl delete ns gatekeeper-system --ignore-not-found
-	manageNamespace(nt, "default")
 
+	/*nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/namespace.gatekeeper-system.yaml", yamlDir), "acme/namespaces/gatekeeper-system/namespace.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create gatekeeper-system namespace")
+	nt.WaitForRepoSyncs()*/
+	nt.MustKubectl("apply", "-f", fmt.Sprintf("%s/reserved_namespaces/namespace.gatekeeper-system.yaml", yamlDir))
+	manageNamespace(nt, "gatekeeper-system")
+
+	/*nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/gatekeeper-system/namespace.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete gatekeeper-system namespace")
+	nt.WaitForRepoSyncs()*/
+	nt.MustKubectl("delete", "ns", "gatekeeper-system", "--ignore-not-found")
 }
 
 func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {

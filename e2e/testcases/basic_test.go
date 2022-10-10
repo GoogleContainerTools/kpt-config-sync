@@ -37,40 +37,10 @@ const (
 	yamlDir = "../testdata"
 )
 
-// NamspaceConfigHasMetadataName will check the metadata name and compare it with the expected value
-func NamespaceConfigHasMetadataName(expectedName string) nomostest.Predicate {
-	return func(o client.Object) error {
-		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
-		dep := &appsv1.Deployment{}
-		if err := json.Unmarshal(raw, &dep); err != nil {
-			return errors.Errorf("Failed to get raw JSON, %s", err)
-		}
-		actualName := dep.GetName()
-		if actualName != expectedName {
-			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
-		}
-		return nil
-	}
-}
-
-// NamspaceConfigHasMetadataCreationTimestamp will check the creation timestamp and compare it with the expected time
-func NamespaceConfigHasMetadataCreationTimestamp(expectedTime metav1.Time) nomostest.Predicate {
-	return func(o client.Object) error {
-		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
-		dep := &appsv1.Deployment{}
-		if err := json.Unmarshal(raw, &dep); err != nil {
-			return errors.Errorf("Failed to get raw JSON, %s", err)
-		}
-		actualTime := dep.GetCreationTimestamp()
-		if actualTime != expectedTime {
-			return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
-		}
-		return nil
-	}
-}
-
 func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
+	expectedName := "hello-world"
+	expectedTime := metav1.Time{}
 
 	nt.T.Log("Add a deployment")
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
@@ -84,12 +54,36 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 	}
 
 	nt.T.Log("Check that specified field name is present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, NamespaceConfigHasMetadataName("hello-world")); err != nil {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{},
+		func(o client.Object) error {
+			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+			dep := &appsv1.Deployment{}
+			if err := json.Unmarshal(raw, &dep); err != nil {
+				return errors.Errorf("Failed to get raw JSON, %s", err)
+			}
+			actualName := dep.GetName()
+			if actualName != expectedName {
+				return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+			}
+			return nil
+		}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Check that unspecified field creationTimestamp is not present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, NamespaceConfigHasMetadataCreationTimestamp(metav1.Time{})); err != nil {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{},
+		func(o client.Object) error {
+			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+			dep := &appsv1.Deployment{}
+			if err := json.Unmarshal(raw, &dep); err != nil {
+				return errors.Errorf("Failed to get raw JSON, %s", err)
+			}
+			actualTime := dep.GetCreationTimestamp()
+			if actualTime != expectedTime {
+				return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
+			}
+			return nil
+		}); err != nil {
 		nt.T.Fatal("NamespaceConfig has default field creationTimestamp which was not specified")
 	}
 }
@@ -245,17 +239,6 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	}
 }
 
-// RoleBindingsHasName will check the Rolebindings name and compare it with expected value
-func RoleBindingsHasName(expectedName string) nomostest.Predicate {
-	return func(o client.Object) error {
-		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
-		if actualName != expectedName {
-			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
-		}
-		return nil
-	}
-}
-
 func TestRolebindingsUpdated(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
@@ -263,7 +246,7 @@ func TestRolebindingsUpdated(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding")
 	nt.WaitForRepoSyncs()
-	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, RoleBindingsHasName("acme-admin")); err != nil {
+	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, nomostest.RoleBindingHasName("acme-admin")); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 
@@ -287,6 +270,16 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	nt.T.Cleanup(func() {
+		someOtherService := &corev1.Service{}
+		if err := nt.Get("some-other-service", namespace, someOtherService); err != nil {
+			nt.T.Fatal(err)
+		}
+		if err := nt.Delete(someOtherService); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
 
 	nt.T.Log("Add resource to manage")
 	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/service.yaml", yamlDir), fmt.Sprintf("acme/namespaces/%s/service.yaml", namespace))
@@ -314,14 +307,6 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	if err := nt.Validate("some-other-service", namespace, &corev1.Service{}); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	someOtherService := &corev1.Service{}
-	if err := nt.Get("some-other-service", namespace, someOtherService); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Delete(someOtherService); err != nil {
-		nt.T.Fatal(err)
-	}
 }
 
 func unmanageNamespace(nt *nomostest.NT, namespace string) {
@@ -339,17 +324,9 @@ func TestNamespaceDefaultCanBeManaged(t *testing.T) {
 
 func TestNamespaceGatekeeperSystemCanBeManaged(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-
-	/*nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/namespace.gatekeeper-system.yaml", yamlDir), "acme/namespaces/gatekeeper-system/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create gatekeeper-system namespace")
-	nt.WaitForRepoSyncs()*/
 	nt.MustKubectl("apply", "-f", fmt.Sprintf("%s/reserved_namespaces/namespace.gatekeeper-system.yaml", yamlDir))
+	t.Cleanup(func() { nt.MustKubectl("delete", "ns", "gatekeeper-system", "--ignore-not-found") })
 	manageNamespace(nt, "gatekeeper-system")
-
-	/*nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/gatekeeper-system/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete gatekeeper-system namespace")
-	nt.WaitForRepoSyncs()*/
-	nt.MustKubectl("delete", "ns", "gatekeeper-system", "--ignore-not-found")
 }
 
 func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {

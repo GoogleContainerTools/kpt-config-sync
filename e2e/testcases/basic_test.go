@@ -15,10 +15,12 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -28,11 +30,44 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	yamlDir = "../testdata"
 )
+
+// NamspaceConfigHasMetadataName will check the metadata name and compare it with the expected value
+func NamespaceConfigHasMetadataName(expectedName string) nomostest.Predicate {
+	return func(o client.Object) error {
+		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+		dep := &appsv1.Deployment{}
+		if err := json.Unmarshal(raw, &dep); err != nil {
+			return errors.Errorf("Failed to get raw JSON, %s", err)
+		}
+		actualName := dep.GetName()
+		if actualName != expectedName {
+			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+		}
+		return nil
+	}
+}
+
+// NamspaceConfigHasMetadataCreationTimestamp will check the creation timestamp and compare it with the expected time
+func NamespaceConfigHasMetadataCreationTimestamp(expectedTime metav1.Time) nomostest.Predicate {
+	return func(o client.Object) error {
+		raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
+		dep := &appsv1.Deployment{}
+		if err := json.Unmarshal(raw, &dep); err != nil {
+			return errors.Errorf("Failed to get raw JSON, %s", err)
+		}
+		actualTime := dep.GetCreationTimestamp()
+		if actualTime != expectedTime {
+			return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
+		}
+		return nil
+	}
+}
 
 func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
@@ -49,12 +84,12 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 	}
 
 	nt.T.Log("Check that specified field name is present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, nomostest.NamspaceConfigHasMetadataName("hello-world")); err != nil {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, NamespaceConfigHasMetadataName("hello-world")); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Check that unspecified field creationTimestamp is not present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, nomostest.NamspaceConfigHasMetadataCreationTimestamp(metav1.Time{})); err != nil {
+	if err := nt.Validate("dir", "", &v1.NamespaceConfig{}, NamespaceConfigHasMetadataCreationTimestamp(metav1.Time{})); err != nil {
 		nt.T.Fatal("NamespaceConfig has default field creationTimestamp which was not specified")
 	}
 }
@@ -104,20 +139,7 @@ func TestDeletingClusterConfigRecoverable(t *testing.T) {
 	}
 
 	nt.T.Log("Forcefully delete clusterconfigs and verify recovery")
-	cmClusterConfig := &v1.ClusterConfig{}
-
-	if err := nt.Get("config-management-cluster-config", "", cmClusterConfig); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Delete(cmClusterConfig); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	cmCRDCLusterConfig := &v1.ClusterConfig{}
-	if err := nt.Get("config-management-crd-cluster-config", "", cmCRDCLusterConfig); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Delete(cmCRDCLusterConfig); err != nil {
+	if err := nt.DeleteAllOf(&v1.ClusterConfig{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -224,6 +246,17 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	}
 }
 
+// RoleBindingsHasName will check the Rolebindings name and compare it with expected value
+func RoleBindingsHasName(expectedName string) nomostest.Predicate {
+	return func(o client.Object) error {
+		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
+		if actualName != expectedName {
+			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+		}
+		return nil
+	}
+}
+
 func TestRolebindingsUpdated(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
@@ -231,7 +264,7 @@ func TestRolebindingsUpdated(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding")
 	nt.WaitForRepoSyncs()
-	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, nomostest.RoleBindingsHasName("acme-admin")); err != nil {
+	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, RoleBindingsHasName("acme-admin")); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 
@@ -305,6 +338,15 @@ func TestNamespaceDefaultCanBeManaged(t *testing.T) {
 	unmanageNamespace(nt, "default")
 }
 
+func TestNamespaceGatekeeperSystemCanBeManaged(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation2)
+	// namespace::create gatekeeper-system
+	// manage_namespace "gatekeeper-system"
+	// kubectl delete ns gatekeeper-system --ignore-not-found
+	manageNamespace(nt, "default")
+
+}
+
 func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipAutopilotCluster)
 	manageNamespace(nt, "kube-system")
@@ -313,6 +355,6 @@ func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {
 
 func TestNamespaceKubePublicCanBeManaged(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	manageNamespace(nt, "default")
+	manageNamespace(nt, "kube-system")
 	unmanageNamespace(nt, "kube-public")
 }

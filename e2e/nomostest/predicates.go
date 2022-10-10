@@ -580,7 +580,7 @@ func SecretMissingKey(key string) Predicate {
 	}
 }
 
-// RoleBindingsHasName will check the Rolebindings name and compare it with expected value
+// RoleBindingHasName will check the Rolebindings name and compare it with expected value
 func RoleBindingHasName(expectedName string) Predicate {
 	return func(o client.Object) error {
 		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name

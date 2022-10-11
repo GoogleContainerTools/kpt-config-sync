@@ -30,6 +30,9 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,7 +56,7 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Check that specified field name is present")
+	nt.T.Log("Check that specified field name is present and unspecified field creationTimestamp is not present")
 	if err := nt.Validate("dir", "", &v1.NamespaceConfig{},
 		func(o client.Object) error {
 			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
@@ -66,13 +69,7 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 				return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 			}
 			return nil
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Check that unspecified field creationTimestamp is not present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{},
-		func(o client.Object) error {
+		}, func(o client.Object) error {
 			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
 			dep := &appsv1.Deployment{}
 			if err := json.Unmarshal(raw, &dep); err != nil {
@@ -84,7 +81,7 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 			}
 			return nil
 		}); err != nil {
-		nt.T.Fatal("NamespaceConfig has default field creationTimestamp which was not specified")
+		nt.T.Fatal(err)
 	}
 }
 
@@ -103,11 +100,7 @@ func TestRecreateSyncDeletedByUser(t *testing.T) {
 	}
 
 	nt.T.Log("Force-delete the sync from the cluster")
-	sync := &v1.Sync{}
-	if err := nt.Get("deployment.apps", "default", sync); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Delete(sync); err != nil {
+	if err := nt.Delete(fake.SyncObject(kinds.Deployment().GroupKind(), core.Namespace("default"))); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -272,11 +265,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	}
 
 	nt.T.Cleanup(func() {
-		someOtherService := &corev1.Service{}
-		if err := nt.Get("some-other-service", namespace, someOtherService); err != nil {
-			nt.T.Fatal(err)
-		}
-		if err := nt.Delete(someOtherService); err != nil {
+		if err := nt.Delete(fake.ServiceObject(core.Namespace(namespace))); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

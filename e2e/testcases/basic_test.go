@@ -68,13 +68,6 @@ func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
 			if actualName != expectedName {
 				return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 			}
-			return nil
-		}, func(o client.Object) error {
-			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
-			dep := &appsv1.Deployment{}
-			if err := json.Unmarshal(raw, &dep); err != nil {
-				return errors.Errorf("Failed to get raw JSON, %s", err)
-			}
 			actualTime := dep.GetCreationTimestamp()
 			if actualTime != expectedTime {
 				return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)

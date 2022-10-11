@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
@@ -574,6 +575,17 @@ func SecretMissingKey(key string) Predicate {
 		_, ok := secret.Data[key]
 		if ok {
 			return errors.Errorf("expected key %s to be missing from secret %s/%s, but was found", key, secret.GetNamespace(), secret.GetName())
+		}
+		return nil
+	}
+}
+
+// RoleBindingHasName will check the Rolebindings name and compare it with expected value
+func RoleBindingHasName(expectedName string) Predicate {
+	return func(o client.Object) error {
+		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
+		if actualName != expectedName {
+			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 		}
 		return nil
 	}

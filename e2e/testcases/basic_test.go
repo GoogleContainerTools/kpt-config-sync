@@ -265,7 +265,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	}
 
 	nt.T.Cleanup(func() {
-		if err := nt.Delete(fake.ServiceObject(core.Namespace(namespace))); err != nil {
+		if err := nt.Delete(fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

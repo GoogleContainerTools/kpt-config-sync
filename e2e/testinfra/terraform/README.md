@@ -47,6 +47,12 @@ terraform plan
 terraform apply
 ```
 
+> **_Note:_**
+If running on a new project, the first apply may fail due to google APIs not yet
+being enabled. If this occurs, wait briefly and re-run `terraform apply`.
+The APIs will have been enabled from the first apply and available for the
+second apply.
+
 To delete the provisioned resources:
 ```shell
 terraform destroy

@@ -42,6 +42,9 @@ data "google_project" "project" {
 }
 
 data "google_compute_default_service_account" "default" {
+  depends_on = [
+    google_project_service.services["compute.googleapis.com"]
+  ]
 }
 
 resource "google_project_iam_member" "gce-default-sa-iam" {

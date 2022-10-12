@@ -319,6 +319,6 @@ func TestNamespaceKubeSystemCanBeManaged(t *testing.T) {
 
 func TestNamespaceKubePublicCanBeManaged(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	manageNamespace(nt, "kube-system")
+	manageNamespace(nt, "kube-public")
 	unmanageNamespace(nt, "kube-public")
 }

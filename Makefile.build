@@ -48,59 +48,59 @@ build-cli: pull-buildenv buildenv-dirs
 		--version $(VERSION) \
 		$(PLATFORMS)
 
-# Creates a docker image for the specified nomos component.
-image-nomos: license
+# Build Config Sync docker images
+build-images: license
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	@echo "+++ Building the nomos image"
+	@echo "+++ Building the nomos image: $(NOMOS_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(NOMOS_IMAGE) \
 		-t $(NOMOS_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Reconciler image"
+	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \
 		-t $(RECONCILER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Reconciler Manager image"
+	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_MANAGER_IMAGE) \
 		-t $(RECONCILER_MANAGER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Admission Webhook image"
+	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(ADMISSION_WEBHOOK_IMAGE) \
 		-t $(ADMISSION_WEBHOOK_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Hydration Controller image"
+	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Hydration Controller image with shell"
+	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the OCI-sync image"
+	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(OCI_SYNC_IMAGE) \
 		-t $(OCI_SYNC_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
-	@echo "+++ Building the Helm-sync image"
+	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(HELM_SYNC_IMAGE) \
 		-t $(HELM_SYNC_TAG) \
@@ -108,8 +108,12 @@ image-nomos: license
 		--build-arg VERSION=${VERSION} \
 		.
 
-# Pushes the specified component's docker image to gcr.io.
-push-to-gcr-nomos:
+# Deprecated alias of build-images. Remove this once unused.
+.PHONY: image-nomos
+image-nomos: build-images
+
+# Pushes Config Sync docker images to REGISTRY.
+push-images:
 	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
 	@echo "+++ Using account:"
 	gcloud config get-value account
@@ -123,9 +127,13 @@ push-to-gcr-nomos:
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
 
+# Deprecated alias of push-images. Remove this once unused.
+.PHONY: push-to-gcr-nomos
+push-to-gcr-nomos: push-images
+
 # Pulls all Config Sync images from REGISTRY
-.PHONY: pull-config-sync-images
-pull-config-sync-images:
+.PHONY: pull-images
+pull-images:
 	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
 	docker pull $(NOMOS_TAG)
 	docker pull $(RECONCILER_TAG)
@@ -135,6 +143,9 @@ pull-config-sync-images:
 	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker pull $(OCI_SYNC_TAG)
 	docker pull $(HELM_SYNC_TAG)
+
+# Deprecated alias of pull-images. Remove this once unused.
+pull-config-sync-images: pull-images
 
 # Retags previously built Config Sync images
 .PHONY: retag-images
@@ -228,12 +239,12 @@ $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
 	@sed -e 's|IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|' < $< > $@
 
 ###################################
-# nomos-manifest
+# Config Sync manifest
 ###################################
 
-# Copy the subset of Config Sync multirepo/OSS manifests from previously constructed ACM manifests
-.PHONY: __config-sync-manifest-oss
-__config-sync-manifest-oss: __config-sync-manifest
+# Build Config Sync manifests for ACM operator and OSS.
+.PHONY: build-manifests
+build-manifests: __config-sync-manifest
 	@echo "+++ Copying manifests for OSS deployments"
 	rm -rf $(OUTPUT_DIR)/oss/cloned
 	mkdir -p $(OUTPUT_DIR)/oss/cloned
@@ -262,6 +273,10 @@ __config-sync-manifest-oss: __config-sync-manifest
 	rsync \
 		.output/manifests/acm-psp.yaml ${OSS_MANIFEST_STAGING_DIR}/acm-psp.yaml
 
+# Deprecated alias of build-manifests. Remove this once unused.
+.PHONY: __config-sync-manifest-oss
+__config-sync-manifest-oss: build-manifests
+
 # __config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
 .PHONY: __config-sync-manifest
 __config-sync-manifest: generate-deployments
@@ -277,12 +292,12 @@ __config-sync-manifest: generate-deployments
 
 # config-sync-manifest-no-push creates the config-sync-manifest.yaml and builds images without pushing
 .PHONY: config-sync-manifest-no-push
-config-sync-manifest-no-push: $(OUTPUT_DIR) image-nomos __config-sync-manifest-oss
+config-sync-manifest-no-push: $(OUTPUT_DIR) build-images build-manifests
 
 # config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
 # and retags images without publishing
 .PHONY: config-sync-manifest-promote-no-push
-config-sync-manifest-promote-no-push: $(OUTPUT_DIR) retag-rc-images __config-sync-manifest-oss
+config-sync-manifest-promote-no-push: $(OUTPUT_DIR) retag-rc-images build-manifests
 
 # config-sync-manifest-e2e adds additional resources that are necessary for the e2e tests
 .PHONY: config-sync-manifest-e2e
@@ -299,12 +314,12 @@ config-sync-manifest-e2e: config-sync-manifest
 
 # config-sync-manifest creates config sync manifest and pushes its docker images
 .PHONY: config-sync-manifest
-config-sync-manifest: config-sync-manifest-no-push push-to-gcr-nomos
+config-sync-manifest: config-sync-manifest-no-push push-images
 
 # config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
 # and pushes the promoted images
 .PHONY: config-sync-manifest-promote
-config-sync-manifest-promote: config-sync-manifest-promote-no-push push-to-gcr-nomos
+config-sync-manifest-promote: config-sync-manifest-promote-no-push push-images
 
 ###################################
 # E2E Git Server

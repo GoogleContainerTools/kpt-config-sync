@@ -34,7 +34,7 @@ const timeout = time.Second * 15
 // GetSyncedCRDs returns the CRDs synced to the cluster in the current context.
 //
 // Times out after 15 seconds.
-func GetSyncedCRDs(ctx context.Context, skipAPIServer bool) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+func GetSyncedCRDs(ctx context.Context, skipAPIServer bool, apiServerTimeout time.Duration) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
 	if skipAPIServer {
 		return nil, nil
 	}
@@ -42,7 +42,7 @@ func GetSyncedCRDs(ctx context.Context, skipAPIServer bool) ([]*v1beta1.CustomRe
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	config, err := restconfig.MonoRepoRestClient(restconfig.DefaultTimeout)
+	config, err := restconfig.MonoRepoRestClient(apiServerTimeout)
 	if err != nil {
 		return nil, getSyncedCRDsError(err, "failed to create rest config")
 	}

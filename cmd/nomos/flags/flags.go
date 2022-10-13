@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 )
@@ -74,6 +75,9 @@ var (
 
 	// ClientTimeout is a flag value to specify how long to wait before timeout of client connection.
 	ClientTimeout time.Duration
+
+	// APIServerTimeout specifies the timeout for requests to the cluster API servers
+	APIServerTimeout = restconfig.DefaultTimeout
 )
 
 // AddContexts adds the --contexts flag.
@@ -116,4 +120,9 @@ func AddSourceFormat(cmd *cobra.Command) {
 func AddOutputFormat(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&OutputFormat, "format", "yaml",
 		`Output format. Accepts 'yaml' and 'json'.`)
+}
+
+// AddAPIServerTimeout adds the --api-server-timeout flag
+func AddAPIServerTimeout(cmd *cobra.Command) {
+	cmd.Flags().DurationVar(&APIServerTimeout, "api-server-timeout", restconfig.DefaultTimeout, fmt.Sprintf("Client-side timeout for talking to the API server; defaults to %s", restconfig.DefaultTimeout))
 }

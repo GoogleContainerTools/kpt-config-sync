@@ -34,6 +34,7 @@ func init() {
 	flags.AddSkipAPIServerCheck(Cmd)
 	flags.AddSourceFormat(Cmd)
 	flags.AddOutputFormat(Cmd)
+	flags.AddAPIServerTimeout(Cmd)
 	Cmd.Flags().StringVar(&namespaceValue, "namespace", "",
 		fmt.Sprintf(
 			"If set, validate the repository as a Namespace Repo with the provided name. Automatically sets --source-format=%s",
@@ -63,6 +64,6 @@ returns a non-zero error code if any issues are found.
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		return runVet(cmd.Context(), namespaceValue, filesystem.SourceFormat(flags.SourceFormat))
+		return runVet(cmd.Context(), namespaceValue, filesystem.SourceFormat(flags.SourceFormat), flags.APIServerTimeout)
 	},
 }

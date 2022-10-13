@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
@@ -281,9 +282,9 @@ func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute
 }
 
 // ValidateOptions returns the validate options for nomos hydrate and vet commands.
-func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute) (validate.Options, error) {
+func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTimeout time.Duration) (validate.Options, error) {
 	var options = validate.Options{}
-	syncedCRDs, err := nomosparse.GetSyncedCRDs(ctx, flags.SkipAPIServer)
+	syncedCRDs, err := nomosparse.GetSyncedCRDs(ctx, flags.SkipAPIServer, apiServerTimeout)
 	if err != nil {
 		return options, err
 	}
@@ -291,7 +292,7 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute) (validate.Opt
 	var serverResourcer discovery.ServerResourcer = discovery.NoOpServerResourcer{}
 	var converter *declared.ValueConverter
 	if !flags.SkipAPIServer {
-		cfg, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+		cfg, err := restconfig.NewRestConfig(apiServerTimeout)
 		if err != nil {
 			return options, fmt.Errorf("failed to create rest config: %w", err)
 		}

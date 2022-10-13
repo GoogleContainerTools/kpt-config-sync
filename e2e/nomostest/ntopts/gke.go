@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -26,7 +27,7 @@ import (
 )
 
 // GKECluster tells the test to use the GKE cluster pointed to by the config flags.
-func GKECluster(t testing.NTB) Opt {
+func GKECluster(t testing.NTB, apiServerTimeout time.Duration) Opt {
 	return func(opt *New) {
 		t.Helper()
 
@@ -43,7 +44,7 @@ func GKECluster(t testing.NTB) Opt {
 		}
 
 		forceAuthRefresh(t)
-		restConfig, err := restconfig.NewRestConfig(restconfig.DefaultTimeout)
+		restConfig, err := restconfig.NewRestConfig(apiServerTimeout)
 		if err != nil {
 			t.Fatal(err)
 		}

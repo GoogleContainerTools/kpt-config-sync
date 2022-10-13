@@ -55,7 +55,9 @@ GEN_DEPLOYMENT_DIR := $(OUTPUT_DIR)/deployment
 TEST_GEN_YAML_DIR := $(OUTPUT_DIR)/test/yaml
 
 # Use git tags to set version string.
-VERSION = $(shell git describe --tags --always --dirty)
+ifeq ($(origin VERSION), undefined)
+VERSION := $(shell git describe --tags --always --dirty)
+endif
 
 # UID of current user
 UID := $(shell id -u)
@@ -64,15 +66,13 @@ UID := $(shell id -u)
 GID := $(shell id -g)
 
 # GCP project that owns container registry for local dev build.
-GCP_PROJECT ?= stolos-dev
+ifeq ($(origin GCP_PROJECT), undefined)
+GCP_PROJECT := $(shell gcloud config get-value project)
+endif
 
-# Prefix at which to store images in GCR. For using dev-local builds, the
-# operator requires that the prefix of the image be unique to the build,
-# and pulling of new versions is forced by setting a timestamp (DATE) in the
-# image path.
 # Use BUILD_ID as a unique identifier for prow jobs, otherwise default to USER
 BUILD_ID ?= $(USER)
-GCR_PREFIX ?= $(GCP_PROJECT)/$(BUILD_ID)/$(DATE)
+GCR_PREFIX ?= $(GCP_PROJECT)/$(BUILD_ID)
 
 # Allow arbitrary registry name, but default to GCR with prefix if not provided
 REGISTRY ?= gcr.io/$(GCR_PREFIX)
@@ -118,9 +118,9 @@ DOCKER_BUILD_QUIET ?= --quiet
 GCLOUD_QUIET := --quiet
 
 # Developer focused docker image tag.
-DATE := $(shell date +'%s')
-LATEST_IMAGE_TAG ?= $(shell ./scripts/get-docker-tag.sh)
-IMAGE_TAG ?= $(LATEST_IMAGE_TAG)
+ifeq ($(origin IMAGE_TAG), undefined)
+IMAGE_TAG := $(shell git describe --tags --always --dirty --long)
+endif
 # Tag used for retagging previously built images
 OLD_IMAGE_TAG ?= $(IMAGE_TAG)
 

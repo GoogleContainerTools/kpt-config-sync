@@ -12,21 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The directory for artifacts for the OSS build of Config Sync.
-OSS_DIR := $(OUTPUT_DIR)/oss
-
-# The directory for manifests for the OSS build of Config Sync.
-OSS_MANIFEST_DIR := $(OUTPUT_DIR)/oss/manifests
-
-$(OSS_MANIFEST_DIR): $(OUTPUT_DIR)
-	@echo "+++ Creating the local output dir for manifests: $(OSS_MANIFEST_DIR)"
-	@mkdir -p \
-		$(OSS_MANIFEST_DIR)
-
-.PHONY: build-oss
-build-oss: $(OSS_MANIFEST_DIR) pull-buildenv
-	MANIFEST_DIR=$(OSS_MANIFEST_DIR) ./scripts/build-oss.sh
-
 .PHONY: run-oss
-run-oss: build-oss
-	kubectl apply -f $(OSS_MANIFEST_DIR)
+run-oss: config-sync-manifest
+	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml

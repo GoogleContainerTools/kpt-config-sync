@@ -34,6 +34,7 @@ import (
 	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -97,7 +98,7 @@ func RestConfig(t testing.NTB, optsStruct *ntopts.New) {
 	case e2e.Kind:
 		ntopts.Kind(t, *e2e.KubernetesVersion)(optsStruct)
 	case e2e.GKE:
-		ntopts.GKECluster(t)(optsStruct)
+		ntopts.GKECluster(t, restconfig.DefaultTimeout)(optsStruct)
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}

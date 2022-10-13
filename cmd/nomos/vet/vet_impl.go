@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/cmd/nomos/flags"
@@ -47,7 +48,7 @@ import (
 // allClusters is whether we are implicitly vetting every cluster.
 // clusters is the set of clusters we are checking.
 //   Only used if allClusters is false.
-func runVet(ctx context.Context, namespace string, sourceFormat filesystem.SourceFormat) error {
+func runVet(ctx context.Context, namespace string, sourceFormat filesystem.SourceFormat, apiServerTimeout time.Duration) error {
 	if sourceFormat == "" {
 		if namespace == "" {
 			// Default to hierarchical if --namespace is not provided.
@@ -81,7 +82,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 
 	parser := filesystem.NewParser(&reader.File{})
 
-	options, err := hydrate.ValidateOptions(ctx, rootDir)
+	options, err := hydrate.ValidateOptions(ctx, rootDir, apiServerTimeout)
 	if err != nil {
 		return err
 	}

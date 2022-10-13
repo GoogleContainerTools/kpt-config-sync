@@ -41,6 +41,7 @@ func init() {
 	flags.AddSkipAPIServerCheck(Cmd)
 	flags.AddSourceFormat(Cmd)
 	flags.AddOutputFormat(Cmd)
+	flags.AddAPIServerTimeout(Cmd)
 	Cmd.Flags().BoolVar(&flat, "flat", false,
 		`If enabled, print all output to a single file`)
 	Cmd.Flags().StringVar(&outPath, "output", flags.DefaultHydrationOutput,
@@ -97,7 +98,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 
 		parser := filesystem.NewParser(&reader.File{})
 
-		options, err := hydrate.ValidateOptions(cmd.Context(), rootDir)
+		options, err := hydrate.ValidateOptions(cmd.Context(), rootDir, flags.APIServerTimeout)
 		if err != nil {
 			return err
 		}

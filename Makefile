@@ -15,7 +15,7 @@
 # limitations under the License.
 
 ######################################################################
-
+# Small change
 ##### CONFIG #####
 
 REPO := kpt.dev/configsync

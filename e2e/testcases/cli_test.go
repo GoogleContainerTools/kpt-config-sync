@@ -15,16 +15,23 @@
 package e2e
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
+	"io/fs"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -36,6 +43,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -832,4 +840,207 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
+	var bugReportZipName, bugReportDirName string
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	err := nt.SetKubeConfigEnv(true)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Cleanup(func() {
+		err := nt.SetKubeConfigEnv(false)
+		if err != nil {
+			nt.T.Fatal("failed to unset KUBECONFIG env var after test is done")
+		}
+	})
+
+	// get bugreport
+	cmd := exec.Command("nomos", "bugreport")
+	cmd.Dir = nt.TmpDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	// locate zip file
+	bugReportZipName, err = getBugReportZipName(nt.TmpDir, nt)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// unzip
+	bugReportDirName = strings.TrimSuffix(bugReportZipName, filepath.Ext(bugReportZipName))
+	err = unzip(nt.TmpDir, bugReportZipName)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log(fmt.Sprintf("unzipped bugreport to %s", bugReportDirName))
+
+	// get current cluster context
+	out, err = exec.Command("kubectl", "config", "current-context").CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+	context := strings.TrimSpace(string(out))
+	files := glob(bugReportDirName, func(s string) bool {
+		return filepath.Ext(s) == ".txt"
+	})
+
+	generalBugReportFiles := []string{"version.txt", "status.txt"}
+
+	multiRepoBugReportFiles := []string{
+		"cluster/configmanagement/clusterselectors.txt",
+		"cluster/configmanagement/clusterselectors_yaml.txt",
+		"cluster/configmanagement/namespaceselectors.txt",
+		"cluster/configmanagement/namespaceselectors_yaml.txt",
+		"cluster/configmanagement/config-sync-validating-webhhook-configuration.txt",
+		"cluster/configmanagement/config-sync-validating-webhhook-configuration_yaml.txt",
+		"namespaces/kube-system/pods.txt",
+		"namespaces/kube-system/pods_yaml.txt",
+		"namespaces/config-management-system/pods.txt",
+		"namespaces/config-management-system/pods_yaml.txt",
+		"namespaces/config-management-system/ConfigMaps.txt",
+		"namespaces/config-management-system/ConfigMaps_yaml.txt",
+		"namespaces/config-management-system/ResourceGroup-root-sync.txt",
+		"namespaces/config-management-system/ResourceGroup-root-sync_yaml.txt",
+		"namespaces/config-management-system/RootSync-root-sync.txt",
+		"namespaces/config-management-system/RootSync-root-sync_yaml.txt",
+		"namespaces/config-management-system/root-reconciler.*/git-sync.txt",
+		"namespaces/config-management-system/root-reconciler.*/hydration-controller.txt",
+		"namespaces/config-management-system/root-reconciler.*/otel-agent.txt",
+		"namespaces/config-management-system/root-reconciler.*/reconciler.txt",
+		"namespaces/config-management-monitoring/pods.txt",
+		"namespaces/config-management-monitoring/pods_yaml.txt",
+		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.txt",
+		"namespaces/gatekeeper-system/pods.txt",
+		"namespaces/gatekeeper-system/pods_yaml.txt",
+		"namespaces/resource-group-system/pods.txt",
+		"namespaces/resource-group-system/pods_yaml.txt",
+	}
+
+	monoRepoBugReportFiles := []string{
+		"namespaces/config-management-system/git-importer.*/git-sync.txt",
+		"namespaces/config-management-system/git-importer.*/importer.txt",
+		"namespaces/config-management-system/monitor.*/monitor.txt",
+		"namespaces/config-management-system/pods.txt",
+		"namespaces/kube-system/pods.txt",
+		"cluster/configmanagement/clusterconfigs.txt",
+		"cluster/configmanagement/namespaceconfigs.txt",
+		"cluster/configmanagement/repos.txt",
+		"cluster/configmanagement/syncs.txt",
+	}
+
+	// check expected files exist in folder
+	var errs status.MultiError
+	errs = checkFileExists(fmt.Sprintf("%s/processed/%s", bugReportDirName, context), generalBugReportFiles, files)
+	if nt.MultiRepo {
+		errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), multiRepoBugReportFiles, files))
+	} else {
+		errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), monoRepoBugReportFiles, files))
+	}
+	if errs != nil {
+		nt.T.Fatal(fmt.Sprintf("did not find all expected files in bug report zip file: %v", errs))
+	}
+	nt.T.Log("Found all expected files in bugreport zip")
+}
+
+// getBugReportZipName find and returns the zip name of bugreport under test dir
+// or error if no bugreport zip found
+func getBugReportZipName(dir string, nt *nomostest.NT) (string, error) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	for _, file := range files {
+		bugReportRegex, _ := regexp.Compile("bug_report_.*.zip")
+		if bugReportRegex.MatchString(file.Name()) {
+			nt.T.Logf("found zip file %s", file.Name())
+			return fmt.Sprintf("%s/%s", dir, file.Name()), nil
+		}
+	}
+	return "", fmt.Errorf("could not find bugreport zip file in test directory")
+}
+
+// unzip all files in bugreport zip to its dir
+func unzip(dir, zipName string) error {
+	archive, err := zip.OpenReader(zipName)
+	if err != nil {
+		return err
+	}
+	defer func(archive *zip.ReadCloser) {
+		err := archive.Close()
+		if err != nil {
+			klog.Fatal(err)
+		}
+	}(archive)
+
+	for _, f := range archive.File {
+		klog.Infof(fmt.Sprintf("processing and unzipping %s", f.Name))
+		filePath := path.Join(dir, f.Name)
+		if f.FileInfo().IsDir() {
+			fmt.Println("creating directory...")
+			if err := os.MkdirAll(filePath, os.ModePerm); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+			return err
+		}
+
+		dstFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		fileInArchive, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(dstFile, fileInArchive); err != nil {
+			return err
+		}
+
+		_ = dstFile.Close()
+		_ = fileInArchive.Close()
+	}
+	return nil
+}
+
+// glob find and return all files matching given pattern
+func glob(dir string, fn func(string) bool) []string {
+	var files []string
+	_ = filepath.WalkDir(dir, func(s string, d fs.DirEntry, e error) error {
+		if fn(s) {
+			files = append(files, s)
+		}
+		return nil
+	})
+	return files
+}
+
+// checkFileExists check if all files in targetFiles with path prefix can be found in allFiles
+func checkFileExists(prefix string, targetFiles, allFiles []string) status.MultiError {
+	var err status.MultiError
+	for _, targetFile := range targetFiles {
+		found := false
+		for _, file := range allFiles {
+			if match, _ := regexp.MatchString(fmt.Sprintf("%s/%s", prefix, targetFile), file); match {
+				found = true
+				break
+			}
+		}
+		if !found {
+			err = status.Append(err, fmt.Errorf("file not found %s", targetFile))
+		}
+	}
+	return err
 }

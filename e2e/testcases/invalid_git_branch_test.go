@@ -22,7 +22,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -30,7 +29,18 @@ import (
 
 func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
-	nt.T.Cleanup(resetToMain(nt))
+	nt.T.Cleanup(func() {
+		// Cleanup to Reset RootSync back to main.
+		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+		nt.WaitForRepoSyncs()
+
+		err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+			return nt.ValidateErrorMetricsNotFound()
+		})
+		if err != nil {
+			nt.T.Error(err)
+		}
+	})
 
 	// Update RootSync to invalid branch name
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, "invalid-branch")
@@ -44,47 +54,10 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	if err != nil {
 		nt.T.Error(err)
 	}
-
-	// Update RootSync to valid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
-
-	nt.WaitForRepoSyncs()
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
 }
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
-	nt.T.Cleanup(func() {
-		nt.T.Log("Resetting all R*Sync branches to main")
-		nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
-
-		// Ensure RepoSync is switched back to main branch locally.
-		nt.T.Log("Switching to main for locally checked out RepoSync")
-		nt.NonRootRepos[nn].CheckoutBranch(nomostest.MainBranch)
-
-		// Ensure RepoSync is reset to main branch in the RootSync.
-		nt.T.Log("Switching to main for local RepoSync object")
-		obj := nt.RootRepos[configsync.RootSyncName].Get(nomostest.StructuredNSPath(namespaceRepo, configsync.RepoSyncName))
-		rs, ok := obj.(*v1beta1.RepoSync)
-		if !ok {
-			nt.T.Fatal("unable to cast commited RepoSync object")
-		}
-
-		if rs.Spec.Branch == nomostest.MainBranch {
-			return
-		}
-		rs.Spec.Branch = nomostest.MainBranch
-		nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, configsync.RepoSyncName), rs)
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset RepoSync to main branch")
-		nt.WaitForRepoSyncs()
-	})
-
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Branch = "invalid-branch"
@@ -133,7 +106,12 @@ func TestInvalidMonoRepoBranchStatus(t *testing.T) {
 
 func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	nt.T.Cleanup(resetToMain(nt))
+	nt.T.Cleanup(func() {
+		nt.T.Log("Resetting all RootSync branches to main")
+		nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
+		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+		nt.WaitForRepoSyncs()
+	})
 
 	// Add audit namespace.
 	auditNS := "audit"
@@ -167,15 +145,4 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	// Change the remote branch name back to the original name.
 	nt.RootRepos[configsync.RootSyncName].RenameBranch("invalid-branch", devBranch)
 	nt.WaitForRepoSyncs()
-}
-
-// resetToMain is a cleanup closure function that will reset the RootSync because
-// the cleanup stage will check if RootSync is synced from the main branch. We need
-// to locally checkout the main branch, AND update the RootSync.
-func resetToMain(nt *nomostest.NT) func() {
-	return func() {
-		nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
-		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
-		nt.WaitForRepoSyncs()
-	}
 }

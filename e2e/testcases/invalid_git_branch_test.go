@@ -29,18 +29,6 @@ import (
 
 func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
-	nt.T.Cleanup(func() {
-		// Cleanup to Reset RootSync back to main.
-		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
-		nt.WaitForRepoSyncs()
-
-		err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateErrorMetricsNotFound()
-		})
-		if err != nil {
-			nt.T.Error(err)
-		}
-	})
 
 	// Update RootSync to invalid branch name
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, "invalid-branch")
@@ -50,6 +38,18 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
+	})
+	if err != nil {
+		nt.T.Error(err)
+	}
+
+	// Update RootSync to valid branch name
+	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+
+	nt.WaitForRepoSyncs()
+
+	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
+		return nt.ValidateErrorMetricsNotFound()
 	})
 	if err != nil {
 		nt.T.Error(err)

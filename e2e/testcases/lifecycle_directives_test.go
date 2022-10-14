@@ -136,7 +136,8 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{})
+	// ensure that the Role is created with the preventDeletion annotation
+	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

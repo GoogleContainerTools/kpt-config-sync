@@ -58,7 +58,6 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
-
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Branch = "invalid-branch"
@@ -107,6 +106,12 @@ func TestInvalidMonoRepoBranchStatus(t *testing.T) {
 
 func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
+	nt.T.Cleanup(func() {
+		nt.T.Log("Resetting all RootSync branches to main")
+		nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
+		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+		nt.WaitForRepoSyncs()
+	})
 
 	// Add audit namespace.
 	auditNS := "audit"

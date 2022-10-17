@@ -27,8 +27,7 @@ import (
 )
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
-	// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
 	crdName := "k8sallowedrepos.constraints.gatekeeper.sh"
 	nt.T.Logf("Delete the %q CRD if needed", crdName)

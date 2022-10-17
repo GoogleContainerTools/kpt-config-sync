@@ -72,7 +72,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "foo-corp"}))
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "hierarchical-format/config"}))
 }
 
 func hasReadyReplicas(replicas int32) nomostest.Predicate {

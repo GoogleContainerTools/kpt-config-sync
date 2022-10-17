@@ -20,9 +20,9 @@ metadata:
 spec:
   sourceFormat: "hierarchy"
   git:
-    repo: https://github.com/GoogleCloudPlatform/csp-config-management/
-    branch: 1.0.0
-    dir: "foo-corp"
+    repo: https://github.com/GoogleCloudPlatform/anthos-config-management-samples
+    branch: main
+    dir: "hierarchical-format/config"
     auth: ssh
     secretRef:
       name: root-ssh-key

@@ -65,6 +65,12 @@ var (
 // TestPublicOCI can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public OCI images without any authentication.
 func TestPublicOCI(t *testing.T) {
+	// TODO: remove the overwrite once the OSS project has public access
+	publicProject := "stolos-dev"
+	if nomostesting.GCPProjectIDFromEnv != publicProject {
+		publicGCRImage = fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components", publicProject)
+		publicARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/kustomize-components", publicProject)
+	}
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured)
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
@@ -314,6 +320,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	repoSync := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
 	repoSync.Spec.SourceType = string(v1beta1.OciSource)
 	imageURL := fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", nomostesting.GCPProjectIDFromEnv)
+	// TODO: remove the overwrite once the OSS project has public access
+	publicProject := "stolos-dev"
+	if nomostesting.GCPProjectIDFromEnv != publicProject {
+		imageURL = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", publicProject)
+	}
 	repoSync.Spec.Oci = &v1beta1.Oci{
 		Image: imageURL,
 		Auth:  configsync.AuthNone,

@@ -479,11 +479,16 @@ func TestLargeCRD(t *testing.T) {
 	nt.WaitForRepoSyncs()
 	nt.RenewClient()
 
-	err := nt.Validate("challenges.acme.cert-manager.io", "", fake.CustomResourceDefinitionV1Object())
+	_, err := nomostest.Retry(30*time.Second, func() error {
+		return nt.Validate("challenges.acme.cert-manager.io", "", fake.CustomResourceDefinitionV1Object())
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("solrclouds.solr.apache.org", "", fake.CustomResourceDefinitionV1Object())
+
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		return nt.Validate("solrclouds.solr.apache.org", "", fake.CustomResourceDefinitionV1Object())
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

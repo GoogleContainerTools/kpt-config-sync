@@ -30,6 +30,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	// TODO enable the test on autopilot clusters when GKE 1.21.3-gke.900 reaches regular/stable.
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
 
+	crdName := "k8sallowedrepos.constraints.gatekeeper.sh"
+	nt.T.Logf("Delete the %q CRD if needed", crdName)
+	nt.MustKubectl("delete", "crd", crdName, "--ignore-not-found")
+
 	// Simulate install of Gatekeeper with just the ConstraintTemplate CRD
 	if err := nt.ApplyGatekeeperCRD("constraint-template-crd.yaml", "constrainttemplates.templates.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create ConstraintTemplate CRD: %v", err)

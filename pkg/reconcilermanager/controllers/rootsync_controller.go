@@ -77,7 +77,7 @@ type RootSyncReconciler struct {
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
-func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, log logr.Logger, scheme *runtime.Scheme, allowVerticalScale bool) *RootSyncReconciler {
+func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
 	return &RootSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			clusterName:             clusterName,
@@ -87,7 +87,6 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 			syncKind:                configsync.RootSyncKind,
-			allowVerticalScale:      allowVerticalScale,
 		},
 	}
 }

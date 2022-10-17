@@ -77,9 +77,6 @@ const (
 	// StatusMode is to control if the kpt applier needs to inject the actuation data
 	// into the ResourceGroup object.
 	StatusMode = "STATUS_MODE"
-
-	// AllowVerticalScale indicates that resources will be managed by VPA
-	AllowVerticalScale = "ALLOW_VERTICAL_SCALE"
 )
 
 const (

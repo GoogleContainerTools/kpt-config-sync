@@ -76,7 +76,6 @@ type reconcilerBase struct {
 	reconcilerPollingPeriod time.Duration
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
-	allowVerticalScale      bool
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string
@@ -209,15 +208,12 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		r.isAutopilotCluster = &isAutopilot
 	}
 
-	adjusted, err := adjustContainerResources(r.allowVerticalScale, *r.isAutopilotCluster, declared, current)
+	adjusted, err := adjustContainerResources(*r.isAutopilotCluster, declared, current)
 	if err != nil {
 		return controllerutil.OperationResultNone, err
 	}
 	if adjusted {
-		mutator := "VPA"
-		if !r.allowVerticalScale {
-			mutator = "Autopilot"
-		}
+		mutator := "Autopilot"
 		r.log.V(3).Info("Managed object container resources updated",
 			logFieldObject, dRef.String(),
 			logFieldKind, kind,
@@ -254,24 +250,16 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 
 // adjustContainerResources adjusts the resources of all containers in the declared Deployment.
 // It returns a boolean to indicate if the declared Deployment is updated or not.
-// This function aims to address the fight among Autopilot, VPA and the reconciler since they all update the resources.
+// This function aims to address the fight among Autopilot and the reconciler since they all update the resources.
 // Below is the resolution:
-// 1. If --allow-vertical-scale flag is enabled (no matter if it is a standard cluster or an Autopilot cluster),
-//	use the current resources and ignore the override defined in the declared Deployment
-//	because VPA will scale up and down automatically.
 //
-// 2. If --allow-vertical-scale flag is not enabled, and the cluster is a standard cluster, the controller
-//	will adjust the declared resources by applying the resource override.
+//  1. If  the cluster is a standard cluster, the controller
+//     will adjust the declared resources by applying the resource override.
 //
-// 3. If --allow-vertical-scale flag is not enabled, and it is an Autopilot cluster, the controller will
-//	honor the resource override, but update the declared resources to be compliant
-//	with the Autopilot resource range constraints.
-func adjustContainerResources(allowVerticalScale, isAutopilot bool, declared, current *appsv1.Deployment) (bool, error) {
-	// If --allow-vertical-scale flag is enabled, use the current resources because VPA takes full control of them.
-	if allowVerticalScale {
-		return keepCurrentContainerResources(declared, current), nil
-	}
-
+//  2. If it is an Autopilot cluster, the controller will
+//     honor the resource override, but update the declared resources to be compliant
+//     with the Autopilot resource range constraints.
+func adjustContainerResources(isAutopilot bool, declared, current *appsv1.Deployment) (bool, error) {
 	// If it is NOT an Autopilot cluster, use the declared Deployment without adjustment.
 	if !isAutopilot {
 		return false, nil

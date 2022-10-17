@@ -121,7 +121,6 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("RootSync"),
 		fakeClient.Scheme(),
-		allowVerticalScale,
 	)
 	return fakeClient, testReconciler
 }
@@ -2476,71 +2475,6 @@ func validateRootSyncStatus(want *v1beta1.RootSync, fakeClient *syncerFake.Clien
 		return fmt.Errorf("rootsync diff %s", diff)
 	}
 	return nil
-}
-
-func TestUpdateRootReconcilerWithAllowVerticalScale(t *testing.T) {
-	// Mock out parseDeployment for testing.
-	parseDeployment = parsedDeployment
-
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
-	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	allowVerticalScale = true
-	fakeClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
-
-	// Test creating Deployment resources.
-	ctx := context.Background()
-	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
-		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
-	}
-
-	rootDeployment := rootSyncDeployment(rootReconcilerName,
-		setServiceAccountName(rootReconcilerName),
-	)
-
-	updatedCPU := "249m"
-	updatedMemory := "259Mi"
-	deploymentCoreObject := fakeClient.Objects[core.IDOf(rootDeployment)]
-	updatedDeployment := deploymentCoreObject.(*appsv1.Deployment)
-	containerName := updatedDeployment.Spec.Template.Spec.Containers[0].Name
-	var updatedReplica int32 = 20
-	*updatedDeployment.Spec.Replicas = updatedReplica
-	// mock VPA behavior of changing deployment resources
-	updatedDeployment.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse(updatedCPU),
-		corev1.ResourceMemory: resource.MustParse(updatedMemory),
-	}
-
-	if err := fakeClient.Update(ctx, updatedDeployment); err != nil {
-		t.Fatalf("failed to update the deployment request, got error: %v, want error: nil", err)
-	}
-
-	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
-		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
-	}
-
-	// when allow vertical scale is enabled, original deployment resource should not be updated
-	// other updated deployment should be reverted
-	expectedResource := []v1beta1.ContainerResourcesSpec{
-		{
-			ContainerName: containerName,
-			CPURequest:    resource.MustParse(updatedCPU),
-			MemoryRequest: resource.MustParse(updatedMemory),
-		},
-	}
-
-	rootContainerEnvs2 := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
-	rootDeployment2 := rootSyncDeployment(rootReconcilerName,
-		setServiceAccountName(rootReconcilerName),
-		secretMutator(rootsyncSSHKey),
-		containerResourcesMutator(expectedResource),
-		containerEnvMutator(rootContainerEnvs2),
-	)
-
-	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment2): rootDeployment2}
-	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
-		t.Errorf("Deployment validation failed. err: %v", err)
-	}
-	allowVerticalScale = false
 }
 
 type depMutator func(*appsv1.Deployment)

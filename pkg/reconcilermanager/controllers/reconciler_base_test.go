@@ -212,7 +212,6 @@ func TestAdjustContainerResources(t *testing.T) {
 
 	testCases := []struct {
 		name                       string
-		vpaEnabled                 bool
 		isAutopilot                bool
 		declaredContainerResources map[string]corev1.ResourceRequirements
 		currentContainerResources  map[string]corev1.ResourceRequirements
@@ -221,8 +220,7 @@ func TestAdjustContainerResources(t *testing.T) {
 		expectedDeclaredDeployment *appsv1.Deployment
 	}{
 		{
-			name:                       "No VPA, No Autopilot, declared is same as current => declared not adjusted, current won't be updated",
-			vpaEnabled:                 false,
+			name:                       "No Autopilot, declared is same as current => declared not adjusted, current won't be updated",
 			isAutopilot:                false,
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
@@ -230,8 +228,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		{
-			name:                       "No VPA, No Autopilot, declared is different from current => declared not adjusted, current will be updated by the controller",
-			vpaEnabled:                 false,
+			name:                       "No Autopilot, declared is different from current => declared not adjusted, current will be updated by the controller",
 			isAutopilot:                false,
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
@@ -239,26 +236,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		{
-			name:                       "VPA is enabled, declared is same as current => declared not adjusted, current won't be updated",
-			vpaEnabled:                 true,
-			isAutopilot:                false,
-			adjusted:                   false,
-			declaredContainerResources: containerResources1,
-			currentContainerResources:  containerResources1,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
-		},
-		{
-			name:                       "VPA is enabled, declared is different from current => declared adjusted to current to avoid discrepancy, current won't be updated",
-			vpaEnabled:                 true,
-			isAutopilot:                false,
-			adjusted:                   true,
-			declaredContainerResources: containerResources1,
-			currentContainerResources:  containerResources2,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources2)),
-		},
-		{
-			name:                       "No VPA, Autopilot enabled, not adjusted by Autopilot yet, declared is same as current => declared not adjusted, current won't be updated",
-			vpaEnabled:                 false,
+			name:                       "Autopilot enabled, not adjusted by Autopilot yet, declared is same as current => declared not adjusted, current won't be updated",
 			isAutopilot:                true,
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
@@ -269,8 +247,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			// The declared resources can be higher or lower than the current.
 			// If the declared resources are compliant with Autopilot constraints, no update.
 			// Otherwise, Autopilot will adjust the resources, which will trigger a reconciliation.
-			name:                       "No VPA, Autopilot enabled, not adjusted by Autopilot yet, declared is different from current => declared not adjusted, current will be updated by the controller",
-			vpaEnabled:                 false,
+			name:                       "Autopilot enabled, not adjusted by Autopilot yet, declared is different from current => declared not adjusted, current will be updated by the controller",
 			isAutopilot:                true,
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
@@ -279,8 +256,7 @@ func TestAdjustContainerResources(t *testing.T) {
 		},
 		// Mimic the case of increasing the resources.
 		{
-			name:                       "No VPA, Autopilot enabled, adjusted by Autopilot, one or more declared resources are higher than adjusted => declared not adjusted, current will be updated by the controller",
-			vpaEnabled:                 false,
+			name:                       "Autopilot enabled, adjusted by Autopilot, one or more declared resources are higher than adjusted => declared not adjusted, current will be updated by the controller",
 			isAutopilot:                true,
 			adjusted:                   false,
 			declaredContainerResources: containerResources2,
@@ -290,8 +266,7 @@ func TestAdjustContainerResources(t *testing.T) {
 		},
 		// Autopilot further increases the resources to meet the constraints, so no more update is needed.
 		{
-			name:                       "No VPA, Autopilot enabled, adjusted by Autopilot, all declared resources are higher than or equal to input, but all are lower than or equal to adjusted => declared adjusted to current to avoid discrepancy, current won't be updated",
-			vpaEnabled:                 false,
+			name:                       "Autopilot enabled, adjusted by Autopilot, all declared resources are higher than or equal to input, but all are lower than or equal to adjusted => declared adjusted to current to avoid discrepancy, current won't be updated",
 			isAutopilot:                true,
 			adjusted:                   true,
 			declaredContainerResources: containerResources4,
@@ -301,8 +276,7 @@ func TestAdjustContainerResources(t *testing.T) {
 		},
 		// Mimic the case of decreasing the resource.
 		{
-			name:                       "No VPA, Autopilot enabled, adjusted by Autopilot, one or more declared resources are lower than input => declared not adjusted, current will be updated by the controller",
-			vpaEnabled:                 false,
+			name:                       "Autopilot enabled, adjusted by Autopilot, one or more declared resources are lower than input => declared not adjusted, current will be updated by the controller",
 			isAutopilot:                true,
 			adjusted:                   false,
 			declaredContainerResources: containerResources7,
@@ -330,7 +304,7 @@ func TestAdjustContainerResources(t *testing.T) {
 				current.Annotations[key] = value
 			}
 
-			got, err := adjustContainerResources(tc.vpaEnabled, tc.isAutopilot, declared, current)
+			got, err := adjustContainerResources(tc.isAutopilot, declared, current)
 			if err != nil {
 				t.Errorf("%s: got unexpected error: %v", tc.name, err)
 			}

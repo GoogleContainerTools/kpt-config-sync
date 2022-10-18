@@ -124,28 +124,28 @@ in Config Sync.
                  - crd_count         <----- Here
        ```
 
-      - To **turn off the custom metrics** in Cloud Monitoring, remove this section
+    - To **turn off the custom metrics** in Cloud Monitoring, remove this section
 
-        > The stackdriver exporter was renamed to googlecloud after otel-collector was upgraded in Config Sync 1.12.0.
+      > The stackdriver exporter was renamed to googlecloud after otel-collector was upgraded in Config Sync 1.12.0.
 
-          ```
-          metrics/cloudmonitoring:
-            receivers: [opencensus]
-            processors: [batch, filter/cloudmonitoring]
-            exporters: [googlecloud]
-          ```
+        ```
+        metrics/cloudmonitoring:
+          receivers: [opencensus]
+          processors: [batch, filter/cloudmonitoring]
+          exporters: [googlecloud]
+        ```
 
     - To **turn off the report to Cloud Monarch**, remove this section
 
-           Note: In Config Sync version prior to 1.12.0, the exporter name was `stackdriver`
-           instead of `googlecloud`. This is not supported when using ACM.
+         > Note: In Config Sync version prior to 1.12.0, the exporter name was `stackdriver`
+         instead of `googlecloud`. This is not supported when using ACM.
 
-           ```
-           metrics/kubernetes:
-             receivers: [opencensus]
-             processors: [batch, filter/kubernetes, metricstransform/kubernetes]
-             exporters: [googlecloud/kubernetes]
-           ```
+         ```
+         metrics/kubernetes:
+           receivers: [opencensus]
+           processors: [batch, filter/kubernetes, metricstransform/kubernetes]
+           exporters: [googlecloud/kubernetes]
+         ```
 
 1. Apply the config map
 

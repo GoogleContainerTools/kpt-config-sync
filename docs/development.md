@@ -19,15 +19,69 @@ cd kpt-config-sync
 ```
 
 ## Run tests
+
+### Unit tests
 Unit tests are small focused test that runs quickly. Run them with:
 ```
 make test
 ```
 
+### E2E tests (kind)
+
 Config Sync also has e2e tests. These run on [kind] and can take a long time
-to finish. Run them with:
+to finish.
+
+#### Prerequisites
+
+Install [kind]
+```shell
+# install the kind version specified in https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/scripts/docker-registry.sh#L50
+go install sigs.k8s.io/kind@v0.14.0
 ```
-make test-e2e-go-ephemeral-multi-repo
+
+- This will put kind in $(go env GOPATH)/bin. This directory will need to be added to $PATH if it isn't already.
+- After upgrading kind, you usually need to delete all your existing kind clusters so that kind functions correctly.
+- Deleting all running kind clusters usually fixes kind issues.
+
+#### Running E2E tests on kind
+
+Run all of the tests (this will take a while):
+```
+make test-e2e-go-multirepo
+```
+
+To execute e2e multi-repo tests locally with kind, build and push the Config Sync
+images to the local kind registry and then execute tests using go test.
+```shell
+make __push-local-images
+go test ./e2e/... --e2e --multirepo --debug --test.v --image-tag=(IMAGE_TAG) --test.run (test name regexp)
+```
+
+### E2E tests (GKE)
+
+Config Sync e2e tests can also target clusters on GKE.
+
+#### Prerequisites
+
+Follow the [instructions to provision a dev environment].
+
+#### Running E2E tests on GKE
+
+To execute e2e multi-repo tests with a GKE cluster, build and push the Config Sync
+images to GCR and then use go test. The images will be pushed to the GCP project
+from you current gcloud context and the tests will execute on the cluster set as the
+current context in your kubeconfig.
+```shell
+# Ensure gcloud context is set to correct project
+gcloud config set project <PROJECT_ID>
+# Ensure kubectl context is set to correct cluster
+kubectl config set-context <CONTEXT>
+# Build images
+make build-images
+# Push images to GCR
+make push-images
+# Run the tests with image prefix/tag from previous step and desired test regex
+go test ./e2e/... --e2e --multirepo --debug --test.v --share-test-env=true --test.parallel=1 --image-prefix=(IMAGE_PREFIX) --image-tag=(IMAGE_TAG) --test-cluster=gke --test.run (test name regexp)
 ```
 
 ## Build
@@ -97,3 +151,4 @@ make run-oss
 [docker]: https://www.docker.com/get-started
 [create your own fork]: https://docs.github.com/en/get-started/quickstart/fork-a-repo
 [kind]: https://kind.sigs.k8s.io/
+[instructions to provision a dev environment]: ../e2e/testinfra/terraform/README.md

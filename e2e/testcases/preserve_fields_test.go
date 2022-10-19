@@ -66,7 +66,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	// Ensure the Service has the target port we set.
-	err := nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort1))
+	_, err := nomostest.Retry(nt.DefaultReconcileTimeout, func() error {
+		return nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort1))
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -134,7 +136,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	// Ensure the Service has the new target port we set.
-	err = nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort2))
+	_, err = nomostest.Retry(nt.DefaultReconcileTimeout, func() error {
+		return nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort2))
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

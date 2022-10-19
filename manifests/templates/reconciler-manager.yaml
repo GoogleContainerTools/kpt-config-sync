@@ -41,7 +41,7 @@ spec:
         - /reconciler-manager
         args:
         - --enable-leader-election
-        image: IMAGE_NAME
+        image: RECONCILER_MANAGER_IMAGE_NAME
         name: reconciler-manager
         securityContext:
           allowPrivilegeEscalation: false

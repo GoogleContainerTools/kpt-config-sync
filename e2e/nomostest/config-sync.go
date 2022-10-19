@@ -351,6 +351,7 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 		case "reconciler-manager.yaml":
 			// For the reconciler manager template, we want the latest image for the reconciler manager.
 			imgName = fmt.Sprintf("%s/reconciler-manager:%s", *e2e.ImagePrefix, *e2e.ImageTag)
+			replaced = strings.ReplaceAll(replaced, "RECONCILER_MANAGER_IMAGE_NAME", imgName)
 		case "reconciler-manager-configmap.yaml":
 			// For the reconciler deployment template, we want the latest image for the reconciler and hydration-controller.
 			reconcilerImgName := fmt.Sprintf("%s/reconciler:%s", *e2e.ImagePrefix, *e2e.ImageTag)
@@ -363,12 +364,10 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 			replaced = strings.ReplaceAll(replaced, "HELM_SYNC_IMAGE_NAME", helmSyncImgName)
 		case "admission-webhook.yaml":
 			imgName = fmt.Sprintf("%s/admission-webhook:%s", *e2e.ImagePrefix, *e2e.ImageTag)
+			replaced = strings.ReplaceAll(replaced, "WEBHOOK_IMAGE_NAME", imgName)
 		default:
 			// For any other template, we want the latest image for the nomos binary (mono-repo).
 			imgName = fmt.Sprintf("%s/nomos:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-		}
-
-		if template != "reconciler-manager-configmap.yaml" {
 			replaced = strings.ReplaceAll(replaced, "IMAGE_NAME", imgName)
 		}
 

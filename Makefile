@@ -264,6 +264,9 @@ lint-license: pull-buildenv buildenv-dirs
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0
 
+"$(GOBIN)/kustomize":
+	go install sigs.k8s.io/kustomize/kustomize/v4@v4.5.7
+
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"
 	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'

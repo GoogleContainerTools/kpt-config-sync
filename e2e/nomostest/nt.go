@@ -243,6 +243,15 @@ func (nt *NT) KubeconfigPath() string {
 	return nt.kubeconfigPath
 }
 
+// SetKubeConfigEnv sets the KUBECONFIG to nt.kubeconfigPath if set is true,
+// otherwise unsets KUBECONFIG environment variable
+func (nt *NT) SetKubeConfigEnv(set bool) error {
+	if set {
+		return os.Setenv("KUBECONFIG", nt.kubeconfigPath)
+	}
+	return os.Unsetenv("KUBECONFIG")
+}
+
 func fmtObj(obj client.Object) string {
 	return fmt.Sprintf("%s/%s %T", obj.GetNamespace(), obj.GetName(), obj)
 }

@@ -174,10 +174,6 @@ func TestBats(t *testing.T) {
 		t.Skip("Skip running bats test on non-local git providers")
 	}
 	e2e.EnableParallel(t)
-	allTests := func(int) bool {
-		return true
-	}
-
 	nomosDir, err := filepath.Abs("../..")
 	if err != nil {
 		tw := nomostesting.New(t, nomostesting.Reconciliation2)
@@ -194,10 +190,10 @@ func TestBats(t *testing.T) {
 		//{fileName: "apiservice.bats"},
 		// Converted to basic_test.go
 		// {fileName: "basic.bats"}
-		{
-			fileName:      "cli.bats",
-			skipMultiRepo: allTests, // TODO: implement nomos status in CLI, this may be a go rewrite
-		},
+		//{
+		//	fileName:      "cli.bats",
+		//	skipMultiRepo: allTests,
+		//},
 		// Converted to cluster_resources_test.go.
 		// {fileName: "cluster_resources.bats"},
 		// Converted to custom_resource_definitions_test.go
@@ -208,7 +204,7 @@ func TestBats(t *testing.T) {
 		// {fileName: "custom_resources_v1.bats"},
 		// Converted to custom_resource_test.go
 		// {fileName: "custom_resources_v1beta1.bats"},
-		{fileName: "foo_corp.bats"},
+		//{fileName: "foo_corp.bats"},
 		// Converted to gatekeeper_test.go
 		//{
 		//	fileName: "gatekeeper.bats",
@@ -235,10 +231,10 @@ func TestBats(t *testing.T) {
 		// {fileName: "per_cluster_addressing.bats"},
 		// Converted to preserve_fields_test.go.
 		// {fileName: "preserve_fields.bats"},
-		{
-			fileName:      "repoless.bats",
-			skipMultiRepo: allTests, // TODO: adjust control knobs for CSMR
-		},
+		//{
+		//	fileName:      "repoless.bats",
+		//	skipMultiRepo: allTests,
+		//},
 		// Converted to resource_conditions_test.go.
 		// {fileName: "resource_conditions.bats"},
 		// Converted to policy_dir_test.go.

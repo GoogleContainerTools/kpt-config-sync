@@ -83,5 +83,5 @@ type HelmBase struct {
 	// secretRef holds the authentication secret for accessing
 	// the Helm repository.
 	// +optional
-	SecretRef SecretReference `json:"secretRef,omitempty"`
+	SecretRef *SecretReference `json:"secretRef,omitempty"`
 }

@@ -885,7 +885,7 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 		Branch: MainBranch,
 		Dir:    AcmeDir,
 		Auth:   "ssh",
-		SecretRef: v1alpha1.SecretReference{
+		SecretRef: &v1alpha1.SecretReference{
 			Name: controllers.GitCredentialVolume,
 		},
 	}
@@ -918,7 +918,7 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 		Branch: MainBranch,
 		Dir:    AcmeDir,
 		Auth:   "ssh",
-		SecretRef: v1beta1.SecretReference{
+		SecretRef: &v1beta1.SecretReference{
 			Name: controllers.GitCredentialVolume,
 		},
 	}
@@ -972,7 +972,7 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 		Branch: MainBranch,
 		Dir:    AcmeDir,
 		Auth:   "ssh",
-		SecretRef: v1alpha1.SecretReference{
+		SecretRef: &v1alpha1.SecretReference{
 			Name: "ssh-key",
 		},
 	}
@@ -1006,7 +1006,7 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 		Branch: MainBranch,
 		Dir:    AcmeDir,
 		Auth:   "ssh",
-		SecretRef: v1beta1.SecretReference{
+		SecretRef: &v1beta1.SecretReference{
 			Name: "ssh-key",
 		},
 	}
@@ -1272,7 +1272,7 @@ func resetRootRepo(nt *NT, rsName string, sourceFormat filesystem.SourceFormat) 
 				Branch:    MainBranch,
 				Dir:       AcmeDir,
 				Auth:      "ssh",
-				SecretRef: v1beta1.SecretReference{Name: controllers.GitCredentialVolume},
+				SecretRef: &v1beta1.SecretReference{Name: controllers.GitCredentialVolume},
 			}
 			if err = nt.Create(rs); err != nil {
 				nt.T.Fatal(err)

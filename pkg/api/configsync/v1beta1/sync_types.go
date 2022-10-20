@@ -271,3 +271,12 @@ func GetPeriodSecs(period metav1.Duration) float64 {
 	}
 	return period.Duration.Seconds()
 }
+
+// GetSecretRef will return an empty string if the secretRef.name is
+// empty or the secretRef doesn't exist
+func GetSecretRef(secretRef *SecretReference) string {
+	if secretRef != nil {
+		return secretRef.Name
+	}
+	return ""
+}

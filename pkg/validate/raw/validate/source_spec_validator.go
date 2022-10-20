@@ -76,11 +76,11 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	// Check the secret ref is specified if and only if it is required.
 	switch git.Auth {
 	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
-		if git.SecretRef.Name != "" {
+		if git.SecretRef != nil && git.SecretRef.Name != "" {
 			return IllegalSecretRef(rs)
 		}
 	default:
-		if git.SecretRef.Name == "" {
+		if git.SecretRef == nil || git.SecretRef.Name == "" {
 			return MissingSecretRef(rs)
 		}
 	}
@@ -138,15 +138,15 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	// will fail to apply.
 	switch helm.Auth {
 	case configsync.AuthGCENode, configsync.AuthNone:
-		if helm.SecretRef.Name != "" {
+		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
 			return IllegalSecretRef(rs)
 		}
 	case configsync.AuthToken:
-		if helm.SecretRef.Name == "" {
+		if helm.SecretRef == nil || helm.SecretRef.Name == "" {
 			return MissingSecretRef(rs)
 		}
 	case configsync.AuthGCPServiceAccount:
-		if helm.SecretRef.Name != "" {
+		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
 			return IllegalSecretRef(rs)
 		}
 		if helm.GCPServiceAccountEmail == "" {

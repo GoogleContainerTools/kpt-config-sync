@@ -393,7 +393,7 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, gitSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RepoSync)
-		if rs.Spec.Git == nil || rs.Spec.Git.SecretRef.Name == "" {
+		if rs.Spec.Git == nil || v1beta1.GetSecretRef(rs.Spec.Git.SecretRef) == "" {
 			return nil
 		}
 		return []string{rs.Spec.Git.SecretRef.Name}
@@ -403,7 +403,7 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	// Index the `caCertSecretRefField` field, so that we will be able to lookup RepoSync be a referenced `caCertSecretRefField` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, caCertSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RepoSync)
-		if rs.Spec.Git == nil || rs.Spec.Git.CACertSecretRef.Name == "" {
+		if rs.Spec.Git == nil || v1beta1.GetSecretRef(rs.Spec.Git.CACertSecretRef) == "" {
 			return nil
 		}
 		return []string{rs.Spec.Git.CACertSecretRef.Name}
@@ -413,7 +413,7 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	// Index the `helmSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, helmSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RepoSync)
-		if rs.Spec.Helm == nil || rs.Spec.Helm.SecretRef.Name == "" {
+		if rs.Spec.Helm == nil || v1beta1.GetSecretRef(rs.Spec.Helm.SecretRef) == "" {
 			return nil
 		}
 		return []string{rs.Spec.Helm.SecretRef.Name}
@@ -670,7 +670,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			proxy:           rs.Spec.Proxy,
 			depth:           rs.Spec.Override.GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
-			caCertSecretRef: rs.Spec.Git.CACertSecretRef.Name,
+			caCertSecretRef: v1beta1.GetSecretRef(rs.Spec.Git.CACertSecretRef),
 		})
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
@@ -706,10 +706,10 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	var namespaceSecretName string
 	if repoSync.Spec.SourceType == string(v1beta1.GitSource) {
 		authType = repoSync.Spec.Auth
-		namespaceSecretName = repoSync.Spec.SecretRef.Name
+		namespaceSecretName = v1beta1.GetSecretRef(repoSync.Spec.SecretRef)
 	} else if repoSync.Spec.SourceType == string(v1beta1.HelmSource) {
 		authType = repoSync.Spec.Helm.Auth
-		namespaceSecretName = repoSync.Spec.Helm.SecretRef.Name
+		namespaceSecretName = v1beta1.GetSecretRef(repoSync.Spec.Helm.SecretRef)
 	}
 	if SkipForAuth(authType) {
 		// There is no Secret to check for the Config object.
@@ -818,15 +818,15 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		case v1beta1.GitSource:
 			auth = rs.Spec.Auth
 			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
-			secretRefName = rs.Spec.SecretRef.Name
-			caCertSecretRefName = rs.Spec.Git.CACertSecretRef.Name
+			secretRefName = v1beta1.GetSecretRef(rs.Spec.SecretRef)
+			caCertSecretRefName = v1beta1.GetSecretRef(rs.Spec.Git.CACertSecretRef)
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
 		case v1beta1.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
-			secretRefName = rs.Spec.Helm.SecretRef.Name
+			secretRefName = v1beta1.GetSecretRef(rs.Spec.Helm.SecretRef)
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
@@ -903,7 +903,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					if authTypeToken(rs.Spec.Auth) {
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
 					}
-					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.SecretRef.Name}
+					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: v1beta1.GetSecretRef(rs.Spec.SecretRef)}
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(ctx, &container, rs.Spec.Override, string(NamespaceReconcilerType))

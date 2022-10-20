@@ -58,12 +58,12 @@ func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType v1be
 	if sourceType == v1beta1.GitSource {
 		result.Spec.Git = &v1beta1.Git{
 			Auth:      auth,
-			SecretRef: v1beta1.SecretReference{Name: gitSecretName},
+			SecretRef: &v1beta1.SecretReference{Name: gitSecretName},
 		}
 	} else if sourceType == v1beta1.HelmSource {
 		result.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 			Auth:      auth,
-			SecretRef: v1beta1.SecretReference{Name: helmSecretName},
+			SecretRef: &v1beta1.SecretReference{Name: helmSecretName},
 		}}
 	}
 	return result

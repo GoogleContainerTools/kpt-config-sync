@@ -606,13 +606,13 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
 	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
-	rsInvalidSecretRef.Spec.SecretRef.Name = veryLongName
+	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
 	if err := nt.Create(rsInvalidSecretRef); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
 		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
-			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), rsInvalidSecretRef.Spec.SecretRef.Name, validation.DNS1123SubdomainMaxLength))
+			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretRef(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
 		if err := nt.Delete(rsInvalidSecretRef); err != nil {
 			nt.T.Fatal(err)

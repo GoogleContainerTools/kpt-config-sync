@@ -155,7 +155,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		Auth:        configsync.AuthToken,
 		Version:     privateNSHelmChartVersion,
 		ReleaseName: "test",
-		SecretRef:   v1beta1.SecretReference{Name: "foo"},
+		SecretRef:   &v1beta1.SecretReference{Name: "foo"},
 	}}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources")

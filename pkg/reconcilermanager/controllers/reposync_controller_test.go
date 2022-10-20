@@ -151,13 +151,13 @@ func reposyncHelmAuthType(auth configsync.AuthType) func(*v1beta1.RepoSync) {
 
 func reposyncHelmSecretRef(ref string) func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
-		rs.Spec.Helm.SecretRef = v1beta1.SecretReference{Name: ref}
+		rs.Spec.Helm.SecretRef = &v1beta1.SecretReference{Name: ref}
 	}
 }
 
 func reposyncSecretRef(ref string) func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
-		rs.Spec.Git.SecretRef = v1beta1.SecretReference{Name: ref}
+		rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: ref}
 	}
 }
 
@@ -201,7 +201,7 @@ func reposyncNoSSLVerify() func(*v1beta1.RepoSync) {
 
 func reposyncCACert(caCertSecretRef string) func(sync *v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
-		rs.Spec.Git.CACertSecretRef.Name = caCertSecretRef
+		rs.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 	}
 }
 
@@ -763,7 +763,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	t.Log("Deployment successfully created")
 
 	// Unset rs.Spec.CACertSecretRef
-	rs.Spec.CACertSecretRef.Name = ""
+	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1245,7 +1245,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 
 	// Test updating RepoSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
-	rs.Spec.Git.SecretRef.Name = reposyncSSHKey
+	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: reposyncSSHKey}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -1270,7 +1270,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 
 	// Test updating RepoSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
-	rs.Spec.SecretRef = v1beta1.SecretReference{}
+	rs.Spec.SecretRef = &v1beta1.SecretReference{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -1731,7 +1731,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName, rs1.Spec.Git.SecretRef.Name)
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName, v1beta1.GetSecretRef(rs1.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs2); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1744,7 +1744,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName2, rs2.Spec.Git.SecretRef.Name)
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName2, v1beta1.GetSecretRef(rs2.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs3); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1757,7 +1757,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Error(err)
 	}
 	delete(wantRoleBindings, core.IDOf(roleBinding2))
-	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName3, rs3.Spec.Git.SecretRef.Name)
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName3, v1beta1.GetSecretRef(rs3.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs4); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1770,7 +1770,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName4, rs4.Spec.Git.SecretRef.Name)
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName4, v1beta1.GetSecretRef(rs4.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs5); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1782,7 +1782,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(roleBinding1), fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName5, rs5.Spec.Git.SecretRef.Name)
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName5, v1beta1.GetSecretRef(rs5.Spec.Git.SecretRef))
 }
 
 func validateGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.Client, reconcilerName, secretRefName string) {
@@ -2151,7 +2151,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 
 	// Test updating RepoSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
-	rs.Spec.Git.SecretRef.Name = reposyncSSHKey
+	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: reposyncSSHKey}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -2177,7 +2177,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 
 	// Test updating RepoSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
-	rs.Spec.SecretRef = v1beta1.SecretReference{}
+	rs.Spec.SecretRef = &v1beta1.SecretReference{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}

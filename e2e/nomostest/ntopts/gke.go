@@ -56,25 +56,25 @@ func GKECluster(t testing.NTB, apiServerTimeout time.Duration) Opt {
 func forceAuthRefresh(t testing.NTB) {
 	out, err := exec.Command("kubectl", "config", "current-context").CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to get current config: %v", err)
+		t.Fatalf("failed to get current config: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 	context := strings.TrimSpace(string(out))
 	gkeArgs := strings.Split(context, "_")
 	if len(gkeArgs) < 4 {
-		t.Fatalf("unknown GKE context fomrat: %s", context)
+		t.Fatalf("unknown GKE context format: %s", context)
 	}
 	gkeProject := gkeArgs[1]
 	gkeZone := gkeArgs[2]
 	gkeCluster := gkeArgs[3]
 
-	_, err = exec.Command("gcloud", "container", "clusters", "get-credentials",
+	out, err = exec.Command("gcloud", "container", "clusters", "get-credentials",
 		gkeCluster, "--zone", gkeZone, "--project", gkeProject).CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to get credentials: %v", err)
+		t.Fatalf("failed to get credentials: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 
-	_, err = exec.Command("gcloud", "config", "config-helper", "--force-auth-refresh").CombinedOutput()
+	out, err = exec.Command("gcloud", "config", "config-helper", "--force-auth-refresh").CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to refresh access_token: %v", err)
+		t.Fatalf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 }

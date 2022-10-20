@@ -46,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/monitor/state"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -462,13 +463,10 @@ func validateMonoRepoDeployments(nt *NT) error {
 
 // ValidateMultiRepoDeployments validates if all Config Sync Components are available.
 func ValidateMultiRepoDeployments(nt *NT) error {
-	for name := range nt.RootRepos {
-		// Create a RootSync to initialize the root reconciler.
-		rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
-		if err := nt.Create(rs); err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				nt.T.Fatal(err)
-			}
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	if err := nt.Create(rs); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			nt.T.Fatal(err)
 		}
 	}
 
@@ -532,6 +530,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 
 // validateMultiRepoPods validates if all Config Sync Pods are healthy. It doesn't retry
 // because it is supposed to be invoked after validateMultiRepoDeployments succeeds.
+// It only checks the central root reconciler Pod.
 func validateMultiRepoPods(nt *NT) error {
 	for _, ns := range CSNamespaces {
 		pods := corev1.PodList{}
@@ -539,6 +538,11 @@ func validateMultiRepoPods(nt *NT) error {
 			return err
 		}
 		for _, pod := range pods.Items {
+			if pod.Labels["app"] == "reconciler" {
+				if pod.Labels[metadata.SyncKindLabel] != configsync.RootSyncKind || pod.Labels[metadata.SyncNameLabel] != configsync.RootSyncName {
+					continue // Only validate the central root reconciler Pod but skip other reconcilers because other RSync objects might be managed by the central root reconciler and may not be reconciled yet.
+				}
+			}
 			// Check if the Pod (running Pod only) has any former abnormally terminated container.
 			// If the Pod is already in a terminating state (with a deletion timestamp) due to clean up, ignore the check.
 			// It uses pod.DeletionTimestamp instead of pod.Status.Phase because the Pod may not be scheduled to evict yet.

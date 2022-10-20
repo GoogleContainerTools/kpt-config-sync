@@ -222,20 +222,6 @@ func SharedNT() *NT {
 	return sharedNT
 }
 
-// GitPrivateKeyPath returns the path to the git private key.
-//
-// Deprecated: only the legacy bats tests should make use of this function.
-func (nt *NT) GitPrivateKeyPath() string {
-	return nt.gitPrivateKeyPath
-}
-
-// GitRepoPort returns the path to the git private key.
-//
-// Deprecated: only the legacy bats tests should make use of this function.
-func (nt *NT) GitRepoPort() int {
-	return nt.gitRepoPort
-}
-
 // KubeconfigPath returns the path to the kubeconifg file.
 //
 // Deprecated: only the legacy bats tests should make use of this function.

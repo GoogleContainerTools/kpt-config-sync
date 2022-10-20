@@ -21,7 +21,6 @@ e2e-staging: \
 	@rm -rf $(E2E_DIR)
 	@mkdir -p $(E2E_DIR)
 	@mkdir -p $(E2E_DIR)/third_party
-	@cp -r ./third_party/bats-core $(E2E_DIR)/third_party
 	@cp -r ./examples $(E2E_DIR)
 	@mkdir -p $(E2E_DIR)/scripts
 	@cp ./scripts/init-git-server.sh $(E2E_DIR)/scripts

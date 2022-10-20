@@ -292,7 +292,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Config:                  opts.RESTConfig,
 		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
-		DefaultMetricsTimeout:   1 * time.Minute,
 		kubeconfigPath:          kubeconfigPath,
 		MultiRepo:               opts.Nomos.MultiRepo,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
@@ -317,8 +316,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	nt.IsGKEAutopilot = skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 10 * time.Minute
+		nt.DefaultMetricsTimeout = 3 * time.Minute
 	} else {
 		nt.DefaultWaitTimeout = 6 * time.Minute
+		nt.DefaultMetricsTimeout = 1 * time.Minute
 	}
 
 	if *e2e.TestCluster != e2e.Kind {

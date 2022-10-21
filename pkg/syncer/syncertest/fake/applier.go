@@ -24,17 +24,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// applier implements a fake reconcile.Applier for use in testing.
+// Applier implements a fake reconcile.Applier for use in testing.
 //
 // reconcile.Applier not imported due to import cycle considerations.
-type applier struct {
-	*Client
+type Applier struct {
+	Client      *Client
+	UpdateError error
 }
 
-var _ reconcile.Applier = &applier{}
+var _ reconcile.Applier = &Applier{}
 
 // Create implements reconcile.Applier.
-func (a *applier) Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
 	err := a.Client.Create(ctx, obj)
 	if err != nil {
 		return false, status.APIServerError(err, "creating")
@@ -43,8 +44,13 @@ func (a *applier) Create(ctx context.Context, obj *unstructured.Unstructured) (b
 }
 
 // Update implements reconcile.Applier.
-func (a *applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) (bool, status.Error) {
-	err := a.Client.Update(ctx, intendedState)
+func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) (bool, status.Error) {
+	var err error
+	if a.UpdateError != nil {
+		err = a.UpdateError
+	} else {
+		err = a.Client.Update(ctx, intendedState)
+	}
 	if err != nil {
 		return false, status.APIServerError(err, "updating")
 	}
@@ -52,7 +58,7 @@ func (a *applier) Update(ctx context.Context, intendedState, _ *unstructured.Uns
 }
 
 // RemoveNomosMeta implements reconcile.Applier.
-func (a *applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured) (bool, status.Error) {
 	updated := metadata.RemoveConfigSyncMetadata(intent)
 	if !updated {
 		return false, nil
@@ -66,7 +72,7 @@ func (a *applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unst
 }
 
 // Delete implements reconcile.Applier.
-func (a *applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
 	err := a.Client.Delete(ctx, obj)
 	if err != nil {
 		return false, status.APIServerError(err, "deleting")
@@ -75,6 +81,6 @@ func (a *applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (b
 }
 
 // GetClient implements reconcile.Applier.
-func (a *applier) GetClient() client.Client {
+func (a *Applier) GetClient() client.Client {
 	return a.Client
 }

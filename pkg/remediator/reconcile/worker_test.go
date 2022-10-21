@@ -17,7 +17,9 @@ package reconcile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"go.opencensus.io/stats/view"
@@ -36,6 +38,7 @@ import (
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -123,6 +126,131 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 
 			c.Check(t, tc.want...)
 		})
+	}
+}
+
+// TestWorker_Run_Cancelled verifies that worker.Run can be cancelled when the
+// queue is empty.
+func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
+	q := queue.New("test") // empty queue
+	c := fakeClient(t)
+	d := makeDeclared(t) // no resources declared
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run worker in the background
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		w.Run(ctx)
+	}()
+
+	// Let the worker run for a bit and then stop it.
+	time.Sleep(1 * time.Second)
+	cancel()
+
+	// Wait for worker to exit or timeout
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+		// fail
+		t.Error("Run() with empty queue did not return when context was cancelled")
+	case <-doneCh:
+		// pass
+		c.Check(t) // no objects expected
+	}
+}
+
+// TestWorker_Run_CancelledWhenNotEmpty verifies that worker.Run can be
+// cancelled when the queue is not empty.
+// Use a fake client Update error to prevent the queue from draining.
+func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	existingObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	declaredObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	changedObjs := []client.Object{
+		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.Label("new", "label")),
+	}
+	expectedObjs := []client.Object{
+		// CRB delete should be reverted
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		// Role revert should fail from fake Update error
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.Label("new", "label")),
+	}
+
+	q := queue.New("test")
+
+	c := fakeClient(t)
+	for _, obj := range existingObjs {
+		if err := c.Create(ctx, obj); err != nil {
+			t.Fatalf("Failed to create object in fake client: %v", err)
+		}
+	}
+
+	d := makeDeclared(t, declaredObjs...)
+	a := &testingfake.Applier{Client: c}
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, a, q, d)
+
+	// Run worker in the background
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		w.Run(ctx)
+	}()
+
+	// Run the worker for a bit with an empty queue, to make sure it starts up.
+	time.Sleep(1 * time.Second)
+
+	// Execute runtime changes
+	for _, obj := range changedObjs {
+		if queue.WasDeleted(ctx, obj) {
+			if err := c.Delete(ctx, obj); err != nil {
+				t.Fatalf("Failed to delete object in fake client: %v", err)
+			}
+		} else {
+			if err := c.Update(ctx, obj); err != nil {
+				t.Fatalf("Failed to update object in fake client: %v", err)
+			}
+		}
+	}
+
+	// Configure the Applier to start erroring on Update.
+	// This will prevent the reconciler from reverting the ClusterRoleObject
+	// change, and prevent the queue from emptying.
+	a.UpdateError = fmt.Errorf("fake update error")
+
+	// Simulate watch events to add the objects to the queue
+	for _, obj := range changedObjs {
+		q.Add(obj)
+	}
+
+	// Cancel the worker before all the changes are processed
+	cancel()
+
+	// Wait for worker to exit or timeout
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+		// fail
+		t.Error("Run() with empty queue did not return when context was cancelled")
+	case <-doneCh:
+		// pass
+		c.Check(t, expectedObjs...)
 	}
 }
 

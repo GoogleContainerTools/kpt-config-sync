@@ -155,7 +155,12 @@ func (q *ObjectQueue) Get() (client.Object, bool) {
 
 	// This is a yielding block that will allow Add() and Done() to be called
 	// while it blocks.
-	for q.underlying.Len() == 0 && !q.underlying.ShuttingDown() {
+	for q.underlying.Len() == 0 {
+		if q.underlying.ShuttingDown() {
+			klog.V(1).Info("Get returning: Shutting Down")
+			return nil, true
+		}
+		klog.V(1).Info("Get waiting: Empty Queue")
 		q.cond.Wait()
 	}
 
@@ -211,7 +216,10 @@ func (q *ObjectQueue) Len() int {
 
 // ShutDown shuts down the object queue.
 func (q *ObjectQueue) ShutDown() {
+	klog.V(1).Info("ShutDown()")
 	q.underlying.ShutDown()
+	// Unblock q.cond.Wait() to unblock q.Get() to detect shutdown and return
+	q.cond.Signal()
 }
 
 // ShuttingDown returns true if the object queue is shutting down.

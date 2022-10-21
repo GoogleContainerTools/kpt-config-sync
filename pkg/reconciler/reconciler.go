@@ -218,21 +218,33 @@ func Run(opts Options) {
 	ctx := signals.SetupSignalHandler()
 
 	// Start the Remediator (non-blocking).
-	rem.Start(ctx)
+	doneChanForRemediator := rem.Start(ctx)
 
-	// Create a new context with its cancellation function.
+	// Start the StatusUpdater (non-blocking).
 	ctxForUpdateStatus, cancel := context.WithCancel(context.Background())
-
-	go updateStatus(ctxForUpdateStatus, parser)
+	doneChForUpdateStatus := make(chan struct{})
+	go func() {
+		defer close(doneChForUpdateStatus)
+		updateStatus(ctxForUpdateStatus, parser)
+	}()
 
 	// Start the Parser (blocking).
 	// This will not return until:
 	// - the Context is cancelled, or
 	// - its Done channel is closed.
 	parse.Run(ctx, parser)
+	klog.Info("Parser exited")
 
-	// This is to terminate `updateSyncStatus`.
+	// Stop the StatusUpdater
 	cancel()
+	// Wait for StatusUpdater to exit
+	<-doneChForUpdateStatus
+	klog.Info("StatusUpdater exited")
+
+	// Wait for Remediator to exit
+	<-doneChanForRemediator
+	klog.Info("Remediator exited")
+	klog.Info("All controllers exited")
 }
 
 // updateStatus update the status periodically until the cancellation function of the context is called.

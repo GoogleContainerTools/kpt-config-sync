@@ -16,6 +16,8 @@
 
 set -euo pipefail
 
+GOPATH="${GOPATH:-$(go env GOPATH)}"
+
 PLATFORMS=()
 VERSION=""
 while [[ $# -gt 0 ]]; do

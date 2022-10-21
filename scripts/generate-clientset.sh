@@ -31,6 +31,8 @@
 
 set -euox pipefail
 
+GOPATH="${GOPATH:-$(go env GOPATH)}"
+
 NOMOS_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
 # The tool doesn't gracefully handle multiple GOPATH values, so this will get

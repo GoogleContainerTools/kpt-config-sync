@@ -20,19 +20,27 @@ import (
 // statusreaders to cover all built-in Kubernetes resources and other CRDs that
 // follow known status conventions.
 func NewDefaultStatusReader(mapper meta.RESTMapper) engine.StatusReader {
+	return NewStatusReader(mapper)
+}
+
+// NewStatusReader returns a DelegatingStatusReader that includes the statusreaders
+// for the build-in Kubernetes resources and also any provided custom status readers.
+func NewStatusReader(mapper meta.RESTMapper, statusReaders ...engine.StatusReader) engine.StatusReader {
 	defaultStatusReader := NewGenericStatusReader(mapper, status.Compute)
 
 	replicaSetStatusReader := NewReplicaSetStatusReader(mapper, defaultStatusReader)
 	deploymentStatusReader := NewDeploymentResourceReader(mapper, replicaSetStatusReader)
 	statefulSetStatusReader := NewStatefulSetResourceReader(mapper, defaultStatusReader)
 
+	statusReaders = append(statusReaders,
+		deploymentStatusReader,
+		statefulSetStatusReader,
+		replicaSetStatusReader,
+		defaultStatusReader,
+	)
+
 	return &DelegatingStatusReader{
-		StatusReaders: []engine.StatusReader{
-			deploymentStatusReader,
-			statefulSetStatusReader,
-			replicaSetStatusReader,
-			defaultStatusReader,
-		},
+		StatusReaders: statusReaders,
 	}
 }
 

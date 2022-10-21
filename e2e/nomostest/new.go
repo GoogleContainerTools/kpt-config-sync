@@ -155,7 +155,14 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 	e2e.EnableParallel(t)
 	tw := nomostesting.New(t, testFeature)
 
+	if *e2e.ShareTestEnv {
+		sharedNt := SharedNT(tw)
+		t.Logf("using shared test env %s", sharedNt.ClusterName)
+		ntOptions = append(ntOptions, ntopts.WithRestConfig(sharedNt.Config))
+	}
+
 	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
+
 	if *e2e.ShareTestEnv {
 		return SharedTestEnv(tw, optsStruct)
 	}
@@ -166,7 +173,7 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
-	sharedNt := SharedNT()
+	sharedNt := SharedNT(t)
 	nt := &NT{
 		Context:                 sharedNt.Context,
 		T:                       t,
@@ -180,8 +187,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		DefaultMetricsTimeout:   sharedNt.DefaultMetricsTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
 		MultiRepo:               sharedNt.MultiRepo,
-		ReconcilerPollingPeriod: sharedNT.ReconcilerPollingPeriod,
-		HydrationPollingPeriod:  sharedNT.HydrationPollingPeriod,
+		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
+		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
 		RootRepos:               sharedNt.RootRepos,
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
@@ -191,8 +198,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		otelCollectorPort:       sharedNt.otelCollectorPort,
 		otelCollectorPodName:    sharedNt.otelCollectorPodName,
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
-		GitProvider:             sharedNT.GitProvider,
-		RemoteRepositories:      sharedNT.RemoteRepositories,
+		GitProvider:             sharedNt.GitProvider,
+		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
 	}
 

@@ -193,7 +193,7 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, genera
 	nt.T.Log("Reset the Deployment manifest in the ConfigMap")
 	var originalManifestFile string
 	if *e2e.ShareTestEnv {
-		originalManifestFile = filepath.Join(nomostest.SharedNT().TmpDir, nomostest.Manifests, "reconciler-manager-configmap.yaml")
+		originalManifestFile = filepath.Join(nomostest.SharedNT(nt.T).TmpDir, nomostest.Manifests, "reconciler-manager-configmap.yaml")
 	} else {
 		originalManifestFile = filepath.Join(nt.TmpDir, nomostest.Manifests, "reconciler-manager-configmap.yaml")
 	}

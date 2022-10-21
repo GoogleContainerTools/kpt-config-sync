@@ -37,13 +37,13 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 
 	if *e2e.ShareTestEnv {
-		if e2e.RunInParallel() {
-			fmt.Println("The test cannot use a shared test environment if it is running in parallel")
+		if *e2e.TestCluster == e2e.GKE && e2e.RunInParallel() {
+			fmt.Println("The test cannot use a shared test environment if it is running in parallel on GKE")
 			os.Exit(1)
 		}
-		sharedNT := nomostest.NewSharedNT()
+		nomostest.InitSharedEnvironments()
 		exitCode := m.Run()
-		nomostest.Clean(sharedNT, false)
+		nomostest.CleanSharedNTs()
 		os.Exit(exitCode)
 	} else {
 		os.Exit(m.Run())

@@ -44,8 +44,9 @@ type NTB interface {
 // FakeNTB implements NTB with standard print out and exit.
 // It is used in `e2e/testcases/main_test.go` when `--share-test-env` is turned on.
 type FakeNTB struct {
-	mu     sync.RWMutex
-	failed bool
+	mu       sync.RWMutex
+	failed   bool
+	cleanups []func()
 }
 
 // Error is equivalent to Log followed by Fail.
@@ -101,8 +102,52 @@ func (t *FakeNTB) Name() string {
 func (t *FakeNTB) Helper() {
 }
 
-// Cleanup is a no-op function.
-func (t *FakeNTB) Cleanup(func()) {
+// Cleanup registers a cleanup function to call at the end of the test suite.
+func (t *FakeNTB) Cleanup(f func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cleanups = append(t.cleanups, f)
+}
+
+// RunCleanup invokes all registered cleanup functions.
+// this should be called at the end of the shared test quite after all tests
+// have completed.
+func (t *FakeNTB) RunCleanup() {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Caught panic during FakeNTB.RunCleanup:\n%v", r)
+		}
+	}()
+
+	t.runCleanup()
+}
+
+func (t *FakeNTB) runCleanup() {
+	// Make sure that if a cleanup function panics,
+	// we still run the remaining cleanup functions.
+	defer func() {
+		t.mu.Lock()
+		recur := len(t.cleanups) > 0
+		t.mu.Unlock()
+		if recur {
+			t.runCleanup()
+		}
+	}()
+
+	for {
+		var cleanup func()
+		t.mu.Lock()
+		if len(t.cleanups) > 0 {
+			last := len(t.cleanups) - 1
+			cleanup = t.cleanups[last]
+			t.cleanups = t.cleanups[:last]
+		}
+		t.mu.Unlock()
+		if cleanup == nil {
+			return
+		}
+		cleanup()
+	}
 }
 
 // Skip is a no-op function.

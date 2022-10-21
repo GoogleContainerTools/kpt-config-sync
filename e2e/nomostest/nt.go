@@ -165,10 +165,6 @@ type NT struct {
 	Control ntopts.RepoControl
 }
 
-const (
-	shared = "shared"
-)
-
 // CSNamespaces is the namespaces of the Config Sync components.
 var CSNamespaces = []string{
 	configmanagement.ControllerNamespace,
@@ -198,28 +194,124 @@ func RepoSyncNN(ns, name string) types.NamespacedName {
 // DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
 var DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
 
-var sharedNT *NT
+var mySharedNTs *sharedNTs
 
-// NewSharedNT sets up the shared config sync testing environment globally.
-func NewSharedNT() *NT {
-	tmpDir := filepath.Join(os.TempDir(), NomosE2E, shared)
+type sharedNT struct {
+	inUse    bool
+	sharedNT *NT
+	fakeNTB  *testing.FakeNTB
+}
+
+type sharedNTs struct {
+	lock      sync.Mutex
+	testMap   map[string]*sharedNT
+	sharedNTs []*sharedNT
+}
+
+func (snt *sharedNTs) newNT(nt *NT, fake *testing.FakeNTB) {
+	snt.lock.Lock()
+	defer snt.lock.Unlock()
+	snt.sharedNTs = append(snt.sharedNTs, &sharedNT{
+		inUse:    false,
+		sharedNT: nt,
+		fakeNTB:  fake,
+	})
+}
+
+func (snt *sharedNTs) acquire(t testing.NTB) *NT {
+	snt.lock.Lock()
+	defer snt.lock.Unlock()
+	if nt, ok := snt.testMap[t.Name()]; ok {
+		return nt.sharedNT
+	}
+	for _, nt := range snt.sharedNTs {
+		if !nt.inUse {
+			nt.inUse = true
+			snt.testMap[t.Name()] = nt
+			t.Cleanup(func() {
+				snt.release(t.Name())
+			})
+			return nt.sharedNT
+		}
+	}
+	t.Fatal("failed to get shared test environment")
+	return nil
+}
+
+func (snt *sharedNTs) release(testName string) {
+	snt.lock.Lock()
+	defer snt.lock.Unlock()
+	snt.testMap[testName].inUse = false
+	delete(snt.testMap, testName)
+}
+
+func (snt *sharedNTs) destroy() {
+	snt.lock.Lock()
+	defer snt.lock.Unlock()
+	var wg sync.WaitGroup
+	for _, nt := range snt.sharedNTs {
+		wg.Add(1)
+		go func(nt *sharedNT) {
+			defer wg.Done()
+			if *e2e.TestCluster == e2e.Kind {
+				// Run Cleanup to destroy kind clusters
+				nt.fakeNTB.RunCleanup()
+			} else {
+				Clean(nt.sharedNT, false)
+			}
+		}(nt)
+	}
+	wg.Wait()
+}
+
+// InitSharedEnvironments initializes shared test environments.
+// It should be run at the beginning of the test suite if the --share-test-env
+// flag is provided. It will produce a number of test environment equal to the
+// go test parallelism.
+func InitSharedEnvironments() {
+	mySharedNTs = &sharedNTs{
+		testMap: map[string]*sharedNT{},
+	}
+	timeStamp := time.Now().Unix()
+	var wg sync.WaitGroup
+	for x := 0; x < e2e.NumParallel(); x++ {
+		name := fmt.Sprintf("cs-e2e-%v-%v", timeStamp, x)
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			newSharedNT(name)
+		}(name)
+	}
+	wg.Wait()
+}
+
+// newSharedNT sets up the shared config sync testing environment globally.
+func newSharedNT(name string) *NT {
+	tmpDir := filepath.Join(os.TempDir(), NomosE2E, name)
 	if err := os.RemoveAll(tmpDir); err != nil {
 		fmt.Printf("failed to remove the shared test directory: %v\n", err)
 		os.Exit(1)
 	}
-	fakeNTB := testing.NewShared(&testing.FakeNTB{})
-	opts := newOptStruct(shared, tmpDir, fakeNTB)
-	sharedNT = FreshTestEnv(fakeNTB, opts)
-	return sharedNT
+	fakeNTB := &testing.FakeNTB{}
+	wrapper := testing.NewShared(fakeNTB)
+	opts := newOptStruct(name, tmpDir, wrapper)
+	nt := FreshTestEnv(wrapper, opts)
+	mySharedNTs.newNT(nt, fakeNTB)
+	return nt
+}
+
+// CleanSharedNTs tears down the shared test environments.
+func CleanSharedNTs() {
+	mySharedNTs.destroy()
 }
 
 // SharedNT returns the shared test environment.
-func SharedNT() *NT {
+func SharedNT(t testing.NTB) *NT {
 	if !*e2e.ShareTestEnv {
-		fmt.Println("Error: the shared test environment is only available when running against GKE clusters")
+		fmt.Println("Error: the shared test environment is only available when --share-test-env is set")
 		os.Exit(1)
 	}
-	return sharedNT
+	return mySharedNTs.acquire(t)
 }
 
 // GitPrivateKeyPath returns the path to the git private key.

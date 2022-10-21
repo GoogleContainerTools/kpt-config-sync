@@ -3,7 +3,9 @@
 
 package inventory
 
-import cmdutil "k8s.io/kubectl/pkg/cmd/util"
+import (
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+)
 
 var (
 	_ ClientFactory = ClusterClientFactory{}
@@ -20,5 +22,5 @@ type ClusterClientFactory struct {
 }
 
 func (ccf ClusterClientFactory) NewClient(factory cmdutil.Factory) (Client, error) {
-	return NewClient(factory, WrapInventoryObj, InvInfoToConfigMap, ccf.StatusPolicy)
+	return NewClient(factory, WrapInventoryObj, InvInfoToConfigMap, ccf.StatusPolicy, ConfigMapGVK)
 }

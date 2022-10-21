@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
@@ -44,6 +45,8 @@ type Client interface {
 	GetClusterInventoryInfo(inv Info) (*unstructured.Unstructured, error)
 	// GetClusterInventoryObjs looks up the inventory objects from the cluster.
 	GetClusterInventoryObjs(inv Info) (object.UnstructuredSet, error)
+	// ListClusterInventoryObjs returns a map mapping from inventory name to a list of cluster inventory objects
+	ListClusterInventoryObjs(ctx context.Context) (map[string]object.ObjMetadataSet, error)
 }
 
 // ClusterClient is a concrete implementation of the
@@ -55,6 +58,7 @@ type ClusterClient struct {
 	InventoryFactoryFunc  StorageFactoryFunc
 	invToUnstructuredFunc ToUnstructuredFunc
 	statusPolicy          StatusPolicy
+	gvk                   schema.GroupVersionKind
 }
 
 var _ Client = &ClusterClient{}
@@ -65,6 +69,7 @@ func NewClient(factory cmdutil.Factory,
 	invFunc StorageFactoryFunc,
 	invToUnstructuredFunc ToUnstructuredFunc,
 	statusPolicy StatusPolicy,
+	gvk schema.GroupVersionKind,
 ) (*ClusterClient, error) {
 	dc, err := factory.DynamicClient()
 	if err != nil {
@@ -85,6 +90,7 @@ func NewClient(factory cmdutil.Factory,
 		InventoryFactoryFunc:  invFunc,
 		invToUnstructuredFunc: invToUnstructuredFunc,
 		statusPolicy:          statusPolicy,
+		gvk:                   gvk,
 	}
 	return &clusterClient, nil
 }
@@ -103,6 +109,8 @@ func (cic *ClusterClient) Merge(localInv Info, objs object.ObjMetadataSet, dryRu
 	if err != nil {
 		return pruneIds, err
 	}
+
+	// Inventory does not exist on the cluster.
 	if clusterInv == nil {
 		// Wrap inventory object and store the inventory in it.
 		var status []actuation.ObjectStatus
@@ -113,60 +121,48 @@ func (cic *ClusterClient) Merge(localInv Info, objs object.ObjMetadataSet, dryRu
 		if err := inv.Store(objs, status); err != nil {
 			return nil, err
 		}
-		invInfo, err := inv.GetObject()
-		if err != nil {
-			return nil, err
-		}
 		klog.V(4).Infof("creating initial inventory object with %d objects", len(objs))
-		createdObj, err := cic.createInventoryObj(invInfo, dryRun)
-		if err != nil {
-			return nil, err
-		}
-		// Status update requires the latest ResourceVersion
-		invInfo.SetResourceVersion(createdObj.GetResourceVersion())
-		if err := cic.updateStatus(invInfo, dryRun); err != nil {
-			return nil, err
-		}
-	} else {
-		// Update existing cluster inventory with merged union of objects
-		clusterObjs, err := cic.GetClusterObjs(localInv)
-		if err != nil {
-			return pruneIds, err
-		}
-		pruneIds = clusterObjs.Diff(objs)
-		unionObjs := clusterObjs.Union(objs)
-		var status []actuation.ObjectStatus
-		if cic.statusPolicy == StatusPolicyAll {
-			status = getObjStatus(pruneIds, unionObjs)
-		}
-		klog.V(4).Infof("num objects to prune: %d", len(pruneIds))
-		klog.V(4).Infof("num merged objects to store in inventory: %d", len(unionObjs))
-		wrappedInv := cic.InventoryFactoryFunc(clusterInv)
-		if err = wrappedInv.Store(unionObjs, status); err != nil {
-			return pruneIds, err
-		}
-		clusterInv, err = wrappedInv.GetObject()
-		if err != nil {
-			return pruneIds, err
-		}
+
 		if dryRun.ClientOrServerDryRun() {
-			return pruneIds, nil
+			klog.V(4).Infof("dry-run create inventory object: not created")
+			return nil, nil
 		}
-		if !objs.Equal(clusterObjs) {
-			klog.V(4).Infof("update cluster inventory: %s/%s", clusterInv.GetNamespace(), clusterInv.GetName())
-			appliedObj, err := cic.applyInventoryObj(clusterInv, dryRun)
-			if err != nil {
-				return pruneIds, err
-			}
-			// Status update requires the latest ResourceVersion
-			clusterInv.SetResourceVersion(appliedObj.GetResourceVersion())
-		}
-		if err := cic.updateStatus(clusterInv, dryRun); err != nil {
-			return pruneIds, err
-		}
+
+		err = inv.Apply(cic.dc, cic.mapper, cic.statusPolicy)
+		return nil, err
 	}
 
-	return pruneIds, nil
+	// Update existing cluster inventory with merged union of objects
+	clusterObjs, err := cic.GetClusterObjs(localInv)
+	if err != nil {
+		return pruneIds, err
+	}
+	pruneIds = clusterObjs.Diff(objs)
+	unionObjs := clusterObjs.Union(objs)
+	var status []actuation.ObjectStatus
+	if cic.statusPolicy == StatusPolicyAll {
+		status = getObjStatus(pruneIds, unionObjs)
+	}
+	klog.V(4).Infof("num objects to prune: %d", len(pruneIds))
+	klog.V(4).Infof("num merged objects to store in inventory: %d", len(unionObjs))
+	wrappedInv := cic.InventoryFactoryFunc(clusterInv)
+	if err = wrappedInv.Store(unionObjs, status); err != nil {
+		return pruneIds, err
+	}
+
+	// Update not required when all objects in inventory are the same and
+	// status does not need to be updated. If status is stored, always update the
+	// inventory to store the latest status.
+	if objs.Equal(clusterObjs) && cic.statusPolicy == StatusPolicyNone {
+		return pruneIds, nil
+	}
+
+	if dryRun.ClientOrServerDryRun() {
+		klog.V(4).Infof("dry-run create inventory object: not created")
+		return pruneIds, nil
+	}
+	err = wrappedInv.Apply(cic.dc, cic.mapper, cic.statusPolicy)
+	return pruneIds, err
 }
 
 // Replace stores the passed objects in the cluster inventory object, or
@@ -178,49 +174,54 @@ func (cic *ClusterClient) Replace(localInv Info, objs object.ObjMetadataSet, sta
 		klog.V(4).Infoln("dry-run replace inventory object: not applied")
 		return nil
 	}
-	clusterObjs, err := cic.GetClusterObjs(localInv)
-	if err != nil {
-		return fmt.Errorf("failed to read inventory objects from cluster: %w", err)
-	}
 	clusterInv, err := cic.GetClusterInventoryInfo(localInv)
 	if err != nil {
 		return fmt.Errorf("failed to read inventory from cluster: %w", err)
 	}
-	clusterInv, err = cic.replaceInventory(clusterInv, objs, status)
+
+	clusterObjs, err := cic.GetClusterObjs(localInv)
+	if err != nil {
+		return fmt.Errorf("failed to read inventory objects from cluster: %w", err)
+	}
+
+	clusterInv, wrappedInv, err := cic.replaceInventory(clusterInv, objs, status)
 	if err != nil {
 		return err
 	}
-	if !objs.Equal(clusterObjs) {
-		klog.V(4).Infof("replace cluster inventory: %s/%s", clusterInv.GetNamespace(), clusterInv.GetName())
-		klog.V(4).Infof("replace cluster inventory %d objects", len(objs))
-		appliedObj, err := cic.applyInventoryObj(clusterInv, dryRun)
-		if err != nil {
-			return fmt.Errorf("failed to write updated inventory to cluster: %w", err)
-		}
-		// Status update requires the latest ResourceVersion
-		clusterInv.SetResourceVersion(appliedObj.GetResourceVersion())
+
+	// Update not required when all objects in inventory are the same and
+	// status does not need to be updated. If status is stored, always update the
+	// inventory to store the latest status.
+	if objs.Equal(clusterObjs) && cic.statusPolicy == StatusPolicyNone {
+		return nil
 	}
-	if err := cic.updateStatus(clusterInv, dryRun); err != nil {
-		return err
+
+	klog.V(4).Infof("replace cluster inventory: %s/%s", clusterInv.GetNamespace(), clusterInv.GetName())
+	klog.V(4).Infof("replace cluster inventory %d objects", len(objs))
+
+	if err := wrappedInv.ApplyWithPrune(cic.dc, cic.mapper, cic.statusPolicy, objs); err != nil {
+		return fmt.Errorf("failed to write updated inventory to cluster: %w", err)
 	}
+
 	return nil
 }
 
 // replaceInventory stores the passed objects into the passed inventory object.
 func (cic *ClusterClient) replaceInventory(inv *unstructured.Unstructured, objs object.ObjMetadataSet,
-	status []actuation.ObjectStatus) (*unstructured.Unstructured, error) {
+	status []actuation.ObjectStatus) (*unstructured.Unstructured, Storage, error) {
 	if cic.statusPolicy == StatusPolicyNone {
 		status = nil
 	}
 	wrappedInv := cic.InventoryFactoryFunc(inv)
 	if err := wrappedInv.Store(objs, status); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	clusterInv, err := wrappedInv.GetObject()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return clusterInv, nil
+
+	return clusterInv, wrappedInv, nil
 }
 
 // DeleteInventoryObj deletes the inventory object from the cluster.
@@ -364,24 +365,35 @@ func (cic *ClusterClient) GetClusterInventoryObjs(inv Info) (object.Unstructured
 	return clusterInvObjects, err
 }
 
-// applyInventoryObj applies the passed inventory object to the APIServer.
-func (cic *ClusterClient) applyInventoryObj(obj *unstructured.Unstructured, dryRun common.DryRunStrategy) (*unstructured.Unstructured, error) {
-	if dryRun.ClientOrServerDryRun() {
-		klog.V(4).Infof("dry-run apply inventory object: not applied")
-		return obj.DeepCopy(), nil
-	}
-	if obj == nil {
-		return nil, fmt.Errorf("attempting apply a nil inventory object")
-	}
-
-	mapping, err := cic.getMapping(obj)
+func (cic *ClusterClient) ListClusterInventoryObjs(ctx context.Context) (map[string]object.ObjMetadataSet, error) {
+	// Define the mapping
+	mapping, err := cic.mapper.RESTMapping(cic.gvk.GroupKind(), cic.gvk.Version)
 	if err != nil {
 		return nil, err
 	}
 
-	klog.V(4).Infof("replacing inventory object: %s/%s", obj.GetNamespace(), obj.GetName())
-	return cic.dc.Resource(mapping.Resource).Namespace(obj.GetNamespace()).
-		Update(context.TODO(), obj, metav1.UpdateOptions{})
+	// retrieve the list from the cluster
+	clusterInvs, err := cic.dc.Resource(mapping.Resource).List(ctx, metav1.ListOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, err
+	}
+	if apierrors.IsNotFound(err) {
+		return map[string]object.ObjMetadataSet{}, nil
+	}
+
+	identifiers := make(map[string]object.ObjMetadataSet)
+
+	for i, inv := range clusterInvs.Items {
+		invName := inv.GetName()
+		identifiers[invName] = object.ObjMetadataSet{}
+		wrappedInvObjSlice, err := cic.InventoryFactoryFunc(&clusterInvs.Items[i]).Load()
+		if err != nil {
+			return nil, err
+		}
+		identifiers[invName] = append(identifiers[invName], wrappedInvObjSlice...)
+	}
+
+	return identifiers, nil
 }
 
 // createInventoryObj creates the passed inventory object on the APIServer.
@@ -461,62 +473,6 @@ func (cic *ClusterClient) ApplyInventoryNamespace(obj *unstructured.Unstructured
 // getMapping returns the RESTMapping for the provided resource.
 func (cic *ClusterClient) getMapping(obj *unstructured.Unstructured) (*meta.RESTMapping, error) {
 	return cic.mapper.RESTMapping(obj.GroupVersionKind().GroupKind(), obj.GroupVersionKind().Version)
-}
-
-func (cic *ClusterClient) updateStatus(obj *unstructured.Unstructured, dryRun common.DryRunStrategy) error {
-	if cic.statusPolicy != StatusPolicyAll {
-		klog.V(4).Infof("inventory status update skipped (StatusPolicy: %s)", cic.statusPolicy)
-		return nil
-	}
-	if dryRun.ClientOrServerDryRun() {
-		klog.V(4).Infof("dry-run update inventory status: not updated")
-		return nil
-	}
-	status, found, _ := unstructured.NestedMap(obj.UnstructuredContent(), "status")
-	if !found {
-		return nil
-	}
-	mapping, err := cic.mapper.RESTMapping(obj.GroupVersionKind().GroupKind())
-	if err != nil {
-		return nil
-	}
-	hasStatus, err := cic.hasSubResource(obj.GetAPIVersion(), mapping.Resource.Resource, "status")
-	if err != nil {
-		return err
-	}
-	if !hasStatus {
-		klog.V(4).Infof("skip updating inventory status")
-		return nil
-	}
-
-	klog.V(4).Infof("update inventory status")
-	resource := cic.dc.Resource(mapping.Resource).Namespace(obj.GetNamespace())
-	meta := metav1.TypeMeta{
-		Kind:       obj.GetKind(),
-		APIVersion: obj.GetAPIVersion(),
-	}
-	if err = unstructured.SetNestedMap(obj.Object, status, "status"); err != nil {
-		return err
-	}
-	if _, err = resource.UpdateStatus(context.TODO(), obj, metav1.UpdateOptions{TypeMeta: meta}); err != nil {
-		return fmt.Errorf("failed to write updated inventory status to cluster: %w", err)
-	}
-	return nil
-}
-
-// hasSubResource checks if a resource has the given subresource using the discovery client.
-func (cic *ClusterClient) hasSubResource(groupVersion, resource, subresource string) (bool, error) {
-	resources, err := cic.discoveryClient.ServerResourcesForGroupVersion(groupVersion)
-	if err != nil {
-		return false, err
-	}
-
-	for _, r := range resources.APIResources {
-		if r.Name == fmt.Sprintf("%s/%s", resource, subresource) {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // getObjStatus returns the list of object status

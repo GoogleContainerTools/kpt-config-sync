@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply/cache"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -26,41 +28,16 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/object/validation"
 )
 
-// NewDestroyer returns a new destroyer. It will set up the ApplyOptions and
-// PruneOptions which are responsible for capturing any command line flags.
-// It currently requires IOStreams, but this is a legacy from when
-// the ApplyOptions were responsible for printing progress. This is now
-// handled by a separate printer with the KubectlPrinterAdapter bridging
-// between the two.
-func NewDestroyer(factory cmdutil.Factory, invClient inventory.Client) (*Destroyer, error) {
-	pruner, err := prune.NewPruner(factory, invClient)
-	if err != nil {
-		return nil, fmt.Errorf("error setting up PruneOptions: %w", err)
-	}
-	client, err := factory.DynamicClient()
-	if err != nil {
-		return nil, err
-	}
-	mapper, err := factory.ToRESTMapper()
-	if err != nil {
-		return nil, err
-	}
-	statusWatcher := watcher.NewDefaultStatusWatcher(client, mapper)
-	return &Destroyer{
-		pruner:        pruner,
-		statusWatcher: statusWatcher,
-		factory:       factory,
-		invClient:     invClient,
-	}, nil
-}
-
 // Destroyer performs the step of grabbing all the previous inventory objects and
 // prune them. This also deletes all the previous inventory objects
 type Destroyer struct {
 	pruner        *prune.Pruner
 	statusWatcher watcher.StatusWatcher
-	factory       cmdutil.Factory
 	invClient     inventory.Client
+	mapper        meta.RESTMapper
+	client        dynamic.Interface
+	openAPIGetter discovery.OpenAPISchemaInterface
+	infoHelper    info.Helper
 }
 
 type DestroyerOptions struct {
@@ -112,18 +89,13 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 			handleError(eventChannel, err)
 			return
 		}
-		mapper, err := d.factory.ToRESTMapper()
-		if err != nil {
-			handleError(eventChannel, err)
-			return
-		}
 
 		// Validate the resources to make sure we catch those problems early
 		// before anything has been updated in the cluster.
 		vCollector := &validation.Collector{}
 		validator := &validation.Validator{
 			Collector: vCollector,
-			Mapper:    mapper,
+			Mapper:    d.mapper,
 		}
 		validator.Validate(deleteObjs)
 
@@ -132,11 +104,6 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		taskContext := taskrunner.NewTaskContext(eventChannel, resourceCache)
 
 		klog.V(4).Infoln("destroyer building task queue...")
-		dynamicClient, err := d.factory.DynamicClient()
-		if err != nil {
-			handleError(eventChannel, err)
-			return
-		}
 		deleteFilters := []filter.ValidationFilter{
 			filter.PreventRemoveFilter{},
 			filter.InventoryPolicyPruneFilter{
@@ -151,10 +118,10 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		}
 		taskBuilder := &solver.TaskQueueBuilder{
 			Pruner:        d.pruner,
-			DynamicClient: dynamicClient,
-			OpenAPIGetter: d.factory.OpenAPIGetter(),
-			InfoHelper:    info.NewHelper(mapper, d.factory.UnstructuredClientForMapping),
-			Mapper:        mapper,
+			DynamicClient: d.client,
+			OpenAPIGetter: d.openAPIGetter,
+			InfoHelper:    d.infoHelper,
+			Mapper:        d.mapper,
 			InvClient:     d.invClient,
 			Collector:     vCollector,
 			PruneFilters:  deleteFilters,

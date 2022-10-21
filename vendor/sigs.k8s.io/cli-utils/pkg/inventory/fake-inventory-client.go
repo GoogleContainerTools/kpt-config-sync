@@ -4,6 +4,8 @@
 package inventory
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
@@ -100,4 +102,8 @@ func (fic *FakeClient) GetClusterInventoryInfo(Info) (*unstructured.Unstructured
 
 func (fic *FakeClient) GetClusterInventoryObjs(_ Info) (object.UnstructuredSet, error) {
 	return object.UnstructuredSet{}, nil
+}
+
+func (fic *FakeClient) ListClusterInventoryObjs(_ context.Context) (map[string]object.ObjMetadataSet, error) {
+	return map[string]object.ObjMetadataSet{}, nil
 }

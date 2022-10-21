@@ -4,9 +4,6 @@
 package apply
 
 import (
-	"errors"
-	"fmt"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/discovery"
@@ -20,15 +17,7 @@ import (
 )
 
 type ApplierBuilder struct {
-	// factory is only used to retrieve things that have not been provided explicitly.
-	factory                      util.Factory
-	invClient                    inventory.Client
-	client                       dynamic.Interface
-	discoClient                  discovery.CachedDiscoveryInterface
-	mapper                       meta.RESTMapper
-	restConfig                   *rest.Config
-	unstructuredClientForMapping func(*meta.RESTMapping) (resource.RESTClient, error)
-	statusWatcher                watcher.StatusWatcher
+	commonBuilder
 }
 
 // NewApplierBuilder returns a new ApplierBuilder.
@@ -56,60 +45,6 @@ func (b *ApplierBuilder) Build() (*Applier, error) {
 		mapper:        bx.mapper,
 		infoHelper:    info.NewHelper(bx.mapper, bx.unstructuredClientForMapping),
 	}, nil
-}
-
-func (b *ApplierBuilder) finalize() (*ApplierBuilder, error) {
-	bx := *b // make a copy before mutating any fields. Shallow copy is good enough.
-	var err error
-	if bx.invClient == nil {
-		return nil, errors.New("inventory client must be provided")
-	}
-	if bx.client == nil {
-		if bx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		bx.client, err = bx.factory.DynamicClient()
-		if err != nil {
-			return nil, fmt.Errorf("error getting dynamic client: %v", err)
-		}
-	}
-	if bx.discoClient == nil {
-		if bx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		bx.discoClient, err = bx.factory.ToDiscoveryClient()
-		if err != nil {
-			return nil, fmt.Errorf("error getting discovery client: %v", err)
-		}
-	}
-	if bx.mapper == nil {
-		if bx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		bx.mapper, err = bx.factory.ToRESTMapper()
-		if err != nil {
-			return nil, fmt.Errorf("error getting rest mapper: %v", err)
-		}
-	}
-	if bx.restConfig == nil {
-		if bx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		bx.restConfig, err = bx.factory.ToRESTConfig()
-		if err != nil {
-			return nil, fmt.Errorf("error getting rest config: %v", err)
-		}
-	}
-	if bx.unstructuredClientForMapping == nil {
-		if bx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		bx.unstructuredClientForMapping = bx.factory.UnstructuredClientForMapping
-	}
-	if bx.statusWatcher == nil {
-		bx.statusWatcher = watcher.NewDefaultStatusWatcher(bx.client, bx.mapper)
-	}
-	return &bx, nil
 }
 
 func (b *ApplierBuilder) WithFactory(factory util.Factory) *ApplierBuilder {

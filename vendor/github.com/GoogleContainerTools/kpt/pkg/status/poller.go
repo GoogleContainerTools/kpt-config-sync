@@ -15,9 +15,14 @@
 package status
 
 import (
+	"time"
+
 	"k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/polling"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/polling/clusterreader"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/polling/engine"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/polling/statusreaders"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
 )
 
 func NewStatusPoller(f util.Factory) (*polling.StatusPoller, error) {
@@ -31,6 +36,35 @@ func NewStatusPoller(f util.Factory) (*polling.StatusPoller, error) {
 			&ConfigConnectorStatusReader{
 				Mapper: mapper,
 			},
+			&RolloutStatusReader{
+				Mapper: mapper,
+			},
 		},
 	})
+}
+
+func NewStatusWatcher(f util.Factory) (watcher.StatusWatcher, error) {
+	mapper, err := f.ToRESTMapper()
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient, err := f.DynamicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return &watcher.DefaultStatusWatcher{
+		DynamicClient: dynamicClient,
+		Mapper:        mapper,
+		ResyncPeriod:  1 * time.Hour,
+		StatusReader: statusreaders.NewStatusReader(
+			mapper,
+			NewConfigConnectorStatusReader(mapper),
+			NewRolloutStatusReader(mapper)),
+		ClusterReader: &clusterreader.DynamicClusterReader{
+			DynamicClient: dynamicClient,
+			Mapper:        mapper,
+		},
+	}, nil
 }

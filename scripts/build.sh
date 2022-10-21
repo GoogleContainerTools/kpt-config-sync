@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-GOPATH="${GOPATH:-$HOME/go}"
+GOPATH="${GOPATH:-$(go env GOPATH)}"
 
 PLATFORMS=()
 VERSION=""

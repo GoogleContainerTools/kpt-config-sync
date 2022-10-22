@@ -15,5 +15,6 @@
 resources:
 - ../base
 - ../acm-psp.yaml
+- ../hierarchyconfig-crd.yaml
 - ../policy-controller-psp.yaml
 - ../templates/admission-webhook.yaml

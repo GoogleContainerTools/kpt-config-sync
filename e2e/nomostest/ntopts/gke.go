@@ -42,6 +42,7 @@ func GKECluster(t testing.NTB, apiServerTimeout time.Duration) Opt {
 		if err := os.Setenv(Kubeconfig, kubeconfig); err != nil {
 			t.Fatalf("unexpected error %v", err)
 		}
+		opt.KubeconfigPath = kubeconfig
 
 		forceAuthRefresh(t)
 		restConfig, err := restconfig.NewRestConfig(apiServerTimeout)

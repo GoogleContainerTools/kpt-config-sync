@@ -208,7 +208,7 @@ func NewSharedNT() *NT {
 		os.Exit(1)
 	}
 	fakeNTB := testing.NewShared(&testing.FakeNTB{})
-	opts := NewOptStruct(shared, tmpDir, fakeNTB)
+	opts := newOptStruct(shared, tmpDir, fakeNTB)
 	sharedNT = FreshTestEnv(fakeNTB, opts)
 	return sharedNT
 }
@@ -241,15 +241,6 @@ func (nt *NT) GitRepoPort() int {
 // Deprecated: only the legacy bats tests should make use of this function.
 func (nt *NT) KubeconfigPath() string {
 	return nt.kubeconfigPath
-}
-
-// SetKubeConfigEnv sets the KUBECONFIG to nt.kubeconfigPath if set is true,
-// otherwise unsets KUBECONFIG environment variable
-func (nt *NT) SetKubeConfigEnv(set bool) error {
-	if set {
-		return os.Setenv("KUBECONFIG", nt.kubeconfigPath)
-	}
-	return os.Unsetenv("KUBECONFIG")
 }
 
 func fmtObj(obj client.Object) string {
@@ -806,6 +797,18 @@ func (nt *NT) Kubectl(args ...string) ([]byte, error) {
 	args = append(prefix, args...)
 	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
 	return exec.Command("kubectl", args...).CombinedOutput()
+}
+
+// Command is a convenience method for invoking a subprocess with the
+// KUBECONFIG environment variable set. Setting the environment variable
+// directly in the test process is not thread safe.
+func (nt *NT) Command(name string, args ...string) *exec.Cmd {
+	nt.T.Helper()
+
+	cmd := exec.Command(name, args...)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, fmt.Sprintf("KUBECONFIG=%s", nt.KubeconfigPath()))
+	return cmd
 }
 
 // MustKubectl fails the test immediately if the kubectl command fails. On

@@ -51,8 +51,8 @@ const fileMode = os.ModePerm
 // which we write test data.
 const NomosE2E = "nomos-e2e"
 
-// NewOptStruct initializes the nomostest options.
-func NewOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntopts.Opt) *ntopts.New {
+// newOptStruct initializes the nomostest options.
+func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntopts.Opt) *ntopts.New {
 	// TODO: we should probably put ntopts.New members inside of NT use the go-convention of mutating NT with option functions.
 	optsStruct := &ntopts.New{
 		Name:   testName,
@@ -155,7 +155,7 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 	e2e.EnableParallel(t)
 	tw := nomostesting.New(t, testFeature)
 
-	optsStruct := NewOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
+	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
 	if *e2e.ShareTestEnv {
 		return SharedTestEnv(tw, optsStruct)
 	}
@@ -194,6 +194,10 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             sharedNT.GitProvider,
 		RemoteRepositories:      sharedNT.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
+	}
+
+	if opts.SkipConfigSyncInstall {
+		return nt
 	}
 
 	// Print container logs in its own cleanup block to catch fatal errors from
@@ -278,11 +282,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	c := connect(t, opts.RESTConfig, scheme)
 	ctx := context.Background()
 
-	kubeconfigPath := filepath.Join(opts.TmpDir, ntopts.Kubeconfig)
-	if *e2e.TestCluster == e2e.GKE {
-		kubeconfigPath = os.Getenv(ntopts.Kubeconfig)
-	}
-
 	webhookDisabled := false
 	nt := &NT{
 		Context:                 ctx,
@@ -292,7 +291,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Config:                  opts.RESTConfig,
 		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
-		kubeconfigPath:          kubeconfigPath,
+		kubeconfigPath:          opts.KubeconfigPath,
 		MultiRepo:               opts.Nomos.MultiRepo,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
 		HydrationPollingPeriod:  50 * time.Millisecond,
@@ -303,6 +302,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
+	}
+
+	if opts.SkipConfigSyncInstall {
+		return nt
 	}
 
 	if *e2e.ImagePrefix == e2e.DefaultImagePrefix {

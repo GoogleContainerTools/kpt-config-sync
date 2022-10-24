@@ -774,7 +774,7 @@ func (c *Client) listUnstructured(list *unstructured.UnstructuredList, options c
 // Applier returns a fake.Applier wrapping this fake.Client. Callers using the
 // resulting Applier will read from/write to the original fake.Client.
 func (c *Client) Applier() reconcile.Applier {
-	return &applier{Client: c}
+	return &Applier{Client: c}
 }
 
 // Scheme implements client.Client.

@@ -39,7 +39,6 @@ import (
 type Remediator struct {
 	watchMgr *watch.Manager
 	workers  []*reconcile.Worker
-	started  bool
 	// The following fields are guarded by the mutex.
 	mux sync.Mutex
 	// conflictErrs tracks all the management conflicts the remediator encounters,
@@ -93,14 +92,23 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 }
 
 // Start begins the asynchronous processes for the Remediator's reconcile workers.
-func (r *Remediator) Start(ctx context.Context) {
-	if r.started {
-		return
+// Returns a done channel that will be closed after all the workers have exited.
+func (r *Remediator) Start(ctx context.Context) <-chan struct{} {
+	doneCh := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range r.workers {
+		worker := r.workers[i]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker.Run(ctx)
+		}()
 	}
-	for _, worker := range r.workers {
-		go worker.Run(ctx)
-	}
-	r.started = true
+	go func() {
+		defer close(doneCh)
+		wg.Wait()
+	}()
+	return doneCh
 }
 
 // NeedsUpdate implements Interface.

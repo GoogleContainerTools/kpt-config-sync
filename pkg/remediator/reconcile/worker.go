@@ -50,11 +50,22 @@ func NewWorker(scope declared.Scope, syncName string, a syncerreconcile.Applier,
 // Run starts the Worker pulling objects from its queue for remediation. This
 // call blocks until the given context is cancelled.
 func (w *Worker) Run(ctx context.Context) {
+	// Shutdown the queue when the context is closed.
+	// This will cause `processNextObject` to return false the next time it's
+	// called, allowing `UntilWithContext` and `Run` to return, whether or not
+	// all the items in the queue have been processed.
+	go func() {
+		<-ctx.Done()
+		klog.V(1).Infof("Shutting down reconciler worker object queue: %v", ctx.Err())
+		w.objectQueue.ShutDown()
+	}()
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
+		// Attempt to drain the queue
 		for w.processNextObject(ctx) {
 		}
+		// Once an attempt has been made for every object in the queue,
+		// sleep for ~1s before retrying.
 	}, 1*time.Second)
-	w.objectQueue.ShutDown()
 }
 
 func (w *Worker) processNextObject(ctx context.Context) bool {

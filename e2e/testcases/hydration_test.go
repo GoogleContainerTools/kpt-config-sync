@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
@@ -75,6 +76,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the Kustomize configuration to make the sync fail")
+	time.Sleep(120 * time.Second)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)

@@ -114,11 +114,6 @@ func Run(ctx context.Context, p Parser) {
 }
 
 func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
-	p.SetReconciling(true)
-	defer func() {
-		p.SetReconciling(false)
-	}()
-
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
 	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)

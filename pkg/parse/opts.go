@@ -60,9 +60,6 @@ type opts struct {
 	// objects in Git.
 	converter *declared.ValueConverter
 
-	// reconciling indicates whether the reconciler is reconciling a change.
-	reconciling bool
-
 	// mux prevents status update conflicts.
 	mux *sync.Mutex
 
@@ -77,10 +74,6 @@ type Parser interface {
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
 	SetSyncStatus(ctx context.Context, errs status.MultiError) error
 	options() *opts
-	// SetReconciling sets the field indicating whether the reconciler is reconciling a change.
-	SetReconciling(value bool)
-	// Reconciling returns whether the reconciler is reconciling a change.
-	Reconciling() bool
 	// ApplierErrors returns the errors surfaced by the applier.
 	ApplierErrors() status.MultiError
 	// RemediatorConflictErrors returns the conflict errors detected by the remediator.
@@ -95,12 +88,4 @@ func (o *opts) k8sClient() client.Client {
 
 func (o *opts) discoveryClient() discovery.ServerResourcer {
 	return o.discoveryInterface
-}
-
-func (o *opts) SetReconciling(value bool) {
-	o.reconciling = value
-}
-
-func (o *opts) Reconciling() bool {
-	return o.reconciling
 }

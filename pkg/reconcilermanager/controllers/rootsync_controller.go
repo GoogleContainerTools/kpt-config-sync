@@ -343,7 +343,7 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RootSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
 		rs := rawObj.(*v1beta1.RootSync)
-		if rs.Spec.Git == nil || v1beta1.GetSecretRef(rs.Spec.Git.SecretRef) == "" {
+		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.SecretRef) == "" {
 			return nil
 		}
 		return []string{rs.Spec.Git.SecretRef.Name}
@@ -474,7 +474,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			proxy:           rs.Spec.Proxy,
 			depth:           rs.Spec.Override.GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
-			caCertSecretRef: v1beta1.GetSecretRef(rs.Spec.Git.CACertSecretRef),
+			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 		})
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
@@ -518,7 +518,7 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		return nil
 	}
 	secret, err := validateSecretExist(ctx,
-		v1beta1.GetSecretRef(rootSync.Spec.SecretRef),
+		v1beta1.GetSecretName(rootSync.Spec.SecretRef),
 		rootSync.Namespace,
 		r.client)
 	if err != nil {
@@ -614,15 +614,15 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		case v1beta1.GitSource:
 			auth = rs.Spec.Auth
 			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
-			secretRefName = v1beta1.GetSecretRef(rs.Spec.SecretRef)
-			caCertSecretRefName = v1beta1.GetSecretRef(rs.Spec.Git.CACertSecretRef)
+			secretRefName = v1beta1.GetSecretName(rs.Spec.SecretRef)
+			caCertSecretRefName = v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
 		case v1beta1.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
-			secretRefName = v1beta1.GetSecretRef(rs.Spec.Helm.SecretRef)
+			secretRefName = v1beta1.GetSecretName(rs.Spec.Helm.SecretRef)
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
@@ -695,7 +695,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					container.VolumeMounts = volumeMounts(rs.Spec.Auth, caCertSecretRefName, rs.Spec.SourceType, container.VolumeMounts)
 					// Update Environment variables for `token` Auth, which
 					// passes the credentials as the Username and Password.
-					secretName := v1beta1.GetSecretRef(rs.Spec.SecretRef)
+					secretName := v1beta1.GetSecretName(rs.Spec.SecretRef)
 					if authTypeToken(rs.Spec.Auth) {
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
 					}

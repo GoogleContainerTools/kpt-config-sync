@@ -1629,7 +1629,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName, v1beta1.GetSecretRef(rs1.Spec.Git.SecretRef))
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName, v1beta1.GetSecretName(rs1.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs2); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1642,7 +1642,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName2, v1beta1.GetSecretRef(rs2.Spec.Git.SecretRef))
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName2, v1beta1.GetSecretName(rs2.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs3); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1655,7 +1655,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName3, v1beta1.GetSecretRef(rs3.Spec.Git.SecretRef))
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName3, v1beta1.GetSecretName(rs3.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs4); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1668,7 +1668,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName4, v1beta1.GetSecretRef(rs4.Spec.Git.SecretRef))
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName4, v1beta1.GetSecretName(rs4.Spec.Git.SecretRef))
 
 	if err := fakeClient.Delete(ctx, rs5); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
@@ -1680,7 +1680,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(crb), fakeClient); err != nil {
 		t.Error(err)
 	}
-	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5, v1beta1.GetSecretRef(rs5.Spec.Git.SecretRef))
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5, v1beta1.GetSecretName(rs5.Spec.Git.SecretRef))
 }
 
 func TestMapSecretToRootSyncs(t *testing.T) {

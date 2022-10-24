@@ -612,7 +612,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	}
 	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
 		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
-			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretRef(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
+			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretName(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
 		if err := nt.Delete(rsInvalidSecretRef); err != nil {
 			nt.T.Fatal(err)

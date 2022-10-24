@@ -86,12 +86,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
-	rr2Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr2), "", filesystem.SourceFormatUnstructured)
-	rr3Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr3), "", filesystem.SourceFormatUnstructured)
-	nn2Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn2, "", filesystem.SourceFormatUnstructured)
-	nn3Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn3, "", filesystem.SourceFormatUnstructured)
-	nn4Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn4, "", filesystem.SourceFormatUnstructured)
-	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, "", filesystem.SourceFormatUnstructured)
+	rr2Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
+	rr3Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
+	nn2Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
+	nn3Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
+	nn4Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
+	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
 	nt.RootRepos[rr2] = rr2Repo

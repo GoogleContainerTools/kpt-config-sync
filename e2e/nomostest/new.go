@@ -63,7 +63,7 @@ func NewOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		},
 		MultiRepo: ntopts.MultiRepo{
 			NamespaceRepos: make(map[types.NamespacedName]ntopts.RepoOpts),
-			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {UpstreamURL: ""}},
+			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
 		},
 	}
 	for _, opt := range ntOptions {
@@ -226,7 +226,7 @@ func resetSyncedRepos(nt *NT, opts *ntopts.New) {
 		nnList := nt.NonRootRepos
 		// clear the namespace resources in the namespace repo to avoid admission validation failure.
 		resetNamespaceRepos(nt)
-		resetRootRepos(nt, opts.UpstreamURL, opts.SourceFormat)
+		resetRootRepos(nt, opts.SourceFormat)
 
 		deleteRootRepos(nt)
 		deleteNamespaceRepos(nt)
@@ -251,7 +251,7 @@ func resetSyncedRepos(nt *NT, opts *ntopts.New) {
 		// else ignore, reset, and wait for sync
 
 		nt.NonRootRepos = map[types.NamespacedName]*Repository{}
-		nt.RootRepos[configsync.RootSyncName] = resetRepository(nt, RootRepo, DefaultRootRepoNamespacedName, opts.UpstreamURL, opts.SourceFormat)
+		nt.RootRepos[configsync.RootSyncName] = resetRepository(nt, RootRepo, DefaultRootRepoNamespacedName, opts.SourceFormat)
 		// It sets POLICY_DIR to always be `acme` because the initial mono-repo's sync directory is configured to be `acme`.
 		ResetMonoRepoSpec(nt, opts.SourceFormat, MainBranch, AcmeDir)
 		nt.WaitForRepoSyncs()
@@ -392,10 +392,10 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	for name := range opts.RootRepos {
-		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.UpstreamURL, opts.SourceFormat)
+		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		nt.NonRootRepos[nsr] = resetRepository(nt, NamespaceRepo, nsr, opts.NamespaceRepos[nsr].UpstreamURL, filesystem.SourceFormatUnstructured)
+		nt.NonRootRepos[nsr] = resetRepository(nt, NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
 	}
 
 	if opts.InitialCommit != nil {

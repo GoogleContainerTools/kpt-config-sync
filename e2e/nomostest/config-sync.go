@@ -324,7 +324,7 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 			// Setting GIT_REPO_URL in the configmap requires a remote repo to be present, so we need to create one if not exists.
 			// We can't call resetRepository() because it resets the existing repo to an initial state.
 			// There are cases that we want to install config sync but keep using the current repo (e.g. switch_mode_test.go).
-			nt.RootRepos[configsync.RootSyncName] = NewRepository(nt, RootRepo, DefaultRootRepoNamespacedName, nomos.UpstreamURL, nomos.SourceFormat)
+			nt.RootRepos[configsync.RootSyncName] = NewRepository(nt, RootRepo, DefaultRootRepoNamespacedName, nomos.SourceFormat)
 		}
 		syncURL = nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 	}
@@ -1244,21 +1244,21 @@ func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, gitBranch, 
 }
 
 // resetRepository re-initializes an existing remote repository or creates a new remote repository.
-func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstream string, sourceFormat filesystem.SourceFormat) *Repository {
+func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
 	if repo, found := nt.RemoteRepositories[nn]; found {
 		repo.ReInit(nt, sourceFormat)
 		return repo
 	}
-	repo := NewRepository(nt, repoType, nn, upstream, sourceFormat)
+	repo := NewRepository(nt, repoType, nn, sourceFormat)
 	return repo
 }
 
-func resetRootRepo(nt *NT, rsName, upstream string, sourceFormat filesystem.SourceFormat) {
+func resetRootRepo(nt *NT, rsName string, sourceFormat filesystem.SourceFormat) {
 	rs := fake.RootSyncObjectV1Beta1(rsName)
 	if err := nt.Get(rs.Name, rs.Namespace, rs); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	} else {
-		nt.RootRepos[rsName] = resetRepository(nt, RootRepo, RootSyncNN(rsName), upstream, sourceFormat)
+		nt.RootRepos[rsName] = resetRepository(nt, RootRepo, RootSyncNN(rsName), sourceFormat)
 		if err == nil {
 			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "%s", "git": {"dir": "%s"}}}`, sourceFormat, AcmeDir))
 		} else {
@@ -1287,19 +1287,19 @@ func resetRootRepo(nt *NT, rsName, upstream string, sourceFormat filesystem.Sour
 // NewRepository and Repository.ReInit and must still exist.
 //
 // TODO: reset everything else, including the branch
-func resetRootRepos(nt *NT, upstream string, sourceFormat filesystem.SourceFormat) {
+func resetRootRepos(nt *NT, sourceFormat filesystem.SourceFormat) {
 	// Reset the default root repo first so that other managed RootSyncs can be re-created and initialized.
 	rootRepo := nt.RootRepos[configsync.RootSyncName]
 	// Update the sourceFormat as the test case might use a different sourceFormat
 	// than the one that is created initially.
 	rootRepo.Format = sourceFormat
-	resetRootRepo(nt, configsync.RootSyncName, upstream, sourceFormat)
+	resetRootRepo(nt, configsync.RootSyncName, sourceFormat)
 	nt.WaitForSync(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
 
 	for name := range nt.RootRepos {
 		if name != configsync.RootSyncName {
-			resetRootRepo(nt, name, nt.RootRepos[name].UpstreamRepoURL, nt.RootRepos[name].Format)
+			resetRootRepo(nt, name, nt.RootRepos[name].Format)
 			nt.WaitForSync(kinds.RootSyncV1Beta1(), name, configsync.ControllerNamespace,
 				nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
 			// Now the repo is back to the initial commit, we can delete the safety check Namespace & ClusterRole
@@ -1322,8 +1322,8 @@ func resetNamespaceRepos(nt *NT) {
 		// reset the namespace repo only when it is in 'nt.NonRootRepos' (created by test).
 		// This prevents from resetting an existing namespace repo from a remote git provider.
 		nn := RepoSyncNN(nr.Namespace, nr.Name)
-		if r, found := nt.NonRootRepos[nn]; found {
-			nt.NonRootRepos[nn] = resetRepository(nt, NamespaceRepo, nn, r.UpstreamRepoURL, filesystem.SourceFormatUnstructured)
+		if _, found := nt.NonRootRepos[nn]; found {
+			nt.NonRootRepos[nn] = resetRepository(nt, NamespaceRepo, nn, filesystem.SourceFormatUnstructured)
 			rs := &v1beta1.RepoSync{}
 			if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
 				if apierrors.IsNotFound(err) {

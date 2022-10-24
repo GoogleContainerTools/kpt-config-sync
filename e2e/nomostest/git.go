@@ -37,11 +37,9 @@ import (
 )
 
 const (
-	// remoteUpstream git upstream repository
-	remoteUpstream = "upstream"
-
 	// remoteOrigin is static as every git repository has exactly one remote.
 	remoteOrigin = "origin"
+
 	// MainBranch is static as behavior when switching branches is never under
 	// test.
 	MainBranch = "main"
@@ -101,9 +99,6 @@ type Repository struct {
 	// It is used to set the url for the remote origin using `git remote add origin <REMOTE_URL>.
 	RemoteURL string
 
-	// UpstreamRepoURL is the URL of the seed repo
-	UpstreamRepoURL string
-
 	// Scheme used for encoding and decoding objects.
 	Scheme *runtime.Scheme
 }
@@ -112,7 +107,7 @@ type Repository struct {
 // Locally, it writes the repository to `tmpdir`/repos/`name`.
 //
 // The repo name is in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstream string, sourceFormat filesystem.SourceFormat) *Repository {
+func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
 	nt.T.Helper()
 
 	namespacedName := nn.String()
@@ -140,7 +135,6 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, upstream 
 	}
 	g.RemoteRepoName = repoName
 	g.RemoteURL = nt.GitProvider.RemoteURL(nt.gitRepoPort, repoName)
-	g.UpstreamRepoURL = upstream
 
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -234,13 +228,6 @@ func (g *Repository) init(privateKey string) {
 		fmt.Sprintf("ssh -q -o StrictHostKeyChecking=no -i %s", privateKey))
 	// Point the origin remote
 	g.Git("remote", "add", remoteOrigin, g.RemoteURL)
-
-	if g.UpstreamRepoURL != "" {
-		// Point the origin remote
-		g.Git("remote", "add", remoteUpstream, g.UpstreamRepoURL)
-		g.Git("fetch", remoteUpstream)
-		g.Git("merge", "upstream/"+MainBranch)
-	}
 }
 
 // Add writes a YAML or JSON representation of obj to `path` in the git

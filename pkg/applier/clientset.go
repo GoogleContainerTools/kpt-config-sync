@@ -36,10 +36,17 @@ type KptApplier interface {
 	Run(context.Context, inventory.Info, object.UnstructuredSet, apply.ApplierOptions) <-chan event.Event
 }
 
+// KptDestroyer is the interface exposed by cli-utils apply.Destroyer.
+// Using an interface, instead of the concrete struct, allows for easier testing.
+type KptDestroyer interface {
+	Run(context.Context, inventory.Info, apply.DestroyerOptions) <-chan event.Event
+}
+
 // ClientSet wraps the various Kubernetes clients required for building a
 // Config Sync applier.Applier.
 type ClientSet struct {
 	KptApplier    KptApplier
+	KptDestroyer  KptDestroyer
 	InvClient     inventory.Client
 	Client        client.Client
 	DynamicClient dynamic.Interface
@@ -74,6 +81,14 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		return nil, err
 	}
 
+	destroyer, err := apply.NewDestroyerBuilder().
+		WithInventoryClient(invClient).
+		WithFactory(f).
+		Build()
+	if err != nil {
+		return nil, err
+	}
+
 	dynamicClient, err := f.DynamicClient()
 	if err != nil {
 		return nil, err
@@ -85,6 +100,7 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 
 	return &ClientSet{
 		KptApplier:    applier,
+		KptDestroyer:  destroyer,
 		InvClient:     invClient,
 		Client:        c,
 		DynamicClient: dynamicClient,

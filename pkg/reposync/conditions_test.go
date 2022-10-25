@@ -24,7 +24,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -531,6 +533,316 @@ func TestSetSyncing(t *testing.T) {
 			}
 			assert.Equal(t, tc.wantUpdated, updated, "updated")
 			assert.Equal(t, tc.wantTransitioned, transitioned, "transitioned")
+		})
+	}
+}
+
+func TestSetReconcilerFinalizing(t *testing.T) {
+	now = func() metav1.Time {
+		return initialNow
+	}
+	testCases := []struct {
+		name        string
+		rs          *v1beta1.RepoSync
+		reason      string
+		message     string
+		want        []v1beta1.RepoSyncCondition
+		wantUpdated bool
+	}{
+		{
+			name:    "Set new finalizing condition without error",
+			rs:      fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName),
+			reason:  "Finalizing",
+			message: "",
+			want: []v1beta1.RepoSyncCondition{
+				// Update and transition
+				{
+					Type:               v1beta1.RepoSyncReconcilerFinalizing,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Finalizing",
+					Message:            "",
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: updatedNow,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "Update to add change message",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:               v1beta1.RepoSyncReconcilerFinalizing,
+						Status:             metav1.ConditionTrue,
+						Reason:             "Finalizing",
+						Message:            "",
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			reason:  "Finalizing",
+			message: "Deleting managed objects",
+			want: []v1beta1.RepoSyncCondition{
+				// Update but no transition
+				{
+					Type:               v1beta1.RepoSyncReconcilerFinalizing,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Finalizing",
+					Message:            "Deleting managed objects",
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: initialNow,
+				},
+			},
+			wantUpdated: true,
+		},
+	}
+	now = func() metav1.Time {
+		return updatedNow
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := SetReconcilerFinalizing(tc.rs, tc.reason, tc.message)
+			if diff := cmp.Diff(tc.want, tc.rs.Status.Conditions); diff != "" {
+				t.Error(diff)
+			}
+			assert.Equal(t, tc.wantUpdated, updated, "updated")
+		})
+	}
+}
+
+func TestSetReconcilerFinalizerFailure(t *testing.T) {
+	deployment1 := fake.DeploymentObject()
+	deployment1ID := core.IDOf(deployment1)
+
+	now = func() metav1.Time {
+		return initialNow
+	}
+	testCases := []struct {
+		name        string
+		rs          *v1beta1.RepoSync
+		errs        status.MultiError
+		want        []v1beta1.RepoSyncCondition
+		wantUpdated bool
+	}{
+		{
+			name: "Set new finalizer failure condition without error",
+			rs:   fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName),
+			errs: nil,
+			want: []v1beta1.RepoSyncCondition{
+				// Update and transition
+				{
+					Type:               v1beta1.RepoSyncReconcilerFinalizerFailure,
+					Status:             metav1.ConditionFalse,
+					Reason:             "DestroySuccess",
+					Message:            "Successfully deleted managed resource objects",
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: updatedNow,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "Set new finalizer failure condition with error",
+			rs:   fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName),
+			errs: applier.DeleteErrorForResource(errors.New("fake error"), deployment1ID),
+			want: []v1beta1.RepoSyncCondition{
+				// Update and transition
+				{
+					Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+					Status:  metav1.ConditionTrue,
+					Reason:  "DestroyFailure",
+					Message: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                1,
+						ErrorCountAfterTruncation: 1,
+					},
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: updatedNow,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "Update to change status",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+						Status:  metav1.ConditionTrue,
+						Reason:  "DestroyFailure",
+						Message: "fake error message",
+						ErrorSummary: &v1beta1.ErrorSummary{
+							TotalCount:                1,
+							ErrorCountAfterTruncation: 1,
+						},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			errs: nil,
+			want: []v1beta1.RepoSyncCondition{
+				// Update but no transition
+				{
+					Type:               v1beta1.RepoSyncReconcilerFinalizerFailure,
+					Status:             metav1.ConditionFalse,
+					Reason:             "DestroySuccess",
+					Message:            "Successfully deleted managed resource objects",
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: updatedNow,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "Update to change error message",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+						Status:  metav1.ConditionTrue,
+						Reason:  "DestroyFailure",
+						Message: "fake error message",
+						ErrorSummary: &v1beta1.ErrorSummary{
+							TotalCount:                1,
+							ErrorCountAfterTruncation: 1,
+						},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			errs: applier.DeleteErrorForResource(errors.New("fake error"), deployment1ID),
+			want: []v1beta1.RepoSyncCondition{
+				// Update but no transition
+				{
+					Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+					Status:  metav1.ConditionTrue,
+					Reason:  "DestroyFailure",
+					Message: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                1,
+						ErrorCountAfterTruncation: 1,
+					},
+					LastUpdateTime:     updatedNow,
+					LastTransitionTime: initialNow,
+				},
+			},
+			wantUpdated: true,
+		},
+	}
+	now = func() metav1.Time {
+		return updatedNow
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := SetReconcilerFinalizerFailure(tc.rs, tc.errs)
+			if diff := cmp.Diff(tc.want, tc.rs.Status.Conditions); diff != "" {
+				t.Error(diff)
+			}
+			assert.Equal(t, tc.wantUpdated, updated, "updated")
+		})
+	}
+}
+
+func TestRemoveCondition(t *testing.T) {
+	now = func() metav1.Time {
+		return initialNow
+	}
+	testCases := []struct {
+		name        string
+		rs          *v1beta1.RepoSync
+		condType    v1beta1.RepoSyncConditionType
+		want        []v1beta1.RepoSyncCondition
+		wantUpdated bool
+	}{
+		{
+			name: "Remove Reconciling condition",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:               v1beta1.RepoSyncReconciling,
+						Status:             metav1.ConditionTrue,
+						Reason:             "Reconciling",
+						Message:            "",
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			condType:    v1beta1.RepoSyncReconciling,
+			want:        nil,
+			wantUpdated: true,
+		},
+		{
+			name: "Remove Syncing condition when Reconciling",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:               v1beta1.RepoSyncSyncing,
+						Status:             metav1.ConditionTrue,
+						Reason:             "Syncing",
+						Message:            "",
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					},
+					v1beta1.RepoSyncCondition{
+						Type:               v1beta1.RepoSyncReconciling,
+						Status:             metav1.ConditionTrue,
+						Reason:             "Reconciling",
+						Message:            "",
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			condType: v1beta1.RepoSyncSyncing,
+			want: []v1beta1.RepoSyncCondition{
+				{
+					Type:               v1beta1.RepoSyncReconciling,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Reconciling",
+					Message:            "",
+					ErrorSummary:       &v1beta1.ErrorSummary{},
+					LastUpdateTime:     initialNow,
+					LastTransitionTime: initialNow,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "Remove missing condition",
+			rs: fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName,
+				withConditions(
+					v1beta1.RepoSyncCondition{
+						Type:               v1beta1.RepoSyncReconcilerFinalizing,
+						Status:             metav1.ConditionTrue,
+						Reason:             "Finalizing",
+						Message:            "",
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+						LastUpdateTime:     initialNow,
+						LastTransitionTime: initialNow,
+					})),
+			condType: v1beta1.RepoSyncSyncing,
+			want: []v1beta1.RepoSyncCondition{
+				// Update but no transition
+				{
+					Type:               v1beta1.RepoSyncReconcilerFinalizing,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Finalizing",
+					Message:            "",
+					ErrorSummary:       &v1beta1.ErrorSummary{},
+					LastUpdateTime:     initialNow,
+					LastTransitionTime: initialNow,
+				},
+			},
+			wantUpdated: false,
+		},
+	}
+	now = func() metav1.Time {
+		return updatedNow
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := RemoveCondition(tc.rs, tc.condType)
+			if diff := cmp.Diff(tc.want, tc.rs.Status.Conditions); diff != "" {
+				t.Error(diff)
+			}
+			assert.Equal(t, tc.wantUpdated, updated, "updated")
 		})
 	}
 }

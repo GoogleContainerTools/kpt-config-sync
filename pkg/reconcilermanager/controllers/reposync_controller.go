@@ -126,6 +126,14 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RepoSync")
 	}
 
+	if !rs.DeletionTimestamp.IsZero() {
+		// Deletion requested.
+		// Cleanup is handled above, after the RepoSync is NotFound.
+		log.V(3).Info("Deletion timestamp detected",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
+	}
+
 	// The caching client sometimes returns an old R*Sync, because the watch
 	// hasn't received the update event yet. If so, error and retry.
 	// This is an optimization to avoid unnecessary API calls.

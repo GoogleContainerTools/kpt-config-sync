@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/status"
 )
 
 // Local alias to enable unit test mocking.
@@ -91,7 +92,7 @@ var singleErrorSummary = &v1beta1.ErrorSummary{
 func SetReconciling(rs *v1beta1.RootSync, reason, message string) (updated, transitioned bool) {
 	updated, transitioned = setCondition(rs, v1beta1.RootSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, &v1beta1.ErrorSummary{}, now())
 	if transitioned {
-		removeCondition(rs, v1beta1.RootSyncSyncing)
+		RemoveCondition(rs, v1beta1.RootSyncSyncing)
 	}
 	return updated, transitioned
 }
@@ -103,7 +104,7 @@ func SetReconciling(rs *v1beta1.RootSync, reason, message string) (updated, tran
 func SetStalled(rs *v1beta1.RootSync, reason string, err error) (updated, transitioned bool) {
 	updated, transitioned = setCondition(rs, v1beta1.RootSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, singleErrorSummary, now())
 	if transitioned {
-		removeCondition(rs, v1beta1.RootSyncSyncing)
+		RemoveCondition(rs, v1beta1.RootSyncSyncing)
 	}
 	return updated, transitioned
 }
@@ -119,6 +120,51 @@ func SetSyncing(rs *v1beta1.RootSync, status bool, reason, message, commit strin
 		conditionStatus = metav1.ConditionFalse
 	}
 	return setCondition(rs, v1beta1.RootSyncSyncing, conditionStatus, reason, message, commit, errorSources, errorSummary, timestamp)
+}
+
+// SetReconcilerFinalizing sets the ReconcilerFinalizing condition to True.
+// Use RemoveCondition to remove this condition. It should never be set to False.
+func SetReconcilerFinalizing(rs *v1beta1.RootSync, reason, message string) (updated bool) {
+	updated, _ = setCondition(rs, v1beta1.RootSyncReconcilerFinalizing, metav1.ConditionTrue, reason, message, "", nil, nil, now())
+	return updated
+}
+
+// SetReconcilerFinalizerFailure sets the ReconcilerFinalizerFailure condition.
+// If there are errors, the status is True, otherwise False.
+// Use RemoveCondition to remove this condition when the finalizer is done.
+func SetReconcilerFinalizerFailure(rs *v1beta1.RootSync, errs status.MultiError) (updated bool) {
+	var conditionStatus metav1.ConditionStatus
+	var reason, message string
+	var summary *v1beta1.ErrorSummary
+	if errs != nil {
+		conditionStatus = metav1.ConditionTrue
+		reason = "DestroyFailure"
+		message = errs.Error()
+		summary = summarizeFinalizerErrors(errs)
+	} else {
+		conditionStatus = metav1.ConditionFalse
+		reason = "DestroySuccess"
+		message = "Successfully deleted managed resource objects"
+		summary = nil
+	}
+	updated, _ = setCondition(rs, v1beta1.RootSyncReconcilerFinalizerFailure,
+		conditionStatus, reason, message, "", nil, summary, now())
+	return updated
+}
+
+// summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`,
+// and returns an ErrorSource slice and an ErrorSummary.
+func summarizeFinalizerErrors(errs status.MultiError) *v1beta1.ErrorSummary {
+	if errs == nil {
+		return nil
+	}
+	// TODO: handle error truncation (requires new status.finalizer fields)
+	count := len(errs.Errors())
+	return &v1beta1.ErrorSummary{
+		TotalCount:                count,
+		Truncated:                 false,
+		ErrorCountAfterTruncation: count,
+	}
 }
 
 // setCondition adds or updates the specified condition with a True status.
@@ -166,8 +212,8 @@ func GetCondition(conditions []v1beta1.RootSyncCondition, condType v1beta1.RootS
 	return nil
 }
 
-// removeCondition removes the RootSync condition with the provided type.
-func removeCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType) (updated bool) {
+// RemoveCondition removes the RootSync condition with the provided type.
+func RemoveCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType) (updated bool) {
 	rs.Status.Conditions, updated = filterOutCondition(rs.Status.Conditions, condType)
 	return updated
 }

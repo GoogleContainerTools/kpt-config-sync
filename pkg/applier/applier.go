@@ -63,7 +63,51 @@ var (
 	maxRequestBytes = int64(1.5 * 1024 * 1024)
 )
 
-// applier is the default implimentation of the Applier interface.
+// Applier is a bulk client for applying a set of desired resource objects and
+// tracking them in a ResourceGroup inventory. This enables pruning objects
+// by removing them from the list of desired resource objects and re-applying.
+type Applier interface {
+	// Apply creates, updates, or prunes all managed resources, depending on
+	// the new desired resource objects.
+	// Returns the set of GVKs which were successfully applied and any errors.
+	// This is called by the reconciler when changes are detected in the
+	// source of truth (git, OCI, helm) and periodically.
+	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
+	// Errors returns the errors encountered during apply.
+	// This method may be called while Destroy is running, to get the set of
+	// errors encounted so far.
+	Errors() status.MultiError
+}
+
+// Destroyer is a bulk client for deleting all the managed resource objects
+// tracked in a single ResourceGroup inventory.
+type Destroyer interface {
+	// Destroy deletes all managed resources.
+	// Returns any errors encountered while destorying.
+	// This is called by the reconciler finalizer when deletion propagation is
+	// enabled.
+	Destroy(ctx context.Context) status.MultiError
+	// Errors returns the errors encountered during destroy.
+	// This method may be called while Destroy is running, to get the set of
+	// errors encounted so far.
+	Errors() status.MultiError
+}
+
+// Dormammu is an incredibly powerful being that dwells in the Dark Dimension,
+// known as the Destroyer of Worlds. He can apply and destroy whole sets of
+// resource objects at will.
+//
+// Not to be confused with The Doctor, who was named the Destroyer of Worlds by
+// Davros, creator of the Daleks.
+//
+// Yes, the name is silly. But applier.ApplierDestroyer is repetitive and
+// doesn't pass lint checks.
+type Dormammu interface {
+	Applier
+	Destroyer
+}
+
+// applier is the default implimentation of the ApplierDestroyer interface.
 type applier struct {
 	// inventory policy for the applier.
 	policy inventory.Policy
@@ -89,23 +133,13 @@ type applier struct {
 	errs status.MultiError
 }
 
-// Applier is a bulk client for applying a set of desired resource objects and
-// tracking them in a ResourceGroup inventory. This enables pruning objects
-// by removing them from the list of desired resource objects and re-applying.
-type Applier interface {
-	// Apply updates the resource API server with the latest parsed git resource.
-	// This is called when a new change in the git resource is detected. It also
-	// returns a map of the GVKs which were successfully applied by the Applier.
-	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
-	// Errors returns the errors encountered during apply.
-	Errors() status.MultiError
-}
-
 var _ Applier = &applier{}
+var _ Destroyer = &applier{}
+var _ Dormammu = &applier{}
 
 // NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
 // the API server.
-func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Applier, error) {
+func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Dormammu, error) {
 	syncKind := configsync.RepoSyncKind
 	invObj := newInventoryUnstructured(syncKind, syncName, string(namespace), cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -133,7 +167,7 @@ func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName strin
 }
 
 // NewRootApplier initializes an applier that can fetch all resources from the API server.
-func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Applier, error) {
+func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Dormammu, error) {
 	syncKind := configsync.RootSyncKind
 	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -266,6 +300,7 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
+// processPruneEvent handles PruneEvents from the Applier
 func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
@@ -296,15 +331,53 @@ func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *
 	case event.PruneSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return a.handlePruneSkippedEvent(ctx, e.Object, id, e.Error)
+		return a.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
 
 	default:
 		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
 }
 
-// handlePruneSkippedEvent translates from prune skipped event into resource error.
-func (a *applier) handlePruneSkippedEvent(ctx context.Context, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+// processDeleteEvent handles DeleteEvents from the Destroyer
+func (a *applier) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
+	id := idFrom(e.Identifier)
+	klog.V(4).Infof("delete %v for object: %v", e.Status, id)
+	s.Add(e.Status)
+
+	objectStatus, ok := objectStatusMap[id]
+	if !ok || objectStatus == nil {
+		objectStatus = &ObjectStatus{}
+		objectStatusMap[id] = objectStatus
+	}
+	objectStatus.Strategy = actuation.ActuationStrategyDelete
+
+	switch e.Status {
+	case event.DeletePending:
+		objectStatus.Actuation = actuation.ActuationPending
+		return nil
+
+	case event.DeleteSuccessful:
+		objectStatus.Actuation = actuation.ActuationSucceeded
+		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		return nil
+
+	case event.DeleteFailed:
+		objectStatus.Actuation = actuation.ActuationFailed
+		return DeleteErrorForResource(e.Error, id)
+
+	case event.DeleteSkipped:
+		objectStatus.Actuation = actuation.ActuationSkipped
+		// Skip event always includes an error with the reason
+		return a.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
+
+	default:
+		return DeleteErrorForResource(fmt.Errorf("unexpected delete event status: %v", e.Status), id)
+	}
+}
+
+// handleDeleteSkippedEvent translates from prune skip or delete skip event into
+// a resource error.
+func (a *applier) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
@@ -328,9 +401,14 @@ func (a *applier) handlePruneSkippedEvent(ctx context.Context, obj *unstructured
 		return SkipErrorForResource(err, id, depMismatchErr.Strategy)
 	}
 
-	var applyDeleteErr *filter.ApplyPreventedDeletionError
-	if errors.As(err, &applyDeleteErr) {
-		return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+	// ApplyPreventedDeletionError is only sent by the Applier in a PruneEvent,
+	// not by the Destroyer in a DeleteEvent, because the Destroyer doesn't
+	// perform any applies before deleting.
+	if eventType == event.PruneType {
+		var applyDeleteErr *filter.ApplyPreventedDeletionError
+		if errors.As(err, &applyDeleteErr) {
+			return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+		}
 	}
 
 	var policyErr *inventory.PolicyPreventedActuationError
@@ -429,6 +507,13 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 		// PruneTimeout defines the timeout for a wait task after a prune task.
 		// PruneTimeout is a task-level setting instead of an object-level setting.
 		PruneTimeout: a.reconcileTimeout,
+		// PrunePropagationPolicy defines what policy to use when pruning
+		// managed objects.
+		// Use "Background" for now, otherwise managed RootSyncs cannot be
+		// deleted, because the reconciler-manager configures the dependencies
+		// to be garbage collected as owned resources.
+		// TODO: Switch to "Foreground" after the reconciler-manager finalizer is added.
+		PrunePropagationPolicy: metav1.DeletePropagationBackground,
 	}
 
 	// Reset shared mapper before each apply to invalidate the discovery cache.
@@ -510,7 +595,7 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 
 // Errors returns the errors encountered during the last apply or current apply
 // if still running.
-// Errors implements Interface.
+// Errors implements the Applier and Destroyer interfaces.
 func (a *applier) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
@@ -538,7 +623,84 @@ func (a *applier) invalidateErrors() {
 	a.errs = nil
 }
 
-// Apply implements Interface.
+// destroyInner triggers a kpt live destroy library call to destroy a set of resources.
+func (a *applier) destroyInner(ctx context.Context) status.MultiError {
+	s := stats.NewSyncStats()
+	objStatusMap := make(ObjectStatusMap)
+
+	options := apply.DestroyerOptions{
+		InventoryPolicy: a.policy,
+		// DeleteTimeout defines the timeout for a wait task after a delete task.
+		// DeleteTimeout is a task-level setting instead of an object-level setting.
+		DeleteTimeout: a.reconcileTimeout,
+		// DeletePropagationPolicy defines what policy to use when deleting
+		// managed objects.
+		// Use "Foreground" to ensure owned resources are deleted in the right
+		// order. This ensures things like a Deployment's ReplicaSets and Pods
+		// are deleted before the Namespace that contains them.
+		DeletePropagationPolicy: metav1.DeletePropagationForeground,
+	}
+
+	// Reset shared mapper before each destroy to invalidate the discovery cache.
+	// This allows for picking up CRD changes.
+	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
+
+	events := a.clientSet.KptDestroyer.Run(ctx, a.inventory, options)
+	for e := range events {
+		switch e.Type {
+		case event.InitType:
+			for _, ag := range e.InitEvent.ActionGroups {
+				klog.Info("InitEvent", ag)
+			}
+		case event.ActionGroupType:
+			klog.Info(e.ActionGroupEvent)
+		case event.ErrorType:
+			klog.V(4).Info(e.ErrorEvent)
+			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
+				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
+			} else {
+				a.addError(e.ErrorEvent.Err)
+			}
+			s.ErrorTypeEvents++
+		case event.WaitType:
+			// Log WaitEvent at the verbose level of 4 due to the number of WaitEvent.
+			// For every object which is skipped to delete, there will be one ReconcileSkipped WaitEvent.
+			// For every object which is not skipped to delete, there will be at least two WaitEvent:
+			// one ReconcilePending WaitEvent and one Reconciled/ReconcileFailed/ReconcileTimeout WaitEvent. In addition,
+			// a reconciled object may become pending before a wait task times out.
+			// Record the objs that have been reconciled.
+			klog.V(4).Info(e.WaitEvent)
+			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+		case event.DeleteType:
+			logEvent := event.DeleteEvent{
+				GroupName:  e.DeleteEvent.GroupName,
+				Identifier: e.DeleteEvent.Identifier,
+				Status:     e.DeleteEvent.Status,
+				// nil Resource to reduce log noise
+				Error: e.DeleteEvent.Error,
+			}
+			klog.V(4).Info(logEvent)
+			a.addError(a.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
+		default:
+			klog.V(4).Infof("skipped %v event", e.Type)
+		}
+	}
+
+	errs := a.Errors()
+	if errs == nil {
+		klog.V(4).Infof("all resources are deleted.")
+	}
+	if s.Empty() {
+		klog.V(4).Infof("The destroyer made no new progress")
+	} else {
+		klog.Infof("The destroyer made new progress: %s.", s.String())
+		objStatusMap.Log(klog.V(0))
+	}
+	return errs
+}
+
+// Apply all managed resource objects and return any errors.
+// Apply implements the Applier interface.
 func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.applyMux.Lock()
 	defer a.applyMux.Unlock()
@@ -548,6 +710,19 @@ func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (m
 	// TODO: improve error cache invalidation to make rsync status more stable
 	a.invalidateErrors()
 	return a.applyInner(ctx, desiredResource)
+}
+
+// Destroy all managed resource objects and return any errors.
+// Destroy implements the Destroyer interface.
+func (a *applier) Destroy(ctx context.Context) status.MultiError {
+	a.applyMux.Lock()
+	defer a.applyMux.Unlock()
+
+	// Ideally we want to avoid invalidating errors that will continue to happen,
+	// but for now, invalidate all errors until they recur.
+	// TODO: improve error cache invalidation to make rsync status more stable
+	a.invalidateErrors()
+	return a.destroyInner(ctx)
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.

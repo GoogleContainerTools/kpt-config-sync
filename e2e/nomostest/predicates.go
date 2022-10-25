@@ -685,3 +685,27 @@ func RepoSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 		return validateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }
+
+// HasFinalizer returns a predicate that tests that an Object has the specified finalizer.
+func HasFinalizer(name string) Predicate {
+	return func(o client.Object) error {
+		for _, finalizer := range o.GetFinalizers() {
+			if finalizer == name {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected finalizer %q not found", name)
+	}
+}
+
+// MissingFinalizer returns a predicate that tests that an Object does NOT have the specified finalizer.
+func MissingFinalizer(name string) Predicate {
+	return func(o client.Object) error {
+		for _, finalizer := range o.GetFinalizers() {
+			if finalizer == name {
+				return fmt.Errorf("expected finalizer %q to be missing", name)
+			}
+		}
+		return nil
+	}
+}

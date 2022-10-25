@@ -20,11 +20,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// RepoOpts defines options for a Repo
-type RepoOpts struct {
-	// UpstreamURL provides the upstream repo to initialize the repo with
-	UpstreamURL string
-}
+// RepoOpts defines options for a Repository.
+// Add options as-needed for tests.
+type RepoOpts struct{}
 
 // MultiRepo configures the NT for use with multi-repo tests.
 // If NonRootRepos is non-empty, the test is assumed to be running in
@@ -70,7 +68,7 @@ func NamespaceRepo(ns, name string) func(opt *New) {
 			Namespace: ns,
 			Name:      name,
 		}
-		opt.NamespaceRepos[nn] = RepoOpts{UpstreamURL: ""}
+		opt.NamespaceRepos[nn] = RepoOpts{}
 	}
 }
 
@@ -78,26 +76,7 @@ func NamespaceRepo(ns, name string) func(opt *New) {
 // that points at the provided Repository.
 func RootRepo(name string) func(opt *New) {
 	return func(opt *New) {
-		opt.RootRepos[name] = RepoOpts{UpstreamURL: ""}
-	}
-}
-
-// NamespaceRepoWithUpstream tells the test case that a Namespace Repo should be configured
-// that points at the provided Repository.
-func NamespaceRepoWithUpstream(ns, name string, upstreamURL string) func(opt *New) {
-	return func(opt *New) {
-		nn := types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
-		opt.NamespaceRepos[nn] = RepoOpts{UpstreamURL: upstreamURL}
-	}
-}
-
-// UpstreamRepo tells the test case that an Upstream Repo should be used to seed the test repo
-func UpstreamRepo(upstreamURL string) func(opt *New) {
-	return func(opt *New) {
-		opt.UpstreamURL = upstreamURL
+		opt.RootRepos[name] = RepoOpts{}
 	}
 }
 

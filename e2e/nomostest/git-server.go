@@ -60,8 +60,8 @@ func installGitServer(nt *NT) func() error {
 	for _, o := range objs {
 		err := nt.Create(o)
 		if err != nil {
-			nt.T.Fatalf("installing %v %s", o.GetObjectKind().GroupVersionKind(),
-				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()})
+			nt.T.Fatalf("installing %v %s: %v", o.GetObjectKind().GroupVersionKind(),
+				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, err)
 		}
 	}
 

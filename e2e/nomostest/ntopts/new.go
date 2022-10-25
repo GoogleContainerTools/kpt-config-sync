@@ -45,6 +45,12 @@ type New struct {
 	// RESTConfig is the config for creating a Client connection to a K8s cluster.
 	RESTConfig *rest.Config
 
+	// KubeconfigPath is the path to the kubeconfig file
+	KubeconfigPath string
+
+	// SkipConfigSyncInstall skips installation/cleanup of Config Sync
+	SkipConfigSyncInstall bool
+
 	// SkipAutopilot will skip the test if running on an Autopilot cluster.
 	SkipAutopilot bool
 
@@ -95,4 +101,9 @@ func WithInitialCommit(initialCommit Commit) func(opt *New) {
 	return func(opt *New) {
 		opt.InitialCommit = &initialCommit
 	}
+}
+
+// SkipConfigSyncInstall skip installation of Config Sync components in cluster
+func SkipConfigSyncInstall(opt *New) {
+	opt.SkipConfigSyncInstall = true
 }

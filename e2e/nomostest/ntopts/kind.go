@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
@@ -64,7 +63,13 @@ const (
 func Kind(t testing.NTB, version string) Opt {
 	v := asKindVersion(t, version)
 	return func(opt *New) {
-		opt.RESTConfig = newKind(t, opt.Name, opt.TmpDir, v)
+		var err error
+		opt.KubeconfigPath = newKind(t, opt.Name, opt.TmpDir, v)
+		// We don't need to specify masterUrl since we have a Kubeconfig.
+		opt.RESTConfig, err = clientcmd.BuildConfigFromFlags("", opt.KubeconfigPath)
+		if err != nil {
+			t.Fatalf("building rest.Config: %v", err)
+		}
 	}
 }
 
@@ -104,13 +109,9 @@ func asKindVersion(t testing.NTB, version string) KindVersion {
 // newKind creates a new Kind cluster for use in testing with the specified name.
 //
 // Automatically registers the cluster to be deleted at the end of the test.
-func newKind(t testing.NTB, name, tmpDir string, version KindVersion) *rest.Config {
+func newKind(t testing.NTB, name, tmpDir string, version KindVersion) string {
 	p := cluster.NewProvider()
 	kcfgPath := filepath.Join(tmpDir, Kubeconfig)
-
-	if err := os.Setenv(Kubeconfig, kcfgPath); err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
 
 	start := time.Now()
 	t.Logf("started creating cluster at %s", start.Format(time.RFC3339))
@@ -161,13 +162,7 @@ kind delete cluster --name=%s`, name)
 
 	preloadImagesKind(t, name)
 
-	// We don't need to specify masterUrl since we have a Kubeconfig.
-	cfg, err := clientcmd.BuildConfigFromFlags("", kcfgPath)
-	if err != nil {
-		t.Fatalf("building rest.Config: %v", err)
-	}
-
-	return cfg
+	return kcfgPath
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

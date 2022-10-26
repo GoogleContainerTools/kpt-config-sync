@@ -287,6 +287,6 @@ print-%:
 
 # Reapply the resources, including a new image.  Use this to update with your code changes.
 manual-test-refresh: config-sync-manifest
-       kubectl apply -f ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml
+	kubectl apply -f ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml
 
 ####################################################################################################

@@ -206,14 +206,14 @@ include Makefile.oss.prow
 include Makefile.reconcilermanager
 -include Makefile.release
 
-all: test deps
+all: test deps configsync-crds
 
 # Cleans all artifacts.
 clean:
 	@echo "+++ Cleaning $(OUTPUT_DIR)"
 	@rm -rf $(OUTPUT_DIR)
 
-test-unit: pull-buildenv buildenv-dirs install-kustomize
+test-unit: pull-buildenv buildenv-dirs "$(BIN_DIR)/kustomize"
 	@echo "+++ Running unit tests in a docker container"
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
@@ -265,7 +265,11 @@ lint-license: pull-buildenv buildenv-dirs
 	go install github.com/google/addlicense@v1.0.0
 
 "$(GOBIN)/kustomize":
-	go install sigs.k8s.io/kustomize/kustomize/v4@v4.5.7
+	CGO_ENABLED=0 go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
+
+# install kustomize binary for containerized testing
+"$(BIN_DIR)/kustomize": "$(GOBIN)/kustomize"
+	cp $(GOBIN)/kustomize $(BIN_DIR)/kustomize
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"

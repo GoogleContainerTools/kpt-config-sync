@@ -57,7 +57,9 @@ func proxy(proxy string) func(*v1beta1.RepoSync) {
 
 func secret(secretName string) func(*v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
-		sync.Spec.SecretRef.Name = secretName
+		sync.Spec.SecretRef = &v1beta1.SecretReference{
+			Name: secretName,
+		}
 	}
 }
 

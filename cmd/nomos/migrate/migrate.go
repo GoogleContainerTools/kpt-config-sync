@@ -377,7 +377,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 				Auth:                   configsync.AuthType(secretType),
 				Proxy:                  proxyConfig,
 				GCPServiceAccountEmail: gcpServiceAccountEmail,
-				SecretRef: v1beta1.SecretReference{
+				SecretRef: &v1beta1.SecretReference{
 					Name: secretRefName,
 				},
 				NoSSLVerify: false,

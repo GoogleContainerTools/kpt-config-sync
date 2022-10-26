@@ -205,6 +205,7 @@ spec:
                   secretRef:
                     description: secretRef holds the authentication secret for accessing
                       the Helm repository.
+                    nullable: true
                     properties:
                       name:
                         description: name represents the secret name.
@@ -1176,6 +1177,7 @@ spec:
                   secretRef:
                     description: secretRef holds the authentication secret for accessing
                       the Helm repository.
+                    nullable: true
                     properties:
                       name:
                         description: name represents the secret name.

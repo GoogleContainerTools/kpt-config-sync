@@ -11,25 +11,6 @@ E2E_DIR := $(OUTPUT_DIR)/nomos
 E2E_VERSION := v1.0.2
 E2E_TEST_IMAGE := gcr.io/$(GCP_PROJECT)/e2e-tests:$(E2E_VERSION)
 
-# Create a staging directory for e2e
-.PHONY: e2e-staging
-e2e-staging: \
-	$(OUTPUT_DIR) \
-	config-sync-manifest-e2e \
-	$(wildcard ./e2e/*)
-	@echo "+++ Creating staging directory for e2e tests"
-	@rm -rf $(E2E_DIR)
-	@mkdir -p $(E2E_DIR)
-	@mkdir -p $(E2E_DIR)/third_party
-	@cp -r ./third_party/bats-core $(E2E_DIR)/third_party
-	@cp -r ./examples $(E2E_DIR)
-	@mkdir -p $(E2E_DIR)/scripts
-	@cp ./scripts/init-git-server.sh $(E2E_DIR)/scripts
-	@mkdir -p $(E2E_DIR)/test/manifests/templates
-	@cp ./test/manifests/templates/git-server.yaml $(E2E_DIR)/test/manifests/templates
-	@cp ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest-e2e.yaml $(E2E_DIR)
-	@cp -r ./e2e $(E2E_DIR)
-
 # Builds the e2e docker image and dependencies.
 image-e2e-tests: \
 		build/e2e-tests/Dockerfile \
@@ -44,22 +25,6 @@ image-e2e-tests: \
 
 GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
 
-__test-e2e-run:
-	@echo "+++ Running e2e tests: git"
-	@echo $(E2E_FLAGS)
-	@env GOTOPT2_BINARY="$(GOTOPT2_BINARY)" \
-		 e2e/e2e.sh \
-		--TEMP_OUTPUT_DIR "$(TEMP_OUTPUT_DIR)" \
-		--OUTPUT_DIR "$(OUTPUT_DIR)" \
-		--e2e-container="$(E2E_TEST_IMAGE)" \
-		$(TEST_E2E_RUN_FLAGS) \
-		-- \
-		$(E2E_FLAGS) \
-	    && echo "+++ git e2e tests completed" \
-	    || (echo "### e2e tests failed. Temp dir (with test output logs etc) are available in ${TEMP_OUTPUT_DIR}"; exit 1)
-
-e2e-image-all: image-e2e-tests e2e-staging
-
 push-e2e-tests: image-e2e-tests
 	docker push $(E2E_TEST_IMAGE)
 
@@ -69,47 +34,6 @@ ensure-image-e2e-tests:
 	@if ! docker image inspect $(E2E_TEST_IMAGE) > /dev/null; then \
 		docker image pull $(E2E_TEST_IMAGE); \
 	fi
-
-# Clean, ensure and run e2e tests for all importers.
-# Clean cluster after running.
-test-e2e-nobuild: build-images push-images ensure-image-e2e-tests e2e-staging
-	$(MAKE) __test-e2e-run \
-		$(E2E_PARAMS) \
-		E2E_FLAGS="\
-			--preclean \
-			--setup \
-			--test \
-			--clean \
-			$(E2E_FLAGS)" \
-		TEST_E2E_RUN_FLAGS="$(TEST_E2E_RUN_FLAGS)"
-
-test-e2e-ephemeral:
-	$(MAKE) test-e2e-nobuild \
-		$(E2E_PARAMS) \
-		E2E_FLAGS="\
-			--timing \
-			--create-ssh-key \
-			--set-admin-role-binding=false \
-			$(E2E_FLAGS) \
-		" \
-		TEST_E2E_RUN_FLAGS="\
-			--hermetic \
-			--use-ephemeral-cluster \
-			$(TEST_E2E_RUN_FLAGS) \
-		"
-
-test-e2e: e2e-image-all
-	$(MAKE) __test-e2e-run $(E2E_PARAMS) E2E_FLAGS="\
-		--preclean \
-		--setup \
-		--test \
-		--clean \
-		$(E2E_FLAGS)"
-
-# This target is for working on specific tests
-test-e2e-dev: image-e2e-tests e2e-staging
-	$(MAKE) __test-e2e-run $(E2E_PARAMS) E2E_FLAGS="\
-		$(E2E_FLAGS)"
 
 # Runs nomos vet locally for example repos.
 # Requires kubeconfig set up properly with Nomos cluster.

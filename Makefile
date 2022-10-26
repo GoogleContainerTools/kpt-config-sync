@@ -269,7 +269,7 @@ lint-license: pull-buildenv buildenv-dirs
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"
-	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** -ignore=third_party/** . 2>&1 | sed '/ skipping: / d'
+	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** . 2>&1 | sed '/ skipping: / d'
 
 .PHONY: lint-license-headers
 lint-license-headers: "$(GOBIN)/addlicense"
@@ -285,17 +285,8 @@ print-%:
 ####################################################################################################
 # MANUAL TESTING COMMANDS
 
-# Setup a working ConfigSync, with git-creds.  It's the same one from the e2e tests... i.e. the
-# git-creds point to the in-cluster git-server.  You'll likely need to override this.
-manual-test-boostrap: e2e-image-all
-	$(MAKE) __test-e2e-run E2E_FLAGS="--preclean --setup"
-
 # Reapply the resources, including a new image.  Use this to update with your code changes.
 manual-test-refresh: config-sync-manifest
 	kubectl apply -f ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml
-
-# Clean up the cluster
-manual-test-clean: e2e-image-all
-	$(MAKE) __test-e2e-run E2E_FLAGS="--clean"
 
 ####################################################################################################

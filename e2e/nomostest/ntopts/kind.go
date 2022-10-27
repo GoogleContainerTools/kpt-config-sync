@@ -114,7 +114,7 @@ func newKind(t testing.NTB, name, tmpDir string, version KindVersion) string {
 	kcfgPath := filepath.Join(tmpDir, Kubeconfig)
 
 	start := time.Now()
-	t.Logf("started creating cluster at %s", start.Format(time.RFC3339))
+	t.Logf("started creating cluster %s at %s", name, start.Format(time.RFC3339))
 
 	err := createKindCluster(p, name, kcfgPath, version)
 	creationSuccessful := err == nil

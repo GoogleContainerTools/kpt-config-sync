@@ -103,6 +103,13 @@ func WithInitialCommit(initialCommit Commit) func(opt *New) {
 	}
 }
 
+// WithRestConfig uses the provided rest.Config
+func WithRestConfig(restConfig *rest.Config) Opt {
+	return func(opt *New) {
+		opt.RESTConfig = restConfig
+	}
+}
+
 // SkipConfigSyncInstall skip installation of Config Sync components in cluster
 func SkipConfigSyncInstall(opt *New) {
 	opt.SkipConfigSyncInstall = true

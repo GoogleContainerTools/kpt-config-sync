@@ -47,10 +47,10 @@ var GceNode = flag.Bool("gcenode", false,
 
 // Debug enables running the test in debug mode.
 // In debug mode:
-// 1) Test execution immediately stops on a call to t.Fatal.
-// 2) The test prints the absolute path to the test temporary directory, and
-//      not delete it.
-// 3) The test prints out how to connect to the kind cluster.
+//  1. Test execution immediately stops on a call to t.Fatal.
+//  2. The test prints the absolute path to the test temporary directory, and
+//     not delete it.
+//  3. The test prints out how to connect to the kind cluster.
 var Debug = flag.Bool("debug", false,
 	"If true, do not destroy cluster and clean up temporary directory after test.")
 
@@ -137,10 +137,14 @@ const (
 	CSR = "csr"
 )
 
+// NumParallel returns the number of parallel test threads
+func NumParallel() int {
+	return flag.Lookup("test.parallel").Value.(flag.Getter).Get().(int)
+}
+
 // RunInParallel indicates whether the test is running in parallel.
 func RunInParallel() bool {
-	parallel := flag.Lookup("test.parallel").Value.(flag.Getter).Get().(int)
-	return parallel > 1
+	return NumParallel() > 1
 }
 
 // EnableParallel allows parallel execution of test functions that call t.Parallel

@@ -123,7 +123,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncBackend
-	repoSyncBackend.Spec.Override = v1alpha1.OverrideSpec{}
+	repoSyncBackend.Spec.Override = &v1alpha1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()
@@ -232,7 +232,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncBackend
-	repoSyncBackend.Spec.Override = v1beta1.OverrideSpec{}
+	repoSyncBackend.Spec.Override = &v1beta1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()

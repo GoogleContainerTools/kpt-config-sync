@@ -5,14 +5,16 @@ kubernetes cluster.
 
 ## Installing a released version
 
-1. Find the latest Config Sync release on the [releases page]. Download the
-manifest bundle from the release assets.
+1. Find the latest Config Sync release on the [releases page]. Note the release
+version that you want to install.
 2. Install the released version by applying the manifest to your cluster.
 ```shell
+# Set the release version
+export CS_VERSION=vX.Y.Z
 # Apply core Config Sync manifests to your cluster
-kubectl apply -f path/to/config-sync-manifest.yaml
+kubectl apply -f "https://github.com/GoogleContainerTools/kpt-config-sync/releases/download/${CS_VERSION}/config-sync-manifest.yaml"
 # Optional: apply acm-psp.yaml to your cluster (for k8s < 1.25)
-kubectl apply -f path/to/acm-psp.yaml
+kubectl apply -f "https://github.com/GoogleContainerTools/kpt-config-sync/releases/download/${CS_VERSION}/acm-psp.yaml"
 ```
 
 ## Building and Installing from source

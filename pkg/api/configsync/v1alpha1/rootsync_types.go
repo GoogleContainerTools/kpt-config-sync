@@ -78,6 +78,16 @@ type RootSyncSpec struct {
 	Override *OverrideSpec `json:"override,omitempty"`
 }
 
+// GetOverride creates an override or returns an existing one
+// use it if you need to ensure that you are assigning
+// to an object, but not to test for nil (current existance)
+func (rs *RootSyncSpec) GetOverride() *OverrideSpec {
+	if rs.Override == nil {
+		rs.Override = &OverrideSpec{}
+	}
+	return rs.Override
+}
+
 // RootSyncStatus defines the observed state of RootSync
 type RootSyncStatus struct {
 	Status `json:",inline"`

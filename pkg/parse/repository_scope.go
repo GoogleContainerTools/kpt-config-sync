@@ -39,9 +39,9 @@ func OptionsForScope(options validate.Options, scope declared.Scope) validate.Op
 }
 
 // repositoryScopeVisitor ensures all objects in a Namespace Repo are either
-// 1) The Namespace for the scope, or
-// 2) Namespace-scoped objects that define metadata.namespace matching the scope, or
-//      omit metadata.namespace.
+//  1. The Namespace for the scope, or
+//  2. Namespace-scoped objects that define metadata.namespace matching the scope, or
+//     omit metadata.namespace.
 func repositoryScopeVisitor(scope declared.Scope) validate.VisitorFunc {
 	return func(objs []ast.FileObject) ([]ast.FileObject, status.MultiError) {
 		var errs status.MultiError

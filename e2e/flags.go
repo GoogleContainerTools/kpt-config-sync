@@ -47,10 +47,10 @@ var GceNode = flag.Bool("gcenode", false,
 
 // Debug enables running the test in debug mode.
 // In debug mode:
-// 1) Test execution immediately stops on a call to t.Fatal.
-// 2) The test prints the absolute path to the test temporary directory, and
-//      not delete it.
-// 3) The test prints out how to connect to the kind cluster.
+//  1. Test execution immediately stops on a call to t.Fatal.
+//  2. The test prints the absolute path to the test temporary directory, and
+//     not delete it.
+//  3. The test prints out how to connect to the kind cluster.
 var Debug = flag.Bool("debug", false,
 	"If true, do not destroy cluster and clean up temporary directory after test.")
 

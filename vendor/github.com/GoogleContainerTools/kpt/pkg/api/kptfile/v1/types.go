@@ -20,16 +20,34 @@ package v1
 import (
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 const (
-	KptFileName       = "Kptfile"
-	KptFileKind       = "Kptfile"
-	KptFileGroup      = "kpt.dev"
-	KptFileVersion    = "v1"
+	KptFileName = "Kptfile"
+
+	// Deprecated: prefer KptFileGVK
+	KptFileKind = "Kptfile"
+
+	// Deprecated: prefer KptFileGVK
+	KptFileGroup = "kpt.dev"
+
+	// Deprecated: prefer KptFileGVK
+	KptFileVersion = "v1"
+
+	// Deprecated: prefer KptFileGVK
 	KptFileAPIVersion = KptFileGroup + "/" + KptFileVersion
 )
+
+// KptFileGVK is the GroupVersionKind of Kptfile objects
+func KptFileGVK() schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "kpt.dev",
+		Version: "v1",
+		Kind:    "Kptfile",
+	}
+}
 
 // TypeMeta is the TypeMeta for KptFile instances.
 var TypeMeta = yaml.ResourceMeta{
@@ -57,6 +75,8 @@ type KptFile struct {
 
 	// Inventory contains parameters for the inventory object used in apply.
 	Inventory *Inventory `yaml:"inventory,omitempty" json:"inventory,omitempty"`
+
+	Status *Status `yaml:"status,omitempty" json:"status,omitempty"`
 }
 
 // OriginType defines the type of origin for a package.
@@ -192,6 +212,12 @@ type PackageInfo struct {
 
 	// Man is the path to documentation about the package
 	Man string `yaml:"man,omitempty" json:"man,omitempty"`
+
+	ReadinessGates []ReadinessGate `yaml:"readinessGates,omitempty" json:"readinessGates,omitempty"`
+}
+
+type ReadinessGate struct {
+	ConditionType string `yaml:"conditionType" json:"conditionType"`
 }
 
 // Subpackages declares a local or remote subpackage.
@@ -341,3 +367,25 @@ func (i Inventory) IsValid() bool {
 	// Name, Namespace InventoryID are required inventory fields, so we check these 3 fields.
 	return i.Name != "" && i.Namespace != "" && i.InventoryID != ""
 }
+
+type Status struct {
+	Conditions []Condition `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+}
+
+type Condition struct {
+	Type string `yaml:"type" json:"type"`
+
+	Status ConditionStatus `yaml:"status" json:"status"`
+
+	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
+
+	Message string `yaml:"message,omitempty" json:"message,omitempty"`
+}
+
+type ConditionStatus string
+
+const (
+	ConditionTrue    ConditionStatus = "True"
+	ConditionFalse   ConditionStatus = "False"
+	ConditionUnknown ConditionStatus = "Unknown"
+)

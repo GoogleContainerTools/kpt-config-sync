@@ -80,16 +80,17 @@ func TestGCENode(t *testing.T) {
 }
 
 // TestGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
-//  The test will run on a GKE cluster only with following pre-requisites
-// 1. Workload Identity is enabled.
-// 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
-// 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//      --role roles/iam.workloadIdentityUser \
-//      --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+//
+//		The test will run on a GKE cluster only with following pre-requisites
+//	 1. Workload Identity is enabled.
+//	 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
+//	 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+//	 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//	    gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
+//	    --role roles/iam.workloadIdentityUser \
+//	    --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	    e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
+//	 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  false,
@@ -102,16 +103,17 @@ func TestGKEWorkloadIdentity(t *testing.T) {
 }
 
 // TestWorkloadIdentity tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
-//  The test will run on a GKE cluster only with following pre-requisites
-// 1. Workload Identity is enabled.
-// 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
-// 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//      --role roles/iam.workloadIdentityUser \
-//      --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+//
+//		The test will run on a GKE cluster only with following pre-requisites
+//	 1. Workload Identity is enabled.
+//	 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
+//	 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+//	 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//	    gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
+//	    --role roles/iam.workloadIdentityUser \
+//	    --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+//	    e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
+//	 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestFleetWISameProject(t *testing.T) {
 	testWorkloadIdentity(t,
 		workloadIdentityTestSpec{
@@ -125,17 +127,18 @@ func TestFleetWISameProject(t *testing.T) {
 }
 
 // TestFleetWIInDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
-//  The test will run on a GKE cluster only with following pre-requisites
-// 1. Workload Identity is enabled.
-// 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
-// 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
-// 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//   gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//      --role roles/iam.workloadIdentityUser \
-//      --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//      e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-// 5. The cross-project fleet host project 'cs-dev-hub' is created.
-// 6. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
+//
+//		The test will run on a GKE cluster only with following pre-requisites
+//	 1. Workload Identity is enabled.
+//	 2. Access scopes for the nodes in the cluster must include `cloud-source-repos-ro`.
+//	 3. The Google service account `e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with the `roles/source.reader` role to access to CSR.
+//	 4. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
+//	    gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
+//	    --role roles/iam.workloadIdentityUser \
+//	    --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
+//	    e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
+//	 5. The cross-project fleet host project 'cs-dev-hub' is created.
+//	 6. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestFleetWIDifferentProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,

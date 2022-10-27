@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build all nomos go binaries
-FROM golang:1.17 as bins
+FROM golang:1.19 as bins
 
 WORKDIR /workspace
 

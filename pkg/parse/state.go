@@ -138,8 +138,8 @@ func (s *reconcilerState) resetCache() {
 // resetAllButSourceState resets the whole cache except for the cached sourceState.
 //
 // resetAllButSourceState is called when:
-//   * a force-resync happens, or
-//   * one of the watchers noticed a management conflict.
+//   - a force-resync happens, or
+//   - one of the watchers noticed a management conflict.
 func (s *reconcilerState) resetAllButSourceState() {
 	source := s.cache.source
 	s.cache = cacheForCommit{}

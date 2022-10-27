@@ -90,6 +90,7 @@ const (
 )
 
 // ClientDryRun returns true if input drs is DryRunClient
+//
 //nolint:stylecheck  // Prevent lint errors on receiver names caused by string generation above
 func (drs DryRunStrategy) ClientDryRun() bool {
 	return drs == DryRunClient

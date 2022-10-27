@@ -33,7 +33,7 @@ func NewErrorClient(err error) client.Client {
 }
 
 // Get implements client.Client.
-func (e ErrorClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object) error {
+func (e ErrorClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 	return e.error
 }
 

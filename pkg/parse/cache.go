@@ -31,8 +31,8 @@ import (
 // The reconciler resets the whole cache when a new commit is detected.
 //
 // The reconciler resets the whole cache except for the cached sourceState when:
-//   * a force-resync happens, or
-//   * one of the watchers noticed a management conflict.
+//   - a force-resync happens, or
+//   - one of the watchers noticed a management conflict.
 type cacheForCommit struct {
 	// source tracks the state of the source repo.
 	// This field is only set after the reconciler successfully reads all the source files.

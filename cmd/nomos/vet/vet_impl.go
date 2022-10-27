@@ -39,15 +39,22 @@ import (
 // vet runs nomos vet with the specified options.
 //
 // root is the OS-specific path to the Nomos policy root.
-//   If relative, it is assumed to be relative to the working directory.
+//
+//	If relative, it is assumed to be relative to the working directory.
+//
 // namespace, if non-emptystring, validates the repo as a CSMR Namespace
-//   repository.
+//
+//	repository.
+//
 // sourceFormat is whether the repository is in the hierarchy or unstructured
-//   format.
+//
+//	format.
+//
 // skipAPIServer is whether to skip the API Server checks.
 // allClusters is whether we are implicitly vetting every cluster.
 // clusters is the set of clusters we are checking.
-//   Only used if allClusters is false.
+//
+//	Only used if allClusters is false.
 func runVet(ctx context.Context, namespace string, sourceFormat filesystem.SourceFormat, apiServerTimeout time.Duration) error {
 	if sourceFormat == "" {
 		if namespace == "" {

@@ -88,7 +88,7 @@ __test-e2e-go-nobuild-prow:
 # current Kind network, so other Prow jobs running in the same
 # Cluster/NodePool/etc. are unaffected.
 test-e2e-kind: __push-local-image
-	@docker build . -f build/test-e2e-go/Dockerfile -t prow-image
+	@docker build . -f build/test-e2e-go/kind/Dockerfile -t prow-image
 	# The .sock volume allows you to connect to the Docker daemon of the host.
 	# Part of the docker-in-docker pattern.
 	@docker run -v /var/run/docker.sock:/var/run/docker.sock --network="host" prow-image make __test-e2e-go-nobuild-prow

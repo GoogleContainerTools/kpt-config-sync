@@ -1,0 +1,37 @@
+WARNING: Your config file at [/usr/local/google/home/rquitales/.docker/config.json] contains these credential helper entries:
+
+{
+  "credHelpers": {
+    "asia.gcr.io": "gcloud",
+    "eu.gcr.io": "gcloud",
+    "gcr.io": "gcloud",
+    "marketplace.gcr.io": "gcloud",
+    "staging-k8s.gcr.io": "gcloud",
+    "us-central1-docker.pkg.dev": "gcloud",
+    "us.gcr.io": "gcloud"
+  }
+}
+Adding credentials for all GCR repositories.
+WARNING: A long list of credential helpers may cause delays running 'docker build'. We recommend passing the registry name to configure only the registry you are using.
+gcloud credential helpers already registered correctly.
+WARNING: Your config file at [/usr/local/google/home/rquitales/.docker/config.json] contains these credential helper entries:
+
+{
+  "credHelpers": {
+    "asia.gcr.io": "gcloud",
+    "eu.gcr.io": "gcloud",
+    "gcr.io": "gcloud",
+    "marketplace.gcr.io": "gcloud",
+    "staging-k8s.gcr.io": "gcloud",
+    "us-central1-docker.pkg.dev": "gcloud",
+    "us.gcr.io": "gcloud"
+  }
+}
+Adding credentials for all GCR repositories.
+WARNING: A long list of credential helpers may cause delays running 'docker build'. We recommend passing the registry name to configure only the registry you are using.
+gcloud credential helpers already registered correctly.
+Activated service account credentials for: [prober-runner@stolos-dev.iam.gserviceaccount.com]
+Fetching cluster endpoint and auth data.
+kubeconfig entry generated for rquitales-cluster-1.
+make[1]: *** [Makefile.e2e.ci:76: __docker-run-e2e-go-gke] Error 1
+make: *** [Makefile.e2e.ci:110: test-e2e-go-gke-ci] Error 2

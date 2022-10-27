@@ -141,10 +141,10 @@ func (m *Manager) ManagementConflict() bool {
 
 // UpdateWatches accepts a map of GVKs that should be watched and takes the
 // following actions:
-// - stop watchers for any GroupVersionKind that is not present in the given
-//   map.
-// - start watchers for any GroupVersionKind that is present in the given map
-//   and not present in the current watch map.
+//   - stop watchers for any GroupVersionKind that is not present in the given
+//     map.
+//   - start watchers for any GroupVersionKind that is present in the given map
+//     and not present in the current watch map.
 //
 // This function is threadsafe.
 func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {

@@ -25,8 +25,9 @@ import (
 // AsUnstructured attempts to convert a client.Object to an
 // *unstructured.Unstructured.
 // TODO: This adds .status and .metadata.creationTimestamp to
-//  everything. Evaluate every use, and convert to using AsUnstructuredSanitized
-//  if possible.
+//
+//	everything. Evaluate every use, and convert to using AsUnstructuredSanitized
+//	if possible.
 func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) {
 	if u, isUnstructured := o.(*unstructured.Unstructured); isUnstructured {
 		// The path below returns a deep copy, so we want to make sure we return a

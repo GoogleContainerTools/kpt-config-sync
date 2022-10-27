@@ -149,7 +149,7 @@ type clientMock struct {
 	nextErr error
 }
 
-func (c *clientMock) Get(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+func (c *clientMock) Get(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
 	if c.nextErr != nil {
 		err := c.nextErr
 		c.nextErr = nil

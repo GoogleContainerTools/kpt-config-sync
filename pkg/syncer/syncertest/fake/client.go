@@ -104,7 +104,7 @@ func toGR(gk schema.GroupKind) schema.GroupResource {
 }
 
 // Get implements client.Client.
-func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object) error {
+func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
 	obj.SetName(key.Name)
 	obj.SetNamespace(key.Namespace)
 

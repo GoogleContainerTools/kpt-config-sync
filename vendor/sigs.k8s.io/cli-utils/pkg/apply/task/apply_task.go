@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -192,8 +192,8 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 		OpenAPIPatch:      true, // Normally set in apply.NewApplyOptions
 		Recorder:          genericclioptions.NoopRecorder{},
 		IOStreams: genericclioptions.IOStreams{
-			Out:    ioutil.Discard,
-			ErrOut: ioutil.Discard, // TODO: Warning for no lastConfigurationAnnotation
+			Out:    io.Discard,
+			ErrOut: io.Discard, // TODO: Warning for no lastConfigurationAnnotation
 			// is printed directly to stderr in ApplyOptions. We
 			// should turn that into a warning on the event channel.
 		},

@@ -57,9 +57,12 @@ func ParseMetrics(port int) (ConfigSyncMetrics, error) {
 // parseMetricName filters for the name of the metric.
 
 // Example input string:
-//   `config_sync_api_duration_seconds_sum{root_reconciler="root-reconciler",operation="create",status="success",type="Namespace"} 0.02125483`
+//
+//	`config_sync_api_duration_seconds_sum{root_reconciler="root-reconciler",operation="create",status="success",type="Namespace"} 0.02125483`
+//
 // Output:
-//   `api_duration_seconds`
+//
+//	`api_duration_seconds`
 func parseMetricName(m string) (string, error) {
 	regex := regexp.MustCompile(`config_sync_(.*?)(?:_sum)?[{ ]`)
 	ss := regex.FindStringSubmatch(m)

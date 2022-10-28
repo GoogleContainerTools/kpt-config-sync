@@ -157,7 +157,7 @@ metadata:
 	}
 
 	// Config Sync should remove `test-ns1`.
-	nomostest.WaitToTerminate(nt, kinds.Namespace(), "test-ns1", "")
+	nomostest.WaitForNotFound(nt, kinds.Namespace(), "test-ns1", "")
 
 	/* A new test */
 	ns = []byte(`
@@ -293,7 +293,7 @@ data:
 	}
 
 	// Config Sync should remove `test-ns`.
-	nomostest.WaitToTerminate(nt, kinds.ConfigMap(), "test-cm1", "bookstore")
+	nomostest.WaitForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore")
 
 	/* A new test */
 	cm = []byte(`

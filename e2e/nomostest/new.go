@@ -431,7 +431,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// understand the Repo and RootSync types as ConfigSync is now installed.
 	nt.RenewClient()
 
-	if err := waitForConfigSync(nt, opts.Nomos); err != nil {
+	if err := WaitForConfigSyncReady(nt, opts.Nomos); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}
 
@@ -469,7 +469,7 @@ func SwitchMode(nt *NT, sourceFormat filesystem.SourceFormat) {
 	if err != nil {
 		nt.T.Fatalf("waiting for ConfigSync CRDs to become established: %v", err)
 	}
-	err = waitForConfigSync(nt, nm)
+	err = WaitForConfigSyncReady(nt, nm)
 	if err != nil {
 		nt.T.Errorf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

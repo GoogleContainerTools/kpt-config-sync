@@ -255,7 +255,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(roleBindingName, backendNamespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WaitToTerminate(nt, kinds.Namespace(), backendNamespace, "")
+	nomostest.WaitForNotFound(nt, kinds.Namespace(), backendNamespace, "")
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
@@ -326,7 +326,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(roleBindingName, backendNamespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WaitToTerminate(nt, kinds.Namespace(), backendNamespace, "")
+	nomostest.WaitForNotFound(nt, kinds.Namespace(), backendNamespace, "")
 
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {

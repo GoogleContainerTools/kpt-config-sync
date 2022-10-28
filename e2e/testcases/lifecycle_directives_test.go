@@ -27,6 +27,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
@@ -58,7 +59,10 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("shipping", "", &corev1.Namespace{})
+	err = nt.Validate("shipping", "", &corev1.Namespace{},
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -85,7 +89,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Ensure we kept the undeclared Namespace that had the "deletion: prevent" annotation.
 	err = nt.Validate("shipping", "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion)
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -137,7 +143,10 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	// ensure that the Role is created with the preventDeletion annotation
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
+	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -147,7 +156,10 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role declaration")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{})
+	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -157,6 +169,14 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Role")
 	nt.WaitForRepoSyncs()
+
+	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+		nomostest.NotPendingDeletion,
+		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateErrorMetricsNotFound()
@@ -186,7 +206,10 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{})
+	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -196,7 +219,10 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove ClusterRole bar declaration")
 	nt.WaitForRepoSyncs()
 
-	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{})
+	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -206,6 +232,14 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from ClusterRole")
 	nt.WaitForRepoSyncs()
+
+	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+		nomostest.NotPendingDeletion,
+		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateErrorMetricsNotFound()
@@ -231,7 +265,15 @@ func TestPreventDeletionImplicitNamespace(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	err := nt.Validate(implicitNamespace, "", &corev1.Namespace{},
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		// Implicit namespaces don't get the full set of configsync annotations & labels.
+		// So we can't just use the HasAllNomosMetadata predicate.
+		nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+		nomostest.HasAnnotationKey(metadata.SyncTokenAnnotationKey),
+		nomostest.HasAnnotationKey(metadata.ResourceIDKey),
+		nomostest.HasLabel(metadata.ManagedByKey, metadata.ManagedByValue),
+	)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -246,7 +288,9 @@ func TestPreventDeletionImplicitNamespace(t *testing.T) {
 
 	// Ensure the Namespace wasn't deleted.
 	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion)
+		nomostest.NotPendingDeletion,
+		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		nomostest.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -277,14 +321,20 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// Verify that the special namespaces have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range differ.SpecialNamespaces {
 		if !skipAutopilotManagedNamespace(nt, ns) {
-			if err := nt.Validate(ns, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
+			if err := nt.Validate(ns, "", &corev1.Namespace{},
+				nomostest.NotPendingDeletion,
+				nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+				nomostest.HasAllNomosMetadata(nt.MultiRepo)); err != nil {
 				nt.T.Fatal(err)
 			}
 		}
 	}
 
 	// Verify that the bookstore namespace does not have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
-	err := nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation))
+	err := nt.Validate("bookstore", "", &corev1.Namespace{},
+		nomostest.NotPendingDeletion,
+		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		nomostest.HasAllNomosMetadata(nt.MultiRepo))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -301,7 +351,10 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// Verify that the special namespaces still exist and have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range differ.SpecialNamespaces {
 		if !skipAutopilotManagedNamespace(nt, ns) {
-			if err := nt.Validate(ns, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
+			if err := nt.Validate(ns, "", &corev1.Namespace{},
+				nomostest.NotPendingDeletion,
+				nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+				nomostest.NoConfigSyncMetadata()); err != nil {
 				nt.T.Fatal(err)
 			}
 		}

@@ -246,7 +246,10 @@ func HasAllNomosMetadata(multiRepo bool) Predicate {
 		annotationKeys := metadata.GetNomosAnnotationKeys(multiRepo)
 		labels := metadata.SyncerLabels()
 
-		predicates := []Predicate{HasAllAnnotationKeys(annotationKeys...), HasAnnotation("configmanagement.gke.io/managed", "enabled")}
+		predicates := []Predicate{
+			HasAllAnnotationKeys(annotationKeys...),
+			HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+		}
 		for labelKey, value := range labels {
 			predicates = append(predicates, HasLabel(labelKey, value))
 		}
@@ -267,7 +270,8 @@ func HasAllNomosMetadata(multiRepo bool) Predicate {
 func NoConfigSyncMetadata() Predicate {
 	return func(o client.Object) error {
 		if metadata.HasConfigSyncMetadata(o) {
-			return fmt.Errorf("object %q shouldn't have configsync metadta %v, %v", o.GetName(), o.GetLabels(), o.GetAnnotations())
+			return fmt.Errorf("object %q shouldn't have configsync metadata (labels: %v, annotations: %v)",
+				o.GetName(), o.GetLabels(), o.GetAnnotations())
 		}
 		return nil
 	}

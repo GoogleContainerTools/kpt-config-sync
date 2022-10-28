@@ -149,9 +149,9 @@ func Clean(nt *NT, failOnError FailOnError) {
 
 		for _, u := range list {
 			if failOnError {
-				WaitToTerminate(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace())
+				WaitForNotFound(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace())
 			} else {
-				WaitToTerminate(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace(), WaitNoFail())
+				WaitForNotFound(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace(), WaitNoFail())
 			}
 		}
 	}
@@ -289,9 +289,9 @@ func deleteImplicitNamespaces(nt *NT, failOnError FailOnError) {
 				errDeleting = true
 			}
 			if failOnError {
-				WaitToTerminate(nt, kinds.Namespace(), ns.Name, "")
+				WaitForNotFound(nt, kinds.Namespace(), ns.Name, "")
 			} else {
-				WaitToTerminate(nt, kinds.Namespace(), ns.Name, "", WaitNoFail())
+				WaitForNotFound(nt, kinds.Namespace(), ns.Name, "", WaitNoFail())
 			}
 		}
 	}
@@ -437,18 +437,6 @@ func FailIfUnknown(t testing.NTB, scheme *runtime.Scheme, o client.Object) {
 	if len(gvks) == 0 {
 		t.Fatalf("unknown type %T %v. Add it to nomostest.newScheme().", o, o.GetObjectKind().GroupVersionKind())
 	}
-}
-
-// WaitToTerminate waits for the passed object to be deleted.
-// Immediately fails the test if the object is not deleted within the timeout.
-func WaitToTerminate(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {
-	nt.T.Helper()
-
-	Wait(nt.T, fmt.Sprintf("wait for %q %v to terminate", name, gvk), nt.DefaultWaitTimeout, func() error {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(gvk)
-		return nt.ValidateNotFound(name, namespace, u)
-	}, opts...)
 }
 
 // DeleteRemoteRepos removes all remote repos on the Git provider.

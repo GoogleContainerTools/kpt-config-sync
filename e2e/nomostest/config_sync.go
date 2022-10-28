@@ -215,14 +215,6 @@ func isPSPCluster() bool {
 	return strings.Contains(testing.GCPClusterFromEnv, "psp")
 }
 
-// waitForConfigSync validates if the config sync deployment is ready.
-func waitForConfigSync(nt *NT, nomos ntopts.Nomos) error {
-	if nomos.MultiRepo {
-		return ValidateMultiRepoDeployments(nt)
-	}
-	return validateMonoRepoDeployments(nt)
-}
-
 // convertObjects converts objects to their literal types. We can do this as
 // we should have all required types in the scheme anyway. This keeps us from
 // having to do ugly Unstructured operations.
@@ -707,7 +699,7 @@ func revokeRepoSyncClusterRoleBinding(nt *NT, nn types.NamespacedName) {
 		}
 		nt.T.Fatal(err)
 	}
-	WaitToTerminate(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, "")
+	WaitForNotFound(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, "")
 }
 
 func revokeRepoSyncNamespace(nt *NT, ns string) {
@@ -730,7 +722,7 @@ func revokeRepoSyncNamespace(nt *NT, ns string) {
 			nt.T.Fatal(err)
 		}
 	}
-	WaitToTerminate(nt, kinds.Namespace(), ns, "")
+	WaitForNotFound(nt, kinds.Namespace(), ns, "")
 }
 
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
@@ -1109,7 +1101,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	}
 
 	// Wait for all Namespaces to be applied and reconciled.
-	nt.WaitForNamespaces(nt.DefaultWaitTimeout, namespaces...)
+	WaitForNamespaces(nt, nt.DefaultWaitTimeout, namespaces...)
 
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
@@ -1362,8 +1354,8 @@ func deleteRootRepos(nt *NT) {
 		if err := nt.Delete(&rs); err != nil {
 			nt.T.Fatal(err)
 		}
-		WaitToTerminate(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace)
-		WaitToTerminate(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+		WaitForNotFound(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace)
+		WaitForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
 	}
 }
 
@@ -1388,7 +1380,7 @@ func deleteNamespaceRepos(nt *NT) {
 	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	}
-	WaitToTerminate(nt, kinds.ClusterRole(), rsClusterRole.Name, "")
+	WaitForNotFound(nt, kinds.ClusterRole(), rsClusterRole.Name, "")
 }
 
 // SetPolicyDir updates the root-sync object with the provided policyDir.

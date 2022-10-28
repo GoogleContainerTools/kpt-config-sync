@@ -24,6 +24,7 @@ import (
 	"k8s.io/kube-openapi/pkg/schemaconv"
 	"k8s.io/kube-openapi/pkg/util/proto"
 	"k8s.io/kubectl/pkg/util/openapi"
+	"sigs.k8s.io/structured-merge-diff/v4/schema"
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
 
@@ -105,7 +106,8 @@ func typedParser(doc *openapiv2.Document) (*typed.Parser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("converting models to schema: %w", err)
 	}
-	// This fails the copylocks lint check, but this is exactly how the API server
-	// does it so I'm not sure what else to do.
-	return &typed.Parser{Schema: *typeSchema}, nil //nolint:govet
+
+	// We need to copy into a new schema.Schema to avoid copylock issue.
+	// See https://github.com/kubernetes/kubernetes/pull/109212/files
+	return &typed.Parser{Schema: schema.Schema{Types: typeSchema.Types}}, nil
 }

@@ -26,10 +26,30 @@ Unit tests are small focused test that runs quickly. Run them with:
 make test
 ```
 
+### E2E tests
+
+Config Sync also has e2e tests. These can be run on [kind] or GKE and can take
+a long time to finish.
+
+For the complete list of arguments accepted by the e2e tests, see [flags.go](../e2e/flags.go).
+Below is a non-exhaustive list of some useful arguments for running the e2e tests.
+These can be provided on the command line with `go test` or with program arguments in your IDE.
+
+- `--e2e` - If true, run end-to-end tests. (required to run the e2e tests)
+- `--debug` - If true, do not destroy cluster and clean up temporary directory after test.
+- `--image-prefix` - The prefix to use for Docker images. Defaults to the local Docker registry. Omit the trailing slash.
+- `--image-tag` - The tag to use for Docker images. Defaults to 'latest'
+- `--share-test-env` - Specify that the test is using a shared test environment instead of fresh installation per test case.
+- `--test-cluster` - The cluster config used for testing. Allowed values are: `kind` and `gke`.
+
+Here are some useful flags from [go test](https://pkg.go.dev/cmd/go#hdr-Testing_flags):
+- `--test.v` - More verbose output
+- `--test.parallel` -- Allow parallel execution of tests (only available for [kind])
+- `--test.run` -- Run only tests matching the provided regular expression
+
 ### E2E tests (kind)
 
-Config Sync also has e2e tests. These run on [kind] and can take a long time
-to finish.
+This section provides instructions on how to run the e2e tests on [kind].
 
 #### Prerequisites
 
@@ -39,7 +59,7 @@ Install [kind]
 go install sigs.k8s.io/kind@v0.14.0
 ```
 
-- This will put kind in $(go env GOPATH)/bin. This directory will need to be added to $PATH if it isn't already.
+- This will put kind in `$(go env GOPATH)/bin`. This directory will need to be added to `$PATH` if it isn't already.
 - After upgrading kind, you usually need to delete all your existing kind clusters so that kind functions correctly.
 - Deleting all running kind clusters usually fixes kind issues.
 
@@ -59,7 +79,7 @@ go test ./e2e/... --e2e --debug --test.v --image-tag=(IMAGE_TAG) --test.run (tes
 
 ### E2E tests (GKE)
 
-Config Sync e2e tests can also target clusters on GKE.
+This section provides instructions on how to run the e2e tests on GKE.
 
 #### Prerequisites
 
@@ -85,6 +105,25 @@ go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1
 ```
 
 ## Build
+
+The make targets use default values for certain variables which can be
+overridden at runtime. For the full list of variables observed by the make
+targets, see [Makefile](../Makefile). Below is a non-exhaustive list of some
+useful variables observed by the make targets.
+
+- `REGISTRY` - Registry to use for image tags. Defaults to `gcr.io/<gcloud-context>`.
+- `IMAGE_TAG` - Version to use for image tags. Defaults to `git describe`.
+
+> **_Note:_**
+The full image tags are constructed using `$(REGISTRY)/<image-name>:$(IMAGE_TAG)`.
+
+Here is an example for how these can be provided at runtime:
+```shell
+make build-images IMAGE_TAG=latest
+```
+
+### Build from source
+
 Config Sync can be built from source with a single command:
 
 ```
@@ -94,7 +133,7 @@ make config-sync-manifest
 This will build all the docker images needed for Config Sync and generate
 the manifests needed to run it. The images will by default be uploaded to 
 Google Container Registry under your current gcloud project and the manifests
-will be created in .output/staging/oss under the Config Sync directory.
+will be created in `.output/staging/oss` under the Config Sync directory.
 
 ### Subcomponents
 Individual components of Config Sync can be built/used with the following

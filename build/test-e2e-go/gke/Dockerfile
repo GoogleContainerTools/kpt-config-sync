@@ -17,7 +17,7 @@ FROM gcr.io/google.com/cloudsdktool/cloud-sdk:369.0.0-slim as gcloud-install
 RUN apt-get install -y kubectl
 
 # Build e2e image
-FROM golang:1.17.7-alpine
+FROM golang:1.19.2-alpine
 
 WORKDIR /repo
 

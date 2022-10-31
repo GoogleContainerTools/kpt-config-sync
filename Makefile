@@ -238,7 +238,7 @@ fmt-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) goimports -w $(NOMOS_CODE_DIRS)
 
 tidy:
-	go mod tidy -compat=1.17
+	go mod tidy -compat=1.19
 
 vendor:
 	go mod vendor

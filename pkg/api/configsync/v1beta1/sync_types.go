@@ -16,7 +16,6 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // Status provides a common type that is embedded in RepoSyncStatus and RootSyncStatus.
@@ -263,20 +262,3 @@ const (
 	// HelmSource represents the source type is Helm repository.
 	HelmSource SourceType = "helm"
 )
-
-// GetPeriodSecs returns the sync period defaulting to 15 if empty.
-func GetPeriodSecs(period metav1.Duration) float64 {
-	if period.Duration == 0 {
-		return configsync.DefaultPeriodSecs
-	}
-	return period.Duration.Seconds()
-}
-
-// GetSecretName will return an empty string if the secretRef.name is
-// empty or the secretRef doesn't exist
-func GetSecretName(secretRef *SecretReference) string {
-	if secretRef != nil {
-		return secretRef.Name
-	}
-	return ""
-}

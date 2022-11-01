@@ -96,11 +96,3 @@ type SecretReference struct {
 	// +optional
 	Name string `json:"name,omitempty"`
 }
-
-// GetPeriodSecs returns the sync period defaulting to 15 if empty.
-func GetPeriodSecs(g *Git) float64 {
-	if g.Period.Duration == 0 {
-		return configsync.DefaultPeriodSecs
-	}
-	return g.Period.Duration.Seconds()
-}

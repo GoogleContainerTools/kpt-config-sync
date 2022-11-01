@@ -15,6 +15,7 @@
 package reposync
 
 import (
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
@@ -84,35 +85,46 @@ var singleErrorSummary = &v1beta1.ErrorSummary{
 }
 
 // SetReconciling sets the Reconciling condition to True.
-func SetReconciling(rs *v1beta1.RepoSync, reason, message string) {
-	if setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, &v1beta1.ErrorSummary{}, now()) {
+// Returns whether the condition was updated (any change) or transitioned
+// (status change).
+// Removes the Syncing condition if the Reconciling condition transitioned.
+func SetReconciling(rs *v1beta1.RepoSync, reason, message string) (updated, transitioned bool) {
+	updated, transitioned = setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, &v1beta1.ErrorSummary{}, now())
+	if transitioned {
 		removeCondition(rs, v1beta1.RepoSyncSyncing)
 	}
+	return updated, transitioned
 }
 
 // SetStalled sets the Stalled condition to True.
-func SetStalled(rs *v1beta1.RepoSync, reason string, err error) {
-	if setCondition(rs, v1beta1.RepoSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, singleErrorSummary, now()) {
+// Returns whether the condition was updated (any change) or transitioned
+// (status change).
+// Removes the Syncing condition if the Stalled condition transitioned.
+func SetStalled(rs *v1beta1.RepoSync, reason string, err error) (updated, transitioned bool) {
+	updated, transitioned = setCondition(rs, v1beta1.RepoSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, singleErrorSummary, now())
+	if transitioned {
 		removeCondition(rs, v1beta1.RepoSyncSyncing)
 	}
+	return updated, transitioned
 }
 
 // SetSyncing sets the Syncing condition.
-func SetSyncing(rs *v1beta1.RepoSync, status bool, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, lastUpdate metav1.Time) {
+// Returns whether the condition was updated (any change) or transitioned
+// (status change).
+func SetSyncing(rs *v1beta1.RepoSync, status bool, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
 	var conditionStatus metav1.ConditionStatus
 	if status {
 		conditionStatus = metav1.ConditionTrue
 	} else {
 		conditionStatus = metav1.ConditionFalse
 	}
-
-	setCondition(rs, v1beta1.RepoSyncSyncing, conditionStatus, reason, message, commit, errorSources, errorSummary, lastUpdate)
+	return setCondition(rs, v1beta1.RepoSyncSyncing, conditionStatus, reason, message, commit, errorSources, errorSummary, timestamp)
 }
 
 // setCondition adds or updates the specified condition with a True status.
-// It returns a boolean indicating if the condition status is transited.
-func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, lastUpdate metav1.Time) bool {
-	conditionTransited := false
+// Returns whether the condition was updated (any change) or transitioned
+// (status change).
+func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
 	condition := GetCondition(rs.Status.Conditions, condType)
 	if condition == nil {
 		i := len(rs.Status.Conditions)
@@ -122,17 +134,26 @@ func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, 
 
 	if condition.Status != status {
 		condition.Status = status
-		condition.LastTransitionTime = lastUpdate
-		conditionTransited = true
+		condition.LastTransitionTime = timestamp
+		transitioned = true
+		updated = true
+	} else if condition.Reason != reason ||
+		condition.Message != message ||
+		condition.Commit != commit ||
+		!equality.Semantic.DeepEqual(condition.ErrorSourceRefs, errorSources) ||
+		!equality.Semantic.DeepEqual(condition.ErrorSummary, errorSummary) {
+		updated = true
+	} else {
+		return updated, transitioned
 	}
 	condition.Reason = reason
 	condition.Message = message
 	condition.Commit = commit
 	condition.ErrorSourceRefs = errorSources
 	condition.ErrorSummary = errorSummary
-	condition.LastUpdateTime = lastUpdate
+	condition.LastUpdateTime = timestamp
 
-	return conditionTransited
+	return updated, transitioned
 }
 
 // GetCondition returns the condition with the provided type.
@@ -146,20 +167,23 @@ func GetCondition(conditions []v1beta1.RepoSyncCondition, condType v1beta1.RepoS
 }
 
 // removeCondition removes the RepoSync condition with the provided type.
-func removeCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType) {
-	rs.Status.Conditions = filterOutCondition(rs.Status.Conditions, condType)
+func removeCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType) (updated bool) {
+	rs.Status.Conditions, updated = filterOutCondition(rs.Status.Conditions, condType)
+	return updated
 }
 
 // filterOutCondition returns a new slice of RepoSync conditions without conditions with the provided type.
-func filterOutCondition(conditions []v1beta1.RepoSyncCondition, condType v1beta1.RepoSyncConditionType) []v1beta1.RepoSyncCondition {
+func filterOutCondition(conditions []v1beta1.RepoSyncCondition, condType v1beta1.RepoSyncConditionType) ([]v1beta1.RepoSyncCondition, bool) {
 	var newConditions []v1beta1.RepoSyncCondition
+	updated := false
 	for _, c := range conditions {
 		if c.Type == condType {
+			updated = true
 			continue
 		}
 		newConditions = append(newConditions, c)
 	}
-	return newConditions
+	return newConditions, updated
 }
 
 // ConditionHasNoErrors returns true when `cond` has no errors, and returns false when `cond` has errors.

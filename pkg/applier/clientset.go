@@ -111,6 +111,7 @@ func (cs *clientSet) handleDisabledObjects(ctx context.Context, rg *live.Invento
 	var errs status.MultiError
 	for _, obj := range objs {
 		err := cs.disableObject(ctx, obj)
+		handleMetrics(ctx, "unmanage", err, obj.GetObjectKind().GroupVersionKind())
 		if err != nil {
 			klog.Warningf("failed to disable object %v", core.IDOf(obj))
 			errs = status.Append(errs, Error(err))

@@ -247,3 +247,24 @@ func cseFromResourceError(err ResourceError) v1beta1.ConfigSyncError {
 	}
 	return cse
 }
+
+// CountErrorByClass counts the errors by errorclass.
+// The errorclass is a string derived from the error code. For example, the errorclass
+// of a ConfigSyncErrow with the error code of "1323" is "1xxx".
+func CountErrorByClass(errs []v1beta1.ConfigSyncError) map[string]int64 {
+	var result = make(map[string]int64)
+	for _, err := range errs {
+		// `err.Code` should not be empty
+		if err.Code == "" {
+			continue
+		}
+
+		errorclass := fmt.Sprintf("%sxxx", string(err.Code[0]))
+		if _, ok := result[errorclass]; !ok {
+			result[errorclass] = 1
+		} else {
+			result[errorclass]++
+		}
+	}
+	return result
+}

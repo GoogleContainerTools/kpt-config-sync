@@ -139,8 +139,6 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 		objs, err = validate.Hierarchical(objs, options)
 	}
 
-	metrics.RecordReconcilerErrors(ctx, "parsing", status.NonBlockingErrors(err))
-
 	if status.HasBlockingErrors(err) {
 		return nil, err
 	}
@@ -415,7 +413,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 		klog.Infof("New sync errors for RootSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !syncing {
+	if !syncing && rs.Status.Sync.Commit != "" {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 

@@ -56,7 +56,7 @@ type Applier interface {
 	Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error)
 	Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (bool, status.Error)
 	// RemoveNomosMeta performs a PUT (rather than a PATCH) to ensure that labels and annotations are removed.
-	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured) (bool, status.Error)
+	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) (bool, status.Error)
 	Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error)
 	GetClient() client.Client
 }
@@ -117,7 +117,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		}
 	}
 	metrics.Operations.WithLabelValues("create", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, "create", m.StatusTagKey(err), intendedState.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "create", m.StatusTagKey(err), intendedState.GroupVersionKind())
 
 	if err != nil {
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
@@ -134,7 +134,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (bool, status.Error) {
 	patch, err := c.update(ctx, intendedState, currentState)
 	metrics.Operations.WithLabelValues("update", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, "update", m.StatusTagKey(err), intendedState.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err), intendedState.GroupVersionKind())
 
 	switch {
 	case apierrors.IsConflict(err):
@@ -159,7 +159,7 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 }
 
 // RemoveNomosMeta implements Applier.
-func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured) (bool, status.Error) {
+func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) (bool, status.Error) {
 	var changed bool
 	_, err := c.client.Apply(ctx, u, func(obj client.Object) (client.Object, error) {
 		changed = metadata.RemoveConfigSyncMetadata(obj)
@@ -169,7 +169,7 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 		return obj, nil
 	})
 	metrics.Operations.WithLabelValues("update", u.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, "update", m.StatusTagKey(err), u.GroupVersionKind())
+	m.RecordApplyOperation(ctx, controller, "update", m.StatusTagKey(err), u.GroupVersionKind())
 
 	if changed {
 		klog.V(3).Infof("RemoveNomosMeta changed the object %v", core.GKNN(u))
@@ -183,7 +183,7 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
 	err := c.client.Delete(ctx, obj)
 	metrics.Operations.WithLabelValues("delete", obj.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, "delete", m.StatusTagKey(err), obj.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err), obj.GroupVersionKind())
 
 	if err != nil {
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)

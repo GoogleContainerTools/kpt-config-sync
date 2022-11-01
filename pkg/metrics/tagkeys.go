@@ -31,7 +31,10 @@ var (
 	// KeyOperation groups metrics by their operation. Possible values: create, patch, update, delete.
 	KeyOperation, _ = tag.NewKey("operation")
 
-	// KeyComponent groups metrics by their component. Possible values: parsing, source, sync, rendering, readiness(from Resource Group Controller).
+	// KeyController groups metrics by their controller. Possible values: applier, remediator, syncer.
+	KeyController, _ = tag.NewKey("controller")
+
+	// KeyComponent groups metrics by their component. Possible values: source, sync, rendering, readiness(from Resource Group Controller).
 	KeyComponent, _ = tag.NewKey("component")
 
 	// KeyErrorClass groups metrics by their error code.
@@ -94,6 +97,10 @@ const (
 	// CommitNone is the string value for the commit key indicating that no
 	// commit has been synced.
 	CommitNone = "NONE"
+	// ApplierController is the string value for the applier controller in the multi-repo mode
+	ApplierController = "applier"
+	// RemediatorController is the string value for the remediator controller in the multi-repo mode
+	RemediatorController = "remediator"
 )
 
 // StatusTagKey returns a string representation of the error, if it exists, otherwise success.

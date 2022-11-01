@@ -17,7 +17,9 @@ package status
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/graph"
 )
@@ -88,6 +90,72 @@ func TestFormatCyclicDepErr(t *testing.T) {
 			}
 			if got := formatCyclicDepErr(tc.message); got != tc.want {
 				t.Errorf("formatCyclicDepErr() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSplitErrorByClass(t *testing.T) {
+	tests := []struct {
+		name string
+		errs []v1beta1.ConfigSyncError
+		want map[string]int64
+	}{
+		{
+			name: "no errors",
+			errs: []v1beta1.ConfigSyncError{},
+			want: map[string]int64{},
+		},
+		{
+			name: "1xxx error count: 1; 2xxx error count: 1",
+			errs: []v1beta1.ConfigSyncError{
+				{Code: "1122"},
+				{Code: "2122"},
+			},
+			want: map[string]int64{
+				"1xxx": 1,
+				"2xxx": 1,
+			},
+		},
+		{
+			name: "1xxx error count: 3",
+			errs: []v1beta1.ConfigSyncError{
+				{Code: "1122"},
+				{Code: "1123"},
+				{Code: "1124"},
+			},
+			want: map[string]int64{
+				"1xxx": 3,
+			},
+		},
+		{
+			name: "1xxx error count: 3, 2xxx error count: 2, 5xxx error count: 1, 9xxx error count: 2",
+			errs: []v1beta1.ConfigSyncError{
+				// 1xxx errors
+				{Code: "1122"},
+				{Code: "1123"},
+				{Code: "1124"},
+				// 2xxx errors
+				{Code: "2122"},
+				{Code: "2123"},
+				// 5xxx errors
+				{Code: "5124"},
+				// 9xxx errors
+				{Code: "9122"},
+				{Code: "9123"},
+			},
+			want: map[string]int64{
+				"1xxx": 3,
+				"2xxx": 2,
+				"5xxx": 1,
+				"9xxx": 2,
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CountErrorByClass(tc.errs); !cmp.Equal(got, tc.want) {
+				t.Errorf("SplitErrorByClass(errs) = %v, want %v", got, tc.want)
 			}
 		})
 	}

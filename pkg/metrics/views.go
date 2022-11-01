@@ -19,7 +19,11 @@ import (
 	"go.opencensus.io/tag"
 )
 
+// distributionBounds defines the bounds for a histogram distribution meansuring short durations.
 var distributionBounds = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
+
+// longDistributionBounds defines the bounds for a histogram distribution meansuring long durations.
+var longDistributionBounds = []float64{1, 5, 10, 30, 60, 300, 600, 1200, 1800, 3600, 5400}
 
 var (
 	// APICallDurationView aggregates the APICallDuration metric measurements.
@@ -67,7 +71,7 @@ var (
 		Measure:     ParserDuration,
 		Description: "The latency distribution of the parse-apply-watch loop",
 		TagKeys:     []tag.Key{KeyStatus, KeyTrigger, KeyParserSource},
-		Aggregation: view.Distribution(distributionBounds...),
+		Aggregation: view.Distribution(longDistributionBounds...),
 	}
 
 	// LastSyncTimestampView aggregates the LastSyncTimestamp metric measurements.
@@ -92,7 +96,7 @@ var (
 		Name:        ApplyOperations.Name() + "_total",
 		Measure:     ApplyOperations,
 		Description: "The total number of operations that have been performed to sync resources to source of truth",
-		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
+		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyStatus},
 		Aggregation: view.Count(),
 	}
 
@@ -102,7 +106,7 @@ var (
 		Measure:     ApplyDuration,
 		Description: "The latency distribution of applier resource sync events",
 		TagKeys:     []tag.Key{KeyStatus},
-		Aggregation: view.Distribution(distributionBounds...),
+		Aggregation: view.Distribution(longDistributionBounds...),
 	}
 
 	// LastApplyTimestampView aggregates the LastApplyTimestamp metric measurements.

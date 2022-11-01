@@ -112,7 +112,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 			return err
 		}
 		klog.V(3).Infof("The remediator is about to unmanage object %v", core.GKNN(actual))
-		_, err = r.applier.RemoveNomosMeta(ctx, actual)
+		_, err = r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 		return err
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.

@@ -58,7 +58,7 @@ func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Uns
 }
 
 // RemoveNomosMeta implements reconcile.Applier.
-func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) (bool, status.Error) {
 	updated := metadata.RemoveConfigSyncMetadata(intent)
 	if !updated {
 		return false, nil

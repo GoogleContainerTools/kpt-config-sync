@@ -205,6 +205,7 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEv
 
 	case event.ApplyFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
+		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
@@ -302,6 +303,7 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEv
 
 	case event.PruneFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
+		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
 		return PruneErrorForResource(e.Error, id)
 
 	case event.PruneSkipped:
@@ -309,6 +311,7 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEv
 		if isNamespace(e.Object) && differ.SpecialNamespaces[e.Object.GetName()] {
 			// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 			err := cs.disableObject(ctx, e.Object)
+			handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
 			if err != nil {
 				errorMsg := "failed to remove the Config Sync metadata from %v (which is a special namespace): %v"
 				klog.Errorf(errorMsg, id, err)
@@ -373,7 +376,7 @@ func handleMetrics(ctx context.Context, operation string, err error, gvk schema.
 
 	m.RecordAPICallDuration(ctx, operation, m.StatusTagKey(err), gvk, start)
 	metrics.Operations.WithLabelValues(operation, gvk.Kind, metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, operation, m.StatusTagKey(err), gvk)
+	m.RecordApplyOperation(ctx, m.ApplierController, operation, m.StatusTagKey(err), gvk)
 }
 
 // checkInventoryObjectSize checks the inventory object size limit.

@@ -461,7 +461,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.GetOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.GetOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.GetOverride().APIServerTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -472,7 +472,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			secretType:      rs.Spec.Git.Auth,
 			period:          v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
 			proxy:           rs.Spec.Proxy,
-			depth:           rs.Spec.GetOverride().GitSyncDepth,
+			depth:           rs.Spec.SafeOverride().GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 		})
@@ -658,7 +658,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
 			case reconcilermanager.HydrationController:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				if rs.Spec.GetOverride().EnableShellInRendering == nil || !*rs.Spec.GetOverride().EnableShellInRendering {
+				if rs.Spec.SafeOverride().EnableShellInRendering == nil || !*rs.Spec.SafeOverride().EnableShellInRendering {
 					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationControllerWithShell, reconcilermanager.HydrationController)
 				} else {
 					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")

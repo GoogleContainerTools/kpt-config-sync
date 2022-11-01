@@ -77,7 +77,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	// Override the git sync depth setting for ns-reconciler-backend
 	var depth int64 = 33
-	repoSyncBackend.Spec.GetOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
 	nt.WaitForRepoSyncs()
@@ -110,7 +110,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	// Override the git sync depth setting for ns-reconciler-backend to 0
 	depth = 0
-	repoSyncBackend.Spec.GetOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
 	nt.WaitForRepoSyncs()
@@ -186,7 +186,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 	// Override the git sync depth setting for ns-reconciler-backend
 	var depth int64 = 33
-	repoSyncBackend.Spec.GetOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
 	nt.WaitForRepoSyncs()
@@ -219,7 +219,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 	// Override the git sync depth setting for ns-reconciler-backend to 0
 	depth = 0
-	repoSyncBackend.Spec.GetOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
 	nt.WaitForRepoSyncs()

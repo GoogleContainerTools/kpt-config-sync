@@ -27,20 +27,20 @@ func GetPeriodSecs(g *Git) float64 {
 	return g.Period.Duration.Seconds()
 }
 
-// GetOverride creates an override or returns an existing one
+// SafeOverride creates an override or returns an existing one
 // use it if you need to ensure that you are assigning
 // to an object, but not to test for nil (current existance)
-func (rs *RepoSyncSpec) GetOverride() *OverrideSpec {
+func (rs *RepoSyncSpec) SafeOverride() *OverrideSpec {
 	if rs.Override == nil {
 		rs.Override = &OverrideSpec{}
 	}
 	return rs.Override
 }
 
-// GetOverride creates an override or returns an existing one
+// SafeOverride creates an override or returns an existing one
 // use it if you need to ensure that you are assigning
 // to an object, but not to test for nil (current existance)
-func (rs *RootSyncSpec) GetOverride() *OverrideSpec {
+func (rs *RootSyncSpec) SafeOverride() *OverrideSpec {
 	if rs.Override == nil {
 		rs.Override = &OverrideSpec{}
 	}

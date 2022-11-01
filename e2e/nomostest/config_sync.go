@@ -895,7 +895,7 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Alpha1(name, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -928,7 +928,7 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Beta1(name, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -944,7 +944,7 @@ func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Beta1(syncName, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -982,7 +982,7 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := RepoSyncObjectV1Alpha1(nn, repoURL)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -1016,7 +1016,7 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	sourceFormat := repo.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -1032,7 +1032,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	sourceFormat := repo.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
 	return rs
 }
@@ -1050,7 +1050,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		}
 		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
 		if opts.MultiRepo.ReconcileTimeout != nil {
-			rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
@@ -1087,7 +1087,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 		if opts.MultiRepo.ReconcileTimeout != nil {
-			rs.Spec.GetOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, nn.Name), rs)
 

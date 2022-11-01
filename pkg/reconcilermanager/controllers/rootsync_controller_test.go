@@ -174,7 +174,7 @@ func rootsyncGCPSAEmail(email string) func(sync *v1beta1.RootSync) {
 
 func rootsyncOverrideResources(containers []v1beta1.ContainerResourcesSpec) func(sync *v1beta1.RootSync) {
 	return func(sync *v1beta1.RootSync) {
-		sync.Spec.Override = v1beta1.OverrideSpec{
+		sync.Spec.Override = &v1beta1.OverrideSpec{
 			Resources: containers,
 		}
 	}
@@ -182,19 +182,19 @@ func rootsyncOverrideResources(containers []v1beta1.ContainerResourcesSpec) func
 
 func rootsyncOverrideGitSyncDepth(depth int64) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
-		rs.Spec.Override.GitSyncDepth = &depth
+		rs.Spec.SafeOverride().GitSyncDepth = &depth
 	}
 }
 
 func rootsyncOverrideReconcileTimeout(reconcileTimeout metav1.Duration) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
-		rs.Spec.Override.ReconcileTimeout = &reconcileTimeout
+		rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
 	}
 }
 
 func rootsyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
-		rs.Spec.Override.APIServerTimeout = &apiServerTimout
+		rs.Spec.SafeOverride().APIServerTimeout = &apiServerTimout
 	}
 }
 
@@ -321,7 +321,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs.Spec.Override = v1beta1.OverrideSpec{
+	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideSelectedResources,
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -345,7 +345,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
-	rs.Spec.Override = v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.OverrideSpec{}
 
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -420,7 +420,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs.Spec.Override = v1beta1.OverrideSpec{
+	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideAllContainerResources,
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -462,7 +462,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs.Spec.Override = v1beta1.OverrideSpec{
+	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideReconcilerAndHydrationResources,
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -494,7 +494,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs.Spec.Override = v1beta1.OverrideSpec{
+	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideGitSyncResources,
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -518,7 +518,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
-	rs.Spec.Override = v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.OverrideSpec{}
 
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -837,7 +837,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 
 	// Test overriding the git sync depth to a positive value
 	var depth int64 = 5
-	rs.Spec.Override.GitSyncDepth = &depth
+	rs.Spec.SafeOverride().GitSyncDepth = &depth
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -861,7 +861,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 
 	// Test overriding the git sync depth to 0
 	depth = 0
-	rs.Spec.Override.GitSyncDepth = &depth
+	rs.Spec.SafeOverride().GitSyncDepth = &depth
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -884,7 +884,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Set rs.Spec.Override.GitSyncDepth to nil.
-	rs.Spec.Override.GitSyncDepth = nil
+	rs.Spec.SafeOverride().GitSyncDepth = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -900,7 +900,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
-	rs.Spec.Override = v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.OverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -972,7 +972,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
-	rs.Spec.Override.ReconcileTimeout = &reconcileTimeout
+	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -995,7 +995,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
-	rs.Spec.Override.ReconcileTimeout = nil
+	rs.Spec.SafeOverride().ReconcileTimeout = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1011,7 +1011,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
-	rs.Spec.Override = v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.OverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1082,7 +1082,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
-	rs.Spec.Override.ReconcileTimeout = &reconcileTimeout
+	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -1105,7 +1105,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
-	rs.Spec.Override.ReconcileTimeout = nil
+	rs.Spec.SafeOverride().ReconcileTimeout = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1121,7 +1121,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
-	rs.Spec.Override = v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.OverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -2080,7 +2080,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		},
 	}
 
-	rs.Spec.Override = v1beta1.OverrideSpec{
+	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideOciSyncResources,
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {

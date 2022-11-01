@@ -340,7 +340,11 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return depObj, nil
 }
 
-func mutateContainerResource(ctx context.Context, c *corev1.Container, override v1beta1.OverrideSpec, reconcilerType string) {
+func mutateContainerResource(ctx context.Context, c *corev1.Container, override *v1beta1.OverrideSpec, reconcilerType string) {
+	if override == nil {
+		return
+	}
+
 	for _, override := range override.Resources {
 		if override.ContainerName == c.Name {
 			if !override.CPURequest.IsZero() {

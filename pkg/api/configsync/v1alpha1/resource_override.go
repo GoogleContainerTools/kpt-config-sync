@@ -17,7 +17,6 @@ package v1alpha1
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // OverrideSpec allows to override the settings for a reconciler pod
@@ -89,12 +88,4 @@ type ContainerResourcesSpec struct {
 	// memoryLimit allows one to override the memory limit of a container
 	// +optional
 	MemoryLimit resource.Quantity `json:"memoryLimit,omitempty"`
-}
-
-//GetReconcileTimeout returns reconcile timeout in string, defaulting to 5m if empty
-func GetReconcileTimeout(d *metav1.Duration) string {
-	if d == nil || d.Duration == 0 {
-		return configsync.DefaultReconcileTimeout.String()
-	}
-	return d.Duration.String()
 }

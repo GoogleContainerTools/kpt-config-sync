@@ -113,9 +113,22 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
 			r.clearLastReconciled(rsRef)
+			r.log.Info("Deleting managed objects",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
 			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef.Namespace)
 		}
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
+	}
+
+	if !rs.DeletionTimestamp.IsZero() {
+		// Deletion requested.
+		// Avoid making updates after deletion has started.
+		// Cleanup is handled after the RootSync is NotFound.
+		log.Info("Ignoring update: deletion timestamp found",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
+		return controllerruntime.Result{}, nil
 	}
 
 	// The caching client sometimes returns an old R*Sync, because the watch

@@ -44,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -1681,6 +1682,155 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5, v1beta1.GetSecretName(rs5.Spec.Git.SecretRef))
+}
+
+func TestRootSyncDelete(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs1 := rootSync(rootsyncName,
+		rootsyncRef(gitRevision),
+		rootsyncBranch(branch),
+		rootsyncSecretType(GitSecretConfigKeySSH),
+		rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
+
+	fakeClient, testReconciler := setupRootReconciler(t, rs1,
+		secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs1.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	label1 := map[string]string{
+		metadata.SyncNamespaceLabel: rs1.Namespace,
+		metadata.SyncNameLabel:      rs1.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
+	}
+
+	serviceAccount1 := fake.ServiceAccountObject(
+		rootReconcilerName,
+		core.Namespace(v1.NSConfigManagementSystem),
+		core.OwnerReference([]metav1.OwnerReference{
+			ownerReference(kinds.RootSyncV1Beta1().Kind, rs1.Name, ""),
+		}),
+		core.Labels(label1),
+	)
+	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
+
+	crb := clusterrolebinding(
+		RootSyncPermissionsName(),
+		rootReconcilerName,
+	)
+	rootContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	rootDeployment1 := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerEnvMutator(rootContainerEnv1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment1): rootDeployment1}
+
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
+
+	// Add Finalizer
+	controllerutil.AddFinalizer(rs1, "test-finalizer")
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the root sync, got error: %v, want error: nil", err)
+	}
+
+	// Simulate a delete by adding a deletion timestamp
+	// TODO: Replace Update with Delete
+	// once the fake.Client has been updated to simulate deletions with finalizers.
+	now := metav1.Now()
+	rs1.DeletionTimestamp = &now
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the root sync, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Validate nothing was updated
+	// TODO: Validate ResourceVersion has not been changed
+	// once the fake.Client has been updated to handle ResourceVersion simulation.
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, ClusterRoleBinding and Deployment delete successfully delayed")
+
+	// Update the Git revision to validate that updates are ignored
+	rs1.Spec.Git.Revision = gitUpdatedRevision
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the root sync, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Validate nothing was updated
+	// TODO: Validate ResourceVersion has not been changed
+	// once the fake.Client has been updated to handle ResourceVersion simulation.
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, ClusterRoleBinding and Deployment update successfully skipped")
+
+	// Remove Finalizer
+	controllerutil.RemoveFinalizer(rs1, "test-finalizer")
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the root sync, got error: %v, want error: nil", err)
+	}
+	// Simulate garbage collection by the server when the last finalizer is removed
+	// TODO: Replace Update with Delete once the fake.Client has been updated to simulate deletions better.
+	if err := fakeClient.Delete(ctx, rs1); err != nil {
+		t.Fatalf("failed to delete the root sync, got error: %v, want error: nil", err)
+	}
+	// Test garbage collecting ClusterRoleBinding after all RootSyncs are deleted
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Verify the ClusterRoleBinding of the root-reconciler is deleted
+	if err := validateResourceDeleted(core.IDOf(crb), fakeClient); err != nil {
+		t.Error(err)
+	}
+	validateGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName, v1beta1.GetSecretName(rs1.Spec.Git.SecretRef))
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully deleted")
 }
 
 func TestMapSecretToRootSyncs(t *testing.T) {

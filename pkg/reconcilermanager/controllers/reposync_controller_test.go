@@ -47,6 +47,7 @@ import (
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -1646,7 +1647,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
+	t.Log("Deployments, ServiceAccounts, and RoleBindings successfully created")
 
 	// Test updating Deployment resources for rs1: my-repo-sync
 	rs1.Spec.Git.Revision = gitUpdatedRevision
@@ -1804,6 +1805,155 @@ func validateGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.Clie
 			t.Error(err)
 		}
 	}
+}
+
+func TestRepoSyncDelete(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs1 := repoSync(reposyncNs, reposyncName,
+		reposyncRef(gitRevision),
+		reposyncBranch(branch),
+		reposyncSecretType(GitSecretConfigKeySSH),
+		reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
+
+	fakeClient, testReconciler := setupNSReconciler(t, rs1,
+		secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs1.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	label1 := map[string]string{
+		metadata.SyncNamespaceLabel: rs1.Namespace,
+		metadata.SyncNameLabel:      rs1.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
+	}
+
+	serviceAccount1 := fake.ServiceAccountObject(
+		nsReconcilerName,
+		core.Namespace(v1.NSConfigManagementSystem),
+		core.Labels(label1),
+	)
+	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
+
+	roleBinding1 := rolebinding(
+		RepoSyncPermissionsName(),
+		nsReconcilerName,
+		core.Namespace(rs1.Namespace),
+	)
+	wantRoleBindings := map[core.ID]*rbacv1.RoleBinding{core.IDOf(roleBinding1): roleBinding1}
+
+	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	repoDeployment1 := repoSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment1): repoDeployment1}
+
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, RoleBinding and Deployment successfully created")
+
+	// Add Finalizer
+	controllerutil.AddFinalizer(rs1, "test-finalizer")
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the repo sync, got error: %v, want error: nil", err)
+	}
+
+	// Simulate a delete by adding a deletion timestamp
+	// TODO: Replace Update with Delete
+	// once the fake.Client has been updated to simulate deletions with finalizers.
+	now := metav1.Now()
+	rs1.DeletionTimestamp = &now
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the repo sync, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Validate nothing was updated
+	// TODO: Validate ResourceVersion has not been changed
+	// once the fake.Client has been updated to handle ResourceVersion simulation.
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, RoleBinding and Deployment delete successfully delayed")
+
+	// Update the Git revision to validate that updates are ignored
+	rs1.Spec.Git.Revision = gitUpdatedRevision
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the repo sync, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Validate nothing was updated
+	// TODO: Validate ResourceVersion has not been changed
+	// once the fake.Client has been updated to handle ResourceVersion simulation.
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateRoleBindings(wantRoleBindings, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateDeployments(wantDeployments, fakeClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, RoleBinding and Deployment update successfully skipped")
+
+	// Remove Finalizer
+	controllerutil.RemoveFinalizer(rs1, "test-finalizer")
+	if err := fakeClient.Update(ctx, rs1); err != nil {
+		t.Fatalf("failed to update the repo sync, got error: %v, want error: nil", err)
+	}
+	// Simulate garbage collection by the server when the last finalizer is removed
+	// TODO: Replace Update with Delete once the fake.Client has been updated to simulate deletions better.
+	if err := fakeClient.Delete(ctx, rs1); err != nil {
+		t.Fatalf("failed to delete the repo sync, got error: %v, want error: nil", err)
+	}
+	// Test garbage collecting RoleBinding after all RootSyncs are deleted
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
+		t.Fatalf("unexpected reconciliation error upon update, got error: %q, want error: nil", err)
+	}
+
+	// Verify the RoleBinding of the ns-reconciler is deleted
+	if err := validateResourceDeleted(core.IDOf(roleBinding1), fakeClient); err != nil {
+		t.Error(err)
+	}
+	validateGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName, v1beta1.GetSecretName(rs1.Spec.Git.SecretRef))
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ServiceAccount, RoleBinding and Deployment successfully deleted")
 }
 
 func TestMapSecretToRepoSyncs(t *testing.T) {
@@ -2811,7 +2961,15 @@ func validateRepoSyncStatus(want *v1beta1.RepoSync, fakeClient *syncerFake.Clien
 func validateServiceAccounts(wants map[core.ID]*corev1.ServiceAccount, fakeClient *syncerFake.Client) error {
 	for id, want := range wants {
 		gotCoreObject := fakeClient.Objects[id]
-		got := gotCoreObject.(*corev1.ServiceAccount)
+		if gotCoreObject == nil {
+			return errors.Errorf("ServiceAccount[%s/%s] is nil",
+				want.Namespace, want.Name)
+		}
+		got, ok := gotCoreObject.(*corev1.ServiceAccount)
+		if !ok {
+			return errors.Errorf("ServiceAccount[%s/%s] has unexpected type, expected *v1.ServiceAccount, got %T",
+				want.Namespace, want.Name, gotCoreObject)
+		}
 		if diff := cmp.Diff(got, want, cmpopts.EquateEmpty()); diff != "" {
 			return errors.Errorf("ServiceAccount[%s/%s] diff: %s", got.Namespace, got.Name, diff)
 		}
@@ -2822,7 +2980,15 @@ func validateServiceAccounts(wants map[core.ID]*corev1.ServiceAccount, fakeClien
 func validateRoleBindings(wants map[core.ID]*rbacv1.RoleBinding, fakeClient *syncerFake.Client) error {
 	for id, want := range wants {
 		gotCoreObject := fakeClient.Objects[id]
-		got := gotCoreObject.(*rbacv1.RoleBinding)
+		if gotCoreObject == nil {
+			return errors.Errorf("RoleBinding[%s/%s] is nil",
+				want.Namespace, want.Name)
+		}
+		got, ok := gotCoreObject.(*rbacv1.RoleBinding)
+		if !ok {
+			return errors.Errorf("RoleBinding[%s/%s] has unexpected type, expected *v1.RoleBinding, got %T",
+				want.Namespace, want.Name, gotCoreObject)
+		}
 		if len(want.Subjects) != len(got.Subjects) {
 			return errors.Errorf("RoleBinding[%s/%s] has unexpected number of subjects, expected %d, got %d",
 				got.Namespace, got.Name, len(want.Subjects), len(got.Subjects))
@@ -2846,7 +3012,15 @@ func validateRoleBindings(wants map[core.ID]*rbacv1.RoleBinding, fakeClient *syn
 
 func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syncerFake.Client) error {
 	gotCoreObject := fakeClient.Objects[core.IDOf(want)]
-	got := gotCoreObject.(*rbacv1.ClusterRoleBinding)
+	if gotCoreObject == nil {
+		return errors.Errorf("ClusterRoleBinding[%s/%s] is nil",
+			want.Namespace, want.Name)
+	}
+	got, ok := gotCoreObject.(*rbacv1.ClusterRoleBinding)
+	if !ok {
+		return errors.Errorf("ClusterRoleBinding[%s/%s] has unexpected type, expected *v1.ClusterRoleBinding, got %T",
+			want.Namespace, want.Name, gotCoreObject)
+	}
 	if len(want.Subjects) != len(got.Subjects) {
 		return errors.Errorf("ClusterRoleBinding[%s/%s] has unexpected number of subjects, expected %d, got %d",
 			got.Namespace, got.Name, len(want.Subjects), len(got.Subjects))
@@ -2871,7 +3045,15 @@ func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syn
 func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeClient *syncerFake.Client) error {
 	for id, want := range wants {
 		gotCoreObject := fakeClient.Objects[id]
-		got := gotCoreObject.(*appsv1.Deployment)
+		if gotCoreObject == nil {
+			return errors.Errorf("Deployment[%s/%s] is nil",
+				want.Namespace, want.Name)
+		}
+		got, ok := gotCoreObject.(*appsv1.Deployment)
+		if !ok {
+			return errors.Errorf("Deployment[%s/%s] has unexpected type, expected *v1.Deployment, got %T",
+				want.Namespace, want.Name, gotCoreObject)
+		}
 
 		// Compare Deployment Annotations
 		if diff := cmp.Diff(want.Annotations, got.Annotations); diff != "" {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package applier
+package stats
 
 import (
 	"testing"
@@ -45,12 +45,12 @@ func TestDisabledObjStats(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.stats.empty() != tc.wantEmpty {
-				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.empty(), tc.wantEmpty)
+			if tc.stats.Empty() != tc.wantEmpty {
+				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.Empty(), tc.wantEmpty)
 			}
 
-			if tc.stats.string() != tc.wantString {
-				t.Errorf("stats.string() = %q, wanted %q", tc.stats.string(), tc.wantString)
+			if tc.stats.String() != tc.wantString {
+				t.Errorf("stats.string() = %q, wanted %q", tc.stats.String(), tc.wantString)
 			}
 
 		})
@@ -60,13 +60,13 @@ func TestDisabledObjStats(t *testing.T) {
 func TestPruneEventStats(t *testing.T) {
 	testcases := []struct {
 		name       string
-		stats      pruneEventStats
+		stats      PruneEventStats
 		wantEmpty  bool
 		wantString string
 	}{
 		{
 			name: "empty pruneEventStats",
-			stats: pruneEventStats{
+			stats: PruneEventStats{
 				EventByOp: map[event.PruneEventStatus]uint64{},
 			},
 			wantEmpty:  true,
@@ -74,7 +74,7 @@ func TestPruneEventStats(t *testing.T) {
 		},
 		{
 			name: "non-empty pruneEventStats",
-			stats: pruneEventStats{
+			stats: PruneEventStats{
 				EventByOp: map[event.PruneEventStatus]uint64{
 					event.PruneSkipped:    4,
 					event.PruneSuccessful: 0,
@@ -87,12 +87,12 @@ func TestPruneEventStats(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.stats.empty() != tc.wantEmpty {
-				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.empty(), tc.wantEmpty)
+			if tc.stats.Empty() != tc.wantEmpty {
+				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.Empty(), tc.wantEmpty)
 			}
 
-			if tc.stats.string() != tc.wantString {
-				t.Errorf("stats.string() = %q, wanted %q", tc.stats.string(), tc.wantString)
+			if tc.stats.String() != tc.wantString {
+				t.Errorf("stats.string() = %q, wanted %q", tc.stats.String(), tc.wantString)
 			}
 
 		})
@@ -102,13 +102,13 @@ func TestPruneEventStats(t *testing.T) {
 func TestApplyEventStats(t *testing.T) {
 	testcases := []struct {
 		name       string
-		stats      applyEventStats
+		stats      ApplyEventStats
 		wantEmpty  bool
 		wantString string
 	}{
 		{
 			name: "empty applyEventStats",
-			stats: applyEventStats{
+			stats: ApplyEventStats{
 				EventByOp: map[event.ApplyEventStatus]uint64{},
 			},
 			wantEmpty:  true,
@@ -116,7 +116,7 @@ func TestApplyEventStats(t *testing.T) {
 		},
 		{
 			name: "non-empty applyEventStats",
-			stats: applyEventStats{
+			stats: ApplyEventStats{
 				EventByOp: map[event.ApplyEventStatus]uint64{
 					event.ApplySuccessful: 4,
 					event.ApplySkipped:    2,
@@ -129,12 +129,12 @@ func TestApplyEventStats(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.stats.empty() != tc.wantEmpty {
-				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.empty(), tc.wantEmpty)
+			if tc.stats.Empty() != tc.wantEmpty {
+				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.Empty(), tc.wantEmpty)
 			}
 
-			if tc.stats.string() != tc.wantString {
-				t.Errorf("stats.string() = %q, wanted %q", tc.stats.string(), tc.wantString)
+			if tc.stats.String() != tc.wantString {
+				t.Errorf("stats.string() = %q, wanted %q", tc.stats.String(), tc.wantString)
 			}
 
 		})
@@ -144,26 +144,26 @@ func TestApplyEventStats(t *testing.T) {
 func TestApplyStats(t *testing.T) {
 	testcases := []struct {
 		name       string
-		stats      ApplyStats
+		stats      *SyncStats
 		wantEmpty  bool
 		wantString string
 	}{
 		{
 			name:       "empty applyStats",
-			stats:      newApplyStats(),
+			stats:      NewSyncStats(),
 			wantEmpty:  true,
 			wantString: "",
 		},
 		{
 			name: "non-empty applyStats",
-			stats: ApplyStats{
-				ApplyEvent: applyEventStats{
+			stats: &SyncStats{
+				ApplyEvent: &ApplyEventStats{
 					EventByOp: map[event.ApplyEventStatus]uint64{
 						event.ApplySuccessful: 1,
 						event.ApplySkipped:    2,
 					},
 				},
-				PruneEvent: pruneEventStats{
+				PruneEvent: &PruneEventStats{
 					EventByOp: map[event.PruneEventStatus]uint64{
 						event.PruneFailed: 3,
 					},
@@ -176,12 +176,12 @@ func TestApplyStats(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.stats.empty() != tc.wantEmpty {
-				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.empty(), tc.wantEmpty)
+			if tc.stats.Empty() != tc.wantEmpty {
+				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.Empty(), tc.wantEmpty)
 			}
 
-			if tc.stats.string() != tc.wantString {
-				t.Errorf("stats.string() = %q, wanted %q", tc.stats.string(), tc.wantString)
+			if tc.stats.String() != tc.wantString {
+				t.Errorf("stats.string() = %q, wanted %q", tc.stats.String(), tc.wantString)
 			}
 
 		})

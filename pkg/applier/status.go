@@ -96,9 +96,9 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		writeStatus(&b, status, ids)
 	}
 	if count == 0 {
-		logger.Infof("Prune Actuations (Total: %d)", count)
+		logger.Infof("Delete Actuations (Total: %d)", count)
 	} else {
-		logger.Infof("Prune Actuations (Total: %d):\n%s", count, b.String())
+		logger.Infof("Delete Actuations (Total: %d):\n%s", count, b.String())
 	}
 
 	count = 0
@@ -112,9 +112,9 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		writeStatus(&b, status, ids)
 	}
 	if count == 0 {
-		logger.Infof("Prune Reconciles (Total: %d)", count)
+		logger.Infof("Delete Reconciles (Total: %d)", count)
 	} else {
-		logger.Infof("Prune Reconciles (Total: %d):\n%s", count, b.String())
+		logger.Infof("Delete Reconciles (Total: %d):\n%s", count, b.String())
 	}
 }
 
@@ -138,13 +138,13 @@ func (m ObjectStatusMap) Filter(
 		if status == nil {
 			continue
 		}
-		if strategy > 0 && status.Strategy != strategy {
+		if strategy >= 0 && status.Strategy != strategy {
 			continue
 		}
-		if actuation > 0 && status.Actuation != actuation {
+		if actuation >= 0 && status.Actuation != actuation {
 			continue
 		}
-		if reconcile > 0 && status.Reconcile != reconcile {
+		if reconcile >= 0 && status.Reconcile != reconcile {
 			continue
 		}
 		ids = append(ids, id)

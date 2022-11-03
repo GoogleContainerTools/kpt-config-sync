@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -418,21 +419,21 @@ func TestProcessApplyEvent(t *testing.T) {
 	testID := object.UnstructuredToObjMetadata(newTestObj())
 
 	ctx := context.Background()
-	status := newApplyStats()
+	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	unknownTypeResources := make(map[core.ID]struct{})
 
-	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, &deploymentID, fmt.Errorf("test error")).ApplyEvent, &status.ApplyEvent, objStatusMap, unknownTypeResources)
+	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, &deploymentID, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
 
-	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, &testID, nil).ApplyEvent, &status.ApplyEvent, objStatusMap, unknownTypeResources)
+	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, &testID, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
 
-	expectedApplyStatus := newApplyStats()
-	expectedApplyStatus.ApplyEvent.EventByOp[event.ApplyFailed] = 1
-	expectedApplyStatus.ApplyEvent.EventByOp[event.ApplySuccessful] = 1
-	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+	expectedApplyStatus := stats.NewSyncStats()
+	expectedApplyStatus.ApplyEvent.Add(event.ApplyFailed)
+	expectedApplyStatus.ApplyEvent.Add(event.ApplySuccessful)
+	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
 
 	expectedObjStatusMap := ObjectStatusMap{
 		idFrom(deploymentID): {
@@ -456,21 +457,21 @@ func TestProcessPruneEvent(t *testing.T) {
 	testID := object.UnstructuredToObjMetadata(newTestObj())
 
 	ctx := context.Background()
-	status := newApplyStats()
+	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	cs := &clientSet{}
 
-	err := processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, &status.PruneEvent, objStatusMap, cs)
+	err := processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap, cs)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, &status.PruneEvent, objStatusMap, cs)
+	err = processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, s.PruneEvent, objStatusMap, cs)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
-	expectedApplyStatus := newApplyStats()
-	expectedApplyStatus.PruneEvent.EventByOp[event.PruneFailed] = 1
-	expectedApplyStatus.PruneEvent.EventByOp[event.PruneSuccessful] = 1
-	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+	expectedApplyStatus := stats.NewSyncStats()
+	expectedApplyStatus.PruneEvent.Add(event.PruneFailed)
+	expectedApplyStatus.PruneEvent.Add(event.PruneSuccessful)
+	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
 
 	expectedObjStatusMap := ObjectStatusMap{
 		idFrom(deploymentID): {
@@ -494,19 +495,19 @@ func TestProcessWaitEvent(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
 	testID := object.UnstructuredToObjMetadata(newTestObj())
 
-	status := newApplyStats()
+	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 
-	err := processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, &status.WaitEvent, objStatusMap)
+	err := processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, s.WaitEvent, objStatusMap)
 	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileFailed)
 
-	err = processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, &status.WaitEvent, objStatusMap)
+	err = processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, s.WaitEvent, objStatusMap)
 	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileSuccessful)
 
-	expectedApplyStatus := newApplyStats()
-	expectedApplyStatus.WaitEvent.EventByOp[event.ReconcileFailed] = 1
-	expectedApplyStatus.WaitEvent.EventByOp[event.ReconcileSuccessful] = 1
-	testutil.AssertEqual(t, expectedApplyStatus, status, "expected event stats to match")
+	expectedApplyStatus := stats.NewSyncStats()
+	expectedApplyStatus.WaitEvent.Add(event.ReconcileFailed)
+	expectedApplyStatus.WaitEvent.Add(event.ReconcileSuccessful)
+	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
 
 	expectedObjStatusMap := ObjectStatusMap{
 		idFrom(deploymentID): {

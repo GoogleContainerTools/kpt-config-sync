@@ -165,7 +165,7 @@ func TestObjectStatusMapLog(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "log status",
+			name: "log applier status",
 			input: ObjectStatusMap{
 				idFrom(deploymentID): {
 					Strategy:  actuation.ActuationStrategyApply,
@@ -179,32 +179,62 @@ func TestObjectStatusMapLog(t *testing.T) {
 				},
 			},
 			expected: []string{
-				"Apply Actuations (Total: 2):\n" +
+				"Apply Actuations (Total: 1):\n" +
 					"Skipped (0),\n" +
-					"Succeeded (2): [apps/namespaces/test-namespace/Deployment/random-name, configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+					"Succeeded (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
 					"Failed (0)",
-				"Apply Reconciles (Total: 2):\n" +
+				"Apply Reconciles (Total: 1):\n" +
 					"Skipped (0),\n" +
-					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+					"Succeeded (0),\n" +
 					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
 					"Timeout (0)",
-				"Prune Actuations (Total: 1):\n" +
+				"Delete Actuations (Total: 1):\n" +
 					"Skipped (0),\n" +
 					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
 					"Failed (0)",
-				"Prune Reconciles (Total: 1):\n" +
+				"Delete Reconciles (Total: 1):\n" +
 					"Skipped (0),\n" +
 					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
 					"Failed (0),\n" +
 					"Timeout (0)",
 			},
 		},
+		{
+			name: "log destroyer status",
+			input: ObjectStatusMap{
+				idFrom(deploymentID): {
+					Strategy:  actuation.ActuationStrategyDelete,
+					Actuation: actuation.ActuationSucceeded,
+					Reconcile: actuation.ReconcileFailed,
+				},
+				idFrom(testID): {
+					Strategy:  actuation.ActuationStrategyDelete,
+					Actuation: actuation.ActuationSucceeded,
+					Reconcile: actuation.ReconcileSucceeded,
+				},
+			},
+			expected: []string{
+				"Apply Actuations (Total: 0)",
+				"Apply Reconciles (Total: 0)",
+				"Delete Actuations (Total: 2):\n" +
+					"Skipped (0),\n" +
+					"Succeeded (2): [apps/namespaces/test-namespace/Deployment/random-name, configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+					"Failed (0)",
+				"Delete Reconciles (Total: 2):\n" +
+					"Skipped (0),\n" +
+					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
+					"Timeout (0)",
+			},
+		},
 	}
 	for _, tc := range testcases {
-		logger := &fakeLogger{}
-		logger.Enable()
-		tc.input.Log(logger)
-		testutil.AssertEqual(t, tc.expected, logger.Logs, "[%s] unexpected log messages", tc.name)
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &fakeLogger{}
+			logger.Enable()
+			tc.input.Log(logger)
+			testutil.AssertEqual(t, tc.expected, logger.Logs, "unexpected log messages")
+		})
 	}
 }
 

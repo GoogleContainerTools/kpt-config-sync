@@ -215,7 +215,7 @@ func (snt *sharedNTs) acquire(t testing.NTB) *NT {
 			nt.inUse = true
 			snt.testMap[t.Name()] = nt
 			t.Cleanup(func() {
-				snt.release(t.Name())
+				snt.release(t)
 			})
 			return nt.sharedNT
 		}
@@ -224,9 +224,15 @@ func (snt *sharedNTs) acquire(t testing.NTB) *NT {
 	return nil
 }
 
-func (snt *sharedNTs) release(testName string) {
+func (snt *sharedNTs) release(t testing.NTB) {
 	snt.lock.Lock()
 	defer snt.lock.Unlock()
+	testName := t.Name()
+	// if the test failed, mark the "fake" shared test environment as failed.
+	// this way the Cleanup functions will honor the --debug flag.
+	if t.Failed() {
+		snt.testMap[testName].fakeNTB.Fail()
+	}
 	snt.testMap[testName].inUse = false
 	delete(snt.testMap, testName)
 }

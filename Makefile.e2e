@@ -93,23 +93,6 @@ test-e2e-kind: __push-local-image
 	# Part of the docker-in-docker pattern.
 	@docker run -v /var/run/docker.sock:/var/run/docker.sock --network="host" prow-image make __test-e2e-go-nobuild-prow
 
-# This target runs all the e2e tests with the mono-repo mode.
-test-e2e-kind-mono-repo: __push-local-image
-	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --timeout 60m --parallel 15 --image-tag=$(IMAGE_TAG) $(E2E_ARGS)
-
-# This target runs the first group of e2e tests with the mono-repo mode.
-test-e2e-kind-mono-repo-test-group1:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,cluster-selector,drift-control,lifecycle,nomos-cli" test-e2e-kind-mono-repo
-
-# This target runs the second group of e2e tests with the mono-repo mode.
-test-e2e-kind-mono-repo-test-group2:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1" test-e2e-kind-mono-repo
-
-# This target runs the third group of e2e tests with the mono-repo mode.
-test-e2e-kind-mono-repo-test-group3:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2" test-e2e-kind-mono-repo
-
 # This target runs all the e2e tests with the multi-repo mode.
 test-e2e-kind-multi-repo: __push-local-image
 	kind delete clusters --all

@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -196,7 +195,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	resetSyncedRepos(nt, opts)
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.
-	installWebhook(nt, opts.Nomos)
+	installWebhook(nt)
 	setupTestCase(nt, opts)
 	return nt
 }
@@ -267,14 +266,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		return nt
 	}
 
-	if *e2e.ImagePrefix == e2e.DefaultImagePrefix {
-		// We're using an ephemeral Kind cluster, so connect to the local Docker
-		// repository. No need to clean before/after as these tests only exist for
-		// a single test.
-		connectToLocalRegistry(nt)
-		docker.CheckImages(nt.T)
-	}
-
 	nt.IsGKEAutopilot = skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 10 * time.Minute
@@ -284,7 +275,13 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.DefaultMetricsTimeout = 1 * time.Minute
 	}
 
-	if *e2e.TestCluster != e2e.Kind {
+	if *e2e.TestCluster == e2e.Kind {
+		// We're using an ephemeral Kind cluster, so connect to the local Docker
+		// repository. No need to clean before/after as these tests only exist for
+		// a single test.
+		connectToLocalRegistry(nt)
+		checkImages(nt.T)
+	} else {
 		// We aren't using an ephemeral Kind cluster, so make sure the cluster is
 		// clean before and after running the test.
 		t.Log("`Clean` before running the test on FreshTestEnv")

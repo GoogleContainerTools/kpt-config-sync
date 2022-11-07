@@ -31,14 +31,17 @@ make test
 Config Sync also has e2e tests. These can be run on [kind] or GKE and can take
 a long time to finish.
 
+The e2e tests will use the most recently built manifests on your local filesystem,
+which are written to the `.output/staging` directory. These are created
+when running `make` targets such as `build-manifests` and `config-sync-manifest`.
+See [building from source](#build-from-source) for more information.
+
 For the complete list of arguments accepted by the e2e tests, see [flags.go](../e2e/flags.go).
 Below is a non-exhaustive list of some useful arguments for running the e2e tests.
 These can be provided on the command line with `go test` or with program arguments in your IDE.
 
 - `--e2e` - If true, run end-to-end tests. (required to run the e2e tests)
 - `--debug` - If true, do not destroy cluster and clean up temporary directory after test.
-- `--image-prefix` - The prefix to use for Docker images. Defaults to the local Docker registry. Omit the trailing slash.
-- `--image-tag` - The tag to use for Docker images. Defaults to 'latest'
 - `--share-test-env` - Specify that the test is using a shared test environment instead of fresh installation per test case.
 - `--test-cluster` - The cluster config used for testing. Allowed values are: `kind` and `gke`.
 
@@ -73,8 +76,15 @@ make test-e2e-go-multirepo
 To execute e2e multi-repo tests locally with kind, build and push the Config Sync
 images to the local kind registry and then execute tests using go test.
 ```shell
-make __push-local-images
-go test ./e2e/... --e2e --debug --test.v --image-tag=(IMAGE_TAG) --test.run (test name regexp)
+make config-sync-manifest-local
+go test ./e2e/... --e2e --debug --test.v --test.run (test name regexp)
+```
+
+To use already existing images without building everything from scratch, rebuild
+only the manifests and then rerun the tests.
+```shell
+make build-manifests IMAGE_TAG=<tag>
+go test ./e2e/... --e2e <additional-options>
 ```
 
 ### E2E tests (GKE)
@@ -96,12 +106,10 @@ current context in your kubeconfig.
 gcloud config set project <PROJECT_ID>
 # Ensure kubectl context is set to correct cluster
 kubectl config set-context <CONTEXT>
-# Build images
-make build-images
-# Push images to GCR
-make push-images
+# Build images/manifests and push images
+make config-sync-manifest
 # Run the tests with image prefix/tag from previous step and desired test regex
-go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1 --image-prefix=(IMAGE_PREFIX) --image-tag=(IMAGE_TAG) --test-cluster=gke --test.run (test name regexp)
+go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1 --test-cluster=gke --test.run (test name regexp)
 ```
 
 ## Build

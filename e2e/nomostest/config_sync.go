@@ -32,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/e2e"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -59,8 +58,7 @@ const (
 	// AcmeDir is the sync directory of the test source repository.
 	AcmeDir = "acme"
 	// Manifests is the folder of the test manifests
-	Manifests     = "manifests"
-	testResources = "test-resources"
+	Manifests = "manifests"
 
 	// e2e/raw-nomos/manifests/multi-repo-configmaps.yaml
 	multiConfigMapsName = "multi-repo-configmaps.yaml"
@@ -74,65 +72,11 @@ var (
 	//
 	// All paths must be relative to the test file that is running. There is probably
 	// a more elegant way to do this.
-	baseDir          = filepath.FromSlash("../..")
-	manifestsDir     = filepath.Join(baseDir, Manifests)
-	testResourcesDir = filepath.Join(manifestsDir, testResources)
-	templateDir      = filepath.Join(manifestsDir, "templates")
+	baseDir            = filepath.FromSlash("../..")
+	outputManifestsDir = filepath.Join(baseDir, ".output", "staging", "oss")
+	configSyncManifest = filepath.Join(outputManifestsDir, "config-sync-manifest.yaml")
 
 	multiConfigMaps = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, multiConfigMapsName)
-
-	templates = []string{
-		"admission-webhook.yaml",
-		"otel-collector.yaml",
-		"reconciler-manager.yaml",
-		"reconciler-manager-configmap.yaml",
-	}
-
-	// multiObjects contains the names of all objects that are necessary to
-	// install and run multi-repo Config Sync.
-	multiObjects = map[string]bool{
-		webhookconfig.ShortName:                      true,
-		"admission-webhook-cert":                     true,
-		"configsync.gke.io:admission-webhook":        true,
-		"configsync.gke.io:ns-reconciler":            true,
-		"admission-webhook.configsync.gke.io":        true,
-		"configsync.gke.io:reconciler-manager":       true,
-		reconcilermanager.ManagerName:                true,
-		"reconciler-manager-cm":                      true,
-		"reposyncs.configsync.gke.io":                true,
-		"rootsyncs.configsync.gke.io":                true,
-		metrics.OtelAgentName:                        true,
-		metrics.OtelCollectorName:                    true,
-		"acm-psp":                                    isPSPCluster(),
-		"configmanagement.gke.io:otel-collector-psp": true,
-		// ResourceGroup CRD
-		"resourcegroups.kpt.dev": true,
-	}
-	// sharedObjects contains the names of all objects that are needed by both
-	// mono-repo and multi-repo Config Sync.
-	sharedObjects = map[string]bool{
-		"clusters.clusterregistry.k8s.io":            true,
-		"clusterselectors.configmanagement.gke.io":   true,
-		"container-limits":                           true,
-		"namespaceselectors.configmanagement.gke.io": true,
-		"configsync.gke.io:admission-webhook":        true,
-	}
-	// ignoredObjects:
-	// config-management-system, this namespace gets created elsewhere
-	resourcegroupObjects = map[string]bool{
-		"resource-group-system":                             true,
-		"resource-group-sa":                                 true,
-		"resource-group-leader-election-role":               true,
-		"resource-group-manager-role":                       true,
-		"resource-group-metrics-reader":                     true,
-		"resource-group-proxy-role":                         true,
-		"resource-group-leader-election-rolebinding":        true,
-		"resource-group-manager-rolebinding":                true,
-		"resource-group-proxy-rolebinding":                  true,
-		"resource-group-otel-agent":                         true,
-		"resource-group-controller-manager-metrics-service": true,
-		"resource-group-controller-manager":                 true,
-	}
 )
 
 var (
@@ -144,17 +88,36 @@ var (
 
 // IsReconcilerManagerConfigMap returns true if passed obj is the
 // reconciler-manager ConfigMap reconciler-manager-cm in config-management namespace.
-var IsReconcilerManagerConfigMap = func(obj client.Object) bool {
+func IsReconcilerManagerConfigMap(obj client.Object) bool {
 	return obj.GetName() == "reconciler-manager-cm" &&
 		obj.GetNamespace() == "config-management-system" &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
 
-func parseManifests(nt *NT, nomos ntopts.Nomos) []client.Object {
+// ResetReconcilerManagerConfigMap resets the reconciler manager config map
+// to what is defined in the manifest
+func ResetReconcilerManagerConfigMap(nt *NT) error {
+	nt.T.Helper()
+	objs := parseManifests(nt)
+	for _, obj := range objs {
+		if !IsReconcilerManagerConfigMap(obj) {
+			continue
+		}
+		nt.T.Logf("ResetReconcilerManagerConfigMap obj: %v", core.GKNN(obj))
+		err := nt.Update(obj)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("failed to reset reconciler manager ConfigMap")
+}
+
+func parseManifests(nt *NT) []client.Object {
 	nt.T.Helper()
 	tmpManifestsDir := filepath.Join(nt.TmpDir, Manifests)
 
-	objs := installationManifests(nt, tmpManifestsDir, nomos)
+	objs := installationManifests(nt, tmpManifestsDir)
 	objs = convertObjects(nt, objs)
 	reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
 	hydrationPollingPeriod = nt.HydrationPollingPeriod
@@ -167,7 +130,7 @@ func parseManifests(nt *NT, nomos ntopts.Nomos) []client.Object {
 // callback for checking that the installation succeeded.
 func installConfigSync(nt *NT, nomos ntopts.Nomos) {
 	nt.T.Helper()
-	objs := parseManifests(nt, nomos)
+	objs := parseManifests(nt)
 	for _, o := range objs {
 		nt.T.Logf("installConfigSync obj: %v", core.GKNN(o))
 		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.ConfigMap().GroupKind() && o.GetName() == reconcilermanager.SourceFormat {
@@ -258,67 +221,19 @@ func copyDirContents(src, dest string) error {
 
 // installationManifests generates the ConfigSync installation YAML and copies
 // it to the test's temporary directory.
-func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) []client.Object {
+func installationManifests(nt *NT, tmpManifestsDir string) []client.Object {
 	nt.T.Helper()
 	err := os.MkdirAll(tmpManifestsDir, fileMode)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.DebugLog("copying test-only-resources")
-	err = copyDirContents(testResourcesDir, tmpManifestsDir)
-	if err != nil {
+	// Copy all manifests to temporary dir
+	if err := copyDirContents(outputManifestsDir, tmpManifestsDir); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.DebugLog("copying manifests, not including manifests/templates/")
-	err = copyDirContents(manifestsDir, tmpManifestsDir)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
 	if err := copyFile(multiConfigMaps, filepath.Join(tmpManifestsDir, multiConfigMapsName)); err != nil {
 		nt.T.Fatal(err)
-	}
-
-	// Generate the Deployment YAML.
-	for _, template := range templates {
-		// It isn't strictly necessary for us to have the YAML file
-		// (we could apply directly), but it is very helpful for debugging.
-		bytes, err := ioutil.ReadFile(filepath.Join(templateDir, template))
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		replaced := string(bytes)
-
-		var imgName string
-		switch template {
-		case "reconciler-manager.yaml":
-			// For the reconciler manager template, we want the latest image for the reconciler manager.
-			imgName = fmt.Sprintf("%s/reconciler-manager:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "RECONCILER_MANAGER_IMAGE_NAME", imgName)
-		case "reconciler-manager-configmap.yaml":
-			// For the reconciler deployment template, we want the latest image for the reconciler and hydration-controller.
-			reconcilerImgName := fmt.Sprintf("%s/reconciler:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "RECONCILER_IMAGE_NAME", reconcilerImgName)
-			hydrationControllerImgName := fmt.Sprintf("%s/hydration-controller:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "HYDRATION_CONTROLLER_IMAGE_NAME", hydrationControllerImgName)
-			ociSyncImgName := fmt.Sprintf("%s/oci-sync:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "OCI_SYNC_IMAGE_NAME", ociSyncImgName)
-			helmSyncImgName := fmt.Sprintf("%s/helm-sync:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "HELM_SYNC_IMAGE_NAME", helmSyncImgName)
-		case "admission-webhook.yaml":
-			imgName = fmt.Sprintf("%s/admission-webhook:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "WEBHOOK_IMAGE_NAME", imgName)
-		default:
-			// For any other template, we want the latest image for the nomos binary (mono-repo).
-			imgName = fmt.Sprintf("%s/nomos:%s", *e2e.ImagePrefix, *e2e.ImageTag)
-			replaced = strings.ReplaceAll(replaced, "IMAGE_NAME", imgName)
-		}
-
-		err = ioutil.WriteFile(filepath.Join(tmpManifestsDir, template), []byte(replaced), fileMode)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
 	}
 
 	// Create the list of paths for the File to read.
@@ -356,6 +271,9 @@ func multiRepoObjects(t testing.NTB, objects []client.Object, opts ...func(t tes
 	var filtered []client.Object
 	found := false
 	for _, obj := range objects {
+		if !isPSPCluster() && obj.GetName() == "acm-psp" {
+			continue
+		}
 		if IsReconcilerManagerConfigMap(obj) {
 			// Mark that we've found the ReconcilerManager ConfigMap.
 			// This way we know we've enabled debug mode.
@@ -364,12 +282,7 @@ func multiRepoObjects(t testing.NTB, objects []client.Object, opts ...func(t tes
 		for _, opt := range opts {
 			opt(t, obj)
 		}
-		if multiObjects[obj.GetName()] || sharedObjects[obj.GetName()] {
-			filtered = append(filtered, obj)
-		}
-		if resourcegroupObjects[obj.GetName()] {
-			filtered = append(filtered, obj)
-		}
+		filtered = append(filtered, obj)
 	}
 	if !found {
 		t.Fatal("Did not find Reconciler Manager ConfigMap")

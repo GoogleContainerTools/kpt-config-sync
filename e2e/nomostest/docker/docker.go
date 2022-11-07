@@ -15,15 +15,10 @@
 package docker
 
 import (
-	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os/exec"
 	"strings"
 
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 // RegistryName is the name of the local Docker registry.
@@ -64,36 +59,5 @@ func StartLocalRegistry(t testing.NTB) {
 	default:
 		// It isn't clear how this could be reached.
 		t.Fatalf("unexpected docker inspect output: %q", string(out))
-	}
-}
-
-// CheckImages ensures that all required images are installed on the local
-// docker registry.
-func CheckImages(t testing.NTB) {
-	t.Helper()
-
-	var images = []string{
-		reconcilermanager.Reconciler,
-		reconcilermanager.ManagerName,
-	}
-
-	for _, image := range images {
-		checkImage(t, image)
-	}
-}
-
-func checkImage(t testing.NTB, image string) {
-	url := fmt.Sprintf("http://%s/%s:%s", e2e.DefaultImagePrefix, image, *e2e.ImageTag)
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatalf("Failed to check for image %s in registry: %s", image, err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response for image %s in registry: %s", image, err)
 	}
 }

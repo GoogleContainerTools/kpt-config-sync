@@ -5,35 +5,7 @@ E2E_PARAMS := \
 	GCP_PROJECT=$(GCP_PROJECT) \
 	REGISTRY=$(REGISTRY) \
 
-# The directory for e2e test related files
-E2E_DIR := $(OUTPUT_DIR)/nomos
-
-E2E_VERSION := v1.0.2
-E2E_TEST_IMAGE := gcr.io/$(GCP_PROJECT)/e2e-tests:$(E2E_VERSION)
-
-# Builds the e2e docker image and dependencies.
-image-e2e-tests: \
-		build/e2e-tests/Dockerfile \
-		build/e2e-tests/build.sh
-	@echo "+++ Building the e2e docker image"
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	@build/e2e-tests/build.sh \
-		-t $(E2E_TEST_IMAGE) \
-		$(DOCKER_BUILD_QUIET)
-	$(MAKE) build-cli VERSION=$(VERSION)
-
-
 GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
-
-push-e2e-tests: image-e2e-tests
-	docker push $(E2E_TEST_IMAGE)
-
-# Makes sure that E2E_TEST_IMAGE is available in the local docker cache.
-# The image takes a *long* time to rebuild, so we reuse a prebuilt one instead.
-ensure-image-e2e-tests:
-	@if ! docker image inspect $(E2E_TEST_IMAGE) > /dev/null; then \
-		docker image pull $(E2E_TEST_IMAGE); \
-	fi
 
 # Runs nomos vet locally for example repos.
 # Requires kubeconfig set up properly with Nomos cluster.

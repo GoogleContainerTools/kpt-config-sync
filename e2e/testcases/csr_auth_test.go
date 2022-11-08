@@ -57,7 +57,7 @@ var (
 // 3. The Compute Engine default service account `PROJECT_ID-compute@developer.gserviceaccount.com` has `source.reader` access to Cloud Source Repository.
 // Public documentation: https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#git-creds-secret
 func TestGCENode(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
@@ -226,7 +226,7 @@ func truncateStringByLength(s string, l int) string {
 }
 
 func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
-	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 

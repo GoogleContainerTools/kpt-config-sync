@@ -241,9 +241,9 @@ func NotPendingDeletion(o client.Object) error {
 
 // HasAllNomosMetadata ensures that the object contains the expected
 // nomos labels and annotations.
-func HasAllNomosMetadata(multiRepo bool) Predicate {
+func HasAllNomosMetadata() Predicate {
 	return func(o client.Object) error {
-		annotationKeys := metadata.GetNomosAnnotationKeys(multiRepo)
+		annotationKeys := metadata.GetNomosAnnotationKeys()
 		labels := metadata.SyncerLabels()
 
 		predicates := []Predicate{

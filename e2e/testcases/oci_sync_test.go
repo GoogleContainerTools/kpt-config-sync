@@ -71,7 +71,7 @@ func TestPublicOCI(t *testing.T) {
 		publicGCRImage = fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components", publicProject)
 		publicARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/kustomize-components", publicProject)
 	}
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -102,7 +102,7 @@ func TestPublicOCI(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
@@ -282,7 +282,7 @@ func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
 }
 
 func TestSwitchFromGitToOci(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 	namespace := "bookinfo"
 	managerScope := string(declared.RootReconciler)
 	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
@@ -428,7 +428,7 @@ func isSourceType(sourceType v1beta1.SourceType) nomostest.Predicate {
 // and permission to push new image to `config-sync-test-public` in the Container Registry.
 // The test uses the current credentials (gcloud auth) when running on the GKE clusters to push new images.
 func TestDigestUpdate(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured, ntopts.RequireGKE(t))
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)

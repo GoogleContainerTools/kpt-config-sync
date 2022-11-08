@@ -31,7 +31,7 @@ import (
 )
 
 func TestNoSSLVerifyV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -123,7 +123,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 }
 
 func TestNoSSLVerifyV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 

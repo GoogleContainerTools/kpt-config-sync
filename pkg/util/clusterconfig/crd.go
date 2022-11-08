@@ -86,19 +86,6 @@ func AsCRD(o *unstructured.Unstructured) (*apiextensionsv1beta1.CustomResourceDe
 	return crd, nil
 }
 
-// AsV1Beta1CRD converts a v1 CRD to a v1beta1 CRD.
-func AsV1Beta1CRD(o *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1beta1.CustomResourceDefinition, status.Error) {
-	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinitionV1Beta1(), core.Scheme)
-	if err != nil {
-		return nil, MalformedCRDError(err, o)
-	}
-	crd, ok := obj.(*apiextensionsv1beta1.CustomResourceDefinition)
-	if !ok {
-		return nil, MalformedCRDError(fmt.Errorf("unexpected type produced by converting v1 CRD to v1beta1 CRD: %T", obj), o)
-	}
-	return crd, nil
-}
-
 // AsV1CRD returns the typed version of the CustomResourceDefinition passed in.
 func AsV1CRD(o *unstructured.Unstructured) (*apiextensionsv1.CustomResourceDefinition, status.Error) {
 	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinitionV1(), core.Scheme)

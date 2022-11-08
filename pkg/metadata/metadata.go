@@ -40,11 +40,8 @@ var MultiRepoOnlyAnnotationKeys = []string{
 }
 
 // GetNomosAnnotationKeys returns the set of Nomos annotations that Config Sync should manage.
-func GetNomosAnnotationKeys(multiRepo bool) []string {
-	if multiRepo {
-		return append(CommonAnnotationKeys, MultiRepoOnlyAnnotationKeys...)
-	}
-	return CommonAnnotationKeys
+func GetNomosAnnotationKeys() []string {
+	return append(CommonAnnotationKeys, MultiRepoOnlyAnnotationKeys...)
 }
 
 // sourceAnnotations is a map of annotations that are valid to exist on objects

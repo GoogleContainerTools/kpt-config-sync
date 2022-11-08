@@ -21,7 +21,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -31,7 +30,7 @@ import (
 )
 
 func TestSyncingThroughAProxy(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	nt.T.Logf("Set up the tiny proxy service and Override the RootSync object with proxy setting")
 	nt.MustKubectl("apply", "-f", "../testdata/proxy")

@@ -30,14 +30,12 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/util/repo"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -269,13 +267,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.WaitForRepoSyncs()
 
 		// Test that the namespace exists with expected config management labels and annotations.
-		err := nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		err := nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
 		if err != nil {
 			nt.T.Error(err)
 		}
 
 		// Test that the configmap exists with expected config management labels and annotations.
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
 		if err != nil {
 			nt.T.Error(err)
 		}
@@ -357,16 +355,6 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		if err != nil {
 			nt.T.Error(err)
 		}
-
-		// Verify the NamespaceConfig is removed from the cluster.
-		if !nt.MultiRepo {
-			_, err = nomostest.Retry(30*time.Second, func() error {
-				return nt.ValidateNotFound(nsName, "", &v1.NamespaceConfig{})
-			})
-			if err != nil {
-				nt.T.Fatal(err)
-			}
-		}
 	}
 }
 
@@ -389,13 +377,13 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}))
 
 	// Test that the namespace exists with expected config management labels and annotations.
-	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
 
 	// Test that cm1 exists with expected config management labels and annotations.
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -407,7 +395,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Test that cm3 exists with expected config management labels and annotations.
-	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(nt.MultiRepo))
+	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -732,17 +720,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].RemoveSafetyNamespace()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare all Namespaces")
 
-	if nt.MultiRepo {
-		_, err = nomostest.Retry(60*time.Second, func() error {
-			return nt.Validate("root-sync", "config-management-system",
-				&v1beta1.RootSync{}, rootSyncHasErrors(status.EmptySourceErrorCode))
-		})
-	} else {
-		_, err = nomostest.Retry(60*time.Second, func() error {
-			return nt.Validate(repo.DefaultName, "",
-				&v1.Repo{}, repoHasErrors("KNV"+status.EmptySourceErrorCode))
-		})
-	}
+	_, err = nomostest.Retry(60*time.Second, func() error {
+		return nt.Validate("root-sync", "config-management-system",
+			&v1beta1.RootSync{}, rootSyncHasErrors(status.EmptySourceErrorCode))
+	})
 	if err != nil {
 		// Fail since we needn't continue the test if this action wasn't blocked.
 		nt.T.Fatal(err)
@@ -884,33 +865,6 @@ func rootSyncHasErrors(wantCodes ...string) nomostest.Predicate {
 
 		if diff := cmp.Diff(wantErrs, gotErrs,
 			cmpopts.IgnoreFields(v1beta1.ConfigSyncError{}, "ErrorMessage")); diff != "" {
-			return errors.New(diff)
-		}
-		return nil
-	}
-}
-
-func repoHasErrors(wantCodes ...string) nomostest.Predicate {
-	sort.Strings(wantCodes)
-
-	var wantErrs []v1.ConfigManagementError
-	for _, code := range wantCodes {
-		wantErrs = append(wantErrs, v1.ConfigManagementError{Code: code})
-	}
-
-	return func(o client.Object) error {
-		repo, isRepo := o.(*v1.Repo)
-		if !isRepo {
-			return nomostest.WrongTypeErr(o, &v1.Repo{})
-		}
-
-		gotErrs := repo.Status.Source.Errors
-		sort.Slice(gotErrs, func(i, j int) bool {
-			return gotErrs[i].Code < gotErrs[j].Code
-		})
-
-		if diff := cmp.Diff(wantErrs, gotErrs,
-			cmpopts.IgnoreFields(v1.ConfigManagementError{}, "ErrorMessage")); diff != "" {
 			return errors.New(diff)
 		}
 		return nil

@@ -8,76 +8,7 @@ __tag-release-candidate:
 	@echo "+++ Tagging commit $(shell git rev-parse HEAD) with CS_VERSION=$(CS_VERSION)"
 	CS_VERSION="$(CS_VERSION)" ./scripts/tag-release-candidate.sh
 
-.PHONY: __build-release-candidate
-__build-release-candidate:
-	@echo "+++ Building release candidate"
-	@$(eval REGISTRY := "gcr.io/config-management-release")
-	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
-
-	$(MAKE) config-sync-manifest \
-		VERSION=$(RC_TAG) \
-		REGISTRY=$(REGISTRY) \
-		IMAGE_TAG=$(RC_TAG)
-	$(MAKE) build-cli VERSION=$(RC_TAG)
-
-	$(eval RELEASE_PATH = "gs://config-management-release/config-sync/tag/$(RC_TAG)")
-	$(MAKE) __upload-manifest RELEASE_PATH=$(RELEASE_PATH)
-	$(MAKE) __upload-cli RELEASE_PATH=$(RELEASE_PATH)
-
 .PHONY: __promote-rc-tag
 __promote-rc-tag:
 	@echo "+++ Promoting release candidate tag"
 	RC_TAG="$(RC_TAG)" ./scripts/tag-promotion.sh
-
-.PHONY: __promote-rc-artifacts
-__promote-rc-artifacts:
-	@echo "+++ Promoting release candidate artifacts"
-	@$(eval REGISTRY := "gcr.io/config-management-release")
-	@test -n "$(CS_VERSION)" || (echo "CS_VERSION unset" ; exit 1)
-	$(eval RC_TAG != git tag --points-at "$(CS_VERSION)^{}" --list "$(CS_VERSION)-rc.*" | sort -V | tail -n 1)
-	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
-
-	$(MAKE) config-sync-manifest-promote \
-		VERSION=$(CS_VERSION) \
-		REGISTRY=$(REGISTRY) \
-		IMAGE_TAG=$(CS_VERSION) \
-		RC_TAG=$(RC_TAG)
-	$(MAKE) build-cli VERSION=$(CS_VERSION)
-
-	$(eval RELEASE_PATH = "gs://config-management-release/config-sync/tag/$(CS_VERSION)")
-	$(MAKE) __upload-manifest RELEASE_PATH=$(RELEASE_PATH)
-	$(MAKE) __upload-cli RELEASE_PATH=$(RELEASE_PATH)
-
-
-####################################################################################################
-# SUPPORTING COMMANDS
-
-PHONY: __upload-manifest
-__upload-manifest:
-	@test -n "$(RELEASE_PATH)" || (echo "RELEASE_PATH unset" ; exit 1)
-	@$(eval MANIFEST_DESTINATION = "$(RELEASE_PATH)/config-sync-manifest.yaml")
-	@echo "+++ Uploading config-sync-manifest.yaml to $(MANIFEST_DESTINATION)"
-	@echo "${NOMOS_MANIFEST_STAGING_DIR}"
-	gsutil cp \
-		"${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml" \
-		$(MANIFEST_DESTINATION)
-
-.PHONY: __upload-cli
-__upload-cli:
-	@test -n "$(RELEASE_PATH)" || (echo "RELEASE_PATH unset" ; exit 1)
-	@echo "+++ Uploading CLI Binaries to $(RELEASE_PATH)"
-	gsutil cp \
-		"$(BIN_DIR)/linux_amd64/nomos" \
-		"$(RELEASE_PATH)/linux_amd64/nomos"
-	gsutil cp \
-		"$(BIN_DIR)/linux_arm64/nomos" \
-		"$(RELEASE_PATH)/linux_arm64/nomos"
-	gsutil cp \
-		"$(BIN_DIR)/darwin_amd64/nomos" \
-		"$(RELEASE_PATH)/darwin_amd64/nomos"
-	gsutil cp \
-		"$(BIN_DIR)/darwin_arm64/nomos" \
-		"$(RELEASE_PATH)/darwin_arm64/nomos"
-	gsutil cp \
-		"$(BIN_DIR)/windows_amd64/nomos.exe" \
-		"$(RELEASE_PATH)/windows_amd64/nomos.exe"

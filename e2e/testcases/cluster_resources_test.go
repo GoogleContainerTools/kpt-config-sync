@@ -26,7 +26,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -109,16 +108,9 @@ func TestRevertClusterRole(t *testing.T) {
 	appliedCr := fake.ClusterRoleObject(core.Name(crName))
 	appliedCr.Rules = appliedRules
 	err = nt.Update(appliedCr)
-	if nt.MultiRepo {
-		// The admission webhook should deny the conflicting change.
-		if err == nil {
-			nt.T.Fatal("got Update error = nil, want admission webhook to deny conflicting update")
-		}
-	} else {
-		// The admission webhook isn't enabled in mono repo.
-		if err != nil {
-			nt.T.Fatalf("applying conflicting ClusterRole: %v", err)
-		}
+	// The admission webhook should deny the conflicting change.
+	if err == nil {
+		nt.T.Fatal("got Update error = nil, want admission webhook to deny conflicting update")
 	}
 
 	// Ensure the conflict is reverted.
@@ -178,16 +170,6 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole")
 	nt.WaitForRepoSyncs()
-
-	if !nt.MultiRepo {
-		// Validate ClusterConfig behavior.
-		nt.WaitForSync(kinds.ClusterConfig(), v1.ClusterConfigName, "",
-			120*time.Second,
-			nomostest.DefaultRootSha1Fn,
-			nomostest.ClusterConfigHasToken,
-			nil,
-		)
-	}
 
 	err = nt.Validate(crName, "", &rbacv1.ClusterRole{},
 		clusterRoleHasRules(declaredRules), managerFieldsNonEmpty())

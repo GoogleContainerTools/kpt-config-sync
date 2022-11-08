@@ -32,11 +32,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/util/repo"
 )
 
 // fileMode is the file mode to use for all operations.
@@ -158,7 +156,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		DefaultReconcileTimeout: sharedNt.DefaultReconcileTimeout,
 		DefaultMetricsTimeout:   sharedNt.DefaultMetricsTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
-		MultiRepo:               sharedNt.MultiRepo,
 		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
 		RootRepos:               sharedNt.RootRepos,
@@ -205,40 +202,24 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 }
 
 func resetSyncedRepos(nt *NT, opts *ntopts.New) {
-	if nt.MultiRepo {
-		nnList := nt.NonRootRepos
-		// clear the namespace resources in the namespace repo to avoid admission validation failure.
-		resetNamespaceRepos(nt)
-		resetRootRepos(nt, opts.SourceFormat)
+	nnList := nt.NonRootRepos
+	// clear the namespace resources in the namespace repo to avoid admission validation failure.
+	resetNamespaceRepos(nt)
+	resetRootRepos(nt, opts.SourceFormat)
 
-		deleteRootRepos(nt)
-		deleteNamespaceRepos(nt)
-		// delete the out-of-sync namespaces in case they're set up in the delegated mode.
-		for nn := range nnList {
-			revokeRepoSyncNamespace(nt, nn.Namespace)
-		}
-		nt.NonRootRepos = map[types.NamespacedName]*Repository{}
-		for name := range nt.RootRepos {
-			if name != configsync.RootSyncName {
-				delete(nt.RootRepos, name)
-			}
-		}
-		nt.WaitForRepoSyncs()
-	} else {
-		// MonoRepo will stop syncing new commits if any commit fails to sync.
-		// So catch this case and fail subsequent tests without waiting.
-		err := nt.ValidateSyncObject(kinds.Repo(), repo.DefaultName, "", MonoRepoSyncNotInProgress)
-		if _, ok := err.(*SyncInProgressError); ok {
-			nt.T.Fatalf("Sync still in progress during test reset: %v", err)
-		}
-		// else ignore, reset, and wait for sync
-
-		nt.NonRootRepos = map[types.NamespacedName]*Repository{}
-		nt.RootRepos[configsync.RootSyncName] = resetRepository(nt, RootRepo, DefaultRootRepoNamespacedName, opts.SourceFormat)
-		// It sets POLICY_DIR to always be `acme` because the initial mono-repo's sync directory is configured to be `acme`.
-		ResetMonoRepoSpec(nt, opts.SourceFormat, MainBranch, AcmeDir)
-		nt.WaitForRepoSyncs()
+	deleteRootRepos(nt)
+	deleteNamespaceRepos(nt)
+	// delete the out-of-sync namespaces in case they're set up in the delegated mode.
+	for nn := range nnList {
+		revokeRepoSyncNamespace(nt, nn.Namespace)
 	}
+	nt.NonRootRepos = map[types.NamespacedName]*Repository{}
+	for name := range nt.RootRepos {
+		if name != configsync.RootSyncName {
+			delete(nt.RootRepos, name)
+		}
+	}
+	nt.WaitForRepoSyncs()
 }
 
 // FreshTestEnv establishes a connection to a test cluster based on the passed
@@ -271,7 +252,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,
-		MultiRepo:               opts.Nomos.MultiRepo,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
 		HydrationPollingPeriod:  50 * time.Millisecond,
 		RootRepos:               make(map[string]*Repository),
@@ -388,12 +368,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	// First wait for CRDs to be established.
-	var err error
-	if nt.MultiRepo {
-		err = WaitForCRDs(nt, multiRepoCRDs)
-	} else {
-		err = WaitForCRDs(nt, monoRepoCRDs)
-	}
+	err := WaitForCRDs(nt, multiRepoCRDs)
 	if err != nil {
 		nt.T.Fatalf("waiting for ConfigSync CRDs to become established: %v", err)
 	}

@@ -41,23 +41,7 @@ build-cli: pull-buildenv buildenv-dirs
 
 # Build Config Sync docker images
 .PHONY: build-images
-build-images: build-images-monorepo build-images-multirepo
-
-# Build Config Sync docker images for monorepo mode
-.PHONY: build-images-monorepo
-build-images-monorepo: license
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	@echo "+++ Building the nomos image: $(NOMOS_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(NOMOS_IMAGE) \
-		-t $(NOMOS_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
-		.
-
-# Build Config Sync docker images for multirepo mode
-.PHONY: build-images-multirepo
-build-images-multirepo: license
+build-images: license
 	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \
@@ -109,23 +93,12 @@ build-images-multirepo: license
 		.
 
 # Deprecated alias of build-images. Remove this once unused.
-.PHONY: image-nomos
-image-nomos: build-images
+.PHONY: build-images-multirepo
+build-images-multirepo: build-images
 
 # Pushes Config Sync docker images to REGISTRY.
 .PHONY: push-images
-push-images: push-images-monorepo push-images-multirepo
-
-.PHONY: push-images-monorepo
-push-images-monorepo:
-	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
-	@echo "+++ Using account:"
-	gcloud config get-value account
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
-	docker push $(NOMOS_TAG)
-
-.PHONY: push-images-multirepo
-push-images-multirepo:
+push-images:
 	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
 	@echo "+++ Using account:"
 	gcloud config get-value account
@@ -139,22 +112,12 @@ push-images-multirepo:
 	docker push $(HELM_SYNC_TAG)
 
 # Deprecated alias of push-images. Remove this once unused.
-.PHONY: push-to-gcr-nomos
-push-to-gcr-nomos: push-images
+.PHONY: push-images-multirepo
+push-images-multirepo: push-images
 
 # Pulls all Config Sync images from REGISTRY
 .PHONY: pull-images
-pull-images: pull-images-monorepo pull-images-multirepo
-
-# Pulls monorepo Config Sync images from REGISTRY
-.PHONY: pull-images-monorepo
-pull-images-monorepo:
-	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
-	docker pull $(NOMOS_TAG)
-
-# Pulls multirepo Config Sync images from REGISTRY
-.PHONY: pull-images-multirepo
-pull-images-multirepo:
+pull-images:
 	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
 	docker pull $(NOMOS_TAG)
 	docker pull $(RECONCILER_TAG)
@@ -166,21 +129,12 @@ pull-images-multirepo:
 	docker pull $(HELM_SYNC_TAG)
 
 # Deprecated alias of pull-images. Remove this once unused.
-pull-config-sync-images: pull-images
+.PHONY: pull-images-multirepo
+pull-images-multirepo: pull-images
 
 # Retags previously built Config Sync images
 .PHONY: retag-images
-retag-images: retag-images-monorepo retag-images-multirepo
-
-# Retags previously built Config Sync images for monorepo mode
-.PHONY: retag-images-monorepo
-retag-images-monorepo:
-	@echo "+++ Retagging Config Sync images from $(OLD_REGISTRY)/*:$(OLD_IMAGE_TAG) to $(REGISTRY)/*:$(IMAGE_TAG)"
-	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
-
-# Retags previously built Config Sync images for multirepo mode
-.PHONY: retag-images-multirepo
-retag-images-multirepo:
+retag-images:
 	@echo "+++ Retagging Config Sync images from $(OLD_REGISTRY)/*:$(OLD_IMAGE_TAG) to $(REGISTRY)/*:$(IMAGE_TAG)"
 	docker tag $(OLD_REGISTRY)/$(RECONCILER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_TAG)
 	docker tag $(OLD_REGISTRY)/$(RECONCILER_MANAGER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_MANAGER_TAG)
@@ -190,83 +144,9 @@ retag-images-multirepo:
 	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
 
-# Pushes the specified component's docker image to gcr.io.
-.PHONY: retag-rc-images
-retag-rc-images:
-	@echo "+++ Promoting Config Sync images to $(REGISTRY)"
-	@test -n "$(RC_TAG)" || (echo "RC_TAG unset" ; exit 1)
-	$(MAKE) pull-config-sync-images \
-		REGISTRY=$(OLD_REGISTRY) \
-		IMAGE_TAG=$(RC_TAG)
-	$(MAKE) retag-images \
-		OLD_REGISTRY=$(OLD_REGISTRY) \
-		OLD_IMAGE_TAG=$(RC_TAG) \
-		REGISTRY=$(REGISTRY) \
-		IMAGE_TAG=$(IMAGE_TAG)
-
-###################################
-# Deployment generation
-###################################
-
-.PHONY: clean-deployments-dir
-__clean-deployments-dir:
-	rm -rf $(GEN_DEPLOYMENT_DIR)
-	$(MAKE) $(OUTPUT_DIR)
-
-.PHONY: generate-deployments
-generate-deployments: \
-		__clean-deployments-dir \
-		$(GEN_DEPLOYMENT_DIR)/git-importer.yaml \
-		$(GEN_DEPLOYMENT_DIR)/monitor.yaml \
-		$(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml \
-		$(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml \
-		$(GEN_DEPLOYMENT_DIR)/otel-collector.yaml \
-		$(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml
-	@echo "+++ Finished generating all yaml"
-
-# Generates the podspec yaml for the component specified.
-.PHONY: $(GEN_DEPLOYMENT_DIR)/git-importer.yaml
-$(GEN_DEPLOYMENT_DIR)/git-importer.yaml: manifests/templates/git-importer.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|IMAGE_NAME|$(NOMOS_TAG)|' < $< > $@
-
-.PHONY: $(GEN_DEPLOYMENT_DIR)/monitor.yaml
-$(GEN_DEPLOYMENT_DIR)/monitor.yaml: manifests/templates/monitor.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|IMAGE_NAME|$(NOMOS_TAG)|' < $< > $@
-
-.PHONY: $(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml
-$(GEN_DEPLOYMENT_DIR)/reconciler-manager-configmap.yaml: \
-		manifests/templates/reconciler-manager-configmap.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|' \
-		-e 's|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|' \
-		-e 's|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|' \
-		-e 's|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|' < $< > $@
-
-.PHONY: $(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml
-$(GEN_DEPLOYMENT_DIR)/reconciler-manager.yaml: \
-		manifests/templates/reconciler-manager.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|' < $< > $@
-
-.PHONY: $(GEN_DEPLOYMENT_DIR)/otel-collector.yaml
-$(GEN_DEPLOYMENT_DIR)/otel-collector.yaml: \
-		manifests/templates/otel-collector.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|IMAGE_NAME|$(OTEL_COLLECTOR_TAG)|' < $< > $@
-
-.PHONY: $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml
-$(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
-		manifests/templates/admission-webhook.yaml
-	@echo "+++ Generating yaml $@"
-	@mkdir -p $(dir $@)
-	@sed -e 's|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|' < $< > $@
+# Deprecated alias of retag-images. Remove this once unused.
+.PHONY: retag-images-multirepo
+retag-images-multirepo: retag-images
 
 ###################################
 # Config Sync manifest
@@ -274,36 +154,7 @@ $(GEN_DEPLOYMENT_DIR)/admission-webhook.yaml: \
 
 # Build Config Sync manifests for ACM operator and OSS.
 .PHONY: build-manifests
-build-manifests: __config-sync-manifest
-	@echo "+++ Copying manifests for OSS deployments"
-	rm -rf $(OUTPUT_DIR)/oss/cloned
-	mkdir -p $(OUTPUT_DIR)/oss/cloned
-	rsync \
-		--exclude='admission-webhook.yaml' \
-		--exclude='git-importer.yaml' \
-		--exclude='monitor.yaml' \
-		.output/deployment/* .output/oss/cloned/deployment/
-	rsync \
-		--exclude='acm-psp.yaml' \
-		--exclude='policy-controller-psp.yaml' \
-		--exclude='cluster-config-crd.yaml' \
-		--exclude='hierarchyconfig-crd.yaml' \
-		--exclude='importer-service-account.yaml' \
-		--exclude='monitor-service-account.yaml' \
-		--exclude='namespace-config-crd.yaml' \
-		--exclude='nomos-repo-crd.yaml' \
-		--exclude='sync-declaration-crd.yaml' \
-		.output/manifests/* .output/oss/cloned/manifests/
-	rsync \
-		manifests/test-resources/* .output/oss/cloned/manifests/
-	@echo "++++ Add OSS yaml files to config-sync-manifest.yaml"
-	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
-		--destination=${OSS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
-		$(OUTPUT_DIR)/oss/cloned/manifests \
-		$(OUTPUT_DIR)/oss/cloned/deployment
-	@echo "+++ Add separate acm-psp.yaml manifest so it can be applied independently"
-	rsync \
-		.output/manifests/acm-psp.yaml ${OSS_MANIFEST_STAGING_DIR}/acm-psp.yaml
+build-manifests: build-manifests-operator build-manifests-oss
 
 # Build Config Sync manifests for OSS installations
 .PHONY: build-manifests-oss
@@ -363,31 +214,9 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DI
 
 	@ echo "+++ Manifests generated in $(NOMOS_MANIFEST_STAGING_DIR)"
 
-# Deprecated alias of build-manifests. Remove this once unused.
-.PHONY: __config-sync-manifest-oss
-__config-sync-manifest-oss: build-manifests
-
-# __config-sync-manifest creates the config-sync-manifest.yaml for release and incorporation into ACM Operator
-.PHONY: __config-sync-manifest
-__config-sync-manifest: generate-deployments
-	@echo "+++ Preparing config-sync-manifest.yaml"
-	@echo "++++ Copy manifests (except templates/ and test-resources/) to output folder"
-	rm -rf $(OUTPUT_DIR)/manifests
-	rsync manifests/* .output/manifests/
-	@echo "++++ Add yaml files to config-sync-manifest.yaml"
-	env GO111MODULE=on go run -mod=vendor ./scripts/append_manifests/append_manifests.go \
-		--destination=${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml \
-		$(OUTPUT_DIR)/manifests \
-		$(OUTPUT_DIR)/deployment
-
 # config-sync-manifest-no-push creates the config-sync-manifest.yaml and builds images without pushing
 .PHONY: config-sync-manifest-no-push
 config-sync-manifest-no-push: $(OUTPUT_DIR) build-images build-manifests
-
-# config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
-# and retags images without publishing
-.PHONY: config-sync-manifest-promote-no-push
-config-sync-manifest-promote-no-push: $(OUTPUT_DIR) retag-rc-images build-manifests
 
 # config-sync-manifest-e2e adds additional resources that are necessary for the e2e tests
 .PHONY: config-sync-manifest-e2e
@@ -405,11 +234,6 @@ config-sync-manifest-e2e: config-sync-manifest
 # config-sync-manifest creates config sync manifest and pushes its docker images
 .PHONY: config-sync-manifest
 config-sync-manifest: config-sync-manifest-no-push push-images
-
-# config-sync-manifest-promote creates the config-sync-manifest.yaml for promoted artifacts
-# and pushes the promoted images
-.PHONY: config-sync-manifest-promote
-config-sync-manifest-promote: config-sync-manifest-promote-no-push push-images
 
 ###################################
 # E2E Git Server

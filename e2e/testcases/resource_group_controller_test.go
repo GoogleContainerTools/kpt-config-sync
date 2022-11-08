@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
@@ -29,7 +28,7 @@ import (
 )
 
 func TestResourceGroupController(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController)
 
 	ns := "rg-test"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/rg-test/ns.yaml",

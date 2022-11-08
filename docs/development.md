@@ -54,7 +54,7 @@ To execute e2e multi-repo tests locally with kind, build and push the Config Syn
 images to the local kind registry and then execute tests using go test.
 ```shell
 make __push-local-images
-go test ./e2e/... --e2e --multirepo --debug --test.v --image-tag=(IMAGE_TAG) --test.run (test name regexp)
+go test ./e2e/... --e2e --debug --test.v --image-tag=(IMAGE_TAG) --test.run (test name regexp)
 ```
 
 ### E2E tests (GKE)
@@ -81,7 +81,7 @@ make build-images
 # Push images to GCR
 make push-images
 # Run the tests with image prefix/tag from previous step and desired test regex
-go test ./e2e/... --e2e --multirepo --debug --test.v --share-test-env=true --test.parallel=1 --image-prefix=(IMAGE_PREFIX) --image-tag=(IMAGE_TAG) --test-cluster=gke --test.run (test name regexp)
+go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1 --image-prefix=(IMAGE_PREFIX) --image-tag=(IMAGE_TAG) --test-cluster=gke --test.run (test name regexp)
 ```
 
 ## Build

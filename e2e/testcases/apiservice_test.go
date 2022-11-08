@@ -24,7 +24,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/status"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
@@ -36,24 +35,12 @@ const (
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.RequireGKE(t))
 	t.Cleanup(func() {
-		if !nt.MultiRepo {
-			nt.MustKubectl("delete", "-f", "../testdata/apiservice/rbac.yaml", "--ignore-not-found")
-			nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace.yaml", "--ignore-not-found")
-		}
 		if t.Failed() {
 			nt.PodLogs(adapterNamespace, adapterName, "pod-custom-metrics-stackdriver-adapter", true)
 		}
 	})
 	nt.T.Log("Creating commit with APIService and Deployment")
-	if nt.MultiRepo {
-		nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml")
-	} else {
-		// In mono repo mode the necessary ClusterRole and ClusterRolebinding
-		// in rbac.yaml is blocked from being removed from git repo by git-importer in
-		// sharedTestEnv, so manually deploying them ahead.
-		nt.MustKubectl("apply", "-f", "../testdata/apiservice/namespace.yaml")
-		nt.MustKubectl("apply", "-f", "../testdata/apiservice/rbac.yaml")
-	}
+	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace.yaml", "acme/namespaces/custom-metrics/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-custom-metrics.yaml", "acme/namespaces/custom-metrics/namespace-custom-metrics.yaml")
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml")
@@ -99,23 +86,18 @@ func TestImporterAndSyncerResilientToFlakyAPIService(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-resilient.yaml", "acme/namespaces/resilient/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add testing resources")
 
-	if nt.MultiRepo {
-		nt.T.Log("Wait for test resource to have status CURRENT")
-		nt.WaitForRepoSyncs()
-		_, e := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-			err := nt.Validate("resilient", "", &corev1.Namespace{},
-				nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-			if err != nil {
-				return err
-			}
-			return nil
-		})
-		if e != nil {
-			nt.T.Fatal("validate failed test resource to have status CURRENT")
+	nt.T.Log("Wait for test resource to have status CURRENT")
+	nt.WaitForRepoSyncs()
+	_, e := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
+		err := nt.Validate("resilient", "", &corev1.Namespace{},
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
+		if err != nil {
+			return err
 		}
-	} else {
-		nt.T.Log("Waiting for APIServerError to be present in sync status")
-		nt.WaitForRepoSourceError(status.APIServerErrorCode)
+		return nil
+	})
+	if e != nil {
+		nt.T.Fatal("validate failed test resource to have status CURRENT")
 	}
 
 	nt.T.Log("Adding backend to test APIService to bring Config Sync out of error state")

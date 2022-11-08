@@ -28,7 +28,7 @@ import (
 )
 
 func TestDeclaredFieldsPod(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)

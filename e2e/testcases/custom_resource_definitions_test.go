@@ -44,15 +44,13 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.WaitForRepoSyncs()
 	nt.RenewClient()
 
-	if nt.MultiRepo {
-		err := nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
-			hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+	err := nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
+		hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
-	err := nt.Validate("heavy", "foo", anvilCR("v1", "", 0))
+	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -80,11 +78,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CRD but leaving Anvil CR")
 
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
-	} else {
-		nt.WaitForRepoImportErrorCode(nonhierarchical.UnsupportedCRDRemovalErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.

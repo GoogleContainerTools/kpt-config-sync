@@ -71,7 +71,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nn5 := nomostest.RepoSyncNN(testNs, "nr5")
 	testNs2 := "ns-2"
 
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
 		ntopts.WithDelegatedControl, ntopts.RootRepo(rr1),
 		ntopts.NamespaceRepo(testNs, nr1), ntopts.NamespaceRepo(testNs2, nr1))
 
@@ -191,7 +191,7 @@ func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, l
 
 func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
@@ -280,7 +280,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace repo: %s", configsync.RootSyncName)
@@ -376,7 +376,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	rootSync2 := "root-test"
 	// If declaring RootSync in a Root repo, the source format has to be unstructured.
 	// Otherwise, the hierarchical validator will complain that the config-management-system has configs but missing a Namespace config.
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo, ntopts.Unstructured, ntopts.RootRepo(rootSync2))
+	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured, ntopts.RootRepo(rootSync2))
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
@@ -441,7 +441,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	repoSyncNN1 := nomostest.RepoSyncNN(testNs, "rs-test-1")
 	repoSyncNN2 := nomostest.RepoSyncNN(testNs, "rs-test-2")
 
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.NamespaceRepo(repoSyncNN1.Namespace, repoSyncNN1.Name),
 		ntopts.NamespaceRepo(repoSyncNN2.Namespace, repoSyncNN2.Name))
 
@@ -542,7 +542,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 }
 
 func TestControllerValidationErrors(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.MultiRepos)
 
 	testNamespace := fake.NamespaceObject(testNs)
 	if err := nt.Create(testNamespace); err != nil {

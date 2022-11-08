@@ -73,7 +73,6 @@ func CheckImages(t testing.NTB) {
 	t.Helper()
 
 	var images = []string{
-		"nomos",
 		reconcilermanager.Reconciler,
 		reconcilermanager.ManagerName,
 	}

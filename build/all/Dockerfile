@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Build all nomos go binaries
+# Build all Config Sync go binaries
 FROM golang:1.17 as bins
 
 WORKDIR /workspace
@@ -49,10 +49,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     -ldflags "-X kpt.dev/configsync/pkg/version.VERSION=${VERSION}" \
     ./cmd/reconciler \
     ./cmd/reconciler-manager \
-    ./cmd/monitor \
-    ./cmd/git-importer \
     ./cmd/hydration-controller \
-    ./cmd/nomos \
     ./cmd/admission-webhook \
     ./cmd/oci-sync \
     ./cmd/helm-sync
@@ -162,34 +159,3 @@ COPY LICENSE LICENSE
 COPY LICENSES.txt LICENSES.txt
 
 ENTRYPOINT ["/admission-webhook"]
-
-# Nomos image
-FROM k8s.gcr.io/build-image/debian-base-amd64:bullseye-v1.4.1 as nomos
-
-# https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
-RUN apt-get update && \
-  apt-get -y upgrade && \
-  apt-get install -y bash git
-
-RUN mkdir -p /opt/nomos/bin
-ENV PATH="/opt/nomos/bin:${PATH}"
-WORKDIR /opt/nomos/bin
-
-# Nomos binaries.
-COPY --from=bins /go/bin/git-importer git-importer
-COPY --from=bins /go/bin/monitor monitor
-COPY --from=bins /go/bin/nomos nomos
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Set up a HOME directory for non-root user
-RUN mkdir -p /nomos
-RUN chown 1000 /nomos
-ENV HOME="/nomos"
-
-# Switch to non-root user
-USER 1000
-
-CMD echo "Please specify a specific binary:\n\n$(find . -type f -executable -printf '\t%f\n')\n" && exit 1

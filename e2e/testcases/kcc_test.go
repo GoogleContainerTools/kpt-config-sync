@@ -35,7 +35,7 @@ import (
 // It then deletes KCC resources and verifies the GCP resources
 // are removed successfully.
 func TestKCCResourcesOnCSR(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.KccTest, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.KccTest, ntopts.RequireGKE(t))
 	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)

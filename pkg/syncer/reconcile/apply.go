@@ -69,22 +69,16 @@ type clientApplier struct {
 	client           *syncerclient.Client
 	fights           fightDetector
 	fLogger          fightLogger
-	multirepoEnabled bool
 }
 
 var _ Applier = &clientApplier{}
 
-// NewApplier returns a new clientApplier.
-func NewApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) {
-	return newApplier(cfg, client, false)
-}
-
 // NewApplierForMultiRepo returns a new clientApplier for callers with multi repo feature enabled.
 func NewApplierForMultiRepo(cfg *rest.Config, client *syncerclient.Client) (Applier, error) {
-	return newApplier(cfg, client, true)
+	return newApplier(cfg, client)
 }
 
-func newApplier(cfg *rest.Config, client *syncerclient.Client, multirepoEnabled bool) (Applier, error) {
+func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) {
 	c, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -107,7 +101,6 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client, multirepoEnabled 
 		client:           client,
 		fights:           newFightDetector(),
 		fLogger:          newFightLogger(),
-		multirepoEnabled: multirepoEnabled,
 	}, nil
 }
 
@@ -206,12 +199,7 @@ func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructur
 // create creates the resource with the declared-config annotation set.
 func (c *clientApplier) create(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	// When multi-repo feature is enabled, use kubectl last-applied-annotation.
-	var err error
-	if c.multirepoEnabled {
-		err = util.CreateApplyAnnotation(obj, unstructured.UnstructuredJSONScheme)
-	} else {
-		err = createApplyAnnotation(obj, unstructured.UnstructuredJSONScheme)
-	}
+	err := util.CreateApplyAnnotation(obj, unstructured.UnstructuredJSONScheme)
 	if err != nil {
 		return status.ResourceWrap(err, "could not generate apply annotation on create", obj)
 	}
@@ -270,36 +258,19 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 
 	var previous []byte
 	var oErr error
-	if c.multirepoEnabled {
-		// Retrieve the last applied configuration of the object from the annotation.
-		previous, oErr = util.GetOriginalConfiguration(currentState)
-	} else {
-		if err := updateConfigAnnotation(currentState); err != nil {
-			return nil, errors.Wrapf(err, "could not update config annotation for %v", currentState)
-		}
-		// Retrieve the declared configuration of the object from the annotation.
-		previous, oErr = getOriginalConfiguration(currentState)
-	}
+	// Retrieve the last applied configuration of the object from the annotation.
+	previous, oErr = util.GetOriginalConfiguration(currentState)
 	if oErr != nil {
 		return nil, errors.Errorf("could not retrieve original configuration from %v", currentState)
 	}
 	if previous == nil {
-		if c.multirepoEnabled {
-			klog.Warningf("3-way merge patch for %s may be incorrect due to missing last-applied-configuration annotation.", resourceDescription)
-		} else {
-			klog.Warningf("3-way merge patch for %s may be incorrect due to missing declared-config annotation.", resourceDescription)
-		}
+		klog.Warningf("3-way merge patch for %s may be incorrect due to missing last-applied-configuration annotation.", resourceDescription)
 	}
 
 	var modified []byte
 	var mErr error
 
-	if c.multirepoEnabled {
-		modified, mErr = util.GetModifiedConfiguration(intendedState, true, unstructured.UnstructuredJSONScheme)
-	} else {
-		// Serialize the modified configuration of the object, populating the declared annotation as well.
-		modified, mErr = getModifiedConfiguration(intendedState, true, unstructured.UnstructuredJSONScheme)
-	}
+	modified, mErr = util.GetModifiedConfiguration(intendedState, true, unstructured.UnstructuredJSONScheme)
 	if mErr != nil {
 		return nil, errors.Errorf("could not serialize intended configuration from %v", intendedState)
 	}

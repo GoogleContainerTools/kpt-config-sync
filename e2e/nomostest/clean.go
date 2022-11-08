@@ -360,14 +360,12 @@ func removeAdmissionWebhook(nt *NT, failOnError FailOnError) {
 
 // removeResourceGroupController deletes namespace `resource-group-system`.
 func removeResourceGroupController(nt *NT, failOnError FailOnError) {
-	if nt.MultiRepo {
-		_, err := nt.Kubectl("delete", "namespace", "resource-group-system", "--ignore-not-found")
-		if err != nil {
-			if failOnError {
-				nt.T.Fatal("error deleting namespace resource-group-system")
-			} else {
-				nt.T.Log("error deleting namespace resource-group-system")
-			}
+	_, err := nt.Kubectl("delete", "namespace", "resource-group-system", "--ignore-not-found")
+	if err != nil {
+		if failOnError {
+			nt.T.Fatal("error deleting namespace resource-group-system")
+		} else {
+			nt.T.Log("error deleting namespace resource-group-system")
 		}
 	}
 }

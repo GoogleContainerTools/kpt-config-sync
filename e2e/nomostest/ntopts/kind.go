@@ -224,7 +224,7 @@ func localImageName(name string) string {
 
 func preloadImagesKind(t testing.NTB, name string) {
 	imageNames := []string{
-		"nomos", "reconciler", "hydration-controller",
+		"reconciler", "hydration-controller",
 		"hydration-controller-with-shell", "reconciler-manager",
 		"admission-webhook", "oci-sync"}
 	var images []string

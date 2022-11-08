@@ -49,7 +49,6 @@ var expectedKrmFnOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  ap
 func TestHydrateKustomizeComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
 
@@ -115,7 +114,6 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 func TestHydrateHelmComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
 
@@ -200,7 +198,6 @@ func TestHydrateHelmComponents(t *testing.T) {
 func TestHydrateHelmOverlay(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
 
@@ -295,7 +292,6 @@ func TestHydrateHelmOverlay(t *testing.T) {
 func TestHydrateRemoteResources(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
 
@@ -366,7 +362,6 @@ func TestHydrateRemoteResources(t *testing.T) {
 func TestHydrateResourcesInRelativePath(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 	)
 

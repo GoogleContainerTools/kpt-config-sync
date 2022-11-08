@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -57,7 +56,7 @@ const (
 )
 
 func TestManagingReconciler(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController)
 
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, reconcilerDeployment); err != nil {
@@ -431,7 +430,7 @@ func firstContainerMemoryRequestIs(memoryRequest int64) nomostest.Predicate {
 }
 
 func TestAutopilotReconcilerAdjustment(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.ACMController)
 
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, reconcilerDeployment); err != nil {

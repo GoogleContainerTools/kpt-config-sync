@@ -23,17 +23,6 @@ import (
 )
 
 var (
-	monoRepoCRDs = []string{
-		"clusterconfigs.configmanagement.gke.io",
-		"hierarchyconfigs.configmanagement.gke.io",
-		"namespaceconfigs.configmanagement.gke.io",
-		"repos.configmanagement.gke.io",
-		"syncs.configmanagement.gke.io",
-		// Shared CRDS
-		"clusters.clusterregistry.k8s.io",
-		"clusterselectors.configmanagement.gke.io",
-		"namespaceselectors.configmanagement.gke.io",
-	}
 	multiRepoCRDs = []string{
 		"reposyncs.configsync.gke.io",
 		"rootsyncs.configsync.gke.io",

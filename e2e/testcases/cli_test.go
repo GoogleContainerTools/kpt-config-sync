@@ -908,26 +908,10 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 		"namespaces/resource-group-system/pods_yaml.txt",
 	}
 
-	monoRepoBugReportFiles := []string{
-		"namespaces/config-management-system/git-importer.*/git-sync.txt",
-		"namespaces/config-management-system/git-importer.*/importer.txt",
-		"namespaces/config-management-system/monitor.*/monitor.txt",
-		"namespaces/config-management-system/pods.txt",
-		"namespaces/kube-system/pods.txt",
-		"cluster/configmanagement/clusterconfigs.txt",
-		"cluster/configmanagement/namespaceconfigs.txt",
-		"cluster/configmanagement/repos.txt",
-		"cluster/configmanagement/syncs.txt",
-	}
-
 	// check expected files exist in folder
 	var errs status.MultiError
 	errs = checkFileExists(fmt.Sprintf("%s/processed/%s", bugReportDirName, context), generalBugReportFiles, files)
-	if nt.MultiRepo {
-		errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), multiRepoBugReportFiles, files))
-	} else {
-		errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), monoRepoBugReportFiles, files))
-	}
+	errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), multiRepoBugReportFiles, files))
 	if errs != nil {
 		nt.T.Fatal(fmt.Sprintf("did not find all expected files in bug report zip file: %v", errs))
 	}

@@ -25,7 +25,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/importer/git"
 )
 
 func TestListPolicyFiles(t *testing.T) {
@@ -108,13 +107,6 @@ func TestListPolicyFiles(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resultGit, err := git.ListFiles(abs)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sort.Slice(resultGit, func(i, j int) bool {
-				return resultGit[i].OSPath() < resultGit[j].OSPath()
-			})
 			resultFind, err := FindFiles(abs)
 			if err != nil {
 				t.Fatal(err)
@@ -122,9 +114,6 @@ func TestListPolicyFiles(t *testing.T) {
 			sort.Slice(resultFind, func(i, j int) bool {
 				return resultFind[i].OSPath() < resultFind[j].OSPath()
 			})
-			if diff := cmp.Diff(resultGit, resultFind); diff != "" {
-				t.Errorf("diff between ListFiles and FindFiles:\n%s", diff)
-			}
 
 			sort.Strings(tc.want)
 			var want []string
@@ -136,7 +125,7 @@ func TestListPolicyFiles(t *testing.T) {
 			}
 
 			var got []string
-			for _, r := range resultGit {
+			for _, r := range resultFind {
 				got = append(got, r.SlashPath())
 			}
 			sort.Strings(got)

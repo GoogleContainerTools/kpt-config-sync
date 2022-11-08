@@ -33,40 +33,36 @@ import (
 func (nt *NT) GetCurrentMetrics(syncOptions ...MetricsSyncOption) (time.Duration, testmetrics.ConfigSyncMetrics) {
 	nt.T.Helper()
 
-	if nt.MultiRepo {
-		var metrics testmetrics.ConfigSyncMetrics
+	var metrics testmetrics.ConfigSyncMetrics
 
-		// Metrics are buffered and sent in batches to the collector.
-		// So we may have to retry a few times until they're current.
-		took, err := Retry(nt.DefaultWaitTimeout, func() error {
-			var err error
-			metrics, err = testmetrics.ParseMetrics(nt.otelCollectorPort)
-			if err != nil {
-				// Port forward again to fix intermittent "exit status 56" errors when
-				// parsing from the port.
-				nt.PortForwardOtelCollector()
-				return err
-			}
-
-			for _, syncOption := range syncOptions {
-				err = syncOption(&metrics)
-				if err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
+	// Metrics are buffered and sent in batches to the collector.
+	// So we may have to retry a few times until they're current.
+	took, err := Retry(nt.DefaultWaitTimeout, func() error {
+		var err error
+		metrics, err = testmetrics.ParseMetrics(nt.otelCollectorPort)
 		if err != nil {
-			nt.T.Fatalf("unable to get latest metrics: %v", err)
+			// Port forward again to fix intermittent "exit status 56" errors when
+			// parsing from the port.
+			nt.PortForwardOtelCollector()
+			return err
 		}
 
-		nt.DebugLogMetrics(metrics)
+		for _, syncOption := range syncOptions {
+			err = syncOption(&metrics)
+			if err != nil {
+				return err
+			}
+		}
 
-		return took, metrics
+		return nil
+	})
+	if err != nil {
+		nt.T.Fatalf("unable to get latest metrics: %v", err)
 	}
 
-	return 0, nil
+	nt.DebugLogMetrics(metrics)
+
+	return took, metrics
 }
 
 // DebugLogMetrics logs metrics to the debug log, if enabled
@@ -89,23 +85,20 @@ func (nt *NT) DebugLogMetrics(metrics testmetrics.ConfigSyncMetrics) {
 // ValidateMetrics pulls the latest metrics, updates the metrics on NT and
 // executes the parameter function.
 func (nt *NT) ValidateMetrics(syncOption MetricsSyncOption, fn func() error) error {
-	if nt.MultiRepo {
-		nt.T.Log("validating metrics...")
-		var once sync.Once
-		duration, err := Retry(nt.DefaultMetricsTimeout, func() error {
-			duration, currentMetrics := nt.GetCurrentMetrics(syncOption)
-			nt.ReconcilerMetrics = currentMetrics
-			once.Do(func() {
-				// Only log this once. Afterwards GetCurrentMetrics will return immediately.
-				nt.T.Logf("waited %v for metrics to be current", duration)
-			})
-			return fn()
+	nt.T.Log("validating metrics...")
+	var once sync.Once
+	duration, err := Retry(nt.DefaultMetricsTimeout, func() error {
+		duration, currentMetrics := nt.GetCurrentMetrics(syncOption)
+		nt.ReconcilerMetrics = currentMetrics
+		once.Do(func() {
+			// Only log this once. Afterwards GetCurrentMetrics will return immediately.
+			nt.T.Logf("waited %v for metrics to be current", duration)
 		})
-		nt.T.Logf("waited %v for metrics to be valid", duration)
-		if err != nil {
-			return fmt.Errorf("validating metrics: %v", err)
-		}
-		return nil
+		return fn()
+	})
+	nt.T.Logf("waited %v for metrics to be valid", duration)
+	if err != nil {
+		return fmt.Errorf("validating metrics: %v", err)
 	}
 	return nil
 }
@@ -191,20 +184,18 @@ func SyncMetricsToReconcilerSyncError(nt *NT, reconcilerName string) MetricsSync
 // ValidateMultiRepoMetrics validates all the multi-repo metrics.
 // It checks all non-error metrics are recorded with the correct tags and values.
 func (nt *NT) ValidateMultiRepoMetrics(reconcilerName string, numResources int, gvkMetrics ...testmetrics.GVKMetric) error {
-	if nt.MultiRepo {
-		// Validate metrics emitted from the reconciler-manager.
-		if err := nt.ReconcilerMetrics.ValidateReconcilerManagerMetrics(); err != nil {
-			return err
-		}
-		// Validate non-typed and non-error metrics in the given reconciler.
-		if err := nt.ReconcilerMetrics.ValidateReconcilerMetrics(reconcilerName, numResources); err != nil {
-			return err
-		}
-		// Validate metrics that have a GVK "type" TagKey.
-		for _, tm := range gvkMetrics {
-			if err := nt.ReconcilerMetrics.ValidateGVKMetrics(reconcilerName, tm); err != nil {
-				return errors.Wrapf(err, "%s %s operation", tm.GVK, tm.APIOp)
-			}
+	// Validate metrics emitted from the reconciler-manager.
+	if err := nt.ReconcilerMetrics.ValidateReconcilerManagerMetrics(); err != nil {
+		return err
+	}
+	// Validate non-typed and non-error metrics in the given reconciler.
+	if err := nt.ReconcilerMetrics.ValidateReconcilerMetrics(reconcilerName, numResources); err != nil {
+		return err
+	}
+	// Validate metrics that have a GVK "type" TagKey.
+	for _, tm := range gvkMetrics {
+		if err := nt.ReconcilerMetrics.ValidateGVKMetrics(reconcilerName, tm); err != nil {
+			return errors.Wrapf(err, "%s %s operation", tm.GVK, tm.APIOp)
 		}
 	}
 	return nil
@@ -213,20 +204,18 @@ func (nt *NT) ValidateMultiRepoMetrics(reconcilerName string, numResources int, 
 // ValidateErrorMetricsNotFound validates that no error metrics are emitted from
 // any of the reconcilers.
 func (nt *NT) ValidateErrorMetricsNotFound() error {
-	if nt.MultiRepo {
-		for name := range nt.RootRepos {
-			reconcilerName := core.RootReconcilerName(name)
-			pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
-				return err
-			}
+	for name := range nt.RootRepos {
+		reconcilerName := core.RootReconcilerName(name)
+		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
+			return err
 		}
-		for nn := range nt.NonRootRepos {
-			reconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
-			pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
-			if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
-				return err
-			}
+	}
+	for nn := range nt.NonRootRepos {
+		reconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
+		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -235,42 +224,28 @@ func (nt *NT) ValidateErrorMetricsNotFound() error {
 // ValidateResourceOverrideCount validates that the `resource_override_count` metric exists
 // for the correct reconciler.
 func (nt *NT) ValidateResourceOverrideCount(reconcilerType, containerName, resourceType string, count int) error {
-	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconcilerType, containerName, resourceType, count)
-	}
-	return nil
+	return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconcilerType, containerName, resourceType, count)
 }
 
 // ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
 func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []metrics.Tag) error {
-	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateResourceOverrideCountMissingTags(tags)
-	}
-	return nil
+	return nt.ReconcilerMetrics.ValidateResourceOverrideCountMissingTags(tags)
 }
 
 // ValidateGitSyncDepthOverrideCount validates the `git_sync_depth_override_count` metric.
 func (nt *NT) ValidateGitSyncDepthOverrideCount(count int) error {
-	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateGitSyncDepthOverrideCount(count)
-	}
-	return nil
+	return nt.ReconcilerMetrics.ValidateGitSyncDepthOverrideCount(count)
 }
 
 // ValidateNoSSLVerifyCount checks that the `no_ssl_verify_count` metric has the correct value.
 func (nt *NT) ValidateNoSSLVerifyCount(count int) error {
-	if nt.MultiRepo {
-		return nt.ReconcilerMetrics.ValidateNoSSLVerifyCount(count)
-	}
-	return nil
+	return nt.ReconcilerMetrics.ValidateNoSSLVerifyCount(count)
 }
 
 // ValidateMetricNotFound validates that a metric does not exist.
 func (nt *NT) ValidateMetricNotFound(metricName string) error {
-	if nt.MultiRepo {
-		if _, ok := nt.ReconcilerMetrics[metricName]; ok {
-			return errors.Errorf("Found an unexpected metric: %s", metricName)
-		}
+	if _, ok := nt.ReconcilerMetrics[metricName]; ok {
+		return errors.Errorf("Found an unexpected metric: %s", metricName)
 	}
 	return nil
 }
@@ -278,9 +253,6 @@ func (nt *NT) ValidateMetricNotFound(metricName string) error {
 // ValidateReconcilerErrors validates that the `reconciler_error` metric exists
 // for the correct reconciler pod and the tagged component has the correct value.
 func (nt *NT) ValidateReconcilerErrors(reconcilerName string, sourceCount, syncCount int) error {
-	if nt.MultiRepo {
-		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
-		return nt.ReconcilerMetrics.ValidateReconcilerErrors(pod.Name, sourceCount, syncCount)
-	}
-	return nil
+	pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+	return nt.ReconcilerMetrics.ValidateReconcilerErrors(pod.Name, sourceCount, syncCount)
 }

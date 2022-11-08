@@ -28,13 +28,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,10 +69,30 @@ const (
 	logFieldOperation = "operation"
 )
 
+// The fields in reconcilerManagerAllowList are the fields that reconciler manager allow
+// users or other controllers to modify.
+var reconcilerManagerAllowList = []string{
+	"$.spec.template.spec.containers[*].terminationMessagePath",
+	"$.spec.template.spec.containers[*].terminationMessagePolicy",
+	"$.spec.template.spec.containers[*].*.timeoutSeconds",
+	"$.spec.template.spec.containers[*].*.periodSeconds",
+	"$.spec.template.spec.containers[*].*.successThreshold",
+	"$.spec.template.spec.containers[*].*.failureThreshold",
+	"$.spec.template.spec.tolerations",
+	"$.spec.template.spec.restartPolicy",
+	"$.spec.template.spec.nodeSelector", // remove this after Config Sync support user-defined nodeSelector through API
+	"$.spec.template.spec.terminationGracePeriodSeconds",
+	"$.spec.template.spec.dnsPolicy",
+	"$.spec.template.spec.schedulerName",
+	"$.spec.revisionHistoryLimit",
+	"$.spec.progressDeadlineSeconds",
+}
+
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
 	clusterName             string
 	client                  client.Client
+	dynamicClient           dynamic.Interface
 	log                     logr.Logger
 	scheme                  *runtime.Scheme
 	isAutopilotCluster      *bool
@@ -183,17 +207,22 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (controllerutil.OperationResult, error) {
 	dRef := client.ObjectKeyFromObject(declared)
 	kind := "Deployment"
-
-	current := &appsv1.Deployment{}
-
-	if err := r.client.Get(ctx, dRef, current); err != nil {
+	forcePatch := true
+	deploymentResourceInterface := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace)
+	unObjCurrent, err := deploymentResourceInterface.Get(ctx, dRef.Name, metav1.GetOptions{})
+	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return controllerutil.OperationResultNone, err
 		}
 		r.log.V(3).Info("Managed object not found, creating",
 			logFieldObject, dRef.String(),
 			logFieldKind, kind)
-		if err := r.client.Create(ctx, declared); err != nil {
+		data, err := json.Marshal(declared)
+		if err != nil {
+			return controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
+		}
+		_, err = deploymentResourceInterface.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		if err != nil {
 			return controllerutil.OperationResultNone, err
 		}
 		return controllerutil.OperationResultCreated, nil
@@ -206,27 +235,25 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		}
 		r.isAutopilotCluster = &isAutopilot
 	}
-
-	adjusted, err := adjustContainerResources(*r.isAutopilotCluster, declared, current)
+	dep, err := isDeploymentSame(*r.isAutopilotCluster, declared, unObjCurrent, reconcilerManagerAllowList, r.scheme)
 	if err != nil {
 		return controllerutil.OperationResultNone, err
 	}
-	if adjusted {
+	if dep.isDeploymentAdjusted {
 		mutator := "Autopilot"
 		r.log.V(3).Info("Managed object container resources updated",
 			logFieldObject, dRef.String(),
 			logFieldKind, kind,
 			"mutator", mutator)
 	}
-
-	if equality.Semantic.DeepEqual(current.Labels, declared.Labels) && equality.Semantic.DeepEqual(current.Spec, declared.Spec) {
+	if dep.isDeploymentSame {
 		return controllerutil.OperationResultNone, nil
 	}
-
-	r.log.V(3).Info("Managed object found, updating",
+	r.log.V(3).Info("Managed object found, patching",
 		logFieldObject, dRef.String(),
 		logFieldKind, kind)
-	if err := r.client.Update(ctx, declared); err != nil {
+	deploymentAfterPatch, err := deploymentResourceInterface.Patch(ctx, dRef.Name, types.ApplyPatchType, dep.deploymentToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+	if err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
 			return controllerutil.OperationResultNone, err
@@ -236,15 +263,73 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		r.log.Error(err, "Managed object update failed, deleting and re-creating",
 			logFieldObject, dRef.String(),
 			logFieldKind, kind)
-		if err := r.client.Delete(ctx, declared); err != nil {
+		if err := deploymentResourceInterface.Delete(ctx, dRef.Name, metav1.DeleteOptions{}); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
-		if err := r.client.Create(ctx, declared); err != nil {
+		data, err := json.Marshal(declared)
+		if err != nil {
+			return controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
+		}
+		_, err = deploymentResourceInterface.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		if err != nil {
 			return controllerutil.OperationResultNone, err
 		}
 	}
-
+	if deploymentAfterPatch.GetGeneration() == unObjCurrent.GetGeneration() {
+		return controllerutil.OperationResultNone, nil
+	}
 	return controllerutil.OperationResultUpdated, nil
+}
+
+// preprocessDeployment delete all the fields in allowlist from unstructured object and convert the unstructured object to Deployment object
+func preprocessDeployment(allowList []string, unstructuredDeployment *unstructured.Unstructured) (*appsv1.Deployment, error) {
+	for _, path := range allowList {
+		if err := deleteFields(unstructuredDeployment.Object, path); err != nil {
+			return nil, err
+		}
+	}
+	var resultDeployment appsv1.Deployment
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredDeployment.Object, &resultDeployment); err != nil {
+		return nil, fmt.Errorf("failed to convert from current reconciler unstructured object to deployment object: %w", err)
+	}
+	return &resultDeployment, nil
+}
+
+type deploymentProcessResult struct {
+	isDeploymentSame     bool
+	isDeploymentAdjusted bool
+	deploymentToPatch    []byte
+}
+
+// isDeploymentSame checks if current deployment is same with declared deployment when ignore the fields in allowlist.
+func isDeploymentSame(isAutopilot bool, declared *appsv1.Deployment, unObjCurrent *unstructured.Unstructured, allowList []string, scheme *runtime.Scheme) (*deploymentProcessResult, error) {
+
+	postProcessAllowList := processAllowlist(isAutopilot, declared, allowList)
+	processedCurrent, err := preprocessDeployment(postProcessAllowList, unObjCurrent)
+	if err != nil {
+		return &deploymentProcessResult{}, err
+	}
+	adjusted, err := adjustContainerResources(isAutopilot, declared, processedCurrent)
+	if err != nil {
+		return &deploymentProcessResult{}, err
+	}
+
+	unObjDeclared, err := kinds.ToUnstructured(declared, scheme)
+	if err != nil {
+		return &deploymentProcessResult{}, err
+	}
+	processedDeclared, err := preprocessDeployment(postProcessAllowList, unObjDeclared)
+	if err != nil {
+		return &deploymentProcessResult{}, err
+	}
+	if equality.Semantic.DeepEqual(processedCurrent.Labels, processedDeclared.Labels) && equality.Semantic.DeepEqual(processedCurrent.Spec, processedDeclared.Spec) {
+		return &deploymentProcessResult{true, adjusted, nil}, nil
+	}
+	data, err := json.Marshal(unObjDeclared)
+	if err != nil {
+		return &deploymentProcessResult{}, err
+	}
+	return &deploymentProcessResult{false, adjusted, data}, nil
 }
 
 // adjustContainerResources adjusts the resources of all containers in the declared Deployment.
@@ -285,6 +370,9 @@ func adjustContainerResources(isAutopilot bool, declared, current *appsv1.Deploy
 	for _, declaredContainer := range declared.Spec.Template.Spec.Containers {
 		inputRequest := input[declaredContainer.Name].Requests
 		outputRequest := output[declaredContainer.Name].Requests
+		if declaredContainer.Resources.Requests == nil {
+			continue // for the containers like gcenode-askpass-sidecar which does not have resource request defined, skip the check
+		}
 		if declaredContainer.Resources.Requests.Cpu().Cmp(*inputRequest.Cpu()) < 0 || declaredContainer.Resources.Requests.Memory().Cmp(*inputRequest.Memory()) < 0 {
 			allRequestsNoLowerThanInput = false
 			break
@@ -300,12 +388,31 @@ func adjustContainerResources(isAutopilot bool, declared, current *appsv1.Deploy
 		resourcesChanged = keepCurrentContainerResources(declared, current)
 	}
 
-	// Add the autopilot annotation to the declared Deployment
-	if declared.Annotations == nil {
-		declared.Annotations = map[string]string{}
-	}
-	declared.Annotations[metadata.AutoPilotAnnotation] = resourceMutationAnnotation
 	return resourcesChanged, nil
+}
+
+// processAllowlist add resources.limits to allowlist when renconciler-manager does not own this field
+func processAllowlist(isAutopilot bool, declared *appsv1.Deployment, allowList []string) []string {
+	// If it is an Autopilot cluster, all the resource limits are ignored, this is handled by adjustContainerResources function.
+	if isAutopilot {
+		return allowList
+	}
+	for i, declaredContainer := range declared.Spec.Template.Spec.Containers {
+		if declaredContainer.Resources.Limits == nil {
+			// Add resources.limits to allowlist when the declared deployment does not have this field defined for the container
+			allowList = append(allowList, fmt.Sprintf("$.spec.template.spec.containers[%d].resources.limits", i))
+			continue
+		}
+		if declaredContainer.Resources.Limits.Cpu() == nil {
+			// Add resources.limits.cpu to allowlist when the declared deployment does not have this field defined for the container
+			allowList = append(allowList, fmt.Sprintf("$.spec.template.spec.containers[%d].resources.limits.cpu", i))
+		}
+		if declaredContainer.Resources.Limits.Memory() == nil {
+			// Add resources.limits.memory to allowlist when the declared deployment does not have this field defined for the container
+			allowList = append(allowList, fmt.Sprintf("$.spec.template.spec.containers[%d].resources.limits.memory", i))
+		}
+	}
+	return allowList
 }
 
 // keepCurrentContainerResources copies over all containers' resources from the current Deployment to the declared one,
@@ -329,12 +436,17 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 // deployment returns the deployment from the server
 func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*appsv1.Deployment, error) {
 	depObj := &appsv1.Deployment{}
-	if err := r.client.Get(ctx, dRef, depObj); err != nil {
+	depUnObj, err := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace).Get(ctx, dRef.Name, metav1.GetOptions{})
+
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, errors.Errorf(
 				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
+	}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(depUnObj.Object, depObj); err != nil {
+		return nil, errors.Wrapf(err, "failed to convert unstructured object %s into Deployment object", depUnObj.GetName())
 	}
 	return depObj, nil
 }

@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -77,10 +76,14 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "failed to build dynamic client")
+		os.Exit(1)
+	}
+	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
-	watchFleetMembership := fleetMembershipCRDExists(mgr.GetConfig(), mgr.GetRESTMapper())
-
-	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
+	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(), dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
 	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
@@ -88,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(),
+	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(), dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
 	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
@@ -137,12 +140,8 @@ func main() {
 
 // fleetMembershipCRDExists checks if the fleet membership CRD exists.
 // It checks the CRD first so that the controller can watch the Membership resource in the startup time.
-func fleetMembershipCRDExists(config *rest.Config, mapper meta.RESTMapper) bool {
-	dc, err := dynamic.NewForConfig(config)
-	if err != nil {
-		setupLog.Error(err, "failed to build dynamic client")
-		os.Exit(1)
-	}
+func fleetMembershipCRDExists(dc dynamic.Interface, mapper meta.RESTMapper) bool {
+
 	crdRESTMapping, err := mapper.RESTMapping(kinds.CustomResourceDefinition())
 	if err != nil {
 		setupLog.Error(err, "failed to get mapping of CRD type")

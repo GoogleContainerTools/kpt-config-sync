@@ -20,6 +20,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -63,7 +64,7 @@ func TestManagingReconciler(t *testing.T) {
 	generation := reconcilerDeployment.Generation
 	managedImage := reconcilerDeployment.Spec.Template.Spec.Containers[0].Image
 	managedReplicas := *reconcilerDeployment.Spec.Replicas
-	managedMemoryLimit := reconcilerDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().DeepCopy()
+	originalTolerations := reconcilerDeployment.Spec.Template.Spec.Tolerations
 
 	// test case 1: The reconciler-manager should manage most of the fields with one exception:
 	// - changes to the container resource requirements should be ignored when the autopilot annotation is set.
@@ -92,28 +93,39 @@ func TestManagingReconciler(t *testing.T) {
 			hasReplicas(managedReplicas))
 	})
 
-	// test case 3: override the memory limit has been moved to TestAutopilotReconcilerAdjustment
-
-	// test case 4: manually update the memory limit.
-	// The reconciler-manager manages the container resource requirements on both
-	// autopilot clusters and non-autopilot clusters. Any manual changes will be reverted.
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Manually update the first container CPU and Memory limit")
+	// test case 3:  the reconciler-manager should not revert the change to the fields that are not owned by reconciler-manager
+	nt.T.Log("Manually update fields that are not owned by reconciler-manager")
+	var modifiedTolerations []corev1.Toleration
 	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
-		d.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			"cpu":    resource.MustParse(updatedFirstContainerCPULimit),
-			"memory": resource.MustParse(updatedFirstContainerMemoryLimit),
-		}
-	})
-	nt.T.Log("Verify the reconciler-manager should revert the memory limit change")
-	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
-	nomostest.Wait(nt.T, "the memory limit to be reverted", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			firstContainerMemoryLimitIs(managedMemoryLimit.String()))
+		d.Spec.Template.Spec.Containers[0].TerminationMessagePath = "dev/termination-message"
+		d.Spec.Template.Spec.Containers[0].Stdin = true
+		d.Spec.Template.Spec.Tolerations = append(d.Spec.Template.Spec.Tolerations, corev1.Toleration{Key: "kubernetes.io/arch", Effect: "NoSchedule", Operator: "Exists"})
+		modifiedTolerations = d.Spec.Template.Spec.Tolerations
+		d.Spec.Template.Spec.PriorityClassName = "system-node-critical"
 	})
 
-	// test case 5: the reconciler-manager should update the reconciler Deployment if the manifest in the ConfigMap has been changed.
+	nt.T.Log("Verify the reconciler-manager does not revert the change")
+	generation++ // generation bumped by 1 because reconicler-manager should not revert this change
+	nomostest.Wait(nt.T, "the reconciler deployment to be updated", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+			&appsv1.Deployment{}, hasGeneration(generation), firstContainerTerminationMessagePathIs("dev/termination-message"),
+			firstContainerStdinIs(true), hasTolerations(modifiedTolerations), hasPriorityClassName("system-node-critical"))
+	})
+	// change the fields back to default values
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].TerminationMessagePath = "dev/termination-log"
+		d.Spec.Template.Spec.Containers[0].Stdin = false
+		d.Spec.Template.Spec.Tolerations = originalTolerations
+		d.Spec.Template.Spec.PriorityClassName = ""
+	})
+	generation++ // generation bumped by 1 because reconciler-manager should not revert this change
+	nomostest.Wait(nt.T, "the reconciler deployment to be updated", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+			&appsv1.Deployment{}, hasGeneration(generation), firstContainerTerminationMessagePathIs("dev/termination-log"),
+			firstContainerStdinIs(false), hasTolerations(originalTolerations), hasPriorityClassName(""))
+	})
+
+	// test case 4: the reconciler-manager should update the reconciler Deployment if the manifest in the ConfigMap has been changed.
 	nt.T.Log("Update the Deployment manifest in the ConfigMap")
 	nt.MustKubectl("apply", "-f", "../testdata/reconciler-manager-configmap-updated.yaml")
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
@@ -131,8 +143,9 @@ func TestManagingReconciler(t *testing.T) {
 			firstContainerImageIsNot(managedImage))
 	})
 
-	// test case 6: the reconciler-manager should delete the git-creds volume if not needed
+	// test case 5: the reconciler-manager should delete the git-creds volume if not needed
 	currentVolumesCount := len(reconcilerDeployment.Spec.Template.Spec.Volumes)
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Switch the auth type from ssh to none")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 	nt.T.Log("Verify the git-creds volume is gone")
@@ -143,7 +156,7 @@ func TestManagingReconciler(t *testing.T) {
 			gitCredsVolumeDeleted(currentVolumesCount))
 	})
 
-	// test case 7: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
+	// test case 6: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
 	nt.T.Log("Switch the auth type from none to gcpserviceaccount")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"gcpserviceaccount","secretRef":{"name":""},"gcpServiceAccountEmail":"test-gcp-sa-email@test-project.iam.gserviceaccount.com"}}}`)
 	nt.T.Log("Verify the gcenode-askpass-sidecar container should be added")
@@ -158,7 +171,7 @@ func TestManagingReconciler(t *testing.T) {
 			templateForGcpServiceAccountAuthType())
 	})
 
-	// test case 8: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
+	// test case 7: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
 	nt.T.Log("Switch the auth type gcpserviceaccount to ssh")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"ssh","secretRef":{"name":"git-creds"}}}}`)
 	nt.T.Log("Verify the git-creds volume exists and the gcenode-askpass-sidecar container is gone")
@@ -215,7 +228,56 @@ func hasGeneration(generation int64) nomostest.Predicate {
 		return nil
 	}
 }
-
+func firstContainerTerminationMessagePathIs(terminationMessagePath string) nomostest.Predicate {
+	return func(o client.Object) error {
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		if d.Spec.Template.Spec.Containers[0].TerminationMessagePath != terminationMessagePath {
+			return fmt.Errorf("expected first container terminationMessagePath is: %s, got: %s", terminationMessagePath, d.Spec.Template.Spec.Containers[0].TerminationMessagePath)
+		}
+		return nil
+	}
+}
+func firstContainerStdinIs(stdin bool) nomostest.Predicate {
+	return func(o client.Object) error {
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		if d.Spec.Template.Spec.Containers[0].Stdin != stdin {
+			return fmt.Errorf("expected first container stdin is: %t, got: %t", stdin, d.Spec.Template.Spec.Containers[0].Stdin)
+		}
+		return nil
+	}
+}
+func hasTolerations(tolerations []corev1.Toleration) nomostest.Predicate {
+	return func(o client.Object) error {
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		for i, toleration := range d.Spec.Template.Spec.Tolerations {
+			if !equality.Semantic.DeepEqual(toleration, tolerations[i]) {
+				return fmt.Errorf("expected toleration is: %s, got: %s", tolerations[i].String(), toleration.String())
+			}
+		}
+		return nil
+	}
+}
+func hasPriorityClassName(priorityClassName string) nomostest.Predicate {
+	return func(o client.Object) error {
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		if d.Spec.Template.Spec.PriorityClassName != priorityClassName {
+			return fmt.Errorf("expected priorityClassName is: %s, got: %s", priorityClassName, d.Spec.Template.Spec.PriorityClassName)
+		}
+		return nil
+	}
+}
 func firstContainerImageIs(image string) nomostest.Predicate {
 	return func(o client.Object) error {
 		d, ok := o.(*appsv1.Deployment)
@@ -497,7 +559,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	}
 	expectedTotalMemory += 100
 	// Waiting for reconciliation and validation
-	nomostest.Wait(nt.T, "Waiting for first reconciliation", nt.DefaultWaitTimeout, func() error {
+	nomostest.Wait(nt.T, "the first container resource requests to be increased", nt.DefaultWaitTimeout, func() error {
 		rd := &appsv1.Deployment{}
 		err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, rd,
 			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
@@ -515,6 +577,25 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		return nil
 	})
 
+	// manually increase first container CPU and memory request to above current user override request
+	nt.T.Log("Manually update the first container CPU and Memory request")
+	manualFirstContainerCPURequest := updatedFirstContainerCPURequest + 10
+	manualFirstContainerMemoryRequest := updatedFirstContainerMemoryRequest + 10
+
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+			"cpu":    resource.MustParse(fmt.Sprintf("%dm", manualFirstContainerCPURequest)),
+			"memory": resource.MustParse(fmt.Sprintf("%dMi", manualFirstContainerMemoryRequest)),
+		}
+	})
+	nt.T.Log("Verify the reconciler-manager does revert the manual memory/CPU request change")
+	generation += 2
+	nomostest.Wait(nt.T, "the resource requests update to be reverted", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
+			totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU),
+			firstContainerMemoryRequestIs(expectedFirstContainerMemory))
+	})
 	// decrease CPU to below autopilot increment but above current request
 	nt.T.Log("Decreasing CPU request to above current request but below autopilot increment")
 	if nt.IsGKEAutopilot {
@@ -538,13 +619,49 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec":{"override":{"resources":[{"containerName":"%s","memoryRequest":"%dMi", "cpuRequest":"%dm"}]}}}`,
 		firstContainerName, updatedFirstContainerMemoryRequest, updatedFirstContainerCPURequest))
 
-	nomostest.Wait(nt.T, "Waiting for second reconciliation", nt.DefaultWaitTimeout, func() error {
+	nomostest.Wait(nt.T, "resource CPU request to be updated only on non-autopilot cluster", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
 			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
 			totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU),
 			firstContainerMemoryRequestIs(expectedFirstContainerMemory))
 	})
 
+	// Manually decrease cpu request to below current cpu request, but the output cpu request after autopilot adjustment are greater than current cpu request
+	nt.T.Log("Manually decrease the first container CPU request")
+	manualFirstContainerCPURequest = updatedFirstContainerCPURequest - 10
+	if nt.IsGKEAutopilot {
+		generation++
+	} else {
+		generation += 2
+	}
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+			"cpu": resource.MustParse(fmt.Sprintf("%dm", manualFirstContainerCPURequest)),
+		}
+	})
+	nomostest.Wait(nt.T, "resource CPU request manual update to be reverted only on non-autopilot cluster", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
+			totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU),
+			firstContainerMemoryRequestIs(expectedFirstContainerMemory))
+	})
+	// Manually decrease cpu and memory requests to below current requests, and the output resource requests after autopilot adjustment still below current requests
+	nt.T.Log("Manually decrease the first container CPU and Memory request")
+	manualFirstContainerCPURequest = initialFirstCPU
+	manualFirstContainerMemoryRequest = initialFirstMemory
+	generation += 2
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+			"cpu":    resource.MustParse(fmt.Sprintf("%dm", manualFirstContainerCPURequest)),
+			"memory": resource.MustParse(fmt.Sprintf("%dMi", manualFirstContainerMemoryRequest)),
+		}
+	})
+	nomostest.Wait(nt.T, "the resource requests manual update to be reverted", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
+			totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU),
+			firstContainerMemoryRequestIs(expectedFirstContainerMemory))
+	})
 	// decrease cpu and memory request to below current request autopilot increment
 	nt.T.Log("Reverting CPU and memory back to initial value")
 	updatedFirstContainerCPURequest = initialFirstCPU
@@ -568,7 +685,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		expectedTotalMemory = initialTotalMemory
 	}
 
-	nomostest.Wait(nt.T, "Waiting for third reconciliation", nt.DefaultWaitTimeout, func() error {
+	nomostest.Wait(nt.T, "resource requests to be updated", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
 			hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
 			totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU),
@@ -576,6 +693,37 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	})
 
 	// limit change
+	// The reconciler-manager allows manual change to resource limits on non-Autopilot clusters only if the resource limits are neither defined by us in reonciler-manager-configmap
+	// nor users through spec.override.resources field.
+	// All the changes to resource limits on Autopilot cluster will be ignored, since the resource limits are always same with resource requests on Autopilot cluster
+
+	// Manually update resource limits before override resource limits through API
+	nt.T.Log("Manually update the first container CPU and Memory limit")
+	manualFirstContainerCPULimit := "600m"
+	manualFirstContainerMemoryLimit := "600Mi"
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			"cpu":    resource.MustParse(manualFirstContainerCPULimit),
+			"memory": resource.MustParse(manualFirstContainerMemoryLimit),
+		}
+	})
+	nt.T.Log("Verify the reconciler-manager does not revert the manual resource limits change when user does not override the memory limit ")
+	if nt.IsGKEAutopilot {
+		expectedFirstContainerMemoryLimit = expectedFirstContainerMemoryLimit1
+		expectedFirstContainerCPULimit = expectedFirstContainerCPULimit1
+	} else {
+		expectedFirstContainerMemoryLimit = manualFirstContainerMemoryLimit
+		expectedFirstContainerCPULimit = manualFirstContainerCPULimit
+	}
+
+	generation++ // generation bumped by 1 because the memory limits are still not owned by reconciler manager
+	nomostest.Wait(nt.T, "resource limits to be updated on non-autopilot cluster, ignore this update on autopilot cluster", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+			&appsv1.Deployment{}, hasGeneration(generation),
+			firstContainerMemoryLimitIs(expectedFirstContainerMemoryLimit), firstContainerCPULimitIs(expectedFirstContainerCPULimit))
+	})
+
+	// override the resource limits through spec.override.resources field
 	nt.T.Log("Updating the container limits")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec":{"override":{"resources":[{"containerName":"%s","memoryLimit":"%s", "cpuLimit":"%s"}]}}}`,
 		firstContainerName, updatedFirstContainerMemoryLimit, updatedFirstContainerCPULimit))
@@ -592,11 +740,31 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		expectedFirstContainerCPULimit = updatedFirstContainerCPULimit
 		generation++
 	}
-
-	nomostest.Wait(nt.T, "Waiting for fourth reconciliation", nt.DefaultWaitTimeout, func() error {
+	nomostest.Wait(nt.T, "resource limits to be updated on non-autopilot cluster, ignore this update on autopilot cluster", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
 			hasGeneration(generation), firstContainerCPURequestIs(expectedFirstContainerCPU),
 			firstContainerMemoryRequestIs(expectedFirstContainerMemory), firstContainerMemoryLimitIs(expectedFirstContainerMemoryLimit),
+			firstContainerCPULimitIs(expectedFirstContainerCPULimit))
+	})
+
+	//manually update the resource limits after user override the resource limits through spec.override field, in this case, reconciler-manager own the resource limits field
+	nt.T.Log("Manually update the first container CPU and Memory limit")
+	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
+		d.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			"cpu":    resource.MustParse(manualFirstContainerCPULimit),
+			"memory": resource.MustParse(manualFirstContainerMemoryLimit),
+		}
+	})
+	nt.T.Log("Verify the reconciler-manager does revert the manual resource limits change after user override the resource limits through API")
+	if nt.IsGKEAutopilot {
+		generation++
+	} else {
+		generation += 2
+	}
+	nomostest.Wait(nt.T, "the manual resource limits change to be reverted on non-autopilot cluster, ignore this change on autopilot cluster", nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+			&appsv1.Deployment{}, hasGeneration(generation),
+			firstContainerMemoryLimitIs(expectedFirstContainerMemoryLimit),
 			firstContainerCPULimitIs(expectedFirstContainerCPULimit))
 	})
 }

@@ -21,9 +21,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -317,6 +319,292 @@ func TestAdjustContainerResources(t *testing.T) {
 			}
 		})
 	}
+}
+
+var declaredDeployment = `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: # this field will be assigned dynamically by the reconciler-manager
+  namespace: config-management-system
+  labels:
+    app: reconciler
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: reconciler
+      configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
+  template:
+    spec:
+      containers:
+      - name: otel-agent
+        image: gcr.io/config-management-release/otelcontribcol:v0.54.0
+        command:
+        - /otelcol-contrib
+        args:
+        - "--config=/conf/otel-agent-config.yaml"
+        - "--feature-gates=-exporter.googlecloud.OTLPDirect"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - NET_RAW
+        ports:
+        - containerPort: 55678 # Default OpenCensus receiver port.
+          protocol: TCP
+        - containerPort: 8888  # Metrics.
+          protocol: TCP
+        volumeMounts:
+        - name: otel-agent-config-vol
+          mountPath: /conf
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+            scheme: HTTP 
+        imagePullPolicy: IfNotPresent
+      dnsPolicy: ClusterFirst
+      schedulerName: default-scheduler
+      volumes:
+      - name: repo
+        emptyDir: {}
+      - name: kube
+        emptyDir: {}
+      securityContext:
+        fsGroup: 65533
+        runAsUser: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+`
+var currentDeployment = `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"1","ephemeral-storage":"1Gi","memory":"1Gi"},"requests":{"cpu":"10m","ephemeral-storage":"1Gi","memory":"100Mi"},"name":"otel-agent"}]},"output":{"containers":[{"limits":{"cpu":"10m","ephemeral-storage":"1Gi","memory":"100Mi"},"requests":{"cpu":"10m","ephemeral-storage":"1Gi","memory":"100Mi"},"name":"otel-agent"}]},"modified":true}'
+  name: # this field will be assigned dynamically by the reconciler-manager
+  namespace: config-management-system
+  labels:
+    app: reconciler
+    configmanagement.gke.io/system: "true"
+    configmanagement.gke.io/arch: "csmr"
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: reconciler
+      configsync.gke.io/deployment-name: "" # this field will be assigned dynamically by the reconciler-manager
+  template:
+    spec:
+      tolerations: # different from declared
+      - key: "key1"
+        operator: "Exists"
+        effect: "NoSchedule"
+      nodeSelector: # different from declared
+        disktype: ssd
+      containers:
+      - name: otel-agent
+        image: gcr.io/config-management-release/otelcontribcol:v0.54.0
+        command:
+        - /otelcol-contrib
+        args:
+        - "--config=/conf/otel-agent-config.yaml"
+        - "--feature-gates=-exporter.googlecloud.OTLPDirect"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - NET_RAW
+        ports:
+        - containerPort: 55678 # Default OpenCensus receiver port.
+          protocol: TCP
+        - containerPort: 8888  # Metrics.
+          protocol: TCP
+        volumeMounts:
+        - name: otel-agent-config-vol
+          mountPath: /conf
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+            scheme: HTTP
+          timeoutSeconds: 1 # different from declared 
+          periodSeconds: 10 # different from declared
+          successThreshold: 1 # different from declared
+          failureThreshold: 3 # different from declared
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133 # Health Check extension default port.
+            scheme: HTTP
+          timeoutSeconds: 1 # different from declared
+          periodSeconds: 10 # different from declared
+          successThreshold: 1 # different from declared
+          failureThreshold: 3 # different from declared
+        terminationMessagePath: "/dev/termination" # different from declared
+        terminationMessagePolicy: FallbackToLogsOnError # different from declared
+        imagePullPolicy: IfNotPresent
+      restartPolicy: Never # different from declared
+      terminationGracePeriodSeconds: 30 # different from declared
+      dnsPolicy: ClusterFirst # different from declared
+      schedulerName: default-scheduler # different from declared
+      volumes:
+      - name: repo
+        emptyDir: {}
+      - name: kube
+        emptyDir: {}
+      securityContext:
+        fsGroup: 65533
+        runAsUser: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+  revisionHistoryLimit: 15 # different from declared
+  progressDeadlineSeconds: 300 # different from declared
+`
+
+func TestIsDeploymentSame(t *testing.T) {
+	declared := yamlToDeployment(t, declaredDeployment)
+	unObjCurrent := yamlToUnstructured(t, currentDeployment)
+	testCases := map[string]struct {
+		declared          *appsv1.Deployment
+		unObjCurrent      *unstructured.Unstructured
+		isAutopilot       bool
+		overrideLimit     bool
+		manualChangeLimit bool
+		isSame            bool
+	}{
+		"non-Autopilot, no override limits, no manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       false,
+			overrideLimit:     false,
+			manualChangeLimit: false,
+			isSame:            true,
+		},
+		"non-Autopilot, no override limits, manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       false,
+			overrideLimit:     false,
+			manualChangeLimit: true,
+			// We do not define some container resource limits to make the resource burstable
+			// For these container resource limits, Config Sync only manage them when user
+			// define the resources limits through our resource override API.
+			// In this test case, the resource limits are not defined in original declared deployment,
+			// and user also not define the resource limits through our resource override API,
+			// so we will allow the manual limits change.
+			isSame: true,
+		},
+		"non-Autopilot, override limits, no manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       false,
+			overrideLimit:     true,
+			manualChangeLimit: false,
+			isSame:            false,
+		},
+		"non-Autopilot, override limits, manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       false,
+			overrideLimit:     true,
+			manualChangeLimit: true,
+			isSame:            false,
+		},
+		"Autopilot, no override limits, no manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       true,
+			overrideLimit:     false,
+			manualChangeLimit: false,
+			isSame:            true,
+		},
+		"Autopilot, no override limits, manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       true,
+			overrideLimit:     false,
+			manualChangeLimit: true,
+			isSame:            true,
+		},
+		"Autopilot, override limits, no manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       true,
+			overrideLimit:     true,
+			manualChangeLimit: false,
+			isSame:            true,
+		},
+		"Autopilot, override limits, manual change limits": {
+			declared:          declared,
+			unObjCurrent:      unObjCurrent,
+			isAutopilot:       true,
+			overrideLimit:     true,
+			manualChangeLimit: true,
+			isSame:            true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			declared := overrideResourceLimits(tc.declared, tc.overrideLimit)
+			unObjCurrent, err := manualChangeResourceLimits(tc.unObjCurrent, tc.manualChangeLimit)
+			require.NoError(t, err)
+			dep, err := isDeploymentSame(tc.isAutopilot, declared, unObjCurrent, reconcilerManagerAllowList, core.Scheme)
+			require.NoError(t, err)
+			require.Equal(t, tc.isSame, dep.isDeploymentSame)
+		})
+	}
+}
+
+func overrideResourceLimits(dep *appsv1.Deployment, isOverride bool) *appsv1.Deployment {
+	resultDep := dep.DeepCopy()
+	if !isOverride {
+		return resultDep
+	}
+	resources := &resultDep.Spec.Template.Spec.Containers[0].Resources
+	resources.Limits = corev1.ResourceList{}
+	resources.Limits[corev1.ResourceMemory] = resource.MustParse("300Mi")
+	resources.Limits[corev1.ResourceCPU] = resource.MustParse("300m")
+
+	return resultDep
+}
+
+func manualChangeResourceLimits(unDep *unstructured.Unstructured, isManaulChange bool) (*unstructured.Unstructured, error) {
+	resultUnDep := unDep.DeepCopy()
+	if !isManaulChange {
+		return resultUnDep, nil
+	}
+	if err := unstructured.SetNestedMap(resultUnDep.Object, map[string]interface{}{"memroy": "400Mi", "cpu": "400m"}, "spec", "template", "spec", "containers[0]", "resources", "limits"); err != nil {
+		return nil, err
+	}
+	return resultUnDep, nil
 }
 
 func addContainerWithResources(resources map[string]corev1.ResourceRequirements) core.MetaMutator {

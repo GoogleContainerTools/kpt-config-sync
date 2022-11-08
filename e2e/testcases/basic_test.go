@@ -15,122 +15,23 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	yamlDir = "../testdata"
 )
-
-func TestNoDefaultFieldsInNamespaceConfig(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
-	expectedName := "hello-world"
-	expectedTime := metav1.Time{}
-
-	nt.T.Log("Add a deployment")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding deployment")
-	nt.WaitForRepoSyncs()
-
-	nt.T.Log("Check that the deployment was created")
-	if err := nt.Validate("hello-world", "dir", &appsv1.Deployment{}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Check that specified field name is present and unspecified field creationTimestamp is not present")
-	if err := nt.Validate("dir", "", &v1.NamespaceConfig{},
-		func(o client.Object) error {
-			raw := o.(*v1.NamespaceConfig).Spec.Resources[0].Versions[0].Objects[0].Raw
-			dep := &appsv1.Deployment{}
-			if err := json.Unmarshal(raw, &dep); err != nil {
-				return errors.Errorf("Failed to get raw JSON, %s", err)
-			}
-			actualName := dep.GetName()
-			if actualName != expectedName {
-				return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
-			}
-			actualTime := dep.GetCreationTimestamp()
-			if actualTime != expectedTime {
-				return errors.Errorf("Expected time: %s, got: %s", expectedTime, actualTime)
-			}
-			return nil
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
-func TestRecreateSyncDeletedByUser(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
-
-	nt.T.Log("Add a deployment to a directory")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a deployment to a directory")
-	nt.WaitForRepoSyncs()
-
-	nt.T.Log("Ensure that the system created a sync for the deployment")
-	if err := nt.Validate("deployment.apps", "default", &v1.Sync{}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Force-delete the sync from the cluster")
-	if err := nt.Delete(fake.SyncObject(kinds.Deployment().GroupKind(), core.Namespace("default"))); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Ensure that the system re-created the force-deleted sync")
-	_, err := nomostest.Retry(60*time.Second, func() error {
-		err := nt.Validate("deployment.apps", "default", &v1.Sync{})
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
-func TestDeletingClusterConfigRecoverable(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipMultiRepo)
-
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add dir namespace")
-	nt.WaitForRepoSyncs()
-
-	if err := nt.Validate("dir", "", &corev1.Namespace{}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Forcefully delete clusterconfigs and verify recovery")
-	if err := nt.DeleteAllOf(&v1.ClusterConfig{}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/cluster/admin-clusterrole.yaml", "acme/cluster/admin-clusterrole.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add admin clusterrole")
-	nt.WaitForRepoSyncs()
-
-	if err := nt.Validate("config-management-cluster-config", "", &v1.ClusterConfig{}); err != nil {
-		nt.T.Fatal(err)
-	}
-}
 
 func TestNamespaceGarbageCollection(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)

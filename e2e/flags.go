@@ -60,12 +60,8 @@ var KubernetesVersion = flag.String("kubernetes-version", "1.21",
 	"The version of Kubernetes to create")
 
 // MultiRepo enables running the tests against multi-repo Config Sync.
-var MultiRepo = flag.Bool("multirepo", false,
+var _ = flag.Bool("multirepo", true,
 	"If true, configure multi-repo Config Sync. Otherwise configure mono-repo.")
-
-// SkipMode will only run the skipped multi repo tests.
-var SkipMode = flag.String("skip-mode", "",
-	"Runs tests as given by the mode, one of \"\", runAll, runSkipped to run normally, run all tests, or run only skipped tests respectively")
 
 // DefaultImagePrefix points to the local docker registry.
 const DefaultImagePrefix = "localhost:5000"
@@ -105,15 +101,6 @@ var GitProvider = flag.String("git-provider", Local,
 // TestFeatures is the list of features to run.
 var TestFeatures = flag.String("test-features", "",
 	"A list of features to run, separated by comma. Defaults to empty, which should run all tests.")
-
-const (
-	// RunAll runs all tests whether skipped or not
-	RunAll = "runAll"
-	// RunSkipped runs only skipped tests
-	RunSkipped = "runSkipped"
-	// RunDefault runs tests as normal and skips skipped tests
-	RunDefault = ""
-)
 
 const (
 	// Kind indicates creating a Kind cluster for testing.

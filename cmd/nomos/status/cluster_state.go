@@ -71,15 +71,16 @@ func unavailableCluster(ref string) *ClusterState {
 
 // RepoState represents the sync status of a single repo on a cluster.
 type RepoState struct {
-	scope      string
-	syncName   string
-	sourceType v1beta1.SourceType
-	git        *v1beta1.Git
-	oci        *v1beta1.Oci
-	helm       *v1beta1.HelmBase
-	status     string
-	commit     string
-	errors     []string
+	scope             string
+	syncName          string
+	sourceType        v1beta1.SourceType
+	git               *v1beta1.Git
+	oci               *v1beta1.Oci
+	helm              *v1beta1.HelmBase
+	status            string
+	commit            string
+	lastSyncTimestamp metav1.Time
+	errors            []string
 	// errorSummary summarizes the `errors` field.
 	errorSummary *v1beta1.ErrorSummary
 	resources    []resourceState
@@ -87,7 +88,11 @@ type RepoState struct {
 
 func (r *RepoState) printRows(writer io.Writer) {
 	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
-	fmt.Fprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
+	if r.status == syncedMsg {
+		fmt.Fprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.status, r.lastSyncTimestamp, r.commit)
+	} else {
+		fmt.Fprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
+	}
 
 	if r.errorSummary != nil && r.errorSummary.TotalCount > 0 {
 		if r.errorSummary.Truncated {
@@ -332,6 +337,9 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 			// The new status condition is not available in older versions, use the
 			// existing logic to compute the status.
 			repostate.status = multiRepoSyncStatus(rs.Status.Status)
+			if repostate.status == syncedMsg {
+				repostate.lastSyncTimestamp = rs.Status.Sync.LastUpdate
+			}
 			repostate.commit = commitHash(rs.Status.Sync.Commit)
 			repostate.errors = repoSyncErrors(rs)
 			totalErrorCount := len(repostate.errors)
@@ -366,6 +374,9 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 	case reposync.ConditionHasNoErrors(*syncingCondition):
 		// The sync step finished without any errors.
 		repostate.status = syncedMsg
+		if repostate.status == syncedMsg {
+			repostate.lastSyncTimestamp = rs.Status.Sync.LastUpdate
+		}
 		repostate.commit = syncingCondition.Commit
 		resources, _ := resourceLevelStatus(rg)
 		repostate.resources = resources
@@ -427,6 +438,9 @@ func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncing
 			// The new status condition is not available in older versions, use the
 			// existing logic to compute the status.
 			repostate.status = multiRepoSyncStatus(rs.Status.Status)
+			if repostate.status == syncedMsg {
+				repostate.lastSyncTimestamp = rs.Status.Sync.LastUpdate
+			}
 			repostate.commit = commitHash(rs.Status.Sync.Commit)
 			repostate.errors = rootSyncErrors(rs)
 			totalErrorCount := len(repostate.errors)
@@ -461,6 +475,9 @@ func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncing
 	case rootsync.ConditionHasNoErrors(*syncingCondition):
 		// The sync step finished without any errors.
 		repostate.status = syncedMsg
+		if repostate.status == syncedMsg {
+			repostate.lastSyncTimestamp = rs.Status.Sync.LastUpdate
+		}
 		repostate.commit = syncingCondition.Commit
 		resources, _ := resourceLevelStatus(rg)
 		repostate.resources = resources

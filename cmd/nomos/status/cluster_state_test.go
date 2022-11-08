@@ -16,6 +16,7 @@ package status
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -65,6 +66,8 @@ var (
 		Truncated:                 false,
 		ErrorCountAfterTruncation: 2,
 	}
+
+	lastSyncTimestamp = metav1.Now()
 )
 
 func TestRepoState_PrintRows(t *testing.T) {
@@ -85,7 +88,7 @@ func TestRepoState_PrintRows(t *testing.T) {
 				commit:    "abc123",
 				resources: exampleResources("abc123"),
 			},
-			"  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED\tabc123\t\n  Managed resources:\n  \tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n  \tbookstore\tdeployment.apps/test\tCurrent\tabc123\n  \tbookstore\tservice/test\tFailed\tabc123\n        A detailed message explaining the current condition.\n  \tbookstore\tservice/test2\tConflict\tabc123\n        A detailed message explaining why it is in the status ownership overlap.\n",
+			"  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ 0001-01-01 00:00:00 +0000 UTC\tabc123\t\n  Managed resources:\n  \tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n  \tbookstore\tdeployment.apps/test\tCurrent\tabc123\n  \tbookstore\tservice/test\tFailed\tabc123\n        A detailed message explaining the current condition.\n  \tbookstore\tservice/test2\tConflict\tabc123\n        A detailed message explaining why it is in the status ownership overlap.\n",
 		},
 		{
 			"optional git subdirectory specified",
@@ -96,10 +99,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "quickstart//multirepo//root/",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  <root>:root-sync\thttps://github.com/tester/sample/quickstart/multirepo/root@master\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample/quickstart/multirepo/root@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory is '/'",
@@ -110,10 +114,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "/",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory is '.'",
@@ -124,10 +129,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo: "https://github.com/tester/sample/",
 					Dir:  ".",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory starts with '/'",
@@ -138,10 +144,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "/admin",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  <root>:root-sync\thttps://github.com/tester/sample/admin@master\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample/admin@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git branch specified",
@@ -152,10 +159,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo:   "https://github.com/tester/sample",
 					Branch: "feature",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  bookstore:repo-sync\thttps://github.com/tester/sample@feature\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@feature\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git revision specified",
@@ -166,10 +174,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo:     "https://github.com/tester/sample",
 					Revision: "v1",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  bookstore:repo-sync\thttps://github.com/tester/sample@v1\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@v1\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional default git revision HEAD specified",
@@ -180,10 +189,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Repo:     "https://github.com/tester/sample",
 					Revision: "HEAD",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  bookstore:repo-sync\thttps://github.com/tester/sample@master\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional default git revision HEAD and branch specified",
@@ -195,10 +205,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Revision: "HEAD",
 					Branch:   "feature",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  bookstore:repo-sync\tgit@github.com:tester/sample@feature\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  bookstore:repo-sync\tgit@github.com:tester/sample@feature\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"all optional git fields specified",
@@ -211,10 +222,11 @@ func TestRepoState_PrintRows(t *testing.T) {
 					Branch:   "feature",
 					Revision: "v1",
 				},
-				status: "SYNCED",
-				commit: "abc123",
+				status:            "SYNCED",
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
-			"  bookstore:repo-sync\tgit@github.com:tester/sample/books@v1\t\n  SYNCED\tabc123\t\n",
+			fmt.Sprintf("  bookstore:repo-sync\tgit@github.com:tester/sample/books@v1\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"repo with errors",
@@ -1494,17 +1506,19 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			syncStatus: v1beta1.SyncStatus{
-				Git:    toGitStatus(git),
-				Commit: "abc123",
+				Git:        toGitStatus(git),
+				Commit:     "abc123",
+				LastUpdate: lastSyncTimestamp,
 			},
 			want: &RepoState{
-				scope:      "bookstore",
-				syncName:   "repo-sync",
-				sourceType: v1beta1.GitSource,
-				git:        git,
-				status:     syncedMsg,
-				commit:     "abc123",
-				resources:  exampleResources(""),
+				scope:             "bookstore",
+				syncName:          "repo-sync",
+				sourceType:        v1beta1.GitSource,
+				git:               git,
+				status:            syncedMsg,
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
+				resources:         exampleResources(""),
 			},
 		},
 		{
@@ -1526,17 +1540,19 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			syncStatus: v1beta1.SyncStatus{
-				Git:    toGitStatus(git),
-				Commit: "abc123",
+				Git:        toGitStatus(git),
+				Commit:     "abc123",
+				LastUpdate: lastSyncTimestamp,
 			},
 			want: &RepoState{
-				scope:      "bookstore",
-				syncName:   "repo-sync",
-				git:        git,
-				sourceType: v1beta1.GitSource,
-				status:     syncedMsg,
-				commit:     "abc123",
-				resources:  exampleResources("abc123"),
+				scope:             "bookstore",
+				syncName:          "repo-sync",
+				git:               git,
+				sourceType:        v1beta1.GitSource,
+				status:            syncedMsg,
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
+				resources:         exampleResources("abc123"),
 			},
 		},
 		{
@@ -2779,15 +2795,17 @@ func TestRepoState_RootRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			syncStatus: v1beta1.SyncStatus{
-				Git:    toGitStatus(git),
-				Commit: "abc123",
+				Git:        toGitStatus(git),
+				Commit:     "abc123",
+				LastUpdate: lastSyncTimestamp,
 			},
 			want: &RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git:      git,
-				status:   syncedMsg,
-				commit:   "abc123",
+				scope:             "<root>",
+				syncName:          "root-sync",
+				git:               git,
+				status:            syncedMsg,
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
 		},
 		{
@@ -2808,15 +2826,17 @@ func TestRepoState_RootRepoStatus(t *testing.T) {
 				Commit: "abc123",
 			},
 			syncStatus: v1beta1.SyncStatus{
-				Git:    toGitStatus(git),
-				Commit: "abc123",
+				Git:        toGitStatus(git),
+				Commit:     "abc123",
+				LastUpdate: lastSyncTimestamp,
 			},
 			want: &RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git:      git,
-				status:   syncedMsg,
-				commit:   "abc123",
+				scope:             "<root>",
+				syncName:          "root-sync",
+				git:               git,
+				status:            syncedMsg,
+				lastSyncTimestamp: lastSyncTimestamp,
+				commit:            "abc123",
 			},
 		},
 	}
@@ -2899,10 +2919,10 @@ gke_sample-project_europe-west1-b_cluster-1
 gke_sample-project_europe-west1-b_cluster-2
   --------------------
   <root>:root-sync	git@github.com:tester/sample@master	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
   --------------------
   bookstore:repos-sync	git@github.com:tester/sample@feature	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
 `,
 		},
 		{
@@ -2937,10 +2957,10 @@ gke_sample-project_europe-west1-b_cluster-2
 gke_sample-project_europe-west1-b_cluster-2
   --------------------
   <root>:root-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
   --------------------
   bookstore:repos-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
 `,
 		},
 		{
@@ -2977,10 +2997,10 @@ gke_sample-project_europe-west1-b_cluster-2
 gke_sample-project_europe-west1-b_cluster-2
   --------------------
   <root>:root-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:latest	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
   --------------------
   bookstore:repos-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.2.0	
-  SYNCED	abc123	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
 `,
 		},
 	}

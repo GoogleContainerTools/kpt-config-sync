@@ -27,7 +27,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
@@ -247,58 +246,6 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	if err != nil {
 		nt.T.Error(err)
 	}
-}
-
-func TestPreventDeletionImplicitNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMultiRepo)
-
-	const implicitNamespace = "delivery"
-
-	role := fake.RoleObject(core.Name("configmap-getter"), core.Namespace(implicitNamespace))
-	role.Rules = []rbacv1.PolicyRule{{
-		APIGroups: []string{""},
-		Resources: []string{"configmaps"},
-		Verbs:     []string{"get"},
-	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/role.yaml", role)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Declare configmap-getter Role")
-	nt.WaitForRepoSyncs()
-
-	err := nt.Validate(implicitNamespace, "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		// Implicit namespaces don't get the full set of configsync annotations & labels.
-		// So we can't just use the HasAllNomosMetadata predicate.
-		nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		nomostest.HasAnnotationKey(metadata.SyncTokenAnnotationKey),
-		nomostest.HasAnnotationKey(metadata.ResourceIDKey),
-		nomostest.HasLabel(metadata.ManagedByKey, metadata.ManagedByValue),
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Validate("configmap-getter", implicitNamespace, &rbacv1.Role{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/role.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove configmap-getter Role")
-	nt.WaitForRepoSyncs()
-
-	// Ensure the Namespace wasn't deleted.
-	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.NoConfigSyncMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Remove the lifecycle annotation from the implicit namespace so that it can be deleted after the test case.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(implicitNamespace))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from the implicit namespace")
-	nt.WaitForRepoSyncs()
 }
 
 func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {

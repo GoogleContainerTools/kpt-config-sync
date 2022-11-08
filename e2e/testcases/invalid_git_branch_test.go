@@ -93,17 +93,6 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	}
 }
 
-func TestInvalidMonoRepoBranchStatus(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMultiRepo)
-
-	nomostest.SetGitBranch(nt, "unused", "invalid-branch")
-
-	nt.WaitForRepoSourceError(status.SourceErrorCode)
-
-	nomostest.SetGitBranch(nt, "unused", "main")
-	nt.WaitForRepoSourceErrorClear()
-}
-
 func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
 	nt.T.Cleanup(func() {

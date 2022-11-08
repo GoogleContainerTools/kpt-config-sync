@@ -59,7 +59,7 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		TmpDir: tmpDir,
 		Nomos: ntopts.Nomos{
 			SourceFormat: filesystem.SourceFormatHierarchy,
-			MultiRepo:    *e2e.MultiRepo,
+			MultiRepo:    true,
 		},
 		MultiRepo: ntopts.MultiRepo{
 			NamespaceRepos: make(map[types.NamespacedName]ntopts.RepoOpts),
@@ -97,34 +97,6 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 
 	if *e2e.GitProvider != e2e.Local && optsStruct.SkipNonLocalGitProvider {
 		t.Skip("Test skipped for non-local GitProvider types")
-	}
-
-	switch {
-	case optsStruct.Nomos.MultiRepo:
-		if optsStruct.MultiRepoIncompatible {
-			t.Skip("Test incompatible with MultiRepo mode")
-		}
-
-		switch *e2e.SkipMode {
-		case e2e.RunDefault:
-			if optsStruct.SkipMultiRepo {
-				t.Skip("Test skipped for MultiRepo mode")
-			}
-		case e2e.RunAll:
-		case e2e.RunSkipped:
-			if !optsStruct.SkipMultiRepo {
-				t.Skip("Test skipped for MultiRepo mode")
-			}
-		default:
-			t.Fatalf("Invalid flag value %s for skipMode", *e2e.SkipMode)
-		}
-	case optsStruct.SkipMonoRepo:
-		t.Skip("Test skipped for MonoRepo mode")
-	case len(optsStruct.NamespaceRepos) > 0:
-		// We're in MonoRepo mode and we aren't skipping this test, but there are
-		// Namespace repos specified.
-		t.Fatal("Namespace Repos specified, but running in MonoRepo mode. " +
-			"Did you forget ntopts.SkipMonoRepo?")
 	}
 
 	if optsStruct.RESTConfig == nil {
@@ -451,28 +423,6 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	nt.WaitForRepoSyncs()
-}
-
-// SwitchMode switches either from mono-repo to multi-repo
-// or from multi-repo to mono-repo.
-// It then installs ConfigSync for the new mode.
-func SwitchMode(nt *NT, sourceFormat filesystem.SourceFormat) {
-	nt.MultiRepo = !nt.MultiRepo
-	nm := ntopts.Nomos{SourceFormat: sourceFormat, MultiRepo: nt.MultiRepo}
-	installConfigSync(nt, nm)
-	var err error
-	if nt.MultiRepo {
-		err = WaitForCRDs(nt, multiRepoCRDs)
-	} else {
-		err = WaitForCRDs(nt, monoRepoCRDs)
-	}
-	if err != nil {
-		nt.T.Fatalf("waiting for ConfigSync CRDs to become established: %v", err)
-	}
-	err = WaitForConfigSyncReady(nt, nm)
-	if err != nil {
-		nt.T.Errorf("waiting for ConfigSync Deployments to become available: %v", err)
-	}
 }
 
 // TestDir creates a unique temporary directory for the E2E test.

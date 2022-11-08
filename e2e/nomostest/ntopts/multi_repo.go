@@ -41,14 +41,6 @@ type MultiRepo struct {
 	// Control indicates options for configuring Namespace Repos.
 	Control RepoControl
 
-	// SkipMultiRepo will skip the test if run in multi repo mode.  This stutters because we decided to embed
-	// this struct inside of the "New" struct rather than have it as a member.
-	SkipMultiRepo bool
-
-	// MultiRepoIncompatible will disable the test for multi repo.  Setting --skip-mode will not affect whether it gets run.
-	// This should be used for disabling tests
-	MultiRepoIncompatible bool
-
 	// SkipMonoRepo will skip the test if run in mono repo mode.
 	SkipMonoRepo bool
 
@@ -78,16 +70,6 @@ func RootRepo(name string) func(opt *New) {
 	return func(opt *New) {
 		opt.RootRepos[name] = RepoOpts{}
 	}
-}
-
-// SkipMultiRepo will skip the test in multi repo mode.
-func SkipMultiRepo(opt *New) {
-	opt.SkipMultiRepo = true
-}
-
-// MultiRepoIncompatible will always skip the test in multi repo mode.
-func MultiRepoIncompatible(opt *New) {
-	opt.MultiRepoIncompatible = true
 }
 
 // SkipMonoRepo will skip the test in mono repo mode.

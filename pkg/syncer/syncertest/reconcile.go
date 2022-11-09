@@ -15,17 +15,8 @@
 package syncertest
 
 import (
-	"testing"
-	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -46,89 +37,3 @@ var (
 	// TokenAnnotation sets the sync token annotation on the object
 	TokenAnnotation = core.Annotation(metadata.SyncTokenAnnotationKey, Token)
 )
-
-// ObjectToUnstructuredList converts the object to unstructured and returns as a list.
-// If the object is nil, the empty nil list is resurned.
-func ObjectToUnstructuredList(t *testing.T, s *runtime.Scheme, obj client.Object) []*unstructured.Unstructured {
-	if obj == nil {
-		return nil
-	}
-	uObj, err := kinds.ToUnstructured(obj, s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return []*unstructured.Unstructured{uObj}
-}
-
-// ClusterConfigImportToken adds an import token to a ClusterConfig.
-func ClusterConfigImportToken(t string) fake.ClusterConfigMutator {
-	return func(cc *v1.ClusterConfig) {
-		cc.Spec.Token = t
-	}
-}
-
-// ClusterConfigImportTime adds an ImportTime to a ClusterConfig.
-func ClusterConfigImportTime(time metav1.Time) fake.ClusterConfigMutator {
-	return func(cc *v1.ClusterConfig) {
-		cc.Spec.ImportTime = time
-	}
-}
-
-// ClusterConfigSyncTime adds a SyncTime to a ClusterConfig.
-func ClusterConfigSyncTime() fake.ClusterConfigMutator {
-	return func(cc *v1.ClusterConfig) {
-		cc.Status.SyncTime = Now()
-	}
-}
-
-// ClusterConfigSyncToken adds a sync token to a ClusterConfig.
-func ClusterConfigSyncToken() fake.ClusterConfigMutator {
-	return func(cc *v1.ClusterConfig) {
-		cc.Status.Token = Token
-	}
-}
-
-// NamespaceConfigImportToken adds an import token to a Namespace Config.
-func NamespaceConfigImportToken(t string) core.MetaMutator {
-	return func(o client.Object) {
-		nc := o.(*v1.NamespaceConfig)
-		nc.Spec.Token = t
-	}
-}
-
-// NamespaceConfigImportTime adds an ImportTime to a Namespace Config.
-func NamespaceConfigImportTime(time metav1.Time) core.MetaMutator {
-	return func(o client.Object) {
-		nc := o.(*v1.NamespaceConfig)
-		nc.Spec.ImportTime = time
-	}
-}
-
-// NamespaceConfigSyncTime adds a sync time to a Namespace Config.
-func NamespaceConfigSyncTime() core.MetaMutator {
-	return func(o client.Object) {
-		nc := o.(*v1.NamespaceConfig)
-		nc.Status.SyncTime = Now()
-	}
-}
-
-// NamespaceConfigSyncToken adds a sync token to a Namespace Config.
-func NamespaceConfigSyncToken() core.MetaMutator {
-	return func(o client.Object) {
-		nc := o.(*v1.NamespaceConfig)
-		nc.Status.Token = Token
-	}
-}
-
-// MarkForDeletion marks a NamespaceConfig with an intent to be delete
-func MarkForDeletion() core.MetaMutator {
-	return func(o client.Object) {
-		nc := o.(*v1.NamespaceConfig)
-		nc.Spec.DeleteSyncedTime = metav1.Now()
-	}
-}
-
-// Now returns a stubbed time, at epoch.
-func Now() metav1.Time {
-	return metav1.Time{Time: time.Unix(0, 0)}
-}

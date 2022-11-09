@@ -80,7 +80,7 @@ func defaultResourceRequestsLimits(nt *nomostest.NT) (reconcilerRequests, reconc
 }
 
 func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
@@ -386,7 +386,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 }
 
 func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipMonoRepo, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()

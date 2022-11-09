@@ -61,7 +61,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	err = nt.Validate("shipping", "", &corev1.Namespace{},
 		nomostest.NotPendingDeletion,
 		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestPreventDeletionRole(t *testing.T) {
 	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
 		nomostest.NotPendingDeletion,
 		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestPreventDeletionRole(t *testing.T) {
 	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
 		nomostest.NotPendingDeletion,
 		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
 		nomostest.NotPendingDeletion,
 		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
 		nomostest.NotPendingDeletion,
 		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 			if err := nt.Validate(ns, "", &corev1.Namespace{},
 				nomostest.NotPendingDeletion,
 				nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-				nomostest.HasAllNomosMetadata(nt.MultiRepo)); err != nil {
+				nomostest.HasAllNomosMetadata()); err != nil {
 				nt.T.Fatal(err)
 			}
 		}
@@ -281,7 +281,7 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	err := nt.Validate("bookstore", "", &corev1.Namespace{},
 		nomostest.NotPendingDeletion,
 		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata(nt.MultiRepo))
+		nomostest.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

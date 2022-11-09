@@ -68,7 +68,7 @@ test-e2e-kind: __push-local-image
 # This target runs all the e2e tests with the multi-repo mode.
 test-e2e-kind-multi-repo: __push-local-image
 	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --multirepo --timeout 60m --parallel 15 --image-tag=$(IMAGE_TAG) $(E2E_ARGS)
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --timeout 60m --parallel 15 --image-tag=$(IMAGE_TAG) $(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.
 test-e2e-kind-multi-repo-test-group1:
@@ -86,4 +86,4 @@ test-e2e-kind-multi-repo-test-group3:
 # Rebuilds the nomos image, so use this when you're actively modifying the Nomos
 # code between test runs.
 test-e2e-go-multirepo: __push-local-image __install-nomos-local
-	@GO111MODULE=on go test ./e2e/... --e2e --timeout 60m --multirepo --image-tag=$(IMAGE_TAG)
+	@GO111MODULE=on go test ./e2e/... --e2e --timeout 60m --image-tag=$(IMAGE_TAG)

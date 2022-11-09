@@ -56,7 +56,7 @@ func secretDataPatch(key, value string) string {
 }
 
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -167,7 +167,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 }
 
 func TestCACertSecretRefV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 
@@ -283,7 +283,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 }
 
 func TestCACertSecretWatch(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipMonoRepo, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
 	key := "GIT_SSL_CAINFO"

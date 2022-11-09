@@ -41,7 +41,6 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)
@@ -132,7 +131,6 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespaceRepo, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
 	)
@@ -181,7 +179,6 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
 	)
@@ -215,7 +212,6 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)
@@ -352,7 +348,6 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)

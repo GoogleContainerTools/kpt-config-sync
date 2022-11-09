@@ -37,7 +37,7 @@ import (
 // The sync ordering feature is only supported in the multi-repo mode.
 
 func TestMultiDependencies(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -265,7 +265,7 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm0 still has the CS metadata")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata(true)); err != nil {
+	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -312,7 +312,7 @@ func TestMultiDependencies(t *testing.T) {
 }
 
 func TestExternalDependencyError(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -406,7 +406,7 @@ func TestExternalDependencyError(t *testing.T) {
 }
 
 func TestDependencyWithReconciliation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)

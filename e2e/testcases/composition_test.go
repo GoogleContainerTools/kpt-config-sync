@@ -72,7 +72,6 @@ import (
 func TestComposition(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.SkipMonoRepo,
 		ntopts.Unstructured,
 		ntopts.WithDelegatedControl,
 		ntopts.RootRepo(configsync.RootSyncName))

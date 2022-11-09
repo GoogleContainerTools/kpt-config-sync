@@ -100,10 +100,7 @@ func WaitForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace s
 
 // WaitForConfigSyncReady validates if the config sync deployments are ready.
 func WaitForConfigSyncReady(nt *NT, nomos ntopts.Nomos) error {
-	if nomos.MultiRepo {
-		return ValidateMultiRepoDeployments(nt)
-	}
-	return validateMonoRepoDeployments(nt)
+	return ValidateMultiRepoDeployments(nt)
 }
 
 // WaitForNamespace waits for a namespace to exist and be ready to use

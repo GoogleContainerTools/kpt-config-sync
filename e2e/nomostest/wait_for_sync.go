@@ -127,30 +127,25 @@ func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
 
 	syncTimeout := waitForRepoSyncsOptions.timeout
 
-	if nt.MultiRepo {
-		if err := ValidateMultiRepoDeployments(nt); err != nil {
-			nt.T.Fatal(err)
-		}
-		for name := range nt.RootRepos {
-			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, RootSyncNN(name))
-			nt.WaitForSync(kinds.RootSyncV1Beta1(), name,
-				configmanagement.ControllerNamespace, syncTimeout,
-				waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
-				&SyncDirPredicatePair{syncDir, RootSyncHasStatusSyncDirectory})
-		}
+	if err := ValidateMultiRepoDeployments(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	for name := range nt.RootRepos {
+		syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, RootSyncNN(name))
+		nt.WaitForSync(kinds.RootSyncV1Beta1(), name,
+			configmanagement.ControllerNamespace, syncTimeout,
+			waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
+			&SyncDirPredicatePair{syncDir, RootSyncHasStatusSyncDirectory})
+	}
 
-		syncNamespaceRepos := waitForRepoSyncsOptions.syncNamespaceRepos
-		if syncNamespaceRepos {
-			for nn := range nt.NonRootRepos {
-				syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
-				nt.WaitForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
-					syncTimeout, waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{syncDir, RepoSyncHasStatusSyncDirectory})
-			}
+	syncNamespaceRepos := waitForRepoSyncsOptions.syncNamespaceRepos
+	if syncNamespaceRepos {
+		for nn := range nt.NonRootRepos {
+			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
+			nt.WaitForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
+				syncTimeout, waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
+				&SyncDirPredicatePair{syncDir, RepoSyncHasStatusSyncDirectory})
 		}
-	} else {
-		nt.WaitForSync(kinds.Repo(), repo.DefaultName, "", syncTimeout,
-			waitForRepoSyncsOptions.rootSha1Fn, RepoHasStatusSyncLatestToken, nil)
 	}
 }
 

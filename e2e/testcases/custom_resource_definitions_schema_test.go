@@ -57,11 +57,7 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 
 	// Restart the ConfigSync importer or reconciler pods.
 	// So that the old schema of the CRD is picked.
-	if nt.MultiRepo {
-		nt.MustKubectl("delete", "pods", "-n", "config-management-system", "-l", "configsync.gke.io/reconciler=root-reconciler")
-	} else {
-		nt.MustKubectl("delete", "pods", "-n", "config-management-system", "-l", "app=git-importer")
-	}
+	nt.MustKubectl("delete", "pods", "-n", "config-management-system", "-l", "configsync.gke.io/reconciler=root-reconciler")
 	nt.WaitForRepoSyncs()
 
 	// Add the CRD with a new schema and a CR using the new schema to the repo

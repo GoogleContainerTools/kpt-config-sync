@@ -41,9 +41,6 @@ type MultiRepo struct {
 	// Control indicates options for configuring Namespace Repos.
 	Control RepoControl
 
-	// SkipMonoRepo will skip the test if run in mono repo mode.
-	SkipMonoRepo bool
-
 	// ReconcileTimeout sets spec.override.reconcileTimeout on each R*Sync
 	// Default: 5m.
 	ReconcileTimeout *time.Duration
@@ -70,11 +67,6 @@ func RootRepo(name string) func(opt *New) {
 	return func(opt *New) {
 		opt.RootRepos[name] = RepoOpts{}
 	}
-}
-
-// SkipMonoRepo will skip the test in mono repo mode.
-func SkipMonoRepo(opt *New) {
-	opt.SkipMonoRepo = true
 }
 
 // SkipNonLocalGitProvider will skip the test with non-local GitProvider types

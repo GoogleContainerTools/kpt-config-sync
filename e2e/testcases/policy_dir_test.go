@@ -30,11 +30,7 @@ func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
 
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "")
 
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
-	} else {
-		nt.WaitForRepoImportErrorCode(system.MissingRepoErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 }
 
 func TestPolicyDirUnset(t *testing.T) {
@@ -66,11 +62,7 @@ func TestInvalidPolicyDir(t *testing.T) {
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "some-nonexistent-policydir")
 
 	nt.T.Log("Expect an error to be present in status.source.errors")
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.PathErrorCode, "")
-	} else {
-		nt.WaitForRepoSourceError(status.SourceErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.PathErrorCode, "")
 
 	nt.T.Log("Fix the policydir in the repo")
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "acme")

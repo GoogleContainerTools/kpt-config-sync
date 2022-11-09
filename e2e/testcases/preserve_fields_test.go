@@ -264,46 +264,23 @@ func TestPreserveLastApplied(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	annotationKeys := metadata.GetNomosAnnotationKeys(nt.MultiRepo)
-	withDeclared := append([]string{corev1.LastAppliedConfigAnnotation}, annotationKeys...)
+	annotationKeys := metadata.GetNomosAnnotationKeys()
 
 	nsViewer.Annotations[corev1.LastAppliedConfigAnnotation] = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"annotations":{"configmanagement.gke.io/cluster-name":"e2e-test-cluster","configmanagement.gke.io/managed":"enabled","configmanagement.gke.io/source-path":"cluster/namespace-viewer-clusterrole.yaml"},"labels":{"app.kubernetes.io/managed-by":"configmanagement.gke.io","permissions":"viewer"},"name":"namespace-viewer"},"rules":[{"apiGroups":[""],"resources":["namespaces"],"verbs":["get","list"]}]}`
 	nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-cr-replace.yaml", nsViewer)
-	if nt.MultiRepo {
-		// Admission webhook denies change. We don't get a "LastApplied" annotation
-		// as we prevented the change outright.
-		_, err = nt.Kubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
-		if err == nil {
-			nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
-		}
+	// Admission webhook denies change. We don't get a "LastApplied" annotation
+	// as we prevented the change outright.
+	_, err = nt.Kubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
+	if err == nil {
+		nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
+	}
 
-		_, err = nomostest.Retry(20*time.Second, func() error {
-			return nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{},
-				nomostest.HasExactlyAnnotationKeys(annotationKeys...))
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	} else {
-		// No admission webhook in mono repo.
-
-		// At this point the fake resource does not have `last-applied-configuration`
-		// annotation, so we are setting it rather than overwriting it. The version on
-		// cluster has the `last-declared-config` annotation and no
-		// `last-applied-annotation`. Since kubectl replace does a delete-then-create,
-		// we are effectively recreating the resource with the "last-applied"
-		// annotation (which we no longer set starting in 1.4.1). We are then
-		// verifying that ConfigSync copies the contents of "last-applied" to
-		// "last-declared" and deletes "last-applied".
-		nt.MustKubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
-
-		_, err = nomostest.Retry(20*time.Second, func() error {
-			return nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{},
-				nomostest.HasExactlyAnnotationKeys(withDeclared...))
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+	_, err = nomostest.Retry(20*time.Second, func() error {
+		return nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{},
+			nomostest.HasExactlyAnnotationKeys(annotationKeys...))
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
@@ -384,7 +361,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo")
 	nt.WaitForRepoSyncs()
 
-	annotationKeys := metadata.GetNomosAnnotationKeys(nt.MultiRepo)
+	annotationKeys := metadata.GetNomosAnnotationKeys()
 
 	// Checking that the configmap with no annotations appears on cluster, and
 	// that no user annotations are specified

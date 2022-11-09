@@ -42,8 +42,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/importer"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -100,9 +98,6 @@ type NT struct {
 	// Only used in multi-repo tests.
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*Repository
-
-	// MultiRepo indicates that the test case is for multi-repo Config Sync.
-	MultiRepo bool
 
 	// ReconcilerPollingPeriod defines how often the reconciler should poll the
 	// filesystem for updates to the source or rendered configs.
@@ -559,25 +554,18 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	// - monitor
 	// Don't merge with any of these uncommented, but feel free to uncomment
 	// temporarily to see how presubmit responds.
-	if nt.MultiRepo {
-		nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
-		nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
-		nt.PodLogs("resource-group-system", "resource-group-controller-manager", "manager", false)
-		for name := range nt.RootRepos {
-			nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
-				reconcilermanager.Reconciler, previousPodLog)
-			//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		}
-		for nn := range nt.NonRootRepos {
-			nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
-				reconcilermanager.Reconciler, previousPodLog)
-			//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		}
-	} else {
-		nt.PodLogs(configmanagement.ControllerNamespace, filesystem.GitImporterName, importer.Name, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, filesystem.GitImporterName, "fs-watcher", previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, filesystem.GitImporterName, reconcilermanager.GitSync, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, state.MonitorName, "", previousPodLog)
+	nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
+	nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
+	nt.PodLogs("resource-group-system", "resource-group-controller-manager", "manager", false)
+	for name := range nt.RootRepos {
+		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
+			reconcilermanager.Reconciler, previousPodLog)
+		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+	}
+	for nn := range nt.NonRootRepos {
+		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
+			reconcilermanager.Reconciler, previousPodLog)
+		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
 	}
 }
 
@@ -682,38 +670,36 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 
 // PortForwardOtelCollector forwards the otel-collector pod.
 func (nt *NT) PortForwardOtelCollector() {
-	if nt.MultiRepo {
-		ocPods := &corev1.PodList{}
-		// Retry otel-collector port-forwarding in case it is in the process of upgrade.
-		took, err := Retry(60*time.Second, func() error {
-			if err := nt.List(ocPods, client.InNamespace(ocmetrics.MonitoringNamespace)); err != nil {
+	ocPods := &corev1.PodList{}
+	// Retry otel-collector port-forwarding in case it is in the process of upgrade.
+	took, err := Retry(60*time.Second, func() error {
+		if err := nt.List(ocPods, client.InNamespace(ocmetrics.MonitoringNamespace)); err != nil {
+			return err
+		}
+		if nPods := len(ocPods.Items); nPods != 1 {
+			return fmt.Errorf("otel-collector: got len(podList.Items) = %d, want 1", nPods)
+		}
+
+		pod := ocPods.Items[0]
+		if pod.Status.Phase != corev1.PodRunning {
+			return fmt.Errorf("pod %q status is %q, want %q", pod.Name, pod.Status.Phase, corev1.PodRunning)
+		}
+		// The otel-collector forwarding port needs to be updated after otel-collector restarts or starts for the first time.
+		// It sets otelCollectorPodName and otelCollectorPort to point to the current running pod that forwards the port.
+		if pod.Name != nt.otelCollectorPodName {
+			port, err := nt.ForwardToFreePort(ocmetrics.MonitoringNamespace, pod.Name, testmetrics.MetricsPort)
+			if err != nil {
 				return err
 			}
-			if nPods := len(ocPods.Items); nPods != 1 {
-				return fmt.Errorf("otel-collector: got len(podList.Items) = %d, want 1", nPods)
-			}
-
-			pod := ocPods.Items[0]
-			if pod.Status.Phase != corev1.PodRunning {
-				return fmt.Errorf("pod %q status is %q, want %q", pod.Name, pod.Status.Phase, corev1.PodRunning)
-			}
-			// The otel-collector forwarding port needs to be updated after otel-collector restarts or starts for the first time.
-			// It sets otelCollectorPodName and otelCollectorPort to point to the current running pod that forwards the port.
-			if pod.Name != nt.otelCollectorPodName {
-				port, err := nt.ForwardToFreePort(ocmetrics.MonitoringNamespace, pod.Name, testmetrics.MetricsPort)
-				if err != nil {
-					return err
-				}
-				nt.otelCollectorPort = port
-				nt.otelCollectorPodName = pod.Name
-			}
-			return nil
-		})
-		if err != nil {
-			nt.T.Fatal(err)
+			nt.otelCollectorPort = port
+			nt.otelCollectorPodName = pod.Name
 		}
-		nt.T.Logf("took %v to wait for otel-collector port-forward", took)
+		return nil
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
+	nt.T.Logf("took %v to wait for otel-collector port-forward", took)
 }
 
 // ForwardToFreePort forwards a local port to a port on the pod and returns the

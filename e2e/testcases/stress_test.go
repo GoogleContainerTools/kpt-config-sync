@@ -57,7 +57,7 @@ func crontabCR(namespace, name string) (*unstructured.Unstructured, error) {
 // TestStressCRD tests Config Sync can sync one CRD and 1000 namespaces successfully.
 // Every namespace includes a ConfigMap and a CR.
 func TestStressCRD(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipMonoRepo, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
@@ -126,7 +126,7 @@ func TestStressCRD(t *testing.T) {
 
 // TestStressLargeNamespace tests that Config Sync can sync a namespace including 5000 resources successfully.
 func TestStressLargeNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipMonoRepo, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
@@ -163,10 +163,8 @@ func TestStressLargeNamespace(t *testing.T) {
 func TestStressFrequentGitCommits(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	if nt.MultiRepo {
-		nt.T.Log("Stop the CS webhook by removing the webhook configuration")
-		nomostest.StopWebhook(nt)
-	}
+	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
+	nomostest.StopWebhook(nt)
 
 	ns := "bookstore"
 	namespace := fake.NamespaceObject(ns)
@@ -195,7 +193,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 }
 
 func TestStressLargeRequest(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest, ntopts.SkipMonoRepo,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	crdName := "crontabs.stable.example.com"

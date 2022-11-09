@@ -16,10 +16,7 @@ package e2e
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
 	"testing"
-	"time"
 
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -34,11 +31,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	baseURL = "localhost:8001/api/v1/namespaces/config-management-system/services"
-	port    = "metrics/proxy"
 )
 
 var configSyncManagementAnnotations = map[string]string{"configmanagement.gke.io/managed": "enabled", "hnc.x-k8s.io/managed-by": "configmanagement.gke.io"}
@@ -183,8 +175,6 @@ func TestAcmeCorpRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	checkLegacyMetricsPages(nt)
-
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
 	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
@@ -194,7 +184,7 @@ func TestAcmeCorpRepo(t *testing.T) {
 
 // TestObjectInCMSNamespace will test that user can sync object to CMS namespace
 func TestObjectInCMSNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.SkipMonoRepo, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace")
@@ -266,43 +256,4 @@ func containsSubMap(m1, m2 map[string]string) bool {
 		}
 	}
 	return true
-}
-
-func checkLegacyMetricsPages(nt *nomostest.NT) {
-	if nt.MultiRepo {
-		return
-	}
-	// creates a proxy server or application-level gateway between localhost and the Kubernetes API Server
-	cmd := exec.Command("kubectl", "proxy", "--kubeconfig", nt.KubeconfigPath()) //nolint:staticcheck
-	stdout := &strings.Builder{}
-	stderr := &strings.Builder{}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	err := cmd.Start()
-	if err != nil || stderr.Len() != 0 {
-		nt.T.Fatal(err)
-	}
-	nt.T.Cleanup(func() {
-		err := cmd.Process.Kill()
-		if err != nil {
-			nt.T.Errorf("killing port forward process: %v", err)
-		}
-	})
-
-	service := "git-importer"
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		out, err := exec.Command("curl", "-s", fmt.Sprintf("%s/%s:%s/threads", baseURL, service, port)).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to scrape %s /threads %v %s", service, err, string(out))
-		}
-		out, err = exec.Command("curl", "-s", fmt.Sprintf("%s/%s:%s/metrics", baseURL, service, port)).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to scrape %s /metrics %v %s", service, err, string(out))
-		}
-		return nil
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
 }

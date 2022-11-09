@@ -33,7 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -472,7 +471,6 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.ClusterSelector,
-		ntopts.SkipMonoRepo,
 		ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName),
 	)
 
@@ -609,11 +607,7 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	})
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add both cluster selector annotations to a role binding")
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
-	} else {
-		nt.WaitForRepoImportErrorCode(selectors.ClusterSelectorAnnotationConflictErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
 
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
 		// Validate reconciler error metric is emitted.
@@ -707,24 +701,13 @@ func renameCluster(nt *nomostest.NT, configMapName, clusterName string) {
 	}
 	nt.MustMergePatch(cm, fmt.Sprintf(`{"data":{"%s":"%s"}}`, reconcilermanager.ClusterNameKey, clusterName))
 
-	if nt.MultiRepo {
-		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
-	} else {
-		nomostest.DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
-		nomostest.DeletePodByLabel(nt, "app", "monitor", false)
-	}
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
 }
 
 // clusterNameConfigMapName returns the name of the ConfigMap that has the CLUSTER_NAME.
 func clusterNameConfigMapName(nt *nomostest.NT) string {
-	var configMapName string
-	if nt.MultiRepo {
-		// The value is defined in manifests/templates/reconciler-manager.yaml
-		configMapName = reconcilermanager.ManagerName
-	} else {
-		// The value is defined in manifests/templates/git-importer.yaml
-		return "cluster-name"
-	}
+	// The value is defined in manifests/templates/reconciler-manager.yaml
+	configMapName := reconcilermanager.ManagerName
 
 	if err := nt.Validate(configMapName, configmanagement.ControllerNamespace,
 		&corev1.ConfigMap{}, configMapHasClusterName(prodClusterName)); err != nil {

@@ -33,7 +33,7 @@ import (
 
 // TestOverrideReconcileTimeout tests that a misconfigured pod will never reconcile (timeout).
 func TestOverrideReconcileTimeout(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// Override reconcileTimeout to a short time 30s, pod will never be ready.

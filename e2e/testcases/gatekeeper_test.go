@@ -18,13 +18,36 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/policycontroller/constrainttemplate"
 	"kpt.dev/configsync/pkg/status"
 )
+
+const (
+	// templatesGroup is the api group for gatekeeper constraint templates
+	templatesGroup = "templates.gatekeeper.sh"
+)
+
+var (
+	gk = schema.GroupKind{
+		Group: templatesGroup,
+		Kind:  "ConstraintTemplate",
+	}
+
+	// GVK is the GVK for gatekeeper ConstraintTemplates.
+	gatekeeperGVK = gk.WithVersion("v1beta1")
+)
+
+// emptyConstraintTemplate returns an empty ConstraintTemplate.
+func emptyConstraintTemplate() unstructured.Unstructured {
+	ct := unstructured.Unstructured{}
+	ct.SetGroupVersionKind(gatekeeperGVK)
+	return ct
+}
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
@@ -55,19 +78,13 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 		}
 	})
 
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
-			`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
-	}
-	// TODO: uncomment error expectation when b/250956101 is fixed
-	// } else {
-	//	nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
-	// }
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
+		`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
 
 	// Simulate Gatekeeper's controller behavior.
 	// Wait for the ConstraintTemplate to be applied, then apply the Constraint CRD.
 	nomostest.Wait(nt.T, "ConstraintTemplate on API server", 2*time.Minute, func() error {
-		ct := constrainttemplate.EmptyConstraintTemplate()
+		ct := emptyConstraintTemplate()
 		return nt.Validate("k8sallowedrepos", "", &ct)
 	})
 	if err := nt.ApplyGatekeeperCRD("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {

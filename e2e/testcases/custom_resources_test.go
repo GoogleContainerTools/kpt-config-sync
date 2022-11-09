@@ -68,12 +68,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
 
-	if nt.MultiRepo {
-		err := nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
-			hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+	err = nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
+		hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	_, err = nomostest.Retry(60*time.Second, func() error {
@@ -111,11 +109,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
 
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
-	} else {
-		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		// Validate reconciler error metric is emitted.
@@ -159,12 +153,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
 
-	if nt.MultiRepo {
-		err := nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
-			hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+	err = nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
+		hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	_, err = nomostest.Retry(60*time.Second, func() error {
@@ -202,11 +194,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
 
-	if nt.MultiRepo {
-		nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
-	} else {
-		nt.WaitForRepoImportErrorCode(status.UnknownKindErrorCode)
-	}
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		// Validate reconciler error metric is emitted.

@@ -41,14 +41,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/monitor/state"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
@@ -64,8 +62,6 @@ const (
 	Manifests     = "manifests"
 	testResources = "test-resources"
 
-	// e2e/raw-nomos/manifests/mono-repo-configmaps.yaml
-	monoConfigMapsName = "mono-repo-configmaps.yaml"
 	// e2e/raw-nomos/manifests/multi-repo-configmaps.yaml
 	multiConfigMapsName = "multi-repo-configmaps.yaml"
 )
@@ -80,7 +76,6 @@ var (
 	testResourcesDir = filepath.Join(manifestsDir, testResources)
 	templateDir      = filepath.Join(manifestsDir, "templates")
 
-	monoConfigMaps  = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, monoConfigMapsName)
 	multiConfigMaps = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, multiConfigMapsName)
 
 	// clusterRoleName is the ClusterRole used by Namespace Reconciler.
@@ -88,30 +83,11 @@ var (
 
 	templates = []string{
 		"admission-webhook.yaml",
-		"git-importer.yaml",
-		"monitor.yaml",
 		"otel-collector.yaml",
 		"reconciler-manager.yaml",
 		"reconciler-manager-configmap.yaml",
 	}
 
-	// monoObjects contains the names of all objects that are necessary to install
-	// and run mono-repo Config Sync.
-	monoObjects = map[string]bool{
-		"configmanagement.gke.io:importer":         true,
-		"configmanagement.gke.io:monitor":          true,
-		"clusterconfigs.configmanagement.gke.io":   true,
-		"cluster-name":                             true,
-		filesystem.GitImporterName:                 true,
-		reconcilermanager.GitSync:                  true,
-		"hierarchyconfigs.configmanagement.gke.io": true,
-		importer.Name:                              true,
-		state.MonitorName:                          true,
-		"namespaceconfigs.configmanagement.gke.io": true,
-		"repos.configmanagement.gke.io":            true,
-		reconcilermanager.SourceFormat:             true,
-		"syncs.configmanagement.gke.io":            true,
-	}
 	// multiObjects contains the names of all objects that are necessary to
 	// install and run multi-repo Config Sync.
 	multiObjects = map[string]bool{
@@ -179,13 +155,10 @@ func parseManifests(nt *NT, nomos ntopts.Nomos) []client.Object {
 
 	objs := installationManifests(nt, tmpManifestsDir, nomos)
 	objs = convertObjects(nt, objs)
-	if nomos.MultiRepo {
-		reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
-		hydrationPollingPeriod = nt.HydrationPollingPeriod
-		objs = multiRepoObjects(nt.T, nt.MultiRepo, objs, setReconcilerDebugMode, setPollingPeriods)
-	} else {
-		objs = monoRepoObjects(objs)
-	}
+	reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
+	hydrationPollingPeriod = nt.HydrationPollingPeriod
+	objs = multiRepoObjects(nt.T, objs, setReconcilerDebugMode, setPollingPeriods)
+
 	return objs
 }
 
@@ -302,29 +275,6 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 		nt.T.Fatal(err)
 	}
 
-	// Update 'GIT_REPO_URL' in mono-repo ConfigMaps.
-	// 'GIT_REPO_URL' in the `git-sync` configmap for monorepo-mode needs to be reset dynamically.
-	bytes, err := ioutil.ReadFile(monoConfigMaps)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	var syncURL string
-	if nt.GitProvider.Type() == e2e.Local {
-		syncURL = nt.GitProvider.SyncURL(DefaultRootRepoNamespacedName.String())
-	} else {
-		if _, found := nt.RootRepos[configsync.RootSyncName]; !found {
-			// Setting GIT_REPO_URL in the configmap requires a remote repo to be present, so we need to create one if not exists.
-			// We can't call resetRepository() because it resets the existing repo to an initial state.
-			// There are cases that we want to install config sync but keep using the current repo (e.g. switch_mode_test.go).
-			nt.RootRepos[configsync.RootSyncName] = NewRepository(nt, RootRepo, DefaultRootRepoNamespacedName, nomos.SourceFormat)
-		}
-		syncURL = nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
-	}
-	replaced := strings.ReplaceAll(string(bytes), "GIT_REPO_URL", syncURL)
-	if err := ioutil.WriteFile(filepath.Join(tmpManifestsDir, monoConfigMapsName), []byte(replaced), fileMode); err != nil {
-		nt.T.Fatal(err)
-	}
 	if err := copyFile(multiConfigMaps, filepath.Join(tmpManifestsDir, multiConfigMapsName)); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -401,17 +351,7 @@ func installationManifests(nt *NT, tmpManifestsDir string, nomos ntopts.Nomos) [
 	return objs
 }
 
-func monoRepoObjects(objects []client.Object) []client.Object {
-	var filtered []client.Object
-	for _, obj := range objects {
-		if monoObjects[obj.GetName()] || sharedObjects[obj.GetName()] {
-			filtered = append(filtered, obj)
-		}
-	}
-	return filtered
-}
-
-func multiRepoObjects(t testing.NTB, resourcegroup bool, objects []client.Object, opts ...func(t testing.NTB, obj client.Object)) []client.Object {
+func multiRepoObjects(t testing.NTB, objects []client.Object, opts ...func(t testing.NTB, obj client.Object)) []client.Object {
 	var filtered []client.Object
 	found := false
 	for _, obj := range objects {
@@ -426,7 +366,7 @@ func multiRepoObjects(t testing.NTB, resourcegroup bool, objects []client.Object
 		if multiObjects[obj.GetName()] || sharedObjects[obj.GetName()] {
 			filtered = append(filtered, obj)
 		}
-		if resourcegroup && resourcegroupObjects[obj.GetName()] {
+		if resourcegroupObjects[obj.GetName()] {
 			filtered = append(filtered, obj)
 		}
 	}
@@ -434,23 +374,6 @@ func multiRepoObjects(t testing.NTB, resourcegroup bool, objects []client.Object
 		t.Fatal("Did not find Reconciler Manager ConfigMap")
 	}
 	return filtered
-}
-
-func validateMonoRepoDeployments(nt *NT) error {
-	took, err := Retry(nt.DefaultWaitTimeout, func() error {
-		err := nt.Validate("monitor", configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-		if err != nil {
-			return err
-		}
-		return nt.Validate(filesystem.GitImporterName, configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-	})
-	if err != nil {
-		return err
-	}
-	nt.T.Logf("took %v to wait for monitor and git-importer", took)
-	return nil
 }
 
 // ValidateMultiRepoDeployments validates if all Config Sync Components are available.
@@ -1201,44 +1124,6 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 	}, WaitTimeout(nt.DefaultWaitTimeout))
 }
 
-// ResetMonoRepoSpec sets the mono repo's SOURCE_FORMAT, GIT_SYNC_BRANCH, and POLICY_DIR.
-// It might cause the git-importer & monitor pods to restart.
-func ResetMonoRepoSpec(nt *NT, sourceFormat filesystem.SourceFormat, gitBranch, policyDir string) {
-	restartPod := false
-
-	importerCM := &corev1.ConfigMap{}
-	if err := nt.Get("importer", configmanagement.ControllerNamespace, importerCM); err != nil {
-		nt.T.Fatal(err)
-	}
-	if importerCM.Data["POLICY_DIR"] != policyDir {
-		restartPod = true
-		nt.MustMergePatch(importerCM, fmt.Sprintf(`{"data":{"POLICY_DIR":"%s"}}`, policyDir))
-	}
-
-	sourceFormatCM := &corev1.ConfigMap{}
-	if err := nt.Get("source-format", configmanagement.ControllerNamespace, sourceFormatCM); err != nil {
-		nt.T.Fatal(err)
-	}
-	if sourceFormatCM.Data["SOURCE_FORMAT"] != string(sourceFormat) {
-		restartPod = true
-		nt.MustMergePatch(sourceFormatCM, fmt.Sprintf(`{"data":{"SOURCE_FORMAT":"%s"}}`, sourceFormat))
-	}
-
-	gitSyncCM := &corev1.ConfigMap{}
-	if err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM); err != nil {
-		nt.T.Fatal(err)
-	}
-	if gitSyncCM.Data["GIT_SYNC_BRANCH"] != gitBranch {
-		restartPod = true
-		nt.MustMergePatch(gitSyncCM, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, gitBranch))
-	}
-
-	if restartPod {
-		DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
-		DeletePodByLabel(nt, "app", "monitor", false)
-	}
-}
-
 // resetRepository re-initializes an existing remote repository or creates a new remote repository.
 func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
 	if repo, found := nt.RemoteRepositories[nn]; found {
@@ -1386,61 +1271,24 @@ func deleteNamespaceRepos(nt *NT) {
 // SetPolicyDir updates the root-sync object with the provided policyDir.
 func SetPolicyDir(nt *NT, syncName, policyDir string) {
 	nt.T.Logf("Set policyDir to %q", policyDir)
-	if nt.MultiRepo {
-		rs := fake.RootSyncObjectV1Beta1(syncName)
-		if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
-			nt.T.Fatal(err)
-		}
-		if rs.Spec.Git.Dir != policyDir {
-			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, policyDir))
-		}
-	} else {
-		restartPod := false
-
-		importerCM := &corev1.ConfigMap{}
-		if err := nt.Get("importer", configmanagement.ControllerNamespace, importerCM); err != nil {
-			nt.T.Fatal(err)
-		}
-		if importerCM.Data["POLICY_DIR"] != policyDir {
-			restartPod = true
-			nt.MustMergePatch(importerCM, fmt.Sprintf(`{"data":{"POLICY_DIR":"%s"}}`, policyDir))
-		}
-
-		if restartPod {
-			DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
-			DeletePodByLabel(nt, "app", "monitor", false)
-		}
+	rs := fake.RootSyncObjectV1Beta1(syncName)
+	if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	if rs.Spec.Git.Dir != policyDir {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s"}}}`, policyDir))
 	}
 }
 
 // SetGitBranch updates the root-sync object with the provided git branch
 func SetGitBranch(nt *NT, syncName, branch string) {
 	nt.T.Logf("Change git branch to %q", branch)
-	if nt.MultiRepo {
-		rs := fake.RootSyncObjectV1Beta1(syncName)
-		if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
-			nt.T.Fatal(err)
-		}
-		if rs.Spec.Git.Branch != branch {
-			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, branch))
-		}
-	} else {
-		restartPod := false
-
-		gitSyncCM := &corev1.ConfigMap{}
-		err := nt.Get("git-sync", configmanagement.ControllerNamespace, gitSyncCM)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		if gitSyncCM.Data["GIT_SYNC_BRANCH"] != branch {
-			restartPod = true
-			nt.MustMergePatch(gitSyncCM, fmt.Sprintf(`{"data":{"GIT_SYNC_BRANCH":"%s"}}`, branch))
-		}
-
-		if restartPod {
-			DeletePodByLabel(nt, "app", filesystem.GitImporterName, false)
-			DeletePodByLabel(nt, "app", "monitor", false)
-		}
+	rs := fake.RootSyncObjectV1Beta1(syncName)
+	if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	if rs.Spec.Git.Branch != branch {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": "%s"}}}`, branch))
 	}
 }
 

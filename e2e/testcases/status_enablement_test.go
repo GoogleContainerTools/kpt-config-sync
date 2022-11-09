@@ -32,7 +32,7 @@ import (
 // or disable status in the kpt applier.
 
 func TestStatusEnabledAndDisabled(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured, ntopts.SkipMonoRepo)
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)

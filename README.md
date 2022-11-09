@@ -24,7 +24,7 @@ You can reach the maintainers of this project at:
 
 [installation guide]: docs/installation.md
 [contribution guide]: docs/contributing.md
-[contribution guide]: docs/development.md
+[development guide]: docs/development.md
 [k8s slack]: https://slack.k8s.io
 [Config Sync issues]: https://github.com/GoogleContainerTools/kpt-config-sync/issues
 [Config Sync discussions]: https://github.com/GoogleContainerTools/kpt-config-sync/discussions

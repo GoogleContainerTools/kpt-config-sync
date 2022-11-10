@@ -22,7 +22,7 @@ import (
 // GetPeriodSecs returns the sync period defaulting to 15 if empty.
 func GetPeriodSecs(g *Git) float64 {
 	if g.Period.Duration == 0 {
-		return configsync.DefaultPeriodSecs
+		return configsync.DefaultReconcilerPollingPeriodSeconds
 	}
 	return g.Period.Duration.Seconds()
 }

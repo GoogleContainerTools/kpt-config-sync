@@ -59,10 +59,10 @@ type Hydrator struct {
 	HydratedLink string
 	// SyncDir is the relative path to the configs within the Git repository.
 	SyncDir cmpath.Relative
-	// PollingFrequency is the period of time between checking the filesystem for rendering the DRY configs.
-	PollingFrequency time.Duration
-	// RehydrateFrequency is the period of time between rehydrating on errors.
-	RehydrateFrequency time.Duration
+	// PollingPeriod is the period of time between checking the filesystem for source updates to render.
+	PollingPeriod time.Duration
+	// RehydratePeriod is the period of time between rehydrating on errors.
+	RehydratePeriod time.Duration
 	// ReconcilerName is the name of the reconciler.
 	ReconcilerName string
 }
@@ -72,9 +72,9 @@ func (h *Hydrator) Run(ctx context.Context) {
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
 	// takes longer than the tick duration.
-	runTimer := time.NewTimer(h.PollingFrequency)
+	runTimer := time.NewTimer(h.PollingPeriod)
 	defer runTimer.Stop()
-	rehydrateTimer := time.NewTimer(h.RehydrateFrequency)
+	rehydrateTimer := time.NewTimer(h.RehydratePeriod)
 	defer rehydrateTimer.Stop()
 	absSourceDir := h.SourceRoot.Join(cmpath.RelativeSlash(h.SourceLink))
 	for {
@@ -88,7 +88,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 			} else {
 				h.rehydrateOnError(commit, syncDir.OSPath())
 			}
-			rehydrateTimer.Reset(h.RehydrateFrequency) // Schedule rehydrate attempt
+			rehydrateTimer.Reset(h.RehydratePeriod) // Schedule rehydrate attempt
 		case <-runTimer.C:
 			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
@@ -102,7 +102,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v", commit, err)
 				}
 			}
-			runTimer.Reset(h.PollingFrequency) // Schedule re-run attempt
+			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
 		}
 	}
 }

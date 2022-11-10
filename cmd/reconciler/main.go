@@ -18,7 +18,6 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -72,12 +71,13 @@ var (
 	fightDetectionThreshold = flag.Float64(
 		"fight-detection-threshold", 5.0,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
-	resyncPeriod = flag.Duration("resync-period", time.Hour,
+	resyncPeriod = flag.Duration("resync-period", configsync.DefaultReconcilerResyncPeriod,
 		"Period of time between forced re-syncs from source (even without a new commit).")
 	workers = flag.Int("workers", 1,
 		"Number of concurrent remediator workers to run at once.")
-	filesystemPollingPeriod = flag.Duration("filesystem-polling-period", controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
-		"Period of time between checking the filesystem for updates to the source or rendered configs.")
+	pollingPeriod = flag.Duration("filesystem-polling-period",
+		controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
+		"Period of time between checking the filesystem for source updates to sync.")
 
 	// Root-Repo-only flags. If set for a Namespace-scoped Reconciler, causes the Reconciler to fail immediately.
 	sourceFormat = flag.String(flags.sourceFormat, os.Getenv(filesystem.SourceFormatKey),
@@ -161,26 +161,27 @@ func main() {
 	}
 
 	opts := reconciler.Options{
-		ClusterName:                *clusterName,
-		FightDetectionThreshold:    *fightDetectionThreshold,
-		NumWorkers:                 *workers,
-		ReconcilerScope:            declared.Scope(*scope),
-		ResyncPeriod:               *resyncPeriod,
-		FilesystemPollingFrequency: *filesystemPollingPeriod,
-		SourceRoot:                 absSourceDir,
-		RepoRoot:                   absRepoRoot,
-		HydratedRoot:               *hydratedRootDir,
-		HydratedLink:               *hydratedLinkDir,
-		SourceRev:                  *sourceRev,
-		SourceBranch:               *sourceBranch,
-		SourceType:                 v1beta1.SourceType(*sourceType),
-		SourceRepo:                 *sourceRepo,
-		SyncDir:                    relSyncDir,
-		SyncName:                   *syncName,
-		ReconcilerName:             *reconcilerName,
-		StatusMode:                 *statusMode,
-		ReconcileTimeout:           *reconcileTimeout,
-		APIServerTimeout:           *apiServerTimeout,
+		ClusterName:             *clusterName,
+		FightDetectionThreshold: *fightDetectionThreshold,
+		NumWorkers:              *workers,
+		ReconcilerScope:         declared.Scope(*scope),
+		ResyncPeriod:            *resyncPeriod,
+		PollingPeriod:           *pollingPeriod,
+		RetryPeriod:             configsync.DefaultReconcilerRetryPeriod,
+		SourceRoot:              absSourceDir,
+		RepoRoot:                absRepoRoot,
+		HydratedRoot:            *hydratedRootDir,
+		HydratedLink:            *hydratedLinkDir,
+		SourceRev:               *sourceRev,
+		SourceBranch:            *sourceBranch,
+		SourceType:              v1beta1.SourceType(*sourceType),
+		SourceRepo:              *sourceRepo,
+		SyncDir:                 relSyncDir,
+		SyncName:                *syncName,
+		ReconcilerName:          *reconcilerName,
+		StatusMode:              *statusMode,
+		ReconcileTimeout:        *reconcileTimeout,
+		APIServerTimeout:        *apiServerTimeout,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

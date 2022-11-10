@@ -64,9 +64,12 @@ type Options struct {
 	// ResyncPeriod is the period of time between forced re-sync from source (even
 	// without a new commit).
 	ResyncPeriod time.Duration
-	// FilesystemPollingFrequency is how often to check the local source repository for
-	// changes.
-	FilesystemPollingFrequency time.Duration
+	// PollingPeriod is the period of time between checking the filesystem for
+	// source updates to sync.
+	PollingPeriod time.Duration
+	// RetryPeriod is the period of time between checking the filesystem for
+	// source updates to sync, after an error.
+	RetryPeriod time.Duration
 	// SourceRoot is the absolute path to the source repository.
 	// Usually contains a symlink that must be resolved every time before parsing.
 	SourceRoot cmpath.Absolute
@@ -203,13 +206,13 @@ func Run(opts Options) {
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, discoveryClient, decls, a, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, fs, discoveryClient, decls, a, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
 		}
 	} else {
 		parser, err = parse.NewNamespaceRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.ReconcilerScope, &reader.File{}, cl,
-			opts.FilesystemPollingFrequency, opts.ResyncPeriod, fs, discoveryClient, decls, a, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, fs, discoveryClient, decls, a, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}

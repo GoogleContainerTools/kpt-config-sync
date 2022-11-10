@@ -41,11 +41,13 @@ var (
 	clusterName = flag.String("cluster-name", os.Getenv(reconcilermanager.ClusterNameKey),
 		"Cluster name to use for Cluster selection")
 
-	reconcilerPollingPeriod = flag.Duration("reconciler-polling-period", controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
-		"How often the reconciler should poll the filesystem for updates to the source or rendered configs.")
+	reconcilerPollingPeriod = flag.Duration("reconciler-polling-period",
+		controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
+		"Period of time between checking the filesystem for source updates to sync.")
 
-	hydrationPollingPeriod = flag.Duration("hydration-polling-period", controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
-		"How often the hydration-controller should poll the filesystem for rendering the DRY configs.")
+	hydrationPollingPeriod = flag.Duration("hydration-polling-period",
+		controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
+		"Period of time between checking the filesystem for source updates to render.")
 
 	setupLog = ctrl.Log.WithName("setup")
 )

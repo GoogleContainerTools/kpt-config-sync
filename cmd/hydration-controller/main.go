@@ -19,16 +19,17 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -55,15 +56,16 @@ var (
 	syncDir = flag.String("sync-dir", os.Getenv(reconcilermanager.SyncDirKey),
 		"Relative path of the root directory within the repo.")
 
-	hydrationPollingPeriodStr = flag.String("polling-period", os.Getenv(reconcilermanager.HydrationPollingPeriod),
-		"Period of time between checking the filesystem for rendering the DRY configs.")
+	pollingPeriod = flag.Duration("polling-period",
+		controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
+		"Period of time between checking the filesystem for source updates to render.")
 
 	// rehydratePeriod sets the hydration-controller to re-run the hydration process
 	// periodically when errors happen. It retries on both transient errors and permanent errors.
 	// Other ways to trigger the hydration process are:
 	// - push a new commit
 	// - delete the done file from the hydration-controller.
-	rehydratePeriod = flag.Duration("rehydrate-period", 30*time.Minute,
+	rehydratePeriod = flag.Duration("rehydrate-period", configsync.DefaultHydrationRetryPeriod,
 		"Period of time between rehydrating on errors.")
 
 	reconcilerName = flag.String("reconciler-name", os.Getenv(reconcilermanager.ReconcilerNameKey),
@@ -107,22 +109,17 @@ func main() {
 	dir := strings.TrimPrefix(*syncDir, "/")
 	relSyncDir := cmpath.RelativeOS(dir)
 
-	hydrationPollingPeriod, err := time.ParseDuration(*hydrationPollingPeriodStr)
-	if err != nil {
-		klog.Fatalf("Failed to get hydration polling period: %v", err)
-	}
-
 	hydrator := &hydrate.Hydrator{
-		DonePath:           absDonePath,
-		SourceType:         v1beta1.SourceType(*sourceType),
-		SourceRoot:         absSourceRootDir,
-		HydratedRoot:       absHydratedRootDir,
-		SourceLink:         *sourceLinkDir,
-		HydratedLink:       *hydratedLinkDir,
-		SyncDir:            relSyncDir,
-		PollingFrequency:   hydrationPollingPeriod,
-		RehydrateFrequency: *rehydratePeriod,
-		ReconcilerName:     *reconcilerName,
+		DonePath:        absDonePath,
+		SourceType:      v1beta1.SourceType(*sourceType),
+		SourceRoot:      absSourceRootDir,
+		HydratedRoot:    absHydratedRootDir,
+		SourceLink:      *sourceLinkDir,
+		HydratedLink:    *hydratedLinkDir,
+		SyncDir:         relSyncDir,
+		PollingPeriod:   *pollingPeriod,
+		RehydratePeriod: *rehydratePeriod,
+		ReconcilerName:  *reconcilerName,
 	}
 
 	hydrator.Run(context.Background())

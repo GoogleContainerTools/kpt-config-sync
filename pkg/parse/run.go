@@ -58,20 +58,23 @@ func Run(ctx context.Context, p Parser) {
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
 	// takes longer than the tick duration.
-	runTimer := time.NewTimer(opts.pollingFrequency)
+	runTimer := time.NewTimer(opts.pollingPeriod)
 	defer runTimer.Stop()
+
 	resyncTimer := time.NewTimer(opts.resyncPeriod)
 	defer resyncTimer.Stop()
-	retryTimer := time.NewTimer(time.Second)
+
+	retryTimer := time.NewTimer(opts.retryPeriod)
 	defer retryTimer.Stop()
+
 	state := &reconcilerState{}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		// it is time to reapply the configuration even if no changes have been detected
-		// This case should be checked first since it resets the cache
+		// Re-apply even if no changes have been detected.
+		// This case should be checked first since it resets the cache.
 		case <-resyncTimer.C:
 			klog.Infof("It is time for a force-resync")
 			// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
@@ -79,15 +82,15 @@ func Run(ctx context.Context, p Parser) {
 			state.resetAllButSourceState()
 			run(ctx, p, triggerResync, state)
 			resyncTimer.Reset(opts.resyncPeriod) // Schedule resync attempt
-			retryTimer.Reset(time.Second)        // Schedule retry attempt
+			retryTimer.Reset(opts.retryPeriod)   // Schedule retry attempt
 
-		// it is time to re-import the configuration from the filesystem
+		// Re-import declared resources from the filesystem (from git-sync).
 		case <-runTimer.C:
 			run(ctx, p, triggerReimport, state)
-			runTimer.Reset(opts.pollingFrequency) // Schedule re-run attempt
-			retryTimer.Reset(time.Second)         // Schedule retry attempt
+			runTimer.Reset(opts.pollingPeriod) // Schedule re-run attempt
+			retryTimer.Reset(opts.retryPeriod) // Schedule retry attempt
 
-		// it is time to check whether the last parse-apply-watch loop failed or any watches need to be updated
+		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C:
 			var trigger string
 			if opts.managementConflict() {
@@ -96,7 +99,7 @@ func Run(ctx context.Context, p Parser) {
 				state.resetAllButSourceState()
 				trigger = triggerManagementConflict
 				// When conflict is detected, wait longer (same as the polling frequency) for the next retry.
-				time.Sleep(opts.pollingFrequency)
+				time.Sleep(opts.pollingPeriod)
 			} else if state.cache.needToRetry && state.cache.readyToRetry() {
 				klog.Infof("The last reconciliation failed")
 				trigger = triggerRetry
@@ -108,7 +111,7 @@ func Run(ctx context.Context, p Parser) {
 				continue
 			}
 			run(ctx, p, trigger, state)
-			retryTimer.Reset(time.Second)
+			retryTimer.Reset(opts.retryPeriod)
 		}
 	}
 }

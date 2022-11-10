@@ -43,18 +43,37 @@ const (
 )
 
 const (
-	// DefaultPeriodSecs is the default value in seconds between consecutive syncs.
-	DefaultPeriodSecs = 15
-
-	// DefaultReconcilerPollingPeriod defines how often the reconciler should poll
-	// the filesystem for updates to the source or rendered configs.
-	DefaultReconcilerPollingPeriod = 5 * time.Second
-
-	// DefaultHydrationPollingPeriod defines how often the hydration controller
-	// should poll the filesystem for rendering the DRY configs.
+	// DefaultHydrationPollingPeriod is the time delay between polling the
+	// filesystem for source updates to render.
 	DefaultHydrationPollingPeriod = 5 * time.Second
 
-	// DefaultReconcileTimeout defines the timeout of kpt applier reconcile/prune task
+	// DefaultHydrationRetryPeriod is the time delay between attempts to
+	// re-render config after an error.
+	// TODO: replace with retry-backoff strategy
+	DefaultHydrationRetryPeriod = 30 * time.Minute
+
+	// DefaultReconcilerPollingPeriodSeconds is time delay between polling the
+	// filesystem for source updates to sync, in seconds.
+	DefaultReconcilerPollingPeriodSeconds = 15
+
+	// DefaultReconcilerPollingPeriod is the time delay between polling the
+	// filesystem for source updates to sync.
+	DefaultReconcilerPollingPeriod = DefaultReconcilerPollingPeriodSeconds * time.Second
+
+	// DefaultReconcilerResyncPeriod is the time delay between forced re-syncs
+	// from source (even without a new commit).
+	DefaultReconcilerResyncPeriod = time.Hour
+
+	// DefaultReconcilerRetryPeriod is the time delay between polling the
+	// filesystem for source updates to sync, when the previous attempt errored.
+	// Note: This retry period is also used for watch updates.
+	// TODO: replace with retry-backoff strategy
+	DefaultReconcilerRetryPeriod = time.Second
+
+	// DefaultReconcileTimeout is the default wait timeout used by the applier
+	// when waiting for reconciliation after actuation.
+	// For Apply, it waits for Current status.
+	// For Delete, it waits for NotFound status.
 	DefaultReconcileTimeout = 5 * time.Minute
 
 	// DefaultHelmReleaseNamespace is the default namespace for a Helm Release which does not have a namespace specified

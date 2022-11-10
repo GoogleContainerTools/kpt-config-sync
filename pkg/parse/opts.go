@@ -34,23 +34,27 @@ type opts struct {
 	// clusterName is the name of the cluster we're syncing configuration to.
 	clusterName string
 
-	// client knows how to read objects from a Kubernetes cluster and update status.
+	// client knows how to read objects from a Kubernetes cluster and update
+	// status.
 	client client.Client
 
-	// reconcilerName is the name of the reconciler resources, such as service account, service, deployment and etc.
+	// reconcilerName is the name of the reconciler resources, such as service
+	// account, service, deployment and etc.
 	reconcilerName string
 
 	// syncName is the name of the RootSync or RepoSync object.
 	syncName string
 
-	// pollingFrequency is how often to re-import configuration from the filesystem.
-	//
-	// For tests, use zero as it will poll continuously.
-	pollingFrequency time.Duration
+	// pollingPeriod is the period of time between checking the filesystem for
+	// source updates to sync.
+	pollingPeriod time.Duration
 
-	// ResyncPeriod is the period of time between forced re-sync from source (even
-	// without a new commit).
+	// ResyncPeriod is the period of time between forced re-sync from source
+	// (even without a new commit).
 	resyncPeriod time.Duration
+
+	// retryPeriod is how long the parser waits between retries, after an error.
+	retryPeriod time.Duration
 
 	// discoveryInterface is how the parser learns what types are currently
 	// available on the cluster.

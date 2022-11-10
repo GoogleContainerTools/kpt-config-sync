@@ -41,7 +41,7 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingFrequency time.Duration, resyncPeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
+func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -49,14 +49,15 @@ func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope decl
 
 	return &namespace{
 		opts: opts{
-			clusterName:      clusterName,
-			client:           c,
-			syncName:         syncName,
-			reconcilerName:   reconcilerName,
-			pollingFrequency: pollingFrequency,
-			resyncPeriod:     resyncPeriod,
-			files:            files{FileSource: fs},
-			parser:           filesystem.NewParser(fileReader),
+			clusterName:    clusterName,
+			client:         c,
+			syncName:       syncName,
+			reconcilerName: reconcilerName,
+			pollingPeriod:  pollingPeriod,
+			resyncPeriod:   resyncPeriod,
+			retryPeriod:    retryPeriod,
+			files:          files{FileSource: fs},
+			parser:         filesystem.NewParser(fileReader),
 			updater: updater{
 				scope:      scope,
 				resources:  resources,

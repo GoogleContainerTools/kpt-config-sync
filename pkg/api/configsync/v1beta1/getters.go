@@ -23,7 +23,7 @@ import (
 // GetPeriodSecs returns the sync period defaulting to 15 if empty.
 func GetPeriodSecs(period metav1.Duration) float64 {
 	if period.Duration == 0 {
-		return configsync.DefaultPeriodSecs
+		return configsync.DefaultReconcilerPollingPeriodSeconds
 	}
 	return period.Duration.Seconds()
 }

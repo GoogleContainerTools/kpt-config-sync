@@ -67,6 +67,9 @@ func Run(ctx context.Context, p Parser) {
 	retryTimer := time.NewTimer(opts.retryPeriod)
 	defer retryTimer.Stop()
 
+	statusUpdateTimer := time.NewTimer(opts.statusUpdatePeriod)
+	defer statusUpdateTimer.Stop()
+
 	state := &reconcilerState{}
 	for {
 		select {
@@ -81,14 +84,18 @@ func Run(ctx context.Context, p Parser) {
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 			state.resetAllButSourceState()
 			run(ctx, p, triggerResync, state)
-			resyncTimer.Reset(opts.resyncPeriod) // Schedule resync attempt
-			retryTimer.Reset(opts.retryPeriod)   // Schedule retry attempt
+
+			resyncTimer.Reset(opts.resyncPeriod)             // Schedule resync attempt
+			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Re-import declared resources from the filesystem (from git-sync).
 		case <-runTimer.C:
 			run(ctx, p, triggerReimport, state)
-			runTimer.Reset(opts.pollingPeriod) // Schedule re-run attempt
-			retryTimer.Reset(opts.retryPeriod) // Schedule retry attempt
+
+			runTimer.Reset(opts.pollingPeriod)               // Schedule re-run attempt
+			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C:
@@ -111,17 +118,33 @@ func Run(ctx context.Context, p Parser) {
 				continue
 			}
 			run(ctx, p, trigger, state)
-			retryTimer.Reset(opts.retryPeriod)
+
+			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+
+		// Update the sync status to report management conflicts (from the remediator).
+		case <-statusUpdateTimer.C:
+			// Skip sync status update if the .status.sync.commit is out of date.
+			// This avoids overwriting a newer Syncing condition with the status
+			// from an older commit.
+			if state.syncStatus.commit == state.sourceStatus.commit &&
+				state.syncStatus.commit == state.renderingStatus.commit {
+				klog.V(3).Info("Updating sync status (periodic while not syncing)")
+				if err := p.SetSyncStatus(ctx, p.ApplierErrors()); err != nil {
+					klog.Warningf("failed to update remediator errors: %v", err)
+				}
+				remediatorErrs := p.RemediatorConflictErrors()
+				if len(remediatorErrs) > 0 {
+					UpdateConflictManagerStatus(ctx, remediatorErrs, p.K8sClient())
+				}
+			}
+
+			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 		}
 	}
 }
 
 func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
-	p.SetReconciling(true)
-	defer func() {
-		p.SetReconciling(false)
-	}()
-
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
 	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
@@ -371,6 +394,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 		lastUpdate: metav1.Now(),
 	}
 	if state.needToSetSyncStatus(newSyncStatus) {
+		klog.V(3).Info("Updating sync status (after sync)")
 		if err := p.SetSyncStatus(ctx, syncErrs); err != nil {
 			syncErrs = status.Append(syncErrs, err)
 		} else {
@@ -384,7 +408,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 
 // updateSyncStatus update the sync status periodically until the cancellation function of the context is called.
 func updateSyncStatus(ctx context.Context, p Parser) {
-	updatePeriod := 5 * time.Second
+	updatePeriod := p.options().statusUpdatePeriod
 	updateTimer := time.NewTimer(updatePeriod)
 	defer updateTimer.Stop()
 	for {
@@ -394,14 +418,16 @@ func updateSyncStatus(ctx context.Context, p Parser) {
 			return
 
 		case <-updateTimer.C:
+			klog.V(3).Info("Updating sync status (periodic while syncing)")
 			if err := p.SetSyncStatus(ctx, p.options().updater.applier.Errors()); err != nil {
 				klog.Warningf("failed to update sync status: %v", err)
 			}
-			remediatorErrs := p.options().updater.remediator.ConflictErrors()
+			remediatorErrs := p.RemediatorConflictErrors()
 			if len(remediatorErrs) > 0 {
 				UpdateConflictManagerStatus(ctx, remediatorErrs, p.K8sClient())
 			}
-			updateTimer.Reset(updatePeriod)
+
+			updateTimer.Reset(updatePeriod) // Schedule status update attempt
 		}
 	}
 }

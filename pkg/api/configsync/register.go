@@ -70,6 +70,11 @@ const (
 	// TODO: replace with retry-backoff strategy
 	DefaultReconcilerRetryPeriod = time.Second
 
+	// DefaultReconcilerSyncStatusUpdatePeriod is the time delay between async
+	// status updates by the reconciler. These updates report new management
+	// conflict errors from the remediator, if there are any.
+	DefaultReconcilerSyncStatusUpdatePeriod = 5 * time.Second
+
 	// DefaultReconcileTimeout is the default wait timeout used by the applier
 	// when waiting for reconciliation after actuation.
 	// For Apply, it waits for Current status.

@@ -24,15 +24,6 @@ DIR=$(dirname "${BASH_SOURCE[0]}")
 if [ $KUBERNETES_ENV == "GKE" ]; then
   echo "GKE environment"
 
-  # Makes the service account from ${gcp_prober_cred} the active account that drives
-  # cluster changes.
-  if [[ -n "${GCP_PROBER_CREDS}" ]]; then
-    gcloud --quiet auth activate-service-account --key-file="${GCP_PROBER_CREDS}"
-  else
-    echo "using default gcloud credentials"
-  fi
-
-
   # Installs gcloud as an auth helper for kubectl with the credentials that
   # were set with the service account activation above.
   # Needs cloud.containers.get permission.

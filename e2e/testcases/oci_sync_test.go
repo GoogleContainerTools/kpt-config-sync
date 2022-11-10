@@ -289,12 +289,17 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	rsGitYAMLFile := "../testdata/reconciler-manager/reposync-sample.yaml"
 	// file path to the RepoSync config in the root repository.
 	repoResourcePath := "acme/reposync-bookinfo.yaml"
+	rsNN := types.NamespacedName{
+		Name:      configsync.RepoSyncName,
+		Namespace: namespace,
+	}
 
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
 	nt.RootRepos[configsync.RootSyncName].Copy(rsGitYAMLFile, repoResourcePath)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nomostest.RepoSyncClusterRole())
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/crb.yaml", nomostest.RepoSyncRoleBinding(rsNN))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
 	nt.WaitForRepoSyncs()

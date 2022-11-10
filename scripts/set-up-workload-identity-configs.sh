@@ -66,7 +66,7 @@ gcloud iam service-accounts add-iam-policy-binding --project="${GCP_PROJECT}" \
 		--member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
 		"e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
 
-echo "Granting the prober-runner service account of the {GCP_PROJECT} project the 'roles/gkehub.admin' role for the '${FLEET_HOST_PROJECT}' project"
+echo "Granting the e2e-test-runner service account of the {GCP_PROJECT} project the 'roles/gkehub.admin' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud projects add-iam-policy-binding "${FLEET_HOST_PROJECT}" \
-  --member "serviceAccount:prober-runner@${GCP_PROJECT}.iam.gserviceaccount.com" \
+  --member "serviceAccount:e2e-test-runner@${GCP_PROJECT}.iam.gserviceaccount.com" \
   --role roles/gkehub.admin

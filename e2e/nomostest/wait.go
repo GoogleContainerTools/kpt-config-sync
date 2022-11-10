@@ -75,6 +75,32 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 	t.Logf("took %v to wait for %s", took, opName)
 }
 
+// WaitForObject waits for the specified object. If predicates are specified,
+// they are waited for, otherwise existance is enough.
+// Predicates must accept the object as Unstructured.
+func WaitForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, waitOptionsAndPredicates ...interface{}) {
+	nt.T.Helper()
+
+	var waitOpts []WaitOption
+	var predicates []Predicate
+	for _, opt := range waitOptionsAndPredicates {
+		switch tOpt := opt.(type) {
+		case WaitOption:
+			waitOpts = append(waitOpts, tOpt)
+		case Predicate:
+			predicates = append(predicates, tOpt)
+		default:
+			nt.T.Fatalf("invalid option passed to WaitForObject: expected WaitOption or Predicate, but received a %T", opt)
+		}
+	}
+
+	Wait(nt.T, fmt.Sprintf("wait for %q %v to meet expectations", name, gvk), nt.DefaultWaitTimeout, func() error {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(gvk)
+		return nt.Validate(name, namespace, u, predicates...)
+	}, waitOpts...)
+}
+
 // WaitForNotFound waits for the passed object to be fully deleted.
 // Immediately fails the test if the object is not deleted within the timeout.
 func WaitForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {

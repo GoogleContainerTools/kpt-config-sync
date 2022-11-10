@@ -399,10 +399,9 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role")
 
 	nt.T.Logf("The admission webhook should deny the update request in Root %s", rootSync2)
-	nt.WaitForRootSyncSyncError(rootSync2, applier.ApplierErrorCode, "denied the request", false)
+	nt.WaitForRootSyncSyncError(rootSync2, applier.ApplierErrorCode, "denied the request")
 	nt.T.Logf("Root %s should also get surfaced with the conflict error", configsync.RootSyncName)
-	// Ignore the Syncing condition because the sync status is updated by another reconciler, which doesn't update the SyncingCondition.
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository", true)
+	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository")
 	nt.T.Logf("The Role resource version should not be changed")
 	if err := nt.Validate("pods", testNs, &rbacv1.Role{},
 		nomostest.ResourceVersionEquals(nt, roleResourceVersion)); err != nil {
@@ -419,9 +418,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Logf("Both of the two RootSyncs still report problems because the remediators detect the conflicts")
-	// Ignore the Syncing condition because the sync status might be updated by another reconciler, which doesn't update the SyncingCondition.
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository", true)
-	nt.WaitForRootSyncSyncError(rootSync2, status.ManagementConflictErrorCode, "declared in another repository", true)
+	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository")
+	nt.WaitForRootSyncSyncError(rootSync2, status.ManagementConflictErrorCode, "declared in another repository")
 
 	nt.T.Logf("Remove the declaration from one Root repo %s", configsync.RootSyncName)
 	nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath)

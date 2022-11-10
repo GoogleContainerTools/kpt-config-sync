@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -92,6 +93,14 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nn3Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
 	nn4Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
 	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
+
+	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
+	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs))
+	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn2.Name)), nomostest.RepoSyncRoleBinding(nn2))
+	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn3.Name)), nomostest.RepoSyncRoleBinding(nn3))
+	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn4.Name)), nomostest.RepoSyncRoleBinding(nn4))
+	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn5.Name)), nomostest.RepoSyncRoleBinding(nn5))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
 	nt.RootRepos[rr2] = rr2Repo

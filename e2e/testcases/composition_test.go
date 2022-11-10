@@ -144,10 +144,11 @@ func TestComposition(t *testing.T) {
 		}
 	})
 
-	nt.T.Logf("Adding Namespace & RoleBinding for RepoSync: %s", lvl2NN.Name)
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(lvl2NN.Namespace))
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s.yaml", testNs)), nomostest.RepoSyncRoleBinding(lvl2NN))
-	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding Namespace & RoleBinding for RepoSync: %s", lvl2NN))
+	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
+	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs))
+	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), nomostest.RepoSyncRoleBinding(lvl2NN))
+	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), nomostest.RepoSyncRoleBinding(lvl3NN))
+	lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
 	waitForSync(nt, rootSha1Fn, lvl0Sync)

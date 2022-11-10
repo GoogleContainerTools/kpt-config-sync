@@ -64,6 +64,9 @@ const (
 
 	// e2e/raw-nomos/manifests/multi-repo-configmaps.yaml
 	multiConfigMapsName = "multi-repo-configmaps.yaml"
+
+	// clusterRoleName imitates a user-created (Cluster)Role for NS reconcilers.
+	clusterRoleName = "c2-e2e"
 )
 
 var (
@@ -78,9 +81,6 @@ var (
 
 	multiConfigMaps = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, multiConfigMapsName)
 
-	// clusterRoleName is the ClusterRole used by Namespace Reconciler.
-	clusterRoleName = fmt.Sprintf("%s:%s", configsync.GroupName, core.NsReconcilerPrefix)
-
 	templates = []string{
 		"admission-webhook.yaml",
 		"otel-collector.yaml",
@@ -94,6 +94,7 @@ var (
 		webhookconfig.ShortName:                      true,
 		"admission-webhook-cert":                     true,
 		"configsync.gke.io:admission-webhook":        true,
+		"configsync.gke.io:ns-reconciler":            true,
 		"admission-webhook.configsync.gke.io":        true,
 		"configsync.gke.io:reconciler-manager":       true,
 		reconcilermanager.ManagerName:                true,
@@ -546,6 +547,7 @@ func waitForReconciler(nt *NT, name string) error {
 // RepoSyncClusterRole returns clusterrole with permissions to manage resources in the cluster.
 func RepoSyncClusterRole() *rbacv1.ClusterRole {
 	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
+	// TODO: make this more granular by test options
 	cr.Rules = []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{rbacv1.APIGroupAll},

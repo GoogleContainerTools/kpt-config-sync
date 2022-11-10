@@ -17,7 +17,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -96,19 +96,24 @@ func TestPublicHelm(t *testing.T) {
 	if err := nt.Validate("my-ingress-nginx-controller-metrics", "ingress-nginx", &corev1.Service{}, nomostest.HasAnnotation("prometheus.io/port", "10254"), nomostest.HasAnnotation("prometheus.io/scrape", "true")); err != nil {
 		nt.T.Error(err)
 	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
+	}
+
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": ""}}}`)
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
-	if err := nt.Validate("my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
-		nt.T.Error(err)
-	}
-	_, err := nomostest.Retry(90*time.Second, func() error {
-		return nt.ValidateNotFound("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{})
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	// TODO: Confirm that the change was Synced.
+	// This is not currently possible using the RootSync status API, because
+	// the commit didn't change, and the commit was already previously Synced.
+	// If sync state could be confirmed, the objects would already be updated,
+	// and we wouldn't need to wait for it.
+	// if err := nt.Validate("my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
+	// 	nt.T.Error(err)
+	// }
+	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), "my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace)
+	nomostest.WaitForNotFound(nt, kinds.Deployment(), "my-ingress-nginx-controller", "ingress-nginx")
 }
 
 // TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully

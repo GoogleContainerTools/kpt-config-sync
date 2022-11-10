@@ -15,6 +15,7 @@
 package metrics
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/google/go-cmp/cmp"
@@ -276,12 +277,18 @@ func (csm ConfigSyncMetrics) ValidateReconcilerErrors(podName string, sourceValu
 	sourceMetrics := podMetrics.FilterByComponent("source")
 	err := sourceMetrics.validateMetric(metric, valueEquals(metric, sourceValue))
 	if err != nil {
+		// Source errors should always be recorded before Sync errors, so don't
+		// ignore NotFound.
 		return errors.Wrapf(err, `for pod=%q and component="source"`, podName)
 	}
 	syncMetrics := podMetrics.FilterByComponent("sync")
 	err = syncMetrics.validateMetric(metric, valueEquals(metric, syncValue))
 	if err != nil {
-		return errors.Wrapf(err, `for pod=%q and component="sync"`, podName)
+		// Sync errors may not be recorded if there were Source errors.
+		// So ignore NotFound if Source errors are expected and Sync errors are not.
+		if !(errors.Is(err, &MetricNotFoundError{Name: metric}) && sourceValue > 0 && syncValue == 0) {
+			return errors.Wrapf(err, `for pod=%q and component="sync"`, podName)
+		}
 	}
 	return nil
 }
@@ -411,15 +418,20 @@ func (csm ConfigSyncMetrics) validateMetric(name string, validations ...Validati
 		return true
 	}
 
-	if entries, ok := csm[name]; ok {
-		for _, e := range entries {
-			if allValidated(e, validations) {
-				return nil
-			}
-		}
-		return errors.Wrapf(errs, "validating metric %q", name)
+	entries, ok := csm[name]
+	if !ok {
+		// Use a typed error so it can be caught by the caller.
+		err := &MetricNotFoundError{Name: name}
+		return errors.Wrapf(err, "validating metric %q", name)
 	}
-	return errors.Errorf("validating metric %q: metric not found", name)
+
+	for _, e := range entries {
+		if allValidated(e, validations) {
+			return nil
+		}
+	}
+	// Return all the errors from the Validation funcs, if not nil
+	return errors.Wrapf(errs, "validating metric %q", name)
 }
 
 // hasTags checks that the measurement contains all the expected tags.
@@ -494,4 +506,24 @@ func valueGTE(name string, value int) Validation {
 		}
 		return nil
 	}
+}
+
+// MetricNotFoundError means the metric being validated was not found.
+type MetricNotFoundError struct {
+	Name string
+}
+
+// Error returns the error message string.
+func (mnfe *MetricNotFoundError) Error() string {
+	return fmt.Sprintf("metric not found: %q", mnfe.Name)
+}
+
+// Is returns true if the specified error is a *MetricNotFoundError and has the
+// same Name.
+func (mnfe *MetricNotFoundError) Is(err error) bool {
+	tErr, ok := err.(*MetricNotFoundError)
+	if !ok {
+		return false
+	}
+	return tErr.Name == mnfe.Name
 }

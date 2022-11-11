@@ -168,6 +168,7 @@ func main() {
 		ResyncPeriod:            *resyncPeriod,
 		PollingPeriod:           *pollingPeriod,
 		RetryPeriod:             configsync.DefaultReconcilerRetryPeriod,
+		StatusUpdatePeriod:      configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 		SourceRoot:              absSourceDir,
 		RepoRoot:                absRepoRoot,
 		HydratedRoot:            *hydratedRootDir,

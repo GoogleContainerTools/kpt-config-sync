@@ -51,22 +51,23 @@ import (
 )
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
+func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
 	}
 
 	opts := opts{
-		clusterName:    clusterName,
-		syncName:       syncName,
-		reconcilerName: reconcilerName,
-		client:         c,
-		pollingPeriod:  pollingPeriod,
-		resyncPeriod:   resyncPeriod,
-		retryPeriod:    retryPeriod,
-		files:          files{FileSource: fs},
-		parser:         filesystem.NewParser(fileReader),
+		clusterName:        clusterName,
+		syncName:           syncName,
+		reconcilerName:     reconcilerName,
+		client:             c,
+		pollingPeriod:      pollingPeriod,
+		resyncPeriod:       resyncPeriod,
+		retryPeriod:        retryPeriod,
+		statusUpdatePeriod: statusUpdatePeriod,
+		files:              files{FileSource: fs},
+		parser:             filesystem.NewParser(fileReader),
 		updater: updater{
 			scope:      declared.RootReconciler,
 			resources:  resources,

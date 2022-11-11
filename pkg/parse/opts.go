@@ -56,6 +56,10 @@ type opts struct {
 	// retryPeriod is how long the parser waits between retries, after an error.
 	retryPeriod time.Duration
 
+	// statusUpdatePeriod is how long the parser waits between updates of the
+	// sync status, to account for management conflict errors from the remediator.
+	statusUpdatePeriod time.Duration
+
 	// discoveryInterface is how the parser learns what types are currently
 	// available on the cluster.
 	discoveryInterface discovery.ServerResourcer
@@ -63,9 +67,6 @@ type opts struct {
 	// converter uses the discoveryInterface to encode the declared fields of
 	// objects in Git.
 	converter *declared.ValueConverter
-
-	// reconciling indicates whether the reconciler is reconciling a change.
-	reconciling bool
 
 	// mux prevents status update conflicts.
 	mux *sync.Mutex
@@ -81,10 +82,6 @@ type Parser interface {
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
 	SetSyncStatus(ctx context.Context, errs status.MultiError) error
 	options() *opts
-	// SetReconciling sets the field indicating whether the reconciler is reconciling a change.
-	SetReconciling(value bool)
-	// Reconciling returns whether the reconciler is reconciling a change.
-	Reconciling() bool
 	// ApplierErrors returns the errors surfaced by the applier.
 	ApplierErrors() status.MultiError
 	// RemediatorConflictErrors returns the conflict errors detected by the remediator.
@@ -99,12 +96,4 @@ func (o *opts) k8sClient() client.Client {
 
 func (o *opts) discoveryClient() discovery.ServerResourcer {
 	return o.discoveryInterface
-}
-
-func (o *opts) SetReconciling(value bool) {
-	o.reconciling = value
-}
-
-func (o *opts) Reconciling() bool {
-	return o.reconciling
 }

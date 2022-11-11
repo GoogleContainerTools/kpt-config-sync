@@ -21,7 +21,6 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -83,9 +82,9 @@ func StopWebhook(nt *NT) {
 	*nt.WebhookDisabled = true
 }
 
-func installWebhook(nt *NT, nomos ntopts.Nomos) {
+func installWebhook(nt *NT) {
 	nt.T.Helper()
-	objs := parseManifests(nt, nomos)
+	objs := parseManifests(nt)
 	for _, o := range objs {
 		labels := o.GetLabels()
 		if labels == nil || labels["app"] != "admission-webhook" {

@@ -22,68 +22,37 @@ test-nomos-vet-local: build
 
 include Makefile.e2e.ci
 
-# Builds a new nomos image and pushes it to the local Docker repository.
-# For use with the Go e2e tests. See e2e/doc.go.
-__push-local-image: build-images
-	@bash scripts/docker-registry.sh
-	$(MAKE) retag-images \
-		OLD_REGISTRY=$(REGISTRY) \
-		OLD_IMAGE_TAG=$(IMAGE_TAG) \
-		REGISTRY=localhost:5000 \
-		IMAGE_TAG=$(IMAGE_TAG)
-	$(MAKE) push-images \
-		REGISTRY=localhost:5000 \
-		IMAGE_TAG=$(IMAGE_TAG)
-
 __install-nomos-local:
 	@GO111MODULE=on go install ./cmd/nomos/nomos.go
 
-# Runs the Go e2e tests
-# Rebuilds the nomos image, so use this when you're actively modifying the Nomos
-# code between test runs.
-test-e2e-go: __push-local-image __install-nomos-local test-e2e-go-nobuild
+# Run the Go e2e tests after building images/manifests.
+# Useful for when you're actively modifying code between runs.
+.PHONY: test-e2e-go
+test-e2e-go: config-sync-manifest-local __install-nomos-local test-e2e-go-nobuild
 
-# Runs the Go e2e tests without building a new Nomos image.
-# This doesn't rebuild the Nomos image, so you can modify test code and rerun
-# this without having to rebuild the image.
+# Run the Go e2e tests without building images/manifests.
+# Useful for modifying test code and rerunning tests without rebuilding images.
+.PHONY: test-e2e-go-nobuild
 test-e2e-go-nobuild:
-	@./scripts/e2e-go.sh --timeout 60m --image-tag=$(IMAGE_TAG)
-
-# Go test target for Prow.
-# Separate from the above as we are still tuning how Prow runs tests.
-__test-e2e-go-nobuild-prow:
-	@./scripts/e2e-go.sh --timeout 60m --parallel 12 --image-tag=$(IMAGE_TAG)
-
-# The target to be run by Prow for e2e tests.
-# Delete all kind clusters before tests to prevent leaking resources after
-# failed tests where cleanup is unsuccessful. This only deletes clusters in the
-# current Kind network, so other Prow jobs running in the same
-# Cluster/NodePool/etc. are unaffected.
-test-e2e-kind: __push-local-image
-	@docker build . -f build/test-e2e-go/Dockerfile -t prow-image
-	# The .sock volume allows you to connect to the Docker daemon of the host.
-	# Part of the docker-in-docker pattern.
-	@docker run -v /var/run/docker.sock:/var/run/docker.sock --network="host" prow-image make __test-e2e-go-nobuild-prow
+	@GO111MODULE=on go test ./e2e/... --e2e $(E2E_ARGS)
 
 # This target runs all the e2e tests with the multi-repo mode.
-test-e2e-kind-multi-repo: __push-local-image
+.PHONY: test-e2e-kind-multi-repo
+test-e2e-kind-multi-repo: config-sync-manifest-local
 	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --timeout 60m --parallel 15 --image-tag=$(IMAGE_TAG) $(E2E_ARGS)
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --timeout 60m --parallel 15 $(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.
+.PHONY: test-e2e-kind-multi-repo-test-group1
 test-e2e-kind-multi-repo-test-group1:
 	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,cluster-selector,drift-control,lifecycle,nomos-cli" test-e2e-kind-multi-repo
 
 # This target runs the second group of e2e tests with the multi-repo mode.
+.PHONY: test-e2e-kind-multi-repo-test-group2
 test-e2e-kind-multi-repo-test-group2:
 	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1" test-e2e-kind-multi-repo
 
 # This target runs the third group of e2e tests with the multi-repo mode.
+.PHONY: test-e2e-kind-multi-repo-test-group3
 test-e2e-kind-multi-repo-test-group3:
 	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2,multi-repos,override-api,hydration" test-e2e-kind-multi-repo
-
-# Runs the Go e2e tests against multi-repo Config Sync.
-# Rebuilds the nomos image, so use this when you're actively modifying the Nomos
-# code between test runs.
-test-e2e-go-multirepo: __push-local-image __install-nomos-local
-	@GO111MODULE=on go test ./e2e/... --e2e --timeout 60m --image-tag=$(IMAGE_TAG)

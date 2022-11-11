@@ -16,10 +16,17 @@ package nomostest
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
+	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 func connectToLocalRegistry(nt *NT) {
@@ -41,5 +48,52 @@ func connectToLocalRegistry(nt *NT) {
 	})
 	if err != nil {
 		nt.T.Fatalf("connecting cluster to local Docker registry: %v", err)
+	}
+}
+
+// checkImages ensures that all required images are installed on the local
+// docker registry.
+func checkImages(t testing.NTB) {
+	t.Helper()
+
+	var imageNames = []string{
+		reconcilermanager.Reconciler,
+		reconcilermanager.ManagerName,
+	}
+
+	for _, imageName := range imageNames {
+		image := imageTagFromManifest(t, imageName)
+		checkImage(t, image)
+	}
+}
+
+func imageTagFromManifest(t testing.NTB, name string) string {
+	bytes, err := os.ReadFile(configSyncManifest)
+	if err != nil {
+		t.Fatalf("failed to read %s: %s", configSyncManifest, err)
+	}
+	re := regexp.MustCompile(
+		fmt.Sprintf(`(image: )(%s\/%s:.*)`, e2e.DefaultImagePrefix, name),
+	)
+	match := re.FindStringSubmatch(string(bytes))
+	if match == nil || len(match) != 3 {
+		t.Fatalf("failed to find image %s in %s", name, configSyncManifest)
+	}
+	return match[2]
+}
+
+func checkImage(t testing.NTB, image string) {
+	url := fmt.Sprintf("http://%s", image)
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("Failed to check for image %s in registry: %s", image, err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response for image %s in registry: %s", image, err)
 	}
 }

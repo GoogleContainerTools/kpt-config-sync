@@ -16,14 +16,12 @@ package e2e
 
 import (
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/util/retry"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -190,13 +188,9 @@ func mustUpdateRootReconciler(nt *nomostest.NT, f updateFunc) {
 
 func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, generation int64) {
 	nt.T.Log("Reset the Deployment manifest in the ConfigMap")
-	var originalManifestFile string
-	if *e2e.ShareTestEnv {
-		originalManifestFile = filepath.Join(nomostest.SharedNT(nt.T).TmpDir, nomostest.Manifests, "reconciler-manager-configmap.yaml")
-	} else {
-		originalManifestFile = filepath.Join(nt.TmpDir, nomostest.Manifests, "reconciler-manager-configmap.yaml")
+	if err := nomostest.ResetReconcilerManagerConfigMap(nt); err != nil {
+		nt.T.Fatalf("failed to reset configmap: %v", err)
 	}
-	nt.MustKubectl("apply", "-f", originalManifestFile)
 
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)

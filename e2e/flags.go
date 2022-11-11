@@ -59,20 +59,8 @@ var Debug = flag.Bool("debug", false,
 var KubernetesVersion = flag.String("kubernetes-version", "1.21",
 	"The version of Kubernetes to create")
 
-// MultiRepo enables running the tests against multi-repo Config Sync.
-var _ = flag.Bool("multirepo", true,
-	"If true, configure multi-repo Config Sync. Otherwise configure mono-repo.")
-
 // DefaultImagePrefix points to the local docker registry.
 const DefaultImagePrefix = "localhost:5000"
-
-// ImagePrefix is where the Docker images are stored.
-var ImagePrefix = flag.String("image-prefix", DefaultImagePrefix,
-	"The prefix to use for Docker images. Defaults to the local Docker registry. Omit the trailing slash.")
-
-// ImageTag is the tag to use for Docker images.
-var ImageTag = flag.String("image-tag", "latest",
-	"The tag to use for Docker images. Defaults to 'latest'")
 
 // Manual indicates the test is being run manually. Some tests are not yet safe
 // to be run automatically.

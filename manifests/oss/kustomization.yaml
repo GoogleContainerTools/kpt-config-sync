@@ -14,5 +14,5 @@
 
 resources:
 - ../base
-- ../test-resources/00-namespace.yaml
-- ../test-resources/resourcegroup-manifest.yaml
+- ../cs-namespaces.yaml
+- ../third_party/resourcegroup-manifest.yaml

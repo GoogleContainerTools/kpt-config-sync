@@ -17,6 +17,7 @@ package e2e
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -415,10 +416,33 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.RootRepos[rootSync2].Add(podRoleFilePath, rootPodRole())
 	nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role")
 
-	nt.T.Logf("The admission webhook should deny the update request in Root %s", rootSync2)
-	nt.WaitForRootSyncSyncError(rootSync2, applier.ApplierErrorCode, "denied the request")
-	nt.T.Logf("Root %s should also get surfaced with the conflict error", configsync.RootSyncName)
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository")
+	// When the webhook is enabled, it will block adoption of managed objects.
+	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook enabled")
+	waitInParallel(
+		// Reconciler conflict, detected by the second reconciler & reported to the first reconciler's RootSync
+		func() {
+			nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+				[]nomostest.Predicate{
+					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				})
+		},
+		// Reconciler conflict, detected by the second reconciler
+		func() {
+			nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+				[]nomostest.Predicate{
+					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				})
+		},
+		// Webhook rejection detected by the second reconciler's applier
+		// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
+		func() {
+			nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+				[]nomostest.Predicate{
+					nomostest.RootSyncHasSyncError(nt, applier.ApplierErrorCode, "denied the request"),
+				})
+		},
+	)
+
 	nt.T.Logf("The Role resource version should not be changed")
 	if err := nt.Validate("pods", testNs, &rbacv1.Role{},
 		nomostest.ResourceVersionEquals(nt, roleResourceVersion)); err != nil {
@@ -434,9 +458,25 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Logf("Both of the two RootSyncs still report problems because the remediators detect the conflicts")
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.ManagementConflictErrorCode, "declared in another repository")
-	nt.WaitForRootSyncSyncError(rootSync2, status.ManagementConflictErrorCode, "declared in another repository")
+
+	// When the webhook is disabled, both RootSyncs will repeatedly try to adopt the object.
+	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook disabled")
+	waitInParallel(
+		// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
+		func() {
+			nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+				[]nomostest.Predicate{
+					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				})
+		},
+		// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
+		func() {
+			nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+				[]nomostest.Predicate{
+					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				})
+		},
+	)
 
 	nt.T.Logf("Remove the declaration from one Root repo %s", configsync.RootSyncName)
 	nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath)
@@ -678,4 +718,21 @@ func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
 		}
 		return nil
 	}
+}
+
+// waitInParallel executes multiple functions in parallel until they all return,
+// which allows waiting for multiple conditions simultaniously, without
+// requiring them all to be true at the same time.
+// This improves testing speed and consistency.
+func waitInParallel(fns ...func()) {
+	var wg sync.WaitGroup
+	for i := range fns {
+		fn := fns[i]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fn()
+		}()
+	}
+	wg.Wait()
 }

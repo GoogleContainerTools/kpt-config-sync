@@ -57,28 +57,30 @@ func NewRootRunner(clusterName, syncName, reconcilerName string, format filesyst
 		return nil, err
 	}
 
-	opts := opts{
-		clusterName:        clusterName,
-		syncName:           syncName,
-		reconcilerName:     reconcilerName,
-		client:             c,
-		pollingPeriod:      pollingPeriod,
-		resyncPeriod:       resyncPeriod,
-		retryPeriod:        retryPeriod,
-		statusUpdatePeriod: statusUpdatePeriod,
-		files:              files{FileSource: fs},
-		parser:             filesystem.NewParser(fileReader),
-		updater: updater{
-			scope:      declared.RootReconciler,
-			resources:  resources,
-			applier:    app,
-			remediator: rem,
+	return &root{
+		opts: opts{
+			clusterName:        clusterName,
+			syncName:           syncName,
+			reconcilerName:     reconcilerName,
+			client:             c,
+			pollingPeriod:      pollingPeriod,
+			resyncPeriod:       resyncPeriod,
+			retryPeriod:        retryPeriod,
+			statusUpdatePeriod: statusUpdatePeriod,
+			files:              files{FileSource: fs},
+			parser:             filesystem.NewParser(fileReader),
+			updater: updater{
+				scope:      declared.RootReconciler,
+				resources:  resources,
+				applier:    app,
+				remediator: rem,
+			},
+			discoveryInterface: dc,
+			converter:          converter,
+			mux:                &sync.Mutex{},
 		},
-		discoveryInterface: dc,
-		converter:          converter,
-		mux:                &sync.Mutex{},
-	}
-	return &root{opts: opts, sourceFormat: format}, nil
+		sourceFormat: format,
+	}, nil
 }
 
 type root struct {
@@ -173,7 +175,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 
 	currentRS := rs.DeepCopy()
 
-	setSourceStatus(&rs.Status.Source, p, newStatus, denominator)
+	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -212,7 +214,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 	return nil
 }
 
-func setSourceStatus(source *v1beta1.SourceStatus, p Parser, newStatus sourceStatus, denominator int) {
+func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sourceStatus, denominator int) {
 	cse := status.ToCSE(newStatus.errs)
 	source.Commit = newStatus.commit
 	switch p.options().SourceType {
@@ -274,7 +276,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 
 	currentRS := rs.DeepCopy()
 
-	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
+	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -313,7 +315,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 	return nil
 }
 
-func setRenderingStatus(rendering *v1beta1.RenderingStatus, p Parser, newStatus renderingStatus, denominator int) {
+func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus renderingStatus, denominator int) {
 	cse := status.ToCSE(newStatus.errs)
 	rendering.Commit = newStatus.commit
 	switch p.options().SourceType {
@@ -358,14 +360,7 @@ func setRenderingStatus(rendering *v1beta1.RenderingStatus, p Parser, newStatus 
 func (p *root) SetSyncStatus(ctx context.Context, errs status.MultiError) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	var allErrs status.MultiError
-	remediatorErrs := p.remediator.ConflictErrors()
-	for _, e := range remediatorErrs {
-		allErrs = status.Append(allErrs, e)
-	}
-	// Add conflicting errors before other apply errors.
-	allErrs = status.Append(allErrs, errs)
-	return p.setSyncStatusWithRetries(ctx, allErrs, defaultDenominator)
+	return p.setSyncStatusWithRetries(ctx, errs, defaultDenominator)
 }
 
 func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiError, denominator int) error {
@@ -383,7 +378,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 	// syncing indicates whether the applier is syncing.
 	syncing := p.applier.Syncing()
 
-	setSyncStatus(&rs.Status.Status, status.ToCSE(errs), denominator)
+	setSyncStatusFields(&rs.Status.Status, status.ToCSE(errs), denominator)
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
 	if syncing {
@@ -428,7 +423,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 	return nil
 }
 
-func setSyncStatus(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncError, denominator int) {
+func setSyncStatusFields(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncError, denominator int) {
 	syncStatus.Sync.Commit = syncStatus.Source.Commit
 	syncStatus.Sync.Git = syncStatus.Source.Git
 	syncStatus.Sync.Oci = syncStatus.Source.Oci
@@ -528,14 +523,11 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 	return objs, errs
 }
 
-// ApplierErrors implements the Parser interface
-func (p *root) ApplierErrors() status.MultiError {
-	return p.applier.Errors()
-}
-
-// RemediatorConflictErrors implements the Parser interface
-func (p *root) RemediatorConflictErrors() []status.ManagementConflictError {
-	return p.remediator.ConflictErrors()
+// SyncErrors returns all the sync errors, including remediator errors,
+// validation errors, applier errors, and watch update errors.
+// SyncErrors implements the Parser interface
+func (p *root) SyncErrors() status.MultiError {
+	return p.updater.Errors()
 }
 
 // K8sClient implements the Parser interface
@@ -578,7 +570,7 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 
 	// Add the remeditor conflict errors before other sync errors for more visibility.
 	errs = append(errs, rs.Status.Sync.Errors...)
-	setSyncStatus(&rs.Status.Status, errs, denominator)
+	setSyncStatusFields(&rs.Status.Status, errs, denominator)
 
 	if err := client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.

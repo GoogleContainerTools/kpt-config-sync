@@ -162,7 +162,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 
 	currentRS := rs.DeepCopy()
 
-	setSourceStatus(&rs.Status.Source, p, newStatus, denominator)
+	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -224,7 +224,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 
 	currentRS := rs.DeepCopy()
 
-	setRenderingStatus(&rs.Status.Rendering, p, newStatus, denominator)
+	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -287,7 +287,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	// syncing indicates whether the applier is syncing.
 	syncing := p.applier.Syncing()
 
-	setSyncStatus(&rs.Status.Status, status.ToCSE(errs), denominator)
+	setSyncStatusFields(&rs.Status.Status, status.ToCSE(errs), denominator)
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
 	if syncing {
@@ -332,14 +332,11 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 	return nil
 }
 
-// ApplierErrors implements the Parser interface
-func (p *namespace) ApplierErrors() status.MultiError {
-	return p.applier.Errors()
-}
-
-// RemediatorConflictErrors implements the Parser interface
-func (p *namespace) RemediatorConflictErrors() []status.ManagementConflictError {
-	return p.remediator.ConflictErrors()
+// SyncErrors returns all the sync errors, including remediator errors,
+// validation errors, applier errors, and watch update errors.
+// SyncErrors implements the Parser interface
+func (p *namespace) SyncErrors() status.MultiError {
+	return p.updater.Errors()
 }
 
 // K8sClient implements the Parser interface

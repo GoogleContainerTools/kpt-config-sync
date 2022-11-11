@@ -17,12 +17,9 @@ package e2e
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -31,8 +28,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -720,14 +717,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].RemoveSafetyNamespace()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare all Namespaces")
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.Validate("root-sync", "config-management-system",
-			&v1beta1.RootSync{}, rootSyncHasErrors(status.EmptySourceErrorCode))
-	})
-	if err != nil {
-		// Fail since we needn't continue the test if this action wasn't blocked.
-		nt.T.Fatal(err)
-	}
+	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]nomostest.Predicate{
+			nomostest.RootSyncHasSyncError(nt, status.EmptySourceErrorCode, ""),
+		})
 
 	// Wait 10 seconds before checking the namespaces.
 	// Checking the namespaces immediately may not catch the case where
@@ -841,32 +834,5 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	})
 	if err != nil {
 		nt.T.Error(err)
-	}
-}
-
-func rootSyncHasErrors(wantCodes ...string) nomostest.Predicate {
-	sort.Strings(wantCodes)
-
-	var wantErrs []v1beta1.ConfigSyncError
-	for _, code := range wantCodes {
-		wantErrs = append(wantErrs, v1beta1.ConfigSyncError{Code: code})
-	}
-
-	return func(o client.Object) error {
-		rs, isRootSync := o.(*v1beta1.RootSync)
-		if !isRootSync {
-			return nomostest.WrongTypeErr(o, &v1beta1.RootSync{})
-		}
-
-		gotErrs := rs.Status.Sync.Errors
-		sort.Slice(gotErrs, func(i, j int) bool {
-			return gotErrs[i].Code < gotErrs[j].Code
-		})
-
-		if diff := cmp.Diff(wantErrs, gotErrs,
-			cmpopts.IgnoreFields(v1beta1.ConfigSyncError{}, "ErrorMessage")); diff != "" {
-			return errors.New(diff)
-		}
-		return nil
 	}
 }

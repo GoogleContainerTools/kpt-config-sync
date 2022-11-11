@@ -525,7 +525,9 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 // Errors implements Interface.
 // Errors returns the errors encountered during apply.
 func (a *Applier) Errors() status.MultiError {
-	return a.errs
+	// TODO: Make read/write of a.errs thread-safe
+	// Return a copy
+	return status.Append(nil, a.errs)
 }
 
 // Syncing implements Interface.

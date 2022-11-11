@@ -82,10 +82,9 @@ type Parser interface {
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
 	SetSyncStatus(ctx context.Context, errs status.MultiError) error
 	options() *opts
-	// ApplierErrors returns the errors surfaced by the applier.
-	ApplierErrors() status.MultiError
-	// RemediatorConflictErrors returns the conflict errors detected by the remediator.
-	RemediatorConflictErrors() []status.ManagementConflictError
+	// SyncErrors returns all the sync errors, including remediator errors,
+	// validation errors, applier errors, and watch update errors.
+	SyncErrors() status.MultiError
 	// K8sClient returns the Kubernetes client that talks to the API server.
 	K8sClient() client.Client
 }

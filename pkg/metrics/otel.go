@@ -54,13 +54,32 @@ exporters:
   googlecloud/kubernetes:
     metric:
       prefix: "kubernetes.io/internal/addons/config_sync/"
-      skip_create_descriptor: false
+      # skip_create_descriptor: Metrics start with 'kubernetes.io/' have already
+      # got descriptors defined internally. Skip sending dupeicated metric 
+      # descriptors here to prevent errors or conflicts.
+      skip_create_descriptor: true
+      # instrumentation_library_labels: Otel Collector by default attaches 
+      # 'instrumentation_version' and 'instrumentation_source' labels that are
+      # not specified in our Cloud Monarch definitions, thus skipping them here
+      instrumentation_library_labels: false
+      # create_service_timeseries: This is a recommended configuration for 
+      # 'service metrics' starts with 'kubernetes.io/' prefix. It uses 
+      # CreateTimeSeries API and has its own quotas, so that custom metric write
+      # will not break this ingestion pipeline
+      create_service_timeseries: true
+      service_resource_labels: false
     retry_on_failure:
       enabled: false
     sending_queue:
       enabled: false
 processors:
   batch:
+  # resourcedetection: This processor is needed to correctly mirror resource
+  # labels from OpenCensus to OpenTelemetry. We also want to keep this same
+  # processor in Otel Agent configuration as the resource labels are added from
+  # there
+  resourcedetection:
+    detectors: [env, gcp]
   filter/cloudmonitoring:
     metrics:
       include:
@@ -106,6 +125,11 @@ processors:
         match_type: strict
         metric_names:
           - rg_reconcile_duration_seconds
+          # TODO remove kcc_resource_count_total rule once Resource Group Controller
+          # 1.0.9 is updated into Config Sync. This metric was unintentionally
+          # included by the 'regex include' filter above and is not included in
+          # our Monarch metric definitions
+          - kcc_resource_count_total
   metricstransform/kubernetes:
     transforms:
       - include: declared_resources
@@ -151,7 +175,7 @@ service:
   pipelines:
     metrics/cloudmonitoring:
       receivers: [opencensus]
-      processors: [batch, filter/cloudmonitoring]
+      processors: [batch, filter/cloudmonitoring, resourcedetection]
       exporters: [googlecloud]
     metrics/prometheus:
       receivers: [opencensus]
@@ -159,6 +183,6 @@ service:
       exporters: [prometheus]
     metrics/kubernetes:
       receivers: [opencensus]
-      processors: [batch, filter/kubernetes, metricstransform/kubernetes]
+      processors: [batch, filter/kubernetes, metricstransform/kubernetes, resourcedetection]
       exporters: [googlecloud/kubernetes]`
 )

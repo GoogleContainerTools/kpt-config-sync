@@ -17,6 +17,7 @@ package ntopts
 import (
 	"time"
 
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -47,6 +48,9 @@ type MultiRepo struct {
 
 	// SkipNonLocalGitProvider will skip the test if run with a GitProvider type other than local.
 	SkipNonLocalGitProvider bool
+
+	// RepoSyncPermissions will grant a list of PolicyRules to NS reconcilers
+	RepoSyncPermissions []rbacv1.PolicyRule
 }
 
 // NamespaceRepo tells the test case that a Namespace Repo should be configured
@@ -102,5 +106,12 @@ func WithReconcileTimeout(timeout time.Duration) func(opt *New) {
 	return func(opt *New) {
 		timeoutCopy := timeout
 		opt.ReconcileTimeout = &timeoutCopy
+	}
+}
+
+// RepoSyncPermissions specifies PolicyRule(s) to grant NS reconcilers
+func RepoSyncPermissions(policy ...rbacv1.PolicyRule) Opt {
+	return func(opt *New) {
+		opt.RepoSyncPermissions = append(opt.RepoSyncPermissions, policy...)
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -74,6 +75,7 @@ func TestComposition(t *testing.T) {
 		nomostesting.MultiRepos,
 		ntopts.Unstructured,
 		ntopts.WithDelegatedControl,
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.CoreAdmin()), // NS reconciler manages RepoSyncs and ConfigMaps
 		ntopts.RootRepo(configsync.RootSyncName))
 
 	lvl0NN := nomostest.RootSyncNN(configsync.RootSyncName)

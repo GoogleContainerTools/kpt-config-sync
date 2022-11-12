@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -124,6 +125,7 @@ func TestPublicHelm(t *testing.T) {
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
+		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	nt.T.Log("Update RepoSync to sync from a public Helm Chart")
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)

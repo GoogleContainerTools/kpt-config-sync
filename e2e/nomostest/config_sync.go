@@ -64,7 +64,7 @@ const (
 	multiConfigMapsName = "multi-repo-configmaps.yaml"
 
 	// clusterRoleName imitates a user-created (Cluster)Role for NS reconcilers.
-	clusterRoleName = "c2-e2e"
+	clusterRoleName = "cs-e2e"
 )
 
 var (
@@ -457,28 +457,6 @@ func waitForReconciler(nt *NT, name string) error {
 	return nil
 }
 
-// RepoSyncClusterRole returns clusterrole with permissions to manage resources in the cluster.
-func RepoSyncClusterRole() *rbacv1.ClusterRole {
-	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
-	// TODO: make this more granular by test options
-	cr.Rules = []rbacv1.PolicyRule{
-		{
-			APIGroups: []string{rbacv1.APIGroupAll},
-			Resources: []string{rbacv1.ResourceAll},
-			Verbs:     []string{rbacv1.VerbAll},
-		},
-	}
-	if isPSPCluster() {
-		cr.Rules = append(cr.Rules, rbacv1.PolicyRule{
-			APIGroups:     []string{"policy"},
-			Resources:     []string{"podsecuritypolicies"},
-			ResourceNames: []string{"acm-psp"},
-			Verbs:         []string{"use"},
-		})
-	}
-	return cr
-}
-
 // RepoSyncRoleBinding returns rolebinding that grants service account
 // permission to manage resources in the namespace.
 func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
@@ -629,7 +607,7 @@ func setPollingPeriods(t testing.NTB, obj client.Object) {
 
 func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
-	if err := nt.Create(RepoSyncClusterRole()); err != nil {
+	if err := nt.Create(nt.RepoSyncClusterRole()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -900,7 +878,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		return
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", RepoSyncClusterRole())
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nt.RepoSyncClusterRole())
 
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
@@ -1176,7 +1154,7 @@ func deleteNamespaceRepos(nt *NT) {
 		}
 	}
 
-	rsClusterRole := RepoSyncClusterRole()
+	rsClusterRole := nt.RepoSyncClusterRole()
 	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	}

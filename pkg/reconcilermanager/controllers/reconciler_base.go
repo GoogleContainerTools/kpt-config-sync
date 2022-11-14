@@ -35,7 +35,6 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/util"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -352,28 +351,24 @@ func mutateContainerResource(ctx context.Context, c *corev1.Container, override 
 					c.Resources.Requests = corev1.ResourceList{}
 				}
 				c.Resources.Requests[corev1.ResourceCPU] = override.CPURequest
-				metrics.RecordResourceOverrideCount(ctx, reconcilerType, c.Name, "cpu")
 			}
 			if !override.CPULimit.IsZero() {
 				if c.Resources.Limits == nil {
 					c.Resources.Limits = corev1.ResourceList{}
 				}
 				c.Resources.Limits[corev1.ResourceCPU] = override.CPULimit
-				metrics.RecordResourceOverrideCount(ctx, reconcilerType, c.Name, "cpu")
 			}
 			if !override.MemoryRequest.IsZero() {
 				if c.Resources.Requests == nil {
 					c.Resources.Requests = corev1.ResourceList{}
 				}
 				c.Resources.Requests[corev1.ResourceMemory] = override.MemoryRequest
-				metrics.RecordResourceOverrideCount(ctx, reconcilerType, c.Name, "memory")
 			}
 			if !override.MemoryLimit.IsZero() {
 				if c.Resources.Limits == nil {
 					c.Resources.Limits = corev1.ResourceList{}
 				}
 				c.Resources.Limits[corev1.ResourceMemory] = override.MemoryLimit
-				metrics.RecordResourceOverrideCount(ctx, reconcilerType, c.Name, "memory")
 			}
 		}
 	}

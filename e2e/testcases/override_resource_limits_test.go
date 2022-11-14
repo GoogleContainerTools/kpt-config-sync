@@ -23,7 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -31,9 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/yaml"
 )
@@ -114,13 +111,6 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
@@ -257,32 +247,6 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCount(string(controllers.RootReconcilerType), "git-sync", "cpu", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
-			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
-			{Key: ocmetrics.KeyContainer.Name(), Value: "reconciler"},
-			{Key: ocmetrics.KeyResourceType.Name(), Value: "memory"},
-		}); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "cpu", 2); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "memory", 2); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "cpu", 2); err != nil {
-			return err
-		}
-		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
 
@@ -342,27 +306,6 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
-			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
-		}); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "cpu", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "memory", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "cpu", 1); err != nil {
-			return err
-		}
-		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 1)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from repoSyncFrontend
 	repoSyncFrontend.Spec.Override = &v1alpha1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
@@ -375,13 +318,6 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 }
 
@@ -420,13 +356,6 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -563,32 +492,6 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCount(string(controllers.RootReconcilerType), "git-sync", "cpu", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
-			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
-			{Key: ocmetrics.KeyContainer.Name(), Value: "reconciler"},
-			{Key: ocmetrics.KeyResourceType.Name(), Value: "memory"},
-		}); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "cpu", 2); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "memory", 2); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "cpu", 2); err != nil {
-			return err
-		}
-		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
 
@@ -648,27 +551,6 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		if err := nt.ValidateResourceOverrideCountMissingTags([]metrics.Tag{
-			{Key: ocmetrics.KeyReconcilerType.Name(), Value: string(controllers.RootReconcilerType)},
-		}); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "cpu", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "reconciler", "memory", 1); err != nil {
-			return err
-		}
-		if err := nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "cpu", 1); err != nil {
-			return err
-		}
-		return nt.ValidateResourceOverrideCount(string(controllers.NamespaceReconcilerType), "git-sync", "memory", 1)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from repoSyncFrontend
 	repoSyncFrontend.Spec.Override = &v1beta1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
@@ -681,12 +563,5 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.ResourceOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 }

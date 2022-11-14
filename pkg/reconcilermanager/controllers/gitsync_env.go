@@ -22,7 +22,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/metrics"
 )
 
 const (
@@ -145,7 +144,6 @@ func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
 			Name:  "GIT_SSL_NO_VERIFY",
 			Value: "true",
 		})
-		metrics.RecordNoSSLVerifyCount(ctx)
 	}
 	if useCACert(opts.caCertSecretRef) {
 		result = append(result, corev1.EnvVar{
@@ -160,7 +158,6 @@ func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
 			Name:  "GIT_SYNC_DEPTH",
 			Value: strconv.FormatInt(*opts.depth, 10),
 		})
-		metrics.RecordGitSyncDepthOverrideCount(ctx)
 	} else {
 		// git-sync would do a shallow clone.
 		//

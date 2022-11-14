@@ -296,13 +296,6 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 		klog.Infof("New rendering errors for RootSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if currentRS.Status.Rendering.Commit != newStatus.commit {
-		if newStatus.message == RenderingSkipped {
-			metrics.RecordSkipRenderingCount(ctx)
-		} else {
-			metrics.RecordRenderingCount(ctx)
-		}
-	}
 
 	if klog.V(5).Enabled() {
 		klog.Infof("Updating rendering status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",

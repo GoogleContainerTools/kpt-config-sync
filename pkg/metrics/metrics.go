@@ -103,34 +103,4 @@ var (
 		"internal_errors",
 		"The number of internal errors triggered by Config Sync",
 		stats.UnitDimensionless)
-
-	// RenderingCount metrics measures the number of renderings are performed.
-	RenderingCount = stats.Int64(
-		"rendering_count",
-		"The number of renderings that are performed",
-		stats.UnitDimensionless)
-
-	// SkipRenderingCount metrics measures the number of renderings are skipped.
-	SkipRenderingCount = stats.Int64(
-		"skip_rendering_count",
-		"The number of renderings that are skipped",
-		stats.UnitDimensionless)
-
-	// ResourceOverrideCount metric measures the number of RootSync/RepoSync objects including the `spec.override.resources` field.
-	ResourceOverrideCount = stats.Int64(
-		"resource_override_count",
-		"The number of RootSync/RepoSync objects including the `spec.override.resources` field",
-		stats.UnitDimensionless)
-
-	// GitSyncDepthOverrideCount metric measures the number of RootSync/RepoSync objects including the `spec.override.gitSyncDepth` field.
-	GitSyncDepthOverrideCount = stats.Int64(
-		"git_sync_depth_override_count",
-		"The number of RootSync/RepoSync objects including the `spec.override.gitSyncDepth` field",
-		stats.UnitDimensionless)
-
-	// NoSSLVerifyCount metric measures the number of RootSync/RepoSync objects whose `spec.git.noSSLVerify` field is set to `true`.
-	NoSSLVerifyCount = stats.Int64(
-		"no_ssl_verify_count",
-		"The number of RootSync/RepoSync objects whose `spec.git.noSSLVerify` field is set to `true`",
-		stats.UnitDimensionless)
 )

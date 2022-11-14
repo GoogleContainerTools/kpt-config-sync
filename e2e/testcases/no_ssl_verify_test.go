@@ -25,7 +25,6 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -37,15 +36,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 
 	key := "GIT_SSL_NO_VERIFY"
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// verify the deployment doesn't have the key yet
-	_, err = nomostest.Retry(30*time.Second, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	})
 	if err != nil {
@@ -85,13 +77,6 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateNoSSLVerifyCount(2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Set noSSLVerify to false for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": false}}}`)
 	_, err = nomostest.Retry(30*time.Second, func() error {
@@ -113,13 +98,6 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
 }
 
 func TestNoSSLVerifyV1Beta1(t *testing.T) {
@@ -129,15 +107,8 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 
 	key := "GIT_SSL_NO_VERIFY"
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// verify the deployment doesn't have the key yet
-	_, err = nomostest.Retry(30*time.Second, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	})
 	if err != nil {
@@ -177,13 +148,6 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateNoSSLVerifyCount(2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Set noSSLVerify to false for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": false}}}`)
 	_, err = nomostest.Retry(30*time.Second, func() error {
@@ -204,12 +168,5 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	})
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.NoSSLVerifyCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 }

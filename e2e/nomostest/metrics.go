@@ -22,7 +22,6 @@ import (
 
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/metrics"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
@@ -219,27 +218,6 @@ func (nt *NT) ValidateErrorMetricsNotFound() error {
 		}
 	}
 	return nil
-}
-
-// ValidateResourceOverrideCount validates that the `resource_override_count` metric exists
-// for the correct reconciler.
-func (nt *NT) ValidateResourceOverrideCount(reconcilerType, containerName, resourceType string, count int) error {
-	return nt.ReconcilerMetrics.ValidateResourceOverrideCount(reconcilerType, containerName, resourceType, count)
-}
-
-// ValidateResourceOverrideCountMissingTags checks that the `resource_override_count` metric misses the specific the tags.
-func (nt *NT) ValidateResourceOverrideCountMissingTags(tags []metrics.Tag) error {
-	return nt.ReconcilerMetrics.ValidateResourceOverrideCountMissingTags(tags)
-}
-
-// ValidateGitSyncDepthOverrideCount validates the `git_sync_depth_override_count` metric.
-func (nt *NT) ValidateGitSyncDepthOverrideCount(count int) error {
-	return nt.ReconcilerMetrics.ValidateGitSyncDepthOverrideCount(count)
-}
-
-// ValidateNoSSLVerifyCount checks that the `no_ssl_verify_count` metric has the correct value.
-func (nt *NT) ValidateNoSSLVerifyCount(count int) error {
-	return nt.ReconcilerMetrics.ValidateNoSSLVerifyCount(count)
 }
 
 // ValidateMetricNotFound validates that a metric does not exist.

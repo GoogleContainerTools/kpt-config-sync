@@ -476,7 +476,9 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 // 	return nil
 // }
 
-func validateError(errs []v1beta1.ConfigSyncError, code string, message string) error {
+// validateError returns true if the specified errors contain an error
+// with the specified error code and (partial) message.
+func validateError(errs []v1beta1.ConfigSyncError, code, message string) error {
 	if len(errs) == 0 {
 		return errors.Errorf("no errors present")
 	}

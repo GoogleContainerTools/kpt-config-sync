@@ -136,8 +136,8 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(testPodsQuota)); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	nomostest.WaitForObject(nt, kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace,
-		resourceQuotaHasHardPods(nt, testPodsQuota))
+	nomostest.WatchForObject(nt, kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace,
+		[]nomostest.Predicate{resourceQuotaHasHardPods(nt, testPodsQuota)})
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.WaitForRepoSyncs()
@@ -149,8 +149,8 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(prodPodsQuota)); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	nomostest.WaitForObject(nt, kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace,
-		resourceQuotaHasHardPods(nt, prodPodsQuota))
+	nomostest.WatchForObject(nt, kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace,
+		[]nomostest.Predicate{resourceQuotaHasHardPods(nt, prodPodsQuota)})
 
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateErrorMetricsNotFound()

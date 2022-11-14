@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -162,6 +163,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		caCertPath:              sharedNt.caCertPath,
 		gitRepoPort:             sharedNt.gitRepoPort,
+		inClusterRegistry:       sharedNt.inClusterRegistry,
 		scheme:                  sharedNt.scheme,
 		otelCollectorPort:       sharedNt.otelCollectorPort,
 		otelCollectorPodName:    sharedNt.otelCollectorPodName,
@@ -248,6 +250,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
+		useInClusterRegistry:    opts.UseInClusterRegistry,
 		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,
@@ -271,7 +274,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.DefaultWaitTimeout = 10 * time.Minute
 		nt.DefaultMetricsTimeout = 3 * time.Minute
 	} else {
-		nt.DefaultWaitTimeout = 6 * time.Minute
+		nt.DefaultWaitTimeout = 2 * time.Minute
 		nt.DefaultMetricsTimeout = 1 * time.Minute
 	}
 
@@ -305,8 +308,15 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.T.Fatal(err)
 	}
 
+	if nt.useInClusterRegistry {
+		nt.inClusterRegistry = RegistryServer{nt: nt}
+		nt.inClusterRegistry.Install()
+		nt.inClusterRegistry.WaitForReady()
+		nt.inClusterRegistry.PortForward()
+	}
+
 	if nt.GitProvider.Type() == e2e.Local {
-		if err := nt.Create(gitNamespace()); err != nil {
+		if err := nt.Create(gitNamespace()); err != nil && !apierrors.IsAlreadyExists(err) {
 			nt.T.Fatal(err)
 		}
 		// Pods don't always restart if the secrets don't exist, so we have to

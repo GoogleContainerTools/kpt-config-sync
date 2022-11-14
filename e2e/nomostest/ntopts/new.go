@@ -60,6 +60,9 @@ type New struct {
 	// TestFeature is the feature that the test verifies
 	TestFeature testing.Feature
 
+	// UseInClusterRegistry
+	UseInClusterRegistry bool
+
 	Nomos
 	MultiRepo
 	TestType
@@ -113,4 +116,9 @@ func WithRestConfig(restConfig *rest.Config) Opt {
 // SkipConfigSyncInstall skip installation of Config Sync components in cluster
 func SkipConfigSyncInstall(opt *New) {
 	opt.SkipConfigSyncInstall = true
+}
+
+// UseInClusterRegistry create an in-cluster registry for testing
+func UseInClusterRegistry(opt *New) {
+	opt.UseInClusterRegistry = true
 }

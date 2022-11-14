@@ -116,6 +116,9 @@ type NT struct {
 	// gitRepoPort is the local port that forwards to the git repo deployment.
 	gitRepoPort int
 
+	// registryPort is the local port that forwards to the registry deployment.
+	registryPort int
+
 	// kubeconfigPath is the path to the kubeconfig file for the kind cluster
 	kubeconfigPath string
 
@@ -144,6 +147,12 @@ type NT struct {
 
 	// Control indicates how the test case was setup.
 	Control ntopts.RepoControl
+
+	// useInClusterRegistry specifies whether to create an in-cluster registry
+	useInClusterRegistry bool
+
+	// inClusterRegistry is the in-cluster registry
+	inClusterRegistry RegistryServer
 }
 
 // CSNamespaces is the namespaces of the Config Sync components.

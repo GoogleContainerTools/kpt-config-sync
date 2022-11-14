@@ -47,6 +47,76 @@ func testGitServerSelector() map[string]string {
 	return map[string]string{"app": testGitServer}
 }
 
+type GitServer struct {
+	nt                *NT
+	forwardedPort     int
+	caCertPath        string
+	gitPrivateKeyPath string
+}
+
+// Install installs an in-cluster git server for testing
+func (s *GitServer) Install() {
+	nt := s.nt
+	nt.T.Helper()
+
+	if err := nt.Create(gitNamespace()); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Pods don't always restart if the secrets don't exist, so we have to
+	// create the Namespaces + Secrets before anything else.
+	s.gitPrivateKeyPath = generateSSHKeys(nt)
+
+	s.caCertPath = generateSSLKeys(nt)
+
+	objs := gitServer()
+
+	for _, o := range objs {
+		err := nt.Create(o)
+		if err != nil {
+			nt.T.Fatalf("installing %v %s: %v", o.GetObjectKind().GroupVersionKind(),
+				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, err)
+		}
+	}
+
+}
+
+// WaitForReady waits for the git-server deployment to be ready.
+// The git-server almost always comes up before 40 seconds, but we give it a
+// full minute in the callback to be safe.
+func (s *GitServer) WaitForReady() {
+	nt := s.nt
+	nt.T.Helper()
+	// In CI, 2% of the time this takes longer than 60 seconds, so 120 seconds
+	// seems like a reasonable amount of time to wait before erroring out.
+	took, err := Retry(nt.DefaultWaitTimeout, func() error {
+		return nt.Validate(testGitServer, testGitNamespace,
+			&appsv1.Deployment{}, isAvailableDeployment)
+	})
+	if err != nil {
+		nt.T.Fatalf("waiting for git-server deployment: %s", err)
+	}
+	nt.T.Logf("took %v to wait for git-server to come up", took)
+}
+
+func (s *GitServer) PortForward() int {
+	nt := s.nt
+	nt.T.Helper()
+	if s.forwardedPort > 0 {
+		return s.forwardedPort
+	}
+
+	podName := getPodName(nt,
+		client.InNamespace(testGitNamespace),
+		client.MatchingLabels(testGitServerSelector()),
+	)
+	port, err := nt.ForwardToFreePort(testGitNamespace, podName, ":22")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	s.forwardedPort = port
+	return s.forwardedPort
+}
+
 // installGitServer installs the git-server Pod, and returns a callback that
 // waits for the Pod to become available.
 //
@@ -276,24 +346,10 @@ func portForwardGitServer(nt *NT, repos ...types.NamespacedName) int {
 
 // InitGitRepos initializes the repositories in the testing git-server and returns the pod names.
 func InitGitRepos(nt *NT, repos ...types.NamespacedName) string {
-	// This logic is not robust to the git-server pod being killed/restarted,
-	// but this is a rare occurrence.
-	// Consider if it is worth getting the Pod name again if port forwarding fails.
-	podList := &corev1.PodList{}
-	err := nt.List(podList, client.InNamespace(testGitNamespace))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if nPods := len(podList.Items); nPods != 1 {
-		podsJSON, err := json.MarshalIndent(podList, "", "  ")
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		nt.T.Log(string(podsJSON))
-		nt.T.Fatalf("got len(podList.Items) = %d, want 1", nPods)
-	}
-
-	podName := podList.Items[0].Name
+	podName := getPodName(nt,
+		client.InNamespace(testGitNamespace),
+		client.MatchingLabels(testGitServerSelector()),
+	)
 
 	for _, repo := range repos {
 		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "--",

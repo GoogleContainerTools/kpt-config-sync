@@ -66,6 +66,8 @@ const NamespaceRepo RepoType = "namespace"
 // We shell out for git commands as the git libraries are difficult to configure
 // ssh for, and git-server requires ssh authentication.
 type Repository struct {
+	// helmArtifactDir is a local directory where helm artifacts are stored before pushing
+	helmArtifactDir string
 	// Root is the location on the machine running the test at which the local
 	// repository is stored.
 	Root string
@@ -99,6 +101,10 @@ type Repository struct {
 	// It is used to set the url for the remote origin using `git remote add origin <REMOTE_URL>.
 	RemoteURL string
 
+	// HelmRegistry is the port forwarded URL of the registry.
+	// It is used for pushing to the registry.
+	HelmRegistry string
+
 	// Scheme used for encoding and decoding objects.
 	Scheme *runtime.Scheme
 }
@@ -114,8 +120,13 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 	safetyName := fmt.Sprintf("safety-%s", strings.ReplaceAll(namespacedName, "/", "-"))
 
 	localDir := filepath.Join(nt.TmpDir, "repos", namespacedName)
+	helmArtifactDir := filepath.Join(nt.TmpDir, "helm", namespacedName)
+	if err := os.MkdirAll(helmArtifactDir, fileMode); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	g := &Repository{
+		helmArtifactDir:       helmArtifactDir,
 		Root:                  localDir,
 		Format:                sourceFormat,
 		T:                     nt.T,
@@ -135,6 +146,9 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 	}
 	g.RemoteRepoName = repoName
 	g.RemoteURL = nt.GitProvider.RemoteURL(nt.gitRepoPort, repoName)
+	if nt.useInClusterRegistry {
+		g.HelmRegistry = fmt.Sprintf("oci://localhost:%d/helm/%s", nt.inClusterRegistry.PortForward(), namespacedName)
+	}
 
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -467,10 +481,50 @@ func (g *Repository) CommitAndPush(msg string) {
 func (g *Repository) CommitAndPushBranch(msg, branch string) {
 	g.T.Helper()
 
-	g.Git("commit", "-m", msg)
+	g.Commit(msg)
+	g.GitPush(branch)
+}
 
-	g.T.Logf("[repo %s] committing %q (%s)", path.Base(g.Root), msg, g.Hash())
+// Commit commits any changes to the git branch.
+func (g *Repository) Commit(msg string) {
+	g.T.Helper()
+	g.Git("commit", "-m", msg)
+	g.log(fmt.Sprintf("commit %s", msg))
+}
+
+// GitPush pushes the current ref to the git server
+func (g *Repository) GitPush(branch string) {
+	g.T.Helper()
 	g.Git("push", "-f", "-u", remoteOrigin, branch)
+	g.log("push to git")
+}
+
+// HelmPush creates a helm package from the current repo state and pushes it
+// to the in-cluster registry
+func (g *Repository) HelmPush(subPath string) {
+	g.T.Helper()
+	artifactDir := filepath.Join(g.helmArtifactDir, subPath)
+	if err := os.MkdirAll(artifactDir, fileMode); err != nil {
+		g.T.Fatal(err)
+	}
+
+	tarFile := filepath.Join(artifactDir, fmt.Sprintf("%s.tgz", g.Hash()))
+	packageRoot := filepath.Join(g.Root, subPath)
+
+	g.log("push to helm")
+	// tar -czvf <tarfile> <repo>
+	g.T.Logf("tar -czvf %s %s", tarFile, packageRoot)
+	out, err := exec.Command("tar", "-czvf", tarFile, "-C", packageRoot, ".").CombinedOutput()
+	if err != nil {
+		g.T.Fatalf("tar error: %s\n%s", err, out)
+	}
+	tag := g.HelmRegistry
+	g.T.Logf("helm push %s %s", tarFile, tag)
+	// helm push <tarfile> <remote>
+	out, err = exec.Command("helm", "push", tarFile, tag).CombinedOutput()
+	if err != nil {
+		g.T.Fatalf("helm push error: %s\n%s", err, out)
+	}
 }
 
 // CreateBranch creates and checkouts a new branch at once.
@@ -536,4 +590,8 @@ func (g *Repository) AddSafetyClusterRole() {
 func (g *Repository) RemoveSafetyClusterRole() {
 	g.T.Helper()
 	g.Remove(g.SafetyClusterRolePath)
+}
+
+func (g *Repository) log(msg string) {
+	g.T.Logf("[repo %s] %s (%s)", path.Base(g.Root), msg, g.Hash())
 }

@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
@@ -208,16 +209,16 @@ func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit
 		}
 		for _, container := range dep.Spec.Template.Spec.Containers {
 			if containerName == container.Name {
-				if container.Resources.Requests[corev1.ResourceCPU] != cpuRequest {
+				if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceCPU], cpuRequest) {
 					return errors.Errorf("The CPU request of the %q container should be %v, got %v", container.Name, cpuRequest, container.Resources.Requests[corev1.ResourceCPU])
 				}
-				if container.Resources.Limits[corev1.ResourceCPU] != cpuLimit {
+				if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceCPU], cpuLimit) {
 					return errors.Errorf("The CPU limit of the %q container should be %v, got %v", container.Name, cpuLimit, container.Resources.Limits[corev1.ResourceCPU])
 				}
-				if container.Resources.Requests[corev1.ResourceMemory] != memoryRequest {
+				if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceMemory], memoryRequest) {
 					return errors.Errorf("The memory request of the %q container should be %v, got %v", container.Name, memoryRequest, container.Resources.Requests[corev1.ResourceMemory])
 				}
-				if container.Resources.Limits[corev1.ResourceMemory] != memoryLimit {
+				if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceMemory], memoryLimit) {
 					return errors.Errorf("The memory limit of the %q container should be %v, got %v", container.Name, memoryLimit, container.Resources.Limits[corev1.ResourceMemory])
 				}
 

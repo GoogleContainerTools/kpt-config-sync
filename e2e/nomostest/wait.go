@@ -31,10 +31,22 @@ import (
 // WaitOption is an optional parameter for Wait
 type WaitOption func(wait *waitSpec)
 
+// WaitFailureStrategy indicates how to handle validation failures
+type WaitFailureStrategy int
+
+const (
+	// WaitFailureStrategyLog calls Testing.Log when there's a validation failure
+	WaitFailureStrategyLog WaitFailureStrategy = iota // Log
+	// WaitFailureStrategyError calls Testing.Error when there's a validation failure
+	WaitFailureStrategyError // Error
+	// WaitFailureStrategyFatal calls Testing.Fatal when there's a validation failure
+	WaitFailureStrategyFatal // Fatal
+)
+
 type waitSpec struct {
 	timeout time.Duration
-	// failOnError is the flag to control whether to fail the test or not when errors occur.
-	failOnError bool
+	// failureStrategy specifies how to handle failure
+	failureStrategy WaitFailureStrategy
 }
 
 // WaitTimeout provides the timeout option to Wait.
@@ -44,10 +56,10 @@ func WaitTimeout(timeout time.Duration) WaitOption {
 	}
 }
 
-// WaitNoFail sets failOnError to false so the Wait function only logs the error but not fails the test.
-func WaitNoFail() WaitOption {
+// WaitStrategy configures how the Wait function handles failure.
+func WaitStrategy(strategy WaitFailureStrategy) WaitOption {
 	return func(wait *waitSpec) {
-		wait.failOnError = false
+		wait.failureStrategy = strategy
 	}
 }
 
@@ -57,8 +69,8 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 	t.Helper()
 
 	wait := waitSpec{
-		timeout:     timeout,
-		failOnError: true,
+		timeout:         timeout,
+		failureStrategy: WaitFailureStrategyFatal,
 	}
 	for _, opt := range opts {
 		opt(&wait)
@@ -68,37 +80,14 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 	took, err := Retry(wait.timeout, condition)
 	if err != nil {
 		t.Logf("failed after %v to wait for %s", took, opName)
-		if wait.failOnError {
+		switch wait.failureStrategy {
+		case WaitFailureStrategyFatal:
 			t.Fatal(err)
+		case WaitFailureStrategyError:
+			t.Error(err)
 		}
 	}
 	t.Logf("took %v to wait for %s", took, opName)
-}
-
-// WaitForObject waits for the specified object. If predicates are specified,
-// they are waited for, otherwise existance is enough.
-// Predicates must accept the object as Unstructured.
-func WaitForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, waitOptionsAndPredicates ...interface{}) {
-	nt.T.Helper()
-
-	var waitOpts []WaitOption
-	var predicates []Predicate
-	for _, opt := range waitOptionsAndPredicates {
-		switch tOpt := opt.(type) {
-		case WaitOption:
-			waitOpts = append(waitOpts, tOpt)
-		case Predicate:
-			predicates = append(predicates, tOpt)
-		default:
-			nt.T.Fatalf("invalid option passed to WaitForObject: expected WaitOption or Predicate, but received a %T", opt)
-		}
-	}
-
-	Wait(nt.T, fmt.Sprintf("wait for %q %v to meet expectations", name, gvk), nt.DefaultWaitTimeout, func() error {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(gvk)
-		return nt.Validate(name, namespace, u, predicates...)
-	}, waitOpts...)
 }
 
 // WaitForNotFound waits for the passed object to be fully deleted.
@@ -116,12 +105,9 @@ func WaitForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string
 // WaitForCurrentStatus waits for the passed object to reconcile.
 func WaitForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {
 	nt.T.Helper()
-
-	Wait(nt.T, fmt.Sprintf("wait for %q %v to reach current status", name, gvk), nt.DefaultWaitTimeout, func() error {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(gvk)
-		return nt.Validate(name, namespace, u, StatusEquals(nt, kstatus.CurrentStatus))
-	}, opts...)
+	WatchForObject(nt, gvk, name, namespace,
+		[]Predicate{StatusEquals(nt, kstatus.CurrentStatus)},
+		opts...)
 }
 
 // WaitForConfigSyncReady validates if the config sync deployments are ready.

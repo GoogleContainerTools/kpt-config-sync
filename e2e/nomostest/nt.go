@@ -70,7 +70,7 @@ type NT struct {
 	//
 	// Most tests shouldn't need to talk directly to this, unless simulating
 	// direct interactions with the API Server.
-	Client client.Client
+	Client client.WithWatch
 
 	// IsGKEAutopilot indicates if the test cluster is a GKE Autopilot cluster.
 	IsGKEAutopilot bool

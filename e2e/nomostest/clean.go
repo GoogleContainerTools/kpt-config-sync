@@ -151,7 +151,8 @@ func Clean(nt *NT, failOnError FailOnError) {
 			if failOnError {
 				WaitForNotFound(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace())
 			} else {
-				WaitForNotFound(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace(), WaitNoFail())
+				WaitForNotFound(nt, u.GroupVersionKind(), u.GetName(), u.GetNamespace(),
+					WaitStrategy(WaitFailureStrategyLog))
 			}
 		}
 	}
@@ -291,7 +292,8 @@ func deleteImplicitNamespaces(nt *NT, failOnError FailOnError) {
 			if failOnError {
 				WaitForNotFound(nt, kinds.Namespace(), ns.Name, "")
 			} else {
-				WaitForNotFound(nt, kinds.Namespace(), ns.Name, "", WaitNoFail())
+				WaitForNotFound(nt, kinds.Namespace(), ns.Name, "",
+					WaitStrategy(WaitFailureStrategyLog))
 			}
 		}
 	}

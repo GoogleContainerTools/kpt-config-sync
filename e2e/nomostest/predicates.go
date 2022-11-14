@@ -26,6 +26,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -592,5 +593,77 @@ func RoleBindingHasName(expectedName string) Predicate {
 			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 		}
 		return nil
+	}
+}
+
+// RootSyncHasSourceError returns an error if the RootSync does not have the
+// specified Source error code and (optional, partial) message.
+func RootSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		return validateError(rs.Status.Source.Errors, errCode, errMessage)
+	}
+}
+
+// RepoSyncHasSourceError returns an error if the RootSync does not have the
+// specified Source error code and (optional, partial) message.
+func RepoSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RepoSync{})
+		}
+		return validateError(rs.Status.Source.Errors, errCode, errMessage)
+	}
+}
+
+// RootSyncHasRenderingError returns an error if the RootSync does not have the
+// specified Rendering error code and (optional, partial) message.
+func RootSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		return validateError(rs.Status.Rendering.Errors, errCode, errMessage)
+	}
+}
+
+// RepoSyncHasRenderingError returns an error if the RootSync does not have the
+// specified Rendering error code and (optional, partial) message.
+func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RepoSync{})
+		}
+		return validateError(rs.Status.Rendering.Errors, errCode, errMessage)
+	}
+}
+
+// RootSyncHasSyncError returns an error if the RootSync does not have the
+// specified Sync error code and (optional, partial) message.
+func RootSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		return validateError(rs.Status.Sync.Errors, errCode, errMessage)
+	}
+}
+
+// RepoSyncHasSyncError returns an error if the RootSync does not have the
+// specified Sync error code and (optional, partial) message.
+func RepoSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RepoSync{})
+		}
+		return validateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }

@@ -172,36 +172,3 @@ func RecordInternalError(ctx context.Context, source string) {
 	measurement := InternalErrors.M(1)
 	record(tagCtx, measurement)
 }
-
-// RecordRenderingCount produces measurements for the RenderingCount view.
-func RecordRenderingCount(ctx context.Context) {
-	//tagCtx, _ := tag.New(ctx, tag.Upsert(KeyName, GetResourceLabels()))
-	measurement := RenderingCount.M(1)
-	record(ctx, measurement)
-}
-
-// RecordSkipRenderingCount produces measurements for the SkipRenderingCount view.
-func RecordSkipRenderingCount(ctx context.Context) {
-	//tagCtx, _ := tag.New(ctx, tag.Upsert(KeyName, GetResourceLabels()))
-	measurement := SkipRenderingCount.M(1)
-	record(ctx, measurement)
-}
-
-// RecordResourceOverrideCount produces measurements for the ResourceOverrideCount view.
-func RecordResourceOverrideCount(ctx context.Context, reconcilerType, containerName, resourceType string) {
-	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyReconcilerType, reconcilerType), tag.Upsert(KeyContainer, containerName), tag.Upsert(KeyResourceType, resourceType))
-	measurement := ResourceOverrideCount.M(1)
-	record(tagCtx, measurement)
-}
-
-// RecordGitSyncDepthOverrideCount produces measurements for the GitSyncDepthOverrideCount view.
-func RecordGitSyncDepthOverrideCount(ctx context.Context) {
-	measurement := GitSyncDepthOverrideCount.M(1)
-	record(ctx, measurement)
-}
-
-// RecordNoSSLVerifyCount produces measurements for the NoSSLVerifyCount view.
-func RecordNoSSLVerifyCount(ctx context.Context) {
-	measurement := NoSSLVerifyCount.M(1)
-	record(ctx, measurement)
-}

@@ -246,13 +246,6 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		klog.Infof("New rendering errors for RepoSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if currentRS.Status.Rendering.Commit != newStatus.commit {
-		if newStatus.message == RenderingSkipped {
-			metrics.RecordSkipRenderingCount(ctx)
-		} else {
-			metrics.RecordRenderingCount(ctx)
-		}
-	}
 
 	if klog.V(5).Enabled() {
 		klog.Infof("Updating rendering status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",

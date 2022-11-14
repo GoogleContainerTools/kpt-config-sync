@@ -27,7 +27,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -40,14 +39,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	key := "GIT_SYNC_DEPTH"
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
-	_, err = nomostest.Retry(30*time.Second, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
 	})
 	if err != nil {
@@ -98,13 +90,6 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateGitSyncDepthOverrideCount(2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
 
@@ -134,13 +119,6 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
 }
 
 func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
@@ -149,14 +127,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 	key := "GIT_SYNC_DEPTH"
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
-	_, err = nomostest.Retry(30*time.Second, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
 	})
 	if err != nil {
@@ -207,13 +178,6 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateGitSyncDepthOverrideCount(2)
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
 
@@ -242,12 +206,5 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	})
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateMetricNotFound(ocmetrics.GitSyncDepthOverrideCountView.Name)
-	})
-	if err != nil {
-		nt.T.Error(err)
 	}
 }

@@ -147,45 +147,4 @@ var (
 		TagKeys:     []tag.Key{KeyInternalErrorSource},
 		Aggregation: view.Count(),
 	}
-
-	// RenderingCountView aggregates the RenderingCount metric measurements.
-	RenderingCountView = &view.View{
-		Name:        RenderingCount.Name() + "_total",
-		Measure:     RenderingCount,
-		Description: "The total number of renderings that are performed",
-		Aggregation: view.Count(),
-	}
-
-	// SkipRenderingCountView aggregates the SkipRenderingCount metric measurements.
-	SkipRenderingCountView = &view.View{
-		Name:        SkipRenderingCount.Name() + "_total",
-		Measure:     SkipRenderingCount,
-		Description: "The total number of renderings that are skipped",
-		Aggregation: view.Count(),
-	}
-
-	// ResourceOverrideCountView aggregates the ResourceOverrideCount metric measurements.
-	ResourceOverrideCountView = &view.View{
-		Name:        ResourceOverrideCount.Name() + "_total",
-		Measure:     ResourceOverrideCount,
-		Description: "The total number of RootSync/RepoSync objects including the `spec.override.resources` field",
-		TagKeys:     []tag.Key{KeyContainer, KeyResourceType},
-		Aggregation: view.Count(),
-	}
-
-	// GitSyncDepthOverrideCountView aggregates the GitSyncDepthOverrideCount metric measurements.
-	GitSyncDepthOverrideCountView = &view.View{
-		Name:        GitSyncDepthOverrideCount.Name() + "_total",
-		Measure:     GitSyncDepthOverrideCount,
-		Description: "The total number of RootSync/RepoSync objects including the `spec.override.gitSyncDepth` field",
-		Aggregation: view.Count(),
-	}
-
-	// NoSSLVerifyCountView aggregates the NoSSLVerifyCount metric measurements.
-	NoSSLVerifyCountView = &view.View{
-		Name:        NoSSLVerifyCount.Name() + "_total",
-		Measure:     NoSSLVerifyCount,
-		Description: "The number of RootSync/RepoSync objects whose `spec.git.noSSLVerify` field is set to `true`",
-		Aggregation: view.Count(),
-	}
 )

@@ -46,7 +46,11 @@ exporters:
   googlecloud:
     metric:
       prefix: "custom.googleapis.com/opencensus/config_sync/"
-      skip_create_descriptor: false
+      # The exporter would always fail at sending metric descriptor. Skipping 
+      # creation of metric descriptors until the error from upstream is resolved
+      # The metric streaming data is not affected
+      # https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/issues/529
+      skip_create_descriptor: true
     retry_on_failure:
       enabled: false
     sending_queue:

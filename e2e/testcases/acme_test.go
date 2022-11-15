@@ -23,7 +23,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 
 	corev1 "k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -82,12 +81,6 @@ func TestAcmeCorpRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := checkResource(nt, &rbacv1.ClusterRoleBinding{}, "", "rbac-viewers", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Check PodSecurityPolicy
-	checkResourceCount(nt, kinds.PodSecurityPolicy(), "", 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &policyv1beta1.PodSecurityPolicy{}, "", "example", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
 		nt.T.Fatal(err)
 	}
 

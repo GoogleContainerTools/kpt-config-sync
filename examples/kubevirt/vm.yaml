@@ -16,6 +16,7 @@ apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: testvm
+  namespace: bookstore1
 spec:
   running: false
   template:

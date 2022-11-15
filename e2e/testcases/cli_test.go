@@ -539,14 +539,14 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	kubevirtPath := "../../examples/kubevirt"
 
 	// Test `nomos vet --no-api-server-check`
-	out, err := nt.Command("nomos", "vet", "--no-api-server-check", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
+	out, err := nt.Command("nomos", "vet", "--source-format=unstructured", "--no-api-server-check", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
 	// Verify that `nomos vet` returns a KNV1021 error.
-	out, err = nt.Command("nomos", "vet", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
+	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects an error, got nil", kubevirtPath))
 	} else {
@@ -556,7 +556,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	}
 
 	// Verify that `nomos hydrate --no-api-server-check` generates no error, and the output dir includes all the objects no matter their scopes.
-	out, err = nt.Command("nomos", "hydrate", "--no-api-server-check",
+	out, err = nt.Command("nomos", "hydrate", "--source-format=unstructured", "--no-api-server-check",
 		fmt.Sprintf("--path=%s", "../../examples/kubevirt"),
 		fmt.Sprintf("--output=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
 	if err != nil {
@@ -571,7 +571,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	}
 
 	// Verify that `nomos hydrate` generates a KNV1021 error, and the output dir includes all the objects no matter their scopes.
-	out, err = nt.Command("nomos", "hydrate",
+	out, err = nt.Command("nomos", "hydrate", "--source-format=unstructured",
 		fmt.Sprintf("--path=%s", "../../examples/kubevirt"),
 		fmt.Sprintf("--output=%s", compiledDirWithAPIServerCheck)).CombinedOutput()
 	if err == nil {

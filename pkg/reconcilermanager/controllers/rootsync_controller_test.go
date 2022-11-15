@@ -265,7 +265,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		{
 			ContainerName: reconcilermanager.HydrationController,
 			CPURequest:    resource.MustParse("500m"),
-			CPULimit:      resource.MustParse("1000m"),
+			CPULimit:      resource.MustParse("1"),
 			MemoryRequest: resource.MustParse("500Mi"),
 			MemoryLimit:   resource.MustParse("1Gi"),
 		},

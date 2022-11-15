@@ -139,8 +139,6 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 		objs, err = validate.Hierarchical(objs, options)
 	}
 
-	metrics.RecordReconcilerErrors(ctx, "parsing", status.NonBlockingErrors(err))
-
 	if status.HasBlockingErrors(err) {
 		return nil, err
 	}

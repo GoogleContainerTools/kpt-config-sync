@@ -121,8 +121,6 @@ func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.F
 
 	objs, err = validate.Unstructured(objs, options)
 
-	metrics.RecordReconcilerErrors(ctx, "parsing", status.NonBlockingErrors(err))
-
 	if status.HasBlockingErrors(err) {
 		return nil, err
 	}

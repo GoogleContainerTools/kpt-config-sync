@@ -34,7 +34,7 @@ var (
 	// KeyController groups metrics by their controller. Possible values: applier, remediator.
 	KeyController, _ = tag.NewKey("controller")
 
-	// KeyComponent groups metrics by their component. Possible values: parsing, source, sync, rendering, readiness(from Resource Group Controller).
+	// KeyComponent groups metrics by their component. Possible values: source, sync, rendering, readiness(from Resource Group Controller).
 	KeyComponent, _ = tag.NewKey("component")
 
 	// KeyErrorClass groups metrics by their error code.

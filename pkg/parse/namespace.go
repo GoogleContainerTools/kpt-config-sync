@@ -312,7 +312,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 		klog.Infof("New sync errors for RepoSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !syncing {
+	if !syncing && rs.Status.Sync.Commit != "" {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 

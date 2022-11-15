@@ -87,10 +87,6 @@ func RecordParserDuration(ctx context.Context, trigger, source, status string, s
 
 // RecordLastSync produces a measurement for the LastSync view.
 func RecordLastSync(ctx context.Context, status, commit string, timestamp time.Time) {
-	if commit == "" {
-		// TODO: Remove default value when otel-collector supports empty tag values correctly.
-		commit = CommitNone
-	}
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
 		tag.Upsert(KeyCommit, commit))

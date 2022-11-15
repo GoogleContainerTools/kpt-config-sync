@@ -408,7 +408,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 		klog.Infof("New sync errors for RootSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !syncing {
+	if !syncing && rs.Status.Sync.Commit != "" {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 

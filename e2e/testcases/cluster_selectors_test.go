@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -517,6 +518,7 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.ClusterSelector,
 		ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages rolebindings
 	)
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")

@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -74,6 +75,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 
 	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
 		ntopts.WithDelegatedControl, ntopts.RootRepo(rr1),
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()), // NS reconciler manages RepoSyncs
 		ntopts.NamespaceRepo(testNs, nr1), ntopts.NamespaceRepo(testNs2, nr1))
 
 	var newRepos []types.NamespacedName
@@ -200,7 +202,10 @@ func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, l
 
 func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS Reconciler manages Roles
+	)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
@@ -289,7 +294,10 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages Roles
+	)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace repo: %s", configsync.RootSyncName)
@@ -449,6 +457,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	repoSyncNN2 := nomostest.RepoSyncNN(testNs, "rs-test-2")
 
 	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages Roles
 		ntopts.NamespaceRepo(repoSyncNN1.Namespace, repoSyncNN1.Name),
 		ntopts.NamespaceRepo(repoSyncNN2.Namespace, repoSyncNN2.Name))
 

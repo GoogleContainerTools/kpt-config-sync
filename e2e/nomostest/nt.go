@@ -26,10 +26,12 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/testing/fake"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -144,6 +146,9 @@ type NT struct {
 
 	// Control indicates how the test case was setup.
 	Control ntopts.RepoControl
+
+	// repoSyncPermissions will grant a list of PolicyRules to NS reconcilers
+	repoSyncPermissions []rbacv1.PolicyRule
 }
 
 // CSNamespaces is the namespaces of the Config Sync components.
@@ -811,6 +816,21 @@ func (nt *NT) GetDeploymentPod(deploymentName, namespace string) *corev1.Pod {
 	pod := pods.Items[0]
 	nt.DebugLogf("Found deployment pod: %s/%s", pod.Namespace, pod.Name)
 	return &pod
+}
+
+// RepoSyncClusterRole returns the NS reconciler ClusterRole
+func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
+	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
+	cr.Rules = append(cr.Rules, nt.repoSyncPermissions...)
+	if isPSPCluster() {
+		cr.Rules = append(cr.Rules, rbacv1.PolicyRule{
+			APIGroups:     []string{"policy"},
+			Resources:     []string{"podsecuritypolicies"},
+			ResourceNames: []string{"acm-psp"},
+			Verbs:         []string{"use"},
+		})
+	}
+	return cr
 }
 
 // RemoteRootRepoSha1Fn returns .status.lastSyncedCommit as the latest sha1.

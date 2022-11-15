@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -42,6 +43,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 		t,
 		nomostesting.MultiRepos,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 		ntopts.WithCentralizedControl,
 	)
 
@@ -133,6 +135,7 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 		nomostesting.MultiRepos,
 		ntopts.NamespaceRepo(bsNamespaceRepo, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 
 	nn := nomostest.RepoSyncNN(bsNamespaceRepo, configsync.RepoSyncName)

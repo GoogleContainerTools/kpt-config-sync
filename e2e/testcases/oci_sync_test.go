@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -282,7 +283,11 @@ func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
 }
 
 func TestSwitchFromGitToOci(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		// bookinfo image contains RoleBinding
+		// bookinfo repo contains ServiceAccount
+		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
+	)
 	namespace := "bookinfo"
 	managerScope := string(declared.RootReconciler)
 	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
@@ -298,7 +303,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
 	nt.RootRepos[configsync.RootSyncName].Copy(rsGitYAMLFile, repoResourcePath)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nomostest.RepoSyncClusterRole())
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nt.RepoSyncClusterRole())
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/crb.yaml", nomostest.RepoSyncRoleBinding(rsNN))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.

@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/status"
 )
 
 func record(ctx context.Context, ms ...stats.Measurement) {
@@ -48,13 +49,20 @@ func RecordAPICallDuration(ctx context.Context, operation, status string, gvk sc
 
 // RecordReconcilerErrors produces a measurement for the ReconcilerErrors view.
 func RecordReconcilerErrors(ctx context.Context, component string, errs []v1beta1.ConfigSyncError) {
-	class := ""
-	tagCtx, _ := tag.New(ctx,
-		tag.Upsert(KeyComponent, component),
-		tag.Upsert(KeyErrorClass, class),
-	)
-	measurement := ReconcilerErrors.M(int64(len(errs)))
-	record(tagCtx, measurement)
+	errorCountByClass := status.CountErrorByClass(errs)
+	var supportedErrorClasses = []string{"1xxx", "2xxx", "9xxx"}
+	for _, errorclass := range supportedErrorClasses {
+		var errorCount int64
+		if v, ok := errorCountByClass[errorclass]; ok {
+			errorCount = v
+		}
+		tagCtx, _ := tag.New(ctx,
+			tag.Upsert(KeyComponent, component),
+			tag.Upsert(KeyErrorClass, errorclass),
+		)
+		measurement := ReconcilerErrors.M(errorCount)
+		record(tagCtx, measurement)
+	}
 }
 
 // RecordPipelineError produces a measurement for the PipelineError view

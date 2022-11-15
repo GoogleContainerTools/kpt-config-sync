@@ -105,10 +105,11 @@ func RecordDeclaredResources(ctx context.Context, numResources int) {
 }
 
 // RecordApplyOperation produces a measurement for the ApplyOperations view.
-func RecordApplyOperation(ctx context.Context, operation, status string, gvk schema.GroupVersionKind) {
+func RecordApplyOperation(ctx context.Context, controller, operation, status string, gvk schema.GroupVersionKind) {
 	tagCtx, _ := tag.New(ctx,
 		//tag.Upsert(KeyName, GetResourceLabels()),
 		tag.Upsert(KeyOperation, operation),
+		tag.Upsert(KeyController, controller),
 		//tag.Upsert(KeyType, gvk.Kind),
 		tag.Upsert(KeyStatus, status))
 	measurement := ApplyOperations.M(1)

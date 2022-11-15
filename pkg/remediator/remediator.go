@@ -128,7 +128,11 @@ func (r *Remediator) ManagementConflict() bool {
 
 // ConflictErrors implements Interface.
 func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
-	return r.conflictErrs
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	// Return a copy
+	return append([]status.ManagementConflictError(nil), r.conflictErrs...)
 }
 
 func (r *Remediator) addConflictError(e status.ManagementConflictError) {

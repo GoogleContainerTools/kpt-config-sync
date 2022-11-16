@@ -90,7 +90,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	defaultGitSyncCPULimits, defaultGitSyncMemLimits := gitSyncResourceLimits[corev1.ResourceCPU], gitSyncResourceLimits[corev1.ResourceMemory]
 
 	// Verify root-reconciler uses the default resource requests and limits
-	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	rootReconcilerDeployment := &appsv1.Deployment{}
+	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, rootReconcilerDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -98,7 +99,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	nsReconcilerBackendDeployment := &appsv1.Deployment{}
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, nsReconcilerBackendDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -106,12 +108,17 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
-	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	nsReconcilerFrontendDeployment := &appsv1.Deployment{}
+	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, nsReconcilerFrontendDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	rootReconcilerDeploymentGeneration := rootReconcilerDeployment.Generation
+	nsReconcilerBackendDeploymentGeneration := nsReconcilerBackendDeployment.Generation
+	nsReconcilerFrontendDeploymentGeneration := nsReconcilerFrontendDeployment.Generation
 
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 
@@ -123,10 +130,12 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Override the CPU/memory requests and limits of the reconciler container of root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "reconciler", "cpuRequest": "500m", "cpuLimit": "800m", "memoryRequest": "400Mi", "memoryLimit": "411Mi"}]}}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify the reconciler container of root-reconciler uses the new resource request and limits, and the git-sync container uses the default resource requests and limits.
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -136,6 +145,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -144,6 +154,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -156,14 +167,14 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 			{
 				ContainerName: "reconciler",
 				CPURequest:    resource.MustParse("500m"),
-				CPULimit:      resource.MustParse("555m"),
+				CPULimit:      resource.MustParse("1000m"),
 				MemoryRequest: resource.MustParse("500Mi"),
 				MemoryLimit:   resource.MustParse("555Mi"),
 			},
 			{
 				ContainerName: "git-sync",
 				CPURequest:    resource.MustParse("600m"),
-				CPULimit:      resource.MustParse("666m"),
+				CPULimit:      resource.MustParse("1"),
 				MemoryRequest: resource.MustParse("600Mi"),
 				MemoryLimit:   resource.MustParse("666Mi"),
 			},
@@ -177,14 +188,14 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 			{
 				ContainerName: "reconciler",
 				CPURequest:    resource.MustParse("511m"),
-				CPULimit:      resource.MustParse("544m"),
+				CPULimit:      resource.MustParse("2000m"),
 				MemoryRequest: resource.MustParse("511Mi"),
 				MemoryLimit:   resource.MustParse("544Mi"),
 			},
 			{
 				ContainerName: "git-sync",
 				CPURequest:    resource.MustParse("611m"),
-				CPULimit:      resource.MustParse("644m"),
+				CPULimit:      resource.MustParse("2"),
 				MemoryRequest: resource.MustParse("611Mi"),
 				MemoryLimit:   resource.MustParse("644Mi"),
 			},
@@ -194,8 +205,12 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits")
 	nt.WaitForRepoSyncs()
 
+	nsReconcilerBackendDeploymentGeneration++
+	nsReconcilerFrontendDeploymentGeneration++
+
 	// Verify the resource requests and limits of root-reconciler are not affected by the resource changes of ns-reconciler-backend and ns-reconciler-fronend
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(rootReconcilerDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -204,26 +219,30 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the new resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify ns-reconciler-frontend uses the new resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Override the CPU limit of the git-sync container of root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "git-sync", "cpuLimit": "333m"}]}}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify the reconciler container root-reconciler uses the default resource requests and limits, and the git-sync container uses the new resource limits.
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, resource.MustParse("333m"), defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -233,26 +252,30 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify the resource limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify root-reconciler uses the default resource requests and limits
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -262,16 +285,18 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -281,9 +306,11 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()
+	nsReconcilerBackendDeploymentGeneration++
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -292,6 +319,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify root-reconciler uses the default resource requests and limits
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(rootReconcilerDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -300,8 +328,9 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of ns-reconciler-backend
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -311,9 +340,11 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend")
 	nt.WaitForRepoSyncs()
+	nsReconcilerFrontendDeploymentGeneration++
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -335,7 +366,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	defaultGitSyncCPULimits, defaultGitSyncMemLimits := gitSyncResourceLimits[corev1.ResourceCPU], gitSyncResourceLimits[corev1.ResourceMemory]
 
 	// Verify root-reconciler uses the default resource requests and limits
-	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	rootReconcilerDeployment := &appsv1.Deployment{}
+	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, rootReconcilerDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -343,7 +375,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	nsReconcilerBackendDeployment := &appsv1.Deployment{}
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, nsReconcilerBackendDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -351,12 +384,17 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
-	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	nsReconcilerFrontendDeployment := &appsv1.Deployment{}
+	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, nsReconcilerFrontendDeployment,
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	rootReconcilerDeploymentGeneration := rootReconcilerDeployment.Generation
+	nsReconcilerBackendDeploymentGeneration := nsReconcilerBackendDeployment.Generation
+	nsReconcilerFrontendDeploymentGeneration := nsReconcilerFrontendDeployment.Generation
 
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
@@ -368,10 +406,12 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Override the CPU/memory requests and limits of the reconciler container of root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "reconciler", "cpuRequest": "500m", "cpuLimit": "800m", "memoryRequest": "400Mi", "memoryLimit": "411Mi"}]}}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify the reconciler container of root-reconciler uses the new resource request and limits, and the git-sync container uses the default resource requests and limits.
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -381,6 +421,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -389,6 +430,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -401,14 +443,14 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 			{
 				ContainerName: "reconciler",
 				CPURequest:    resource.MustParse("500m"),
-				CPULimit:      resource.MustParse("555m"),
+				CPULimit:      resource.MustParse("1000m"),
 				MemoryRequest: resource.MustParse("500Mi"),
 				MemoryLimit:   resource.MustParse("555Mi"),
 			},
 			{
 				ContainerName: "git-sync",
 				CPURequest:    resource.MustParse("600m"),
-				CPULimit:      resource.MustParse("666m"),
+				CPULimit:      resource.MustParse("1"),
 				MemoryRequest: resource.MustParse("600Mi"),
 				MemoryLimit:   resource.MustParse("666Mi"),
 			},
@@ -422,14 +464,14 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 			{
 				ContainerName: "reconciler",
 				CPURequest:    resource.MustParse("511m"),
-				CPULimit:      resource.MustParse("544m"),
+				CPULimit:      resource.MustParse("2000m"),
 				MemoryRequest: resource.MustParse("511Mi"),
 				MemoryLimit:   resource.MustParse("544Mi"),
 			},
 			{
 				ContainerName: "git-sync",
 				CPURequest:    resource.MustParse("611m"),
-				CPULimit:      resource.MustParse("644m"),
+				CPULimit:      resource.MustParse("2"),
 				MemoryRequest: resource.MustParse("611Mi"),
 				MemoryLimit:   resource.MustParse("644Mi"),
 			},
@@ -439,8 +481,12 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits")
 	nt.WaitForRepoSyncs()
 
+	nsReconcilerBackendDeploymentGeneration++
+	nsReconcilerFrontendDeploymentGeneration++
+
 	// Verify the resource requests and limits of root-reconciler are not affected by the resource changes of ns-reconciler-backend and ns-reconciler-fronend
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(rootReconcilerDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -449,26 +495,30 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the new resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify ns-reconciler-frontend uses the new resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Override the CPU limit of the git-sync container of root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "git-sync", "cpuLimit": "333m"}]}}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify the reconciler container root-reconciler uses the default resource requests and limits, and the git-sync container uses the new resource limits.
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, resource.MustParse("333m"), defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -478,26 +528,30 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify the resource limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Clear `spec.override` from the RootSync
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
+	rootReconcilerDeploymentGeneration++
 
 	// Verify root-reconciler uses the default resource requests and limits
 	_, err = nomostest.Retry(30*time.Second, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+			hasGeneration(rootReconcilerDeploymentGeneration),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	})
@@ -507,16 +561,18 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("555m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("666m"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -526,9 +582,11 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()
+	nsReconcilerBackendDeploymentGeneration++
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerBackendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -537,6 +595,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify root-reconciler uses the default resource requests and limits
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(rootReconcilerDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -545,8 +604,9 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of ns-reconciler-backend
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("544m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
-		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("644m"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
+		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -556,9 +616,11 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend")
 	nt.WaitForRepoSyncs()
+	nsReconcilerFrontendDeploymentGeneration++
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(frontendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		nomostest.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {

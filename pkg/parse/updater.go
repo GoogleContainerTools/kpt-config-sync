@@ -37,11 +37,14 @@ type updater struct {
 	scope      declared.Scope
 	resources  *declared.Resources
 	remediator remediator.Interface
-	applier    applier.Interface
+	applier    applier.KptApplier
 
-	mux            sync.RWMutex
+	errorMux       sync.RWMutex
 	validationErrs status.MultiError
 	watchErrs      status.MultiError
+
+	updateMux sync.RWMutex
+	updating  bool
 }
 
 func (u *updater) needToUpdateWatch() bool {
@@ -55,8 +58,8 @@ func (u *updater) managementConflict() bool {
 // Errors returns the latest known set of errors from the updater.
 // This method is safe to call while Update is running.
 func (u *updater) Errors() status.MultiError {
-	u.mux.RLock()
-	defer u.mux.RUnlock()
+	u.errorMux.RLock()
+	defer u.errorMux.RUnlock()
 
 	var errs status.MultiError
 	for _, conflictErr := range u.remediator.ConflictErrors() {
@@ -69,15 +72,20 @@ func (u *updater) Errors() status.MultiError {
 }
 
 func (u *updater) setValidationErrs(errs status.MultiError) {
-	u.mux.Lock()
-	defer u.mux.Unlock()
+	u.errorMux.Lock()
+	defer u.errorMux.Unlock()
 	u.validationErrs = errs
 }
 
 func (u *updater) setWatchErrs(errs status.MultiError) {
-	u.mux.Lock()
-	defer u.mux.Unlock()
+	u.errorMux.Lock()
+	defer u.errorMux.Unlock()
 	u.watchErrs = errs
+}
+
+// Updating returns true if the Update method is running.
+func (u *updater) Updating() bool {
+	return u.updating
 }
 
 // declaredCRDs returns the list of CRDs which are present in the updater's
@@ -97,9 +105,16 @@ func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.Mu
 	return crds, nil
 }
 
-// update updates the declared resources in memory, applies the resources, and sets
+// Update updates the declared resources in memory, applies the resources, and sets
 // up the watches.
-func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+	u.updateMux.Lock()
+	u.updating = true
+	defer func() {
+		u.updating = false
+		u.updateMux.Unlock()
+	}()
+
 	objs := filesystem.AsCoreObjects(cache.objsToApply)
 
 	// Update the declared resources so that the Remediator immediately

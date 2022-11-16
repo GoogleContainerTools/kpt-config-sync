@@ -77,38 +77,37 @@ type Applier struct {
 	// errs tracks all the errors the applier encounters.
 	// This field is cleared at the start of the `Applier.Apply` method
 	errs status.MultiError
-	// syncing indicates whether the applier is syncing.
-	syncing bool
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
 	syncKind string
 	// syncName is the name of RSync object
 	syncName string
 	// syncNamespace is the namespace of RSync object
 	syncNamespace string
-	// mux is an Applier-level mutext to prevent concurrent Apply() and Refresh()
-	mux sync.Mutex
 	// statusMode controls if the applier injects the acutation status into the
 	// ResourceGroup object
 	statusMode string
 	// reconcileTimeout controls the reconcile and prune timeout
 	reconcileTimeout time.Duration
+
+	// applyMux prevents concurrent Apply() calls
+	applyMux sync.Mutex
+	// errorMux prevents concurrent modifications to the cached set of errors
+	errorMux sync.RWMutex
 }
 
-// Interface is a fake-able subset of the interface Applier implements.
+// KptApplier is a fake-able subset of the interface Applier implements.
 //
 // Placed here to make discovering the production implementation (above) easier.
-type Interface interface {
+type KptApplier interface {
 	// Apply updates the resource API server with the latest parsed git resource.
 	// This is called when a new change in the git resource is detected. It also
 	// returns a map of the GVKs which were successfully applied by the Applier.
 	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
 	// Errors returns the errors encountered during apply.
 	Errors() status.MultiError
-	// Syncing indicates whether the applier is syncing.
-	Syncing() bool
 }
 
-var _ Interface = &Applier{}
+var _ KptApplier = &Applier{}
 
 // NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
 // the API server.
@@ -397,11 +396,12 @@ func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 	}
 }
 
-// sync triggers a kpt live apply library call to apply a set of resources.
-func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+// applyInner triggers a kpt live apply library call to apply a set of resources.
+func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	cs, err := a.clientSetFunc(a.client, a.configFlags, a.statusMode)
 	if err != nil {
-		return nil, Error(err)
+		a.addError(err)
+		return nil, a.Errors()
 	}
 	a.checkInventoryObjectSize(ctx, cs.client)
 
@@ -414,8 +414,8 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
 		disabledCount, err := cs.handleDisabledObjects(ctx, a.inventory, disabledObjs)
 		if err != nil {
-			a.errs = status.Append(a.errs, err)
-			return nil, a.errs
+			a.addError(err)
+			return nil, a.Errors()
 		}
 		s.DisableObjs = &stats.DisabledObjStats{
 			Total:     uint64(len(disabledObjs)),
@@ -423,9 +423,10 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		}
 	}
 	klog.Infof("%v objects to be applied: %v", len(enabledObjs), core.GKNNs(enabledObjs))
-	resources, toUnsErrs := toUnstructured(enabledObjs)
-	if toUnsErrs != nil {
-		return nil, toUnsErrs
+	resources, err := toUnstructured(enabledObjs)
+	if err != nil {
+		a.addError(err)
+		return nil, a.Errors()
 	}
 
 	unknownTypeResources := make(map[core.ID]struct{})
@@ -449,7 +450,8 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 	// This allows for picking up CRD changes.
 	mapper, err := a.configFlags.ToRESTMapper()
 	if err != nil {
-		return nil, status.Append(nil, err)
+		a.addError(err)
+		return nil, a.Errors()
 	}
 	meta.MaybeResetRESTMapper(mapper)
 
@@ -465,9 +467,9 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		case event.ErrorType:
 			klog.V(4).Info(e.ErrorEvent)
 			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
-				a.errs = status.Append(a.errs, largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
+				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
 			} else {
-				a.errs = status.Append(a.errs, Error(e.ErrorEvent.Err))
+				a.addError(e.ErrorEvent.Err)
 			}
 			s.ErrorTypeEvents++
 		case event.WaitType:
@@ -478,7 +480,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 			// a reconciled object may become pending before a wait task times out.
 			// Record the objs that have been reconciled.
 			klog.V(4).Info(e.WaitEvent)
-			a.errs = status.Append(a.errs, processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.ApplyType:
 			logEvent := event.ApplyEvent{
 				GroupName:  e.ApplyEvent.GroupName,
@@ -488,7 +490,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 				Error: e.ApplyEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
+			a.addError(processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
 			logEvent := event.PruneEvent{
 				GroupName:  e.PruneEvent.GroupName,
@@ -498,7 +500,7 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 				Error: e.PruneEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.errs = status.Append(a.errs, processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap, cs))
+			a.addError(processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap, cs))
 		default:
 			klog.V(4).Infof("skipped %v event", e.Type)
 		}
@@ -512,57 +514,60 @@ func (a *Applier) sync(ctx context.Context, objs []client.Object) (map[schema.Gr
 		}
 		gvks[resource.GetObjectKind().GroupVersionKind()] = struct{}{}
 	}
-	if a.errs == nil {
+
+	errs := a.Errors()
+	if errs == nil {
 		klog.V(4).Infof("all resources are up to date.")
 	}
-
 	if s.Empty() {
 		klog.V(4).Infof("The applier made no new progress")
 	} else {
 		klog.Infof("The applier made new progress: %s", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
-	return gvks, a.errs
+	return gvks, errs
 }
 
+// Errors returns the errors encountered during the last apply or current apply
+// if still running.
 // Errors implements Interface.
-// Errors returns the errors encountered during apply.
 func (a *Applier) Errors() status.MultiError {
-	// TODO: Make read/write of a.errs thread-safe
-	// Return a copy
+	a.errorMux.RLock()
+	defer a.errorMux.RUnlock()
+
+	// Return a copy to avoid persisting caller modifications
 	return status.Append(nil, a.errs)
 }
 
-// Syncing implements Interface.
-// Syncing returns whether the applier is syncing.
-func (a *Applier) Syncing() bool {
-	return a.syncing
+func (a *Applier) addError(err error) {
+	a.errorMux.Lock()
+	defer a.errorMux.Unlock()
+
+	if _, ok := err.(status.Error); !ok {
+		// Wrap as an applier.Error to indidate the source of the error
+		err = Error(err)
+	}
+
+	a.errs = status.Append(a.errs, err)
+}
+
+func (a *Applier) invalidateErrors() {
+	a.errorMux.Lock()
+	defer a.errorMux.Unlock()
+
+	a.errs = nil
 }
 
 // Apply implements Interface.
 func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
-	// Clear the `errs` field at the start.
-	a.errs = nil
-	// Set the `syncing` field to `true` at the start.
-	a.syncing = true
+	a.applyMux.Lock()
+	defer a.applyMux.Unlock()
 
-	defer func() {
-		// Make sure to clear the `syncing` field before `Apply` returns.
-		a.syncing = false
-	}()
-
-	a.mux.Lock()
-	defer a.mux.Unlock()
-
-	// Pull the actual resources from the API server to compare against the
-	// declared resources. Note that we do not immediately return on error here
-	// because the Applier needs to try to do as much work as it can on each
-	// cycle. We collect and return all errors at the end. Some of those errors
-	// are transient and resolve in future cycles based on partial work completed
-	// in a previous cycle (eg ignore an error about a CR so that we can apply the
-	// CRD, then a future cycle is able to apply the CR).
-	// TODO: Here and elsewhere, pass the MultiError as a parameter.
-	return a.sync(ctx, desiredResource)
+	// Ideally we want to avoid invalidating errors that will continue to happen,
+	// but for now, invalidate all errors until they recur.
+	// TODO: improve error cache invalidation to make rsync status more stable
+	a.invalidateErrors()
+	return a.applyInner(ctx, desiredResource)
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.

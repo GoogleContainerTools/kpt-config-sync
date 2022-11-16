@@ -71,7 +71,7 @@ func (a *fakeApplier) Run(_ context.Context, _ inventory.Info, _ object.Unstruct
 	return events
 }
 
-func TestSync(t *testing.T) {
+func TestApply(t *testing.T) {
 	deploymentObj := newDeploymentObj()
 	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
 
@@ -242,54 +242,56 @@ func TestSync(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
-		u.SetNamespace("test-namespace")
-		u.SetName("rs")
+		t.Run(tc.name, func(t *testing.T) {
+			u := &unstructured.Unstructured{}
+			u.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
+			u.SetNamespace("test-namespace")
+			u.SetName("rs")
 
-		fakeClient := testingfake.NewClient(t, core.Scheme, u)
-		configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
-		applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
-			return &clientSet{
-				kptApplier: newFakeApplier(tc.initErr, tc.events),
-				client:     fakeClient,
-			}, tc.initErr
-		}
+			fakeClient := testingfake.NewClient(t, core.Scheme, u)
+			configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
+			applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
+				return &clientSet{
+					kptApplier: newFakeApplier(tc.initErr, tc.events),
+					client:     fakeClient,
+				}, tc.initErr
+			}
 
-		var errs status.MultiError
-		applier, err := NewNamespaceApplier(fakeClient, configFlags, "test-namespace", "rs", "", 5*time.Minute)
-		if err != nil {
-			errs = Error(err)
-		} else {
-			applier.clientSetFunc = applierFunc
-			var gvks map[schema.GroupVersionKind]struct{}
-			gvks, errs = applier.sync(context.Background(), objs)
-			if diff := cmp.Diff(tc.gvks, gvks, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("%s: Diff of GVK map from Apply(): %s", tc.name, diff)
-			}
-		}
-		if tc.multiErr == nil {
-			if errs != nil {
-				t.Errorf("%s: unexpected error %v", tc.name, errs)
-			}
-		} else if errs == nil {
-			t.Errorf("%s: expected some error, but not happened", tc.name)
-		} else {
-			actualErrs := errs.Errors()
-			expectedErrs := tc.multiErr.Errors()
-			if len(actualErrs) != len(expectedErrs) {
-				t.Errorf("%s: number of error is not as expected %v", tc.name, actualErrs)
+			var errs status.MultiError
+			applier, err := NewNamespaceApplier(fakeClient, configFlags, "test-namespace", "rs", "", 5*time.Minute)
+			if err != nil {
+				errs = Error(err)
 			} else {
-				for i, actual := range actualErrs {
-					expected := expectedErrs[i]
-					if !strings.Contains(actual.Error(), expected.Error()) || reflect.TypeOf(expected) != reflect.TypeOf(actual) {
-						t.Errorf("%s:\nexpected error:\n%v\nbut got:\n%v", tc.name,
-							indent(expected.Error(), 1),
-							indent(actual.Error(), 1))
+				applier.clientSetFunc = applierFunc
+				var gvks map[schema.GroupVersionKind]struct{}
+				gvks, errs = applier.Apply(context.Background(), objs)
+				if diff := cmp.Diff(tc.gvks, gvks, cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("%s: Diff of GVK map from Apply(): %s", tc.name, diff)
+				}
+			}
+			if tc.multiErr == nil {
+				if errs != nil {
+					t.Errorf("%s: unexpected error %v", tc.name, errs)
+				}
+			} else if errs == nil {
+				t.Errorf("%s: expected some error, but not happened", tc.name)
+			} else {
+				actualErrs := errs.Errors()
+				expectedErrs := tc.multiErr.Errors()
+				if len(actualErrs) != len(expectedErrs) {
+					t.Errorf("%s: number of error is not as expected %v", tc.name, actualErrs)
+				} else {
+					for i, actual := range actualErrs {
+						expected := expectedErrs[i]
+						if !strings.Contains(actual.Error(), expected.Error()) || reflect.TypeOf(expected) != reflect.TypeOf(actual) {
+							t.Errorf("%s:\nexpected error:\n%v\nbut got:\n%v", tc.name,
+								indent(expected.Error(), 1),
+								indent(actual.Error(), 1))
+						}
 					}
 				}
 			}
-		}
+		})
 	}
 }
 

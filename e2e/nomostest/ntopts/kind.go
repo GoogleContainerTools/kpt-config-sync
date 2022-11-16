@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"k8s.io/client-go/tools/clientcmd"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -62,13 +61,7 @@ const (
 func Kind(t testing.NTB, version string) Opt {
 	v := asKindVersion(t, version)
 	return func(opt *New) {
-		var err error
 		opt.KubeconfigPath = newKind(t, opt.Name, opt.TmpDir, v)
-		// We don't need to specify masterUrl since we have a Kubeconfig.
-		opt.RESTConfig, err = clientcmd.BuildConfigFromFlags("", opt.KubeconfigPath)
-		if err != nil {
-			t.Fatalf("building rest.Config: %v", err)
-		}
 	}
 }
 

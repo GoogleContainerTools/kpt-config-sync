@@ -35,6 +35,7 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/remediator/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -93,13 +94,23 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 // RestConfig sets up the config for creating a Client connection to a K8s cluster.
 // If --test-cluster=kind, it creates a Kind cluster.
 // If --test-cluster=kubeconfig, it uses the context specified in kubeconfig.
-func RestConfig(t testing.NTB, optsStruct *ntopts.New) {
+func RestConfig(t testing.NTB, opts *ntopts.New) {
 	switch strings.ToLower(*e2e.TestCluster) {
 	case e2e.Kind:
-		ntopts.Kind(t, *e2e.KubernetesVersion)(optsStruct)
+		ntopts.Kind(t, *e2e.KubernetesVersion)(opts)
 	case e2e.GKE:
-		ntopts.GKECluster(t, restconfig.DefaultTimeout)(optsStruct)
+		ntopts.GKECluster(t, restconfig.DefaultTimeout)(opts)
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}
+
+	restConfig, err := restconfig.NewFromConfigFile(opts.KubeconfigPath)
+	if err != nil {
+		t.Fatalf("building rest.Config: %v", err)
+	}
+	opts.RESTConfig = restConfig
+
+	// Copy the RESTConfig to create the WatchConfig, but use a longer timeout.
+	opts.WatchConfig = restconfig.DeepCopy(restConfig)
+	opts.WatchConfig.Timeout = watch.RESTConfigTimeout
 }

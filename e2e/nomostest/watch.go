@@ -62,7 +62,7 @@ func watchForObjectInner(nt *NT, gvk schema.GroupVersionKind, name, namespace st
 	nt.T.Helper()
 
 	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	rObj, err := nt.Client.Scheme().New(listGVK)
+	rObj, err := nt.WatchClient.Scheme().New(listGVK)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func watchForObjectInner(nt *NT, gvk schema.GroupVersionKind, name, namespace st
 
 	ctx, cancel := context.WithTimeout(nt.Context, wait.timeout)
 	defer cancel()
-	result, err := nt.Client.Watch(ctx, cObjList, listOpts...)
+	result, err := nt.WatchClient.Watch(ctx, cObjList, listOpts...)
 	defer result.Stop()
 	if err != nil {
 		return err

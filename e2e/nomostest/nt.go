@@ -68,11 +68,22 @@ type NT struct {
 	// Config specifies how to create a new connection to the cluster.
 	Config *rest.Config
 
+	// WatchConfig specifies how to create a new connection to the cluster for
+	// watches.
+	WatchConfig *rest.Config
+
 	// Client is the underlying client used to talk to the Kubernetes cluster.
 	//
 	// Most tests shouldn't need to talk directly to this, unless simulating
 	// direct interactions with the API Server.
-	Client client.WithWatch
+	Client client.Client
+
+	// WatchClient is the underlying client used to talk to the Kubernetes
+	// cluster, when performing watches.
+	//
+	// Most tests shouldn't need to talk directly to this, unless simulating
+	// direct interactions with the API Server.
+	WatchClient client.WithWatch
 
 	// IsGKEAutopilot indicates if the test cluster is a GKE Autopilot cluster.
 	IsGKEAutopilot bool
@@ -452,6 +463,7 @@ func (nt *NT) RenewClient() {
 	nt.T.Helper()
 
 	nt.Client = connect(nt.T, nt.Config, nt.scheme)
+	nt.WatchClient = connect(nt.T, nt.WatchConfig, nt.scheme)
 }
 
 // Kubectl is a convenience method for calling kubectl against the

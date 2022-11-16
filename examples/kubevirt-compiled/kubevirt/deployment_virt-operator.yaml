@@ -29,11 +29,10 @@ spec:
     type: RollingUpdate
   template:
     metadata:
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ""
       labels:
         kubevirt.io: virt-operator
-        prometheus.kubevirt.io: ""
+        name: virt-operator
+        prometheus.kubevirt.io: "true"
       name: virt-operator
     spec:
       affinity:
@@ -49,20 +48,21 @@ spec:
               topologyKey: kubernetes.io/hostname
             weight: 1
       containers:
-      - command:
-        - virt-operator
+      - args:
         - --port
         - "8443"
         - -v
         - "2"
+        command:
+        - virt-operator
         env:
         - name: OPERATOR_IMAGE
-          value: quay.io/kubevirt/virt-operator:v0.46.1
+          value: quay.io/kubevirt/virt-operator:v0.58.0
         - name: WATCH_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.annotations['olm.targetNamespaces']
-        image: quay.io/kubevirt/virt-operator:v0.46.1
+        image: quay.io/kubevirt/virt-operator:v0.58.0
         imagePullPolicy: IfNotPresent
         name: virt-operator
         ports:
@@ -82,16 +82,27 @@ spec:
         resources:
           requests:
             cpu: 10m
-            memory: 150Mi
+            memory: 250Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - mountPath: /etc/virt-operator/certificates
           name: kubevirt-operator-certs
           readOnly: true
         - mountPath: /profile-data
           name: profile-data
+      nodeSelector:
+        kubernetes.io/os: linux
       priorityClassName: kubevirt-cluster-critical
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: kubevirt-operator
       tolerations:
       - key: CriticalAddonsOnly

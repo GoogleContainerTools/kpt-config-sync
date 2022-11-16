@@ -20,6 +20,14 @@ metadata:
   namespace: kubevirt
 spec:
   certificateRotateStrategy: {}
+  # kubevirt-operator needs to update the `spec.configuration.developerConfiguration.featureGates` field.
+  # Declaring this field in the SOT of Config Sync would cause controller fights between kubevirt-operator
+  # and the CS remediator if the CS admission webhook is not enabled;
+  # declaring this field in the SOT of Config Sync would cause kubevirt-operator to fail the reconciliation
+  # of this kubevirt CR if the CS admission is enabled, which would block kubevirt-operator from updating this field.
+  # configuration:
+  #   developerConfiguration:
+  #     featureGates: []
   customizeComponents: {}
   imagePullPolicy: IfNotPresent
   workloadUpdateStrategy: {}

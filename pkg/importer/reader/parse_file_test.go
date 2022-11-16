@@ -241,6 +241,48 @@ func TestParseJsonFile(t *testing.T) {
 			},
 		},
 		{
+			name: "one object (with local-config: false)",
+			contents: `{
+  "apiVersion": "rbac/v1",
+  "kind": "Role",
+  "metadata": {
+    "name": "admin",
+    "namespace": "shipping",
+    "annotations": {
+      "config.kubernetes.io/local-config": "false"
+    }
+  },
+  "rules": [
+    {
+      "apiGroups": ["rbac"],
+      "verbs": ["all"]
+    }
+  ]
+}
+`,
+			expected: []*unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"apiVersion": "rbac/v1",
+						"kind":       "Role",
+						"metadata": map[string]interface{}{
+							"name":      "admin",
+							"namespace": "shipping",
+							"annotations": map[string]interface{}{
+								"config.kubernetes.io/local-config": "false",
+							},
+						},
+						"rules": []interface{}{
+							map[string]interface{}{
+								"apiGroups": []interface{}{"rbac"},
+								"verbs":     []interface{}{"all"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "ignore local configuration",
 			contents: `{
   "apiVersion": "rbac/v1",
@@ -250,6 +292,27 @@ func TestParseJsonFile(t *testing.T) {
     "namespace": "shipping",
     "annotations": {
       "config.kubernetes.io/local-config": "true"
+    }
+  },
+  "rules": [
+    {
+      "apiGroups": ["rbac"],
+      "verbs": ["all"]
+    }
+  ]
+}
+`,
+		},
+		{
+			name: "ignore local configuration (with local-config: True)",
+			contents: `{
+  "apiVersion": "rbac/v1",
+  "kind": "Role",
+  "metadata": {
+    "name": "admin",
+    "namespace": "shipping",
+    "annotations": {
+      "config.kubernetes.io/local-config": "True"
     }
   },
   "rules": [

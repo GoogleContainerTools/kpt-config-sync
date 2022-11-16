@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -146,7 +145,8 @@ func hasStatusField(u runtime.Unstructured) bool {
 func filterLocalConfigUnstructured(unstructureds []*unstructured.Unstructured) []*unstructured.Unstructured {
 	var result []*unstructured.Unstructured
 	for _, u := range unstructureds {
-		if core.GetAnnotation(u, metadata.LocalConfigAnnotationKey) == metadata.LocalConfigValue {
+		annoVal, found := u.GetAnnotations()[metadata.LocalConfigAnnotationKey]
+		if found && annoVal != metadata.NoLocalConfigAnnoVal {
 			continue
 		}
 		result = append(result, u)

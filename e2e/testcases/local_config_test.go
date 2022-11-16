@@ -27,6 +27,8 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
+var LocalConfigValue = "true"
+
 func TestLocalConfig(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle)
 
@@ -36,7 +38,7 @@ func TestLocalConfig(t *testing.T) {
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/local-config/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, metadata.LocalConfigValue))
+	cm := fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap as local config")
 	nt.WaitForRepoSyncs()
@@ -61,7 +63,7 @@ func TestLocalConfig(t *testing.T) {
 
 	// Add the local-config annotation again.
 	// This will make the object pruned.
-	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, metadata.LocalConfigValue))
+	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Changing ConfigMap to local config")
 	nt.WaitForRepoSyncs()
@@ -107,7 +109,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 
 	// Add the local-config annotation to the unmanaged configmap
 	cm = fake.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled,
-		core.Annotation(metadata.LocalConfigAnnotationKey, metadata.LocalConfigValue))
+		core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Change the ConfigMap to local config")
 	nt.WaitForRepoSyncs()
@@ -119,7 +121,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Remove the management disabled annotation
-	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, metadata.LocalConfigValue))
+	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the managed disabled annotation and keep the local-config annotation")
 	nt.WaitForRepoSyncs()

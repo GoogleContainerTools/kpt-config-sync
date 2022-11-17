@@ -67,8 +67,6 @@ data:
            volumeMounts:
            - name: repo
              mountPath: /repo
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
@@ -110,8 +108,6 @@ data:
              capabilities:
                drop:
                - NET_RAW
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
          - name: git-sync
            image: gcr.io/config-management-release/git-sync:v3.6.1-gke.2__linux_amd64
@@ -122,8 +118,6 @@ data:
            - name: git-creds
              mountPath: /etc/git-secret
              readOnly: true
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
@@ -142,8 +136,6 @@ data:
            volumeMounts:
            - name: repo
              mountPath: /repo
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
@@ -165,8 +157,6 @@ data:
            - name: helm-creds
              mountPath: /etc/helm-secret
              readOnly: true
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
@@ -214,21 +204,11 @@ data:
                path: /
                port: 13133 # Health Check extension default port.
                scheme: HTTP
-             timeoutSeconds: 1
-             periodSeconds: 10
-             successThreshold: 1
-             failureThreshold: 3
            readinessProbe:
              httpGet:
                path: /
                port: 13133 # Health Check extension default port.
                scheme: HTTP
-             timeoutSeconds: 1
-             periodSeconds: 10
-             successThreshold: 1
-             failureThreshold: 3
-           terminationMessagePath: "/dev/termination-log"
-           terminationMessagePolicy: File
            imagePullPolicy: IfNotPresent
            # These KUBE env vars help populate OTEL_RESOURCE_ATTRIBUTES which
            # is used by the otel-agent to populate resource attributes when
@@ -290,10 +270,6 @@ data:
                configsync.sync.kind=$(CONFIGSYNC_SYNC_KIND),\
                configsync.sync.name=$(CONFIGSYNC_SYNC_NAME),\
                configsync.sync.namespace=$(CONFIGSYNC_SYNC_NAMESPACE)"
-         restartPolicy: Always
-         terminationGracePeriodSeconds: 30
-         dnsPolicy: ClusterFirst
-         schedulerName: default-scheduler
          volumes:
          - name: repo
            emptyDir: {}
@@ -317,5 +293,3 @@ data:
            runAsNonRoot: true
            seccompProfile:
              type: RuntimeDefault
-     revisionHistoryLimit: 10
-     progressDeadlineSeconds: 600

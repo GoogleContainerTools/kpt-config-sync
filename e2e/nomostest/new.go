@@ -128,6 +128,7 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 		sharedNt := SharedNT(tw)
 		t.Logf("using shared test env %s", sharedNt.ClusterName)
 		ntOptions = append(ntOptions, ntopts.WithRestConfig(sharedNt.Config))
+		ntOptions = append(ntOptions, ntopts.WithWatchConfig(sharedNt.WatchConfig))
 	}
 
 	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)

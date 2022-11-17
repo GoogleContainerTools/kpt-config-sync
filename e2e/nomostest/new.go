@@ -96,6 +96,21 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		t.Skip("Test skipped for non-local GitProvider types")
 	}
 
+	if *e2e.TestCluster == e2e.GKE { // required env vars for GKE
+		if nomostesting.GCPProjectIDFromEnv == "" {
+			t.Fatal("Environment variable GCP_PROJECT is required for GKE clusters")
+		}
+		if nomostesting.GCPClusterFromEnv == "" {
+			t.Fatal("Environment variable GCP_CLUSTER is required for GKE clusters")
+		}
+		if nomostesting.GCPRegionFromEnv == "" && nomostesting.GCPZoneFromEnv == "" {
+			t.Fatal("One of GCP_REGION or GCP_ZONE is required for GKE clusters")
+		}
+		if nomostesting.GCPRegionFromEnv != "" && nomostesting.GCPZoneFromEnv != "" {
+			t.Fatal("At most one of GCP_ZONE or GCP_REGION may be specified")
+		}
+	}
+
 	if optsStruct.RESTConfig == nil {
 		RestConfig(t, optsStruct)
 		// Increase the QPS for the clients used by the e2e tests.

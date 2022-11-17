@@ -15,6 +15,7 @@
 package nomostest
 
 import (
+	"path/filepath"
 	"strings"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -95,6 +96,8 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 // If --test-cluster=kind, it creates a Kind cluster.
 // If --test-cluster=kubeconfig, it uses the context specified in kubeconfig.
 func RestConfig(t testing.NTB, opts *ntopts.New) {
+	opts.KubeconfigPath = filepath.Join(opts.TmpDir, ntopts.Kubeconfig)
+	t.Logf("kubeconfig will be created at %s", opts.KubeconfigPath)
 	switch strings.ToLower(*e2e.TestCluster) {
 	case e2e.Kind:
 		ntopts.Kind(t, *e2e.KubernetesVersion)(opts)

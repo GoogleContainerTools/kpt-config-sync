@@ -104,10 +104,14 @@ current context in your kubeconfig.
 ```shell
 # Ensure gcloud context is set to correct project
 gcloud config set project <PROJECT_ID>
-# Ensure kubectl context is set to correct cluster
-kubectl config set-context <CONTEXT>
 # Build images/manifests and push images
 make config-sync-manifest
+# Set env vars for GKE cluster
+export GCP_PROJECT=<PROJECT_ID>
+export GCP_CLUSTER=<CLUSTER_NAME>
+# One of GCP_REGION and GCP_ZONE must be set (but not both)
+export GCP_REGION=<REGION>
+export GCP_ZONE=<ZONE>
 # Run the tests with image prefix/tag from previous step and desired test regex
 go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1 --test-cluster=gke --test.run (test name regexp)
 ```

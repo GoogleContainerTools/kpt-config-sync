@@ -19,34 +19,6 @@
 
 set -eo pipefail
 
-DIR=$(dirname "${BASH_SOURCE[0]}")
-
-if [ $KUBERNETES_ENV == "GKE" ]; then
-  echo "GKE environment"
-
-  # Installs gcloud as an auth helper for kubectl with the credentials that
-  # were set with the service account activation above.
-  # Needs cloud.containers.get permission.
-  # shellcheck disable=SC2154
-  if [[ -z ${GCP_ZONE} ]] && [[ -z ${GCP_REGION} ]]; then
-    echo "neither GCP_ZONE nor GCP_REGION is set."
-    exit 1
-  elif [[ -n ${GCP_ZONE} ]] && [[ -n ${GCP_REGION} ]]; then
-    echo "At most one of GCP_ZONE | GCP_REGION may be specified."
-    exit 1
-  elif [[ -n ${GCP_ZONE} ]]; then
-    gcloud --quiet container clusters get-credentials "${GCP_CLUSTER}" --zone="${GCP_ZONE}" --project="${GCP_PROJECT}"
-  else
-    gcloud --quiet container clusters get-credentials "${GCP_CLUSTER}" --region="${GCP_REGION}" --project="${GCP_PROJECT}"
-  fi
-
-elif [ $KUBERNETES_ENV == "KIND" ]; then
-  echo "kind environment"
-else
-  echo "Unexpected Kubernetes environment, '$KUBERNETES_ENV'"
-  exit 1
-fi
-
 set +e
 
 echo "Starting e2e tests"

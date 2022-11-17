@@ -41,7 +41,7 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
+func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.KptApplier, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -264,13 +264,13 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RepoSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *namespace) SetSyncStatus(ctx context.Context, errs status.MultiError) error {
+func (p *namespace) SetSyncStatus(ctx context.Context, newStatus syncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setSyncStatusWithRetries(ctx, errs, defaultDenominator)
+	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.MultiError, denominator int) error {
+func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -282,13 +282,10 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 
 	currentRS := rs.DeepCopy()
 
-	// syncing indicates whether the applier is syncing.
-	syncing := p.applier.Syncing()
-
-	setSyncStatusFields(&rs.Status.Status, status.ToCSE(errs), denominator)
+	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
-	if syncing {
+	if newStatus.syncing {
 		reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	} else {
 		if errorSummary.TotalCount == 0 {
@@ -303,14 +300,14 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 		return nil
 	}
 
-	csErrs := status.ToCSE(errs)
+	csErrs := status.ToCSE(newStatus.errs)
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
 		klog.Infof("New sync errors for RepoSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !syncing && rs.Status.Sync.Commit != "" {
+	if !newStatus.syncing && rs.Status.Sync.Commit != "" {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
@@ -323,7 +320,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
-			return p.setSyncStatusWithRetries(ctx, errs, denominator*2)
+			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", p.scope))
 	}
@@ -335,6 +332,12 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, errs status.Mu
 // SyncErrors implements the Parser interface
 func (p *namespace) SyncErrors() status.MultiError {
 	return p.updater.Errors()
+}
+
+// Syncing returns true if the updater is running.
+// SyncErrors implements the Parser interface
+func (p *namespace) Syncing() bool {
+	return p.updater.Updating()
 }
 
 // K8sClient implements the Parser interface

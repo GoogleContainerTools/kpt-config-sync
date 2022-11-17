@@ -51,7 +51,7 @@ import (
 )
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Interface, rem remediator.Interface) (Parser, error) {
+func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.KptApplier, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -355,13 +355,13 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *root) SetSyncStatus(ctx context.Context, errs status.MultiError) error {
+func (p *root) SetSyncStatus(ctx context.Context, newStatus syncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setSyncStatusWithRetries(ctx, errs, defaultDenominator)
+	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiError, denominator int) error {
+func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -373,13 +373,10 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 
 	currentRS := rs.DeepCopy()
 
-	// syncing indicates whether the applier is syncing.
-	syncing := p.applier.Syncing()
-
-	setSyncStatusFields(&rs.Status.Status, status.ToCSE(errs), denominator)
+	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
 
 	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
-	if syncing {
+	if newStatus.syncing {
 		rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	} else {
 		if errorSummary.TotalCount == 0 {
@@ -394,14 +391,14 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 		return nil
 	}
 
-	csErrs := status.ToCSE(errs)
+	csErrs := status.ToCSE(newStatus.errs)
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
 		klog.Infof("New sync errors for RootSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !syncing && rs.Status.Sync.Commit != "" {
+	if !newStatus.syncing && rs.Status.Sync.Commit != "" {
 		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
@@ -414,24 +411,29 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, errs status.MultiEr
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
-			return p.setSyncStatusWithRetries(ctx, errs, denominator*2)
+			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync sync status")
 	}
 	return nil
 }
 
-func setSyncStatusFields(syncStatus *v1beta1.Status, syncErrs []v1beta1.ConfigSyncError, denominator int) {
-	syncStatus.Sync.Commit = syncStatus.Source.Commit
+func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus syncStatus, denominator int) {
+	cse := status.ToCSE(newStatus.errs)
+	syncStatus.Sync.Commit = newStatus.commit
 	syncStatus.Sync.Git = syncStatus.Source.Git
 	syncStatus.Sync.Oci = syncStatus.Source.Oci
 	syncStatus.Sync.Helm = syncStatus.Source.Helm
+	setSyncStatusErrors(syncStatus, cse, denominator)
+	syncStatus.Sync.LastUpdate = newStatus.lastUpdate
+}
+
+func setSyncStatusErrors(syncStatus *v1beta1.Status, cse []v1beta1.ConfigSyncError, denominator int) {
 	syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
-		TotalCount: len(syncErrs),
+		TotalCount: len(cse),
 		Truncated:  denominator != 1,
 	}
-	syncStatus.Sync.Errors = syncErrs[0 : len(syncErrs)/denominator]
-	syncStatus.Sync.LastUpdate = metav1.Now()
+	syncStatus.Sync.Errors = cse[0 : len(cse)/denominator]
 }
 
 // summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`, and returns an ErrorSource slice and an ErrorSummary.
@@ -528,6 +530,12 @@ func (p *root) SyncErrors() status.MultiError {
 	return p.updater.Errors()
 }
 
+// Syncing returns true if the updater is running.
+// SyncErrors implements the Parser interface
+func (p *root) Syncing() bool {
+	return p.updater.Updating()
+}
+
 // K8sClient implements the Parser interface
 func (p *root) K8sClient() client.Client {
 	return p.client
@@ -568,7 +576,8 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 
 	// Add the remeditor conflict errors before other sync errors for more visibility.
 	errs = append(errs, rs.Status.Sync.Errors...)
-	setSyncStatusFields(&rs.Status.Status, errs, denominator)
+	setSyncStatusErrors(&rs.Status.Status, errs, denominator)
+	rs.Status.Sync.LastUpdate = metav1.Now()
 
 	if err := client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.

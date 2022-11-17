@@ -80,11 +80,13 @@ type Parser interface {
 	parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError)
 	setSourceStatus(ctx context.Context, newStatus sourceStatus) error
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
-	SetSyncStatus(ctx context.Context, errs status.MultiError) error
+	SetSyncStatus(ctx context.Context, newStatus syncStatus) error
 	options() *opts
 	// SyncErrors returns all the sync errors, including remediator errors,
 	// validation errors, applier errors, and watch update errors.
 	SyncErrors() status.MultiError
+	// Syncing returns true if the updater is running.
+	Syncing() bool
 	// K8sClient returns the Kubernetes client that talks to the API server.
 	K8sClient() client.Client
 }

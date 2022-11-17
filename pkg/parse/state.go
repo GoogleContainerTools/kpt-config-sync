@@ -49,18 +49,29 @@ func (rs renderingStatus) equal(other renderingStatus) bool {
 	return rs.commit == other.commit && rs.message == other.message && status.DeepEqual(rs.errs, other.errs)
 }
 
+type syncStatus struct {
+	syncing    bool
+	commit     string
+	errs       status.MultiError
+	lastUpdate metav1.Time
+}
+
+func (gs syncStatus) equal(other syncStatus) bool {
+	return gs.syncing == other.syncing && gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
+}
+
 type reconcilerState struct {
 	// lastApplied keeps the state for the last successful-applied syncDir.
 	lastApplied string
 
 	// sourceStatus tracks info from the `Status.Source` field of a RepoSync/RootSync.
-	sourceStatus
+	sourceStatus sourceStatus
 
 	// renderingStatus tracks info from the `Status.Rendering` field of a RepoSync/RootSync.
-	renderingStatus
+	renderingStatus renderingStatus
 
 	// syncStatus tracks info from the `Status.Sync` field of a RepoSync/RootSync.
-	syncStatus sourceStatus
+	syncStatus syncStatus
 
 	// syncingConditionLastUpdate tracks when the `Syncing` condition was updated most recently.
 	syncingConditionLastUpdate metav1.Time
@@ -138,8 +149,8 @@ func (s *reconcilerState) resetCache() {
 // resetAllButSourceState resets the whole cache except for the cached sourceState.
 //
 // resetAllButSourceState is called when:
-//   * a force-resync happens, or
-//   * one of the watchers noticed a management conflict.
+//   - a force-resync happens, or
+//   - one of the watchers noticed a management conflict.
 func (s *reconcilerState) resetAllButSourceState() {
 	source := s.cache.source
 	s.cache = cacheForCommit{}
@@ -152,6 +163,6 @@ func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
 }
 
 // needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
-func (s *reconcilerState) needToSetSyncStatus(newStatus sourceStatus) bool {
+func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
 	return !newStatus.equal(s.syncStatus) || s.syncStatus.lastUpdate.IsZero() || s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
 }

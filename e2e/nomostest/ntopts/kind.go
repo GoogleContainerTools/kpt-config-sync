@@ -61,7 +61,7 @@ const (
 func Kind(t testing.NTB, version string) Opt {
 	v := asKindVersion(t, version)
 	return func(opt *New) {
-		opt.KubeconfigPath = newKind(t, opt.Name, opt.TmpDir, v)
+		newKind(t, opt.Name, opt.TmpDir, opt.KubeconfigPath, v)
 	}
 }
 
@@ -101,9 +101,8 @@ func asKindVersion(t testing.NTB, version string) KindVersion {
 // newKind creates a new Kind cluster for use in testing with the specified name.
 //
 // Automatically registers the cluster to be deleted at the end of the test.
-func newKind(t testing.NTB, name, tmpDir string, version KindVersion) string {
+func newKind(t testing.NTB, name, tmpDir, kcfgPath string, version KindVersion) {
 	p := cluster.NewProvider()
-	kcfgPath := filepath.Join(tmpDir, Kubeconfig)
 
 	start := time.Now()
 	t.Logf("started creating cluster %s at %s", name, start.Format(time.RFC3339))
@@ -151,8 +150,6 @@ kind delete cluster --name=%s`, name)
 		t.Fatalf("creating Kind cluster: %v", err)
 	}
 	t.Logf("finished creating cluster at %s", finish.Format(time.RFC3339))
-
-	return kcfgPath
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

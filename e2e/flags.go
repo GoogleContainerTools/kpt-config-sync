@@ -73,10 +73,6 @@ var TestCluster = flag.String("test-cluster", Kind,
 		"If --test-cluster=%s, create a Kind cluster. Otherwise use the GKE context specified in %s.",
 		GKE, Kind, Kind, Kubeconfig))
 
-// KubeConfig specifies the file path to the kubeconfig file.
-var KubeConfig = flag.String(Kubeconfig, "",
-	"The file path to the kubeconfig file. If not set, use the default context.")
-
 // ShareTestEnv indicates whether to share the test env for all test cases.
 // If it is true, we only install nomos once before all tests and tear it down until all tests complete.
 var ShareTestEnv = flag.Bool("share-test-env", false,

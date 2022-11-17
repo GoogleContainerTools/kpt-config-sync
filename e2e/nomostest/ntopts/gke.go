@@ -23,7 +23,6 @@ import (
 
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
 // GKECluster tells the test to use the GKE cluster pointed to by the config flags.
@@ -45,11 +44,6 @@ func GKECluster(t testing.NTB, apiServerTimeout time.Duration) Opt {
 		opt.KubeconfigPath = kubeconfig
 
 		forceAuthRefresh(t)
-		restConfig, err := restconfig.NewRestConfig(apiServerTimeout)
-		if err != nil {
-			t.Fatal(err)
-		}
-		opt.RESTConfig = restConfig
 	}
 }
 

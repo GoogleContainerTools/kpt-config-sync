@@ -21,9 +21,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // kubectl auth provider plugins
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/flowcontrol"
 )
@@ -31,72 +33,76 @@ import (
 // DefaultTimeout is the default REST config timeout.
 const DefaultTimeout = 5 * time.Second
 
-// A source for creating a rest config
-type configSource struct {
-	name   string                       // The name for the config
-	create func() (*rest.Config, error) // The function for creating the config
-}
-
-// List of config sources that will be tried in order for creating a rest.Config
-var configSources = []configSource{
-	{
-		name:   "podServiceAccount",
-		create: newLocalClusterConfig,
-	},
-	{
-		name:   "kubectl",
-		create: newKubectlConfig,
-	},
-}
-
-// MonoRepoRestClient will attempt to create a new rest config from all
-// configured options and return the first successfully created configuration.
-// It always enables the client-side throttling to fix the commit stuck in the
-// inProgress state issue.
-// It is only used in the legacy mono-repo mode.
-func MonoRepoRestClient(timeout time.Duration) (*rest.Config, error) {
-	return newRestConfig(timeout, true)
-}
-
 // NewRestConfig will attempt to create a new rest config from all configured
 // options and return the first successfully created configuration.
 // The client-side throttling is only determined by if server-side flow control
 // is enabled or not. If server-side flow control is enabled, then client-side
 // throttling is disabled, vice versa.
-// It is used by the multi-repo mode.
 func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
-	return newRestConfig(timeout, false)
-}
-
-func newRestConfig(timeout time.Duration, isMonoRepo bool) (*rest.Config, error) {
 	var errorStrs []string
 
-	for _, source := range configSources {
-		config, err := source.create()
-		if err == nil {
-			klog.V(1).Infof("Created rest config from source %s", source.name)
-			klog.V(7).Infof("Config: %#v", *config)
+	// Build from k8s downward API
+	config, err := NewFromInClusterConfig()
+	if err != nil {
+		errorStrs = append(errorStrs, fmt.Sprintf("reading in-cluster config: %s", err))
 
-			UpdateQPS(config, isMonoRepo)
-
-			config.Timeout = timeout
-			return config, nil
+		// Detect path from env var
+		path, err := newConfigPath()
+		if err != nil {
+			errorStrs = append(errorStrs, fmt.Sprintf("finding local kubeconfig: %s", err))
+		} else {
+			// Build from local config file
+			config, err = NewFromConfigFile(path)
+			if err != nil {
+				errorStrs = append(errorStrs, fmt.Sprintf("reading local kubeconfig: %s", err))
+			} else {
+				errorStrs = nil
+			}
 		}
-
-		klog.V(5).Infof("Failed to create from %s: %s", source.name, err)
-		errorStrs = append(errorStrs, fmt.Sprintf("%s: %s", source.name, err))
 	}
+	if len(errorStrs) > 0 {
+		return nil, fmt.Errorf("failed to build rest config:\n%s", strings.Join(errorStrs, "\n"))
+	}
+	// Set timeout, if specified.
+	if timeout != 0 {
+		config.Timeout = timeout
+	}
+	klog.V(7).Infof("Config: %#v", *config)
+	return config, nil
+}
 
-	return nil, fmt.Errorf("failed to build rest config:\n%s", strings.Join(errorStrs, "\n"))
+// NewFromConfigFile returns a REST config built from the kube config file at
+// the specified path.
+func NewFromConfigFile(path string) (*rest.Config, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "loading REST config from %q", path)
+	}
+	setDefaults(config)
+	return config, nil
+}
+
+// NewFromInClusterConfig returns a REST config built from the k8s downward API.
+// This should work from inside a Pod to talk to the cluster the Pod is in.
+func NewFromInClusterConfig() (*rest.Config, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, errors.Wrapf(err, "loading REST config from K8s downward API")
+	}
+	setDefaults(config)
+	return config, nil
+}
+
+func setDefaults(config *rest.Config) {
+	if config.Timeout == 0 {
+		config.Timeout = DefaultTimeout
+	}
+	UpdateQPS(config)
 }
 
 // UpdateQPS modifies a rest.Config to update the client-side throttling QPS and
 // Burst QPS.
 //
-// If it is running in the legacy mono-repo mode, set the client-side
-// throttling: QPS: 20, burst 40.
-//
-// If it is the new multi-repo mode:
 // - If Flow Control is enabled on the apiserver, and client-side throttling is
 // not forced to be enabled, client-side throttling is disabled!
 // - If Flow Control is disabled or undetected on the apiserver, client-side
@@ -104,24 +110,10 @@ func newRestConfig(timeout time.Duration, isMonoRepo bool) (*rest.Config, error)
 //
 // Flow Control is enabled by default on Kubernetes v1.20+.
 // https://kubernetes.io/docs/concepts/cluster-administration/flow-control/
-func UpdateQPS(config *rest.Config, isMonoRepo bool) {
+func UpdateQPS(config *rest.Config) {
 	// Timeout if the query takes too long, defaulting to the lower QPS limits.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	if isMonoRepo {
-		// Comfortable QPS limits for us to run smoothly.
-		// The defaults are too low. It is probably safe to increase these if
-		// we see problems in the future or need to accommodate VERY large numbers
-		// of resources.
-		//
-		// config.QPS does not apply to WATCH requests. Currently, there is no client-side
-		// or server-side rate-limiting for WATCH requests.
-		config.QPS = 20
-		config.Burst = 40
-		klog.V(1).Infof("Legacy mono-repo mode, client-side throttling: QPS set to %.0f (burst: %d)", config.QPS, config.Burst)
-		return
-	}
 
 	flowControlEnabled, err := flowcontrol.IsEnabled(ctx, config)
 	if err != nil {
@@ -163,7 +155,7 @@ func NewConfigFlags(config *rest.Config) (*genericclioptions.ConfigFlags, error)
 	configPtrCopy := config
 	// Modify the rest.Config after initialization by copying from the supplied config.
 	cf.WrapConfigFn = func(factoryCfg *rest.Config) *rest.Config {
-		restConfigDeepCopyInto(configPtrCopy, factoryCfg)
+		DeepCopyInto(configPtrCopy, factoryCfg)
 		return factoryCfg
 	}
 
@@ -184,10 +176,10 @@ func NewConfigFlags(config *rest.Config) (*genericclioptions.ConfigFlags, error)
 	return cf, nil
 }
 
-// restConfigDeepCopyInto copies one rest.Config into another.
+// DeepCopyInto copies one rest.Config into another.
 // For reference, see rest.CopyConfig:
 // https://github.com/kubernetes/client-go/blob/v0.24.0/rest/config.go#L630
-func restConfigDeepCopyInto(from, to *rest.Config) {
+func DeepCopyInto(from, to *rest.Config) {
 	to.Host = from.Host
 	to.APIPath = from.APIPath
 	to.ContentConfig = from.ContentConfig
@@ -229,4 +221,13 @@ func restConfigDeepCopyInto(from, to *rest.Config) {
 	if from.ExecProvider != nil && from.ExecProvider.Config != nil {
 		to.ExecProvider.Config = from.ExecProvider.Config.DeepCopyObject()
 	}
+}
+
+// DeepCopy returns a deep copy of the specified rest.Config.
+// For reference, see rest.CopyConfig:
+// https://github.com/kubernetes/client-go/blob/v0.24.0/rest/config.go#L630
+func DeepCopy(from *rest.Config) *rest.Config {
+	to := &rest.Config{}
+	DeepCopyInto(from, to)
+	return to
 }

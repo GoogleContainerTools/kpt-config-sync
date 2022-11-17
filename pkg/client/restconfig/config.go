@@ -55,16 +55,6 @@ func newConfigPath() (string, error) {
 	return path, nil
 }
 
-// newConfigFromPath creates a rest.Config from a configuration file at the
-// supplied path.
-func newConfigFromPath(path string) (*rest.Config, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", path)
-	if err != nil {
-		return nil, err
-	}
-	return config, nil
-}
-
 // newRawConfigWithRules returns a clientcmdapi.Config from a configuration file whose path is
 // provided by newConfigPath, and the clientcmd.ClientConfigLoadingRules associated with it
 func newRawConfigWithRules() (*clientcmdapi.Config, *clientcmd.ClientConfigLoadingRules, error) {
@@ -128,22 +118,4 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 		cfgErrs = fmt.Errorf("failed to build configs:\n%s", strings.Join(badConfigs, "\n"))
 	}
 	return configs, cfgErrs
-}
-
-// newKubectlConfig creates a config for whichever context is active in kubectl.
-func newKubectlConfig() (*rest.Config, error) {
-	path, err := newConfigPath()
-	if err != nil {
-		return nil, errors.Wrapf(err, "while getting config path")
-	}
-	config, err := newConfigFromPath(path)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while loading from %v", path)
-	}
-	return config, nil
-}
-
-// newLocalClusterConfig creates a config for connecting to the local cluster API server.
-func newLocalClusterConfig() (*rest.Config, error) {
-	return rest.InClusterConfig()
 }

@@ -149,8 +149,10 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
+		WatchConfig:             opts.WatchConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		Client:                  sharedNt.Client,
+		WatchClient:             sharedNt.WatchClient,
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
 		DefaultReconcileTimeout: sharedNt.DefaultReconcileTimeout,
@@ -239,7 +241,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	scheme := newScheme(t)
-	c := connect(t, opts.RESTConfig, scheme)
 	ctx := context.Background()
 
 	webhookDisabled := false
@@ -249,8 +250,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
+		WatchConfig:             opts.WatchConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
-		Client:                  c,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,
 		ReconcilerPollingPeriod: 50 * time.Millisecond,
@@ -263,6 +264,9 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
 	}
+
+	// init the Client & WatchClient
+	nt.RenewClient()
 
 	if opts.SkipConfigSyncInstall {
 		return nt

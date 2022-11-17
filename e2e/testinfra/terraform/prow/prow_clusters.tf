@@ -76,48 +76,10 @@ module "multi-repo-autopilot-rapid-latest" {
   min_master_version = "latest"
 }
 
-# Mono repo clusters
-module "mono-repo-stable" {
-  source = "../modules/testgroup"
-  prefix = "mono-repo"
-  channel = "stable"
-  num_clusters = 3
-}
-
-module "mono-repo-regular" {
-  source = "../modules/testgroup"
-  prefix = "mono-repo"
-  channel = "regular"
-  num_clusters = 3
-}
-
-module "mono-repo-rapid" {
-  source = "../modules/testgroup"
-  prefix = "mono-repo"
-  channel = "rapid"
-  num_clusters = 3
-}
-
-module "mono-repo-rapid-latest" {
-  source = "../modules/testgroup"
-  prefix = "mono-repo"
-  channel = "rapid"
-  min_master_version = "latest"
-  num_clusters = 3
-}
-
 # One off clusters
 module "multi-repo-kind" {
   source = "../modules/e2ecluster"
   name = "multi-repo-kind"
-  channel = "regular"
-  subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
-  network = google_compute_network.e2e-network.name
-}
-
-module "mono-repo-kind" {
-  source = "../modules/e2ecluster"
-  name = "mono-repo-kind"
   channel = "regular"
   subnetwork = google_compute_subnetwork.e2e-subnetwork-1.name
   network = google_compute_network.e2e-network.name

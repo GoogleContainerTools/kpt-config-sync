@@ -119,7 +119,6 @@ push-images-multirepo: push-images
 .PHONY: pull-images
 pull-images:
 	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
-	docker pull $(NOMOS_TAG)
 	docker pull $(RECONCILER_TAG)
 	docker pull $(RECONCILER_MANAGER_TAG)
 	docker pull $(ADMISSION_WEBHOOK_TAG)

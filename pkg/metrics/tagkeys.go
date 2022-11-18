@@ -114,7 +114,7 @@ func StatusTagKey(err error) string {
 // StatusTagValueFromSummary returns error if the summary indicates at least 1
 // error, otherwise success.
 func StatusTagValueFromSummary(summary *v1beta1.ErrorSummary) string {
-	if summary.TotalCount == 0 {
+	if summary == nil || summary.TotalCount == 0 {
 		return StatusSuccess
 	}
 	return StatusError

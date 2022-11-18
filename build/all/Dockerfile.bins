@@ -1,0 +1,55 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Build all Config Sync go binaries
+FROM golang:1.17
+
+WORKDIR /workspace
+
+# Version string to embed in built binary.
+ARG VERSION
+ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
+
+ARG HELM_VERSION=v3.9.0
+ARG KUSTOMIZE_VERSION=v4.5.2
+
+# Install Helm
+RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \
+  tar -zxvf /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz -C /tmp && \
+  mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
+  rm -rf /tmp/linux-amd64 /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz
+
+# Install Kustomize
+RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -O /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
+  tar -zxvf /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -C /tmp && \
+  mv /tmp/kustomize /usr/local/bin/kustomize && \
+  rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
+
+# Install the render-helm-chart function.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
+  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTIOPN_VERSION}
+
+COPY . .
+
+# Build all our stuff.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
+  go install \
+    -mod=vendor \
+    -ldflags "-X kpt.dev/configsync/pkg/version.VERSION=${VERSION}" \
+    ./cmd/reconciler \
+    ./cmd/reconciler-manager \
+    ./cmd/hydration-controller \
+    ./cmd/admission-webhook \
+    ./cmd/oci-sync \
+    ./cmd/helm-sync

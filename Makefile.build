@@ -42,54 +42,60 @@ build-cli: pull-buildenv buildenv-dirs
 # Build Config Sync docker images
 .PHONY: build-images
 build-images: license
+	@echo "+++ Building the Bins image: $(BINS_TAG)"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		-t $(BINS_TAG) \
+		-f build/all/Dockerfile.bins \
+		--build-arg VERSION=${VERSION} \
+		.
+	@echo
 	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(RECONCILER_IMAGE) \
 		-t $(RECONCILER_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.reconciler \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(RECONCILER_MANAGER_IMAGE) \
 		-t $(RECONCILER_MANAGER_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.reconciler-manager \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(ADMISSION_WEBHOOK_IMAGE) \
 		-t $(ADMISSION_WEBHOOK_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.admission-webhook \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(HYDRATION_CONTROLLER_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.hydration-controller \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.hydration-controller-with-shell \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(OCI_SYNC_IMAGE) \
 		-t $(OCI_SYNC_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.oci-sync \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
+	@echo
 	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
 	@docker build $(DOCKER_BUILD_QUIET) \
-		--target $(HELM_SYNC_IMAGE) \
 		-t $(HELM_SYNC_TAG) \
-		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		-f build/all/Dockerfile.helm-sync \
+		--build-arg BINS_IMAGE=$(BINS_TAG) \
 		.
 
 # Deprecated alias of build-images. Remove this once unused.

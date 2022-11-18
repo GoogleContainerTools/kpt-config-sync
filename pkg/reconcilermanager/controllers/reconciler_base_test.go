@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -488,123 +489,143 @@ spec:
   progressDeadlineSeconds: 300 # different from declared
 `
 
-func TestIsDeploymentSame(t *testing.T) {
+func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 	declared := yamlToDeployment(t, declaredDeployment)
-	unObjCurrent := yamlToUnstructured(t, currentDeployment)
+	currentDeploymentUnstructured := yamlToUnstructured(t, currentDeployment)
 	testCases := map[string]struct {
 		declared          *appsv1.Deployment
-		unObjCurrent      *unstructured.Unstructured
+		current           *unstructured.Unstructured
 		isAutopilot       bool
 		overrideLimit     bool
 		manualChangeLimit bool
-		isSame            bool
+		expectedSame      bool
 	}{
 		"non-Autopilot, no override limits, no manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       false,
 			overrideLimit:     false,
 			manualChangeLimit: false,
-			isSame:            true,
+			expectedSame:      true,
 		},
 		"non-Autopilot, no override limits, manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       false,
 			overrideLimit:     false,
 			manualChangeLimit: true,
-			// We do not define some container resource limits to make the resource burstable
-			// For these container resource limits, Config Sync only manage them when user
-			// define the resources limits through our resource override API.
-			// In this test case, the resource limits are not defined in original declared deployment,
-			// and user also not define the resource limits through our resource override API,
-			// so we will allow the manual limits change.
-			isSame: true,
+			// We do not define some containers' resource limits to make the resource burstable.
+			// Config Sync only manages resource limits when a user
+			// defines resource limits through the resource override API.
+			// When a user resets resource limit overrides, the declared deployment will not have
+			// resource limits defined. To make sure a user can always successfully
+			// reset the resource limits override we must track differences in resource limits
+			// between the declared and current deployment, even if no resource limits are defined
+			// in the declared deployment.
+			expectedSame: false,
 		},
 		"non-Autopilot, override limits, no manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       false,
 			overrideLimit:     true,
 			manualChangeLimit: false,
-			isSame:            false,
+			expectedSame:      false,
 		},
 		"non-Autopilot, override limits, manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       false,
 			overrideLimit:     true,
 			manualChangeLimit: true,
-			isSame:            false,
+			expectedSame:      false,
 		},
 		"Autopilot, no override limits, no manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       true,
 			overrideLimit:     false,
 			manualChangeLimit: false,
-			isSame:            true,
+			expectedSame:      true,
 		},
 		"Autopilot, no override limits, manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       true,
 			overrideLimit:     false,
 			manualChangeLimit: true,
-			isSame:            true,
+			expectedSame:      true,
 		},
 		"Autopilot, override limits, no manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       true,
 			overrideLimit:     true,
 			manualChangeLimit: false,
-			isSame:            true,
+			expectedSame:      true,
 		},
 		"Autopilot, override limits, manual change limits": {
 			declared:          declared,
-			unObjCurrent:      unObjCurrent,
+			current:           currentDeploymentUnstructured,
 			isAutopilot:       true,
 			overrideLimit:     true,
 			manualChangeLimit: true,
-			isSame:            true,
+			expectedSame:      true,
 		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			declared := overrideResourceLimits(tc.declared, tc.overrideLimit)
-			unObjCurrent, err := manualChangeResourceLimits(tc.unObjCurrent, tc.manualChangeLimit)
+			var testDeclared *appsv1.Deployment
+			var testCurrent *unstructured.Unstructured
+			if tc.overrideLimit {
+				testDeclared = overrideResourceLimits(tc.declared)
+			} else {
+				testDeclared = tc.declared.DeepCopy()
+			}
+			if tc.manualChangeLimit {
+				var err error
+				testCurrent, err = manualChangeResourceLimits(tc.current)
+				require.NoError(t, err)
+			} else {
+				testCurrent = tc.current.DeepCopy()
+			}
+			dep, err := compareDeploymentsToCreatePatchData(tc.isAutopilot, testDeclared, testCurrent, reconcilerManagerAllowList, core.Scheme)
 			require.NoError(t, err)
-			dep, err := isDeploymentSame(tc.isAutopilot, declared, unObjCurrent, reconcilerManagerAllowList, core.Scheme)
-			require.NoError(t, err)
-			require.Equal(t, tc.isSame, dep.isDeploymentSame)
+			require.Equal(t, tc.expectedSame, dep.same)
 		})
 	}
 }
 
-func overrideResourceLimits(dep *appsv1.Deployment, isOverride bool) *appsv1.Deployment {
-	resultDep := dep.DeepCopy()
-	if !isOverride {
-		return resultDep
-	}
-	resources := &resultDep.Spec.Template.Spec.Containers[0].Resources
+func overrideResourceLimits(dep *appsv1.Deployment) *appsv1.Deployment {
+	updatedDeployment := dep.DeepCopy()
+	resources := &updatedDeployment.Spec.Template.Spec.Containers[0].Resources
 	resources.Limits = corev1.ResourceList{}
 	resources.Limits[corev1.ResourceMemory] = resource.MustParse("300Mi")
 	resources.Limits[corev1.ResourceCPU] = resource.MustParse("300m")
 
-	return resultDep
+	return updatedDeployment
 }
 
-func manualChangeResourceLimits(unDep *unstructured.Unstructured, isManaulChange bool) (*unstructured.Unstructured, error) {
-	resultUnDep := unDep.DeepCopy()
-	if !isManaulChange {
-		return resultUnDep, nil
+func manualChangeResourceLimits(unDep *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	updatedDeploymentUnstructured := unDep.DeepCopy()
+	o, err := kinds.ToTypedObject(updatedDeploymentUnstructured, core.Scheme)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert unstructured to typed object: %v", err)
 	}
-	if err := unstructured.SetNestedMap(resultUnDep.Object, map[string]interface{}{"memroy": "400Mi", "cpu": "400m"}, "spec", "template", "spec", "containers[0]", "resources", "limits"); err != nil {
-		return nil, err
+	dep, ok := o.(*appsv1.Deployment)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert the Object to Deployment type")
 	}
-	return resultUnDep, nil
+	resources := &dep.Spec.Template.Spec.Containers[0].Resources
+	resources.Limits = corev1.ResourceList{}
+	resources.Limits[corev1.ResourceMemory] = resource.MustParse("400Mi")
+	resources.Limits[corev1.ResourceCPU] = resource.MustParse("400m")
+	updatedDeploymentUnstructured, err = kinds.ToUnstructured(dep, core.Scheme)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert Deployment Object to Unstructured: %v", err)
+	}
+	return updatedDeploymentUnstructured, nil
 }
 
 func addContainerWithResources(resources map[string]corev1.ResourceRequirements) core.MetaMutator {

@@ -57,129 +57,73 @@ build-junit-report-cli: pull-buildenv buildenv-dirs
 	@mkdir -p $(addprefix $(OUTPUT_DIR)/go/bin/,linux_amd64)
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/build-junitreport-cli.sh linux_amd64 $(VERSION)
 
+# Targets for building individual images
+BUILD_IMAGE_TARGETS := $(patsubst %,__build-image-%,$(IMAGES))
+
+.PHONY: $(BUILD_IMAGE_TARGETS)
+$(BUILD_IMAGE_TARGETS): install-helm install-kustomize
+	@echo "+++ Building the $(subst __build-image-,,$@) image: $(call gen_image_tag,$(subst __build-image-,,$@))"
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
+		--target $(subst __build-image-,,$@) \
+		-t $(call gen_image_tag,$(subst __build-image-,,$@)) \
+		-f build/all/Dockerfile \
+		$(DOCKER_BUILD_ARGS) \
+		.
+
 # Build Config Sync docker images
 .PHONY: build-images
-build-images: install-helm install-kustomize
-	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(RECONCILER_IMAGE) \
-		-t $(RECONCILER_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(RECONCILER_MANAGER_IMAGE) \
-		-t $(RECONCILER_MANAGER_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(ADMISSION_WEBHOOK_IMAGE) \
-		-t $(ADMISSION_WEBHOOK_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(HYDRATION_CONTROLLER_IMAGE) \
-		-t $(HYDRATION_CONTROLLER_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
-		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(OCI_SYNC_IMAGE) \
-		-t $(OCI_SYNC_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(HELM_SYNC_IMAGE) \
-		-t $(HELM_SYNC_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Askpass image: $(ASKPASS_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(ASKPASS_IMAGE) \
-		-t $(ASKPASS_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
-	@echo "+++ Building the Nomos image: $(NOMOS_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
-		--target $(NOMOS_IMAGE) \
-		-t $(NOMOS_TAG) \
-		-f build/all/Dockerfile \
-		$(DOCKER_BUILD_ARGS) \
-		.
+build-images: $(BUILD_IMAGE_TARGETS)
 
 # Deprecated alias of build-images. Remove this once unused.
 .PHONY: build-images-multirepo
 build-images-multirepo: build-images
 
-# Pushes Config Sync docker images to REGISTRY.
-.PHONY: push-images
-push-images:
-	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
+.PHONY: auth-docker
+auth-docker:
 	@echo "+++ Using account:"
 	gcloud config get-value account
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(REGISTRY)))
-	docker push $(RECONCILER_TAG)
-	docker push $(RECONCILER_MANAGER_TAG)
-	docker push $(ADMISSION_WEBHOOK_TAG)
-	docker push $(HYDRATION_CONTROLLER_TAG)
-	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
-	docker push $(OCI_SYNC_TAG)
-	docker push $(HELM_SYNC_TAG)
-	docker push $(NOMOS_TAG)
-	docker push $(ASKPASS_TAG)
+	@gcloud $(GCLOUD_QUIET) auth configure-docker
+
+# Targets for pushing individual images
+PUSH_IMAGE_TARGETS := $(patsubst %,__push-image-%,$(IMAGES))
+
+.PHONY: $(PUSH_IMAGE_TARGETS)
+$(PUSH_IMAGE_TARGETS): auth-docker
+	docker push $(call gen_image_tag,$(subst __push-image-,,$@))
+
+# Pushes Config Sync docker images to REGISTRY.
+.PHONY: push-images
+push-images: $(PUSH_IMAGE_TARGETS)
 
 # Deprecated alias of push-images. Remove this once unused.
 .PHONY: push-images-multirepo
 push-images-multirepo: push-images
 
+# Targets for pulling individual images
+PULL_IMAGE_TARGETS := $(patsubst %,__pull-image-%,$(IMAGES))
+
+.PHONY: $(PULL_IMAGE_TARGETS)
+$(PULL_IMAGE_TARGETS): auth-docker
+	docker pull $(call gen_image_tag,$(subst __pull-image-,,$@))
+
 # Pulls all Config Sync images from REGISTRY
 .PHONY: pull-images
-pull-images:
-	@echo "+++ Pulling Config Sync images from $(REGISTRY)"
-	docker pull $(RECONCILER_TAG)
-	docker pull $(RECONCILER_MANAGER_TAG)
-	docker pull $(ADMISSION_WEBHOOK_TAG)
-	docker pull $(HYDRATION_CONTROLLER_TAG)
-	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
-	docker pull $(OCI_SYNC_TAG)
-	docker pull $(HELM_SYNC_TAG)
-	docker pull $(NOMOS_TAG)
-	docker pull $(ASKPASS_TAG)
+pull-images: $(PULL_IMAGE_TARGETS)
 
 # Deprecated alias of pull-images. Remove this once unused.
 .PHONY: pull-images-multirepo
 pull-images-multirepo: pull-images
 
+# Targets for retagging individual images
+RETAG_IMAGE_TARGETS := $(patsubst %,__retag-image-%,$(IMAGES))
+
+.PHONY: $(RETAG_IMAGE_TARGETS)
+$(RETAG_IMAGE_TARGETS):
+	docker tag $(OLD_REGISTRY)/$(subst __retag-image-,,$@):$(OLD_IMAGE_TAG) $(call gen_image_tag,$(subst __retag-image-,,$@))
+
 # Retags previously built Config Sync images
 .PHONY: retag-images
-retag-images:
-	@echo "+++ Retagging Config Sync images from $(OLD_REGISTRY)/*:$(OLD_IMAGE_TAG) to $(REGISTRY)/*:$(IMAGE_TAG)"
-	docker tag $(OLD_REGISTRY)/$(RECONCILER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_TAG)
-	docker tag $(OLD_REGISTRY)/$(RECONCILER_MANAGER_IMAGE):$(OLD_IMAGE_TAG) $(RECONCILER_MANAGER_TAG)
-	docker tag $(OLD_REGISTRY)/$(ADMISSION_WEBHOOK_IMAGE):$(OLD_IMAGE_TAG) $(ADMISSION_WEBHOOK_TAG)
-	docker tag $(OLD_REGISTRY)/$(HYDRATION_CONTROLLER_IMAGE):$(OLD_IMAGE_TAG) $(HYDRATION_CONTROLLER_TAG)
-	docker tag $(OLD_REGISTRY)/$(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE):$(OLD_IMAGE_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
-	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
-	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
-	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
-	docker tag $(OLD_REGISTRY)/$(ASKPASS_IMAGE):$(OLD_IMAGE_TAG) $(ASKPASS_TAG)
+retag-images: $(RETAG_IMAGE_TARGETS)
 
 # Deprecated alias of retag-images. Remove this once unused.
 .PHONY: retag-images-multirepo
@@ -197,30 +141,22 @@ build-manifests: build-manifests-operator build-manifests-oss
 .PHONY: build-manifests-oss
 build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(OSS_MANIFEST_STAGING_DIR)"
-	@ echo "    Using these tags:"
-	@ echo "    $(RECONCILER_MANAGER_IMAGE): $(RECONCILER_MANAGER_TAG)"
-	@ echo "    $(HYDRATION_CONTROLLER_IMAGE): $(HYDRATION_CONTROLLER_TAG)"
-	@ echo "    $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE): $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
-	@ echo "    $(RECONCILER_IMAGE): $(RECONCILER_TAG)"
-	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
-	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
-	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
-	@ echo "    $(ASKPASS_IMAGE): $(ASKPASS_TAG)"
+	@ echo " Using tags: $(REGISTRY)/*:$(IMAGE_TAG)"
 	@ rm -f $(OSS_MANIFEST_STAGING_DIR)/*
 	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
 		| sed \
-			-e "s|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|g" \
-			-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|g" \
-			-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|g" \
-			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
-			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
-			-e "s|ASKPASS_IMAGE_NAME|$(ASKPASS_TAG)|g" \
+			-e "s|RECONCILER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_IMAGE))|g" \
+			-e "s|OCI_SYNC_IMAGE_NAME|$(call gen_image_tag,$(OCI_SYNC_IMAGE))|g" \
+			-e "s|HELM_SYNC_IMAGE_NAME|$(call gen_image_tag,$(HELM_SYNC_IMAGE))|g" \
+			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(call gen_image_tag,$(HYDRATION_CONTROLLER_IMAGE))|g" \
+			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_MANAGER_IMAGE))|g" \
+			-e "s|ASKPASS_IMAGE_NAME|$(call gen_image_tag,$(ASKPASS_IMAGE))|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 
 	@ # Additional optional OSS manifests
 	@ cat "manifests/templates/admission-webhook.yaml" \
-		| sed -e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
+		| sed -e "s|WEBHOOK_IMAGE_NAME|$(call gen_image_tag,$(ADMISSION_WEBHOOK_IMAGE))|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/admission-webhook.yaml
 
 	@ echo "+++ Manifests generated in $(OSS_MANIFEST_STAGING_DIR)"
@@ -229,25 +165,17 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 .PHONY: build-manifests-operator
 build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(NOMOS_MANIFEST_STAGING_DIR)"
-	@ echo "    Using these tags:"
-	@ echo "    $(RECONCILER_MANAGER_IMAGE): $(RECONCILER_MANAGER_TAG)"
-	@ echo "    $(HYDRATION_CONTROLLER_IMAGE): $(HYDRATION_CONTROLLER_TAG)"
-	@ echo "    $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE): $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
-	@ echo "    $(RECONCILER_IMAGE): $(RECONCILER_TAG)"
-	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
-	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
-	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
-	@ echo "    $(ASKPASS_IMAGE): $(ASKPASS_TAG)"
+	@ echo " Using tags: $(REGISTRY)/*:$(IMAGE_TAG)"
 	@ rm -f $(NOMOS_MANIFEST_STAGING_DIR)/*
 	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
 		| sed \
-			-e "s|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|g" \
-			-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|g" \
-			-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|g" \
-			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
-			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
-			-e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
-			-e "s|ASKPASS_IMAGE_NAME|$(ASKPASS_TAG)|g" \
+			-e "s|RECONCILER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_IMAGE))|g" \
+			-e "s|OCI_SYNC_IMAGE_NAME|$(call gen_image_tag,$(OCI_SYNC_IMAGE))|g" \
+			-e "s|HELM_SYNC_IMAGE_NAME|$(call gen_image_tag,$(HELM_SYNC_IMAGE))|g" \
+			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(call gen_image_tag,$(HYDRATION_CONTROLLER_IMAGE))|g" \
+			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_MANAGER_IMAGE))|g" \
+			-e "s|WEBHOOK_IMAGE_NAME|$(call gen_image_tag,$(ADMISSION_WEBHOOK_IMAGE))|g" \
+			-e "s|ASKPASS_IMAGE_NAME|$(call gen_image_tag,$(ASKPASS_IMAGE))|g" \
 		> $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 

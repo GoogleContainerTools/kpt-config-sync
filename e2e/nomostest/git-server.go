@@ -27,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -87,8 +87,11 @@ func isAvailableDeployment(o client.Object) error {
 	if !ok {
 		return WrongTypeErr(o, d)
 	}
-
-	result, err := controllers.ComputeDeploymentStatus(d)
+	ud, err := kinds.ToUnstructured(d, core.Scheme)
+	if err != nil {
+		return fmt.Errorf("failed to convert Deployment Object to Unstructured: %v", err)
+	}
+	result, err := kstatus.Compute(ud)
 	if err != nil {
 		// Display the full state of the malfunctioning Deployment to aid in debugging.
 		jsn, e := json.MarshalIndent(d, "", "  ")

@@ -40,6 +40,8 @@ const (
 	RepoSyncKind = "RepoSync"
 	// RootSyncKind is the kind of the RepoSync resource.
 	RootSyncKind = "RootSync"
+	// NotificationKind is the kind of the Notification resource.
+	NotificationKind = "Notification"
 )
 
 const (

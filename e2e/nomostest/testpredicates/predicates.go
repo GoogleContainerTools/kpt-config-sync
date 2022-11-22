@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/notifications"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -429,6 +430,24 @@ func ObjectHasAnnotation(key string) Predicate {
 			}
 		}
 		return errors.Errorf("%s missing annotation (%s). Got %v", o.GetName(), key, annotations)
+	}
+}
+
+// NotificationHasStatus checks that the Notification has the specified status
+func NotificationHasStatus(expectedStatus v1beta1.NotificationStatus) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		n, ok := o.(*v1beta1.Notification)
+		if !ok {
+			return WrongTypeErr(o, n)
+		}
+		same := notifications.IsNotificationStatusSame(expectedStatus, n.Status)
+		if !same {
+			return fmt.Errorf("expected status %v, got %v", expectedStatus, n.Status)
+		}
+		return nil
 	}
 }
 

@@ -20,37 +20,40 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argoproj/notifications-engine/pkg/api"
 	"github.com/argoproj/notifications-engine/pkg/controller"
 	"github.com/argoproj/notifications-engine/pkg/services"
 	"github.com/argoproj/notifications-engine/pkg/subscriptions"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
-	csclientv1beta1 "kpt.dev/configsync/clientgen/apis/typed/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/notifications"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/util/log"
-	ctrl "sigs.k8s.io/controller-runtime"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
+	csclientv1beta1 "kpt.dev/configsync/clientgen/apis/typed/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util"
+	"kpt.dev/configsync/pkg/util/log"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const objectKey = "sync"
+const fieldManager = "notification-controller"
 
 var (
 	apiGroup = flag.String("api-group", util.EnvString(util.NotificationAPIGroup, v1beta1.SchemeGroupVersion.Group),
@@ -133,6 +136,7 @@ func main() {
 		Group: *apiGroup, Version: *apiVersion, Resource: apiResource,
 	}
 	notificationClient := dynamic.NewForConfigOrDie(restConfig).Resource(gvr)
+	notificationStatusClient := dynamic.NewForConfigOrDie(restConfig).Resource(v1beta1.GroupVersionResource("notifications")).Namespace(*resourceNamespace)
 
 	fieldsSelector := fields.SelectorFromSet(map[string]string{"metadata.name": *resourceName})
 	csClient, err := csclientv1beta1.NewForConfig(restConfig)
@@ -151,11 +155,25 @@ func main() {
 		cache.NewListWatchFromClient(csClient.RESTClient(), apiResource, *resourceNamespace, fieldsSelector),
 		exampleObject, *resyncCheckPeriod, cache.Indexers{})
 
+	statusUpdater := notificationStatusUpdater(notificationStatusClient)
+
 	notificationController := controller.NewController(
 		notificationClient,
 		notificationInformer,
 		notificationsFactory,
 		controller.WithToUnstructured(toUnstructured),
+		controller.WithEventCallback(func(eventSequence controller.NotificationEventSequence) {
+			defer func() {
+				if r := recover(); r != nil {
+					klog.Errorf("Recovered in eventCallback: %v", r)
+				}
+			}()
+			err := statusUpdater(eventSequence)
+			if err != nil {
+				klog.Errorf("Failed to update notification status for %s/%s. Err: %v",
+					eventSequence.Resource.GetNamespace(), eventSequence.Resource.GetName(), err)
+			}
+		}),
 	)
 
 	// Start informers and controller
@@ -166,4 +184,50 @@ func main() {
 	}
 
 	notificationController.Run(1, context.Background().Done())
+}
+
+func notificationStatusUpdater(notificationStatusClient dynamic.ResourceInterface) func(eventSequence controller.NotificationEventSequence) error {
+	var mux sync.Mutex
+	return func(eventSequence controller.NotificationEventSequence) error {
+		mux.Lock()
+		defer mux.Unlock()
+		ctx := context.Background()
+		unstructuredRSync, err := toUnstructured(eventSequence.Resource)
+		if err != nil {
+			return err
+		}
+		curNotificationUn, err := notificationStatusClient.Get(ctx, unstructuredRSync.GetName(), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		curNotification := &v1beta1.Notification{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curNotificationUn.UnstructuredContent(), curNotification); err != nil {
+			return err
+		}
+		commit, err := util.LastCommit(unstructuredRSync, *apiKind)
+		if err != nil {
+			return err
+		}
+		newNotificationStatus := notifications.CreateNotificationStatus(unstructuredRSync.GetGeneration(), commit, eventSequence)
+		if notifications.IsNotificationStatusSame(curNotification.Status, newNotificationStatus) {
+			return nil
+		}
+		curNotification.Status = newNotificationStatus
+		un, err := kinds.ToUnstructured(curNotification, core.Scheme)
+		if err != nil {
+			return err
+		}
+		up, err := notificationStatusClient.UpdateStatus(
+			ctx,
+			un,
+			metav1.UpdateOptions{
+				FieldManager: fieldManager,
+			},
+		)
+		if err != nil {
+			return err
+		}
+		klog.Infof("updated notification: %s/%s - %s", up.GetNamespace(), up.GetName(), up.GetResourceVersion())
+		return nil
+	}
 }

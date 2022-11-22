@@ -28,18 +28,21 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 func TestNotification(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncNN := nomostest.RootSyncNN("root-sync-2")
 	repoSyncNN := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	rootReconcilerName := core.RootReconcilerName(rootSyncNN.Name)
-	backendReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
+	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
 	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.Unstructured,
 		ntopts.InstallNotificationServer,
+		ntopts.RootRepo(rootSyncNN.Name),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
 	)
 	var err error
@@ -64,17 +67,11 @@ func TestNotification(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-
-	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+	// Enable notifications on RootSYnc
 	rootSync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
-	if err := nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
-
 	nomostest.SubscribeRootSyncNotification(rootSync, "on-sync-synced", "local")
-	if err := nt.KubeClient.Update(rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RootSync")
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
@@ -87,6 +84,31 @@ func TestNotification(t *testing.T) {
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
+	// query RootSync to get the generation
+	rootSyncObj := &v1beta1.RootSync{}
+	if err := nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSyncObj); err != nil {
+		nt.T.Fatal(err)
+	}
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace,
+			[]testpredicates.Predicate{testpredicates.NotificationHasStatus(v1beta1.NotificationStatus{
+				ObservedGeneration: rootSyncObj.Generation,
+				Commit:             nt.RootRepos[rootSyncNN.Name].Hash(),
+				Deliveries: []v1beta1.NotificationDelivery{
+					{
+						Trigger:         "on-sync-synced",
+						Service:         "local",
+						Recipient:       "",
+						AlreadyNotified: true,
+					},
+				},
+			})},
+		)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 	records, err := waitForNotifications(nt, 1)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -94,15 +116,16 @@ func TestNotification(t *testing.T) {
 	require.Equal(nt.T, nomostest.NotificationRecords{
 		Records: []nomostest.NotificationRecord{
 			{
-				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync is synced!\"\n  }\n}",
+				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-2 is synced!\"\n  }\n}",
 				Auth:    fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass123"))), // base64 encoded username/pass
 			},
 		},
 	}, *records)
-
-	nomostest.SubscribeRepoSyncNotification(repoSyncBackend, "on-sync-synced", "local")
-	nt.RootRepos[rootSyncNN.Name].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), repoSyncBackend)
-	nt.RootRepos[rootSyncNN.Name].CommitAndPush("Enable notifications on backend RepoSync")
+	// Enable notifications on RepoSync
+	repoSync := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+	nomostest.SubscribeRepoSyncNotification(repoSync, "on-sync-synced", "local")
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), repoSync)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RepoSync")
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Deployment(),
@@ -116,19 +139,40 @@ func TestNotification(t *testing.T) {
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
-	records, err = waitForNotifications(nt, 3)
+	// query RootSync to get the generation
+	repoSyncObj := &v1beta1.RepoSync{}
+	if err := nt.KubeClient.Get(repoSyncNN.Name, repoSyncNN.Namespace, repoSyncObj); err != nil {
+		nt.T.Fatal(err)
+	}
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.NotificationV1Beta1(), repoSyncNN.Name, repoSyncNN.Namespace,
+			[]testpredicates.Predicate{testpredicates.NotificationHasStatus(v1beta1.NotificationStatus{
+				ObservedGeneration: repoSyncObj.Generation,
+				Commit:             nt.NonRootRepos[repoSyncNN].Hash(),
+				Deliveries: []v1beta1.NotificationDelivery{
+					{
+						Trigger:         "on-sync-synced",
+						Service:         "local",
+						Recipient:       "",
+						AlreadyNotified: true,
+					},
+				},
+			})},
+		)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+	records, err = waitForNotifications(nt, 2)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	// RootSync notification for two commits, RepoSync notification for one commit
+	// RootSync notification for one commit, RepoSync notification for one commit
 	require.Equal(nt.T, nomostest.NotificationRecords{
 		Records: []nomostest.NotificationRecord{
 			{
-				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync is synced!\"\n  }\n}",
-				Auth:    fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass123"))), // base64 encoded username/pass
-			},
-			{
-				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync is synced!\"\n  }\n}",
+				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-2 is synced!\"\n  }\n}",
 				Auth:    fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass123"))), // base64 encoded username/pass
 			},
 			{
@@ -137,19 +181,12 @@ func TestNotification(t *testing.T) {
 			},
 		},
 	}, *records)
-
-	rootSync = nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
-	if err := nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
+	// Unsubscribe notification for RootSync and RepoSync
 	nomostest.UnsubscribeRootSyncNotification(rootSync)
-	if err := nt.KubeClient.Update(rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
-	nomostest.UnsubscribeRepoSyncNotification(repoSyncBackend)
-	nt.RootRepos[rootSyncNN.Name].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), repoSyncBackend)
-	nt.RootRepos[rootSyncNN.Name].CommitAndPush("Disable notifications on backend RepoSync")
-
+	nomostest.UnsubscribeRepoSyncNotification(repoSync)
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync)
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), repoSync)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable notifications on RootSync and RepoSync")
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
@@ -157,9 +194,44 @@ func TestNotification(t *testing.T) {
 		)
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchObject(kinds.Deployment(), backendReconcilerName, rootSyncNN.Namespace,
+		return nt.Watcher.WatchObject(kinds.Deployment(), nsReconcilerName, rootSyncNN.Namespace,
 			[]testpredicates.Predicate{testpredicates.DeploymentMissingContainer(reconcilermanager.Notification)},
 		)
+	})
+	tg.Go(func() error { // unregistering the RootSync NotificationConfig should delete the Notification CR
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace)
+	})
+	tg.Go(func() error { // unregistering the RepoSync NotificationConfig should delete the Notification CR
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), repoSyncNN.Name, repoSyncNN.Namespace)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Re-enable notifications for RootSync and RepoSync
+	nomostest.SubscribeRootSyncNotification(rootSync, "on-sync-synced", "local")
+	nomostest.SubscribeRepoSyncNotification(repoSync, "on-sync-synced", "local")
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync)
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), repoSync)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RootSync and RepoSync")
+	tg = taskgroup.New()
+	tg.Go(func() error { // registering the RootSync NotificationConfig should create the Notification CR
+		return nt.Watcher.WatchObject(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace, []testpredicates.Predicate{})
+	})
+	tg.Go(func() error { // registering the RepoSync NotificationConfig should create the Notification CR
+		return nt.Watcher.WatchObject(kinds.NotificationV1Beta1(), repoSyncNN.Name, repoSyncNN.Namespace, []testpredicates.Predicate{})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name))
+	nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove root-sync-2 and repo-sync-2")
+	tg = taskgroup.New()
+	tg.Go(func() error { // deleting the RootSync should delete the Notification CR
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace)
+	})
+	tg.Go(func() error { // deleting the RepoSync should delete the Notification CR
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), repoSyncNN.Name, repoSyncNN.Namespace)
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)

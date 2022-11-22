@@ -42,6 +42,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RepoSyncList{},
 		&RootSync{},
 		&RootSyncList{},
+		&Notification{},
+		&NotificationList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

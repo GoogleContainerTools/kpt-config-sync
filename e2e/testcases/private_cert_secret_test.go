@@ -280,6 +280,25 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	// Set RepoSync to use HTTPS with no auth and SSL verification disabled.
+	// This validates that the GIT_SSL_CAINFO env var can be removed.
+	// TODO: switch to HTTP instead of HTTPS, when supported by the local git server nginx proxy. That way we're not testing NoSSLVerify in the CACertSecretRef test.
+	repoSyncBackend.Spec.Git.Repo = repoSyncHTTPS
+	repoSyncBackend.Spec.Git.Auth = "none"
+	repoSyncBackend.Spec.Git.NoSSLVerify = true
+	repoSyncBackend.Spec.Git.SecretRef = nil
+	repoSyncBackend.Spec.Git.CACertSecretRef = nil
+	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS with no auth")
+	nt.WaitForRepoSyncs()
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, "GIT_SSL_CAINFO"),
+		nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS),
+		nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SSL_NO_VERIFY", "true"))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestCACertSecretWatch(t *testing.T) {

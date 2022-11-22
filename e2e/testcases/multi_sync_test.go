@@ -484,10 +484,13 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Ensure the Role is managed by the other Root repo %s", rootSync2)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		roleHasRules(rootPodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2))
-	if err != nil {
+	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
+	// Therefore, we need to retry here to wait until the `root-test` Root repo recreates the pod role.
+	if _, err := nomostest.Retry(90*time.Second, func() error {
+		return nt.Validate("pods", testNs, &rbacv1.Role{},
+			roleHasRules(rootPodRole().Rules),
+			nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2))
+	}); err != nil {
 		nt.T.Fatal(err)
 	}
 }

@@ -279,7 +279,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		}
 	}
 
-	result, err := ComputeDeploymentStatus(deployObj)
+	result, err := kstatus.Compute(deployObj)
 	if err != nil {
 		log.Error(err, "Managed object status check failed",
 			logFieldObject, reconcilerRef.String(),
@@ -298,7 +298,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	log.V(3).Info("RootSync reconciler Deployment status",
 		logFieldObject, reconcilerRef.String(),
-		"resourceVersion", deployObj.ResourceVersion,
+		"resourceVersion", deployObj.GetResourceVersion(),
 		"status", result.Status,
 		"message", result.Message)
 

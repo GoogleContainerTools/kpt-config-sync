@@ -156,7 +156,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 
 type mutateFn func(client.Object) error
 
-func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef types.NamespacedName, labelMap map[string]string, mutateObject mutateFn) (*appsv1.Deployment, controllerutil.OperationResult, error) {
+func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef types.NamespacedName, labelMap map[string]string, mutateObject mutateFn) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := parseDeployment(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, errors.Wrap(err, "failed to parse reconciler Deployment manifest from ConfigMap")
@@ -188,23 +188,21 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	if err := mutateObject(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, err
 	}
-	op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
-	if err != nil {
-		return reconcilerDeployment, op, err
-	}
+	appliedObj, op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
+
 	if op != controllerutil.OperationResultNone {
 		r.log.Info("Managed object upsert successful",
 			logFieldObject, reconcilerRef.String(),
 			logFieldKind, "Deployment",
 			logFieldOperation, op)
 	}
-	return reconcilerDeployment, op, nil
+	return appliedObj, op, err
 }
 
 // createOrPatchDeployment() first call Get() on the object. If the
 // object does not exist, Create() will be called. If it does exist, Patch()
 // will be called.
-func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (controllerutil.OperationResult, error) {
+func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
 	dRef := client.ObjectKeyFromObject(declared)
 	kind := "Deployment"
 	forcePatch := true
@@ -212,20 +210,20 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	currentDeploymentUnstructured, err := deploymentClient.Get(ctx, dRef.Name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, err
 		}
 		r.log.V(3).Info("Managed object not found, creating",
 			logFieldObject, dRef.String(),
 			logFieldKind, kind)
 		data, err := json.Marshal(declared)
 		if err != nil {
-			return controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
+			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		_, err = deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 		if err != nil {
-			return controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, err
 		}
-		return controllerutil.OperationResultCreated, nil
+		return appliedObj, controllerutil.OperationResultCreated, nil
 	}
 	currentGeneration := currentDeploymentUnstructured.GetGeneration()
 	currentUID := currentDeploymentUnstructured.GetUID()
@@ -233,13 +231,13 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	if r.isAutopilotCluster == nil {
 		isAutopilot, err := util.IsGKEAutopilotCluster(r.client)
 		if err != nil {
-			return controllerutil.OperationResultNone, fmt.Errorf("unable to determine if it is an Autopilot cluster: %w", err)
+			return nil, controllerutil.OperationResultNone, fmt.Errorf("unable to determine if it is an Autopilot cluster: %w", err)
 		}
 		r.isAutopilotCluster = &isAutopilot
 	}
 	dep, err := compareDeploymentsToCreatePatchData(*r.isAutopilotCluster, declared, currentDeploymentUnstructured, reconcilerManagerAllowList, r.scheme)
 	if err != nil {
-		return controllerutil.OperationResultNone, err
+		return nil, controllerutil.OperationResultNone, err
 	}
 	if dep.adjusted {
 		mutator := "Autopilot"
@@ -249,16 +247,16 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 			"mutator", mutator)
 	}
 	if dep.same {
-		return controllerutil.OperationResultNone, nil
+		return nil, controllerutil.OperationResultNone, nil
 	}
 	r.log.V(3).Info("Managed object found, patching",
 		logFieldObject, dRef.String(),
 		logFieldKind, kind)
-	deploymentAfterPatch, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+	appliedObj, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 	if err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
-			return controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, err
 		}
 		// The provided data is invalid (e.g. http://b/196922619), so delete and re-create the resource.
 		// This handles changes to immutable fields, like labels.
@@ -266,21 +264,21 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 			logFieldObject, dRef.String(),
 			logFieldKind, kind)
 		if err := deploymentClient.Delete(ctx, dRef.Name, metav1.DeleteOptions{}); err != nil {
-			return controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, err
 		}
 		data, err := json.Marshal(declared)
 		if err != nil {
-			return controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
+			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		_, err = deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err = deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 		if err != nil {
-			return controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, err
 		}
 	}
-	if deploymentAfterPatch.GetGeneration() == currentGeneration && deploymentAfterPatch.GetUID() == currentUID {
-		return controllerutil.OperationResultNone, nil
+	if appliedObj.GetGeneration() == currentGeneration && appliedObj.GetUID() == currentUID {
+		return appliedObj, controllerutil.OperationResultNone, nil
 	}
-	return controllerutil.OperationResultUpdated, nil
+	return appliedObj, controllerutil.OperationResultUpdated, nil
 }
 
 // deleteDeploymentFields delete all the fields in allowlist from unstructured object and convert the unstructured object to Deployment object
@@ -410,9 +408,8 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 }
 
 // deployment returns the deployment from the server
-func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*appsv1.Deployment, error) {
-	depObj := &appsv1.Deployment{}
-	depUnObj, err := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace).Get(ctx, dRef.Name, metav1.GetOptions{})
+func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*unstructured.Unstructured, error) {
+	deployObj, err := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace).Get(ctx, dRef.Name, metav1.GetOptions{})
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -421,10 +418,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
 	}
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(depUnObj.Object, depObj); err != nil {
-		return nil, errors.Wrapf(err, "failed to convert unstructured object %s into Deployment object", depUnObj.GetName())
-	}
-	return depObj, nil
+	return deployObj, nil
 }
 
 func mutateContainerResource(ctx context.Context, c *corev1.Container, override *v1beta1.OverrideSpec, reconcilerType string) {

@@ -38,7 +38,7 @@ const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
 const testGitServerImage = "gcr.io/stolos-dev/git-server:v1.0.0"
 const testGitHTTPServer = "http-git-server"
-const testGitHTTPServerImage = "gcr.io/stolos-dev/http-git-server:v1.0.0"
+const testGitHTTPServerImage = "gcr.io/stolos-dev/http-git-server:v1.1.0"
 
 func testGitServerSelector() map[string]string {
 	// Note that maps are copied by reference into objects.
@@ -202,6 +202,7 @@ func gitService() *corev1.Service {
 	)
 	service.Spec.Selector = testGitServerSelector()
 	service.Spec.Ports = []corev1.ServicePort{{Name: "ssh", Port: 22},
+		{Name: "http", Port: 80},
 		{Name: "https", Port: 443}}
 	return service
 }
@@ -243,7 +244,10 @@ func gitDeployment() *appsv1.Deployment {
 					{
 						Name:  testGitHTTPServer,
 						Image: testGitHTTPServerImage,
-						Ports: []corev1.ContainerPort{{ContainerPort: 443}},
+						Ports: []corev1.ContainerPort{
+							{ContainerPort: 80},
+							{ContainerPort: 443},
+						},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "repos", MountPath: "/git-server/repos"},
 							{Name: "ssl-cert", MountPath: "/etc/nginx/ssl"},

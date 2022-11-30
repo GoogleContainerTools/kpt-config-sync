@@ -17,15 +17,16 @@ package fake
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,13 +35,18 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
-	"kpt.dev/configsync/pkg/util/clusterconfig"
+	"kpt.dev/configsync/pkg/util/log"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,6 +60,8 @@ var _ client.StatusWriter = &statusWriter{}
 // Client is a fake implementation of client.Client.
 type Client struct {
 	scheme  *runtime.Scheme
+	codecs  serializer.CodecFactory
+	mapper  meta.RESTMapper
 	Objects map[core.ID]client.Object
 }
 
@@ -68,6 +76,7 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 
 	result := Client{
 		scheme:  scheme,
+		codecs:  serializer.NewCodecFactory(scheme),
 		Objects: make(map[core.ID]client.Object),
 	}
 
@@ -86,6 +95,9 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 		t.Fatal(errors.Wrap(err, "unable to create fake Client"))
 	}
 
+	// Build mapper using known GVKs from the scheme
+	result.mapper = testutil.NewFakeRESTMapper(allKnownGVKs(result.scheme)...)
+
 	for _, o := range objs {
 		err = result.Create(context.Background(), o)
 		if err != nil {
@@ -94,6 +106,16 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	}
 
 	return &result
+}
+
+// allKnownGVKs returns an unsorted list of GVKs known by the scheme and mapper.
+func allKnownGVKs(scheme *runtime.Scheme) []schema.GroupVersionKind {
+	typeMap := scheme.AllKnownTypes()
+	gvkList := make([]schema.GroupVersionKind, 0, len(typeMap))
+	for gvk := range typeMap {
+		gvkList = append(gvkList, gvk)
+	}
+	return gvkList
 }
 
 func toGR(gk schema.GroupKind) schema.GroupResource {
@@ -108,39 +130,45 @@ func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object)
 	obj.SetName(key.Name)
 	obj.SetNamespace(key.Namespace)
 
-	if obj.GetObjectKind().GroupVersionKind().Empty() {
-		// Since many times we call with just an empty struct with no type metadata.
-		gvks, _, err := c.Scheme().ObjectKinds(obj)
-		if err != nil {
-			return err
-		}
-		switch len(gvks) {
-		case 0:
-			return errors.Errorf("unregistered Type; register it in fake.Client.Schema: %T", obj)
-		case 1:
-			obj.GetObjectKind().SetGroupVersionKind(gvks[0])
-		default:
-			return errors.Errorf("fake.Client does not support multiple Versions for the same GroupKind: %v", obj)
-		}
+	// Populate the GVK, if not populated. We need it to build the ID.
+	// The normal rest client populates it from the apiserver response anyway.
+	gvk, err := kinds.Lookup(obj, c.scheme)
+	if err != nil {
+		return err
 	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
 	id := core.IDOf(obj)
-	o, ok := c.Objects[id]
+	cachedObj, ok := c.Objects[id]
 	if !ok {
 		return newNotFound(id)
 	}
+	klog.V(5).Infof("Getting(cached) %T %s (ResourceVersion: %q): %s",
+		cachedObj, gvk.Kind, cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
 
-	// The actual Kubernetes implementation is much more complex.
-	// This approximates the behavior, but will fail (for example) if obj lies
-	// about its GroupVersionKind.
-	jsn, err := json.Marshal(o)
+	// Convert to a typed object, optionally convert between versions
+	tObj, matches, err := c.convertToVersion(cachedObj, gvk)
 	if err != nil {
-		return errors.Wrapf(err, "unable to Marshal %v", obj)
+		return err
 	}
-	err = json.Unmarshal(jsn, obj)
+	if !matches {
+		// Either the typed object specified the wrong GVK
+		// or the desired GVK isn't in the scheme.
+		return errors.Errorf("fake.Client.Get failed to convert object %s from %q to %q",
+			key, cachedObj.GetObjectKind().GroupVersionKind(), gvk)
+	}
+
+	// Convert from the typed object to whatever type the caller asked for.
+	// If it's the same, it'll just do a DeepCopyInto.
+	err = c.scheme.Convert(tObj, obj, nil)
 	if err != nil {
-		return errors.Wrapf(err, "unable to Unmarshal: %s", string(jsn))
+		return err
 	}
+	// Conversion sometimes drops the GVK, so add it back in.
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+
+	klog.V(5).Infof("Getting %T %s (ResourceVersion: %q): %s",
+		obj, gvk.Kind, obj.GetResourceVersion(), log.AsJSON(obj))
 	return nil
 }
 
@@ -171,50 +199,80 @@ func (c *Client) List(_ context.Context, list client.ObjectList, opts ...client.
 		return errors.Errorf("called fake.Client.List on non-List type %T", list)
 	}
 
-	if ul, isUnstructured := list.(*unstructured.UnstructuredList); isUnstructured {
-		return c.listUnstructured(ul, options)
+	// Populate the GVK, if not populated.
+	// The normal rest client populates it from the apiserver response anyway.
+	listGVK, err := kinds.Lookup(list, c.scheme)
+	if err != nil {
+		return err
+	}
+	// Get the item GVK
+	gvk := listGVK.GroupVersion().WithKind(strings.TrimSuffix(listGVK.Kind, "List"))
+	// Validate the list is a list
+	if gvk.Kind == listGVK.Kind {
+		return errors.Errorf("fake.Client.List(UnstructuredList) called with non-List GVK %q", listGVK.String())
+	}
+	list.GetObjectKind().SetGroupVersionKind(listGVK)
+
+	// Get the List results from the cache as an UnstructuredList.
+	uList := &unstructured.UnstructuredList{}
+	uList.SetGroupVersionKind(listGVK)
+
+	// Populate the items
+	for _, obj := range c.list(gvk.GroupKind()) {
+		// Convert to a typed object of the right version
+		tObj, matches, err := c.convertToVersion(obj, gvk)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			// Either the typed object specified the wrong GVK
+			// or the desired GVK isn't in the scheme.
+			return errors.Errorf("fake.Client.List failed to convert object %s from %q to %q",
+				client.ObjectKeyFromObject(obj), tObj.GetObjectKind().GroupVersionKind(), gvk)
+		}
+		// Convert typed object to unstructured, since we're using an UnstructuredList.
+		uObj, err := kinds.ToUnstructured(tObj, c.Scheme())
+		if err != nil {
+			return err
+		}
+		// TODO: Is GVK set for unversioned List items? typed List items?
+		uObj.SetGroupVersionKind(gvk)
+		// Skip objects that don't match the ListOptions filters
+		ok, err := c.matchesListFilters(uObj, &options)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// No match
+			continue
+		}
+		uList.Items = append(uList.Items, *uObj)
 	}
 
-	switch l := list.(type) {
-	case *apiextensionsv1.CustomResourceDefinitionList:
-		return c.listV1CRDs(l, options)
-	case *v1.SyncList:
-		return c.listSyncs(l, options)
-	case *configsyncv1beta1.RootSyncList:
-		return c.listRootSyncs(l, options)
-	case *configsyncv1beta1.RepoSyncList:
-		return c.listRepoSyncs(l, options)
-	case *corev1.SecretList:
-		return c.listSecrets(l, options)
-	case *corev1.NodeList:
-		return c.listNodes(l, options)
+	// Convert from the UnstructuredList to whatever type the caller asked for.
+	// If it's the same, it'll just do a DeepCopyInto.
+	err = c.scheme.Convert(uList, list, nil)
+	if err != nil {
+		return err
 	}
-	return errors.Errorf("fake.Client does not support List(%T)", list)
+	// Conversion sometimes drops the GVK, so add it back in.
+	list.GetObjectKind().SetGroupVersionKind(gvk)
+
+	klog.V(5).Infof("Listing %T %s (ResourceVersion: %q, Items: %d): %s",
+		list, gvk.Kind, list.GetResourceVersion(), len(uList.Items), log.AsJSON(list))
+	return nil
 }
 
-func (c *Client) fromUnstructured(obj client.Object) (client.Object, error) {
-	// If possible, we want to deal with the non-Unstructured form of objects.
-	// Unstructureds are prone to declare a bunch of empty maps we don't care
-	// about, and can't easily tell cmp.Diff to ignore.
-
-	u, isUnstructured := obj.(*unstructured.Unstructured)
-	if !isUnstructured {
-		// Already not unstructured.
-		return obj, nil
-	}
-
-	result, err := c.Scheme().New(u.GroupVersionKind())
-	if err != nil {
-		// The type isn't registered.
-		return obj, nil
-	}
-
-	jsn, err := json.Marshal(obj)
+func (c *Client) convertFromUnstructured(obj client.Object) (client.Object, error) {
+	tObj, err := kinds.ToTypedObject(obj, c.Scheme())
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(jsn, result)
-	return result.(client.Object), err
+	cObj, ok := tObj.(client.Object)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert patched %T to client.Object", tObj)
+	}
+	return cObj, nil
 }
 
 func validateCreateOptions(opts *client.CreateOptions) error {
@@ -231,60 +289,90 @@ func validateCreateOptions(opts *client.CreateOptions) error {
 
 // Create implements client.Client.
 func (c *Client) Create(_ context.Context, obj client.Object, opts ...client.CreateOption) error {
-	createOpts := &client.CreateOptions{}
-	createOpts.ApplyOptions(opts)
-	err := validateCreateOptions(createOpts)
+	options := &client.CreateOptions{}
+	options.ApplyOptions(opts)
+	err := validateCreateOptions(options)
 	if err != nil {
 		return err
 	}
 
-	obj, err = c.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	// Convert to a typed object for storage, with GVK populated.
+	tObj, err := c.convertFromUnstructured(obj)
 	if err != nil {
 		return err
 	}
 
-	id := core.IDOf(obj)
-	_, found := c.Objects[core.IDOf(obj)]
+	// Set defaults
+	c.scheme.Default(tObj)
+
+	id := core.IDOf(tObj)
+	_, found := c.Objects[id]
 	if found {
 		return newAlreadyExists(id)
 	}
 
-	c.Objects[id] = obj
+	initResourceVersion(tObj)
+	klog.V(5).Infof("Creating %T %s (ResourceVersion: %q): %s",
+		tObj, client.ObjectKeyFromObject(tObj), tObj.GetResourceVersion(), log.AsJSON(tObj))
+
+	// Copy ResourceVersion change back to input object
+	obj.SetResourceVersion(tObj.GetResourceVersion())
+
+	c.Objects[id] = tObj
 	return nil
 }
 
-func validateDeleteOptions(opts []client.DeleteOption) error {
-	var unsupported []client.DeleteOption
-	for _, opt := range opts {
-		switch opt {
-		case client.PropagationPolicy(metav1.DeletePropagationBackground):
-		default:
-			unsupported = append(unsupported, opt)
-		}
+func validateDeleteOptions(opts client.DeleteOptions) error {
+	if opts.DryRun != nil {
+		return errors.Errorf("fake.Client.Delete does not yet support DryRun, but got: %+v", opts)
 	}
-	if len(unsupported) > 0 {
-		jsn, _ := json.MarshalIndent(opts, "", "  ")
-		return errors.Errorf("fake.Client.Delete does not yet support opts, but got: %v", string(jsn))
+	if opts.GracePeriodSeconds != nil {
+		return errors.Errorf("fake.Client.Delete does not yet support GracePeriodSeconds, but got: %+v", opts)
 	}
-
+	if opts.Preconditions != nil {
+		return errors.Errorf("fake.Client.Delete does not yet support Preconditions, but got: %+v", opts)
+	}
+	if opts.PropagationPolicy != nil &&
+		*opts.PropagationPolicy != metav1.DeletePropagationBackground {
+		return errors.Errorf("fake.Client.Delete does not yet support PropagationPolicy %q",
+			*opts.PropagationPolicy)
+	}
 	return nil
 }
 
 // Delete implements client.Client.
 func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	err := validateDeleteOptions(opts)
+	options := client.DeleteOptions{}
+	options.ApplyOptions(opts)
+	err := validateDeleteOptions(options)
 	if err != nil {
 		return err
 	}
 
+	// Populate the GVK, if not populated.
+	gvk, err := kinds.Lookup(obj, c.scheme)
+	if err != nil {
+		return err
+	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+
 	id := core.IDOf(obj)
 
-	_, found := c.Objects[id]
+	cachedObj, found := c.Objects[id]
 	if !found {
 		return newNotFound(id)
 	}
 
-	// Delete objects whose ownerRef is the current obj.
+	klog.V(5).Infof("Deleting %T %s (ResourceVersion: %q): %s",
+		cachedObj, client.ObjectKeyFromObject(cachedObj), cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
+
+	c.deleteManagedObjects(id)
+	delete(c.Objects, id)
+	return nil
+}
+
+// deleteManagedObjects deletes objects whose ownerRef is the specified obj.
+func (c *Client) deleteManagedObjects(id core.ID) {
 	for _, o := range c.Objects {
 		for _, ownerRef := range o.GetOwnerReferences() {
 			if ownerRef.Name == id.Name && ownerRef.Kind == id.Kind {
@@ -292,43 +380,40 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 			}
 		}
 	}
-	delete(c.Objects, id)
-
-	return nil
-}
-
-func (c *Client) toUnstructured(obj client.Object) (unstructured.Unstructured, error) {
-	uObj, err := kinds.ToUnstructured(obj, c.Scheme())
-	if err != nil {
-		return unstructured.Unstructured{}, err
-	}
-	return *uObj, nil
 }
 
 func (c *Client) getStatusFromObject(obj client.Object) (map[string]interface{}, bool, error) {
-	u, err := c.toUnstructured(obj)
+	uObj, err := kinds.ToUnstructured(obj, c.Scheme())
 	if err != nil {
 		return nil, false, err
 	}
-	return unstructured.NestedMap(u.Object, "status")
+	return unstructured.NestedMap(uObj.Object, "status")
 }
 
 func (c *Client) updateObjectStatus(obj client.Object, status map[string]interface{}) (client.Object, error) {
-	u, err := c.toUnstructured(obj)
+	uObj, err := kinds.ToUnstructured(obj, c.Scheme())
 	if err != nil {
 		return nil, err
 	}
-
-	if err = unstructured.SetNestedMap(u.Object, status, "status"); err != nil {
+	if err = unstructured.SetNestedMap(uObj.Object, status, "status"); err != nil {
 		return obj, err
 	}
-
-	updated := &unstructured.Unstructured{Object: u.Object}
-	updated.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-	return c.fromUnstructured(updated)
+	return c.convertFromUnstructured(uObj)
 }
 
 func validateUpdateOptions(opts *client.UpdateOptions) error {
+	if len(opts.DryRun) > 0 {
+		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
+			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+		}
+	}
+	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+	}
+	return nil
+}
+
+func validatePatchOptions(opts *client.PatchOptions) error {
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
 			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
@@ -349,14 +434,16 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		return err
 	}
 
-	obj, err = c.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	tObj, err := c.convertFromUnstructured(obj)
 	if err != nil {
 		return err
 	}
 
-	id := core.IDOf(obj)
+	// Set defaults
+	c.scheme.Default(tObj)
 
-	_, found := c.Objects[id]
+	id := core.IDOf(tObj)
+	cachedObj, found := c.Objects[id]
 	if !found {
 		return newNotFound(id)
 	}
@@ -369,35 +456,134 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		// don't merge or store the result
 		return nil
 	}
+
+	// Copy cached ResourceVersion to updated object & increment
+	tObj.SetResourceVersion(cachedObj.GetResourceVersion())
+	err = incrementResourceVersion(tObj)
+	if err != nil {
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
+	}
+
+	// Copy ResourceVersion change back to input object
+	obj.SetResourceVersion(tObj.GetResourceVersion())
+
 	if hasStatus {
-		u, err := c.updateObjectStatus(obj, oldStatus)
+		tObj, err = c.updateObjectStatus(tObj, oldStatus)
 		if err != nil {
 			return err
 		}
-
-		c.Objects[id] = u
-	} else {
-		c.Objects[id] = obj
 	}
+
+	klog.V(5).Infof("Updating %T %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		tObj, id, tObj.GetResourceVersion(),
+		log.AsJSON(tObj), cmp.Diff(cachedObj, tObj))
+
+	c.Objects[id] = tObj
 	return nil
 }
 
 // Patch implements client.Client.
-func (c *Client) Patch(ctx context.Context, obj client.Object, _ client.Patch, opts ...client.PatchOption) error {
-	// Currently re-using the Update implementation for Patch since it fits the use-case where this is used for unit tests.
-	// Please use this with caution for your use-case.
-	var updateOpts []client.UpdateOption
-	for _, opt := range opts {
-		if uOpt, ok := opt.(client.UpdateOption); ok {
-			updateOpts = append(updateOpts, uOpt)
-		} else if opt == client.ForceOwnership {
-			// Ignore, for now.
-			// TODO: Simulate FieldManagement and Force updates.
-		} else {
-			return errors.Errorf("invalid patch option: %+v", opt)
-		}
+func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	patchOpts := &client.PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+	err := validatePatchOptions(patchOpts)
+	if err != nil {
+		return err
 	}
-	return c.Update(ctx, obj, updateOpts...)
+
+	gvk, err := kinds.Lookup(obj, c.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to lookup GVK from scheme: %w", err)
+	}
+
+	patchData, err := patch.Data(obj)
+	if err != nil {
+		return fmt.Errorf("failed to build patch: %w", err)
+	}
+
+	id := core.IDOf(obj)
+	cachedObj, found := c.Objects[id]
+	var mergedData []byte
+	switch patch.Type() {
+	case types.ApplyPatchType:
+		// WARNING: If you need to test SSA with multiple managers, do it in e2e tests!
+		// Unfortunately, there's no good way to replicate the field-manager
+		// behavior of Server-Side Apply, because some of the code used by the
+		// apiserver is internal and can't be imported.
+		// So we're using Update behavior here instead, since that's effectively
+		// how SSA acts when there's only one field manager.
+		// Since we're treating the patch data as the full intent, we don't need
+		// to merge with the cached object, just preserve the ResourceVersion.
+		mergedData = patchData
+	case types.MergePatchType:
+		if found {
+			oldData, err := json.Marshal(cachedObj)
+			if err != nil {
+				return err
+			}
+			mergedData, err = jsonpatch.MergePatch(oldData, patchData)
+			if err != nil {
+				return err
+			}
+		} else {
+			mergedData = patchData
+		}
+	case types.StrategicMergePatchType:
+		if found {
+			rObj, err := c.scheme.New(gvk)
+			if err != nil {
+				return err
+			}
+			oldData, err := json.Marshal(cachedObj)
+			if err != nil {
+				return err
+			}
+			mergedData, err = strategicpatch.StrategicMergePatch(oldData, patchData, rObj)
+			if err != nil {
+				return err
+			}
+		} else {
+			mergedData = patchData
+		}
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(patchData)
+		if err != nil {
+			return err
+		}
+		oldData, err := json.Marshal(cachedObj)
+		if err != nil {
+			return err
+		}
+		mergedData, err = patch.Apply(oldData)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("patch type not supported: %q", patch.Type())
+	}
+	// Use a new object, instead of updating the cached object,
+	// because unmarshal doesn't always delete unspecified fields.
+	uObj := &unstructured.Unstructured{}
+	if err = uObj.UnmarshalJSON(mergedData); err != nil {
+		return fmt.Errorf("failed to unmarshal patch data: %w", err)
+	}
+	tObj, err := c.convertFromUnstructured(uObj)
+	if err != nil {
+		return err
+	}
+	if found {
+		tObj.SetResourceVersion(cachedObj.GetResourceVersion())
+	} else {
+		tObj.SetResourceVersion("0") // init to allow incrementing
+	}
+	if err := incrementResourceVersion(tObj); err != nil {
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
+	}
+	klog.V(5).Infof("Patching %s (Found: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		id, found, tObj.GetResourceVersion(),
+		log.AsJSON(tObj), cmp.Diff(cachedObj, tObj))
+	c.Objects[id] = tObj
+	return nil
 }
 
 // DeleteAllOf implements client.Client.
@@ -414,14 +600,13 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 		return err
 	}
 
-	obj, err = s.Client.fromUnstructured(obj.DeepCopyObject().(client.Object))
+	tObj, err := s.Client.convertFromUnstructured(obj)
 	if err != nil {
 		return err
 	}
 
-	id := core.IDOf(obj)
-
-	_, found := s.Client.Objects[id]
+	id := core.IDOf(tObj)
+	cachedObj, found := s.Client.Objects[id]
 	if !found {
 		return newNotFound(id)
 	}
@@ -430,27 +615,42 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 	if err != nil {
 		return err
 	}
-	if hasStatus {
-		if len(updateOpts.DryRun) > 0 {
-			// don't merge or store the result
-			return nil
-		}
 
-		u, err := s.Client.updateObjectStatus(s.Client.Objects[id], newStatus)
-		if err != nil {
-			return err
-		}
-
-		s.Client.Objects[id] = u
-	} else {
-		return errors.Errorf("the object %q/%q does not have a status field", obj.GetObjectKind().GroupVersionKind(), obj.GetName())
+	if !hasStatus {
+		return errors.Errorf("the object %q/%q does not have a status field",
+			tObj.GetObjectKind().GroupVersionKind(), tObj.GetName())
 	}
+
+	if len(updateOpts.DryRun) > 0 {
+		// don't merge or store the result
+		return nil
+	}
+
+	err = incrementResourceVersion(cachedObj)
+	if err != nil {
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
+	}
+
+	klog.V(5).Infof("Updating Status %T %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		cachedObj, id.ObjectKey, cachedObj.GetResourceVersion(),
+		log.AsJSON(newStatus), cmp.Diff(cachedObj, newStatus))
+
+	// Copy ResourceVersion change back to input object
+	obj.SetResourceVersion(cachedObj.GetResourceVersion())
+
+	u, err := s.Client.updateObjectStatus(cachedObj, newStatus)
+	if err != nil {
+		return err
+	}
+
+	s.Client.Objects[id] = u
 	return nil
 }
 
 // Patch implements client.StatusWriter. It only updates the status field.
 func (s *statusWriter) Patch(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
-	return s.Update(ctx, obj)
+	// TODO: Impliment status patch, if needed
+	panic("fakeClient.Status().Patch() not yet implimented")
 }
 
 // Status implements client.Client.
@@ -469,20 +669,16 @@ func (c *Client) Check(t *testing.T, wants ...client.Object) {
 	wantMap := make(map[core.ID]client.Object)
 
 	for _, obj := range wants {
-		obj, err := c.fromUnstructured(obj)
+		obj, err := c.convertFromUnstructured(obj)
 		if err != nil {
 			// This is a test precondition, and if it fails the following error
 			// messages will be garbage.
 			t.Fatal(err)
 		}
-
-		cobj, ok := obj.(client.Object)
-		if !ok {
-			t.Errorf("obj is not a Kubernetes object %v", obj)
-		}
-		wantMap[core.IDOf(cobj)] = cobj
+		wantMap[core.IDOf(obj)] = obj
 	}
 
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 	checked := make(map[core.ID]bool)
 	for id, want := range wantMap {
 		checked[id] = true
@@ -491,23 +687,7 @@ func (c *Client) Check(t *testing.T, wants ...client.Object) {
 			t.Errorf("fake.Client missing %s", id.String())
 			continue
 		}
-
-		_, wantUnstructured := want.(*unstructured.Unstructured)
-		_, actualUnstructured := actual.(*unstructured.Unstructured)
-		if wantUnstructured != actualUnstructured {
-			// If you see this error, you should register the type so the code can
-			// compare them properly.
-			t.Errorf("got want.(type)=%T and actual.(type)=%T for two objects of type %s, want equal",
-				want, actual, want.GetObjectKind().GroupVersionKind().String())
-			continue
-		}
-
-		if diff := cmp.Diff(want, actual, cmpopts.EquateEmpty()); diff != "" {
-			// If you're seeing errors originating from how unstructured conversions work,
-			// e.g. the diffs are a bunch of nil maps, then register the type in the
-			// client's scheme.
-			t.Errorf("diff to fake.Client.Objects[%s]:\n%s", id.String(), diff)
-		}
+		asserter.Equal(t, want, actual, "expected object (%s) to be equal", id)
 	}
 	for id := range c.Objects {
 		if !checked[id] {
@@ -535,242 +715,6 @@ func (c *Client) list(gk schema.GroupKind) []client.Object {
 	return result
 }
 
-func (c *Client) listV1CRDs(list *apiextensionsv1.CustomResourceDefinitionList, options client.ListOptions) error {
-	if options.FieldSelector != nil {
-		return errors.Errorf("fake.Client.List for CustomResourceDefinitionList does not yet support the FieldSelector option, but got: %+v", options)
-	}
-	objs := c.list(kinds.CustomResourceDefinition())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		switch o := obj.(type) {
-		case *apiextensionsv1.CustomResourceDefinition:
-			list.Items = append(list.Items, *o)
-		case *v1beta1.CustomResourceDefinition:
-			crd, err := clusterconfig.V1Beta1ToV1CRD(o)
-			if err != nil {
-				return err
-			}
-			list.Items = append(list.Items, *crd)
-		case *unstructured.Unstructured:
-			crd, err := clusterconfig.AsV1CRD(o)
-			if err != nil {
-				return err
-			}
-			list.Items = append(list.Items, *crd)
-		default:
-			return errors.Errorf("non-CRD stored as CRD: %+v", obj)
-		}
-	}
-
-	return nil
-}
-
-func (c *Client) listNodes(list *corev1.NodeList, options client.ListOptions) error {
-	if options.FieldSelector != nil {
-		return errors.Errorf("fake.Client.List for NodeList does not yet support the FieldSelector option, but got: %+v", options)
-	}
-	objs := c.list(corev1.SchemeGroupVersion.WithKind("Node").GroupKind())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		node, ok := obj.(*corev1.Node)
-		if !ok {
-			return errors.Errorf("non-Node stored as Node: %v", obj)
-		}
-		list.Items = append(list.Items, *node)
-	}
-
-	return nil
-}
-
-func (c *Client) listSyncs(list *v1.SyncList, options client.ListOptions) error {
-	if options.FieldSelector != nil {
-		return errors.Errorf("fake.Client.List for SyncList does not yet support the FieldSelector option, but got: %+v", options)
-	}
-	objs := c.list(kinds.Sync().GroupKind())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		sync, ok := obj.(*v1.Sync)
-		if !ok {
-			return errors.Errorf("non-Sync stored as Sync: %v", obj)
-		}
-		list.Items = append(list.Items, *sync)
-	}
-
-	return nil
-}
-
-func (c *Client) listRootSyncs(list *configsyncv1beta1.RootSyncList, options client.ListOptions) error {
-	objs := c.list(kinds.RootSyncV1Beta1().GroupKind())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		if options.FieldSelector != nil {
-			fieldSelector := strings.Split(options.FieldSelector.String(), "=")
-			field := fieldSelector[0]
-			if len(fieldSelector) != 2 {
-				return errors.Errorf("fake.Client.List for RootSyncList only supports OneTermEqualSelector FieldSelector option, but got: %+v", options)
-			}
-			uObj, err := c.toUnstructured(obj)
-			if err != nil {
-				return err
-			}
-			var fs []string
-			for _, s := range strings.Split(field, ".") {
-				if len(s) > 0 {
-					fs = append(fs, s)
-				}
-			}
-			val, found, err := unstructured.NestedString(uObj.Object, fs...)
-			if err != nil || !found {
-				continue
-			}
-			actualFields := fields.Set{field: val}
-			if !options.FieldSelector.Matches(actualFields) {
-				continue
-			}
-		}
-		rs, ok := obj.(*configsyncv1beta1.RootSync)
-		if !ok {
-			return errors.Errorf("non-RootSync stored as RootSync: %v", obj)
-		}
-		list.Items = append(list.Items, *rs)
-	}
-	return nil
-}
-
-func (c *Client) listRepoSyncs(list *configsyncv1beta1.RepoSyncList, options client.ListOptions) error {
-	objs := c.list(kinds.RepoSyncV1Beta1().GroupKind())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		if options.FieldSelector != nil {
-			fieldSelector := strings.Split(options.FieldSelector.String(), "=")
-			field := fieldSelector[0]
-			if len(fieldSelector) != 2 {
-				return errors.Errorf("fake.Client.List for RepoSyncList only supports OneTermEqualSelector FieldSelector option, but got: %+v", options)
-			}
-			uObj, err := c.toUnstructured(obj)
-			if err != nil {
-				return err
-			}
-			var fs []string
-			for _, s := range strings.Split(field, ".") {
-				if len(s) > 0 {
-					fs = append(fs, s)
-				}
-			}
-			val, found, err := unstructured.NestedString(uObj.Object, fs...)
-			if err != nil || !found {
-				continue
-			}
-			actualFields := fields.Set{field: val}
-			if !options.FieldSelector.Matches(actualFields) {
-				continue
-			}
-		}
-		rs, ok := obj.(*configsyncv1beta1.RepoSync)
-		if !ok {
-			return errors.Errorf("non-RepoSync stored as RepoSync: %v", obj)
-		}
-		list.Items = append(list.Items, *rs)
-	}
-	return nil
-}
-
-func (c *Client) listSecrets(list *corev1.SecretList, options client.ListOptions) error {
-	if options.FieldSelector != nil {
-		return errors.Errorf("fake.Client.List for SecretList does not yet support the FieldSelector option, but got: %+v", options)
-	}
-	objs := c.list(kinds.Secret().GroupKind())
-	for _, obj := range objs {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		s, ok := obj.(*corev1.Secret)
-		if !ok {
-			return errors.Errorf("non-Secret stored as Secret: %v", obj)
-		}
-		list.Items = append(list.Items, *s)
-	}
-	return nil
-}
-
-func (c *Client) listUnstructured(list *unstructured.UnstructuredList, options client.ListOptions) error {
-	if options.FieldSelector != nil {
-		return errors.Errorf("fake.Client.List for UnstructuredList does not yet support the FieldSelector option, but got: %+v", options)
-	}
-	gvk := list.GetObjectKind().GroupVersionKind()
-	if gvk.Empty() {
-		return errors.Errorf("fake.Client.List(UnstructuredList) requires GVK")
-	}
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		return errors.Errorf("fake.Client.List(UnstructuredList) called with non-List GVK %q", gvk.String())
-	}
-	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
-
-	for _, obj := range c.list(gvk.GroupKind()) {
-		if options.Namespace != "" && obj.GetNamespace() != options.Namespace {
-			continue
-		}
-		if options.LabelSelector != nil {
-			l := labels.Set(obj.GetLabels())
-			if !options.LabelSelector.Matches(l) {
-				continue
-			}
-		}
-		uObj, err := c.toUnstructured(obj)
-		if err != nil {
-			return err
-		}
-		list.Items = append(list.Items, uObj)
-	}
-	return nil
-}
-
 // Applier returns a fake.Applier wrapping this fake.Client. Callers using the
 // resulting Applier will read from/write to the original fake.Client.
 func (c *Client) Applier() reconcile.Applier {
@@ -784,5 +728,100 @@ func (c *Client) Scheme() *runtime.Scheme {
 
 // RESTMapper implements client.Client.
 func (c *Client) RESTMapper() meta.RESTMapper {
-	panic("fake.Client does not support RESTMapper()")
+	return c.mapper
+}
+
+// convertToVersion converts the object to a typed object of the targetGVK.
+// Does both object type conversion and version conversion.
+func (c *Client) convertToVersion(obj runtime.Object, targetGVK schema.GroupVersionKind) (runtime.Object, bool, error) {
+	objGVK, err := kinds.Lookup(obj, c.scheme)
+	if err != nil {
+		return nil, false, err
+	}
+	if objGVK.GroupKind() != targetGVK.GroupKind() {
+		// No match
+		return nil, false, nil
+	}
+	if objGVK.Version != targetGVK.Version {
+		// Version conversion goes through the unversioned internal type first.
+		// This avoids all versions needing to know how to convert to all other versions.
+		untypedObj, err := c.scheme.New(targetGVK.GroupKind().WithVersion(runtime.APIVersionInternal))
+		if err != nil {
+			return nil, false, err
+		}
+		err = c.scheme.Convert(obj, untypedObj, nil)
+		if err != nil {
+			return nil, false, err
+		}
+		obj = untypedObj
+	}
+	// Convert to the desired typed object
+	tObj, err := c.scheme.New(targetGVK)
+	if err != nil {
+		return nil, false, err
+	}
+	err = c.scheme.Convert(obj, tObj, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	return tObj, true, nil
+}
+
+// matchesListFilters returns true if the object matches the constaints
+// specified by the ListOptions: Namespace, LabelSelector, and FieldSelector.
+func (c *Client) matchesListFilters(obj runtime.Object, opts *client.ListOptions) (bool, error) {
+	labels, fields, accessor, err := c.getAttrs(obj)
+	if err != nil {
+		return false, err
+	}
+	if opts.Namespace != "" && opts.Namespace != accessor.GetNamespace() {
+		// No match
+		return false, nil
+	}
+	if opts.LabelSelector != nil && !opts.LabelSelector.Matches(labels) {
+		// No match
+		return false, nil
+	}
+	if opts.FieldSelector != nil && !opts.FieldSelector.Matches(fields) {
+		// No match
+		return false, nil
+	}
+	// Match!
+	return true, nil
+}
+
+// getAttrs returns the label set and field set from an object that can be used
+// for query filtering. This is roughly equivelent to what's in the apiserver,
+// except only supporting the few metadata fields that are supported by CRDs.
+func (c *Client) getAttrs(obj runtime.Object) (labels.Set, fields.Fields, metav1.Object, error) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	labelSet := labels.Set(accessor.GetLabels())
+
+	uObj, err := kinds.ToUnstructured(obj, c.scheme)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	uFields := &UnstructuredFields{Object: uObj}
+
+	return labelSet, uFields, accessor, nil
+}
+
+func incrementResourceVersion(obj client.Object) error {
+	rv := obj.GetResourceVersion()
+	rvInt, err := strconv.Atoi(rv)
+	if err != nil {
+		return fmt.Errorf("failed to parse resourceVersion: %w", err)
+	}
+	obj.SetResourceVersion(strconv.Itoa(rvInt + 1))
+	return nil
+}
+
+func initResourceVersion(obj client.Object) {
+	rv := obj.GetResourceVersion()
+	if rv == "" {
+		obj.SetResourceVersion("1")
+	}
 }

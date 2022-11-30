@@ -102,7 +102,7 @@ func fakeClient(t *testing.T, objs ...client.Object) *syncerFake.Client {
 	return syncerFake.NewClient(t, core.Scheme, objs...)
 }
 
-func TestCreate(t *testing.T) {
+func TestUpsertAuthSecret(t *testing.T) {
 	testCases := []struct {
 		name       string
 		reposync   *v1beta1.RepoSync
@@ -117,8 +117,7 @@ func TestCreate(t *testing.T) {
 			client:   fakeClient(t, secret(t, gitSecretName, keyData, sshAuth, gitSource, core.Namespace(reposyncNs))),
 			wantKey:  types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, gitSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, gitSecretName), keyData, sshAuth, gitSource,
-				core.Namespace(nsReconcilerKey.Namespace),
-			),
+				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("1")),
 		},
 		{
 			name:     "Secret updated for git source",
@@ -129,8 +128,7 @@ func TestCreate(t *testing.T) {
 			),
 			wantKey: types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, gitSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, gitSecretName), updatedKeyData, sshAuth, gitSource,
-				core.Namespace(nsReconcilerKey.Namespace),
-			),
+				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("2")),
 		},
 		{
 			name:      "Secret not found for git source",
@@ -153,8 +151,7 @@ func TestCreate(t *testing.T) {
 			client:   fakeClient(t, secret(t, helmSecretName, tokenData, tokenAuth, helmSource, core.Namespace(reposyncNs))),
 			wantKey:  types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, helmSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, helmSecretName), tokenData, tokenAuth, helmSource,
-				core.Namespace(nsReconcilerKey.Namespace),
-			),
+				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("1")),
 		},
 		{
 			name:     "Secret updated for helm source",
@@ -165,8 +162,7 @@ func TestCreate(t *testing.T) {
 			),
 			wantKey: types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, helmSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, helmSecretName), updatedKeyData, tokenAuth, helmSource,
-				core.Namespace(nsReconcilerKey.Namespace),
-			),
+				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("2")),
 		},
 		{
 			name:      "Secret not found for helm source",
@@ -190,11 +186,17 @@ func TestCreate(t *testing.T) {
 			sKey, err := upsertAuthSecret(context.Background(), log, tc.reposync, tc.client, nsReconcilerKey)
 			assert.Equal(t, tc.wantKey, sKey, "unexpected secret key returned")
 			if tc.wantError {
-				assert.Error(t, err, "expected upsertSecrets to error")
+				assert.Error(t, err, "expected upsertAuthSecret to error")
 				return
 			}
-			assert.NoError(t, err, "expected upsertSecrets not to error")
-			testutil.AssertEqual(t, tc.client.Objects[core.IDOf(tc.wantSecret)], tc.wantSecret, "unexpected secret contents")
+			assert.NoError(t, err, "expected upsertAuthSecret not to error")
+
+			key := client.ObjectKeyFromObject(tc.wantSecret)
+			got := &corev1.Secret{}
+			ctx := context.Background()
+			err = tc.client.Get(ctx, key, got)
+			assert.NoError(t, err, "expected Secret to exist")
+			testutil.AssertEqual(t, got, tc.wantSecret, "unexpected secret contents")
 		})
 	}
 }

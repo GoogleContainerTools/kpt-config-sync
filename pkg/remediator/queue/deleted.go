@@ -23,15 +23,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type deleted struct {
+// Deleted wraps an Object that has be deleted
+type Deleted struct {
 	client.Object
 }
 
 // DeepCopyObject implements client.Object.
 //
 // This ensures when we deepcopy a deleted object, we retain that it is deleted.
-func (d *deleted) DeepCopyObject() runtime.Object {
-	return &deleted{Object: d.Object.DeepCopyObject().(client.Object)}
+func (d *Deleted) DeepCopyObject() runtime.Object {
+	return &Deleted{Object: d.Object.DeepCopyObject().(client.Object)}
 }
 
 // MarkDeleted marks the given Object as having been deleted from the cluster.
@@ -43,7 +44,7 @@ func MarkDeleted(ctx context.Context, obj client.Object) client.Object {
 		metrics.RecordInternalError(ctx, "remediator")
 		return obj
 	}
-	return &deleted{obj}
+	return &Deleted{obj}
 }
 
 // WasDeleted returns true if the given Object was marked as having been
@@ -54,6 +55,6 @@ func WasDeleted(ctx context.Context, obj client.Object) bool {
 		metrics.RecordInternalError(ctx, "remediator")
 		return false
 	}
-	_, wasDeleted := obj.(*deleted)
+	_, wasDeleted := obj.(*Deleted)
 	return wasDeleted
 }

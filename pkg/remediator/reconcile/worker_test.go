@@ -65,9 +65,9 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 			},
 			want: []client.Object{
 				// TODO: Figure out why the reconciler is stripping away labels and annotations.
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
 					core.Label("first", "one")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				fake.ClusterRoleObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
 					core.Label("second", "two")),
 			},
 		},
@@ -93,8 +93,8 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 				queue.MarkDeleted(context.Background(), fake.ClusterRoleObject()),
 			},
 			want: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("1")),
+				fake.ClusterRoleObject(syncertest.ManagementEnabled, core.ResourceVersion("1")),
 			},
 		},
 	}
@@ -186,9 +186,11 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	}
 	expectedObjs := []client.Object{
 		// CRB delete should be reverted
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			core.ResourceVersion("1")),
 		// Role revert should fail from fake Update error
 		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.ResourceVersion("2"),
 			core.Label("new", "label")),
 	}
 
@@ -217,8 +219,8 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 
 	// Execute runtime changes
 	for _, obj := range changedObjs {
-		if queue.WasDeleted(ctx, obj) {
-			if err := c.Delete(ctx, obj); err != nil {
+		if deletedObj, ok := obj.(*queue.Deleted); ok {
+			if err := c.Delete(ctx, deletedObj.Object); err != nil {
 				t.Fatalf("Failed to delete object in fake client: %v", err)
 			}
 		} else {
@@ -291,7 +293,7 @@ func TestWorker_Refresh(t *testing.T) {
 				fake.RoleObject(core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "qux"))),
 			want: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
-				core.Annotation("foo", "qux")),
+				core.ResourceVersion("1"), core.Annotation("foo", "qux")),
 			wantDeleted: false,
 			wantErr:     nil,
 		},

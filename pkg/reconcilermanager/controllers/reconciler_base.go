@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -111,6 +112,10 @@ type reconcilerBase struct {
 	// if it's the latest or not. So this is just an optimization, not a guarantee.
 	// https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
 	lastReconciledResourceVersions map[types.NamespacedName]string
+}
+
+func (r *reconcilerBase) serviceAccountSubject(reconcilerRef types.NamespacedName) rbacv1.Subject {
+	return newSubject(reconcilerRef.Name, reconcilerRef.Namespace, kinds.ServiceAccount().Kind)
 }
 
 func (r *reconcilerBase) upsertServiceAccount(

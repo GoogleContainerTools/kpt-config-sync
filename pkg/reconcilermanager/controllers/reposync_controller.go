@@ -266,7 +266,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Overwrite reconciler rolebinding.
-	if rbRef, err := r.upsertRoleBinding(ctx, rs.Namespace, reconcilerRef.Namespace); err != nil {
+	if rbRef, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
 		log.Error(err, "Managed object upsert failed",
 			logFieldObject, rbRef.String(),
 			logFieldKind, "RoleBinding")
@@ -740,9 +740,9 @@ func (r *RepoSyncReconciler) validateNamespaceName(namespaceName string) error {
 	return nil
 }
 
-func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, rsNamespace, reconcilerNamespace string) (client.ObjectKey, error) {
+func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {
 	rbRef := client.ObjectKey{
-		Namespace: rsNamespace,
+		Namespace: rsRef.Namespace,
 		Name:      RepoSyncPermissionsName(),
 	}
 	childRB := &rbacv1.RoleBinding{}
@@ -750,7 +750,9 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, rsNamespace,
 	childRB.Namespace = rbRef.Namespace
 
 	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childRB, func() error {
-		return r.mutateRoleBinding(ctx, childRB, rsNamespace, reconcilerNamespace)
+		childRB.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
+		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		return nil
 	})
 	if err != nil {
 		return rbRef, err
@@ -762,17 +764,6 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, rsNamespace,
 			logFieldOperation, op)
 	}
 	return rbRef, nil
-}
-
-func (r *RepoSyncReconciler) mutateRoleBinding(ctx context.Context, rb *rbacv1.RoleBinding, rsNamespace, reconcilerNamespace string) error {
-	// Update rolereference.
-	rb.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
-
-	rsList := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, rsList, client.InNamespace(rsNamespace)); err != nil {
-		return errors.Wrapf(err, "failed to list the RepoSync objects in namespace %q", rsNamespace)
-	}
-	return r.updateRoleBindingSubjects(rb, rsList, reconcilerNamespace)
 }
 
 func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RepoSync) (bool, error) {

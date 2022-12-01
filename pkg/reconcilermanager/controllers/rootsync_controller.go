@@ -115,7 +115,10 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
 			r.clearLastReconciled(rsRef)
-			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef.Namespace)
+			r.log.Info("Deleting managed objects",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
+			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef)
 		}
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
@@ -216,7 +219,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	if crbRef, err := r.upsertClusterRoleBinding(ctx, rs.Namespace, reconcilerRef.Namespace); err != nil {
+	if crbRef, err := r.upsertClusterRoleBinding(ctx, reconcilerRef); err != nil {
 		log.Error(err, "Managed object upsert failed",
 			logFieldObject, crbRef.String(),
 			logFieldKind, "ClusterRoleBinding")
@@ -529,13 +532,16 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, rsNamespace, reconcilerNamespace string) (client.ObjectKey, error) {
+func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	crbRef := client.ObjectKey{Name: RootSyncPermissionsName()}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
 	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childCRB, func() error {
-		return r.mutateRootSyncClusterRoleBinding(ctx, childCRB, rsNamespace, reconcilerNamespace)
+		childCRB.OwnerReferences = nil
+		childCRB.RoleRef = rolereference("cluster-admin", "ClusterRole")
+		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		return nil
 	})
 	if err != nil {
 		return crbRef, err
@@ -547,19 +553,6 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, rsNam
 			logFieldOperation, op)
 	}
 	return crbRef, nil
-}
-
-func (r *RootSyncReconciler) mutateRootSyncClusterRoleBinding(ctx context.Context, crb *rbacv1.ClusterRoleBinding, rsNamespace, reconcilerNamespace string) error {
-	crb.OwnerReferences = nil
-
-	// Update rolereference.
-	crb.RoleRef = rolereference("cluster-admin", "ClusterRole")
-
-	rsList := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, rsList, client.InNamespace(rsNamespace)); err != nil {
-		return errors.Wrapf(err, "failed to list the RootSync objects")
-	}
-	return r.updateClusterRoleBindingSubjects(crb, rsList, reconcilerNamespace)
 }
 
 func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RootSync) (bool, error) {

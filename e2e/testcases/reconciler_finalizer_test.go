@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -202,8 +203,11 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t,
+		nomostesting.MultiRepos,
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
+	)
 
 	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	nsRepo := nt.NonRootRepos[repoSyncNN]
@@ -318,8 +322,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
-	nt := nomostest.New(t, nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	nt := nomostest.New(t,
+		nomostesting.MultiRepos,
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
+	)
 
 	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	nsRepo := nt.NonRootRepos[repoSyncNN]

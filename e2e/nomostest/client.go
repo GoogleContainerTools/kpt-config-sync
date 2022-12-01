@@ -37,6 +37,7 @@ import (
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/remediator/watch"
+	resourcegroupv1alpha1 "kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -82,6 +83,7 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 		networkingv1.SchemeBuilder,
 		rbacv1.SchemeBuilder,
 		rbacv1beta1.SchemeBuilder,
+		resourcegroupv1alpha1.SchemeBuilder.SchemeBuilder,
 	}
 	for _, b := range builders {
 		err := b.AddToScheme(s)

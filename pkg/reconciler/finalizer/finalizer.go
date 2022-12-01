@@ -98,7 +98,7 @@ func (f *Finalizer) AddFinalizer(ctx context.Context, obj *unstructured.Unstruct
 	if updated {
 		klog.Info("Finalizer injection successful")
 	} else {
-		klog.Warning("Finalizer injection skipped: already exists")
+		klog.V(5).Info("Finalizer injection skipped: already exists")
 	}
 	return updated, nil
 }
@@ -119,7 +119,7 @@ func (f *Finalizer) RemoveFinalizer(ctx context.Context, obj *unstructured.Unstr
 	if updated {
 		klog.Info("Finalizer removal successful")
 	} else {
-		klog.Warning("Finalizer removal skipped: already removed")
+		klog.V(5).Info("Finalizer removal skipped: already removed")
 	}
 	return updated, nil
 }
@@ -164,7 +164,7 @@ func (f *Finalizer) setFinalizingCondition(ctx context.Context, obj *unstructure
 	if updated {
 		klog.Info("ReconcilerFinalizing condition update successful")
 	} else {
-		klog.Warning("ReconcilerFinalizing condition update skipped: already set")
+		klog.V(5).Info("ReconcilerFinalizing condition update skipped: already set")
 	}
 	return updated, nil
 }
@@ -209,7 +209,7 @@ func (f *Finalizer) removeFinalizingCondition(ctx context.Context, obj *unstruct
 	if updated {
 		klog.Info("ReconcilerFinalizing condition removal successful")
 	} else {
-		klog.Warning("ReconcilerFinalizing condition removal skipped: already removed")
+		klog.V(5).Info("ReconcilerFinalizing condition removal skipped: already removed")
 	}
 	return updated, nil
 }
@@ -286,7 +286,7 @@ func (f *Finalizer) updateFailureCondition(ctx context.Context, obj *unstructure
 	if updated {
 		klog.Info("ReconcilerFinalizerFailure condition update successful")
 	} else {
-		klog.Warning("ReconcilerFinalizerFailure condition update skipped: already set")
+		klog.V(5).Info("ReconcilerFinalizerFailure condition update skipped: already set")
 	}
 	return updated, nil
 }

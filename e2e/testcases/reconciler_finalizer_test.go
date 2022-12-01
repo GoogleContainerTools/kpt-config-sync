@@ -24,6 +24,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -281,8 +282,8 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	if setDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
 		rootRepo.Add(repoSyncPath, repoSync)
 		rootRepo.CommitAndPush("Enabling RepoSync deletion propagation")
-		nt.WaitForRepoSyncs()
 	}
+	nt.WaitForRepoSyncs()
 	nomostest.WatchForObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
 		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
 		nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
@@ -463,7 +464,7 @@ func tailReconcilerLogs(ctx context.Context, nt *nomostest.NT, reconcilerNN type
 	}
 	// Only print the logs if the test has failed
 	if nt.T.Failed() {
-		nt.T.Logf("Reconciler logs:\n%s", string(out))
+		nt.T.Logf("Reconciler deployment logs (%s):\n%s", reconcilerNN, string(out))
 	}
 }
 
@@ -531,6 +532,10 @@ func cleanupSingleLevel(nt *nomostest.NT, rootSyncNN, deployment1NN, namespace1N
 }
 
 func cleanupMultiLevel(nt *nomostest.NT, rootSyncNN, repoSyncNN, deployment1NN, deployment2NN, namespace1NN types.NamespacedName) {
+	if nt.T.Failed() && *e2e.Debug {
+		nt.T.Log("Skipping test cleanup: debug enabled")
+		return
+	}
 	nt.T.Log("Stopping webhook")
 	// Stop webhook to avoid deletion prevention.
 	// Webhook will be re-enabled by test setup, if the next test needs it.
@@ -648,7 +653,7 @@ func nsReconcilerObjectKey(namespace, syncName string) client.ObjectKey {
 func setDeletionPropagationPolicy(obj client.Object, policy metadata.DeletionPropagationPolicy) bool {
 	annotations := obj.GetAnnotations()
 	if len(annotations) == 0 {
-		annotations = map[string]string{}
+		annotations = make(map[string]string, 1)
 	} else if val, found := annotations[metadata.DeletionPropagationPolicyAnnotationKey]; found && val == string(policy) {
 		return false
 	}

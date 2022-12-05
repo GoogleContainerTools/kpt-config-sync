@@ -46,7 +46,7 @@ exporters:
   googlecloud:
     metric:
       prefix: "custom.googleapis.com/opencensus/config_sync/"
-      # The exporter would always fail at sending metric descriptor. Skipping 
+      # The exporter would always fail at sending metric descriptor. Skipping
       # creation of metric descriptors until the error from upstream is resolved
       # The metric streaming data is not affected
       # https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/issues/529
@@ -59,15 +59,15 @@ exporters:
     metric:
       prefix: "kubernetes.io/internal/addons/config_sync/"
       # skip_create_descriptor: Metrics start with 'kubernetes.io/' have already
-      # got descriptors defined internally. Skip sending dupeicated metric 
+      # got descriptors defined internally. Skip sending dupeicated metric
       # descriptors here to prevent errors or conflicts.
       skip_create_descriptor: true
-      # instrumentation_library_labels: Otel Collector by default attaches 
+      # instrumentation_library_labels: Otel Collector by default attaches
       # 'instrumentation_version' and 'instrumentation_source' labels that are
       # not specified in our Cloud Monarch definitions, thus skipping them here
       instrumentation_library_labels: false
-      # create_service_timeseries: This is a recommended configuration for 
-      # 'service metrics' starts with 'kubernetes.io/' prefix. It uses 
+      # create_service_timeseries: This is a recommended configuration for
+      # 'service metrics' starts with 'kubernetes.io/' prefix. It uses
       # CreateTimeSeries API and has its own quotas, so that custom metric write
       # will not break this ingestion pipeline
       create_service_timeseries: true

@@ -1,7 +1,8 @@
 # Installing Config Sync
 
-This document provides instructions on how to install Config Sync in a
-kubernetes cluster.
+This document provides instructions on how to install open source Config Sync in a
+Kubernetes cluster. For instructions on how to install Config Sync using ACM, see
+[Installing Config Sync using Anthos Config Management].
 
 ## Installing a released version
 
@@ -45,6 +46,12 @@ kubectl apply -f ./.output/oss/manifests
      ```
      gcloud projects add-iam-policy-binding [*PROJECT_ID*] --member=serviceAccount:[*PROJECT_NUMBER*]-compute@developer.gserviceaccount.com --role=roles/storage.objectViewer
      ```
+   
+## Using Config Sync
+
+See [Using Config Sync](./usage.md) for more information on how to configure/use
+Config Sync once it's installed.
 
 [releases page]: https://github.com/GoogleContainerTools/kpt-config-sync/releases
 [development instructions]: development.md
+[Installing Config Sync using Anthos Config Management]: https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync

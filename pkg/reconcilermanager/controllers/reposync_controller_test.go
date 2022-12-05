@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1775,7 +1774,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		core.Namespace(rs1.Namespace),
 		core.ResourceVersion("1"),
 	)
-	roleBinding1.Subjects = addSubject(roleBinding1.Subjects, nsReconcilerName)
+	roleBinding1.Subjects = addSubjectByName(roleBinding1.Subjects, nsReconcilerName)
 	wantRoleBindings := map[core.ID]*rbacv1.RoleBinding{core.IDOf(roleBinding1): roleBinding1}
 
 	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
@@ -1856,7 +1855,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		core.Namespace(rs2.Namespace),
 		core.ResourceVersion("1"),
 	)
-	roleBinding2.Subjects = addSubject(roleBinding2.Subjects, nsReconcilerName2)
+	roleBinding2.Subjects = addSubjectByName(roleBinding2.Subjects, nsReconcilerName2)
 	wantRoleBindings[core.IDOf(roleBinding2)] = roleBinding2
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	if t.Failed() {
@@ -1915,7 +1914,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Add to roleBinding2.Subjects because rs3 and rs2 are in the same namespace.
-	roleBinding2.Subjects = addSubject(roleBinding2.Subjects, nsReconcilerName3)
+	roleBinding2.Subjects = addSubjectByName(roleBinding2.Subjects, nsReconcilerName3)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	if t.Failed() {
 		t.FailNow()
@@ -1977,7 +1976,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Add to roleBinding1.Subjects because rs1 and rs4 are in the same namespace.
-	roleBinding1.Subjects = addSubject(roleBinding1.Subjects, nsReconcilerName4)
+	roleBinding1.Subjects = addSubjectByName(roleBinding1.Subjects, nsReconcilerName4)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	if t.Failed() {
 		t.FailNow()
@@ -2040,7 +2039,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Add to roleBinding1.Subjects because rs1 and rs5 are in the same namespace.
-	roleBinding1.Subjects = addSubject(roleBinding1.Subjects, nsReconcilerName5)
+	roleBinding1.Subjects = addSubjectByName(roleBinding1.Subjects, nsReconcilerName5)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	if t.Failed() {
 		t.FailNow()
@@ -2158,7 +2157,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Subject for rs1 is removed from RoleBinding.Subjects
-	roleBinding1.Subjects = deleteSubject(roleBinding1.Subjects, nsReconcilerName)
+	roleBinding1.Subjects = deleteSubjectByName(roleBinding1.Subjects, nsReconcilerName)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	validateRepoGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName, v1beta1.GetSecretName(rs1.Spec.Git.SecretRef))
 	if t.Failed() {
@@ -2177,7 +2176,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Subject for rs2 is removed from RoleBinding.Subjects
-	roleBinding2.Subjects = deleteSubject(roleBinding2.Subjects, nsReconcilerName2)
+	roleBinding2.Subjects = deleteSubjectByName(roleBinding2.Subjects, nsReconcilerName2)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 
 	validateRepoGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName2, v1beta1.GetSecretName(rs2.Spec.Git.SecretRef))
@@ -2218,7 +2217,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	// Subject for rs4 is removed from RoleBinding.Subjects
-	roleBinding1.Subjects = deleteSubject(roleBinding1.Subjects, nsReconcilerName4)
+	roleBinding1.Subjects = deleteSubjectByName(roleBinding1.Subjects, nsReconcilerName4)
 	validateRoleBindings(t, wantRoleBindings, fakeClient)
 	validateRepoGeneratedResourcesDeleted(t, fakeClient, nsReconcilerName4, v1beta1.GetSecretName(rs4.Spec.Git.SecretRef))
 	if t.Failed() {
@@ -3484,25 +3483,12 @@ func validateResourceDeleted(id core.ID, fakeClient *syncerFake.Client) error {
 	return errors.Errorf("resource %s still exists: %#v", id, got)
 }
 
-func addSubject(subjects []rbacv1.Subject, name string) []rbacv1.Subject {
-	var result []rbacv1.Subject
-	result = append(result, subjects...)
-	result = append(result, subject(name, configsync.ControllerNamespace, "ServiceAccount"))
-	sort.SliceStable(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
-	})
-	return result
+func addSubjectByName(subjects []rbacv1.Subject, name string) []rbacv1.Subject {
+	return addSubject(subjects, newSubject(name, configsync.ControllerNamespace, "ServiceAccount"))
 }
 
-func deleteSubject(subjects []rbacv1.Subject, name string) []rbacv1.Subject {
-	subjectToDelete := subject(name, configsync.ControllerNamespace, "ServiceAccount")
-	var result []rbacv1.Subject
-	for _, s := range subjects {
-		if s != subjectToDelete {
-			result = append(result, s)
-		}
-	}
-	return result
+func deleteSubjectByName(subjects []rbacv1.Subject, name string) []rbacv1.Subject {
+	return removeSubject(subjects, newSubject(name, configsync.ControllerNamespace, "ServiceAccount"))
 }
 
 func namespacedName(name, namespace string) reconcile.Request {

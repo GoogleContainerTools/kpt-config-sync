@@ -14,7 +14,7 @@ pull-buildenv:
 
 build-buildenv: build/buildenv/Dockerfile
 	@echo "+++ Creating the docker container for $(BUILDENV_IMAGE)"
-	@docker build $(DOCKER_BUILD_QUIET) build/buildenv -t $(BUILDENV_IMAGE)
+	@docker buildx build $(DOCKER_BUILD_QUIET) build/buildenv -t $(BUILDENV_IMAGE)
 
 push-buildenv: build-buildenv
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
@@ -43,49 +43,49 @@ build-cli: pull-buildenv buildenv-dirs
 .PHONY: build-images
 build-images: license
 	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \
 		-t $(RECONCILER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_MANAGER_IMAGE) \
 		-t $(RECONCILER_MANAGER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(ADMISSION_WEBHOOK_IMAGE) \
 		-t $(ADMISSION_WEBHOOK_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(OCI_SYNC_IMAGE) \
 		-t $(OCI_SYNC_TAG) \
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HELM_SYNC_IMAGE) \
 		-t $(HELM_SYNC_TAG) \
 		-f build/all/Dockerfile \
@@ -245,7 +245,7 @@ build-git-server:
 	@rm -rf $(GIT_SERVER_DOCKER)
 	@git clone https://github.com/jkarlosb/git-server-docker.git $(GIT_SERVER_DOCKER)
 	@cd $(GIT_SERVER_DOCKER) && git checkout $(GIT_SERVER_RELEASE)
-	@docker build $(DOCKER_BUILD_QUIET) \
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
 			$(GIT_SERVER_DOCKER) \
 			-t gcr.io/stolos-dev/git-server:$(GIT_SERVER_RELEASE)
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
@@ -258,7 +258,7 @@ E2E_TEST_IMAGE_HTTP_GIT_SERVER := gcr.io/stolos-dev/http-git-server:$(E2E_TEST_I
 # Builds the container used by e2e tests to test git over HTTPS.
 build-http-git-server:
 	@echo "+++ Building the http-git-server image"
-	docker build \
+	docker buildx build \
 		-t $(E2E_TEST_IMAGE_HTTP_GIT_SERVER) \
 		test/docker/http-git-server/
 	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)

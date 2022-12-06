@@ -26,7 +26,7 @@ E2E_TEST_IMAGE_OSS_PROW_TAG := kubekins-e2e-$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS)-
 E2E_TEST_IMAGE_OSS_PROW := gcr.io/oss-prow-build-kpt-config-sync/e2e-prow:$(E2E_TEST_IMAGE_OSS_PROW_TAG)
 image-oss-prow: build/prow/kubekins-kind/Dockerfile
 	@echo "+++ Building the image for the oss-prow presubmit run"
-	docker build \
+	docker buildx build \
 		-t $(E2E_TEST_IMAGE_OSS_PROW) \
 		--build-arg KUBEKINS_REGISTRY=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY) \
 		--build-arg KUBEKINS=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS) \

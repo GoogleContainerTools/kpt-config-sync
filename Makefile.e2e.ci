@@ -3,7 +3,7 @@
 # Build a test docker container with gcloud and kubectl installed.
 __build-e2e-go-container:
 	@echo "+++ Building build/test-e2e-go/gke/Dockerfile nomos-gcloud-image"
-	@docker build . \
+	@docker buildx build . \
 	 	--network host \
 		-f build/test-e2e-go/gke/Dockerfile \
 		-t nomos-gcloud-image

@@ -24,10 +24,10 @@ when configuring pipelines:
 1. `otel-collector`
 
    This is the default configuration that Config Sync deploys in a non-GKE environment, which only exports the metrics through Prometheus exporter
-2. `otel-collector-googlecloud` (or `otel-collector-stackdriver` before Config Sync v1.12.0)
+1. `otel-collector-googlecloud` (or `otel-collector-stackdriver` before Config Sync v1.12.0)
 
    Config Sync automatically deploys this configuration when Workload Identity is configured, usually on a GKE cluster. 
-3. `otel-collector-custom`
+1. `otel-collector-custom`
 
     Users can apply this ConfigMap and configure their own metric pipelines.
     Use this ConfigMap instead of modifying the others in-place, to ensure modifications don't get reverted by Config Sync.
@@ -74,15 +74,22 @@ in Config Sync.
 
 1. **Get the current ConfigMap as template**
 
+    If you are using Config Sync prior to `1.14.0`, run    
+
     ```
     kubectl get cm otel-collector-googlecloud -n config-management-monitoring -o yaml > otel-collector-config.yaml
     ```
     
-    Or in Config Sync with version prior to `v1.11.1`, use
+    Or in Config Sync with version prior to `v1.11.1`, run
     
     ```
     kubectl get cm otel-collector-stackdriver -n config-management-monitoring -o yaml > otel-collector-config.yaml
     ```
+   
+    Or if you installed ACM 1.14.0, use the [sample Configmap](#sample-configmap) that Config Sync applies
+    when [Kubernetes default service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#use-the-default-service-account-to-access-the-api-server)
+    exists, to avoid the formatting issue when accessing the ConfigMap.
+
 1. Change the `.metadata.name` to `otel-collector-custom`
 
     This step spawns a new ConfigMap with name `otel-collector-custom` that is recognized by Config Sync, which overrides the `otel-collector-googlecloud` ConfigMap. Documents of the custom collector can be found [here](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#custom-exporter). 
@@ -164,3 +171,151 @@ This can be done by deleting the Otel Collector deployment.
     
     - `kubectl get all -n config-management-monitoring` should show all objects running with no error.
     - `kubectl get cm -n config-management-monitoring` should include a new ConfigMap named `otel-collector-custom`
+
+## Sample Configmap
+
+```yaml
+# sample-otel-collector-custom.yaml
+apiVersion: v1
+data:
+  otel-collector-config.yaml: |-
+    receivers:
+      opencensus:
+    exporters:
+      prometheus:
+        endpoint: :8675
+        namespace: config_sync
+      googlecloud:
+        metric:
+          prefix: "custom.googleapis.com/opencensus/config_sync/"
+          skip_create_descriptor: true
+          instrumentation_library_labels: false
+        retry_on_failure:
+          enabled: false
+        sending_queue:
+          enabled: false
+      googlecloud/kubernetes:
+        metric:
+          prefix: "kubernetes.io/internal/addons/config_sync/"
+          skip_create_descriptor: true
+          instrumentation_library_labels: false
+          service_resource_labels: false
+        retry_on_failure:
+          enabled: false
+        sending_queue:
+          enabled: false
+    processors:
+      batch:
+      resourcedetection:
+        detectors: [env, gcp]
+      filter/cloudmonitoring:
+        metrics:
+          include:
+            match_type: regexp
+            metric_names:
+              - reconciler_errors
+              - pipeline_error_observed
+              - declared_resources
+              - apply_operations_total
+              - resource_fights_total
+              - internal_errors_total
+              - kcc_resource_count
+              - resource_count
+              - ready_resource_count
+              - cluster_scoped_resource_count
+              - resource_ns_count
+              - api_duration_seconds
+      filter/kubernetes:
+        metrics:
+          include:
+            match_type: regexp
+            metric_names:
+              - kustomize.*
+              - api_duration_seconds
+              - reconciler_errors
+              - pipeline_error_observed
+              - reconcile_duration_seconds
+              - parser_duration_seconds
+              - declared_resources
+              - apply_operations_total
+              - apply_duration_seconds
+              - resource_fights_total
+              - remediate_duration_seconds
+              - resource_conflicts_total
+              - internal_errors_total
+              - rendering_count_total
+              - skip_rendering_count_total
+              - resource_override_count_total
+              - git_sync_depth_override_count_total
+              - no_ssl_verify_count_total
+              - kcc_resource_count
+          exclude:
+            match_type: strict
+            metric_names:
+              - rg_reconcile_duration_seconds
+              - kcc_resource_count_total
+      metricstransform/kubernetes:
+        transforms:
+          - include: declared_resources
+            action: update
+            new_name: current_declared_resources
+          - include: reconciler_errors
+            action: update
+            new_name: last_reconciler_errors
+          - include: pipeline_error_observed
+            action: update
+            new_name: last_pipeline_error_observed
+          - include: apply_operations_total
+            action: update
+            new_name: apply_operations_count
+          - include: resource_fights_total
+            action: update
+            new_name: resource_fights_count
+          - include: resource_conflicts_total
+            action: update
+            new_name: resource_conflicts_count
+          - include: internal_errors_total
+            action: update
+            new_name: internal_errors_count
+          - include: rendering_count_total
+            action: update
+            new_name: rendering_count
+          - include: skip_rendering_count_total
+            action: update
+            new_name: skip_rendering_count
+          - include: resource_override_count_total
+            action: update
+            new_name: resource_override_count
+          - include: git_sync_depth_override_count_total
+            action: update
+            new_name: git_sync_depth_override_count
+          - include: no_ssl_verify_count_total
+            action: update
+            new_name: no_ssl_verify_count
+    extensions:
+      health_check:
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics/cloudmonitoring:
+          receivers: [opencensus]
+          processors: [resourcedetection, batch, filter/cloudmonitoring]
+          exporters: [googlecloud]
+        metrics/prometheus:
+          receivers: [opencensus]
+          processors: [batch]
+          exporters: [prometheus]
+        metrics/kubernetes:
+          receivers: [opencensus]
+          processors: [resourcedetection, batch, filter/kubernetes, metricstransform/kubernetes]
+          exporters: [googlecloud/kubernetes]
+kind: ConfigMap
+metadata:
+  labels:
+    app: opentelemetry
+    component: otel-collector
+    configmanagement.gke.io/arch: csmr
+    configmanagement.gke.io/system: "true"
+  name: otel-collector-custom
+  namespace: config-management-monitoring
+```

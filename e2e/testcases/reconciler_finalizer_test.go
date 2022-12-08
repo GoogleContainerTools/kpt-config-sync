@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -40,6 +41,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/common"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // TestReconcilerFinalizer_Orphan tests that the reconciler's finalizer
@@ -62,8 +64,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
-	rootRepo.Copy("../testdata/deployment-helloworld.yaml", deployment1Path)
-	deployment1 := rootRepo.Get(deployment1Path)
+	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
@@ -142,8 +143,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
-	rootRepo.Copy("../testdata/deployment-helloworld.yaml", deployment1Path)
-	deployment1 := rootRepo.Get(deployment1Path)
+	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
@@ -231,8 +231,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
-	rootRepo.Copy("../testdata/deployment-helloworld.yaml", deployment1Path)
-	deployment1 := rootRepo.Get(deployment1Path)
+	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
@@ -242,8 +241,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 
 	// Add deployment-helloworld-2 to RepoSync
 	deployment2Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-2")
-	nsRepo.Copy("../testdata/deployment-helloworld.yaml", deployment2Path)
-	deployment2 := nsRepo.Get(deployment2Path)
+	deployment2 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment2.SetName(deployment2NN.Name)
 	deployment2.SetNamespace(deployment1NN.Namespace)
 	nsRepo.Add(deployment2Path, deployment2)
@@ -347,8 +345,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment2NN.Namespace, "deployment-helloworld-1")
-	rootRepo.Copy("../testdata/deployment-helloworld.yaml", deployment1Path)
-	deployment1 := rootRepo.Get(deployment1Path)
+	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment2NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
@@ -358,8 +355,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	// Add deployment-helloworld-2 to RepoSync
 	deployment2Path := nomostest.StructuredNSPath(deployment2NN.Namespace, "deployment-helloworld-2")
-	nsRepo.Copy("../testdata/deployment-helloworld.yaml", deployment2Path)
-	deployment2 := nsRepo.Get(deployment2Path)
+	deployment2 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment2.SetName(deployment2NN.Name)
 	deployment2.SetNamespace(deployment2NN.Namespace)
 	nsRepo.Add(deployment2Path, deployment2)
@@ -673,4 +669,17 @@ func removeDeletionPropagationPolicy(obj client.Object) bool {
 	delete(annotations, metadata.DeletionPropagationPolicyAnnotationKey)
 	obj.SetAnnotations(annotations)
 	return true
+}
+
+func loadDeployment(nt *nomostest.NT, path string) *appsv1.Deployment {
+	specBytes, err := os.ReadFile(path)
+	if err != nil {
+		nt.T.Fatalf("failed to read test file: %v", err)
+	}
+	obj := &appsv1.Deployment{}
+	err = yaml.Unmarshal(specBytes, obj)
+	if err != nil {
+		nt.T.Fatalf("failed to parse test file: %v", err)
+	}
+	return obj
 }

@@ -175,9 +175,6 @@ data:
            - /otelcol-contrib
            args:
            - "--config=/conf/otel-agent-config.yaml"
-           # TODO: Remove this feature gate when opentelemetry semantic conventions are used
-           # in the collector code.
-           - "--feature-gates=-exporter.googlecloud.OTLPDirect"
            resources:
              limits:
                cpu: 1
@@ -266,10 +263,7 @@ data:
                k8s.pod.uid=$(KUBE_POD_UID),\
                k8s.pod.ip=$(KUBE_POD_IP),\
                k8s.node.name=$(KUBE_NODE_NAME),\
-               k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME),\
-               configsync.sync.kind=$(CONFIGSYNC_SYNC_KIND),\
-               configsync.sync.name=$(CONFIGSYNC_SYNC_NAME),\
-               configsync.sync.namespace=$(CONFIGSYNC_SYNC_NAMESPACE)"
+               k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)"
          volumes:
          - name: repo
            emptyDir: {}

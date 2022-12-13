@@ -633,6 +633,23 @@ func RootSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 	}
 }
 
+// RootSyncHasObservedGenerationNoLessThan returns an error if the RootSync has the observedGeneration
+// less than the expected generation.
+func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {
+	return func(o client.Object) error {
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		if rs.Status.ObservedGeneration < generation {
+			return errors.Errorf("expected %s %s to have observedGeneration no less than %d, but got %d",
+				rs.Kind, core.ObjectNamespacedName(rs),
+				generation, rs.Status.ObservedGeneration)
+		}
+		return nil
+	}
+}
+
 // RepoSyncHasRenderingError returns an error if the RootSync does not have the
 // specified Rendering error code and (optional, partial) message.
 func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {

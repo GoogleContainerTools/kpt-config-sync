@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/mutate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -85,10 +86,10 @@ func (f *Finalizer) Finalize(ctx context.Context, obj *unstructured.Unstructured
 // AddFinalizer adds the `configsync.gke.io/reconciler` finalizer to the specified
 // object.
 func (f *Finalizer) AddFinalizer(ctx context.Context, obj *unstructured.Unstructured) (bool, error) {
-	updated, err := updateObjectWithRetry(ctx, f.Client, obj, func() error {
+	updated, err := mutate.WithRetry(ctx, f.Client, obj, func() error {
 		if !controllerutil.AddFinalizer(obj, metadata.ReconcilerFinalizer) {
 			// Already added. No change necessary.
-			return &NoUpdateError{}
+			return &mutate.NoUpdateError{}
 		}
 		return nil
 	})
@@ -106,10 +107,10 @@ func (f *Finalizer) AddFinalizer(ctx context.Context, obj *unstructured.Unstruct
 // RemoveFinalizer removes the `configsync.gke.io/reconciler` finalizer from the
 // specified object.
 func (f *Finalizer) RemoveFinalizer(ctx context.Context, obj *unstructured.Unstructured) (bool, error) {
-	updated, err := updateObjectWithRetry(ctx, f.Client, obj, func() error {
+	updated, err := mutate.WithRetry(ctx, f.Client, obj, func() error {
 		if !controllerutil.RemoveFinalizer(obj, metadata.ReconcilerFinalizer) {
 			// Already removed. No change necessary.
-			return &NoUpdateError{}
+			return &mutate.NoUpdateError{}
 		}
 		return nil
 	})
@@ -127,7 +128,7 @@ func (f *Finalizer) RemoveFinalizer(ctx context.Context, obj *unstructured.Unstr
 // setFinalizingCondition sets the ReconcilerFinalizing condition on the
 // specified object.
 func (f *Finalizer) setFinalizingCondition(ctx context.Context, obj *unstructured.Unstructured) (bool, error) {
-	updated, err := updateObjectWithRetry(ctx, f.Client, obj, func() error {
+	updated, err := mutate.WithRetry(ctx, f.Client, obj, func() error {
 		// Convert to RootSync/RepoSync to make it easier to update the conditions.
 		// TODO: Optimize by avoiding multiple type conversions.
 		rObj, err := kinds.ToTypedObject(obj, core.Scheme)
@@ -138,12 +139,12 @@ func (f *Finalizer) setFinalizingCondition(ctx context.Context, obj *unstructure
 		case *v1beta1.RootSync:
 			if !rootsync.SetReconcilerFinalizing(tObj, "ResourcesDeleting", "Deleting managed resource objects") {
 				// Already removed. No change necessary.
-				return &NoUpdateError{}
+				return &mutate.NoUpdateError{}
 			}
 		case *v1beta1.RepoSync:
 			if !reposync.SetReconcilerFinalizing(tObj, "ResourcesDeleting", "Deleting managed resource objects") {
 				// Already removed. No change necessary.
-				return &NoUpdateError{}
+				return &mutate.NoUpdateError{}
 			}
 		case client.Object:
 			return fmt.Errorf("invalid object type: expected v1beta1.RootSync or v1beta1.RepoSync: %s", objSummary(tObj))
@@ -172,7 +173,7 @@ func (f *Finalizer) setFinalizingCondition(ctx context.Context, obj *unstructure
 // removeFinalizingCondition removes the ReconcilerFinalizing condition from the
 // specified object.
 func (f *Finalizer) removeFinalizingCondition(ctx context.Context, obj *unstructured.Unstructured) (bool, error) {
-	updated, err := updateObjectWithRetry(ctx, f.Client, obj, func() error {
+	updated, err := mutate.WithRetry(ctx, f.Client, obj, func() error {
 		// Convert to RootSync/RepoSync to make it easier to update the conditions.
 		// TODO: Optimize by avoiding multiple type conversions.
 		rObj, err := kinds.ToTypedObject(obj, core.Scheme)
@@ -183,12 +184,12 @@ func (f *Finalizer) removeFinalizingCondition(ctx context.Context, obj *unstruct
 		case *v1beta1.RootSync:
 			if !rootsync.RemoveCondition(tObj, v1beta1.RootSyncReconcilerFinalizing) {
 				// Already removed. No change necessary.
-				return &NoUpdateError{}
+				return &mutate.NoUpdateError{}
 			}
 		case *v1beta1.RepoSync:
 			if !reposync.RemoveCondition(tObj, v1beta1.RepoSyncReconcilerFinalizing) {
 				// Already removed. No change necessary.
-				return &NoUpdateError{}
+				return &mutate.NoUpdateError{}
 			}
 		case client.Object:
 			return fmt.Errorf("invalid object type: expected v1beta1.RootSync or v1beta1.RepoSync: %s", objSummary(tObj))
@@ -235,7 +236,7 @@ func (f *Finalizer) deleteManagedObjects(ctx context.Context, syncObj *unstructu
 // updateFailureCondition sets or removes the ReconcilerFinalizerFailure
 // condition on the specified object, depending if errors were specified or not.
 func (f *Finalizer) updateFailureCondition(ctx context.Context, obj *unstructured.Unstructured, destroyErrs status.MultiError) (bool, error) {
-	updated, err := updateObjectStatus(ctx, f.Client, obj, func() error {
+	updated, err := mutate.Status(ctx, f.Client, obj, func() error {
 		// Convert to RootSync/RepoSync to make it easier to update the conditions.
 		// TODO: Optimize by avoiding multiple type conversions.
 		rObj, err := kinds.ToTypedObject(obj, core.Scheme)
@@ -247,24 +248,24 @@ func (f *Finalizer) updateFailureCondition(ctx context.Context, obj *unstructure
 			if destroyErrs != nil {
 				if !rootsync.SetReconcilerFinalizerFailure(tObj, destroyErrs) {
 					// Already removed. No change necessary.
-					return &NoUpdateError{}
+					return &mutate.NoUpdateError{}
 				}
 			} else {
 				if !rootsync.RemoveCondition(tObj, v1beta1.RootSyncReconcilerFinalizerFailure) {
 					// Already updated. No change necessary.
-					return &NoUpdateError{}
+					return &mutate.NoUpdateError{}
 				}
 			}
 		case *v1beta1.RepoSync:
 			if destroyErrs != nil {
 				if !reposync.SetReconcilerFinalizerFailure(tObj, destroyErrs) {
 					// Already updated. No change necessary.
-					return &NoUpdateError{}
+					return &mutate.NoUpdateError{}
 				}
 			} else {
 				if !reposync.RemoveCondition(tObj, v1beta1.RepoSyncReconcilerFinalizerFailure) {
 					// Already removed. No change necessary.
-					return &NoUpdateError{}
+					return &mutate.NoUpdateError{}
 				}
 			}
 		case client.Object:

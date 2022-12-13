@@ -12,44 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package finalizer
+package mutate
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// NoUpdateError is an error that when retrned from a `MutateFn` tells
-// `updateObjectWithRetry` and `updateObjectStatus` not to perform the update,
-// usually because the change has already be made.
+// Func is a function which mutates an existing object into its desired state.
+type Func func() error
+
+// NoUpdateError tells the caller that no update is required.
+// Use with `WithRetry` and `Status` by returning a NoUpdateError from the
+// `mutate.Func`.
 type NoUpdateError struct{}
 
-// Error returns the error message
+// Error returns the error message string
 func (nue *NoUpdateError) Error() string {
 	return "no update required"
 }
 
-// updateObjectWithRetry attempts to update an object.
-// - If the update errors due to an API status error, the update will be retried,
-//   quickly (no backoff).
-// - If the update errors due to a ResourceVersion conflict, the update will be
-//   retried against the latest version.
-// - If the update errors due to a UID conflict, an error will be returned.
-// - If the MutateFn returns a *NoUpdateError, the update will be skipped.
-// TODO: Replace with server-side-apply, if possible.
-func updateObjectWithRetry(ctx context.Context, c client.Client, obj *unstructured.Unstructured, mutate controllerutil.MutateFn) (bool, error) {
+// WithRetry attempts to update an object until successful or update becomes
+// unnecessary (`NoUpdateError` from the `mutate.Func`). Retries are quick, with
+// no backoff.
+//
+//   - If the update errors due to an API status error, the object will
+//     be re-read from the server, re-mutated, and re-updated.
+//   - If the update errors due to a ResourceVersion conflict, the object will
+//     be re-read from the server, re-mutated, and re-updated.
+//   - If the update errors due to a UID conflict, that means the object has
+//     been deleted and re-created. So an error will be returned.
+//   - If the mutate.Func returns a *NoUpdateError, the update will be skipped
+//     and retries will be stopped.
+func WithRetry(ctx context.Context, c client.Client, obj client.Object, mutate Func) (bool, error) {
 	// UID must be set already, so we can error if it changes.
 	uid := obj.GetUID()
 	if uid == "" {
-		return false, errors.Errorf("failed to update object: metadata.uid is empty: %s", objSummary(obj))
+		return false, fmt.Errorf("failed to update object: metadata.uid is empty: %s", objSummary(obj))
 	}
 	objKey := client.ObjectKeyFromObject(obj)
 	// Wrapped status errors are retriable. All others are terminal.
@@ -67,6 +72,7 @@ func updateObjectWithRetry(ctx context.Context, c client.Client, obj *unstructur
 			// If the update fails due to ResourceVersion conflict, get the latest
 			// version of the object, remove the finalizer, and retry.
 			if apierrors.IsConflict(updateErr) {
+				fmt.Printf("WithRetry update conflict: %v", updateErr)
 				getErr := c.Get(ctx, objKey, obj)
 				if getErr != nil {
 					// Return the GET error & retry
@@ -75,7 +81,7 @@ func updateObjectWithRetry(ctx context.Context, c client.Client, obj *unstructur
 				}
 				if obj.GetUID() != uid {
 					// Stop retrying
-					return errors.Errorf("failed to update object: metadata.uid has changed: %s", objSummary(obj))
+					return fmt.Errorf("failed to update object: metadata.uid has changed: %s", objSummary(obj))
 				}
 				// Retry with the updated object
 			}
@@ -95,13 +101,16 @@ func updateObjectWithRetry(ctx context.Context, c client.Client, obj *unstructur
 	return true, nil
 }
 
-// updateObjectStatus attempts to update an object's status, once.
-// TODO: Replace with server-side-apply, if possible.
-func updateObjectStatus(ctx context.Context, c client.Client, obj *unstructured.Unstructured, mutate controllerutil.MutateFn) (bool, error) {
+// Status attempts to update an object's status, once.
+//
+//   - If the update errors due to a UID conflict, that means the object has
+//     been deleted and re-created. So an error will be returned.
+//   - If the mutate.Func returns a *NoUpdateError, the update will be skipped.
+func Status(ctx context.Context, c client.Client, obj client.Object, mutate Func) (bool, error) {
 	// UID must be set already, so we can error if it changes.
 	uid := obj.GetUID()
 	if uid == "" {
-		return false, errors.Errorf("failed to update object: metadata.uid is empty: %s", objSummary(obj))
+		return false, fmt.Errorf("failed to update object: metadata.uid is empty: %s", objSummary(obj))
 	}
 	objKey := client.ObjectKeyFromObject(obj)
 
@@ -112,7 +121,7 @@ func updateObjectStatus(ctx context.Context, c client.Client, obj *unstructured.
 	}
 	if obj.GetUID() != uid {
 		// Object replaced
-		return false, errors.Errorf("failed to update object status: the UID has changed: %s", objSummary(obj))
+		return false, fmt.Errorf("failed to update object status: the UID has changed: %s", objSummary(obj))
 	}
 
 	if err := mutate(); err != nil {
@@ -129,4 +138,14 @@ func updateObjectStatus(ctx context.Context, c client.Client, obj *unstructured.
 			fmt.Sprintf("failed to update object status: %s", objSummary(obj)))
 	}
 	return true, nil
+}
+
+func objSummary(obj client.Object) string {
+	if uObj, ok := obj.(*unstructured.Unstructured); ok {
+		return fmt.Sprintf("%T %s %s/%s", obj,
+			uObj.GetObjectKind().GroupVersionKind(),
+			obj.GetNamespace(), obj.GetName())
+	}
+	return fmt.Sprintf("%T %s/%s", obj,
+		obj.GetNamespace(), obj.GetName())
 }

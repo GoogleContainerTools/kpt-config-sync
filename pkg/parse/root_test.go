@@ -947,32 +947,92 @@ func (a *fakeApplier) Syncing() bool {
 func TestSummarizeErrors(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		sourceStatus         v1beta1.SourceStatus
-		syncStatus           v1beta1.SyncStatus
+		commit               string
+		rsStatus             v1beta1.Status
 		expectedErrorSources []v1beta1.ErrorSource
 		expectedErrorSummary *v1beta1.ErrorSummary
 	}{
 		{
-			name:                 "both sourceStatus and syncStatus are empty",
-			sourceStatus:         v1beta1.SourceStatus{},
-			syncStatus:           v1beta1.SyncStatus{},
+			name: "all status fields are empty",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source:    v1beta1.SourceStatus{},
+				Sync:      v1beta1.SyncStatus{},
+			},
 			expectedErrorSources: nil,
-			expectedErrorSummary: &v1beta1.ErrorSummary{},
+			expectedErrorSummary: nil,
 		},
 		{
-			name: "sourceStatus is not empty (no trucation), syncStatus is empty",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
+			name:   "rendering is not empty (no trucation), source and sync are empty",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+						{Code: "1002", ErrorMessage: "1002-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
-				},
+				Source: v1beta1.SourceStatus{},
+				Sync:   v1beta1.SyncStatus{},
 			},
-			syncStatus:           v1beta1.SyncStatus{},
+			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.RenderingError},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                2,
+				Truncated:                 false,
+				ErrorCountAfterTruncation: 2,
+			},
+		},
+		{
+			name:   "rendering is not empty and trucates errors, source and sync are empty",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+						{Code: "1002", ErrorMessage: "1002-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+				Source: v1beta1.SourceStatus{},
+				Sync:   v1beta1.SyncStatus{},
+			},
+			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.RenderingError},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                100,
+				Truncated:                 true,
+				ErrorCountAfterTruncation: 2,
+			},
+		},
+		{
+			name:   "source is not empty (no trucation), sync is empty",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+				Sync: v1beta1.SyncStatus{},
+			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError},
 			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                2,
@@ -981,19 +1041,24 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "sourceStatus is not empty and trucates errors, syncStatus is empty",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
+			name:   "source is not empty and trucates errors, sync is empty",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
-				},
+				Sync: v1beta1.SyncStatus{},
 			},
-			syncStatus:           v1beta1.SyncStatus{},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError},
 			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                100,
@@ -1002,17 +1067,22 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name:         "sourceStatus is empty, syncStatus is not empty (no trucation)",
-			sourceStatus: v1beta1.SourceStatus{},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
+			name:   "source is empty, sync is not empty (no trucation)",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source:    v1beta1.SourceStatus{},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SyncError},
@@ -1023,17 +1093,22 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name:         "sourceStatus is empty, syncStatus is not empty and trucates errors",
-			sourceStatus: v1beta1.SourceStatus{},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
+			name:   "source is empty, sync is not empty and trucates errors",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source:    v1beta1.SourceStatus{},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SyncError},
@@ -1044,27 +1119,33 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "neither sourceStatus nor syncStatus is empty or trucates errors",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
+			name:   "neither source nor sync is empty or trucates errors",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
-				},
-			},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
@@ -1075,59 +1156,33 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "neither sourceStatus nor syncStatus is empty, sourceStatus trucates errors",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
+			name:   "neither source nor sync is empty, source trucates errors",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
-				},
-			},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
-				},
-			},
-			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
-			expectedErrorSummary: &v1beta1.ErrorSummary{
-				TotalCount:                102,
-				Truncated:                 true,
-				ErrorCountAfterTruncation: 4,
-			},
-		},
-		{
-			name: "neither sourceStatus nor syncStatus is empty, syncStatus trucates errors",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
-				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                2,
-					Truncated:                 false,
-					ErrorCountAfterTruncation: 2,
-				},
-			},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
@@ -1138,42 +1193,274 @@ func TestSummarizeErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "neither sourceStatus nor syncStatus is empty, both trucates errors",
-			sourceStatus: v1beta1.SourceStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "1021", ErrorMessage: "1021-error-message"},
-					{Code: "1022", ErrorMessage: "1022-error-message"},
+			name:   "neither source nor sync is empty, sync trucates errors",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                2,
+						Truncated:                 false,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
-				},
-			},
-			syncStatus: v1beta1.SyncStatus{
-				Errors: []v1beta1.ConfigSyncError{
-					{Code: "2009", ErrorMessage: "apiserver error"},
-					{Code: "2009", ErrorMessage: "webhook error"},
-				},
-
-				ErrorSummary: &v1beta1.ErrorSummary{
-					TotalCount:                100,
-					Truncated:                 true,
-					ErrorCountAfterTruncation: 2,
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
 				},
 			},
 			expectedErrorSources: []v1beta1.ErrorSource{v1beta1.SourceError, v1beta1.SyncError},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                102,
+				Truncated:                 true,
+				ErrorCountAfterTruncation: 4,
+			},
+		},
+		{
+			name:   "neither rendering nor source nor sync is empty, all trucate errors",
+			commit: "a",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+						{Code: "1002", ErrorMessage: "1002-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+			},
+			expectedErrorSources: []v1beta1.ErrorSource{
+				v1beta1.RenderingError,
+				v1beta1.SourceError,
+				v1beta1.SyncError,
+			},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                300,
+				Truncated:                 true,
+				ErrorCountAfterTruncation: 6,
+			},
+		},
+		{
+			name:   "new source commit, hide old render and sync errors",
+			commit: "b",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+						{Code: "1002", ErrorMessage: "1002-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+				Source: v1beta1.SourceStatus{
+					Errors:       nil,
+					ErrorSummary: nil,
+					Commit:       "b",
+				},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+			},
+			expectedErrorSources: nil,
+			expectedErrorSummary: nil,
+		},
+		{
+			name:   "new source commit with errors, hide old render and sync errors",
+			commit: "b",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 1,
+					},
+					Commit: "a",
+				},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "b",
+				},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+						{Code: "2009", ErrorMessage: "apply error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+			},
+			expectedErrorSources: []v1beta1.ErrorSource{
+				v1beta1.SourceError,
+			},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                100,
+				Truncated:                 true,
+				ErrorCountAfterTruncation: 2,
+			},
+		},
+		{
+			name:   "new render commit with errors, hide old sync errors",
+			commit: "b",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1001", ErrorMessage: "1001-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 1,
+					},
+					Commit: "b",
+				},
+				Source: v1beta1.SourceStatus{
+					Errors:       nil,
+					ErrorSummary: nil,
+					Commit:       "b",
+				},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+						{Code: "2009", ErrorMessage: "apply error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "a",
+				},
+			},
+			expectedErrorSources: []v1beta1.ErrorSource{
+				v1beta1.RenderingError,
+			},
+			expectedErrorSummary: &v1beta1.ErrorSummary{
+				TotalCount:                100,
+				Truncated:                 true,
+				ErrorCountAfterTruncation: 1,
+			},
+		},
+		{
+			name:   "new sync commit with errors, include non-blocking source errors",
+			commit: "b",
+			rsStatus: v1beta1.Status{
+				Rendering: v1beta1.RenderingStatus{
+					Errors:       nil,
+					ErrorSummary: nil,
+					Commit:       "b",
+				},
+				Source: v1beta1.SourceStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "1021", ErrorMessage: "1021-error-message"},
+						{Code: "1022", ErrorMessage: "1022-error-message"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 2,
+					},
+					Commit: "b",
+				},
+				Sync: v1beta1.SyncStatus{
+					Errors: []v1beta1.ConfigSyncError{
+						{Code: "2009", ErrorMessage: "apiserver error"},
+						{Code: "2009", ErrorMessage: "webhook error"},
+						{Code: "2009", ErrorMessage: "apply error"},
+					},
+					ErrorSummary: &v1beta1.ErrorSummary{
+						TotalCount:                100,
+						Truncated:                 true,
+						ErrorCountAfterTruncation: 3,
+					},
+					Commit: "b",
+				},
+			},
+			expectedErrorSources: []v1beta1.ErrorSource{
+				v1beta1.SourceError,
+				v1beta1.SyncError,
+			},
 			expectedErrorSummary: &v1beta1.ErrorSummary{
 				TotalCount:                200,
 				Truncated:                 true,
-				ErrorCountAfterTruncation: 4,
+				ErrorCountAfterTruncation: 5,
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotErrorSources, gotErrorSummary := summarizeErrors(tc.sourceStatus, tc.syncStatus)
+			gotErrorSources, gotErrorSummary := summarizeErrors(tc.rsStatus, tc.commit)
 			if diff := cmp.Diff(tc.expectedErrorSources, gotErrorSources); diff != "" {
 				t.Errorf("summarizeErrors() got %v, expected %v", gotErrorSources, tc.expectedErrorSources)
 			}

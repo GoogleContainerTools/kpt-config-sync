@@ -278,6 +278,7 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
+// processPruneEvent handles PruneEvents from the Applier
 func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap, cs *clientSet) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
@@ -411,7 +412,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 	// through annotation.
 	enabledObjs, disabledObjs := partitionObjs(objs)
 	if len(disabledObjs) > 0 {
-		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
+		klog.Infof("Applier disabling %d objects: %v", len(disabledObjs), core.GKNNs(disabledObjs))
 		disabledCount, err := cs.handleDisabledObjects(ctx, a.inventory, disabledObjs)
 		if err != nil {
 			a.addError(err)
@@ -422,7 +423,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 			Succeeded: disabledCount,
 		}
 	}
-	klog.Infof("%v objects to be applied: %v", len(enabledObjs), core.GKNNs(enabledObjs))
+	klog.Infof("Applier applying %d objects: %v", len(enabledObjs), core.GKNNs(enabledObjs))
 	resources, err := toUnstructured(enabledObjs)
 	if err != nil {
 		a.addError(err)
@@ -460,7 +461,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 		switch e.Type {
 		case event.InitType:
 			for _, ag := range e.InitEvent.ActionGroups {
-				klog.Info("InitEvent", ag)
+				klog.Info("Applier InitEvent", ag)
 			}
 		case event.ActionGroupType:
 			klog.Info(e.ActionGroupEvent)
@@ -502,7 +503,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 			klog.V(4).Info(logEvent)
 			a.addError(processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap, cs))
 		default:
-			klog.V(4).Infof("skipped %v event", e.Type)
+			klog.V(4).Infof("Applier skipped %v event", e.Type)
 		}
 	}
 
@@ -517,12 +518,12 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 
 	errs := a.Errors()
 	if errs == nil {
-		klog.V(4).Infof("all resources are up to date.")
+		klog.V(4).Infof("Applier completed without error")
 	}
 	if s.Empty() {
-		klog.V(4).Infof("The applier made no new progress")
+		klog.V(4).Infof("Applier made no new progress")
 	} else {
-		klog.Infof("The applier made new progress: %s", s.String())
+		klog.Infof("Applier made new progress: %s", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
 	return gvks, errs
@@ -558,6 +559,7 @@ func (a *Applier) invalidateErrors() {
 	a.errs = nil
 }
 
+// Apply all managed resource objects and return any errors.
 // Apply implements Interface.
 func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.applyMux.Lock()

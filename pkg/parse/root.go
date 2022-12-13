@@ -174,13 +174,14 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 	currentRS := rs.DeepCopy()
 
 	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
-	var errorSource []v1beta1.ErrorSource
-	if len(rs.Status.Source.Errors) > 0 {
-		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
-	}
-	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
+	// Syncing is stopped/prevented if there are any errors from the same commit.
+	// TODO: Handle non-blocking errors
+	syncing := (syncErrorCount == 0)
+
+	rootsync.SetSyncing(&rs, syncing, "Source", "Source", newStatus.commit, errorSources, errorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Source.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -197,14 +198,15 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating source status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating source status for RootSync %s/%s:\nDiff (- Old, + New):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RootSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RootSync source status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setSourceStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync source status from parser")
@@ -241,19 +243,23 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 		source.Git = nil
 		source.Oci = nil
 	}
-	errorSummary := &v1beta1.ErrorSummary{
-		TotalCount:                len(cse),
-		Truncated:                 denominator != 1,
-		ErrorCountAfterTruncation: len(cse) / denominator,
+	if len(cse) > 0 {
+		source.Errors = cse[0 : len(cse)/denominator]
+		source.ErrorSummary = &v1beta1.ErrorSummary{
+			TotalCount:                len(cse),
+			Truncated:                 denominator != 1,
+			ErrorCountAfterTruncation: len(cse) / denominator,
+		}
+	} else {
+		source.Errors = nil
+		source.ErrorSummary = nil
 	}
-	source.Errors = cse[0 : len(cse)/denominator]
-	source.ErrorSummary = errorSummary
 	source.LastUpdate = newStatus.lastUpdate
 }
 
 // setRenderingStatus implements the Parser interface
 func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error {
-	if oldStatus.equal(newStatus) {
+	if oldStatus.Equal(newStatus) {
 		return nil
 	}
 
@@ -275,13 +281,14 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 	currentRS := rs.DeepCopy()
 
 	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
-	var errorSource []v1beta1.ErrorSource
-	if len(rs.Status.Rendering.Errors) > 0 {
-		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
-	}
-	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+	// Syncing is stopped/prevented if there are any errors from the same commit.
+	// TODO: Handle non-blocking errors
+	syncing := (syncErrorCount == 0)
+
+	rootsync.SetSyncing(&rs, syncing, "Rendering", newStatus.message, newStatus.commit, errorSources, errorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Rendering.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -298,14 +305,15 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating rendering status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating rendering status for RootSync %s/%s:\nDiff (- Old, + New):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RootSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RootSync rendering status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setRenderingStatusWithRetires(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync rendering status from parser")
@@ -343,12 +351,17 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 		rendering.Oci = nil
 	}
 	rendering.Message = newStatus.message
-	errorSummary := &v1beta1.ErrorSummary{
-		TotalCount: len(cse),
-		Truncated:  denominator != 1,
+	if len(cse) > 0 {
+		rendering.Errors = cse[0 : len(cse)/denominator]
+		rendering.ErrorSummary = &v1beta1.ErrorSummary{
+			TotalCount:                len(cse),
+			Truncated:                 denominator != 1,
+			ErrorCountAfterTruncation: len(cse) / denominator,
+		}
+	} else {
+		rendering.Errors = nil
+		rendering.ErrorSummary = nil
 	}
-	rendering.Errors = cse[0 : len(cse)/denominator]
-	rendering.ErrorSummary = errorSummary
 	rendering.LastUpdate = newStatus.lastUpdate
 }
 
@@ -374,16 +387,19 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 	currentRS := rs.DeepCopy()
 
 	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
+	var message string
 	if newStatus.syncing {
-		rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		message = "Syncing"
 	} else {
-		if errorSummary.TotalCount == 0 {
+		message = "Sync Completed"
+		if syncErrorCount == 0 {
 			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
 		}
-		rootsync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	}
+	rootsync.SetSyncing(rs, newStatus.syncing, "Sync", message, rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Sync.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -403,14 +419,15 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating sync status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating sync status for RootSync %s/%s:\nDiff (- Old, + New):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.client.Status().Update(ctx, rs); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync sync status")
@@ -429,35 +446,62 @@ func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus syncStatus, denom
 }
 
 func setSyncStatusErrors(syncStatus *v1beta1.Status, cse []v1beta1.ConfigSyncError, denominator int) {
-	syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
-		TotalCount: len(cse),
-		Truncated:  denominator != 1,
+	if len(cse) > 0 {
+		syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
+			TotalCount: len(cse),
+			Truncated:  denominator != 1,
+		}
+		syncStatus.Sync.Errors = cse[0 : len(cse)/denominator]
+	} else {
+		syncStatus.Sync.Errors = nil
+		syncStatus.Sync.ErrorSummary = nil
 	}
-	syncStatus.Sync.Errors = cse[0 : len(cse)/denominator]
 }
 
-// summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`, and returns an ErrorSource slice and an ErrorSummary.
-func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncStatus) ([]v1beta1.ErrorSource, *v1beta1.ErrorSummary) {
+// summarizeErrors summarizes the rendering, source, and sync errors that
+// correspond to the specified commit.
+// Returns an ErrorSource slice and ErrorSummary.
+func summarizeErrors(rsStatus v1beta1.Status, commit string) ([]v1beta1.ErrorSource, *v1beta1.ErrorSummary) {
+	var errorSummary v1beta1.ErrorSummary
 	var errorSources []v1beta1.ErrorSource
-	if len(sourceStatus.Errors) > 0 {
+	if len(rsStatus.Rendering.Errors) > 0 && rsStatus.Rendering.Commit == commit {
+		errorSources = append(errorSources, v1beta1.RenderingError)
+		summary := rsStatus.Rendering.ErrorSummary
+		if summary != nil {
+			errorSummary.TotalCount += summary.TotalCount
+			errorSummary.ErrorCountAfterTruncation += summary.ErrorCountAfterTruncation
+			errorSummary.Truncated = errorSummary.Truncated || summary.Truncated
+		}
+	}
+	if len(rsStatus.Source.Errors) > 0 && rsStatus.Source.Commit == commit {
 		errorSources = append(errorSources, v1beta1.SourceError)
+		summary := rsStatus.Source.ErrorSummary
+		if summary != nil {
+			errorSummary.TotalCount += summary.TotalCount
+			errorSummary.ErrorCountAfterTruncation += summary.ErrorCountAfterTruncation
+			errorSummary.Truncated = errorSummary.Truncated || summary.Truncated
+		}
 	}
-	if len(syncStatus.Errors) > 0 {
+	if len(rsStatus.Sync.Errors) > 0 && rsStatus.Sync.Commit == commit {
 		errorSources = append(errorSources, v1beta1.SyncError)
+		summary := rsStatus.Sync.ErrorSummary
+		if summary != nil {
+			errorSummary.TotalCount += summary.TotalCount
+			errorSummary.ErrorCountAfterTruncation += summary.ErrorCountAfterTruncation
+			errorSummary.Truncated = errorSummary.Truncated || summary.Truncated
+		}
 	}
+	if errorSummary.TotalCount > 0 {
+		return errorSources, &errorSummary
+	}
+	return nil, nil
+}
 
-	errorSummary := &v1beta1.ErrorSummary{}
-	for _, summary := range []*v1beta1.ErrorSummary{sourceStatus.ErrorSummary, syncStatus.ErrorSummary} {
-		if summary == nil {
-			continue
-		}
-		errorSummary.TotalCount += summary.TotalCount
-		errorSummary.ErrorCountAfterTruncation += summary.ErrorCountAfterTruncation
-		if summary.Truncated {
-			errorSummary.Truncated = true
-		}
+func totalErrors(summary *v1beta1.ErrorSummary) int {
+	if summary != nil {
+		return summary.TotalCount
 	}
-	return errorSources, errorSummary
+	return 0
 }
 
 // addImplicitNamespaces hydrates the given FileObjects by injecting implicit

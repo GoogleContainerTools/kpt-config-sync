@@ -41,7 +41,9 @@ type Resources struct {
 	objectSet map[core.ID]*unstructured.Unstructured
 }
 
-// Update performs an atomic update on the resource declaration set.
+// Update performs an atomic update on the resource declaration set, converts
+// the objects to Unstructured and validating that not all namespaces are
+// deleted at once.
 func (r *Resources) Update(ctx context.Context, objects []client.Object) ([]client.Object, status.Error) {
 	// First build up the new map using a local pointer/reference.
 	newSet := make(map[core.ID]*unstructured.Unstructured)

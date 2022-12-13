@@ -41,6 +41,7 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
+// TODO: replace with builder pattern to avoid too many arguments.
 func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.KptApplier, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
@@ -161,13 +162,14 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	currentRS := rs.DeepCopy()
 
 	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
-	var errorSource []v1beta1.ErrorSource
-	if len(rs.Status.Source.Errors) > 0 {
-		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
-	}
-	reposync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
+	// Syncing is stopped/prevented if there are any errors from the same commit.
+	// TODO: Handle non-blocking errors
+	syncing := (syncErrorCount == 0)
+
+	reposync.SetSyncing(&rs, syncing, "Source", "Source", newStatus.commit, errorSources, errorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Source.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -191,7 +193,8 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RepoSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RepoSync source status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setSourceStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RepoSync source status from parser")
@@ -201,7 +204,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 
 // setRenderingStatus implements the Parser interface
 func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error {
-	if oldStatus.equal(newStatus) {
+	if oldStatus.Equal(newStatus) {
 		return nil
 	}
 
@@ -223,13 +226,14 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	currentRS := rs.DeepCopy()
 
 	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
-	var errorSource []v1beta1.ErrorSource
-	if len(rs.Status.Rendering.Errors) > 0 {
-		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
-	}
-	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+	// Syncing is stopped/prevented if there are any errors from the same commit.
+	// TODO: Handle non-blocking errors
+	syncing := (syncErrorCount == 0)
+
+	reposync.SetSyncing(&rs, syncing, "Rendering", newStatus.message, newStatus.commit, errorSources, errorSummary, newStatus.lastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Rendering.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -253,7 +257,8 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	if err := p.client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setRenderingStatusWithRetires(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RepoSync rendering status from parser")
@@ -283,16 +288,19 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 	currentRS := rs.DeepCopy()
 
 	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
+	errorSources, errorSummary := summarizeErrors(rs.Status.Status, newStatus.commit)
+	syncErrorCount := totalErrors(errorSummary)
 
-	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
+	var message string
 	if newStatus.syncing {
-		reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		message = "Syncing"
 	} else {
-		if errorSummary.TotalCount == 0 {
+		message = "Sync Completed"
+		if syncErrorCount == 0 {
 			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
 		}
-		reposync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 	}
+	reposync.SetSyncing(rs, newStatus.syncing, "Sync", message, rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Sync.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -312,14 +320,15 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
+		klog.Infof("Updating sync status for RepoSync %s/%s:\nDiff (- Old, + New):\n%s",
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.client.Status().Update(ctx, rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.",
+				syncErrorCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", p.scope))

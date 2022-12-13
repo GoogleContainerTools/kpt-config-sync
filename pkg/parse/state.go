@@ -28,36 +28,40 @@ const (
 	maxRetryInterval             = time.Duration(5) * time.Minute
 )
 
-type sourceStatus struct {
+type commonStatus struct {
 	commit     string
 	errs       status.MultiError
 	lastUpdate metav1.Time
 }
 
-func (gs sourceStatus) equal(other sourceStatus) bool {
-	return gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
+func (cs commonStatus) Equal(other commonStatus) bool {
+	return cs.commit == other.commit && status.DeepEqual(cs.errs, other.errs)
+}
+
+type sourceStatus struct {
+	commonStatus
+}
+
+func (gs sourceStatus) Equal(other sourceStatus) bool {
+	return gs.commonStatus.Equal(other.commonStatus)
 }
 
 type renderingStatus struct {
-	commit     string
-	message    string
-	errs       status.MultiError
-	lastUpdate metav1.Time
+	commonStatus
+	message string
 }
 
-func (rs renderingStatus) equal(other renderingStatus) bool {
-	return rs.commit == other.commit && rs.message == other.message && status.DeepEqual(rs.errs, other.errs)
+func (rs renderingStatus) Equal(other renderingStatus) bool {
+	return rs.commonStatus.Equal(other.commonStatus) && rs.message == other.message
 }
 
 type syncStatus struct {
-	syncing    bool
-	commit     string
-	errs       status.MultiError
-	lastUpdate metav1.Time
+	commonStatus
+	syncing bool
 }
 
-func (gs syncStatus) equal(other syncStatus) bool {
-	return gs.syncing == other.syncing && gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
+func (ss syncStatus) Equal(other syncStatus) bool {
+	return ss.commonStatus.Equal(other.commonStatus) && ss.syncing == other.syncing
 }
 
 type reconcilerState struct {
@@ -159,10 +163,10 @@ func (s *reconcilerState) resetAllButSourceState() {
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
 func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
-	return !newStatus.equal(s.sourceStatus) || s.sourceStatus.lastUpdate.IsZero() || s.sourceStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
+	return !newStatus.Equal(s.sourceStatus) || s.sourceStatus.lastUpdate.IsZero() || s.sourceStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
 }
 
 // needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
 func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
-	return !newStatus.equal(s.syncStatus) || s.syncStatus.lastUpdate.IsZero() || s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
+	return !newStatus.Equal(s.syncStatus) || s.syncStatus.lastUpdate.IsZero() || s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
 }

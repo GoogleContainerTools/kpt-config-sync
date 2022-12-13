@@ -142,42 +142,50 @@ func Run(ctx context.Context, p Parser) {
 	}
 }
 
+// run executes the parts of the pipeline managed by the reconciler.
+//
+// Phases:
+// 1. Fetch (git-sync), then the reconciler reads the result from disk
+// 2. Render (hydration-controller), then the reconciler reads the result from disk
+// 3. Parse (reconciler)
+// 4. Sync (reconciler)
+// 5. Remediate (remediator)
 func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
 	var syncDir cmpath.Absolute
-	gs := sourceStatus{}
-	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
+	fetchStatus := sourceStatus{}
+	fetchStatus.commit, syncDir, fetchStatus.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
 
 	// If failed to fetch the source commit and directory, set `.status.source` to fail early.
 	// Otherwise, set `.status.rendering` before `.status.source` because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
-	if gs.errs != nil {
-		gs.lastUpdate = metav1.Now()
+	if fetchStatus.errs != nil {
+		fetchStatus.lastUpdate = metav1.Now()
 		var setSourceStatusErr error
-		if state.needToSetSourceStatus(gs) {
-			setSourceStatusErr = p.setSourceStatus(ctx, gs)
+		if state.needToSetSourceStatus(fetchStatus) {
+			setSourceStatusErr = p.setSourceStatus(ctx, fetchStatus)
 			if setSourceStatusErr == nil {
-				state.sourceStatus = gs
-				state.syncingConditionLastUpdate = gs.lastUpdate
+				state.sourceStatus = fetchStatus
+				state.syncingConditionLastUpdate = fetchStatus.lastUpdate
 			}
 		}
-		state.invalidate(status.Append(gs.errs, setSourceStatusErr))
+		state.invalidate(status.Append(fetchStatus.errs, setSourceStatusErr))
 		return
 	}
 
-	rs := renderingStatus{
-		commit: gs.commit,
-	}
+	renderStatus := renderingStatus{}
+	renderStatus.commit = fetchStatus.commit
+
 	// set the rendering status by checking the done file.
 	doneFilePath := p.options().RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
 	_, err := os.Stat(doneFilePath)
-	if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.commit) {
-		rs.message = RenderingInProgress
-		rs.lastUpdate = metav1.Now()
-		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
+	if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != fetchStatus.commit) {
+		renderStatus.message = RenderingInProgress
+		renderStatus.lastUpdate = metav1.Now()
+		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, renderStatus)
 		if setRenderingStatusErr == nil {
 			state.reset()
-			state.renderingStatus = rs
-			state.syncingConditionLastUpdate = rs.lastUpdate
+			state.renderingStatus = renderStatus
+			state.syncingConditionLastUpdate = renderStatus.lastUpdate
 		} else {
 			var m status.MultiError
 			state.invalidate(status.Append(m, setRenderingStatusErr))
@@ -185,15 +193,15 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		return
 	}
 	if err != nil {
-		rs.message = RenderingFailed
-		rs.lastUpdate = metav1.Now()
-		rs.errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
-		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
+		renderStatus.message = RenderingFailed
+		renderStatus.lastUpdate = metav1.Now()
+		renderStatus.errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
+		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, renderStatus)
 		if setRenderingStatusErr == nil {
-			state.renderingStatus = rs
-			state.syncingConditionLastUpdate = rs.lastUpdate
+			state.renderingStatus = renderStatus
+			state.syncingConditionLastUpdate = renderStatus.lastUpdate
 		}
-		state.invalidate(status.Append(rs.errs, setRenderingStatusErr))
+		state.invalidate(status.Append(renderStatus.errs, setRenderingStatusErr))
 		return
 	}
 
@@ -201,7 +209,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	oldSyncDir := state.cache.source.syncDir
 	// `read` is called no matter what the trigger is.
 	ps := sourceState{
-		commit:  gs.commit,
+		commit:  fetchStatus.commit,
 		syncDir: syncDir,
 	}
 	if errs := read(ctx, p, trigger, state, ps); errs != nil {
@@ -233,37 +241,37 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 // read reads config files from source if no rendering is needed, or from hydrated output if rendering is done.
 // It also updates the .status.rendering and .status.source fields.
 func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) status.MultiError {
-	hydrationStatus, sourceStatus := readFromSource(ctx, p, trigger, state, sourceState)
-	hydrationStatus.lastUpdate = metav1.Now()
+	renderStatus, readStatus := readFromSource(ctx, p, trigger, state, sourceState)
+	renderStatus.lastUpdate = metav1.Now()
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
-	setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, hydrationStatus)
+	setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, renderStatus)
 	if setRenderingStatusErr == nil {
-		state.renderingStatus = hydrationStatus
-		state.syncingConditionLastUpdate = hydrationStatus.lastUpdate
+		state.renderingStatus = renderStatus
+		state.syncingConditionLastUpdate = renderStatus.lastUpdate
 	}
-	renderingErrs := status.Append(hydrationStatus.errs, setRenderingStatusErr)
+	renderingErrs := status.Append(renderStatus.errs, setRenderingStatusErr)
 	if renderingErrs != nil {
 		return renderingErrs
 	}
 
-	if sourceStatus.errs == nil {
+	if readStatus.errs == nil {
 		return nil
 	}
 
 	// Only call `setSourceStatus` if `readFromSource` fails.
 	// If `readFromSource` succeeds, `parse` may still fail.
-	sourceStatus.lastUpdate = metav1.Now()
+	readStatus.lastUpdate = metav1.Now()
 	var setSourceStatusErr error
-	if state.needToSetSourceStatus(sourceStatus) {
-		setSourceStatusErr := p.setSourceStatus(ctx, sourceStatus)
+	if state.needToSetSourceStatus(readStatus) {
+		setSourceStatusErr := p.setSourceStatus(ctx, readStatus)
 		if setSourceStatusErr == nil {
-			state.sourceStatus = sourceStatus
-			state.syncingConditionLastUpdate = sourceStatus.lastUpdate
+			state.sourceStatus = readStatus
+			state.syncingConditionLastUpdate = readStatus.lastUpdate
 		}
 	}
 
-	return status.Append(sourceStatus.errs, setSourceStatusErr)
+	return status.Append(readStatus.errs, setSourceStatusErr)
 }
 
 // readFromSource reads the source or hydrated configs, checks whether the sourceState in
@@ -273,41 +281,40 @@ func readFromSource(ctx context.Context, p Parser, trigger string, state *reconc
 	opts := p.options()
 	start := time.Now()
 
-	hydrationStatus := renderingStatus{
-		commit: sourceState.commit,
-	}
-	sourceStatus := sourceStatus{
-		commit: sourceState.commit,
-	}
+	renderStatus := renderingStatus{}
+	renderStatus.commit = sourceState.commit
+
+	readStatus := sourceStatus{}
+	readStatus.commit = sourceState.commit
 
 	// Check if the hydratedRoot directory exists.
 	// If exists, read the hydrated directory. Otherwise, read the source directory.
 	absHydratedRoot, err := cmpath.AbsoluteOS(opts.HydratedRoot)
 	if err != nil {
-		hydrationStatus.message = RenderingFailed
-		hydrationStatus.errs = status.InternalHydrationError(err, "hydrated-dir must be an absolute path")
-		return hydrationStatus, sourceStatus
+		renderStatus.message = RenderingFailed
+		renderStatus.errs = status.InternalHydrationError(err, "hydrated-dir must be an absolute path")
+		return renderStatus, readStatus
 	}
 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
 		sourceState, hydrationErr = opts.readHydratedDir(absHydratedRoot, opts.HydratedLink, opts.reconcilerName)
 		if hydrationErr != nil {
-			hydrationStatus.message = RenderingFailed
-			hydrationStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
-			return hydrationStatus, sourceStatus
+			renderStatus.message = RenderingFailed
+			renderStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
+			return renderStatus, readStatus
 		}
-		hydrationStatus.message = RenderingSucceeded
+		renderStatus.message = RenderingSucceeded
 	} else if !os.IsNotExist(err) {
-		hydrationStatus.message = RenderingFailed
-		hydrationStatus.errs = status.InternalHydrationError(err, "unable to evaluate the hydrated path %s", absHydratedRoot.OSPath())
-		return hydrationStatus, sourceStatus
+		renderStatus.message = RenderingFailed
+		renderStatus.errs = status.InternalHydrationError(err, "unable to evaluate the hydrated path %s", absHydratedRoot.OSPath())
+		return renderStatus, readStatus
 	} else {
-		hydrationStatus.message = RenderingSkipped
+		renderStatus.message = RenderingSkipped
 	}
 
 	if sourceState.syncDir == state.cache.source.syncDir {
-		return hydrationStatus, sourceStatus
+		return renderStatus, readStatus
 	}
 
 	klog.Infof("New source changes (%s) detected, reset the cache", sourceState.syncDir.OSPath())
@@ -316,13 +323,13 @@ func readFromSource(ctx context.Context, p Parser, trigger string, state *reconc
 	state.resetCache()
 
 	// Read all the files under state.syncDir
-	sourceStatus.errs = opts.readConfigFiles(&sourceState)
-	if sourceStatus.errs == nil {
+	readStatus.errs = opts.readConfigFiles(&sourceState)
+	if readStatus.errs == nil {
 		// Set `state.cache.source` after `readConfigFiles` succeeded
 		state.cache.source = sourceState
 	}
-	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(sourceStatus.errs), start)
-	return hydrationStatus, sourceStatus
+	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(readStatus.errs), start)
+	return renderStatus, readStatus
 }
 
 func parseSource(ctx context.Context, p Parser, trigger string, state *reconcilerState) status.MultiError {
@@ -354,20 +361,22 @@ func parseSource(ctx context.Context, p Parser, trigger string, state *reconcile
 
 func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconcilerState) status.MultiError {
 	sourceErrs := parseSource(ctx, p, trigger, state)
-	newSourceStatus := sourceStatus{
-		commit:     state.cache.source.commit,
-		errs:       sourceErrs,
-		lastUpdate: metav1.Now(),
+	parseStatus := sourceStatus{
+		commonStatus: commonStatus{
+			commit:     state.cache.source.commit,
+			errs:       sourceErrs,
+			lastUpdate: metav1.Now(),
+		},
 	}
-	if state.needToSetSourceStatus(newSourceStatus) {
-		if err := p.setSourceStatus(ctx, newSourceStatus); err != nil {
+	if state.needToSetSourceStatus(parseStatus) {
+		if err := p.setSourceStatus(ctx, parseStatus); err != nil {
 			// If `p.setSourceStatus` fails, we terminate the reconciliation.
 			// If we call `update` in this case and `update` succeeds, `Status.Source.Commit` would end up be older
 			// than `Status.Sync.Commit`.
 			return status.Append(sourceErrs, err)
 		}
-		state.sourceStatus = newSourceStatus
-		state.syncingConditionLastUpdate = newSourceStatus.lastUpdate
+		state.sourceStatus = parseStatus
+		state.syncingConditionLastUpdate = parseStatus.lastUpdate
 	}
 
 	if status.HasBlockingErrors(sourceErrs) {
@@ -383,7 +392,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 	syncErrs := p.options().Update(ctx, &state.cache)
 	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(syncErrs), start)
 
-	// This is to terminate `updateSyncStatusPeriodically`.
+	// Terminate `updateSyncStatusPeriodically`.
 	cancel()
 
 	klog.V(3).Info("Updating sync status (after sync)")
@@ -400,10 +409,12 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, syncErrs status.MultiError) error {
 	// Update the RSync status, if necessary
 	newSyncStatus := syncStatus{
-		syncing:    syncing,
-		commit:     state.cache.source.commit,
-		errs:       syncErrs,
-		lastUpdate: metav1.Now(),
+		syncing: syncing,
+		commonStatus: commonStatus{
+			commit:     state.cache.source.commit,
+			errs:       syncErrs,
+			lastUpdate: metav1.Now(),
+		},
 	}
 	if state.needToSetSyncStatus(newSyncStatus) {
 		if err := p.SetSyncStatus(ctx, newSyncStatus); err != nil {
@@ -429,8 +440,8 @@ func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncin
 	return nil
 }
 
-// updateSyncStatusPeriodically update the sync status periodically until the
-// cancellation function of the context is called.
+// updateSyncStatusPeriodically updates the sync status periodically until the
+// context is cancelled.
 func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcilerState) {
 	updatePeriod := p.options().statusUpdatePeriod
 	updateTimer := time.NewTimer(updatePeriod)
@@ -438,7 +449,7 @@ func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcil
 	for {
 		select {
 		case <-ctx.Done():
-			// ctx.Done() is closed when the cancellation function of the context is called.
+			// ctx.Done() is closed when the context is cancelled.
 			return
 
 		case <-updateTimer.C:

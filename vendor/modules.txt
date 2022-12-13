@@ -913,11 +913,12 @@ k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1
 k8s.io/component-base/config
 k8s.io/component-base/config/v1alpha1
 k8s.io/component-base/version
-# k8s.io/klog/v2 v2.60.1
+# k8s.io/klog/v2 v2.70.1
 ## explicit; go 1.13
 k8s.io/klog/v2
 k8s.io/klog/v2/internal/buffer
 k8s.io/klog/v2/internal/clock
+k8s.io/klog/v2/internal/dbg
 k8s.io/klog/v2/internal/serialize
 k8s.io/klog/v2/internal/severity
 k8s.io/klog/v2/klogr
@@ -985,6 +986,9 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
+# kpt.dev/resourcegroup v0.0.0-20221109031828-db4c3d2c630f
+## explicit; go 1.17
+kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1
 # sigs.k8s.io/cli-utils v0.33.0
 ## explicit; go 1.17
 sigs.k8s.io/cli-utils/pkg/apis/actuation

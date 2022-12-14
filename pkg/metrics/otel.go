@@ -90,6 +90,10 @@ processors:
         match_type: regexp
         metric_names:
           - reconciler_errors
+          - apply_duration_seconds
+          - reconcile_duration_seconds
+          - rg_reconcile_duration_seconds
+          - last_sync_timestamp
           - pipeline_error_observed
           - declared_resources
           - apply_operations_total

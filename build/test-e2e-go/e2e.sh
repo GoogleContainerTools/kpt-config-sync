@@ -30,7 +30,7 @@ echo "Tests took $(( end_time - start_time )) seconds"
 
 if [ -d "/logs/artifacts" ]; then
   echo "Creating junit xml report"
-  cat test_results.txt | go-junit-report > /logs/artifacts/junit_report.xml
+  cat test_results.txt | go-junit-report --subtest-mode=exclude-parents > /logs/artifacts/junit_report.xml
 fi
 
 exit $exit_code

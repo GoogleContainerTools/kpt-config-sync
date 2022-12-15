@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	depAnnotationGooglecloud = "bf5e629613587cb03583429c8bf94c35"
+	depAnnotationGooglecloud = "da797169b1ba60a19276f637963523eb"
 	depAnnotationCustom      = "9182661d55e260a55da649363c03c187"
 )
 

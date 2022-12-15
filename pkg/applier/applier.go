@@ -22,10 +22,11 @@ import (
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -40,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	"kpt.dev/configsync/pkg/util"
+	nomosutil "kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
@@ -47,6 +49,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
+	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -60,32 +63,20 @@ var (
 	maxRequestBytes = int64(1.5 * 1024 * 1024)
 )
 
-// Applier declares the Applier component in the Multi Repo Reconciler Process.
-type Applier struct {
+// applier is the default implimentation of the Applier interface.
+type applier struct {
 	// inventory policy for the applier.
 	policy inventory.Policy
 	// inventory is the inventory ResourceGroup for current Applier.
 	inventory *live.InventoryResourceGroup
-	// clientSetFunc is the function to create kpt clientSet.
-	// Use this as a function so that the unit testing can mock
-	// the clientSet.
-	clientSetFunc func(client.Client, *genericclioptions.ConfigFlags, string) (*clientSet, error)
-	// client get and updates RepoSync and its status.
-	client client.Client
-	// configFlags for creating clients
-	configFlags *genericclioptions.ConfigFlags
-	// errs tracks all the errors the applier encounters.
-	// This field is cleared at the start of the `Applier.Apply` method
-	errs status.MultiError
+	// clientSet is a wrapper around multiple clients
+	clientSet *ClientSet
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
 	syncKind string
 	// syncName is the name of RSync object
 	syncName string
 	// syncNamespace is the namespace of RSync object
 	syncNamespace string
-	// statusMode controls if the applier injects the acutation status into the
-	// ResourceGroup object
-	statusMode string
 	// reconcileTimeout controls the reconcile and prune timeout
 	reconcileTimeout time.Duration
 
@@ -93,12 +84,15 @@ type Applier struct {
 	applyMux sync.Mutex
 	// errorMux prevents concurrent modifications to the cached set of errors
 	errorMux sync.RWMutex
+	// errs tracks all the errors the applier encounters.
+	// This field is cleared at the start of the `Applier.Apply` method
+	errs status.MultiError
 }
 
-// KptApplier is a fake-able subset of the interface Applier implements.
-//
-// Placed here to make discovering the production implementation (above) easier.
-type KptApplier interface {
+// Applier is a bulk client for applying a set of desired resource objects and
+// tracking them in a ResourceGroup inventory. This enables pruning objects
+// by removing them from the list of desired resource objects and re-applying.
+type Applier interface {
 	// Apply updates the resource API server with the latest parsed git resource.
 	// This is called when a new change in the git resource is detected. It also
 	// returns a map of the GVKs which were successfully applied by the Applier.
@@ -107,34 +101,31 @@ type KptApplier interface {
 	Errors() status.MultiError
 }
 
-var _ KptApplier = &Applier{}
+var _ Applier = &applier{}
 
 // NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
 // the API server.
-func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, namespace declared.Scope, syncName string, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
+func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Applier, error) {
 	syncKind := configsync.RepoSyncKind
-	u := newInventoryUnstructured(syncKind, syncName, string(namespace), statusMode)
+	invObj := newInventoryUnstructured(syncKind, syncName, string(namespace), cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
-	if err := annotateStatusMode(context.TODO(), c, u, statusMode); err != nil {
-		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", statusMode)
+	if err := annotateStatusMode(context.TODO(), cs.Client, invObj, cs.StatusMode); err != nil {
+		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
 		return nil, err
 	}
-	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", statusMode)
-	inv, err := wrapInventoryObj(u)
+	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
+	inv, err := wrapInventoryObj(invObj)
 	if err != nil {
 		return nil, err
 	}
-	a := &Applier{
+	a := &applier{
 		inventory:        inv,
-		client:           c,
-		configFlags:      configFlags,
-		clientSetFunc:    newClientSet,
+		clientSet:        cs,
 		policy:           inventory.PolicyAdoptIfNoInventory,
 		syncKind:         syncKind,
 		syncName:         syncName,
 		syncNamespace:    string(namespace),
-		statusMode:       statusMode,
 		reconcileTimeout: reconcileTimeout,
 	}
 	klog.V(4).Infof("Applier %s/%s is initialized", namespace, syncName)
@@ -142,30 +133,27 @@ func NewNamespaceApplier(c client.Client, configFlags *genericclioptions.ConfigF
 }
 
 // NewRootApplier initializes an applier that can fetch all resources from the API server.
-func NewRootApplier(c client.Client, configFlags *genericclioptions.ConfigFlags, syncName, statusMode string, reconcileTimeout time.Duration) (*Applier, error) {
+func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Applier, error) {
 	syncKind := configsync.RootSyncKind
-	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, statusMode)
+	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
-	if err := annotateStatusMode(context.TODO(), c, u, statusMode); err != nil {
-		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", statusMode)
+	if err := annotateStatusMode(context.TODO(), cs.Client, u, cs.StatusMode); err != nil {
+		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
 		return nil, err
 	}
-	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", statusMode)
+	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
 	inv, err := wrapInventoryObj(u)
 	if err != nil {
 		return nil, err
 	}
-	a := &Applier{
+	a := &applier{
 		inventory:        inv,
-		client:           c,
-		configFlags:      configFlags,
-		clientSetFunc:    newClientSet,
+		clientSet:        cs,
 		policy:           inventory.PolicyAdoptAll,
 		syncKind:         syncKind,
 		syncName:         syncName,
 		syncNamespace:    string(configmanagement.ControllerNamespace),
-		statusMode:       statusMode,
 		reconcileTimeout: reconcileTimeout,
 	}
 	klog.V(4).Infof("Root applier %s is initialized and synced with the API server", syncName)
@@ -278,7 +266,7 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
-func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap, cs *clientSet) status.Error {
+func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
 	s.Add(e.Status)
@@ -307,19 +295,8 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEv
 
 	case event.PruneSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
-		if isNamespace(e.Object) && differ.SpecialNamespaces[e.Object.GetName()] {
-			// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-			err := cs.disableObject(ctx, e.Object)
-			handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
-			if err != nil {
-				errorMsg := "failed to remove the Config Sync metadata from %v (which is a special namespace): %v"
-				klog.Errorf(errorMsg, id, err)
-				return applierErrorBuilder.Wrap(fmt.Errorf(errorMsg, id, err)).Build()
-			}
-			klog.V(4).Infof("removed the Config Sync metadata from %v (which is a special namespace)", id)
-		}
 		// Skip event always includes an error with the reason
-		return handlePruneSkippedEvent(e.Object, id, e.Error)
+		return a.handlePruneSkippedEvent(ctx, e.Object, id, e.Error)
 
 	default:
 		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
@@ -327,7 +304,20 @@ func processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEv
 }
 
 // handlePruneSkippedEvent translates from prune skipped event into resource error.
-func handlePruneSkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (a *applier) handlePruneSkippedEvent(ctx context.Context, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+	// Disable protected namespaces that were removed from the desired object set.
+	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
+		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
+		err := a.disableObject(ctx, obj)
+		handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
+		if err != nil {
+			errorMsg := "failed to remove the Config Sync metadata from %v (which is a special namespace): %v"
+			klog.Errorf(errorMsg, id, err)
+			return applierErrorBuilder.Wrap(fmt.Errorf(errorMsg, id, err)).Build()
+		}
+		klog.V(4).Infof("removed the Config Sync metadata from %v (which is a special namespace)", id)
+	}
+
 	var depErr *filter.DependencyPreventedActuationError
 	if errors.As(err, &depErr) {
 		return SkipErrorForResource(err, id, depErr.Strategy)
@@ -380,8 +370,8 @@ func handleMetrics(ctx context.Context, operation string, err error, gvk schema.
 
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
-func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client) {
-	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.statusMode)
+func (a *applier) checkInventoryObjectSize(ctx context.Context, c client.Client) {
+	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.clientSet.StatusMode)
 	err := c.Get(ctx, client.ObjectKey{Namespace: a.syncNamespace, Name: a.syncName}, u)
 	if err == nil {
 		size, err := getObjectSize(u)
@@ -397,13 +387,8 @@ func (a *Applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
-	cs, err := a.clientSetFunc(a.client, a.configFlags, a.statusMode)
-	if err != nil {
-		a.addError(err)
-		return nil, a.Errors()
-	}
-	a.checkInventoryObjectSize(ctx, cs.client)
+func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
 
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
@@ -412,7 +397,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 	enabledObjs, disabledObjs := partitionObjs(objs)
 	if len(disabledObjs) > 0 {
 		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
-		disabledCount, err := cs.handleDisabledObjects(ctx, a.inventory, disabledObjs)
+		disabledCount, err := a.handleDisabledObjects(ctx, a.inventory, disabledObjs)
 		if err != nil {
 			a.addError(err)
 			return nil, a.Errors()
@@ -448,14 +433,9 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 
 	// Reset shared mapper before each apply to invalidate the discovery cache.
 	// This allows for picking up CRD changes.
-	mapper, err := a.configFlags.ToRESTMapper()
-	if err != nil {
-		a.addError(err)
-		return nil, a.Errors()
-	}
-	meta.MaybeResetRESTMapper(mapper)
+	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
 
-	events := cs.apply(ctx, a.inventory, resources, options)
+	events := a.clientSet.KptApplier.Run(ctx, a.inventory, object.UnstructuredSet(resources), options)
 	for e := range events {
 		switch e.Type {
 		case event.InitType:
@@ -500,7 +480,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 				Error: e.PruneEvent.Error,
 			}
 			klog.V(4).Info(logEvent)
-			a.addError(processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap, cs))
+			a.addError(a.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
 		default:
 			klog.V(4).Infof("skipped %v event", e.Type)
 		}
@@ -531,7 +511,7 @@ func (a *Applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 // Errors returns the errors encountered during the last apply or current apply
 // if still running.
 // Errors implements Interface.
-func (a *Applier) Errors() status.MultiError {
+func (a *applier) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
 
@@ -539,7 +519,7 @@ func (a *Applier) Errors() status.MultiError {
 	return status.Append(nil, a.errs)
 }
 
-func (a *Applier) addError(err error) {
+func (a *applier) addError(err error) {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
@@ -551,7 +531,7 @@ func (a *Applier) addError(err error) {
 	a.errs = status.Append(a.errs, err)
 }
 
-func (a *Applier) invalidateErrors() {
+func (a *applier) invalidateErrors() {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
@@ -559,7 +539,7 @@ func (a *Applier) invalidateErrors() {
 }
 
 // Apply implements Interface.
-func (a *Applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.applyMux.Lock()
 	defer a.applyMux.Unlock()
 
@@ -588,4 +568,88 @@ func newInventoryUnstructured(kind, name, namespace, statusMode string) *unstruc
 // The inventory ID is assigned as <NAMESPACE>_<NAME>.
 func InventoryID(name, namespace string) string {
 	return namespace + "_" + name
+}
+
+// handleDisabledObjects removes the specified objects from the inventory, and
+// then disables them, one by one, by removing the ConfigSync metadata.
+// Returns the number of objects which are disabled successfully, and any errors
+// encountered.
+func (a *applier) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+	// disabledCount tracks the number of objects which are disabled successfully
+	var disabledCount uint64
+	err := a.removeFromInventory(rg, objs)
+	if err != nil {
+		if nomosutil.IsRequestTooLargeError(err) {
+			return disabledCount, largeResourceGroupError(err, idFromInventory(rg))
+		}
+		return disabledCount, Error(err)
+	}
+	var errs status.MultiError
+	for _, obj := range objs {
+		err := a.disableObject(ctx, obj)
+		handleMetrics(ctx, "unmanage", err, obj.GetObjectKind().GroupVersionKind())
+		if err != nil {
+			klog.Warningf("failed to disable object %v", core.IDOf(obj))
+			errs = status.Append(errs, Error(err))
+		} else {
+			klog.V(4).Infof("disabled object %v", core.IDOf(obj))
+			disabledCount++
+		}
+	}
+	return disabledCount, errs
+}
+
+// removeFromInventory removes the specified objects from the inventory, if it
+// exists.
+func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
+	clusterInv, err := a.clientSet.InvClient.GetClusterInventoryInfo(rg)
+	if err != nil {
+		return err
+	}
+	if clusterInv == nil {
+		// If inventory does not exist, there is nothing to remove
+		return nil
+	}
+	wrappedInv, err := wrapInventoryObj(clusterInv)
+	if err != nil {
+		return err
+	}
+	oldObjs, err := wrappedInv.Load()
+	if err != nil {
+		return err
+	}
+	newObjs := removeFrom(oldObjs, objs)
+	err = rg.Store(newObjs, nil)
+	if err != nil {
+		return err
+	}
+	return a.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
+}
+
+// disableObject disables the management for a single object by removing the
+// ConfigSync labels and annotations.
+func (a *applier) disableObject(ctx context.Context, obj client.Object) error {
+	meta := objMetaFrom(obj)
+	mapping, err := a.clientSet.Mapper.RESTMapping(meta.GroupKind)
+	if err != nil {
+		return err
+	}
+	uObj, err := a.clientSet.DynamicClient.Resource(mapping.Resource).
+		Namespace(meta.Namespace).
+		Get(ctx, meta.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if metadata.HasConfigSyncMetadata(uObj) {
+		updated := metadata.RemoveConfigSyncMetadata(uObj)
+		if !updated {
+			return nil
+		}
+		uObj.SetManagedFields(nil)
+		return a.clientSet.Client.Patch(ctx, uObj, client.Apply, client.FieldOwner(configsync.FieldManager), client.ForceOwnership)
+	}
+	return nil
 }

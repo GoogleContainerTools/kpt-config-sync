@@ -23,13 +23,11 @@ import (
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -48,19 +46,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type fakeApplier struct {
-	initErr error
-	events  []event.Event
+type fakeKptApplier struct {
+	events []event.Event
 }
 
-func newFakeApplier(err error, events []event.Event) *fakeApplier {
-	return &fakeApplier{
-		initErr: err,
-		events:  events,
+var _ KptApplier = &fakeKptApplier{}
+
+func newFakeKptApplier(events []event.Event) *fakeKptApplier {
+	return &fakeKptApplier{
+		events: events,
 	}
 }
 
-func (a *fakeApplier) Run(_ context.Context, _ inventory.Info, _ object.UnstructuredSet, _ apply.ApplierOptions) <-chan event.Event {
+func (a *fakeKptApplier) Run(_ context.Context, _ inventory.Info, _ object.UnstructuredSet, _ apply.ApplierOptions) <-chan event.Event {
 	events := make(chan event.Event, len(a.events))
 	go func() {
 		for _, e := range a.events {
@@ -96,16 +94,10 @@ func TestApply(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		initErr  error
 		events   []event.Event
 		multiErr status.MultiError
 		gvks     map[schema.GroupVersionKind]struct{}
 	}{
-		{
-			name:     "applier init error",
-			initErr:  errors.New("init error"),
-			multiErr: Error(errors.New("init error")),
-		},
 		{
 			name: "unknown type for some resource",
 			events: []event.Event{
@@ -249,26 +241,16 @@ func TestApply(t *testing.T) {
 			u.SetName("rs")
 
 			fakeClient := testingfake.NewClient(t, core.Scheme, u)
-			configFlags := &genericclioptions.ConfigFlags{} // unused by test applier
-			applierFunc := func(c client.Client, _ *genericclioptions.ConfigFlags, _ string) (*clientSet, error) {
-				return &clientSet{
-					kptApplier: newFakeApplier(tc.initErr, tc.events),
-					client:     fakeClient,
-				}, tc.initErr
+			cs := &ClientSet{
+				KptApplier: newFakeKptApplier(tc.events),
+				Client:     fakeClient,
 			}
+			applier, err := NewNamespaceApplier(cs, "test-namespace", "rs", 5*time.Minute)
+			require.NoError(t, err)
 
-			var errs status.MultiError
-			applier, err := NewNamespaceApplier(fakeClient, configFlags, "test-namespace", "rs", "", 5*time.Minute)
-			if err != nil {
-				errs = Error(err)
-			} else {
-				applier.clientSetFunc = applierFunc
-				var gvks map[schema.GroupVersionKind]struct{}
-				gvks, errs = applier.Apply(context.Background(), objs)
-				if diff := cmp.Diff(tc.gvks, gvks, cmpopts.EquateEmpty()); diff != "" {
-					t.Errorf("%s: Diff of GVK map from Apply(): %s", tc.name, diff)
-				}
-			}
+			gvks, errs := applier.Apply(context.Background(), objs)
+			testutil.AssertEqual(t, tc.gvks, gvks)
+
 			if tc.multiErr == nil {
 				if errs != nil {
 					t.Errorf("%s: unexpected error %v", tc.name, errs)
@@ -461,13 +443,16 @@ func TestProcessPruneEvent(t *testing.T) {
 	ctx := context.Background()
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
-	cs := &clientSet{}
+	cs := &ClientSet{}
+	applier := &applier{
+		clientSet: cs,
+	}
 
-	err := processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap, cs)
+	err := applier.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, s.PruneEvent, objStatusMap, cs)
+	err = applier.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, s.PruneEvent, objStatusMap)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()

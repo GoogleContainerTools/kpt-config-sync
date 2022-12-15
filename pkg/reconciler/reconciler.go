@@ -167,11 +167,15 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	var a *applier.Applier
+	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode)
+	if err != nil {
+		klog.Fatalf("Error creating clients: %v", err)
+	}
+	var a applier.Applier
 	if opts.ReconcilerScope == declared.RootReconciler {
-		a, err = applier.NewRootApplier(cl, configFlags, opts.SyncName, opts.StatusMode, reconcileTimeout)
+		a, err = applier.NewRootApplier(clientSet, opts.SyncName, reconcileTimeout)
 	} else {
-		a, err = applier.NewNamespaceApplier(cl, configFlags, opts.ReconcilerScope, opts.SyncName, opts.StatusMode, reconcileTimeout)
+		a, err = applier.NewNamespaceApplier(clientSet, opts.ReconcilerScope, opts.SyncName, reconcileTimeout)
 	}
 	if err != nil {
 		klog.Fatalf("Error creating applier: %v", err)

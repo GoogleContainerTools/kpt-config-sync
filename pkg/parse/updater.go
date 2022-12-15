@@ -37,7 +37,7 @@ type updater struct {
 	scope      declared.Scope
 	resources  *declared.Resources
 	remediator remediator.Interface
-	applier    applier.KptApplier
+	applier    applier.Applier
 
 	errorMux       sync.RWMutex
 	validationErrs status.MultiError

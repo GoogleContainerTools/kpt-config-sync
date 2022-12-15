@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	depAnnotationGooglecloud = "afd3350628e16f83b8951ceef0e776d2"
+	depAnnotationGooglecloud = "c7420e47ee5c361e221cbe0896d1bea0"
 	depAnnotationCustom      = "7021ec2418429875d452e1cd5455724a"
 )
 

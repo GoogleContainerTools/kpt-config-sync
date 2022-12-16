@@ -41,7 +41,7 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.KptApplier, rem remediator.Interface) (Parser, error) {
+func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err

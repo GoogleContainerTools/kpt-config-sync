@@ -20,4 +20,7 @@ if [ "${GOBIN:-"unset"}" == "unset" ]; then
   exit 1
 fi
 
-"${GOBIN}/addlicense" -check -ignore=vendor/** -ignore=e2e/testdata/helm-charts/** -ignore=.output/** . 2>&1 | sed '/ skipping: / d'
+"${GOBIN}/addlicense" -check -ignore=vendor/** \
+  -ignore=e2e/testdata/helm-charts/** \
+  -ignore=.output/** \
+  -ignore=e2e/testdata/*.xml . 2>&1 | sed '/ skipping: / d'

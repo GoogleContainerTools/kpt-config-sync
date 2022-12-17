@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
@@ -328,12 +329,11 @@ func TestCACertSecretWatch(t *testing.T) {
 	}
 	// Modify the secret in c-m-s namespace
 	nt.MustMergePatch(cmsSecret, secretDataPatch("foo", "bar"))
-	nt.WaitForRepoSyncs()
 	// Check that watch triggered resync of the c-m-s secret
-	err = nt.Validate(cmsSecretName, v1.NSConfigManagementSystem, &corev1.Secret{}, nomostest.SecretMissingKey("foo"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.WatchForObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem,
+		[]nomostest.Predicate{
+			nomostest.SecretMissingKey("foo"),
+		})
 	// Modify the secret in RepoSync namespace
 	rsSecret := &corev1.Secret{}
 	err = nt.Validate(caCertSecret, backendNamespace, rsSecret)
@@ -341,13 +341,11 @@ func TestCACertSecretWatch(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.MustMergePatch(rsSecret, secretDataPatch("baz", "bat"))
-	nt.WaitForRepoSyncs()
 	// Check that the watch triggered upsert to c-m-s secret
-	err = nt.Validate(cmsSecretName, v1.NSConfigManagementSystem, &corev1.Secret{}, nomostest.SecretHasKey("baz", "bat"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
+	nomostest.WatchForObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem,
+		[]nomostest.Predicate{
+			nomostest.SecretHasKey("baz", "bat"),
+		})
 	// Unset caCertSecret for repoSyncBackend and use SSH
 	repoSyncSSHURL := nt.GitProvider.SyncURL(nt.NonRootRepos[nn].RemoteRepoName)
 	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL

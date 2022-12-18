@@ -241,6 +241,10 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
+# github.com/jstemmer/go-junit-report/v2 v2.0.0
+## explicit; go 1.13
+github.com/jstemmer/go-junit-report/v2/gtr
+github.com/jstemmer/go-junit-report/v2/junit
 # github.com/klauspost/compress v1.15.8
 ## explicit; go 1.16
 github.com/klauspost/compress

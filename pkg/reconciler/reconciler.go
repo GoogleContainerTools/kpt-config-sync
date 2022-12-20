@@ -264,15 +264,13 @@ func Run(opts Options) {
 	continueChanForFinalizer := make(chan struct{})
 
 	// Create the Finalizer
-	f := &finalizer.Finalizer{
-		Destroyer: a,
-		// The caching client built by the controller-manager doesn't update
-		// the GET cache on UPDATE/PATCH. So we need to use a non-caching client
-		// for the finalizer, which does GET/LIST after UPDATE/PATCH.
-		Client:             cl, // non-caching client
-		StopControllers:    stopControllers,
-		ControllersStopped: continueChanForFinalizer,
-	}
+	// The caching client built by the controller-manager doesn't update
+	// the GET cache on UPDATE/PATCH. So we need to use the non-caching client
+	// for the finalizer, which does GET/LIST after UPDATE/PATCH.
+	f := finalizer.New(opts.ReconcilerScope, a, cl, // non-caching client
+		stopControllers, continueChanForFinalizer)
+
+	// Create the Finalizer Controller
 	finalizerController := &finalizer.Controller{
 		SyncScope: opts.ReconcilerScope,
 		SyncName:  opts.SyncName,

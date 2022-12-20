@@ -16,11 +16,11 @@ package mutate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -142,7 +142,8 @@ func TestStatus(t *testing.T) {
 					schema.GroupResource{Group: "apps", Resource: "Deployment"},
 					"default/hello-world",
 					fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-				"failed to update object status: *v1.Deployment default/hello-world"),
+				"failed to update object status",
+				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				obj.Status.Replicas = 1
@@ -278,7 +279,8 @@ func TestWithRetry(t *testing.T) {
 					schema.GroupResource{Group: "apps", Resource: "Deployment"},
 					"default/hello-world",
 					fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-				"failed to update object: *v1.Deployment default/hello-world"),
+				"failed to update object",
+				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				obj.Spec.Replicas = pointer.Int32(1)
@@ -369,7 +371,9 @@ func TestWithRetry(t *testing.T) {
 			// Expect no update because there was an error
 			expectedUpdated: false,
 			// Expect err, because the UID in the request is older than the one on the server
-			expectedError: errors.New("failed to update object: metadata.uid has changed: *v1.Deployment default/hello-world"),
+			expectedError: errors.Wrap(
+				errors.New("metadata.uid has changed: object may have been re-created"),
+				"failed to update object: *v1.Deployment default/hello-world"),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				// no change persisted

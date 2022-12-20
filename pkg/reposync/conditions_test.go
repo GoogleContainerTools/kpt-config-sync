@@ -650,10 +650,12 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 					Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
 					Status:  metav1.ConditionTrue,
 					Reason:  "DestroyFailure",
-					Message: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-					ErrorSummary: &v1beta1.ErrorSummary{
-						TotalCount:                1,
-						ErrorCountAfterTruncation: 1,
+					Message: "Failed to delete managed resource objects",
+					Errors: []v1beta1.ConfigSyncError{
+						{
+							Code:         "2009",
+							ErrorMessage: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+						},
 					},
 					LastUpdateTime:     updatedNow,
 					LastTransitionTime: updatedNow,
@@ -669,10 +671,12 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 						Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
 						Status:  metav1.ConditionTrue,
 						Reason:  "DestroyFailure",
-						Message: "fake error message",
-						ErrorSummary: &v1beta1.ErrorSummary{
-							TotalCount:                1,
-							ErrorCountAfterTruncation: 1,
+						Message: "Failed to delete managed resource objects",
+						Errors: []v1beta1.ConfigSyncError{
+							{
+								Code:         "2009",
+								ErrorMessage: "KNV2009: fake error message",
+							},
 						},
 						LastUpdateTime:     initialNow,
 						LastTransitionTime: initialNow,
@@ -714,10 +718,12 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 					Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
 					Status:  metav1.ConditionTrue,
 					Reason:  "DestroyFailure",
-					Message: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-					ErrorSummary: &v1beta1.ErrorSummary{
-						TotalCount:                1,
-						ErrorCountAfterTruncation: 1,
+					Message: "Failed to delete managed resource objects",
+					Errors: []v1beta1.ConfigSyncError{
+						{
+							Code:         "2009",
+							ErrorMessage: "KNV2009: failed to delete Deployment.apps, /default-name: fake error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+						},
 					},
 					LastUpdateTime:     updatedNow,
 					LastTransitionTime: initialNow,

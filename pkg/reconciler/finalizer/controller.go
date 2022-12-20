@@ -21,12 +21,11 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,7 +56,7 @@ type Controller struct {
 	Client    client.Client
 	Mapper    meta.RESTMapper
 	Scheme    *runtime.Scheme
-	Finalizer *Finalizer
+	Finalizer Finalizer
 }
 
 // SetupWithManager registers the finalizer Controller with reconciler-manager.
@@ -80,18 +79,17 @@ func (c *Controller) SetupWithManager(mgr ctrl.Manager) error {
 	return controllerBuilder.Complete(c)
 }
 
-// newExampleObject returns new example object with GVK, name, and namespace.
-// This returns either a RootSync or RepoSync as Unstructured.
-func (c *Controller) newExampleObject() *unstructured.Unstructured {
-	exampleObj := &unstructured.Unstructured{}
-	exampleObj.SetName(c.SyncName)
+// newExampleObject returns new RootSync or RepoSync with name and namespace set.
+func (c *Controller) newExampleObject() client.Object {
 	if c.SyncScope == declared.RootReconciler {
-		exampleObj.SetGroupVersionKind(kinds.RootSyncV1Beta1())
-		exampleObj.SetNamespace(configmanagement.ControllerNamespace)
-	} else {
-		exampleObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
-		exampleObj.SetNamespace(string(c.SyncScope))
+		exampleObj := &v1beta1.RootSync{}
+		exampleObj.Name = c.SyncName
+		exampleObj.Namespace = configmanagement.ControllerNamespace
+		return exampleObj
 	}
+	exampleObj := &v1beta1.RepoSync{}
+	exampleObj.Name = c.SyncName
+	exampleObj.Namespace = string(c.SyncScope)
 	return exampleObj
 }
 
@@ -106,8 +104,8 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	// This should never happen, if the controller is configured correctly.
 	if reqKey.Name != rsKey.Name || reqKey.Namespace != rsKey.Namespace {
-		klog.Errorf("Controller misconfiguration: reconciler called for the wrong %s: expected %q, but got %q",
-			rs.GroupVersionKind().Kind, rsKey, reqKey)
+		klog.Errorf("Controller misconfiguration: reconciler called for the wrong %T: expected %q, but got %q",
+			rs, rsKey, reqKey)
 		// Programmer error. Retry won't help, so don't return the error.
 		return result, nil
 	}
@@ -145,7 +143,7 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 // reconcileFinalizer adds or removes the `configsync.gke.io/reconciler`
 // finalizer, depending on the existance and value of the
 // `configsync.gke.io/deletion-propagation-policy` annotation.
-func (c *Controller) reconcileFinalizer(ctx context.Context, obj *unstructured.Unstructured) error {
+func (c *Controller) reconcileFinalizer(ctx context.Context, obj client.Object) error {
 	policyStr, found := obj.GetAnnotations()[metadata.DeletionPropagationPolicyAnnotationKey]
 	policy := metadata.DeletionPropagationPolicy(policyStr)
 	if !found {
@@ -162,8 +160,8 @@ func (c *Controller) reconcileFinalizer(ctx context.Context, obj *unstructured.U
 			return err
 		}
 	default:
-		klog.Warningf("%s %s has an invalid value for the annotation %q: %q",
-			obj.GetKind(), client.ObjectKeyFromObject(obj), metadata.DeletionPropagationPolicyAnnotationKey, policy)
+		klog.Warningf("%T %s has an invalid value for the annotation %q: %q",
+			obj, client.ObjectKeyFromObject(obj), metadata.DeletionPropagationPolicyAnnotationKey, policy)
 		// User error. Retry won't help, so don't return the error.
 	}
 	return nil

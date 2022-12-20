@@ -90,7 +90,7 @@ var singleErrorSummary = &v1beta1.ErrorSummary{
 // (status change).
 // Removes the Syncing condition if the Reconciling condition transitioned.
 func SetReconciling(rs *v1beta1.RootSync, reason, message string) (updated, transitioned bool) {
-	updated, transitioned = setCondition(rs, v1beta1.RootSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, &v1beta1.ErrorSummary{}, now())
+	updated, transitioned = setCondition(rs, v1beta1.RootSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, nil, &v1beta1.ErrorSummary{}, now())
 	if transitioned {
 		RemoveCondition(rs, v1beta1.RootSyncSyncing)
 	}
@@ -102,7 +102,7 @@ func SetReconciling(rs *v1beta1.RootSync, reason, message string) (updated, tran
 // (status change).
 // Removes the Syncing condition if the Stalled condition transitioned.
 func SetStalled(rs *v1beta1.RootSync, reason string, err error) (updated, transitioned bool) {
-	updated, transitioned = setCondition(rs, v1beta1.RootSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, singleErrorSummary, now())
+	updated, transitioned = setCondition(rs, v1beta1.RootSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, nil, singleErrorSummary, now())
 	if transitioned {
 		RemoveCondition(rs, v1beta1.RootSyncSyncing)
 	}
@@ -119,13 +119,13 @@ func SetSyncing(rs *v1beta1.RootSync, status bool, reason, message, commit strin
 	} else {
 		conditionStatus = metav1.ConditionFalse
 	}
-	return setCondition(rs, v1beta1.RootSyncSyncing, conditionStatus, reason, message, commit, errorSources, errorSummary, timestamp)
+	return setCondition(rs, v1beta1.RootSyncSyncing, conditionStatus, reason, message, commit, nil, errorSources, errorSummary, timestamp)
 }
 
 // SetReconcilerFinalizing sets the ReconcilerFinalizing condition to True.
 // Use RemoveCondition to remove this condition. It should never be set to False.
 func SetReconcilerFinalizing(rs *v1beta1.RootSync, reason, message string) (updated bool) {
-	updated, _ = setCondition(rs, v1beta1.RootSyncReconcilerFinalizing, metav1.ConditionTrue, reason, message, "", nil, nil, now())
+	updated, _ = setCondition(rs, v1beta1.RootSyncReconcilerFinalizing, metav1.ConditionTrue, reason, message, "", nil, nil, nil, now())
 	return updated
 }
 
@@ -135,42 +135,30 @@ func SetReconcilerFinalizing(rs *v1beta1.RootSync, reason, message string) (upda
 func SetReconcilerFinalizerFailure(rs *v1beta1.RootSync, errs status.MultiError) (updated bool) {
 	var conditionStatus metav1.ConditionStatus
 	var reason, message string
-	var summary *v1beta1.ErrorSummary
+	var csErrs []v1beta1.ConfigSyncError
 	if errs != nil {
 		conditionStatus = metav1.ConditionTrue
 		reason = "DestroyFailure"
-		message = errs.Error()
-		summary = summarizeFinalizerErrors(errs)
+		message = "Failed to delete managed resource objects"
+		csErrs = status.ToCSE(errs)
 	} else {
 		conditionStatus = metav1.ConditionFalse
 		reason = "DestroySuccess"
 		message = "Successfully deleted managed resource objects"
-		summary = nil
+		csErrs = nil
 	}
 	updated, _ = setCondition(rs, v1beta1.RootSyncReconcilerFinalizerFailure,
-		conditionStatus, reason, message, "", nil, summary, now())
+		conditionStatus, reason, message, "", csErrs, nil, nil, now())
 	return updated
-}
-
-// summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`,
-// and returns an ErrorSource slice and an ErrorSummary.
-func summarizeFinalizerErrors(errs status.MultiError) *v1beta1.ErrorSummary {
-	if errs == nil {
-		return nil
-	}
-	// TODO: handle error truncation (requires new status.finalizer fields)
-	count := len(errs.Errors())
-	return &v1beta1.ErrorSummary{
-		TotalCount:                count,
-		Truncated:                 false,
-		ErrorCountAfterTruncation: count,
-	}
 }
 
 // setCondition adds or updates the specified condition with a True status.
 // Returns whether the condition was updated (any change) or transitioned
 // (status change).
-func setCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
+//
+// Use Errors OR (ErrorSource & ErrorSummary).
+// Errors should only be used if there isn't another status field to reference.
+func setCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errs []v1beta1.ConfigSyncError, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
 	condition := GetCondition(rs.Status.Conditions, condType)
 	if condition == nil {
 		i := len(rs.Status.Conditions)
@@ -186,6 +174,7 @@ func setCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType, 
 	} else if condition.Reason != reason ||
 		condition.Message != message ||
 		condition.Commit != commit ||
+		!equality.Semantic.DeepEqual(condition.Errors, errs) ||
 		!equality.Semantic.DeepEqual(condition.ErrorSourceRefs, errorSources) ||
 		!equality.Semantic.DeepEqual(condition.ErrorSummary, errorSummary) {
 		updated = true
@@ -195,6 +184,7 @@ func setCondition(rs *v1beta1.RootSync, condType v1beta1.RootSyncConditionType, 
 	condition.Reason = reason
 	condition.Message = message
 	condition.Commit = commit
+	condition.Errors = errs
 	condition.ErrorSourceRefs = errorSources
 	condition.ErrorSummary = errorSummary
 	condition.LastUpdateTime = timestamp

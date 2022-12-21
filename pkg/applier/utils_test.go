@@ -86,7 +86,7 @@ func TestObjMetaFrom(t *testing.T) {
 			Kind:  "Deployment",
 		},
 	}
-	actual := objMetaFrom(d)
+	actual := ObjMetaFromObject(d)
 	if actual != expected {
 		t.Errorf("expected %v but got %v", expected, actual)
 	}
@@ -94,7 +94,7 @@ func TestObjMetaFrom(t *testing.T) {
 
 func TestIDFrom(t *testing.T) {
 	d := fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
-	meta := objMetaFrom(d)
+	meta := ObjMetaFromObject(d)
 	id := idFrom(meta)
 	if id != core.IDOf(d) {
 		t.Errorf("expected %v but got %v", core.IDOf(d), id)
@@ -111,47 +111,47 @@ func TestRemoveFrom(t *testing.T) {
 		{
 			name: "toRemove is empty",
 			allObjMeta: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				objMetaFrom(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: nil,
 			expected: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				objMetaFrom(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "all toRemove are in the original list",
 			allObjMeta: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				objMetaFrom(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "some toRemove are not in the original list",
 			allObjMeta: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				objMetaFrom(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
 				fake.ConfigMapObject(core.Name("cm"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "toRemove are the same as original objects",
 			allObjMeta: []object.ObjMetadata{
-				objMetaFrom(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				objMetaFrom(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default")),

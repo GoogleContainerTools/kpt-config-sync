@@ -629,7 +629,7 @@ func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []cl
 // disableObject disables the management for a single object by removing the
 // ConfigSync labels and annotations.
 func (a *applier) disableObject(ctx context.Context, obj client.Object) error {
-	meta := objMetaFrom(obj)
+	meta := ObjMetaFromObject(obj)
 	mapping, err := a.clientSet.Mapper.RESTMapping(meta.GroupKind)
 	if err != nil {
 		return err

@@ -15,11 +15,6 @@
 package finalizer
 
 import (
-	"fmt"
-
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
-	syncfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -30,18 +25,7 @@ import (
 // Use this for client-side filtering when you can't use server-side
 // fieldSelectors, like when an informer is shared between controllers.
 func SingleObjectPredicate(key client.ObjectKey) predicate.Predicate {
-	fieldSelector := fields.AndSelectors(
-		fields.OneTermEqualSelector("metadata.name", key.Name),
-		fields.OneTermEqualSelector("metadata.namespace", key.Namespace),
-	)
-
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		uObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			panic(fmt.Sprintf("Predicate received unexpected object type %T", obj))
-		}
-		return fieldSelector.Matches(&syncfake.UnstructuredFields{
-			Object: uObj,
-		})
+		return obj.GetName() == key.Name && obj.GetNamespace() == key.Namespace
 	})
 }

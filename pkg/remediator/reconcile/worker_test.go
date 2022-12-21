@@ -65,9 +65,11 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 			},
 			want: []client.Object{
 				// TODO: Figure out why the reconciler is stripping away labels and annotations.
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 					core.Label("first", "one")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
+				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 					core.Label("second", "two")),
 			},
 		},
@@ -93,8 +95,12 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 				queue.MarkDeleted(context.Background(), fake.ClusterRoleObject()),
 			},
 			want: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("1")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled, core.ResourceVersion("1")),
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+				),
+				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+				),
 			},
 		},
 	}
@@ -106,7 +112,7 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 				q.Add(obj)
 			}
 
-			c := fakeClient(t)
+			c := testingfake.NewClient(t, core.Scheme)
 			for _, obj := range tc.toProcess {
 				if !queue.WasDeleted(context.Background(), obj) {
 					if err := c.Create(context.Background(), obj); err != nil {
@@ -133,7 +139,7 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 // queue is empty.
 func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	q := queue.New("test") // empty queue
-	c := fakeClient(t)
+	c := testingfake.NewClient(t, core.Scheme)
 	d := makeDeclared(t) // no resources declared
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
@@ -187,16 +193,18 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	expectedObjs := []client.Object{
 		// CRB delete should be reverted
 		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
-			core.ResourceVersion("1")),
+			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		),
 		// Role revert should fail from fake Update error
 		fake.ClusterRoleObject(syncertest.ManagementEnabled,
-			core.ResourceVersion("2"),
-			core.Label("new", "label")),
+			core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+			core.Label("new", "label"),
+		),
 	}
 
 	q := queue.New("test")
 
-	c := fakeClient(t)
+	c := testingfake.NewClient(t, core.Scheme)
 	for _, obj := range existingObjs {
 		if err := c.Create(ctx, obj); err != nil {
 			t.Fatalf("Failed to create object in fake client: %v", err)
@@ -293,7 +301,8 @@ func TestWorker_Refresh(t *testing.T) {
 				fake.RoleObject(core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "qux"))),
 			want: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
-				core.ResourceVersion("1"), core.Annotation("foo", "qux")),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+				core.Annotation("foo", "qux")),
 			wantDeleted: false,
 			wantErr:     nil,
 		},
@@ -375,7 +384,7 @@ func TestWorker_ResourceConflictMetricValidation(t *testing.T) {
 				w := &Worker{
 					objectQueue: &fakeQueue{},
 					reconciler: fakeReconciler{
-						client:       fakeClient(t),
+						client:       testingfake.NewClient(t, core.Scheme),
 						remediateErr: syncerclient.ConflictUpdateDoesNotExist(errors.New("resource conflict error"), obj),
 					},
 				}

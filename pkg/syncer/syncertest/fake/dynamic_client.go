@@ -21,6 +21,7 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // DynamicClient is a fake dynamic client which contains a map to store unstructured objects
@@ -71,7 +73,7 @@ func NewDynamicClient(t *testing.T, scheme *runtime.Scheme) *DynamicClient {
 		fakeClient.PrependReactor("update", resource, dc.update)
 		fakeClient.PrependReactor("patch", resource, dc.patch)
 		fakeClient.PrependReactor("delete", resource, dc.delete)
-		// TODO: add support for list, delete-collection, and watch, if needed
+		// TODO: add support for create, list, delete-collection, and watch, if needed
 	}
 	return dc
 }
@@ -127,9 +129,13 @@ func (dc *DynamicClient) update(action clienttesting.Action) (bool, runtime.Obje
 		return true, nil, fmt.Errorf("invalid spec.resourceVersion: expected %q but found %q",
 			updateAction.GetNamespace(), uObj.GetNamespace())
 	}
+	// Copy cached ResourceVersion to updated object & increment
 	uObj.SetResourceVersion(cachedObj.GetResourceVersion())
 	if err := incrementResourceVersion(uObj); err != nil {
 		return true, nil, fmt.Errorf("failed to increment resourceVersion: %w", err)
+	}
+	if err = updateGeneration(cachedObj, uObj, dc.scheme); err != nil {
+		return true, nil, fmt.Errorf("failed to update generation: %w", err)
 	}
 	klog.V(5).Infof("Updating %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
 		id, found, uObj.GetResourceVersion(),
@@ -219,6 +225,13 @@ func (dc *DynamicClient) patch(action clienttesting.Action) (bool, runtime.Objec
 	if err := incrementResourceVersion(patchedObj); err != nil {
 		return true, nil, fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
+	if found {
+		if err = updateGeneration(cachedObj, patchedObj, dc.scheme); err != nil {
+			return true, nil, fmt.Errorf("failed to update generation: %w", err)
+		}
+	} else {
+		patchedObj.SetGeneration(1)
+	}
 	klog.V(5).Infof("Patching %s (Found: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
 		id, found, patchedObj.GetResourceVersion(),
 		log.AsJSON(patchedObj), cmp.Diff(cachedObj, patchedObj))
@@ -250,4 +263,39 @@ func genID(namespace, name string, gk schema.GroupKind) core.ID {
 		GroupKind: gk,
 		ObjectKey: types.NamespacedName{Namespace: namespace, Name: name},
 	}
+}
+
+func updateGeneration(oldObj, newObj client.Object, scheme *runtime.Scheme) error {
+	var oldCopyContent, newCopyContent map[string]interface{}
+	if uObj, ok := oldObj.(*unstructured.Unstructured); ok {
+		oldCopyContent = uObj.DeepCopy().UnstructuredContent()
+	} else {
+		uObj, err := kinds.ToUnstructured(oldObj, scheme)
+		if err != nil {
+			return fmt.Errorf("failed to convert old object to unstructured: %w", err)
+		}
+		oldCopyContent = uObj.UnstructuredContent()
+	}
+	if uObj, ok := newObj.(*unstructured.Unstructured); ok {
+		newCopyContent = uObj.DeepCopy().UnstructuredContent()
+	} else {
+		uObj, err := kinds.ToUnstructured(newObj, scheme)
+		if err != nil {
+			return fmt.Errorf("failed to convert new object to unstructured: %w", err)
+		}
+		newCopyContent = uObj.UnstructuredContent()
+	}
+	// ignore metadata
+	delete(newCopyContent, "metadata")
+	delete(oldCopyContent, "metadata")
+	// Assume all objects have a status subresource, and ignore it.
+	// TODO: figure out how to detect if this resource has a status subresource.
+	delete(newCopyContent, "status")
+	delete(oldCopyContent, "status")
+	if !equality.Semantic.DeepEqual(newCopyContent, oldCopyContent) {
+		newObj.SetGeneration(oldObj.GetGeneration() + 1)
+	} else {
+		newObj.SetGeneration(oldObj.GetGeneration())
+	}
+	return nil
 }

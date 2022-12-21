@@ -50,11 +50,13 @@ func TestRemediator_Reconcile(t *testing.T) {
 	}{
 		// Happy Paths.
 		{
-			name:      "create added object",
-			version:   "v1",
-			declared:  fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-			actual:    nil,
-			want:      fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("1")),
+			name:     "create added object",
+			version:  "v1",
+			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+			actual:   nil,
+			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 			wantError: nil,
 		},
 		{
@@ -63,8 +65,10 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
 			actual: fake.ClusterRoleBindingObject(),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
-				core.Label("new-label", "one")),
+			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+				core.Label("new-label", "one"),
+			),
 			wantError: nil,
 		},
 		{
@@ -91,16 +95,20 @@ func TestRemediator_Reconcile(t *testing.T) {
 			version: "v1",
 			declared: fake.ClusterRoleBindingObject(syncertest.ManagementDisabled,
 				core.Label("declared-label", "foo")),
-			actual:    fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
-			want:      fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"), core.ResourceVersion("1")),
+			actual: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
+			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 			wantError: nil,
 		},
 		{
-			name:      "don't delete unmanaged object",
-			version:   "v1",
-			declared:  nil,
-			actual:    fake.ClusterRoleBindingObject(),
-			want:      fake.ClusterRoleBindingObject(core.ResourceVersion("1")),
+			name:     "don't delete unmanaged object",
+			version:  "v1",
+			declared: nil,
+			actual:   fake.ClusterRoleBindingObject(),
+			want: fake.ClusterRoleBindingObject(
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 			wantError: nil,
 		},
 		{
@@ -109,7 +117,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_wrong-name")),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("1"),
+			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_wrong-name")),
 			wantError: nil,
 		},
@@ -123,11 +132,13 @@ func TestRemediator_Reconcile(t *testing.T) {
 			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
 		},
 		{
-			name:      "don't update, and error on bad declared management annotation",
-			version:   "v1",
-			declared:  fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
-			actual:    fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
-			want:      fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"), core.ResourceVersion("1")),
+			name:     "don't update, and error on bad declared management annotation",
+			version:  "v1",
+			declared: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			actual:   fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
+			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
 		},
 		// bad in-cluster management annotation paths.
@@ -138,7 +149,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 				core.Label("declared-label", "foo")),
 			actual: fake.ClusterRoleBindingObject(syncertest.ManagementInvalid,
 				core.Label("declared-label", "foo")),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled, core.ResourceVersion("2"),
+			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("declared-label", "foo")),
 			wantError: nil,
 		},
@@ -148,7 +160,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual:   fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
 			want: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid,
-				core.ResourceVersion("1")),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 			wantError: nil,
 		},
 		// system namespaces
@@ -158,7 +171,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.NamespaceObject(metav1.NamespaceSystem, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_kube-system")),
-			want: fake.NamespaceObject(metav1.NamespaceSystem, core.ResourceVersion("2")),
+			want: fake.NamespaceObject(metav1.NamespaceSystem,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+			),
 		},
 		{
 			name:     "don't delete kube-public Namespace",
@@ -166,7 +181,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.NamespaceObject(metav1.NamespacePublic, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_kube-public")),
-			want: fake.NamespaceObject(metav1.NamespacePublic, core.ResourceVersion("2")),
+			want: fake.NamespaceObject(metav1.NamespacePublic,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+			),
 		},
 		{
 			name:     "don't delete default Namespace",
@@ -174,7 +191,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.NamespaceObject(metav1.NamespaceDefault, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_default")),
-			want: fake.NamespaceObject(metav1.NamespaceDefault, core.ResourceVersion("2")),
+			want: fake.NamespaceObject(metav1.NamespaceDefault,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+			),
 		},
 		{
 			name:     "don't delete gatekeeper-system Namespace",
@@ -182,7 +201,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.NamespaceObject(policycontroller.NamespaceSystem, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_gatekeeper-system")),
-			want: fake.NamespaceObject(policycontroller.NamespaceSystem, core.ResourceVersion("2")),
+			want: fake.NamespaceObject(policycontroller.NamespaceSystem,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+			),
 		},
 		// Version difference paths.
 		{
@@ -190,7 +211,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
 			actual: fake.ClusterRoleBindingObject(),
-			want: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled, core.ResourceVersion("2"),
+			want: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(2),
 				core.Label("new-label", "one")),
 			wantError: nil,
 		},
@@ -199,7 +221,11 @@ func TestRemediator_Reconcile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set up the fake client that represents the initial state of the cluster.
-			c := fakeClient(t, tc.actual)
+			var existingObjs []client.Object
+			if tc.actual != nil {
+				existingObjs = append(existingObjs, tc.actual)
+			}
+			c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 			// Simulate the Parser having already parsed the resource and recorded it.
 			d := makeDeclared(t, tc.declared)
 
@@ -229,22 +255,6 @@ func TestRemediator_Reconcile(t *testing.T) {
 			}
 		})
 	}
-}
-
-func fakeClient(t *testing.T, actual ...client.Object) *testingfake.Client {
-	t.Helper()
-
-	c := testingfake.NewClient(t, core.Scheme)
-	for _, a := range actual {
-		if a == nil {
-			continue
-		}
-		if err := c.Create(context.Background(), a); err != nil {
-			// Test precondition; fail early.
-			t.Fatal(err)
-		}
-	}
-	return c
 }
 
 func makeDeclared(t *testing.T, objs ...client.Object) *declared.Resources {

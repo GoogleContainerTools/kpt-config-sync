@@ -117,7 +117,9 @@ func TestUpsertAuthSecret(t *testing.T) {
 			client:   fakeClient(t, secret(t, gitSecretName, keyData, sshAuth, gitSource, core.Namespace(reposyncNs))),
 			wantKey:  types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, gitSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, gitSecretName), keyData, sshAuth, gitSource,
-				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("1")),
+				core.Namespace(nsReconcilerKey.Namespace),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 		},
 		{
 			name:     "Secret updated for git source",
@@ -128,7 +130,9 @@ func TestUpsertAuthSecret(t *testing.T) {
 			),
 			wantKey: types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, gitSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, gitSecretName), updatedKeyData, sshAuth, gitSource,
-				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("2")),
+				core.Namespace(nsReconcilerKey.Namespace),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(2),
+			),
 		},
 		{
 			name:      "Secret not found for git source",
@@ -151,7 +155,9 @@ func TestUpsertAuthSecret(t *testing.T) {
 			client:   fakeClient(t, secret(t, helmSecretName, tokenData, tokenAuth, helmSource, core.Namespace(reposyncNs))),
 			wantKey:  types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, helmSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, helmSecretName), tokenData, tokenAuth, helmSource,
-				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("1")),
+				core.Namespace(nsReconcilerKey.Namespace),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+			),
 		},
 		{
 			name:     "Secret updated for helm source",
@@ -162,7 +168,9 @@ func TestUpsertAuthSecret(t *testing.T) {
 			),
 			wantKey: types.NamespacedName{Namespace: nsReconcilerKey.Namespace, Name: ReconcilerResourceName(nsReconcilerName, helmSecretName)},
 			wantSecret: secret(t, ReconcilerResourceName(nsReconcilerName, helmSecretName), updatedKeyData, tokenAuth, helmSource,
-				core.Namespace(nsReconcilerKey.Namespace), core.ResourceVersion("2")),
+				core.Namespace(nsReconcilerKey.Namespace),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(2),
+			),
 		},
 		{
 			name:      "Secret not found for helm source",

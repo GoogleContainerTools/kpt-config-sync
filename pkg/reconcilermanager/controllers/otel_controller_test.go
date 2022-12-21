@@ -34,9 +34,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// These constants hard-code the hash of the ConfigMaps that configure the
+// otel-collector. This value is used to check the `configsync.gke.io/configmap`
+// annotation value, which is populated by the reconciler-manager to ensure that
+// the otel-collector deployment is updated (and pods replaced) any time the
+// ConfigMap changes. The hash will change any time the ConfigMap changes. So
+// you'll need to update these values any time you make a deliberate change to
+// the config or its ConfigMap metadata.
 const (
-	depAnnotationGooglecloud = "c7420e47ee5c361e221cbe0896d1bea0"
-	depAnnotationCustom      = "7021ec2418429875d452e1cd5455724a"
+	// depAnnotationGooglecloud is the expected hash of the GCP/GKE-specific
+	// otel-collector ConfigMap.
+	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
+	// Used by TestOtelReconcilerGooglecloud.
+	depAnnotationGooglecloud = "48a5b088ea2af4e9bc259230f88cafd3"
+	// depAnnotationGooglecloud is the expected hash of the custom
+	// otel-collector ConfigMap test artifact.
+	// Used by TestOtelReconcilerCustom.
+	depAnnotationCustom = "d166bfb4bea41bdc98b5b718e6c34b44"
 )
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
@@ -56,7 +70,7 @@ func TestOtelReconciler(t *testing.T) {
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
-		core.ResourceVersion("1"),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
@@ -100,7 +114,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
-		core.ResourceVersion("1"),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
@@ -129,7 +143,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 			metadata.SystemLabel: "true",
 			metadata.ArchLabel:   "csmr",
 		}),
-		core.ResourceVersion("1"),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 
 	wantDeployment := fake.DeploymentObject(
@@ -162,11 +176,13 @@ func TestOtelReconcilerCustom(t *testing.T) {
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	cmCustom := configMapWithData(
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorCustomCM,
 		map[string]string{"otel-collector-config.yaml": "custom"},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, metrics.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
@@ -184,7 +200,7 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	wantDeployment := fake.DeploymentObject(
 		core.Namespace(metrics.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
-		core.ResourceVersion("1"),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationCustom)
 

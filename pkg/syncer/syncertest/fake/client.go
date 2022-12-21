@@ -138,13 +138,15 @@ func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object)
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
-	id := core.IDOf(obj)
+	id := c.idFromObject(obj)
 	cachedObj, ok := c.Objects[id]
 	if !ok {
 		return newNotFound(id)
 	}
-	klog.V(5).Infof("Getting(cached) %T %s (ResourceVersion: %q): %s",
-		cachedObj, gvk.Kind, cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
+	klog.V(5).Infof("Getting(cached) %T %s (Generation: %v, ResourceVersion: %q): %s",
+		cachedObj, gvk.Kind,
+		cachedObj.GetGeneration(), cachedObj.GetResourceVersion(),
+		log.AsJSON(cachedObj))
 
 	// Convert to a typed object, optionally convert between versions
 	tObj, matches, err := c.convertToVersion(cachedObj, gvk)
@@ -167,8 +169,10 @@ func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object)
 	// Conversion sometimes drops the GVK, so add it back in.
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
-	klog.V(5).Infof("Getting %T %s (ResourceVersion: %q): %s",
-		obj, gvk.Kind, obj.GetResourceVersion(), log.AsJSON(obj))
+	klog.V(5).Infof("Getting %T %s (Generation: %v, ResourceVersion: %q): %s",
+		obj, gvk.Kind,
+		obj.GetGeneration(), obj.GetResourceVersion(),
+		log.AsJSON(obj))
 	return nil
 }
 
@@ -305,18 +309,24 @@ func (c *Client) Create(_ context.Context, obj client.Object, opts ...client.Cre
 	// Set defaults
 	c.scheme.Default(tObj)
 
-	id := core.IDOf(tObj)
+	id := c.idFromObject(tObj)
 	_, found := c.Objects[id]
 	if found {
 		return newAlreadyExists(id)
 	}
 
 	initResourceVersion(tObj)
-	klog.V(5).Infof("Creating %T %s (ResourceVersion: %q): %s",
-		tObj, client.ObjectKeyFromObject(tObj), tObj.GetResourceVersion(), log.AsJSON(tObj))
+	initGeneration(tObj)
+	initUID(tObj)
+	klog.V(5).Infof("Creating %T %s (Generation: %v, ResourceVersion: %q): %s",
+		tObj, client.ObjectKeyFromObject(tObj),
+		tObj.GetGeneration(), tObj.GetResourceVersion(),
+		log.AsJSON(tObj))
 
 	// Copy ResourceVersion change back to input object
 	obj.SetResourceVersion(tObj.GetResourceVersion())
+	// Copy Generation change back to input object
+	obj.SetGeneration(tObj.GetGeneration())
 
 	c.Objects[id] = tObj
 	return nil
@@ -356,15 +366,29 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
-	id := core.IDOf(obj)
+	id := c.idFromObject(obj)
 
 	cachedObj, found := c.Objects[id]
 	if !found {
 		return newNotFound(id)
 	}
 
-	klog.V(5).Infof("Deleting %T %s (ResourceVersion: %q): %s",
-		cachedObj, client.ObjectKeyFromObject(cachedObj), cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
+	if obj.GetUID() != "" && obj.GetUID() != cachedObj.GetUID() {
+		return newConflictingUID(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
+	}
+	if obj.GetResourceVersion() != "" && obj.GetResourceVersion() != cachedObj.GetResourceVersion() {
+		return newConflictingResourceVersion(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
+	}
+
+	// Copy latest values back to input object
+	obj.SetUID(cachedObj.GetUID())
+	obj.SetResourceVersion(cachedObj.GetResourceVersion())
+	obj.SetGeneration(cachedObj.GetGeneration())
+
+	klog.V(5).Infof("Deleting %T %s (Generation: %v, ResourceVersion: %q): %s",
+		cachedObj, client.ObjectKeyFromObject(cachedObj),
+		cachedObj.GetGeneration(), cachedObj.GetResourceVersion(),
+		log.AsJSON(cachedObj))
 
 	c.deleteManagedObjects(id)
 	delete(c.Objects, id)
@@ -376,7 +400,7 @@ func (c *Client) deleteManagedObjects(id core.ID) {
 	for _, o := range c.Objects {
 		for _, ownerRef := range o.GetOwnerReferences() {
 			if ownerRef.Name == id.Name && ownerRef.Kind == id.Kind {
-				delete(c.Objects, core.IDOf(o))
+				delete(c.Objects, c.idFromObject(o))
 			}
 		}
 	}
@@ -442,7 +466,7 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 	// Set defaults
 	c.scheme.Default(tObj)
 
-	id := core.IDOf(tObj)
+	id := c.idFromObject(tObj)
 	cachedObj, found := c.Objects[id]
 	if !found {
 		return newNotFound(id)
@@ -457,15 +481,23 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		return nil
 	}
 
-	// Copy cached ResourceVersion to updated object & increment
-	tObj.SetResourceVersion(cachedObj.GetResourceVersion())
-	err = incrementResourceVersion(tObj)
-	if err != nil {
-		return fmt.Errorf("failed to increment resourceVersion: %w", err)
+	if obj.GetUID() == "" {
+		tObj.SetUID(cachedObj.GetUID())
+	} else if obj.GetUID() != cachedObj.GetUID() {
+		return newConflictingUID(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
+	}
+	if obj.GetResourceVersion() == "" {
+		tObj.SetResourceVersion(cachedObj.GetResourceVersion())
+	} else if obj.GetResourceVersion() != cachedObj.GetResourceVersion() {
+		return newConflictingResourceVersion(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
 	}
 
-	// Copy ResourceVersion change back to input object
-	obj.SetResourceVersion(tObj.GetResourceVersion())
+	if err = incrementResourceVersion(tObj); err != nil {
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
+	}
+	if err = updateGeneration(cachedObj, tObj, c.scheme); err != nil {
+		return fmt.Errorf("failed to update generation: %w", err)
+	}
 
 	if hasStatus {
 		tObj, err = c.updateObjectStatus(tObj, oldStatus)
@@ -474,8 +506,14 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		}
 	}
 
-	klog.V(5).Infof("Updating %T %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
-		tObj, id, tObj.GetResourceVersion(),
+	// Copy latest values back to input object
+	obj.SetUID(tObj.GetUID())
+	obj.SetResourceVersion(tObj.GetResourceVersion())
+	obj.SetGeneration(tObj.GetGeneration())
+
+	klog.V(5).Infof("Updating %T %s (Generation: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		tObj, id,
+		tObj.GetGeneration(), tObj.GetResourceVersion(),
 		log.AsJSON(tObj), cmp.Diff(cachedObj, tObj))
 
 	c.Objects[id] = tObj
@@ -501,7 +539,7 @@ func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patc
 		return fmt.Errorf("failed to build patch: %w", err)
 	}
 
-	id := core.IDOf(obj)
+	id := c.idFromObject(obj)
 	cachedObj, found := c.Objects[id]
 	var mergedData []byte
 	switch patch.Type() {
@@ -579,8 +617,17 @@ func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patc
 	if err := incrementResourceVersion(tObj); err != nil {
 		return fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
-	klog.V(5).Infof("Patching %s (Found: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
-		id, found, tObj.GetResourceVersion(),
+	if found {
+		// Update generation if spec changed
+		if err = updateGeneration(cachedObj, tObj, c.scheme); err != nil {
+			return fmt.Errorf("failed to update generation: %w", err)
+		}
+	} else {
+		tObj.SetGeneration(1)
+	}
+	klog.V(5).Infof("Patching %s (Found: %v, Generation: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		id, found,
+		tObj.GetGeneration(), tObj.GetResourceVersion(),
 		log.AsJSON(tObj), cmp.Diff(cachedObj, tObj))
 	c.Objects[id] = tObj
 	return nil
@@ -605,7 +652,7 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 		return err
 	}
 
-	id := core.IDOf(tObj)
+	id := s.Client.idFromObject(tObj)
 	cachedObj, found := s.Client.Objects[id]
 	if !found {
 		return newNotFound(id)
@@ -626,24 +673,39 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 		return nil
 	}
 
-	err = incrementResourceVersion(cachedObj)
+	if obj.GetUID() != "" && obj.GetUID() != cachedObj.GetUID() {
+		return newConflictingUID(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
+	}
+	if obj.GetResourceVersion() != "" && obj.GetResourceVersion() != cachedObj.GetResourceVersion() {
+		return newConflictingResourceVersion(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
+	}
+
+	// Copy cached object so we can diff the changes later
+	updatedObj := cachedObj.DeepCopyObject().(client.Object)
+
+	err = incrementResourceVersion(updatedObj)
 	if err != nil {
 		return fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
 
-	klog.V(5).Infof("Updating Status %T %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
-		cachedObj, id.ObjectKey, cachedObj.GetResourceVersion(),
-		log.AsJSON(newStatus), cmp.Diff(cachedObj, newStatus))
+	// Assume status doesn't affect generation (don't increment).
+	// TODO: Figure out how to check if status is a sub-resource. If not, increment generation.
 
-	// Copy ResourceVersion change back to input object
-	obj.SetResourceVersion(cachedObj.GetResourceVersion())
-
-	u, err := s.Client.updateObjectStatus(cachedObj, newStatus)
+	updatedObj, err = s.Client.updateObjectStatus(updatedObj, newStatus)
 	if err != nil {
 		return err
 	}
 
-	s.Client.Objects[id] = u
+	// Copy latest values back to input object
+	obj.SetUID(updatedObj.GetUID())
+	obj.SetResourceVersion(updatedObj.GetResourceVersion())
+	obj.SetGeneration(updatedObj.GetGeneration())
+
+	klog.V(5).Infof("Updating Status %T %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+		updatedObj, id.ObjectKey, updatedObj.GetResourceVersion(),
+		log.AsJSON(updatedObj), cmp.Diff(cachedObj, updatedObj))
+
+	s.Client.Objects[id] = updatedObj
 	return nil
 }
 
@@ -675,10 +737,13 @@ func (c *Client) Check(t *testing.T, wants ...client.Object) {
 			// messages will be garbage.
 			t.Fatal(err)
 		}
-		wantMap[core.IDOf(obj)] = obj
+		wantMap[c.idFromObject(obj)] = obj
 	}
 
-	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+	asserter := testutil.NewAsserter(
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(metav1.Time{}, "Time"),
+	)
 	checked := make(map[core.ID]bool)
 	for id, want := range wantMap {
 		checked[id] = true
@@ -702,6 +767,22 @@ func newNotFound(id core.ID) error {
 
 func newAlreadyExists(id core.ID) error {
 	return apierrors.NewAlreadyExists(toGR(id.GroupKind), id.ObjectKey.String())
+}
+
+func newConflict(id core.ID, err error) error {
+	return apierrors.NewConflict(toGR(id.GroupKind), id.ObjectKey.String(), err)
+}
+
+func newConflictingUID(id core.ID, expectedUID, foundUID string) error {
+	return newConflict(id,
+		fmt.Errorf("UID conflict: expected %q but found %q",
+			expectedUID, foundUID))
+}
+
+func newConflictingResourceVersion(id core.ID, expectedRV, foundRV string) error {
+	return newConflict(id,
+		fmt.Errorf("ResourceVersion conflict: expected %q but found %q",
+			expectedRV, foundRV))
 }
 
 func (c *Client) list(gk schema.GroupKind) []client.Object {
@@ -729,6 +810,20 @@ func (c *Client) Scheme() *runtime.Scheme {
 // RESTMapper implements client.Client.
 func (c *Client) RESTMapper() meta.RESTMapper {
 	return c.mapper
+}
+
+// idFromObject returns the object's ID.
+// If the GK isn't set, the Scheme is used to look it up by object type.
+func (c *Client) idFromObject(obj client.Object) core.ID {
+	id := core.IDOf(obj)
+	if id.GroupKind.Empty() {
+		gvk, err := kinds.Lookup(obj, c.scheme)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to lookup object GVK: %v", err))
+		}
+		id.GroupKind = gvk.GroupKind()
+	}
+	return id
 }
 
 // convertToVersion converts the object to a typed object of the targetGVK.
@@ -820,8 +915,19 @@ func incrementResourceVersion(obj client.Object) error {
 }
 
 func initResourceVersion(obj client.Object) {
-	rv := obj.GetResourceVersion()
-	if rv == "" {
+	if obj.GetResourceVersion() == "" {
 		obj.SetResourceVersion("1")
+	}
+}
+
+func initGeneration(obj client.Object) {
+	if obj.GetGeneration() == 0 {
+		obj.SetGeneration(1)
+	}
+}
+
+func initUID(obj client.Object) {
+	if obj.GetUID() == "" {
+		obj.SetUID("1")
 	}
 }

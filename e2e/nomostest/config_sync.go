@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -51,6 +53,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	webhookconfig "kpt.dev/configsync/pkg/webhook/configuration"
+	"sigs.k8s.io/cli-utils/pkg/object/dependson"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -878,7 +881,8 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		return
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nt.RepoSyncClusterRole())
+	cr := nt.RepoSyncClusterRole()
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr)
 
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
@@ -889,7 +893,12 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		rsCount++
 		rsNamespaces[ns] = struct{}{}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), RepoSyncRoleBinding(nn))
+		rb := RepoSyncRoleBinding(nn)
+		dependencies := dependson.DependencySet{
+			applier.ObjMetaFromObject(cr),
+			applier.ObjMetaFromObject(rb),
+		}
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), rb)
 		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
 			// when the cluster has PodSecurityPolicy enabled.
@@ -898,10 +907,16 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			// TODO: Remove the psp related change when Kubernetes 1.25 is
 			// available on GKE.
 			crb := repoSyncClusterRoleBinding(nn)
+			dependencies = append(dependencies, applier.ObjMetaFromObject(crb))
 			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
 		}
 
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+		// [Cluster]RoleBinding & ClusterRole must be deleted after the RepoSync,
+		// so the reconciler has the right permissions until it's fully exited.
+		if err := setDependsOnAnnotation(rs, dependencies); err != nil {
+			nt.T.Fatalf("Failed to set RepoSync(%s) depends-on: %v", nn, err)
+		}
 		if opts.MultiRepo.ReconcileTimeout != nil {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
@@ -957,6 +972,23 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+// setDependsOnAnnotation is a copy of cli-utils dependson.WriteAnnotation, but
+// it accepts a core.Annotated instead of an Unstructured.
+func setDependsOnAnnotation(obj core.Annotated, depSet dependson.DependencySet) error {
+	if obj == nil {
+		return errors.New("object is nil")
+	}
+	if depSet.Equal(dependson.DependencySet{}) {
+		return errors.New("dependency set is empty")
+	}
+	depSetStr, err := dependson.FormatDependencySet(depSet)
+	if err != nil {
+		return fmt.Errorf("failed to format depends-on annotation: %w", err)
+	}
+	core.SetAnnotation(obj, dependson.Annotation, depSetStr)
+	return nil
 }
 
 // podHasReadyCondition checks if a pod status has a READY condition.

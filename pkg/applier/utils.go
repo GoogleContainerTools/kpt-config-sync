@@ -60,7 +60,8 @@ func toUnstructured(objs []client.Object) ([]*unstructured.Unstructured, status.
 	return unstructureds, errs
 }
 
-func objMetaFrom(obj client.Object) object.ObjMetadata {
+// ObjMetaFromObject constructs an ObjMetadata representing the Object.
+func ObjMetaFromObject(obj client.Object) object.ObjMetadata {
 	return object.ObjMetadata{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),

@@ -380,10 +380,8 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 		return newConflictingResourceVersion(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
 	}
 
-	// Copy latest values back to input object
-	obj.SetUID(cachedObj.GetUID())
-	obj.SetResourceVersion(cachedObj.GetResourceVersion())
-	obj.SetGeneration(cachedObj.GetGeneration())
+	// Delete method in real typed client(https://github.com/kubernetes-sigs/controller-runtime/blob/v0.14.1/pkg/client/typed_client.go#L84)
+	// does not copy the latest values back to input object which is different from other methods.
 
 	klog.V(5).Infof("Deleting %T %s (Generation: %v, ResourceVersion: %q): %s",
 		cachedObj, client.ObjectKeyFromObject(cachedObj),

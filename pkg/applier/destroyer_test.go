@@ -194,10 +194,10 @@ func TestDestroy(t *testing.T) {
 				// TODO: Add tests to cover disabling objects
 				// TODO: Add tests to cover status mode
 			}
-			applier, err := NewNamespaceApplier(cs, "test-namespace", "rs", 5*time.Minute)
+			destroyer, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
 			require.NoError(t, err)
 
-			errs := applier.Destroy(context.Background())
+			errs := destroyer.Destroy(context.Background())
 			testutil.AssertEqual(t, tc.multiErr, errs)
 		})
 	}

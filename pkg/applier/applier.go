@@ -93,22 +93,19 @@ type Destroyer interface {
 	Errors() status.MultiError
 }
 
-// Dormammu is an incredibly powerful being that dwells in the Dark Dimension,
-// known as the Destroyer of Worlds. He can apply and destroy whole sets of
-// resource objects at will.
+// Supervisor is a bulk client for applying and deleting a mutable set of
+// resource objects. Managed objects are tracked in a ResourceGroup inventory
+// object.
 //
-// Not to be confused with The Doctor, who was named the Destroyer of Worlds by
-// Davros, creator of the Daleks.
-//
-// Yes, the name is silly. But applier.ApplierDestroyer is repetitive and
-// doesn't pass lint checks.
-type Dormammu interface {
+// Supervisor satisfies both the Applier and Destroyer interfaces, with a shared
+// lock, preventing Apply and Destroy from running concurrently.
+type Supervisor interface {
 	Applier
 	Destroyer
 }
 
-// applier is the default implimentation of the ApplierDestroyer interface.
-type applier struct {
+// supervisor is the default implimentation of the Supervisor interface.
+type supervisor struct {
 	// inventory policy for the applier.
 	policy inventory.Policy
 	// inventory is the inventory ResourceGroup for current Applier.
@@ -133,13 +130,22 @@ type applier struct {
 	errs status.MultiError
 }
 
-var _ Applier = &applier{}
-var _ Destroyer = &applier{}
-var _ Dormammu = &applier{}
+var _ Applier = &supervisor{}
+var _ Destroyer = &supervisor{}
+var _ Supervisor = &supervisor{}
 
-// NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
-// the API server.
-func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Dormammu, error) {
+// NewSupervisor constructs either a cluster-level or namespace-level Supervisor,
+// based on the specified scope.
+func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
+	if scope == declared.RootReconciler {
+		return NewRootSupervisor(cs, syncName, reconcileTimeout)
+	}
+	return NewNamespaceSupervisor(cs, scope, syncName, reconcileTimeout)
+}
+
+// NewNamespaceSupervisor constructs a Supervisor that can manage resource
+// objects in a single namespace.
+func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RepoSyncKind
 	invObj := newInventoryUnstructured(syncKind, syncName, string(namespace), cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -153,7 +159,7 @@ func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName strin
 	if err != nil {
 		return nil, err
 	}
-	a := &applier{
+	a := &supervisor{
 		inventory:        inv,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptIfNoInventory,
@@ -166,8 +172,9 @@ func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName strin
 	return a, nil
 }
 
-// NewRootApplier initializes an applier that can fetch all resources from the API server.
-func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Dormammu, error) {
+// NewRootSupervisor constructs a Supervisor that can manage both cluster-level
+// and namespace-level resource objects in a single cluster.
+func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RootSyncKind
 	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -181,7 +188,7 @@ func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Durati
 	if err != nil {
 		return nil, err
 	}
-	a := &applier{
+	a := &supervisor{
 		inventory:        inv,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptAll,
@@ -301,7 +308,7 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 }
 
 // processPruneEvent handles PruneEvents from the Applier
-func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
 	s.Add(e.Status)
@@ -339,7 +346,7 @@ func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *
 }
 
 // processDeleteEvent handles DeleteEvents from the Destroyer
-func (a *applier) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	klog.V(4).Infof("delete %v for object: %v", e.Status, id)
 	s.Add(e.Status)
@@ -377,7 +384,7 @@ func (a *applier) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s
 
 // handleDeleteSkippedEvent translates from prune skip or delete skip event into
 // a resource error.
-func (a *applier) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
@@ -448,7 +455,7 @@ func handleMetrics(ctx context.Context, operation string, err error, gvk schema.
 
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
-func (a *applier) checkInventoryObjectSize(ctx context.Context, c client.Client) {
+func (a *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Client) {
 	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.clientSet.StatusMode)
 	err := c.Get(ctx, client.ObjectKey{Namespace: a.syncNamespace, Name: a.syncName}, u)
 	if err == nil {
@@ -465,7 +472,7 @@ func (a *applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
 
 	s := stats.NewSyncStats()
@@ -596,7 +603,7 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 // Errors returns the errors encountered during the last apply or current apply
 // if still running.
 // Errors implements the Applier and Destroyer interfaces.
-func (a *applier) Errors() status.MultiError {
+func (a *supervisor) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
 
@@ -604,7 +611,7 @@ func (a *applier) Errors() status.MultiError {
 	return status.Append(nil, a.errs)
 }
 
-func (a *applier) addError(err error) {
+func (a *supervisor) addError(err error) {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
@@ -616,7 +623,7 @@ func (a *applier) addError(err error) {
 	a.errs = status.Append(a.errs, err)
 }
 
-func (a *applier) invalidateErrors() {
+func (a *supervisor) invalidateErrors() {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
@@ -624,7 +631,7 @@ func (a *applier) invalidateErrors() {
 }
 
 // destroyInner triggers a kpt live destroy library call to destroy a set of resources.
-func (a *applier) destroyInner(ctx context.Context) status.MultiError {
+func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 
@@ -701,7 +708,7 @@ func (a *applier) destroyInner(ctx context.Context) status.MultiError {
 
 // Apply all managed resource objects and return any errors.
 // Apply implements the Applier interface.
-func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.applyMux.Lock()
 	defer a.applyMux.Unlock()
 
@@ -714,7 +721,7 @@ func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (m
 
 // Destroy all managed resource objects and return any errors.
 // Destroy implements the Destroyer interface.
-func (a *applier) Destroy(ctx context.Context) status.MultiError {
+func (a *supervisor) Destroy(ctx context.Context) status.MultiError {
 	a.applyMux.Lock()
 	defer a.applyMux.Unlock()
 
@@ -749,7 +756,7 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (a *applier) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
 	err := a.removeFromInventory(rg, objs)
@@ -776,7 +783,7 @@ func (a *applier) handleDisabledObjects(ctx context.Context, rg *live.InventoryR
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
+func (a *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
 	clusterInv, err := a.clientSet.InvClient.GetClusterInventoryInfo(rg)
 	if err != nil {
 		return err
@@ -803,7 +810,7 @@ func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []cl
 
 // disableObject disables the management for a single object by removing the
 // ConfigSync labels and annotations.
-func (a *applier) disableObject(ctx context.Context, obj client.Object) error {
+func (a *supervisor) disableObject(ctx context.Context, obj client.Object) error {
 	meta := ObjMetaFromObject(obj)
 	mapping, err := a.clientSet.Mapper.RESTMapping(meta.GroupKind)
 	if err != nil {

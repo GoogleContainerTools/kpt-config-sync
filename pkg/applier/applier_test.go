@@ -251,7 +251,7 @@ func TestApply(t *testing.T) {
 				// TODO: Add tests to cover disabling objects
 				// TODO: Add tests to cover status mode
 			}
-			applier, err := NewNamespaceApplier(cs, "test-namespace", "rs", 5*time.Minute)
+			applier, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
 			require.NoError(t, err)
 
 			gvks, errs := applier.Apply(context.Background(), objs)
@@ -450,7 +450,7 @@ func TestProcessPruneEvent(t *testing.T) {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	cs := &ClientSet{}
-	applier := &applier{
+	applier := &supervisor{
 		clientSet: cs,
 	}
 

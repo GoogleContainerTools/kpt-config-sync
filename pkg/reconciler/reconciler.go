@@ -177,12 +177,7 @@ func Run(opts Options) {
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}
-	var a applier.Dormammu
-	if opts.ReconcilerScope == declared.RootReconciler {
-		a, err = applier.NewRootApplier(clientSet, opts.SyncName, reconcileTimeout)
-	} else {
-		a, err = applier.NewNamespaceApplier(clientSet, opts.ReconcilerScope, opts.SyncName, reconcileTimeout)
-	}
+	supervisor, err := applier.NewSupervisor(clientSet, opts.ReconcilerScope, opts.SyncName, reconcileTimeout)
 	if err != nil {
 		klog.Fatalf("Error creating applier: %v", err)
 	}
@@ -218,13 +213,13 @@ func Run(opts Options) {
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, a, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
 		}
 	} else {
 		parser, err = parse.NewNamespaceRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.ReconcilerScope, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, a, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}
@@ -267,7 +262,7 @@ func Run(opts Options) {
 	// The caching client built by the controller-manager doesn't update
 	// the GET cache on UPDATE/PATCH. So we need to use the non-caching client
 	// for the finalizer, which does GET/LIST after UPDATE/PATCH.
-	f := finalizer.New(opts.ReconcilerScope, a, cl, // non-caching client
+	f := finalizer.New(opts.ReconcilerScope, supervisor, cl, // non-caching client
 		stopControllers, continueChanForFinalizer)
 
 	// Create the Finalizer Controller

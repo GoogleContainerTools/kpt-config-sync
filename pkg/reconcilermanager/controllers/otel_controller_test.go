@@ -33,8 +33,15 @@ import (
 )
 
 const (
-	depAnnotationGooglecloud = "da797169b1ba60a19276f637963523eb"
-	depAnnotationCustom      = "9182661d55e260a55da649363c03c187"
+	// depAnnotationGooglecloud is the expected hash of the GCP/GKE-specific
+	// otel-collector ConfigMap.
+	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
+	// Used by TestOtelReconcilerGooglecloud.
+	depAnnotationGooglecloud = "5163721692c4f972e45e5ffebb976be9"
+	// depAnnotationGooglecloud is the expected hash of the custom
+	// otel-collector ConfigMap test artifact.
+	// Used by TestOtelReconcilerCustom.
+	depAnnotationCustom = "9182661d55e260a55da649363c03c187"
 )
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {

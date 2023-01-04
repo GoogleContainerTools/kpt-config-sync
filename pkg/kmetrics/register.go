@@ -15,12 +15,22 @@
 package kmetrics
 
 import (
+	"os"
+
 	"contrib.go.opencensus.io/exporter/ocagent"
 	"go.opencensus.io/stats/view"
 )
 
 // RegisterOCAgentExporter creates the OC Agent metrics exporter.
-func RegisterOCAgentExporter() (*ocagent.Exporter, error) {
+func RegisterOCAgentExporter(containerName string) (*ocagent.Exporter, error) {
+	// Add the k8s.container.name resource label so that the google cloud monitoring
+	// and monarch metrics exporters will use the k8s_container resource type
+	err := os.Setenv(
+		"OC_RESOURCE_LABELS",
+		"k8s.container.name=\""+containerName+"\"")
+	if err != nil {
+		return nil, err
+	}
 	oce, err := ocagent.NewExporter(
 		ocagent.WithInsecure(),
 	)

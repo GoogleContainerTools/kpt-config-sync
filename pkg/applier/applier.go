@@ -551,14 +551,22 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 			if e.WaitEvent.Status == event.ReconcilePending {
 				klog.V(4).Info(e.WaitEvent)
 			} else {
-				klog.Info(e.WaitEvent)
+				klog.V(1).Info(e.WaitEvent)
 			}
 			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.ApplyType:
-			klog.Info(e.ApplyEvent)
+			if e.ApplyEvent.Error != nil {
+				klog.Info(e.ApplyEvent)
+			} else {
+				klog.V(1).Info(e.ApplyEvent)
+			}
 			a.addError(processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
-			klog.Info(e.PruneEvent)
+			if e.PruneEvent.Error != nil {
+				klog.Info(e.PruneEvent)
+			} else {
+				klog.V(1).Info(e.PruneEvent)
+			}
 			a.addError(a.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)
@@ -663,11 +671,15 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 			if e.WaitEvent.Status == event.ReconcilePending {
 				klog.V(4).Info(e.WaitEvent)
 			} else {
-				klog.Info(e.WaitEvent)
+				klog.V(1).Info(e.WaitEvent)
 			}
 			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.DeleteType:
-			klog.Info(e.DeleteEvent)
+			if e.DeleteEvent.Error != nil {
+				klog.Info(e.DeleteEvent)
+			} else {
+				klog.V(1).Info(e.DeleteEvent)
+			}
 			a.addError(a.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)

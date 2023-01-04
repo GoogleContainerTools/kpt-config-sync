@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// Register the OC Agent exporter
-	oce, err := kmetrics.RegisterOCAgentExporter()
+	oce, err := kmetrics.RegisterOCAgentExporter(reconcilermanager.HydrationController)
 	if err != nil {
 		klog.Fatalf("Failed to register the OC Agent exporter: %v", err)
 	}

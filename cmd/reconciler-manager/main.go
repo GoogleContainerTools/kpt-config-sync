@@ -113,7 +113,7 @@ func main() {
 	}
 
 	// Register the OC Agent exporter
-	oce, err := metrics.RegisterOCAgentExporter()
+	oce, err := metrics.RegisterOCAgentExporter(reconcilermanager.ManagerName)
 	if err != nil {
 		setupLog.Error(err, "failed to register the OC Agent exporter")
 		os.Exit(1)

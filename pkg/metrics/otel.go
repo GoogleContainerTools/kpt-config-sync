@@ -51,6 +51,22 @@ exporters:
       # The metric streaming data is not affected
       # https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/issues/529
       skip_create_descriptor: true
+      # resource_filters looks for metric resource attributes by prefix and converts
+      # them into custom metric labels, so they become visible and can be accessed
+      # under the GroupBy dropdown list in Cloud Monitoring
+      resource_filters:
+        - prefix: "cloud.account.id"
+        - prefix: "cloud.availability.zone"
+        - prefix: "cloud.platform"
+        - prefix: "cloud.provider"
+        - prefix: "k8s.pod.ip"
+        - prefix: "k8s.pod.namespace"
+        - prefix: "k8s.pod.uid"
+        - prefix: "k8s.container.name"
+        - prefix: "host.id"
+        - prefix: "host.name"
+        - prefix: "k8s.deployment.name"
+        - prefix: "k8s.node.name"
     retry_on_failure:
       enabled: false
     sending_queue:
@@ -138,6 +154,15 @@ processors:
           # included by the 'regex include' filter above and is not included in
           # our Monarch metric definitions
           - kcc_resource_count_total
+  # Remove custom configsync metric labels that are not registered with Monarch
+  attributes/kubernetes:
+    actions:
+      - key: configsync.sync.kind
+        action: delete
+      - key: configsync.sync.name
+        action: delete
+      - key: configsync.sync.namespace
+        action: delete
   metricstransform/kubernetes:
     transforms:
       - include: declared_resources
@@ -191,6 +216,6 @@ service:
       exporters: [prometheus]
     metrics/kubernetes:
       receivers: [opencensus]
-      processors: [batch, filter/kubernetes, metricstransform/kubernetes, resourcedetection]
+      processors: [batch, filter/kubernetes, attributes/kubernetes, metricstransform/kubernetes, resourcedetection]
       exporters: [googlecloud/kubernetes]`
 )

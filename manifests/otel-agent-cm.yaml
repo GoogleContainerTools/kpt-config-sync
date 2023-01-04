@@ -32,6 +32,19 @@ data:
         tls:
           insecure: true
     processors:
+      # Attributes processor adds custom configsync metric labels to applicable
+      # metrics to identify the sync object used to configure this deployment
+      attributes:
+        actions:
+          - key: configsync.sync.kind
+            action: upsert
+            value: $CONFIGSYNC_SYNC_KIND
+          - key: configsync.sync.name
+            action: upsert
+            value: $CONFIGSYNC_SYNC_NAME
+          - key: configsync.sync.namespace
+            action: upsert
+            value: $CONFIGSYNC_SYNC_NAMESPACE
       batch:
       # Populate resource attributes from OTEL_RESOURCE_ATTRIBUTES env var and
       # the GCE metadata service, if available.
@@ -44,5 +57,5 @@ data:
       pipelines:
         metrics:
           receivers: [opencensus]
-          processors: [batch, resourcedetection]
+          processors: [batch, resourcedetection, attributes]
           exporters: [opencensus]

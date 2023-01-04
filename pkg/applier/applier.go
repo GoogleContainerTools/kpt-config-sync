@@ -99,6 +99,9 @@ type Destroyer interface {
 //
 // Supervisor satisfies both the Applier and Destroyer interfaces, with a shared
 // lock, preventing Apply and Destroy from running concurrently.
+//
+// The Applier and Destroyer share an error cache. So the Errors method will
+// return the last errors from Apply or the Destroy, whichever came last.
 type Supervisor interface {
 	Applier
 	Destroyer
@@ -106,11 +109,11 @@ type Supervisor interface {
 
 // supervisor is the default implimentation of the Supervisor interface.
 type supervisor struct {
-	// inventory policy for the applier.
+	// inventory policy for configuring the inventory status
 	policy inventory.Policy
-	// inventory is the inventory ResourceGroup for current Applier.
+	// inventory ResourceGroup used to track managed objects
 	inventory *live.InventoryResourceGroup
-	// clientSet is a wrapper around multiple clients
+	// clientSet wraps multiple API server clients
 	clientSet *ClientSet
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
 	syncKind string
@@ -121,12 +124,12 @@ type supervisor struct {
 	// reconcileTimeout controls the reconcile and prune timeout
 	reconcileTimeout time.Duration
 
-	// applyMux prevents concurrent Apply() calls
-	applyMux sync.Mutex
+	// execMux prevents concurrent Apply/Destroy calls
+	execMux sync.Mutex
 	// errorMux prevents concurrent modifications to the cached set of errors
 	errorMux sync.RWMutex
-	// errs tracks all the errors the applier encounters.
-	// This field is cleared at the start of the `Applier.Apply` method
+	// errs recieved from the current (if running) or previous Apply/Destroy.
+	// These errors is cleared at the start of the Apply/Destroy methods.
 	errs status.MultiError
 }
 
@@ -168,7 +171,7 @@ func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName st
 		syncNamespace:    string(namespace),
 		reconcileTimeout: reconcileTimeout,
 	}
-	klog.V(4).Infof("Applier %s/%s is initialized", namespace, syncName)
+	klog.V(4).Infof("Namespace Supervisor %s/%s is initialized", namespace, syncName)
 	return a, nil
 }
 
@@ -197,7 +200,7 @@ func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Dur
 		syncNamespace:    string(configmanagement.ControllerNamespace),
 		reconcileTimeout: reconcileTimeout,
 	}
-	klog.V(4).Infof("Root applier %s is initialized and synced with the API server", syncName)
+	klog.V(4).Infof("Root Supervisor %s is initialized and synced with the API server", syncName)
 	return a, nil
 }
 
@@ -695,8 +698,8 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 // Apply all managed resource objects and return any errors.
 // Apply implements the Applier interface.
 func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
-	a.applyMux.Lock()
-	defer a.applyMux.Unlock()
+	a.execMux.Lock()
+	defer a.execMux.Unlock()
 
 	// Ideally we want to avoid invalidating errors that will continue to happen,
 	// but for now, invalidate all errors until they recur.
@@ -708,8 +711,8 @@ func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object)
 // Destroy all managed resource objects and return any errors.
 // Destroy implements the Destroyer interface.
 func (a *supervisor) Destroy(ctx context.Context) status.MultiError {
-	a.applyMux.Lock()
-	defer a.applyMux.Unlock()
+	a.execMux.Lock()
+	defer a.execMux.Unlock()
 
 	// Ideally we want to avoid invalidating errors that will continue to happen,
 	// but for now, invalidate all errors until they recur.

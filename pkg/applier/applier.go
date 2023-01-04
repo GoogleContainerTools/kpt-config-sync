@@ -537,7 +537,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 		case event.ActionGroupType:
 			klog.Info(e.ActionGroupEvent)
 		case event.ErrorType:
-			klog.V(4).Info(e.ErrorEvent)
+			klog.Info(e.ErrorEvent)
 			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
 				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
 			} else {
@@ -545,36 +545,23 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 			}
 			s.ErrorTypeEvents++
 		case event.WaitType:
-			// Log WaitEvent at the verbose level of 4 due to the number of WaitEvent.
-			// For every object which is skipped to apply/prune, there will be one ReconcileSkipped WaitEvent.
-			// For every object which is not skipped to apply/prune, there will be at least two WaitEvent:
-			// one ReconcilePending WaitEvent and one Reconciled/ReconcileFailed/ReconcileTimeout WaitEvent. In addition,
-			// a reconciled object may become pending before a wait task times out.
-			// Record the objs that have been reconciled.
-			klog.V(4).Info(e.WaitEvent)
+			// Pending events are sent for any objects that haven't reconciled
+			// when the WaitEvent starts. They're not very useful to the user.
+			// So log them at a higher verbosity.
+			if e.WaitEvent.Status == event.ReconcilePending {
+				klog.V(4).Info(e.WaitEvent)
+			} else {
+				klog.Info(e.WaitEvent)
+			}
 			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.ApplyType:
-			logEvent := event.ApplyEvent{
-				GroupName:  e.ApplyEvent.GroupName,
-				Identifier: e.ApplyEvent.Identifier,
-				Status:     e.ApplyEvent.Status,
-				// nil Resource to reduce log noise
-				Error: e.ApplyEvent.Error,
-			}
-			klog.V(4).Info(logEvent)
+			klog.Info(e.ApplyEvent)
 			a.addError(processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
-			logEvent := event.PruneEvent{
-				GroupName:  e.PruneEvent.GroupName,
-				Identifier: e.PruneEvent.Identifier,
-				Status:     e.PruneEvent.Status,
-				// nil Resource to reduce log noise
-				Error: e.PruneEvent.Error,
-			}
-			klog.V(4).Info(logEvent)
+			klog.Info(e.PruneEvent)
 			a.addError(a.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
 		default:
-			klog.V(4).Infof("skipped %v event", e.Type)
+			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
 	}
 
@@ -589,12 +576,12 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 
 	errs := a.Errors()
 	if errs == nil {
-		klog.V(4).Infof("all resources are up to date.")
+		klog.V(4).Infof("Apply completed without error: all resources are up to date.")
 	}
 	if s.Empty() {
-		klog.V(4).Infof("The applier made no new progress")
+		klog.V(4).Infof("Applier made no new progress")
 	} else {
-		klog.Infof("The applier made new progress: %s", s.String())
+		klog.Infof("Applier made new progress: %s", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
 	return gvks, errs
@@ -662,7 +649,7 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 		case event.ActionGroupType:
 			klog.Info(e.ActionGroupEvent)
 		case event.ErrorType:
-			klog.V(4).Info(e.ErrorEvent)
+			klog.Info(e.ErrorEvent)
 			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
 				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
 			} else {
@@ -670,37 +657,31 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 			}
 			s.ErrorTypeEvents++
 		case event.WaitType:
-			// Log WaitEvent at the verbose level of 4 due to the number of WaitEvent.
-			// For every object which is skipped to delete, there will be one ReconcileSkipped WaitEvent.
-			// For every object which is not skipped to delete, there will be at least two WaitEvent:
-			// one ReconcilePending WaitEvent and one Reconciled/ReconcileFailed/ReconcileTimeout WaitEvent. In addition,
-			// a reconciled object may become pending before a wait task times out.
-			// Record the objs that have been reconciled.
-			klog.V(4).Info(e.WaitEvent)
+			// Pending events are sent for any objects that haven't reconciled
+			// when the WaitEvent starts. They're not very useful to the user.
+			// So log them at a higher verbosity.
+			if e.WaitEvent.Status == event.ReconcilePending {
+				klog.V(4).Info(e.WaitEvent)
+			} else {
+				klog.Info(e.WaitEvent)
+			}
 			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.DeleteType:
-			logEvent := event.DeleteEvent{
-				GroupName:  e.DeleteEvent.GroupName,
-				Identifier: e.DeleteEvent.Identifier,
-				Status:     e.DeleteEvent.Status,
-				// nil Resource to reduce log noise
-				Error: e.DeleteEvent.Error,
-			}
-			klog.V(4).Info(logEvent)
+			klog.Info(e.DeleteEvent)
 			a.addError(a.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
 		default:
-			klog.V(4).Infof("skipped %v event", e.Type)
+			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
 	}
 
 	errs := a.Errors()
 	if errs == nil {
-		klog.V(4).Infof("all resources are deleted.")
+		klog.V(4).Infof("Destroy completed without error: all resources are deleted.")
 	}
 	if s.Empty() {
-		klog.V(4).Infof("The destroyer made no new progress")
+		klog.V(4).Infof("Destroyer made no new progress")
 	} else {
-		klog.Infof("The destroyer made new progress: %s.", s.String())
+		klog.Infof("Destroyer made new progress: %s.", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
 	return errs

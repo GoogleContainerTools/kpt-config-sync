@@ -89,19 +89,47 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 		return nil
 	}
 
-	if isReconcilerManager(reconciler) && op == admissionv1.Update &&
-		(id.GroupKind == kinds.RootSyncV1Beta1().GroupKind() ||
-			id.GroupKind == kinds.RepoSyncV1Beta1().GroupKind()) {
-		// ReconcilerManager is allowed to update RootSync/RepoSync to add/remove the finalizer
-		return nil
-	}
-
 	oldReconciler, syncScope := reconcilerName(manager)
 
 	if err := declared.ValidateScope(string(syncScope)); err != nil {
 		// All managers are allowed to manage an object with an invalid manager.
 		// But print a warning, because users shouldn't manually modify the manager.
 		klog.Warningf("Invalid manager annotation (object: %q, annotation: %s=%q)", id, metadata.ResourceManagerKey, manager)
+	}
+
+	switch id.GroupKind {
+	case kinds.RootSyncV1Beta1().GroupKind():
+		if isReconcilerManager(reconciler) {
+			if op == admissionv1.Update {
+				// reconciler-manager is allowed to update any RootSync to add/remove the finalizer
+				return nil
+			}
+		}
+		if core.RootReconcilerName(id.Name) == reconciler {
+			if op == admissionv1.Update {
+				// root-reconciler is allowed to update its own RootSync to add/remove the finalizer
+				return nil
+			}
+			// root-reconciler is NOT allowed to create or delete its own RootSync
+			return fmt.Errorf("config sync %q can not %s object %q managed by config sync %q",
+				reconciler, op, id, oldReconciler)
+		}
+	case kinds.RepoSyncV1Beta1().GroupKind():
+		if isReconcilerManager(reconciler) {
+			if op == admissionv1.Update {
+				// reconciler-manager is allowed to update any RepoSync to add/remove the finalizer
+				return nil
+			}
+		}
+		if core.NsReconcilerName(id.Namespace, id.Name) == reconciler {
+			if op == admissionv1.Update {
+				// ns-reconciler is allowed to update its own RepoSync to add/remove the finalizer
+				return nil
+			}
+			// ns-reconciler is NOT allowed to create or delete its own RepoSync
+			return fmt.Errorf("config sync %q can not %s object %q managed by config sync %q",
+				reconciler, op, id, oldReconciler)
+		}
 	}
 
 	if isRootReconciler(reconciler) && syncScope != declared.RootReconciler {

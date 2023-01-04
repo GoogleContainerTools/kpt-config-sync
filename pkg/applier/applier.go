@@ -63,13 +63,57 @@ var (
 	maxRequestBytes = int64(1.5 * 1024 * 1024)
 )
 
-// applier is the default implimentation of the Applier interface.
-type applier struct {
-	// inventory policy for the applier.
+// Applier is a bulk client for applying a set of desired resource objects and
+// tracking them in a ResourceGroup inventory. This enables pruning objects
+// by removing them from the list of desired resource objects and re-applying.
+type Applier interface {
+	// Apply creates, updates, or prunes all managed resources, depending on
+	// the new desired resource objects.
+	// Returns the set of GVKs which were successfully applied and any errors.
+	// This is called by the reconciler when changes are detected in the
+	// source of truth (git, OCI, helm) and periodically.
+	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
+	// Errors returns the errors encountered during apply.
+	// This method may be called while Destroy is running, to get the set of
+	// errors encounted so far.
+	Errors() status.MultiError
+}
+
+// Destroyer is a bulk client for deleting all the managed resource objects
+// tracked in a single ResourceGroup inventory.
+type Destroyer interface {
+	// Destroy deletes all managed resources.
+	// Returns any errors encountered while destorying.
+	// This is called by the reconciler finalizer when deletion propagation is
+	// enabled.
+	Destroy(ctx context.Context) status.MultiError
+	// Errors returns the errors encountered during destroy.
+	// This method may be called while Destroy is running, to get the set of
+	// errors encounted so far.
+	Errors() status.MultiError
+}
+
+// Supervisor is a bulk client for applying and deleting a mutable set of
+// resource objects. Managed objects are tracked in a ResourceGroup inventory
+// object.
+//
+// Supervisor satisfies both the Applier and Destroyer interfaces, with a shared
+// lock, preventing Apply and Destroy from running concurrently.
+//
+// The Applier and Destroyer share an error cache. So the Errors method will
+// return the last errors from Apply or the Destroy, whichever came last.
+type Supervisor interface {
+	Applier
+	Destroyer
+}
+
+// supervisor is the default implimentation of the Supervisor interface.
+type supervisor struct {
+	// inventory policy for configuring the inventory status
 	policy inventory.Policy
-	// inventory is the inventory ResourceGroup for current Applier.
+	// inventory ResourceGroup used to track managed objects
 	inventory *live.InventoryResourceGroup
-	// clientSet is a wrapper around multiple clients
+	// clientSet wraps multiple API server clients
 	clientSet *ClientSet
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
 	syncKind string
@@ -80,32 +124,31 @@ type applier struct {
 	// reconcileTimeout controls the reconcile and prune timeout
 	reconcileTimeout time.Duration
 
-	// applyMux prevents concurrent Apply() calls
-	applyMux sync.Mutex
+	// execMux prevents concurrent Apply/Destroy calls
+	execMux sync.Mutex
 	// errorMux prevents concurrent modifications to the cached set of errors
 	errorMux sync.RWMutex
-	// errs tracks all the errors the applier encounters.
-	// This field is cleared at the start of the `Applier.Apply` method
+	// errs recieved from the current (if running) or previous Apply/Destroy.
+	// These errors is cleared at the start of the Apply/Destroy methods.
 	errs status.MultiError
 }
 
-// Applier is a bulk client for applying a set of desired resource objects and
-// tracking them in a ResourceGroup inventory. This enables pruning objects
-// by removing them from the list of desired resource objects and re-applying.
-type Applier interface {
-	// Apply updates the resource API server with the latest parsed git resource.
-	// This is called when a new change in the git resource is detected. It also
-	// returns a map of the GVKs which were successfully applied by the Applier.
-	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
-	// Errors returns the errors encountered during apply.
-	Errors() status.MultiError
+var _ Applier = &supervisor{}
+var _ Destroyer = &supervisor{}
+var _ Supervisor = &supervisor{}
+
+// NewSupervisor constructs either a cluster-level or namespace-level Supervisor,
+// based on the specified scope.
+func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
+	if scope == declared.RootReconciler {
+		return NewRootSupervisor(cs, syncName, reconcileTimeout)
+	}
+	return NewNamespaceSupervisor(cs, scope, syncName, reconcileTimeout)
 }
 
-var _ Applier = &applier{}
-
-// NewNamespaceApplier initializes an applier that fetches a certain namespace's resources from
-// the API server.
-func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Applier, error) {
+// NewNamespaceSupervisor constructs a Supervisor that can manage resource
+// objects in a single namespace.
+func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RepoSyncKind
 	invObj := newInventoryUnstructured(syncKind, syncName, string(namespace), cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -119,7 +162,7 @@ func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName strin
 	if err != nil {
 		return nil, err
 	}
-	a := &applier{
+	a := &supervisor{
 		inventory:        inv,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptIfNoInventory,
@@ -128,12 +171,13 @@ func NewNamespaceApplier(cs *ClientSet, namespace declared.Scope, syncName strin
 		syncNamespace:    string(namespace),
 		reconcileTimeout: reconcileTimeout,
 	}
-	klog.V(4).Infof("Applier %s/%s is initialized", namespace, syncName)
+	klog.V(4).Infof("Namespace Supervisor %s/%s is initialized", namespace, syncName)
 	return a, nil
 }
 
-// NewRootApplier initializes an applier that can fetch all resources from the API server.
-func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Applier, error) {
+// NewRootSupervisor constructs a Supervisor that can manage both cluster-level
+// and namespace-level resource objects in a single cluster.
+func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RootSyncKind
 	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, cs.StatusMode)
 	// If the ResourceGroup object exists, annotate the status mode on the
@@ -147,7 +191,7 @@ func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Durati
 	if err != nil {
 		return nil, err
 	}
-	a := &applier{
+	a := &supervisor{
 		inventory:        inv,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptAll,
@@ -156,7 +200,7 @@ func NewRootApplier(cs *ClientSet, syncName string, reconcileTimeout time.Durati
 		syncNamespace:    string(configmanagement.ControllerNamespace),
 		reconcileTimeout: reconcileTimeout,
 	}
-	klog.V(4).Infof("Root applier %s is initialized and synced with the API server", syncName)
+	klog.V(4).Infof("Root Supervisor %s is initialized and synced with the API server", syncName)
 	return a, nil
 }
 
@@ -170,7 +214,6 @@ func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGr
 
 func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
 	id := idFrom(e.Identifier)
-	klog.V(4).Infof("apply %v for object: %v", e.Status, id)
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -213,10 +256,6 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEv
 
 func processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMap ObjectStatusMap) error {
 	id := idFrom(e.Identifier)
-	if e.Status != event.ReconcilePending {
-		// Don't log pending. It's noisy and only fires in certain conditions.
-		klog.V(4).Infof("Reconcile %v: %v", e.Status, id)
-	}
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -266,9 +305,9 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 	return SkipErrorForResource(err, id, actuation.ActuationStrategyApply)
 }
 
-func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
+// processPruneEvent handles PruneEvents from the Applier
+func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
-	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -296,15 +335,52 @@ func (a *applier) processPruneEvent(ctx context.Context, e event.PruneEvent, s *
 	case event.PruneSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return a.handlePruneSkippedEvent(ctx, e.Object, id, e.Error)
+		return a.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
 
 	default:
 		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
 }
 
-// handlePruneSkippedEvent translates from prune skipped event into resource error.
-func (a *applier) handlePruneSkippedEvent(ctx context.Context, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+// processDeleteEvent handles DeleteEvents from the Destroyer
+func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
+	id := idFrom(e.Identifier)
+	s.Add(e.Status)
+
+	objectStatus, ok := objectStatusMap[id]
+	if !ok || objectStatus == nil {
+		objectStatus = &ObjectStatus{}
+		objectStatusMap[id] = objectStatus
+	}
+	objectStatus.Strategy = actuation.ActuationStrategyDelete
+
+	switch e.Status {
+	case event.DeletePending:
+		objectStatus.Actuation = actuation.ActuationPending
+		return nil
+
+	case event.DeleteSuccessful:
+		objectStatus.Actuation = actuation.ActuationSucceeded
+		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		return nil
+
+	case event.DeleteFailed:
+		objectStatus.Actuation = actuation.ActuationFailed
+		return DeleteErrorForResource(e.Error, id)
+
+	case event.DeleteSkipped:
+		objectStatus.Actuation = actuation.ActuationSkipped
+		// Skip event always includes an error with the reason
+		return a.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
+
+	default:
+		return DeleteErrorForResource(fmt.Errorf("unexpected delete event status: %v", e.Status), id)
+	}
+}
+
+// handleDeleteSkippedEvent translates from prune skip or delete skip event into
+// a resource error.
+func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
@@ -328,9 +404,14 @@ func (a *applier) handlePruneSkippedEvent(ctx context.Context, obj *unstructured
 		return SkipErrorForResource(err, id, depMismatchErr.Strategy)
 	}
 
-	var applyDeleteErr *filter.ApplyPreventedDeletionError
-	if errors.As(err, &applyDeleteErr) {
-		return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+	// ApplyPreventedDeletionError is only sent by the Applier in a PruneEvent,
+	// not by the Destroyer in a DeleteEvent, because the Destroyer doesn't
+	// perform any applies before deleting.
+	if eventType == event.PruneType {
+		var applyDeleteErr *filter.ApplyPreventedDeletionError
+		if errors.As(err, &applyDeleteErr) {
+			return SkipErrorForResource(err, id, actuation.ActuationStrategyDelete)
+		}
 	}
 
 	var policyErr *inventory.PolicyPreventedActuationError
@@ -370,7 +451,7 @@ func handleMetrics(ctx context.Context, operation string, err error, gvk schema.
 
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
-func (a *applier) checkInventoryObjectSize(ctx context.Context, c client.Client) {
+func (a *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Client) {
 	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.clientSet.StatusMode)
 	err := c.Get(ctx, client.ObjectKey{Namespace: a.syncNamespace, Name: a.syncName}, u)
 	if err == nil {
@@ -387,7 +468,7 @@ func (a *applier) checkInventoryObjectSize(ctx context.Context, c client.Client)
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
 
 	s := stats.NewSyncStats()
@@ -429,6 +510,13 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 		// PruneTimeout defines the timeout for a wait task after a prune task.
 		// PruneTimeout is a task-level setting instead of an object-level setting.
 		PruneTimeout: a.reconcileTimeout,
+		// PrunePropagationPolicy defines what policy to use when pruning
+		// managed objects.
+		// Use "Background" for now, otherwise managed RootSyncs cannot be
+		// deleted, because the reconciler-manager configures the dependencies
+		// to be garbage collected as owned resources.
+		// TODO: Switch to "Foreground" after the reconciler-manager finalizer is added.
+		PrunePropagationPolicy: metav1.DeletePropagationBackground,
 	}
 
 	// Reset shared mapper before each apply to invalidate the discovery cache.
@@ -445,7 +533,7 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 		case event.ActionGroupType:
 			klog.Info(e.ActionGroupEvent)
 		case event.ErrorType:
-			klog.V(4).Info(e.ErrorEvent)
+			klog.Info(e.ErrorEvent)
 			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
 				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
 			} else {
@@ -453,36 +541,31 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 			}
 			s.ErrorTypeEvents++
 		case event.WaitType:
-			// Log WaitEvent at the verbose level of 4 due to the number of WaitEvent.
-			// For every object which is skipped to apply/prune, there will be one ReconcileSkipped WaitEvent.
-			// For every object which is not skipped to apply/prune, there will be at least two WaitEvent:
-			// one ReconcilePending WaitEvent and one Reconciled/ReconcileFailed/ReconcileTimeout WaitEvent. In addition,
-			// a reconciled object may become pending before a wait task times out.
-			// Record the objs that have been reconciled.
-			klog.V(4).Info(e.WaitEvent)
+			// Pending events are sent for any objects that haven't reconciled
+			// when the WaitEvent starts. They're not very useful to the user.
+			// So log them at a higher verbosity.
+			if e.WaitEvent.Status == event.ReconcilePending {
+				klog.V(4).Info(e.WaitEvent)
+			} else {
+				klog.V(1).Info(e.WaitEvent)
+			}
 			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.ApplyType:
-			logEvent := event.ApplyEvent{
-				GroupName:  e.ApplyEvent.GroupName,
-				Identifier: e.ApplyEvent.Identifier,
-				Status:     e.ApplyEvent.Status,
-				// nil Resource to reduce log noise
-				Error: e.ApplyEvent.Error,
+			if e.ApplyEvent.Error != nil {
+				klog.Info(e.ApplyEvent)
+			} else {
+				klog.V(1).Info(e.ApplyEvent)
 			}
-			klog.V(4).Info(logEvent)
 			a.addError(processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
-			logEvent := event.PruneEvent{
-				GroupName:  e.PruneEvent.GroupName,
-				Identifier: e.PruneEvent.Identifier,
-				Status:     e.PruneEvent.Status,
-				// nil Resource to reduce log noise
-				Error: e.PruneEvent.Error,
+			if e.PruneEvent.Error != nil {
+				klog.Info(e.PruneEvent)
+			} else {
+				klog.V(1).Info(e.PruneEvent)
 			}
-			klog.V(4).Info(logEvent)
 			a.addError(a.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
 		default:
-			klog.V(4).Infof("skipped %v event", e.Type)
+			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
 	}
 
@@ -497,12 +580,12 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 
 	errs := a.Errors()
 	if errs == nil {
-		klog.V(4).Infof("all resources are up to date.")
+		klog.V(4).Infof("Apply completed without error: all resources are up to date.")
 	}
 	if s.Empty() {
-		klog.V(4).Infof("The applier made no new progress")
+		klog.V(4).Infof("Applier made no new progress")
 	} else {
-		klog.Infof("The applier made new progress: %s", s.String())
+		klog.Infof("Applier made new progress: %s", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
 	return gvks, errs
@@ -510,8 +593,8 @@ func (a *applier) applyInner(ctx context.Context, objs []client.Object) (map[sch
 
 // Errors returns the errors encountered during the last apply or current apply
 // if still running.
-// Errors implements Interface.
-func (a *applier) Errors() status.MultiError {
+// Errors implements the Applier and Destroyer interfaces.
+func (a *supervisor) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
 
@@ -519,7 +602,7 @@ func (a *applier) Errors() status.MultiError {
 	return status.Append(nil, a.errs)
 }
 
-func (a *applier) addError(err error) {
+func (a *supervisor) addError(err error) {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
@@ -531,23 +614,111 @@ func (a *applier) addError(err error) {
 	a.errs = status.Append(a.errs, err)
 }
 
-func (a *applier) invalidateErrors() {
+func (a *supervisor) invalidateErrors() {
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
 	a.errs = nil
 }
 
-// Apply implements Interface.
-func (a *applier) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
-	a.applyMux.Lock()
-	defer a.applyMux.Unlock()
+// destroyInner triggers a kpt live destroy library call to destroy a set of resources.
+func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
+	s := stats.NewSyncStats()
+	objStatusMap := make(ObjectStatusMap)
+
+	options := apply.DestroyerOptions{
+		InventoryPolicy: a.policy,
+		// DeleteTimeout defines the timeout for a wait task after a delete task.
+		// DeleteTimeout is a task-level setting instead of an object-level setting.
+		DeleteTimeout: a.reconcileTimeout,
+		// DeletePropagationPolicy defines what policy to use when deleting
+		// managed objects.
+		// Use "Foreground" to ensure owned resources are deleted in the right
+		// order. This ensures things like a Deployment's ReplicaSets and Pods
+		// are deleted before the Namespace that contains them.
+		DeletePropagationPolicy: metav1.DeletePropagationForeground,
+	}
+
+	// Reset shared mapper before each destroy to invalidate the discovery cache.
+	// This allows for picking up CRD changes.
+	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
+
+	events := a.clientSet.KptDestroyer.Run(ctx, a.inventory, options)
+	for e := range events {
+		switch e.Type {
+		case event.InitType:
+			for _, ag := range e.InitEvent.ActionGroups {
+				klog.Info("InitEvent", ag)
+			}
+		case event.ActionGroupType:
+			klog.Info(e.ActionGroupEvent)
+		case event.ErrorType:
+			klog.Info(e.ErrorEvent)
+			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
+				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
+			} else {
+				a.addError(e.ErrorEvent.Err)
+			}
+			s.ErrorTypeEvents++
+		case event.WaitType:
+			// Pending events are sent for any objects that haven't reconciled
+			// when the WaitEvent starts. They're not very useful to the user.
+			// So log them at a higher verbosity.
+			if e.WaitEvent.Status == event.ReconcilePending {
+				klog.V(4).Info(e.WaitEvent)
+			} else {
+				klog.V(1).Info(e.WaitEvent)
+			}
+			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+		case event.DeleteType:
+			if e.DeleteEvent.Error != nil {
+				klog.Info(e.DeleteEvent)
+			} else {
+				klog.V(1).Info(e.DeleteEvent)
+			}
+			a.addError(a.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
+		default:
+			klog.Infof("Unhandled event (%s): %v", e.Type, e)
+		}
+	}
+
+	errs := a.Errors()
+	if errs == nil {
+		klog.V(4).Infof("Destroy completed without error: all resources are deleted.")
+	}
+	if s.Empty() {
+		klog.V(4).Infof("Destroyer made no new progress")
+	} else {
+		klog.Infof("Destroyer made new progress: %s.", s.String())
+		objStatusMap.Log(klog.V(0))
+	}
+	return errs
+}
+
+// Apply all managed resource objects and return any errors.
+// Apply implements the Applier interface.
+func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+	a.execMux.Lock()
+	defer a.execMux.Unlock()
 
 	// Ideally we want to avoid invalidating errors that will continue to happen,
 	// but for now, invalidate all errors until they recur.
 	// TODO: improve error cache invalidation to make rsync status more stable
 	a.invalidateErrors()
 	return a.applyInner(ctx, desiredResource)
+}
+
+// Destroy all managed resource objects and return any errors.
+// Destroy implements the Destroyer interface.
+func (a *supervisor) Destroy(ctx context.Context) status.MultiError {
+	a.execMux.Lock()
+	defer a.execMux.Unlock()
+
+	// Ideally we want to avoid invalidating errors that will continue to happen,
+	// but for now, invalidate all errors until they recur.
+	// TODO: improve error cache invalidation to make rsync status more stable
+	a.invalidateErrors()
+	return a.destroyInner(ctx)
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.
@@ -574,7 +745,7 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (a *applier) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
 	err := a.removeFromInventory(rg, objs)
@@ -601,7 +772,7 @@ func (a *applier) handleDisabledObjects(ctx context.Context, rg *live.InventoryR
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
+func (a *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
 	clusterInv, err := a.clientSet.InvClient.GetClusterInventoryInfo(rg)
 	if err != nil {
 		return err
@@ -628,7 +799,7 @@ func (a *applier) removeFromInventory(rg *live.InventoryResourceGroup, objs []cl
 
 // disableObject disables the management for a single object by removing the
 // ConfigSync labels and annotations.
-func (a *applier) disableObject(ctx context.Context, obj client.Object) error {
+func (a *supervisor) disableObject(ctx context.Context, obj client.Object) error {
 	meta := ObjMetaFromObject(obj)
 	mapping, err := a.clientSet.Mapper.RESTMapping(meta.GroupKind)
 	if err != nil {

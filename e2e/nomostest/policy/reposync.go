@@ -15,6 +15,7 @@
 package policy
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -34,6 +35,16 @@ func RBACAdmin() rbacv1.PolicyRule {
 func CoreAdmin() rbacv1.PolicyRule {
 	policy := rbacv1.PolicyRule{
 		APIGroups: []string{corev1.GroupName},
+		Resources: []string{rbacv1.ResourceAll},
+		Verbs:     []string{rbacv1.VerbAll},
+	}
+	return policy
+}
+
+// AppsAdmin returns a PolicyRule that grants admin for appsv1 APIGroup
+func AppsAdmin() rbacv1.PolicyRule {
+	policy := rbacv1.PolicyRule{
+		APIGroups: []string{appsv1.GroupName},
 		Resources: []string{rbacv1.ResourceAll},
 		Verbs:     []string{rbacv1.VerbAll},
 	}

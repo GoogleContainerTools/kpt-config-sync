@@ -92,6 +92,10 @@ func TestApply(t *testing.T) {
 		},
 	}
 
+	// Use sentinel errors so erors.Is works for comparison.
+	// testError := errors.New("test error")
+	etcdError := errors.New("etcdserver: request is too large") // satisfies util.IsRequestTooLargeError
+
 	testcases := []struct {
 		name     string
 		events   []event.Event
@@ -126,9 +130,9 @@ func TestApply(t *testing.T) {
 		{
 			name: "inventory object is too large",
 			events: []event.Event{
-				formErrorEvent("etcdserver: request is too large"),
+				formErrorEvent(etcdError),
 			},
-			multiErr: largeResourceGroupError(fmt.Errorf("etcdserver: request is too large"), uid),
+			multiErr: largeResourceGroupError(etcdError, uid),
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
@@ -244,8 +248,10 @@ func TestApply(t *testing.T) {
 			cs := &ClientSet{
 				KptApplier: newFakeKptApplier(tc.events),
 				Client:     fakeClient,
+				// TODO: Add tests to cover disabling objects
+				// TODO: Add tests to cover status mode
 			}
-			applier, err := NewNamespaceApplier(cs, "test-namespace", "rs", 5*time.Minute)
+			applier, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
 			require.NoError(t, err)
 
 			gvks, errs := applier.Apply(context.Background(), objs)
@@ -388,11 +394,11 @@ func formWaitEvent(status event.WaitEventStatus, id *object.ObjMetadata) event.E
 	return e
 }
 
-func formErrorEvent(s string) event.Event {
+func formErrorEvent(err error) event.Event {
 	e := event.Event{
 		Type: event.ErrorType,
 		ErrorEvent: event.ErrorEvent{
-			Err: fmt.Errorf("%s", s),
+			Err: err,
 		},
 	}
 	return e
@@ -444,7 +450,7 @@ func TestProcessPruneEvent(t *testing.T) {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	cs := &ClientSet{}
-	applier := &applier{
+	applier := &supervisor{
 		clientSet: cs,
 	}
 

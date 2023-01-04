@@ -25,8 +25,9 @@ import (
 // AsUnstructured attempts to convert a client.Object to an
 // *unstructured.Unstructured.
 // TODO: This adds .status and .metadata.creationTimestamp to
-//  everything. Evaluate every use, and convert to using AsUnstructuredSanitized
-//  if possible.
+//
+//	everything. Evaluate every use, and convert to using AsUnstructuredSanitized
+//	if possible.
 func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) {
 	if u, isUnstructured := o.(*unstructured.Unstructured); isUnstructured {
 		// The path below returns a deep copy, so we want to make sure we return a
@@ -50,11 +51,20 @@ func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) 
 // AsUnstructuredSanitized converts o to an Unstructured and removes problematic
 // fields:
 // - metadata.creationTimestamp
+// - metadata.finalizers
 // - status
 //
-// There is no other way to do this without defining our own versions of the
-// Kubernetes type definitions.
-// Explanation of why: https://www.sohamkamani.com/golang/2018-07-19-golang-omitempty/
+// These fields must not be set in the source, so we can safely drop them from
+// the current live manifest, because we won't ever need to be reverted.
+//
+// This allows the returned object to be used with Server-Side Apply without
+// accidentally attempting to modify or take ownership of these fields.
+//
+// This is required because the existing typed objects don't use pointers and
+// thus can't be set to nil, and the Go JSON formatter ignores omitempty on
+// non-pointer structs. So even when empty, the fields are still set during
+// serialization, which would cause SSA to try to delete the existing value.
+// For more details, see https://www.sohamkamani.com/golang/2018-07-19-golang-omitempty/
 func AsUnstructuredSanitized(o client.Object) (*unstructured.Unstructured, status.Error) {
 	u, err := AsUnstructured(o)
 	if err != nil {
@@ -62,6 +72,7 @@ func AsUnstructuredSanitized(o client.Object) (*unstructured.Unstructured, statu
 	}
 
 	unstructured.RemoveNestedField(u.Object, "metadata", "creationTimestamp")
+	unstructured.RemoveNestedField(u.Object, "metadata", "finalizers")
 	unstructured.RemoveNestedField(u.Object, "status")
 	return u, nil
 }

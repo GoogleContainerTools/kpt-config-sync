@@ -22,10 +22,10 @@ metadata:
 rules:
 - apiGroups: ["configsync.gke.io"]
   resources: ["reposyncs"]
-  verbs: ["get"]
+  verbs: ["get","list","watch","update","patch"]
 - apiGroups: ["configsync.gke.io"]
   resources: ["reposyncs/status"]
-  verbs: ["get","list","update"]
+  verbs: ["get","list","watch","update","patch"]
 - apiGroups: ["kpt.dev"]
   resources: ["resourcegroups"]
   verbs: ["*"]

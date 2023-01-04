@@ -480,6 +480,17 @@ func (nt *NT) Kubectl(args ...string) ([]byte, error) {
 	return exec.Command("kubectl", args...).CombinedOutput()
 }
 
+// KubectlContext is similar to nt.Kubectl but allows using a context to cancel
+// (kill signal) the kubectl command.
+func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error) {
+	nt.T.Helper()
+
+	prefix := []string{"--kubeconfig", nt.kubeconfigPath}
+	args = append(prefix, args...)
+	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
+	return exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
+}
+
 // Command is a convenience method for invoking a subprocess with the
 // KUBECONFIG environment variable set. Setting the environment variable
 // directly in the test process is not thread safe.

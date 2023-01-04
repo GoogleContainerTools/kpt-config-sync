@@ -99,6 +99,48 @@ func TestPruneEventStats(t *testing.T) {
 	}
 }
 
+func TestDeleteEventStats(t *testing.T) {
+	testcases := []struct {
+		name       string
+		stats      DeleteEventStats
+		wantEmpty  bool
+		wantString string
+	}{
+		{
+			name: "empty DeleteEventStats",
+			stats: DeleteEventStats{
+				EventByOp: map[event.DeleteEventStatus]uint64{},
+			},
+			wantEmpty:  true,
+			wantString: "",
+		},
+		{
+			name: "non-empty DeleteEventStats",
+			stats: DeleteEventStats{
+				EventByOp: map[event.DeleteEventStatus]uint64{
+					event.DeleteSkipped:    4,
+					event.DeleteSuccessful: 0,
+					event.DeleteFailed:     1,
+				},
+			},
+			wantEmpty:  false,
+			wantString: "DeleteEvents: 5 (Skipped: 4, Failed: 1)",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.stats.Empty() != tc.wantEmpty {
+				t.Errorf("stats.empty() = %t, wanted %t", tc.stats.Empty(), tc.wantEmpty)
+			}
+
+			if tc.stats.String() != tc.wantString {
+				t.Errorf("stats.string() = %q, wanted %q", tc.stats.String(), tc.wantString)
+			}
+
+		})
+	}
+}
+
 func TestApplyEventStats(t *testing.T) {
 	testcases := []struct {
 		name       string

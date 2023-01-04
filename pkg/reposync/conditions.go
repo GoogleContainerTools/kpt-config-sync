@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/status"
 )
 
 // Local alias to enable unit test mocking.
@@ -89,9 +90,9 @@ var singleErrorSummary = &v1beta1.ErrorSummary{
 // (status change).
 // Removes the Syncing condition if the Reconciling condition transitioned.
 func SetReconciling(rs *v1beta1.RepoSync, reason, message string) (updated, transitioned bool) {
-	updated, transitioned = setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, &v1beta1.ErrorSummary{}, now())
+	updated, transitioned = setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, nil, &v1beta1.ErrorSummary{}, now())
 	if transitioned {
-		removeCondition(rs, v1beta1.RepoSyncSyncing)
+		RemoveCondition(rs, v1beta1.RepoSyncSyncing)
 	}
 	return updated, transitioned
 }
@@ -101,9 +102,9 @@ func SetReconciling(rs *v1beta1.RepoSync, reason, message string) (updated, tran
 // (status change).
 // Removes the Syncing condition if the Stalled condition transitioned.
 func SetStalled(rs *v1beta1.RepoSync, reason string, err error) (updated, transitioned bool) {
-	updated, transitioned = setCondition(rs, v1beta1.RepoSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, singleErrorSummary, now())
+	updated, transitioned = setCondition(rs, v1beta1.RepoSyncStalled, metav1.ConditionTrue, reason, err.Error(), "", nil, nil, singleErrorSummary, now())
 	if transitioned {
-		removeCondition(rs, v1beta1.RepoSyncSyncing)
+		RemoveCondition(rs, v1beta1.RepoSyncSyncing)
 	}
 	return updated, transitioned
 }
@@ -118,13 +119,46 @@ func SetSyncing(rs *v1beta1.RepoSync, status bool, reason, message, commit strin
 	} else {
 		conditionStatus = metav1.ConditionFalse
 	}
-	return setCondition(rs, v1beta1.RepoSyncSyncing, conditionStatus, reason, message, commit, errorSources, errorSummary, timestamp)
+	return setCondition(rs, v1beta1.RepoSyncSyncing, conditionStatus, reason, message, commit, nil, errorSources, errorSummary, timestamp)
+}
+
+// SetReconcilerFinalizing sets the ReconcilerFinalizing condition to True.
+// Use RemoveCondition to remove this condition. It should never be set to False.
+func SetReconcilerFinalizing(rs *v1beta1.RepoSync, reason, message string) (updated bool) {
+	updated, _ = setCondition(rs, v1beta1.RepoSyncReconcilerFinalizing, metav1.ConditionTrue, reason, message, "", nil, nil, nil, now())
+	return updated
+}
+
+// SetReconcilerFinalizerFailure sets the ReconcilerFinalizerFailure condition.
+// If there are errors, the status is True, otherwise False.
+// Use RemoveCondition to remove this condition when the finalizer is done.
+func SetReconcilerFinalizerFailure(rs *v1beta1.RepoSync, errs status.MultiError) (updated bool) {
+	var conditionStatus metav1.ConditionStatus
+	var reason, message string
+	var csErrs []v1beta1.ConfigSyncError
+	if errs != nil {
+		conditionStatus = metav1.ConditionTrue
+		reason = "DestroyFailure"
+		message = "Failed to delete managed resource objects"
+		csErrs = status.ToCSE(errs)
+	} else {
+		conditionStatus = metav1.ConditionFalse
+		reason = "DestroySuccess"
+		message = "Successfully deleted managed resource objects"
+		csErrs = nil
+	}
+	updated, _ = setCondition(rs, v1beta1.RepoSyncReconcilerFinalizerFailure,
+		conditionStatus, reason, message, "", csErrs, nil, nil, now())
+	return updated
 }
 
 // setCondition adds or updates the specified condition with a True status.
 // Returns whether the condition was updated (any change) or transitioned
 // (status change).
-func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
+//
+// Use Errors OR (ErrorSource & ErrorSummary).
+// Errors should only be used if there isn't another status field to reference.
+func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, status metav1.ConditionStatus, reason, message, commit string, errs []v1beta1.ConfigSyncError, errorSources []v1beta1.ErrorSource, errorSummary *v1beta1.ErrorSummary, timestamp metav1.Time) (updated, transitioned bool) {
 	condition := GetCondition(rs.Status.Conditions, condType)
 	if condition == nil {
 		i := len(rs.Status.Conditions)
@@ -140,6 +174,7 @@ func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, 
 	} else if condition.Reason != reason ||
 		condition.Message != message ||
 		condition.Commit != commit ||
+		!equality.Semantic.DeepEqual(condition.Errors, errs) ||
 		!equality.Semantic.DeepEqual(condition.ErrorSourceRefs, errorSources) ||
 		!equality.Semantic.DeepEqual(condition.ErrorSummary, errorSummary) {
 		updated = true
@@ -149,6 +184,7 @@ func setCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType, 
 	condition.Reason = reason
 	condition.Message = message
 	condition.Commit = commit
+	condition.Errors = errs
 	condition.ErrorSourceRefs = errorSources
 	condition.ErrorSummary = errorSummary
 	condition.LastUpdateTime = timestamp
@@ -166,8 +202,8 @@ func GetCondition(conditions []v1beta1.RepoSyncCondition, condType v1beta1.RepoS
 	return nil
 }
 
-// removeCondition removes the RepoSync condition with the provided type.
-func removeCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType) (updated bool) {
+// RemoveCondition removes the RepoSync condition with the provided type.
+func RemoveCondition(rs *v1beta1.RepoSync, condType v1beta1.RepoSyncConditionType) (updated bool) {
 	rs.Status.Conditions, updated = filterOutCondition(rs.Status.Conditions, condType)
 	return updated
 }

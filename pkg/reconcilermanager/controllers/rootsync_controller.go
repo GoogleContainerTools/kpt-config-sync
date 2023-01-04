@@ -123,6 +123,14 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
 
+	if !rs.DeletionTimestamp.IsZero() {
+		// Deletion requested.
+		// Cleanup is handled above, after the RootSync is NotFound.
+		log.V(3).Info("Deletion timestamp detected",
+			logFieldObject, rsRef.String(),
+			logFieldKind, r.syncKind)
+	}
+
 	// The caching client sometimes returns an old R*Sync, because the watch
 	// hasn't received the update event yet. If so, error and retry.
 	// This is an optimization to avoid unnecessary API calls.

@@ -45,6 +45,12 @@ func PruneErrorForResource(err error, id core.ID) status.Error {
 	return applierErrorBuilder.Wrap(fmt.Errorf("failed to prune %v: %w", id, err)).Build()
 }
 
+// DeleteErrorForResource indicates that the applier failed to delete
+// the given resource.
+func DeleteErrorForResource(err error, id core.ID) status.Error {
+	return applierErrorBuilder.Wrap(fmt.Errorf("failed to delete %v: %w", id, err)).Build()
+}
+
 // SkipErrorForResource indicates that the applier skipped apply or delete of
 // the given resource.
 func SkipErrorForResource(err error, id core.ID, strategy actuation.ActuationStrategy) status.Error {

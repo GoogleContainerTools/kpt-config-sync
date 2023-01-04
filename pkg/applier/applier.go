@@ -211,7 +211,6 @@ func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGr
 
 func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
 	id := idFrom(e.Identifier)
-	klog.V(4).Infof("apply %v for object: %v", e.Status, id)
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -254,10 +253,6 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEv
 
 func processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMap ObjectStatusMap) error {
 	id := idFrom(e.Identifier)
-	if e.Status != event.ReconcilePending {
-		// Don't log pending. It's noisy and only fires in certain conditions.
-		klog.V(4).Infof("Reconcile %v: %v", e.Status, id)
-	}
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -310,7 +305,6 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 // processPruneEvent handles PruneEvents from the Applier
 func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
-	klog.V(4).Infof("prune %v for object: %v", e.Status, id)
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
@@ -348,7 +342,6 @@ func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 // processDeleteEvent handles DeleteEvents from the Destroyer
 func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
-	klog.V(4).Infof("delete %v for object: %v", e.Status, id)
 	s.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]

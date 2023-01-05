@@ -62,10 +62,25 @@ terraform destroy
 
 The Terraform config for our prow environment is defined in the [prow directory].
 
+## oss-prow-build-kpt-config-sync
+
+This project hosts the GKE clusters which the main branch periodics run on.
+
 ```shell
 export TF_VAR_project=oss-prow-build-kpt-config-sync
 export TF_VAR_prow=true
 terraform init -backend-config="bucket=oss-prow-build-kpt-config-sync-tfstate"
+terraform apply
+```
+
+## kpt-config-sync-ci-release
+
+This project hosts the GKE clusters which the release branch periodics run on.
+
+```shell
+export TF_VAR_project=kpt-config-sync-ci-release
+export TF_VAR_prow=true
+terraform init -backend-config="bucket=kpt-config-sync-ci-release-tfstate"
 terraform apply
 ```
 

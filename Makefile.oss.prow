@@ -34,3 +34,55 @@ image-oss-prow: build/prow/kubekins-kind/Dockerfile
 		-f $< \
 		$(dir $<).
 	@docker push $(E2E_TEST_IMAGE_OSS_PROW)
+
+
+###################################
+# Helpers
+###################################
+
+.PHONY: install-crane
+# install crane binary to publish the image
+install-crane:
+	go install github.com/google/go-containerregistry/cmd/crane@latest
+
+.PHONY: install-helm
+# install helm binary to publish the image
+install-helm:
+	wget https://get.helm.sh/helm-$(HELM_VERSION)-linux-amd64.tar.gz -O /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+	tar -zxvf /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz -C /tmp
+	mkdir -p $(HELM) || true
+	mv /tmp/linux-amd64/helm $(HELM)
+	rm /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+
+###################################
+# Prow environment provisioning
+###################################
+# The following targets are used to provision test resources in a prow environment
+
+.PHONY: push-test-oci-images
+# push-test-oci-images pushes the test images to the Artifact Registry and Container Registry repositories.
+push-test-oci-images: install-crane
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/publish-test-oci-images.sh
+
+.PHONY: push-to-test-csr-repos
+push-to-test-csr-repos:
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/push-to-test-csr-repos.sh
+
+.PHONY: set-up-kcc-configs
+KCC_MANAGED_PROJECT ?= cs-dev-hub
+set-up-kcc-configs:
+	GCP_PROJECT=$(GCP_PROJECT) KCC_MANAGED_PROJECT=$(KCC_MANAGED_PROJECT) \
+	GCP_CLUSTER=$(GCP_CLUSTER) GCP_ZONE=$(GCP_ZONE) \
+	./scripts/set-up-kcc-configs.sh
+
+.PHONY: set-up-workload-identity-test
+FLEET_HOST_PROJECT ?= cs-dev-hub
+PROW_PROJECT ?= oss-prow-build-kpt-config-sync
+set-up-workload-identity-test:
+	GCP_PROJECT=$(GCP_PROJECT) FLEET_HOST_PROJECT=$(FLEET_HOST_PROJECT) \
+	PROW_PROJECT=$(PROW_PROJECT) \
+	./scripts/set-up-workload-identity-configs.sh
+
+.PHONY: push-test-helm-charts-to-ar
+push-test-helm-charts-to-ar: install-helm
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/push-test-helm-charts-to-ar.sh

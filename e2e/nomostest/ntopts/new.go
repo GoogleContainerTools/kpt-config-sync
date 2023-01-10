@@ -91,6 +91,14 @@ func RequireGKE(t testing.NTB) Opt {
 	return func(opt *New) {}
 }
 
+// RequireKind requires the --test-cluster flag to be `kind` so that the test only runs on kind clusters.
+func RequireKind(t testing.NTB) Opt {
+	if *e2e.TestCluster != e2e.Kind {
+		t.Skip("The --test-cluster flag must be set to `kind` to run this test.")
+	}
+	return func(opt *New) {}
+}
+
 // WithInitialCommit creates the initialCommit before the first sync
 func WithInitialCommit(initialCommit Commit) func(opt *New) {
 	return func(opt *New) {

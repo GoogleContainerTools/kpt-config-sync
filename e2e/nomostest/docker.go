@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -65,6 +66,17 @@ func checkImages(t testing.NTB) {
 		image := imageTagFromManifest(t, imageName)
 		checkImage(t, image)
 	}
+}
+
+// VersionFromManifest parses the image tag from the local manifest
+func VersionFromManifest(t testing.NTB) string {
+	t.Helper()
+	image := imageTagFromManifest(t, reconcilermanager.ManagerName)
+	split := strings.Split(image, ":")
+	if len(split) < 2 {
+		t.Fatalf("unexpected format of image: %s", split)
+	}
+	return split[len(split)-1]
 }
 
 func imageTagFromManifest(t testing.NTB, name string) string {

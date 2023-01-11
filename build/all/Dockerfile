@@ -47,6 +47,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
   go install \
     -mod=vendor \
     -ldflags "-X kpt.dev/configsync/pkg/version.VERSION=${VERSION}" \
+    ./cmd/nomos \
     ./cmd/reconciler \
     ./cmd/reconciler-manager \
     ./cmd/hydration-controller \
@@ -159,3 +160,34 @@ COPY LICENSE LICENSE
 COPY LICENSES.txt LICENSES.txt
 
 ENTRYPOINT ["/admission-webhook"]
+
+# Nomos image
+# Not used by Config Sync backend components. Intended for use cases with the
+# nomos CLI (e.g. containerized CI/CD)
+FROM k8s.gcr.io/build-image/debian-base-amd64:bullseye-v1.4.1 as nomos
+
+# https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
+RUN apt-get update && \
+  apt-get -y upgrade && \
+  apt-get install -y bash git
+
+RUN mkdir -p /opt/nomos/bin
+ENV PATH="/opt/nomos/bin:${PATH}"
+WORKDIR /opt/nomos/bin
+
+# Nomos binary
+COPY --from=bins /go/bin/nomos nomos
+
+# License file required for on-prem release.
+COPY LICENSE LICENSE
+COPY LICENSES.txt LICENSES.txt
+
+# Set up a HOME directory for non-root user
+RUN mkdir -p /nomos
+RUN chown 1000 /nomos
+ENV HOME="/nomos"
+
+# Switch to non-root user
+USER 1000
+
+ENTRYPOINT ["/opt/nomos/bin/nomos"]

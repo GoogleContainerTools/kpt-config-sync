@@ -91,6 +91,13 @@ build-images: license
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
+	@echo "+++ Building the Nomos image: $(NOMOS_TAG)"
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
+		--target $(NOMOS_IMAGE) \
+		-t $(NOMOS_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
 
 # Deprecated alias of build-images. Remove this once unused.
 .PHONY: build-images-multirepo
@@ -110,6 +117,7 @@ push-images:
 	docker push $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
+	docker push $(NOMOS_TAG)
 
 # Deprecated alias of push-images. Remove this once unused.
 .PHONY: push-images-multirepo
@@ -126,6 +134,7 @@ pull-images:
 	docker pull $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker pull $(OCI_SYNC_TAG)
 	docker pull $(HELM_SYNC_TAG)
+	docker pull $(NOMOS_TAG)
 
 # Deprecated alias of pull-images. Remove this once unused.
 .PHONY: pull-images-multirepo
@@ -142,6 +151,7 @@ retag-images:
 	docker tag $(OLD_REGISTRY)/$(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE):$(OLD_IMAGE_TAG) $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)
 	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
+	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
 
 # Deprecated alias of retag-images. Remove this once unused.
 .PHONY: retag-images-multirepo

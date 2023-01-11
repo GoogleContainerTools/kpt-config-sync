@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -916,6 +917,26 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 		nt.T.Fatal(fmt.Sprintf("did not find all expected files in bug report zip file: %v", errs))
 	}
 	nt.T.Log("Found all expected files in bugreport zip")
+}
+
+func TestNomosImage(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI,
+		ntopts.SkipConfigSyncInstall, ntopts.RequireKind(t))
+
+	version := nomostest.VersionFromManifest(t)
+
+	cmd := nt.Command(
+		"docker", "run", "-i", "--rm",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), version) {
+		nt.T.Fatalf("expected to find version string in output")
+	}
 }
 
 // getBugReportZipName find and returns the zip name of bugreport under test dir

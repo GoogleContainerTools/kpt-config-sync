@@ -935,7 +935,7 @@ func TestNomosImage(t *testing.T) {
 	}
 
 	if !strings.Contains(string(out), version) {
-		nt.T.Fatalf("expected to find version string in output")
+		nt.T.Fatalf("expected to find version string in output:\n%s\n", string(out))
 	}
 }
 

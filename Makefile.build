@@ -39,14 +39,6 @@ build-cli: pull-buildenv buildenv-dirs
 		--version $(VERSION) \
 		$(PLATFORMS)
 
-# NOTE: this rule depends on OUTPUT_DIR because buildenv needs those dirs to
-# exist in order to work.
-build-junit-report-cli: pull-buildenv buildenv-dirs
-	@echo "+++ Compiling junit-report binaries for linux_amd64"
-	@echo "+++ Compiling with VERSION: $(VERSION)"
-	@mkdir -p $(addprefix $(OUTPUT_DIR)/go/bin/,linux_amd64)
-	@docker run $(DOCKER_RUN_ARGS) ./scripts/build-junitreport-cli.sh linux_amd64 $(VERSION)
-
 # Build Config Sync docker images
 .PHONY: build-images
 build-images: license

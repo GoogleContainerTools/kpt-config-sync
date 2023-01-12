@@ -65,6 +65,3 @@ COPY . .
 
 # Make sure the nomos command is available for tests.
 RUN go install kpt.dev/configsync/cmd/nomos
-
-# Make sure the junit-report command is available for tests.
-RUN go install kpt.dev/configsync/cmd/junit-report

@@ -57,7 +57,7 @@ RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomiz
   rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
 
 # Get go-junit-report.
-RUN go install github.com/jstemmer/go-junit-report@v1.0.0
+RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
 
 # Steps after here can't be cached since they touch the local filesystem.
 
@@ -66,3 +66,6 @@ COPY . .
 
 # Make sure the nomos command is available for tests.
 RUN go install kpt.dev/configsync/cmd/nomos
+
+# Make sure the junit-report command is available for tests.
+RUN go install kpt.dev/configsync/cmd/junit-report

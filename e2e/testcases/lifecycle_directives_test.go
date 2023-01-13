@@ -256,24 +256,30 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
 
+	// Build list of special namespaces to test.
+	// Skip namespaces managed by GKE Autopilot, if on an Autopilot cluster
+	specialNamespaces := make(map[string]struct{}, len(differ.SpecialNamespaces))
 	for ns := range differ.SpecialNamespaces {
 		if !skipAutopilotManagedNamespace(nt, ns) {
-			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns))
+			specialNamespaces[ns] = struct{}{}
 		}
+	}
+
+	for ns := range specialNamespaces {
+		checkpointProtectedNamespace(nt, ns)
+		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns))
 	}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", fake.NamespaceObject("bookstore"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace")
 	nt.WaitForRepoSyncs()
 
 	// Verify that the special namespaces have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
-	for ns := range differ.SpecialNamespaces {
-		if !skipAutopilotManagedNamespace(nt, ns) {
-			if err := nt.Validate(ns, "", &corev1.Namespace{},
-				nomostest.NotPendingDeletion,
-				nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-				nomostest.HasAllNomosMetadata()); err != nil {
-				nt.T.Fatal(err)
-			}
+	for ns := range specialNamespaces {
+		if err := nt.Validate(ns, "", &corev1.Namespace{},
+			nomostest.NotPendingDeletion,
+			nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+			nomostest.HasAllNomosMetadata()); err != nil {
+			nt.T.Fatal(err)
 		}
 	}
 
@@ -286,24 +292,20 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	for ns := range differ.SpecialNamespaces {
-		if !skipAutopilotManagedNamespace(nt, ns) {
-			nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/ns-%s.yaml", ns))
-		}
+	for ns := range specialNamespaces {
+		nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/ns-%s.yaml", ns))
 	}
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/ns-bookstore.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove namespaces")
 	nt.WaitForRepoSyncs()
 
 	// Verify that the special namespaces still exist and have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
-	for ns := range differ.SpecialNamespaces {
-		if !skipAutopilotManagedNamespace(nt, ns) {
-			if err := nt.Validate(ns, "", &corev1.Namespace{},
-				nomostest.NotPendingDeletion,
-				nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-				nomostest.NoConfigSyncMetadata()); err != nil {
-				nt.T.Fatal(err)
-			}
+	for ns := range specialNamespaces {
+		if err := nt.Validate(ns, "", &corev1.Namespace{},
+			nomostest.NotPendingDeletion,
+			nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+			nomostest.NoConfigSyncMetadata()); err != nil {
+			nt.T.Fatal(err)
 		}
 	}
 

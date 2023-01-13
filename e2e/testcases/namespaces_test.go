@@ -23,6 +23,8 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -253,7 +255,9 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 func TestManagementDisabledNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	namespacesToTest := []string{"foo", "default"}
+	checkpointProtectedNamespace(nt, metav1.NamespaceDefault)
+
+	namespacesToTest := []string{"foo", metav1.NamespaceDefault}
 	for _, nsName := range namespacesToTest {
 		// Create namespace.
 		namespace := fake.NamespaceObject(nsName)
@@ -475,8 +479,10 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipAutopilotCluster)
 
+	checkpointProtectedNamespace(nt, metav1.NamespaceSystem)
+
 	// Update kube-system namespace to be managed.
-	kubeSystemNamespace := fake.NamespaceObject("kube-system")
+	kubeSystemNamespace := fake.NamespaceObject(metav1.NamespaceSystem)
 	kubeSystemNamespace.Labels["test-corp.com/awesome-controller-flavour"] = "fuzzy"
 	kubeSystemNamespace.Annotations["test-corp.com/awesome-controller-mixin"] = "green"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/kube-system/ns.yaml", kubeSystemNamespace)
@@ -835,4 +841,45 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	if err != nil {
 		nt.T.Error(err)
 	}
+}
+
+// checkpointProtectedNamespace stores the current state of the specified
+// namespace and registers a test Cleanup to restore it.
+func checkpointProtectedNamespace(nt *nomostest.NT, namespace string) {
+	nsObj := fake.NamespaceObject(namespace)
+
+	if err := nt.Get(nsObj.Name, "", nsObj); err != nil {
+		if apierrors.IsNotFound(err) {
+			nt.T.Cleanup(func() {
+				// Revert to initial state (not found).
+				if err := nt.Delete(nsObj); err != nil {
+					if !apierrors.IsNotFound(err) {
+						nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
+					}
+				}
+			})
+			return
+		}
+		nt.T.Fatalf("Failed to get %q namespace: %v", namespace, err)
+	}
+	// Remove unique identifiers (reset may happen after update or delete)
+	nsObj.SetUID("")
+	nsObj.SetResourceVersion("")
+	nsObj.SetGeneration(0)
+	// Remove managed fields (Config Sync doesn't allow them in the source of truth)
+	nsObj.SetManagedFields(nil)
+
+	nt.T.Cleanup(func() {
+		// Revert to initial state.
+		// Removes the test label, which avoids triggering deletion by Reset/Clean.
+		if err := nt.Update(nsObj); err != nil {
+			if apierrors.IsNotFound(err) {
+				if err := nt.Create(nsObj); err != nil {
+					nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
+				}
+			} else {
+				nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
+			}
+		}
+	})
 }

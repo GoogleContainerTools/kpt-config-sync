@@ -15,37 +15,21 @@
 package reconcile
 
 import (
-	"encoding/json"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // AsUnstructured attempts to convert a client.Object to an
-// *unstructured.Unstructured.
-// TODO: This adds .status and .metadata.creationTimestamp to
-//
-//	everything. Evaluate every use, and convert to using AsUnstructuredSanitized
-//	if possible.
+// *unstructured.Unstructured using the global core.Scheme.
 func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) {
-	if u, isUnstructured := o.(*unstructured.Unstructured); isUnstructured {
-		// The path below returns a deep copy, so we want to make sure we return a
-		// deep copy here as well (for symmetry and to avoid subtle bugs).
-		return u.DeepCopy(), nil
-	}
-
-	jsn, err := json.Marshal(o)
+	uObj, err := kinds.ToUnstructured(o, core.Scheme)
 	if err != nil {
 		return nil, status.InternalErrorBuilder.Wrap(err).BuildWithResources(o)
 	}
-
-	u := &unstructured.Unstructured{}
-	err = u.UnmarshalJSON(jsn)
-	if err != nil {
-		return nil, status.InternalErrorBuilder.Wrap(err).BuildWithResources(o)
-	}
-	return u, nil
+	return uObj, nil
 }
 
 // AsUnstructuredSanitized converts o to an Unstructured and removes problematic

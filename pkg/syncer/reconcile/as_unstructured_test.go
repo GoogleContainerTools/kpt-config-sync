@@ -15,7 +15,6 @@
 package reconcile
 
 import (
-	"encoding/json"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,23 +45,58 @@ func TestAsUnstructured_AddsStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			u, err := AsUnstructured(tc.obj)
 			if err != nil {
-				t.Error(err)
-				t.Fatalf("unable to convert %T to Unstructured", tc.obj)
+				t.Fatalf("unable to convert %T to Unstructured: %v", tc.obj, err)
 			}
 
 			// Yes, we don't like this behavior.
 			// These checks validate the bug.
 			if _, hasStatus := u.Object["status"]; !hasStatus {
-				jsn, _ := json.MarshalIndent(u, "", "  ")
-				t.Log(string(jsn))
-				t.Error("got .status undefined, want defined")
+				t.Errorf("got .status undefined, want defined: %s", log.AsJSON(u))
 			}
 
 			metadata := u.Object["metadata"].(map[string]interface{})
 			if _, hasCreationTimestamp := metadata["creationTimestamp"]; !hasCreationTimestamp {
-				jsn, _ := json.MarshalIndent(u, "", "  ")
-				t.Log(string(jsn))
-				t.Error("got .metadata.creationTimestamp undefined, want defined")
+				t.Errorf("got .metadata.creationTimestamp undefined, want defined: %s", log.AsJSON(u))
+			}
+		})
+	}
+}
+
+func TestAsUnstructured_AddsGVK(t *testing.T) {
+	testCases := []struct {
+		name string
+		obj  client.Object
+	}{
+		{
+			name: "Namespace",
+			obj:  &corev1.Namespace{},
+		},
+		{
+			name: "Service",
+			obj:  &corev1.Service{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			u, err := AsUnstructured(tc.obj)
+			if err != nil {
+				t.Fatalf("unable to convert %T to Unstructured: %v", tc.obj, err)
+			}
+
+			if u.GetObjectKind().GroupVersionKind().Empty() {
+				t.Errorf("got .kind & .apiVersion undefined, want defined: %s", log.AsJSON(u))
+			}
+
+			// Yes, we don't like this behavior.
+			// These checks validate the bug.
+			if _, hasStatus := u.Object["status"]; !hasStatus {
+				t.Errorf("got .status undefined, want defined: %s", log.AsJSON(u))
+			}
+
+			metadata := u.Object["metadata"].(map[string]interface{})
+			if _, hasCreationTimestamp := metadata["creationTimestamp"]; !hasCreationTimestamp {
+				t.Errorf("got .metadata.creationTimestamp undefined, want defined: %s", log.AsJSON(u))
 			}
 		})
 	}
@@ -86,21 +121,16 @@ func TestAsUnstructuredSanitized_DoesNotAddStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			u, err := AsUnstructuredSanitized(tc.obj)
 			if err != nil {
-				t.Error(err)
-				t.Fatalf("unable to convert %T to Unstructured", tc.obj)
+				t.Fatalf("unable to convert %T to Unstructured: %v", tc.obj, err)
 			}
 
 			if _, hasStatus := u.Object["status"]; hasStatus {
-				jsn, _ := json.MarshalIndent(u, "", "  ")
-				t.Log(string(jsn))
-				t.Error("got .status defined, want undefined")
+				t.Errorf("got .status defined, want undefined: %s", log.AsJSON(u))
 			}
 
 			metadata := u.Object["metadata"].(map[string]interface{})
 			if _, hasCreationTimestamp := metadata["creationTimestamp"]; hasCreationTimestamp {
-				jsn, _ := json.MarshalIndent(u, "", "  ")
-				t.Log(string(jsn))
-				t.Error("got .status defined, want undefined")
+				t.Errorf("got .metadata.creationTimestamp defined, want undefined: %s", log.AsJSON(u))
 			}
 		})
 	}
@@ -129,8 +159,7 @@ func TestAsUnstructuredSanitized_DeepCopy(t *testing.T) {
 
 			u, err := AsUnstructuredSanitized(tc.obj)
 			if err != nil {
-				t.Error(err)
-				t.Fatalf("unable to convert %T to Unstructured", tc.obj)
+				t.Fatalf("unable to convert %T to Unstructured: %v", tc.obj, err)
 			}
 			// Verify the name was unchanged by conversion to unstructured.
 			if u.GetName() != wantName {

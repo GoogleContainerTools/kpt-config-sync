@@ -17,13 +17,17 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -299,12 +303,23 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		Namespace: namespace,
 	}
 
+	rsCR := nt.RepoSyncClusterRole()
+	rsRB := nomostest.RepoSyncRoleBinding(rsNN)
+	repoSyncGit, err := parseObjectFromFile(nt, rsGitYAMLFile)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
+	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
-	nt.RootRepos[configsync.RootSyncName].Copy(rsGitYAMLFile, repoResourcePath)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", nt.RepoSyncClusterRole())
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/crb.yaml", nomostest.RepoSyncRoleBinding(rsNN))
+	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncGit)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", rsCR)
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name), rsRB)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
 	nt.WaitForRepoSyncs()
@@ -327,19 +342,23 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	repoSync := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
-	repoSync.Spec.SourceType = string(v1beta1.OciSource)
+	repoSyncOCI := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	repoSyncOCI.Spec.SourceType = string(v1beta1.OciSource)
 	imageURL := fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", nomostesting.GCPProjectIDFromEnv)
 	// TODO: remove the overwrite once the OSS project has public access
 	publicProject := "stolos-dev"
 	if nomostesting.GCPProjectIDFromEnv != publicProject {
 		imageURL = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", publicProject)
 	}
-	repoSync.Spec.Oci = &v1beta1.Oci{
+	repoSyncOCI.Spec.Oci = &v1beta1.Oci{
 		Image: imageURL,
 		Auth:  configsync.AuthNone,
 	}
-	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSync)
+	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
+	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncOCI)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository")
 	nt.WaitForRepoSyncs()
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
@@ -366,8 +385,10 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Error(err)
 	}
 	// Verify the default sourceType is set when not specified.
-	nt.T.Log("Manually apply the RepoSync object")
-	nt.MustKubectl("apply", "-f", rsGitYAMLFile)
+	nt.T.Log("Revert the RepoSync object to sync from Git")
+	if err := nt.Create(repoSyncGit); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
 		nt.T.Error(err)
 	}
@@ -383,7 +404,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Switch from Git to OCI
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
-	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
+	nt.MustMergePatch(repoSyncOCI, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
 		v1beta1.OciSource, imageURL, configsync.AuthNone))
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
@@ -415,6 +436,24 @@ func TestSwitchFromGitToOci(t *testing.T) {
 			nt.T.Error(err)
 		}
 	}
+}
+
+func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error) {
+	bytes, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read file path: %s", absPath)
+	}
+	decoder := serializer.NewCodecFactory(nt.Client.Scheme()).UniversalDeserializer()
+	u := &unstructured.Unstructured{}
+	rObj, gvk, err := decoder.Decode(bytes, nil, u)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode object from file path: %s", absPath)
+	}
+	cObj, ok := rObj.(client.Object)
+	if !ok {
+		return nil, errors.Errorf("failed to cast %s %T to client.Object", gvk.Kind, rObj)
+	}
+	return cObj, nil
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

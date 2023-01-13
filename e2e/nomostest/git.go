@@ -453,6 +453,22 @@ func (g *Repository) Remove(path string) {
 	g.Git("add", absPath)
 }
 
+// Exists returns true if the file or directory exists at the specified path.
+func (g *Repository) Exists(path string) bool {
+	g.T.Helper()
+
+	absPath := filepath.Join(g.Root, path)
+
+	_, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		g.T.Fatal(err)
+	}
+	return true
+}
+
 // CommitAndPush commits any changes to the git repository, and
 // pushes them to the git server.
 // We don't care about differentiating between committing and pushing

@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -60,7 +60,7 @@ const testNs = "test-ns"
 // - nr1 is created using k8s api. This is to validate RepoSyncs can be created in the delegated mode.
 // - nr2 is a v1alpha1 version of RepoSync created using k8s api. This is to validate v1alpha1 version of RepoSync can be created in the delegated mode.
 // - nr3 is declared in the root repo of root-sync. This is to validate RepoSync can be managed in a root repo.
-// - nr4 is a v1alpha1 version of RepoSync declared in the namespace repo of nr1. This is to validate RepoSync can be managed in a namespace repo in the same namespace.
+// - nr4 is a v1alpha1 version of RepoSync declared in the namespace repo of nn2. This is to validate RepoSync can be managed in a namespace repo in the same namespace.
 // - nr5 is declared in the root repo of rr1. This is to validate implicit namespace won't cause conflict between two root reconcilers (rr1 and root-sync).
 // - nr6 is created using k8s api in a different namespace but with the same name "nr1".
 func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
@@ -68,16 +68,48 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	rr2 := "rr2"
 	rr3 := "rr3"
 	nr1 := "nr1"
+	nn1 := nomostest.RepoSyncNN(testNs, nr1)
 	nn2 := nomostest.RepoSyncNN(testNs, "nr2")
 	nn3 := nomostest.RepoSyncNN(testNs, "nr3")
 	nn4 := nomostest.RepoSyncNN(testNs, "nr4")
 	nn5 := nomostest.RepoSyncNN(testNs, "nr5")
 	testNs2 := "ns-2"
+	nn6 := nomostest.RepoSyncNN(testNs2, nr1)
 
 	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
 		ntopts.WithDelegatedControl, ntopts.RootRepo(rr1),
-		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()), // NS reconciler manages RepoSyncs
-		ntopts.NamespaceRepo(testNs, nr1), ntopts.NamespaceRepo(testNs2, nr1))
+		// NS reconciler allowed to manage RepoSyncs but not RoleBindings
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
+		ntopts.NamespaceRepo(nn1.Namespace, nn1.Name),
+		ntopts.NamespaceRepo(nn6.Namespace, nn6.Name))
+
+	// Cleanup all unmanaged RepoSyncs BEFORE the root-sync is deleted!
+	// Otherwise, the test Namespace will be deleted while still containing
+	// RepoSyncs, which could block deletion if their finalizer hangs.
+	// This also replaces depends-on deletion ordering (RoleBinding -> RepoSync),
+	// which can't be used by unmanaged syncs or objects in different repos.
+	// Stop the webhook to allow deletion of managed resources.
+	nt.T.Cleanup(func() {
+		nt.T.Log("[CLEANUP] Stopping webhook")
+		nomostest.StopWebhook(nt)
+		nt.T.Log("[CLEANUP] Deleting test RepoSyncs")
+		rsNNs := []types.NamespacedName{nn1, nn2, nn4}
+		for _, rsNN := range rsNNs {
+			rs := &v1beta1.RepoSync{}
+			err := nt.Get(rsNN.Name, rsNN.Namespace, rs)
+			if err != nil {
+				if !apierrors.IsNotFound(err) {
+					nt.T.Error(err)
+				}
+			} else {
+				if err := nt.Delete(rs); err != nil {
+					if !apierrors.IsNotFound(err) {
+						nt.T.Error(err)
+					}
+				}
+			}
+		}
+	})
 
 	var newRepos []types.NamespacedName
 	newRepos = append(newRepos, nomostest.RootSyncNN(rr2))
@@ -97,12 +129,15 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nn4Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
 	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
 
+	nrb2 := nomostest.RepoSyncRoleBinding(nn2)
+	nrb3 := nomostest.RepoSyncRoleBinding(nn3)
+	nrb4 := nomostest.RepoSyncRoleBinding(nn4)
+	nrb5 := nomostest.RepoSyncRoleBinding(nn5)
+
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
-	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs))
-	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn2.Name)), nomostest.RepoSyncRoleBinding(nn2))
-	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn3.Name)), nomostest.RepoSyncRoleBinding(nn3))
-	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn4.Name)), nomostest.RepoSyncRoleBinding(nn4))
-	nt.RootRepos[configsync.RootSyncName].Add(filepath.Join("acme/cluster", fmt.Sprintf("rb-%s-%s.yaml", testNs, nn5.Name)), nomostest.RepoSyncRoleBinding(nn5))
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/ns-%s.yaml", testNs), fake.NamespaceObject(testNs))
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn2.Name), nrb2)
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn4.Name), nrb4)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
@@ -129,14 +164,20 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if err := nt.Create(nrs2); err != nil {
 		nt.T.Fatal(err)
 	}
+	// RoleBinding (nrb2) managed by RootSync root-sync, because the namespace
+	// tenant does not have permission to manage RBAC.
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr2.
 	nt.WaitForRepoSyncs()
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn3, configsync.RootSyncName)
 	nt.NonRootRepos[nn3] = nn3Repo
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn3)
-	nrs3ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name)
-	nt.RootRepos[configsync.RootSyncName].Add(nrs3ConfigFile, nrs3)
+	// Ensure the RoleBinding is deleted after the RepoSync
+	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name), nrs3)
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn3.Name), nrb3)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSync: " + nn3.String())
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr3.
 	nt.WaitForRepoSyncs()
@@ -144,8 +185,9 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", nn4, nn2)
 	nt.NonRootRepos[nn4] = nn4Repo
 	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn4)
-	nrs4ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name)
-	nt.NonRootRepos[nn2].Add(nrs4ConfigFile, nrs4)
+	nt.NonRootRepos[nn2].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name), nrs4)
+	// RoleBinding (nrb4) managed by RootSync root-sync, because RepoSync (nr2)
+	// does not have permission to manage RBAC.
 	nt.NonRootRepos[nn2].CommitAndPush("Adding RepoSync: " + nn4.String())
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr4.
 	nt.WaitForRepoSyncs()
@@ -153,8 +195,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn5, rr1)
 	nt.NonRootRepos[nn5] = nn5Repo
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn5)
-	nrs5ConfigFile := fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name)
-	nt.RootRepos[rr1].Add(nrs5ConfigFile, nrs5)
+	// Ensure the RoleBinding is deleted after the RepoSync
+	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.RootRepos[rr1].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name), nrs5)
+	nt.RootRepos[rr1].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn5.Name), nrb5)
 	nt.RootRepos[rr1].CommitAndPush("Adding RepoSync: " + nn5.String())
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr5.
 	nt.WaitForRepoSyncs()

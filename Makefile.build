@@ -100,7 +100,7 @@ build-images: license
 		--build-arg VERSION=${VERSION} \
 		.
 	@echo "+++ Building the Nomos image: $(NOMOS_TAG)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
+	@docker build $(DOCKER_BUILD_QUIET) \
 		--target $(NOMOS_IMAGE) \
 		-t $(NOMOS_TAG) \
 		-f build/all/Dockerfile \

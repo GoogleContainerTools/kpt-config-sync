@@ -894,10 +894,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		rsNamespaces[ns] = struct{}{}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
 		rb := RepoSyncRoleBinding(nn)
-		dependencies := dependson.DependencySet{
-			applier.ObjMetaFromObject(cr),
-			applier.ObjMetaFromObject(rb),
-		}
+		dependencies := []client.Object{cr, rb}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), rb)
 		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
@@ -907,15 +904,15 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			// TODO: Remove the psp related change when Kubernetes 1.25 is
 			// available on GKE.
 			crb := repoSyncClusterRoleBinding(nn)
-			dependencies = append(dependencies, applier.ObjMetaFromObject(crb))
+			dependencies = append(dependencies, crb)
 			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
 		}
 
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 		// [Cluster]RoleBinding & ClusterRole must be deleted after the RepoSync,
 		// so the reconciler has the right permissions until it's fully exited.
-		if err := setDependsOnAnnotation(rs, dependencies); err != nil {
-			nt.T.Fatalf("Failed to set RepoSync(%s) depends-on: %v", nn, err)
+		if err := SetDependencies(rs, dependencies...); err != nil {
+			nt.T.Fatal(err)
 		}
 		if opts.MultiRepo.ReconcileTimeout != nil {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
@@ -972,6 +969,18 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+// SetDependencies sets the specified objects as dependencies of the first object.
+func SetDependencies(obj client.Object, dependencies ...client.Object) error {
+	var deps dependson.DependencySet
+	for _, dep := range dependencies {
+		deps = append(deps, applier.ObjMetaFromObject(dep))
+	}
+	if err := setDependsOnAnnotation(obj, deps); err != nil {
+		return errors.Wrapf(err, "failed to set dependencies on %T %s", obj, client.ObjectKeyFromObject(obj))
+	}
+	return nil
 }
 
 // setDependsOnAnnotation is a copy of cli-utils dependson.WriteAnnotation, but

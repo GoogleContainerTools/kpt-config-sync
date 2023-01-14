@@ -47,23 +47,24 @@ import (
 // git repo, using different directories.
 //
 // ├── repos
-// │   └── config-management-system
-// │       └── root-sync
-// │           ├── acme
-// │           │   └── level-0
-// │           │       ├── level-1.yaml (RootSync)
-// │           │       ├── ns-test-ns.yaml
-// │           │       ├── rb-test-ns.yaml
-// │           │       └── .gitkeep
-// │           ├── level-1
-// │           │    ├── level-2.yaml (RepoSync)
-// │           │    └── .gitkeep
-// │           ├── level-2
-// │           │   ├── level-3.yaml (RepoSync)
-// │           │   └── .gitkeep
-// │           └── level-3
-// │               ├── level-4.yaml (ConfigMap)
-// │               └── .gitkeep
+// │   └── config-management-system
+// │       └── root-sync
+// │           ├── acme
+// │           │   └── level-0
+// │           │       ├── rootsync-level-1.yaml
+// │           │       ├── ns-test-ns.yaml
+// │           │       ├── rb-test-ns-level-2.yaml
+// │           │       ├── rb-test-ns-level-3.yaml
+// │           │       └── .gitkeep
+// │           ├── level-1
+// │           │   ├── reposync-level-2.yaml
+// │           │   └── .gitkeep
+// │           ├── level-2
+// │           │   ├── reposync-level-3.yaml
+// │           │   └── .gitkeep
+// │           └── level-3
+// │               ├── configmap-level-4.yaml
+// │               └── .gitkeep
 //
 // This tests multiple things:
 // 1. RootSync -> RootSyncs -> RepoSyncs -> RepoSyncs
@@ -94,11 +95,26 @@ func TestComposition(t *testing.T) {
 	lvl1Sync := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, lvl1NN.Name, lvl0NN.Name)
 	lvl1Sync.Spec.Git.Dir = lvl1NN.Name
 
+	lvl2RB := nomostest.RepoSyncRoleBinding(lvl2NN)
 	lvl2Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl2NN, lvl0NN.Name)
 	lvl2Sync.Spec.Git.Dir = lvl2NN.Name
 
+	lvl3RB := nomostest.RepoSyncRoleBinding(lvl3NN)
 	lvl3Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl3NN, lvl0NN.Name)
 	lvl3Sync.Spec.Git.Dir = lvl3NN.Name
+
+	// RepoSync level-2 depends on RoleBinding level-2.
+	// RepoSync level-3 depends on RoleBinding level-3.
+	// But the RoleBindings are managed by RootSync root-sync (level-0),
+	// and Config Sync doesn't support external dependencies.
+	// Since RepoSync level-3 is managed by RepoSync level-2,
+	// and RepoSync level-2 is manage by RootSync level-1,
+	// and RootSync level-1 is manage by RootSync root-sync (level-0),
+	// we need to make RepoSync level-1 depend on both RoleBindings,
+	// so the RoleBindings are deleted after both RepoSyncs.
+	if err := nomostest.SetDependencies(lvl1Sync, lvl2RB, lvl3RB); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// All R*Syncs in this test will use the same repository, with different directories.
 	// This function returns the latest sha1 of the shared root repo.
@@ -111,28 +127,36 @@ func TestComposition(t *testing.T) {
 	// which can happen if the previous test failed when partially complete.
 	// Cleanups execute in the reverse order they are added.
 	t.Cleanup(func() {
-		nt.T.Logf("Cleaning up %s %s...", lvl0Sync.Kind, lvl0NN)
-		removeDirContents(lvl0Repo, lvl0SubDir)
-		nt.T.Logf("Waiting for %s %s to be synced...", lvl0Sync.Kind, lvl0NN)
-		waitForSync(nt, rootSha1Fn, lvl1Sync)
+		if lvl0Repo.Exists(lvl0SubDir) {
+			nt.T.Logf("Cleaning up %s %s...", lvl0Sync.Kind, lvl0NN)
+			removeDirContents(lvl0Repo, lvl0SubDir)
+			nt.T.Logf("Waiting for %s %s to be synced...", lvl0Sync.Kind, lvl0NN)
+			waitForSync(nt, rootSha1Fn, lvl0Sync)
+		}
 	})
 	t.Cleanup(func() {
-		nt.T.Logf("Cleaning up %s %s...", lvl1Sync.Kind, lvl1NN)
-		removeDirContents(lvl0Repo, lvl1Sync.Spec.Git.Dir)
-		nt.T.Logf("Waiting for %s %s to be synced...", lvl1Sync.Kind, lvl1NN)
-		waitForSync(nt, rootSha1Fn, lvl1Sync)
+		if lvl0Repo.Exists(lvl1Sync.Spec.Git.Dir) {
+			nt.T.Logf("Cleaning up %s %s...", lvl1Sync.Kind, lvl1NN)
+			removeDirContents(lvl0Repo, lvl1Sync.Spec.Git.Dir)
+			nt.T.Logf("Waiting for %s %s to be synced...", lvl1Sync.Kind, lvl1NN)
+			waitForSync(nt, rootSha1Fn, lvl1Sync)
+		}
 	})
 	t.Cleanup(func() {
-		nt.T.Logf("Cleaning up %s %s...", lvl2Sync.Kind, lvl2NN)
-		removeDirContents(lvl0Repo, lvl2Sync.Spec.Git.Dir)
-		nt.T.Logf("Waiting for %s %s to be synced...", lvl2Sync.Kind, lvl2NN)
-		waitForSync(nt, rootSha1Fn, lvl2Sync)
+		if lvl0Repo.Exists(lvl2Sync.Spec.Git.Dir) {
+			nt.T.Logf("Cleaning up %s %s...", lvl2Sync.Kind, lvl2NN)
+			removeDirContents(lvl0Repo, lvl2Sync.Spec.Git.Dir)
+			nt.T.Logf("Waiting for %s %s to be synced...", lvl2Sync.Kind, lvl2NN)
+			waitForSync(nt, rootSha1Fn, lvl2Sync)
+		}
 	})
 	t.Cleanup(func() {
-		nt.T.Logf("Cleaning up %s %s...", lvl3Sync.Kind, lvl3NN)
-		removeDirContents(lvl0Repo, lvl3Sync.Spec.Git.Dir)
-		nt.T.Logf("Waiting for %s %s to be synced...", lvl3Sync.Kind, lvl3NN)
-		waitForSync(nt, rootSha1Fn, lvl3Sync)
+		if lvl0Repo.Exists(lvl3Sync.Spec.Git.Dir) {
+			nt.T.Logf("Cleaning up %s %s...", lvl3Sync.Kind, lvl3NN)
+			removeDirContents(lvl0Repo, lvl3Sync.Spec.Git.Dir)
+			nt.T.Logf("Waiting for %s %s to be synced...", lvl3Sync.Kind, lvl3NN)
+			waitForSync(nt, rootSha1Fn, lvl3Sync)
+		}
 	})
 	// Print reconciler logs for R*Syncs that aren't in nt.RootRepos or nt.NonRootRepos.
 	t.Cleanup(func() {
@@ -148,8 +172,8 @@ func TestComposition(t *testing.T) {
 
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
 	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs))
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), nomostest.RepoSyncRoleBinding(lvl2NN))
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), nomostest.RepoSyncRoleBinding(lvl3NN))
+	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), lvl2RB)
+	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), lvl3RB)
 	lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
@@ -162,7 +186,7 @@ func TestComposition(t *testing.T) {
 	nomostest.CreateNamespaceSecret(nt, lvl2NN.Namespace)
 
 	// lvl1 RootSync
-	lvl1Path := filepath.Join(lvl0Sync.Spec.Git.Dir, fmt.Sprintf("%s.yaml", lvl1NN.Name))
+	lvl1Path := filepath.Join(lvl0SubDir, fmt.Sprintf("rootsync-%s.yaml", lvl1NN.Name))
 	nt.T.Logf("Adding RootSync %s to the shared repository: %s", lvl1NN.Name, lvl1Path)
 	lvl0Repo.Add(lvl1Path, lvl1Sync)
 	lvl0Repo.AddEmptyDir(lvl1Sync.Spec.Git.Dir)
@@ -176,7 +200,7 @@ func TestComposition(t *testing.T) {
 	// lvl1Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl2 RepoSync
-	lvl2Path := filepath.Join(lvl1Sync.Spec.Git.Dir, fmt.Sprintf("%s.yaml", lvl2NN.Name))
+	lvl2Path := filepath.Join(lvl1Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl2NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl2NN.Name, lvl2Path)
 	lvl0Repo.Add(lvl2Path, lvl2Sync)
 	lvl0Repo.AddEmptyDir(lvl2Sync.Spec.Git.Dir)
@@ -191,7 +215,7 @@ func TestComposition(t *testing.T) {
 	// lvl2Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl3 RepoSync
-	lvl3Path := filepath.Join(lvl2Sync.Spec.Git.Dir, fmt.Sprintf("%s.yaml", lvl3NN.Name))
+	lvl3Path := filepath.Join(lvl2Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl3NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl3NN.Name, lvl3Path)
 	lvl0Repo.Add(lvl3Path, lvl3Sync)
 	lvl0Repo.AddEmptyDir(lvl3Sync.Spec.Git.Dir)
@@ -212,7 +236,7 @@ func TestComposition(t *testing.T) {
 	lvl4ConfigMap.SetNamespace(testNs)
 	lvl4ConfigMap.SetName(lvl4NN.Name)
 	lvl4ConfigMap.Data = map[string]string{"key": "value"}
-	lvl4Path := filepath.Join(lvl3Sync.Spec.Git.Dir, fmt.Sprintf("%s.yaml", lvl4NN.Name))
+	lvl4Path := filepath.Join(lvl3Sync.Spec.Git.Dir, fmt.Sprintf("configmap-%s.yaml", lvl4NN.Name))
 	nt.T.Logf("Adding ConfigMap %s to the shared repository: %s", lvl4NN.Name, lvl4Path)
 	lvl0Repo.Add(lvl4Path, lvl4ConfigMap)
 	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding ConfigMap: %s", lvl4NN.Name))

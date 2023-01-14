@@ -187,12 +187,15 @@ func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) {
 	switch sourceFormat {
 	case filesystem.SourceFormatHierarchy:
 		// Hierarchy format requires a Repo object.
+		g.T.Logf("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 		g.Add(filepath.Join(AcmeDir, "system", "repo.yaml"), fake.RepoObject())
 	case filesystem.SourceFormatUnstructured:
 		// It is an error for unstructured repos to include the Repo object.
+		g.T.Logf("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 	default:
 		g.T.Fatalf("Unrecognized SourceFormat: %q", sourceFormat)
 	}
+	g.Format = sourceFormat
 	g.CommitAndPush("initial commit")
 }
 

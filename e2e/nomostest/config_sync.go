@@ -429,24 +429,6 @@ func noOOMKilledContainer(nt *NT) Predicate {
 	}
 }
 
-func setupRootSync(nt *NT, rsName string) {
-	// create RootSync to initialize the root reconciler.
-	rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-	if err := nt.Create(rs); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			nt.T.Fatal(err)
-		}
-	}
-}
-
-func setupRepoSync(nt *NT, nn types.NamespacedName) {
-	// create RepoSync to initialize the Namespace reconciler.
-	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-	if err := nt.Create(rs); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
 func waitForReconciler(nt *NT, name string) error {
 	took, err := Retry(60*time.Second, func() error {
 		return nt.Validate(name, configmanagement.ControllerNamespace,
@@ -500,15 +482,6 @@ func repoSyncClusterRoleBinding(nn types.NamespacedName) *rbacv1.ClusterRoleBind
 	rb.Subjects = sb
 	rb.RoleRef = rf
 	return rb
-}
-
-func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
-	if err := nt.Create(RepoSyncRoleBinding(nn)); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Validate rolebinding is present.
-	return nt.Validate(nn.Name, nn.Namespace, &rbacv1.RoleBinding{})
 }
 
 func revokeRepoSyncClusterRoleBinding(nt *NT, nn types.NamespacedName) {
@@ -609,46 +582,54 @@ func setPollingPeriods(t testing.NTB, obj client.Object) {
 }
 
 func setupDelegatedControl(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] Delegated control")
+
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
 	if err := nt.Create(nt.RepoSyncClusterRole()); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	for rsName := range opts.RootRepos {
-		// The default RootSync is created manually, no need to set up again.
+		// The default RootSync is created by `resetRootRepo`, called by
+		// `setupTestCase`, so no need to create it again.
 		if rsName == configsync.RootSyncName {
 			continue
 		}
-		setupRootSync(nt, rsName)
-	}
-
-	for nn := range opts.NamespaceRepos {
-		// Add a ClusterRoleBinding so that the pods can be created
-		// when the cluster has PodSecurityPolicy enabled.
-		// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
-		// it will only grant usage for pods being run in the same namespace as the binding.
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if isPSPCluster() {
-			if err := nt.Create(repoSyncClusterRoleBinding(nn)); err != nil {
+		// Create a RootSync
+		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
+		if err := nt.Create(rs); err != nil {
+			// TODO: Do we need this IsAlreadyExists check? The RepoSync create doesn't have one.
+			if !apierrors.IsAlreadyExists(err) {
 				nt.T.Fatal(err)
 			}
 		}
+	}
 
-		// create namespace for namespace reconciler.
+	for nn := range opts.NamespaceRepos {
+		// Add a ClusterRoleBinding to grant the RepoSync reconciler permission
+		// to manage resources in the RepoSync namespace.
+		// Using a ClusterRoleBinding ensures that the permissions will not be
+		// revoked before the RepoSync is deleted, if the Namespace is deleted.
+		if err := nt.Create(repoSyncClusterRoleBinding(nn)); err != nil {
+			nt.T.Fatal(err)
+		}
+
+		// Create a namespace for the RepoSync.
 		err := nt.Create(fake.NamespaceObject(nn.Namespace))
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 
-		// create secret for the namespace reconciler.
+		// Create a secret for the RepoSync.
+		// This will be copied into the config-management-system namespace by
+		// the reconciler-manager.
 		CreateNamespaceSecret(nt, nn.Namespace)
 
-		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
+		// Create a RepoSync for this namespace
+		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+		if err := nt.Create(rs); err != nil {
 			nt.T.Fatal(err)
 		}
-
-		setupRepoSync(nt, nn)
 	}
 
 	// Validate multi-repo metrics in root reconcilers.
@@ -859,6 +840,8 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 // setupCentralizedControl is a pure central-control mode.
 // A default root repo (root-sync) manages all other root repos and namespace repos.
 func setupCentralizedControl(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] Centralized control")
+
 	rsCount := 0
 
 	// Add any RootSyncs specified by the test options
@@ -892,26 +875,22 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		ns := nn.Namespace
 		rsCount++
 		rsNamespaces[ns] = struct{}{}
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
-		rb := RepoSyncRoleBinding(nn)
-		dependencies := []client.Object{cr, rb}
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), rb)
-		if isPSPCluster() {
-			// Add a ClusterRoleBinding so that the pods can be created
-			// when the cluster has PodSecurityPolicy enabled.
-			// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
-			// it will only grant usage for pods being run in the same namespace as the binding.
-			// TODO: Remove the psp related change when Kubernetes 1.25 is
-			// available on GKE.
-			crb := repoSyncClusterRoleBinding(nn)
-			dependencies = append(dependencies, crb)
-			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
-		}
 
+		// Add a namespace for the RepoSync.
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
+
+		// Add a ClusterRoleBinding to grant the RepoSync reconciler permission
+		// to manage resources in the RepoSync namespace.
+		// Using a ClusterRoleBinding ensures that the permissions will not be
+		// revoked before the RepoSync is deleted, if the Namespace is deleted.
+		crb := repoSyncClusterRoleBinding(nn)
+		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
+
+		// Add a RepoSync
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 		// [Cluster]RoleBinding & ClusterRole must be deleted after the RepoSync,
 		// so the reconciler has the right permissions until it's fully exited.
-		if err := SetDependencies(rs, dependencies...); err != nil {
+		if err := SetDependencies(rs, cr, crb); err != nil {
 			nt.T.Fatal(err)
 		}
 		if opts.MultiRepo.ReconcileTimeout != nil {
@@ -919,7 +898,7 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, nn.Name), rs)
 
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
+		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, clusterrolebinding and RepoSync")
 	}
 
 	// Convert namespace set to list
@@ -953,11 +932,8 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		gvkMetrics := []testmetrics.GVKMetric{
 			testmetrics.ResourceCreated("Namespace"),
 			testmetrics.ResourceCreated("ClusterRole"),
-			testmetrics.ResourceCreated("RoleBinding"),
+			testmetrics.ResourceCreated("ClusterRoleBinding"),
 			testmetrics.ResourceCreated(configsync.RepoSyncKind),
-		}
-		if isPSPCluster() {
-			gvkMetrics = append(gvkMetrics, testmetrics.ResourceCreated("ClusterRoleBinding"))
 		}
 		numObjects := nt.DefaultRootSyncObjectCount()
 		err := nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName, numObjects, gvkMetrics...)
@@ -1190,9 +1166,7 @@ func deleteNamespaceRepos(nt *NT) {
 		// auto-deletes the resources, including RepoSync, Deployment, RoleBinding, Secret, and etc.
 		revokeRepoSyncNamespace(nt, rs.Namespace)
 		nn := RepoSyncNN(rs.Namespace, rs.Name)
-		if isPSPCluster() {
-			revokeRepoSyncClusterRoleBinding(nt, nn)
-		}
+		revokeRepoSyncClusterRoleBinding(nt, nn)
 	}
 
 	rsClusterRole := nt.RepoSyncClusterRole()

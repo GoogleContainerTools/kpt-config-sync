@@ -410,10 +410,7 @@ func (nt *NT) DefaultRootSyncObjectCount() int {
 		numObjects++                             // 1 for the ClusterRole, shared by all RepoSyncs
 		numObjects += nt.NumRepoSyncNamespaces() // 1 for each unique RepoSync Namespace
 		numObjects += numRepoSyncs               // 1 for each RepoSync
-		numObjects += numRepoSyncs               // 1 for each RepoSync RoleBinding
-		if isPSPCluster() {
-			numObjects += numRepoSyncs // 1 for each RepoSync ClusterRoleBinding
-		}
+		numObjects += numRepoSyncs               // 1 for each RepoSync ClusterRoleBinding
 	}
 	return numObjects
 }

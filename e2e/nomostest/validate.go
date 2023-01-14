@@ -21,6 +21,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -50,7 +52,12 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Pr
 func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 	err := nt.Get(name, namespace, o)
 	if err == nil {
-		return errors.Errorf("%T %v %s/%s found", o, o.GetObjectKind().GroupVersionKind(), namespace, name)
+		gvk, err := kinds.Lookup(o, nt.scheme)
+		if err != nil {
+			return errors.Wrapf(err, "failed to lookup kind of %T", o)
+		}
+		// Include full object json to help determine why the object still exists
+		return errors.Errorf("%s %s/%s found:\n%s", gvk.Kind, namespace, name, log.AsJSON(o))
 	}
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -66,7 +73,12 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object) error {
 	err := nt.Get(name, namespace, o)
 	if err == nil {
-		return errors.Errorf("%T %v %s/%s found", o, o.GetObjectKind().GroupVersionKind(), namespace, name)
+		gvk, err := kinds.Lookup(o, nt.scheme)
+		if err != nil {
+			return errors.Wrapf(err, "failed to lookup kind of %T", o)
+		}
+		// Include full object json to help determine why the object still exists
+		return errors.Errorf("%s %s/%s found:\n%s", gvk.Kind, namespace, name, log.AsJSON(o))
 	}
 	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 		return nil

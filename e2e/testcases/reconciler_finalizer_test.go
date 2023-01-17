@@ -20,10 +20,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -53,9 +55,13 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
+	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
-		cleanupSingleLevel(nt, rootSyncNN, deployment1NN, namespace1NN)
+		cleanupSingleLevel(nt,
+			rootSyncNN,
+			deployment1NN,
+			namespace1NN, safetyNamespace1NN)
 	})
 
 	// Add namespace to RootSync
@@ -132,9 +138,13 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
+	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
-		cleanupSingleLevel(nt, rootSyncNN, deployment1NN, namespace1NN)
+		cleanupSingleLevel(nt,
+			rootSyncNN,
+			deployment1NN,
+			namespace1NN, safetyNamespace1NN)
 	})
 
 	// Add namespace to RootSync
@@ -216,14 +226,14 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncNN.Namespace}
 	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncNN.Namespace}
 	namespace1NN := types.NamespacedName{Name: repoSyncNN.Namespace}
+	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
+	safetyNamespace2NN := types.NamespacedName{Name: nsRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupMultiLevel(nt,
-			rootSyncNN,
-			repoSyncNN,
-			deployment1NN,
-			deployment2NN,
-			namespace1NN)
+			rootSyncNN, repoSyncNN,
+			deployment1NN, deployment2NN,
+			namespace1NN, safetyNamespace1NN, safetyNamespace2NN)
 	})
 
 	// Namespace created for the RepoSync by test setup
@@ -333,14 +343,14 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncNN.Namespace}
 	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncNN.Namespace}
 	namespace1NN := types.NamespacedName{Name: repoSyncNN.Namespace}
+	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
+	safetyNamespace2NN := types.NamespacedName{Name: nsRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupMultiLevel(nt,
-			rootSyncNN,
-			repoSyncNN,
-			deployment1NN,
-			deployment2NN,
-			namespace1NN)
+			rootSyncNN, repoSyncNN,
+			deployment1NN, deployment2NN,
+			namespace1NN, safetyNamespace1NN, safetyNamespace2NN)
 	})
 
 	// Add deployment-helloworld-1 to RootSync
@@ -464,54 +474,62 @@ func tailReconcilerLogs(ctx context.Context, nt *nomostest.NT, reconcilerNN type
 	}
 }
 
-func cleanupSingleLevel(nt *nomostest.NT, rootSyncNN, deployment1NN, namespace1NN types.NamespacedName) {
+func cleanupSingleLevel(nt *nomostest.NT,
+	rootSyncNN,
+	deployment1NN,
+	namespace1NN, safetyNamespace1NN types.NamespacedName,
+) {
+	cleanupSyncsAndObjects(nt,
+		[]client.Object{
+			fake.RootSyncObjectV1Beta1(rootSyncNN.Name),
+		},
+		[]client.Object{
+			fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
+			fake.NamespaceObject(namespace1NN.Name),
+			fake.NamespaceObject(safetyNamespace1NN.Name),
+		})
+}
+
+func cleanupMultiLevel(nt *nomostest.NT,
+	rootSyncNN, repoSyncNN,
+	deployment1NN, deployment2NN,
+	namespace1NN, safetyNamespace1NN, safetyNamespace2NN types.NamespacedName,
+) {
+	cleanupSyncsAndObjects(nt,
+		[]client.Object{
+			fake.RootSyncObjectV1Beta1(rootSyncNN.Name),
+			fake.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name),
+		},
+		[]client.Object{
+			fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
+			fake.DeploymentObject(core.Name(deployment2NN.Name), core.Namespace(deployment2NN.Namespace)),
+			fake.NamespaceObject(namespace1NN.Name),
+			fake.NamespaceObject(safetyNamespace1NN.Name),
+			fake.NamespaceObject(safetyNamespace2NN.Name),
+		})
+}
+
+func cleanupSyncsAndObjects(nt *nomostest.NT, syncObjs []client.Object, objs []client.Object) {
+	if nt.T.Failed() && *e2e.Debug {
+		nt.T.Log("Skipping test cleanup: debug enabled")
+		return
+	}
+
 	nt.T.Log("Stopping webhook")
 	// Stop webhook to avoid deletion prevention.
 	// Webhook will be re-enabled by test setup, if the next test needs it.
 	nomostest.StopWebhook(nt)
 
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	deployment1 := fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace))
-	namespace1 := fake.NamespaceObject(namespace1NN.Name)
-
-	nt.T.Log("Resetting RootSync deletion propagation")
-	err := nt.Get(rootSync.Name, rootSync.Namespace, rootSync)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// ValidateMultiRepoDeployments called by WaitForRepoSyncs handles RootSync re-creation
-			return
-		}
-		nt.T.Fatal(err)
-	}
-	if removeDeletionPropagationPolicy(rootSync) {
-		err = nt.Update(rootSync)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-
-	nt.T.Logf("Deleting RootSync %s", rootSyncNN)
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
+	// For the purposes of these finalizer tests, we assume the finalizer may
+	// not work correctly. So we delete the deletion propegation annotation,
+	// the syncs, and all the managed objects.
+	for _, syncObj := range syncObjs {
+		if err := deleteSyncWithOrphanPolicy(nt, syncObj); err != nil {
 			nt.T.Error(err)
 		}
 	}
-
-	// Delete Deployment 1
-	nt.T.Logf("Deleting Deployment %s", deployment1NN)
-	err = nt.Delete(deployment1, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
-		}
-	}
-
-	// Delete Namespace 1
-	nt.T.Logf("Deleting Namespace %s", namespace1NN)
-	err = nt.Delete(namespace1, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
+	for _, obj := range objs {
+		if err := deleteObject(nt, obj); err != nil {
 			nt.T.Error(err)
 		}
 	}
@@ -519,113 +537,95 @@ func cleanupSingleLevel(nt *nomostest.NT, rootSyncNN, deployment1NN, namespace1N
 	nomostest.Wait(nt.T, "test cleanup", nt.DefaultWaitTimeout,
 		func() error {
 			var errs status.MultiError
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			errs = status.Append(errs, nt.ValidateNotFound(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
-			errs = status.Append(errs, nt.ValidateNotFound(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{}))
+			for _, syncObj := range syncObjs {
+				errs = status.Append(errs, validateNotFoundFromObject(nt, syncObj))
+			}
+			for _, obj := range objs {
+				errs = status.Append(errs, validateNotFoundFromObject(nt, obj))
+			}
 			return errs
 		},
 	)
 }
 
-func cleanupMultiLevel(nt *nomostest.NT, rootSyncNN, repoSyncNN, deployment1NN, deployment2NN, namespace1NN types.NamespacedName) {
-	if nt.T.Failed() && *e2e.Debug {
-		nt.T.Log("Skipping test cleanup: debug enabled")
-		return
+// validateNotFoundFromObject wraps nt.ValidateNotFound, but allows the object
+// to be fully populated, constructing a new empty typed object as needed.
+func validateNotFoundFromObject(nt *nomostest.NT, obj client.Object) error {
+	key := client.ObjectKeyFromObject(obj)
+	obj, _, err := newEmptyTypedObject(nt, obj)
+	if err != nil {
+		return err
 	}
-	nt.T.Log("Stopping webhook")
-	// Stop webhook to avoid deletion prevention.
-	// Webhook will be re-enabled by test setup, if the next test needs it.
-	nomostest.StopWebhook(nt)
+	return nt.ValidateNotFound(key.Name, key.Namespace, obj)
+}
 
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	repoSync := fake.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
-	deployment1 := fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace))
-	deployment2 := fake.DeploymentObject(core.Name(deployment2NN.Name), core.Namespace(deployment2NN.Namespace))
-	namespace1 := fake.NamespaceObject(namespace1NN.Name)
+func newEmptyTypedObject(nt *nomostest.NT, obj client.Object) (client.Object, schema.GroupVersionKind, error) {
+	scheme := nt.Client.Scheme()
+	gvk, err := kinds.Lookup(obj, scheme)
+	if err != nil {
+		return nil, gvk, err
+	}
+	rObj, err := scheme.New(gvk)
+	if err != nil {
+		return nil, gvk, err
+	}
+	cObj, ok := rObj.(client.Object)
+	if !ok {
+		return nil, gvk, errors.Errorf("failed to cast %s %T to client.Object", gvk.Kind, rObj)
+	}
+	return cObj, gvk, nil
+}
 
-	nt.T.Log("Resetting RootSync deletion propagation")
-	err := nt.Get(rootSync.Name, rootSync.Namespace, rootSync)
+func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
+	key := client.ObjectKeyFromObject(obj)
+	obj, gvk, err := newEmptyTypedObject(nt, obj)
+	if err != nil {
+		return err
+	}
+
+	err = nt.Get(key.Name, key.Name, obj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			// ValidateMultiRepoDeployments called by WaitForRepoSyncs handles RootSync re-creation
-			return
+			return nil
 		}
-		nt.T.Fatal(err)
+		return err
 	}
-	if removeDeletionPropagationPolicy(rootSync) {
-		err = nt.Update(rootSync)
+
+	nt.T.Log("Removing deletion propagation annotation")
+	if removeDeletionPropagationPolicy(obj) {
+		err = nt.Update(obj)
 		if err != nil {
-			nt.T.Fatal(err)
+			return err
 		}
 	}
 
-	nt.T.Logf("Deleting RootSync %s", rootSyncNN)
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationForeground))
+	nt.T.Logf("Deleting %s %s", gvk.Kind, key)
+	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
+	err = nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
+		if apierrors.IsNotFound(err) {
+			return nil
 		}
+		return err
 	}
+	return nil
+}
 
-	nt.T.Log("Resetting RepoSync deletion propagation")
-	err = nt.Get(repoSync.Name, repoSync.Namespace, repoSync)
+func deleteObject(nt *nomostest.NT, obj client.Object) error {
+	gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
-		}
-	} else if removeDeletionPropagationPolicy(repoSync) {
-		err = nt.Update(repoSync)
-		if err != nil {
-			nt.T.Error(err)
-		}
+		return err
 	}
 
-	nt.T.Logf("Deleting RepoSync %s", repoSyncNN)
-	err = nt.Delete(repoSync, client.PropagationPolicy(metav1.DeletePropagationForeground))
+	nt.T.Logf("Deleting %s %s", gvk.Kind, client.ObjectKeyFromObject(obj))
+	err = nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground))
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
+		if apierrors.IsNotFound(err) {
+			return nil
 		}
+		return err
 	}
-
-	// Delete Deployment 1
-	nt.T.Logf("Deleting Deployment %s", deployment1NN)
-	err = nt.Delete(deployment1, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
-		}
-	}
-
-	// Delete Deployment 2
-	nt.T.Logf("Deleting Deployment %s", deployment2NN)
-	err = nt.Delete(deployment2, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
-		}
-	}
-
-	// Delete Namespace 1
-	nt.T.Logf("Deleting Namespace %s", namespace1NN)
-	err = nt.Delete(namespace1, client.PropagationPolicy(metav1.DeletePropagationForeground))
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			nt.T.Error(err)
-		}
-	}
-
-	nomostest.Wait(nt.T, "test cleanup", nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			errs = status.Append(errs, nt.ValidateNotFound(repoSync.GetName(), repoSync.GetNamespace(), &v1beta1.RepoSync{}))
-			errs = status.Append(errs, nt.ValidateNotFound(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
-			errs = status.Append(errs, nt.ValidateNotFound(deployment2.GetName(), deployment2.GetNamespace(), &appsv1.Deployment{}))
-			errs = status.Append(errs, nt.ValidateNotFound(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{}))
-			return errs
-		},
-	)
+	return nil
 }
 
 // rootReconcilerObjectKey returns an ObjectKey for interacting with the

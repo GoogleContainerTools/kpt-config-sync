@@ -56,7 +56,7 @@ TEST_GEN_YAML_DIR := $(OUTPUT_DIR)/test/yaml
 
 # Use git tags to set version string.
 ifeq ($(origin VERSION), undefined)
-VERSION := $(shell git describe --tags --always --dirty)
+VERSION := $(shell git describe --tags --always --dirty --long)
 endif
 
 # UID of current user

@@ -52,6 +52,8 @@ resource "google_project_iam_member" "gce-default-sa-iam" {
     "roles/source.reader",
     "roles/artifactregistry.reader",
     "roles/storage.objectViewer",
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
   ])
 
   role    = each.value

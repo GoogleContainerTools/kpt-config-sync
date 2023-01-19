@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -43,10 +44,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		[]byte(`{"spec": {"override": {"reconcileTimeout": "30s"}}}`))); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		[]nomostest.Predicate{
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
 			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
-		})
+		}))
 	nt.WaitForRepoSyncs()
 	// Pre-provision a low priority workload to force the cluster to scale up.
 	// Later, when the real workload is being scheduled, if there's no more resources available
@@ -57,10 +58,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.T.Cleanup(func() {
 			nt.MustKubectl("delete", "-f", "../testdata/low-priority-pause-deployment.yaml", "--ignore-not-found")
 		})
-		nomostest.WatchForObject(nt, kinds.Deployment(), "pause-deployment", "default",
-			[]nomostest.Predicate{
+		require.NoError(nt.T,
+			nomostest.WatchObject(nt, kinds.Deployment(), "pause-deployment", "default", []nomostest.Predicate{
 				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-			})
+			}))
 	}
 
 	namespaceName := "timeout-1"
@@ -106,10 +107,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		[]byte(`{"spec": {"override": {"reconcileTimeout": "5m"}}}`))); err != nil {
 		nt.T.Fatal(err)
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		[]nomostest.Predicate{
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
 			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
-		})
+		}))
 	nt.WaitForRepoSyncs()
 
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml")

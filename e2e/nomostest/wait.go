@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
-	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
 // WaitOption is an optional parameter for Wait
@@ -88,26 +87,6 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 		}
 	}
 	t.Logf("took %v to wait for %s", took, opName)
-}
-
-// WaitForNotFound waits for the passed object to be fully deleted.
-// Immediately fails the test if the object is not deleted within the timeout.
-func WaitForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {
-	nt.T.Helper()
-
-	Wait(nt.T, fmt.Sprintf("wait for %q %v to be not found", name, gvk), nt.DefaultWaitTimeout, func() error {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(gvk)
-		return nt.ValidateNotFound(name, namespace, u)
-	}, opts...)
-}
-
-// WaitForCurrentStatus waits for the passed object to reconcile.
-func WaitForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WaitOption) {
-	nt.T.Helper()
-	WatchForObject(nt, gvk, name, namespace,
-		[]Predicate{StatusEquals(nt, kstatus.CurrentStatus)},
-		opts...)
 }
 
 // WaitForConfigSyncReady validates if the config sync deployments are ready.

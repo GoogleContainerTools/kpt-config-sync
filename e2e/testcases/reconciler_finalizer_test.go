@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -76,7 +77,9 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync are deleted, the
@@ -98,10 +101,11 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.MissingFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.MissingFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	// Delete the RootSync
 	// DeletePropagationBackground is required when deleting RootSync, to
@@ -159,7 +163,9 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync are deleted, the
@@ -181,10 +187,11 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	// Delete the RootSync
 	// DeletePropagationBackground is required when deleting RootSync, to
@@ -247,7 +254,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Add deployment-helloworld-2 to RepoSync
 	deployment2Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-2")
@@ -257,7 +266,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	nsRepo.Add(deployment2Path, deployment2)
 	nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync/RepoSync are deleted, the
@@ -280,10 +291,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	nt.T.Log("Enabling RepoSync deletion propagation")
 	repoSync := rootRepo.Get(repoSyncPath)
@@ -292,10 +304,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		rootRepo.CommitAndPush("Enabling RepoSync deletion propagation")
 	}
 	nt.WaitForRepoSyncs()
-	nomostest.WatchForObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	// Delete the RootSync
 	// DeletePropagationBackground is required when deleting RootSync, to
@@ -361,7 +374,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Add deployment-helloworld-2 to RepoSync
 	deployment2Path := nomostest.StructuredNSPath(deployment2NN.Namespace, "deployment-helloworld-2")
@@ -371,7 +386,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	nsRepo.Add(deployment2Path, deployment2)
 	nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync")
 	nt.WaitForRepoSyncs()
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace())
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync/RepoSync are deleted, the
@@ -394,10 +411,11 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.HasFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	nt.T.Log("Disabling RepoSync deletion propagation")
 	repoSync := rootRepo.Get(repoSyncPath)
@@ -406,10 +424,11 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		rootRepo.CommitAndPush("Disabling RepoSync deletion propagation")
 		nt.WaitForRepoSyncs()
 	}
-	nomostest.WatchForObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus),
-		nomostest.MissingFinalizer(metadata.ReconcilerFinalizer),
-	})
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nomostest.MissingFinalizer(metadata.ReconcilerFinalizer),
+		}))
 
 	// Abandon the test namespace, otherwise it will block the finalizer
 	namespace1Path := nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name)

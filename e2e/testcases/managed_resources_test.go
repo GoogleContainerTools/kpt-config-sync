@@ -87,7 +87,9 @@ metadata:
 	}
 
 	// Config Sync should remove `test-ns1`.
-	nomostest.WaitForNotFound(nt, kinds.Namespace(), "test-ns1", "")
+	if err := nomostest.WatchForNotFound(nt, kinds.Namespace(), "test-ns1", ""); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	/* A new test */
 	ns = []byte(`
@@ -223,7 +225,9 @@ data:
 	}
 
 	// Config Sync should remove `test-ns`.
-	nomostest.WaitForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore")
+	if err := nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore"); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	/* A new test */
 	cm = []byte(`

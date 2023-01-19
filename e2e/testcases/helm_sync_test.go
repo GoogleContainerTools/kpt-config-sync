@@ -113,8 +113,12 @@ func TestPublicHelm(t *testing.T) {
 	// if err := nt.Validate("my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
 	// 	nt.T.Error(err)
 	// }
-	nomostest.WaitForCurrentStatus(nt, kinds.Deployment(), "my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace)
-	nomostest.WaitForNotFound(nt, kinds.Deployment(), "my-ingress-nginx-controller", "ingress-nginx")
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "my-ingress-nginx-controller", "ingress-nginx"); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully

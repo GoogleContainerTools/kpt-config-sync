@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -723,10 +724,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].RemoveSafetyNamespace()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare all Namespaces")
 
-	nomostest.WatchForObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		[]nomostest.Predicate{
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
 			nomostest.RootSyncHasSyncError(nt, status.EmptySourceErrorCode, ""),
-		})
+		}))
 
 	// Wait 10 seconds before checking the namespaces.
 	// Checking the namespaces immediately may not catch the case where

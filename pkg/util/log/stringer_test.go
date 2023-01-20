@@ -269,6 +269,24 @@ func TestAsYAMLDiff(t *testing.T) {
  Namespace: ""
  `,
 		},
+		{
+			name: "nil vs typed",
+			old:  nil,
+			new: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example",
+				},
+			},
+			expectedOutput: `-null
++apiVersion: v1
++kind: Namespace
++metadata:
++  creationTimestamp: null
++  name: example
++spec: {}
++status: {}
+ `,
+		},
 	}
 
 	for _, tc := range testCases {

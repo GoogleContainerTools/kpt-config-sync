@@ -132,9 +132,13 @@ func AsYAMLDiffWithScheme(old, new runtime.Object, scheme *runtime.Scheme) fmt.S
 // Uses diff.Diff to print full yaml, instead of cmp.Diff which truncates.
 func (yds *yamlDiffStringer) String() string {
 	if yds.Scheme != nil {
+		// Must be either runtime.Object or nil.
+		// Don't panic trying to cast nil interface{} to runtime.Object.
+		old, _ := yds.Old.(runtime.Object)
+		new, _ := yds.New.(runtime.Object)
 		return diff.Diff(
-			AsYAMLWithScheme(yds.Old.(runtime.Object), yds.Scheme).String(),
-			AsYAMLWithScheme(yds.New.(runtime.Object), yds.Scheme).String())
+			AsYAMLWithScheme(old, yds.Scheme).String(),
+			AsYAMLWithScheme(new, yds.Scheme).String())
 	}
 	return diff.Diff(AsYAML(yds.Old).String(), AsYAML(yds.New).String())
 }

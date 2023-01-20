@@ -518,7 +518,9 @@ func revokeRepoSyncClusterRoleBinding(nt *NT, nn types.NamespacedName) {
 		}
 		nt.T.Fatal(err)
 	}
-	WaitForNotFound(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, "")
+	if err := WatchForNotFound(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, ""); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func revokeRepoSyncNamespace(nt *NT, ns string) {
@@ -541,7 +543,9 @@ func revokeRepoSyncNamespace(nt *NT, ns string) {
 			nt.T.Fatal(err)
 		}
 	}
-	WaitForNotFound(nt, kinds.Namespace(), ns, "")
+	if err := WatchForNotFound(nt, kinds.Namespace(), ns, ""); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
@@ -1173,8 +1177,12 @@ func deleteRootRepos(nt *NT) {
 		if err := nt.Delete(&rs); err != nil {
 			nt.T.Fatal(err)
 		}
-		WaitForNotFound(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace)
-		WaitForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+		if err := WatchForNotFound(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace); err != nil {
+			nt.T.Fatal(err)
+		}
+		if err := WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 }
 
@@ -1199,7 +1207,9 @@ func deleteNamespaceRepos(nt *NT) {
 	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Fatal(err)
 	}
-	WaitForNotFound(nt, kinds.ClusterRole(), rsClusterRole.Name, "")
+	if err := WatchForNotFound(nt, kinds.ClusterRole(), rsClusterRole.Name, ""); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // SetPolicyDir updates the root-sync object with the provided policyDir.

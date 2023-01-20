@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -330,10 +331,10 @@ func TestCACertSecretWatch(t *testing.T) {
 	// Modify the secret in c-m-s namespace
 	nt.MustMergePatch(cmsSecret, secretDataPatch("foo", "bar"))
 	// Check that watch triggered resync of the c-m-s secret
-	nomostest.WatchForObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem,
-		[]nomostest.Predicate{
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []nomostest.Predicate{
 			nomostest.SecretMissingKey("foo"),
-		})
+		}))
 	// Modify the secret in RepoSync namespace
 	rsSecret := &corev1.Secret{}
 	err = nt.Validate(caCertSecret, backendNamespace, rsSecret)
@@ -342,10 +343,10 @@ func TestCACertSecretWatch(t *testing.T) {
 	}
 	nt.MustMergePatch(rsSecret, secretDataPatch("baz", "bat"))
 	// Check that the watch triggered upsert to c-m-s secret
-	nomostest.WatchForObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem,
-		[]nomostest.Predicate{
+	require.NoError(nt.T,
+		nomostest.WatchObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []nomostest.Predicate{
 			nomostest.SecretHasKey("baz", "bat"),
-		})
+		}))
 	// Unset caCertSecret for repoSyncBackend and use SSH
 	repoSyncSSHURL := nt.GitProvider.SyncURL(nt.NonRootRepos[nn].RemoteRepoName)
 	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL

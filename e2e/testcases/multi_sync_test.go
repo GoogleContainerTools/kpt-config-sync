@@ -16,13 +16,11 @@ package e2e
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +34,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -465,31 +464,30 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 
 	// When the webhook is enabled, it will block adoption of managed objects.
 	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook enabled")
-	err = waitInParallel(
-		// Reconciler conflict, detected by the second reconciler & reported to the first reconciler's RootSync
-		func() error {
-			return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-				[]nomostest.Predicate{
-					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-				})
-		},
-		// Reconciler conflict, detected by the second reconciler
-		func() error {
-			return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-				[]nomostest.Predicate{
-					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-				})
-		},
-		// Webhook rejection detected by the second reconciler's applier
-		// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
-		func() error {
-			return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-				[]nomostest.Predicate{
-					nomostest.RootSyncHasSyncError(nt, applier.ApplierErrorCode, "denied the request"),
-				})
-		},
-	)
-	if err != nil {
+	tg := taskgroup.New()
+	// Reconciler conflict, detected by the second reconciler & reported to the first reconciler's RootSync
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+			[]nomostest.Predicate{
+				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+			})
+	})
+	// Reconciler conflict, detected by the second reconciler
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+			[]nomostest.Predicate{
+				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+			})
+	})
+	// Webhook rejection detected by the second reconciler's applier
+	// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+			[]nomostest.Predicate{
+				nomostest.RootSyncHasSyncError(nt, applier.ApplierErrorCode, "denied the request"),
+			})
+	})
+	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -511,23 +509,22 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 
 	// When the webhook is disabled, both RootSyncs will repeatedly try to adopt the object.
 	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook disabled")
-	err = waitInParallel(
-		// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
-		func() error {
-			return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-				[]nomostest.Predicate{
-					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-				})
-		},
-		// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
-		func() error {
-			return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-				[]nomostest.Predicate{
-					nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-				})
-		},
-	)
-	if err != nil {
+	tg = taskgroup.New()
+	// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+			[]nomostest.Predicate{
+				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+			})
+	})
+	// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+			[]nomostest.Predicate{
+				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+			})
+	})
+	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -774,33 +771,4 @@ func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
 		}
 		return nil
 	}
-}
-
-// waitInParallel executes multiple functions in parallel until they all return,
-// which allows waiting for multiple conditions simultaniously, without
-// requiring them all to be successful at the same time.
-// This improves testing speed and consistency.
-// Returns a compound error, if any occured.
-func waitInParallel(fns ...func() error) error {
-	var wg sync.WaitGroup
-	var errs []error
-	errCh := make(chan error)
-	for i := range fns {
-		fn := fns[i]
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errCh <- fn()
-		}()
-	}
-	go func() {
-		defer close(errCh)
-		wg.Wait()
-	}()
-	for err := range errCh {
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return multierr.Combine(errs...)
 }

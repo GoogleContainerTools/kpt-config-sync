@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -76,6 +77,16 @@ func Clean(nt *NT, failOnError FailOnError) {
 
 	// The admission-webhook prevents deleting test resources. Hence we delete it before cleaning other resources.
 	removeAdmissionWebhook(nt, failOnError)
+
+	// RepoSync finalizers can block namespace deletion.
+	// Disable deletion-propagation and delete the finalizers.
+	if err := disableRepoSyncDeletionPropagation(nt); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
 
 	// Remove the Kubevirt resources
 	removeKubevirt(nt, failOnError)
@@ -455,4 +466,25 @@ func DeleteRemoteRepos(nt *NT) {
 	if err != nil {
 		nt.T.Error(err)
 	}
+}
+
+func disableRepoSyncDeletionPropagation(nt *NT) error {
+	// List all RepoSyncs in all namespaces
+	rsList := &v1beta1.RepoSyncList{}
+	if err := nt.List(rsList); err != nil {
+		return err
+	}
+	for _, rs := range rsList.Items {
+		if IsDeletionPropagationEnabled(&rs) {
+			rsCopy := rs.DeepCopy()
+			// Disable deletion-propagation and delete finalizers
+			// This should unblock RepoSync & Namespace deletion.
+			RemoveDeletionPropagationPolicy(rsCopy)
+			rsCopy.Finalizers = nil
+			if err := nt.Update(rsCopy); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

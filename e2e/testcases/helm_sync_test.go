@@ -51,18 +51,12 @@ var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-
 // It tests Config Sync can pull from public Helm repo without any authentication.
 func TestPublicHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
-	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace and multiple inline values")
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	nt.T.Cleanup(func() {
-		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
-			v1beta1.GitSource, origRepoURL))
-	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
 	var expectedCPURequest string
@@ -142,12 +136,6 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	}}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type")
-	// Change the RepoSync to sync from the original git source to make test works in the shared test environment.
-	nt.T.Cleanup(func() {
-		rs.Spec.SourceType = string(v1beta1.GitSource)
-		nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from the original git repository")
-	})
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 	nt.T.Log("Fetch password from Secret Manager")
 	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
@@ -267,17 +255,10 @@ func TestHelmGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
-	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
-
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
-	nt.T.Cleanup(func() {
-		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
-			v1beta1.GitSource, origRepoURL))
-	})
 
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
@@ -297,7 +278,6 @@ func TestHelmARTokenAuth(t *testing.T) {
 		ntopts.Unstructured,
 		ntopts.RequireGKE(t),
 	)
-	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Fetch password from Secret Manager")
@@ -316,11 +296,6 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
-	nt.T.Cleanup(func() {
-		// Change the rs back so that it works in the shared test environment.
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
-			v1beta1.GitSource, origRepoURL))
-	})
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}); err != nil {

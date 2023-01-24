@@ -67,11 +67,7 @@ type FailOnError bool
 // It is unnecessary to run this on Kind clusters that exist only for the
 // duration of a single test.
 func Clean(nt *NT, failOnError FailOnError) {
-	start := time.Now()
-	defer func() {
-		elapsed := time.Since(start)
-		nt.T.Logf("[CLEANUP] Test environment cleanup took %v", elapsed)
-	}()
+	nt.T.Helper()
 
 	// Delete remote repos that were created 24 hours ago on the Git provider.
 	if err := nt.GitProvider.DeleteObsoleteRepos(); err != nil {

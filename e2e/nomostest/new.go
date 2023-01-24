@@ -204,23 +204,40 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Cleanup(func() {
 		// Reset the otel-collector pod name to get a new forwarding port because the current process is killed.
 		nt.otelCollectorPodName = ""
-		nt.T.Log("[RESET] Post-test `Reset` in SharedTestEnv")
-		if err := Reset(nt); err != nil {
-			nt.T.Errorf("[RESET] Failed to reset test environment: %v", err)
-		}
+		nt.T.Log("`resetSyncedRepos` after a test as a part of `Cleanup` on SharedTestEnv")
+		resetSyncedRepos(nt, opts)
 	})
 
 	skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 
-	nt.T.Log("[RESET] Pre-test `Reset` in SharedTestEnv")
-	if err := Reset(nt); err != nil {
-		nt.T.Fatalf("[RESET] Failed to reset test environment: %v", err)
-	}
+	nt.T.Log("`resetSyncedRepos` before a test on SharedTestEnv")
+	resetSyncedRepos(nt, opts)
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.
 	installWebhook(nt)
 	setupTestCase(nt, opts)
 	return nt
+}
+
+func resetSyncedRepos(nt *NT, opts *ntopts.New) {
+	nnList := nt.NonRootRepos
+	// clear the namespace resources in the namespace repo to avoid admission validation failure.
+	resetNamespaceRepos(nt)
+	resetRootRepos(nt, opts.SourceFormat)
+
+	deleteRootRepos(nt)
+	deleteNamespaceRepos(nt)
+	// delete the out-of-sync namespaces in case they're set up in the delegated mode.
+	for nn := range nnList {
+		revokeRepoSyncNamespace(nt, nn.Namespace)
+	}
+	nt.NonRootRepos = map[types.NamespacedName]*Repository{}
+	for name := range nt.RootRepos {
+		if name != configsync.RootSyncName {
+			delete(nt.RootRepos, name)
+		}
+	}
+	nt.WaitForRepoSyncs()
 }
 
 // FreshTestEnv establishes a connection to a test cluster based on the passed
@@ -289,11 +306,11 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	} else {
 		// We aren't using an ephemeral Kind cluster, so make sure the cluster is
 		// clean before and after running the test.
-		t.Log("[CLEANUP] Pre-test `Clean` in FreshTestEnv")
+		t.Log("`Clean` before running the test on FreshTestEnv")
 		Clean(nt, true)
 		t.Cleanup(func() {
 			// Clean the cluster now that the test is over.
-			t.Log("[CLEANUP] Post-test `Clean` in FreshTestEnv")
+			t.Log("`Clean` after running the test on FreshTestEnv")
 			Clean(nt, false)
 		})
 	}
@@ -336,13 +353,12 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	})
 
 	installConfigSync(nt, opts.Nomos)
+
 	setupTestCase(nt, opts)
 	return nt
 }
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
-	nt.T.Log("[SETUP] New test case")
-
 	// allRepos specifies the slice all repos for port forwarding.
 	var allRepos []types.NamespacedName
 	for repo := range opts.RootRepos {
@@ -357,19 +373,9 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	for name := range opts.RootRepos {
-		if name == configsync.RootSyncName {
-			// Create or reset and reconfigure the Repository and the RootSync
-			err := resetRootRepo(nt, name, opts.SourceFormat)
-			if err != nil {
-				nt.T.Fatal(err)
-			}
-		} else {
-			// Configure the Repository (Repo/RootSync should not exist yet)
-			nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)
-		}
+		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		// Configure the Repository (RepoSync should not exist yet)
 		nt.NonRootRepos[nsr] = resetRepository(nt, NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
 	}
 

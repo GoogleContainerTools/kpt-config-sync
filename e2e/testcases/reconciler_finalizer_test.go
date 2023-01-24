@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -86,7 +87,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, rootReconcilerObjectKey(rootSyncNN.Name))
 
 	nt.T.Log("Disabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
@@ -94,7 +95,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
+	if setDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
 		err = nt.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -172,7 +173,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, rootReconcilerObjectKey(rootSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
@@ -180,7 +181,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if setDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		err = nt.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -275,8 +276,8 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, rootReconcilerObjectKey(rootSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, nsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
@@ -284,7 +285,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if setDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		err = nt.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -298,7 +299,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 
 	nt.T.Log("Enabling RepoSync deletion propagation")
 	repoSync := rootRepo.Get(repoSyncPath)
-	if nomostest.SetDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
+	if setDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
 		rootRepo.Add(repoSyncPath, repoSync)
 		rootRepo.CommitAndPush("Enabling RepoSync deletion propagation")
 	}
@@ -395,8 +396,8 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, rootReconcilerObjectKey(rootSyncNN.Name))
+	go tailReconcilerLogs(ctx, nt, nsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
@@ -404,7 +405,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if setDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		err = nt.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -418,7 +419,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	nt.T.Log("Disabling RepoSync deletion propagation")
 	repoSync := rootRepo.Get(repoSyncPath)
-	if nomostest.RemoveDeletionPropagationPolicy(repoSync) {
+	if removeDeletionPropagationPolicy(repoSync) {
 		rootRepo.Add(repoSyncPath, repoSync)
 		rootRepo.CommitAndPush("Disabling RepoSync deletion propagation")
 		nt.WaitForRepoSyncs()
@@ -465,6 +466,31 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 			return errs
 		},
 	)
+}
+
+// tailReconcilerLogs starts tailing a reconciler's logs.
+// The logs are stored in memory until either the context is cancelled or the
+// kubectl command exits (usually because the container exited).
+// This allows capturing logs even if the reconciler is deleted before the
+// test ends.
+// The logs will only be printed if the test has failed when the command exits.
+// Run in an goroutine to capture logs in the background while deleting RSyncs.
+func tailReconcilerLogs(ctx context.Context, nt *nomostest.NT, reconcilerNN types.NamespacedName) {
+	out, err := nt.KubectlContext(ctx, "logs",
+		fmt.Sprintf("deployment/%s", reconcilerNN.Name),
+		"-n", reconcilerNN.Namespace,
+		"-c", reconcilermanager.Reconciler,
+		"-f")
+	// Expect the logs to tail until the context is cancelled, or exit early if
+	// the reconciler container exited.
+	if err != nil && err.Error() != "signal: killed" {
+		// We're only using this for debugging, so don't trigger test failure.
+		nt.T.Logf("Failed to tail logs from reconciler %s: %v", reconcilerNN, err)
+	}
+	// Only print the logs if the test has failed
+	if nt.T.Failed() {
+		nt.T.Logf("Reconciler deployment logs (%s):\n%s", reconcilerNN, string(out))
+	}
 }
 
 func cleanupSingleLevel(nt *nomostest.NT,
@@ -514,7 +540,7 @@ func cleanupSyncsAndObjects(nt *nomostest.NT, syncObjs []client.Object, objs []c
 	nomostest.StopWebhook(nt)
 
 	// For the purposes of these finalizer tests, we assume the finalizer may
-	// not work correctly. So we delete the deletion propagation annotation,
+	// not work correctly. So we delete the deletion propegation annotation,
 	// the syncs, and all the managed objects.
 	for _, syncObj := range syncObjs {
 		if err := deleteSyncWithOrphanPolicy(nt, syncObj); err != nil {
@@ -585,7 +611,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 	}
 
 	nt.T.Log("Removing deletion propagation annotation")
-	if nomostest.RemoveDeletionPropagationPolicy(obj) {
+	if removeDeletionPropagationPolicy(obj) {
 		err = nt.Update(obj)
 		if err != nil {
 			return err
@@ -619,6 +645,49 @@ func deleteObject(nt *nomostest.NT, obj client.Object) error {
 		return err
 	}
 	return nil
+}
+
+// rootReconcilerObjectKey returns an ObjectKey for interacting with the
+// RootReconciler for the specified RootSync.
+func rootReconcilerObjectKey(syncName string) client.ObjectKey {
+	return client.ObjectKey{
+		Name:      core.RootReconcilerName(syncName),
+		Namespace: configsync.ControllerNamespace,
+	}
+}
+
+// nsReconcilerObjectKey returns an ObjectKey for interacting with the
+// NsReconciler for the specified RepoSync.
+func nsReconcilerObjectKey(namespace, syncName string) client.ObjectKey {
+	return client.ObjectKey{
+		Name:      core.NsReconcilerName(namespace, syncName),
+		Namespace: configsync.ControllerNamespace,
+	}
+}
+
+func setDeletionPropagationPolicy(obj client.Object, policy metadata.DeletionPropagationPolicy) bool {
+	annotations := obj.GetAnnotations()
+	if len(annotations) == 0 {
+		annotations = make(map[string]string, 1)
+	} else if val, found := annotations[metadata.DeletionPropagationPolicyAnnotationKey]; found && val == string(policy) {
+		return false
+	}
+	annotations[metadata.DeletionPropagationPolicyAnnotationKey] = string(policy)
+	obj.SetAnnotations(annotations)
+	return true
+}
+
+func removeDeletionPropagationPolicy(obj client.Object) bool {
+	annotations := obj.GetAnnotations()
+	if len(annotations) == 0 {
+		return false
+	}
+	if _, found := annotations[metadata.DeletionPropagationPolicyAnnotationKey]; !found {
+		return false
+	}
+	delete(annotations, metadata.DeletionPropagationPolicyAnnotationKey)
+	obj.SetAnnotations(annotations)
+	return true
 }
 
 func loadDeployment(nt *nomostest.NT, path string) *appsv1.Deployment {

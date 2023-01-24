@@ -88,9 +88,11 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	// RepoSyncs, which could block deletion if their finalizer hangs.
 	// This also replaces depends-on deletion ordering (RoleBinding -> RepoSync),
 	// which can't be used by unmanaged syncs or objects in different repos.
+	// Stop the webhook to allow deletion of managed resources.
 	nt.T.Cleanup(func() {
+		nt.T.Log("[CLEANUP] Stopping webhook")
+		nomostest.StopWebhook(nt)
 		nt.T.Log("[CLEANUP] Deleting test RepoSyncs")
-		var rsList []v1beta1.RepoSync
 		rsNNs := []types.NamespacedName{nn1, nn2, nn4}
 		for _, rsNN := range rsNNs {
 			rs := &v1beta1.RepoSync{}
@@ -100,11 +102,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 					nt.T.Error(err)
 				}
 			} else {
-				rsList = append(rsList, *rs)
+				if err := nt.Delete(rs); err != nil {
+					if !apierrors.IsNotFound(err) {
+						nt.T.Error(err)
+					}
+				}
 			}
-		}
-		if err := nomostest.ResetRepoSyncs(nt, rsList); err != nil {
-			nt.T.Error(err)
 		}
 	})
 

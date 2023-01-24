@@ -472,6 +472,10 @@ func disableRepoSyncDeletionPropagation(nt *NT) error {
 	// List all RepoSyncs in all namespaces
 	rsList := &v1beta1.RepoSyncList{}
 	if err := nt.List(rsList); err != nil {
+		if meta.IsNoMatchError(err) {
+			// RepoSync resource not registered. So none can exist.
+			return nil
+		}
 		return err
 	}
 	for _, rs := range rsList.Items {

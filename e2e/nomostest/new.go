@@ -205,13 +205,17 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		// Reset the otel-collector pod name to get a new forwarding port because the current process is killed.
 		nt.otelCollectorPodName = ""
 		nt.T.Log("[RESET] SharedTestEnv after test")
-		resetSyncedRepos(nt, opts)
+		if err := Reset(nt); err != nil {
+			nt.T.Errorf("[RESET] Failed to reset test environment: %v", err)
+		}
 	})
 
 	skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 
 	nt.T.Log("[RESET] SharedTestEnv before test")
-	resetSyncedRepos(nt, opts)
+	if err := Reset(nt); err != nil {
+		nt.T.Fatalf("[RESET] Failed to reset test environment: %v", err)
+	}
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.
 	if err := installWebhook(nt); err != nil {
@@ -219,33 +223,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	}
 	setupTestCase(nt, opts)
 	return nt
-}
-
-func resetSyncedRepos(nt *NT, opts *ntopts.New) {
-	start := time.Now()
-	defer func() {
-		elapsed := time.Since(start)
-		nt.T.Logf("[RESET] Test environment reset took %v", elapsed)
-	}()
-
-	nnList := nt.NonRootRepos
-	// clear the namespace resources in the namespace repo to avoid admission validation failure.
-	resetNamespaceRepos(nt)
-	resetRootRepos(nt, opts.SourceFormat)
-
-	deleteRootRepos(nt)
-	deleteNamespaceRepos(nt)
-	// delete the out-of-sync namespaces in case they're set up in the delegated mode.
-	for nn := range nnList {
-		revokeRepoSyncNamespace(nt, nn.Namespace)
-	}
-	nt.NonRootRepos = map[types.NamespacedName]*Repository{}
-	for name := range nt.RootRepos {
-		if name != configsync.RootSyncName {
-			delete(nt.RootRepos, name)
-		}
-	}
-	nt.WaitForRepoSyncs()
 }
 
 // FreshTestEnv establishes a connection to a test cluster based on the passed

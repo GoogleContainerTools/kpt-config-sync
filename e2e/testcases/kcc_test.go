@@ -36,7 +36,6 @@ import (
 // are removed successfully.
 func TestKCCResourcesOnCSR(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.KccTest, ntopts.RequireGKE(t))
-	origRepoURL := nt.GitProvider.SyncURL(nt.RootRepos[configsync.RootSyncName].RemoteRepoName)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("sync to the kcc resources from a CSR repo")
@@ -82,9 +81,6 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	validateKCCResourceNotFound(nt, gvkPubSubSubscription, "test-cs-read", "foo")
 	validateKCCResourceNotFound(nt, gvkServiceAccount, "pubsub-app", "foo")
 	validateKCCResourceNotFound(nt, gvkPolicyMember, "policy-member-binding", "foo")
-
-	// Change the rs back so that it works in the shared test environment.
-	defer nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}, "sourceFormat": "hierarchy"}}`, origRepoURL))
 }
 
 func validateKCCResourceReady(nt *nomostest.NT, gvk schema.GroupVersionKind, name, namespace string) {

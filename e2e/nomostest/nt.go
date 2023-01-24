@@ -591,13 +591,15 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 
 // printTestLogs prints test logs and pods information for debugging.
 func (nt *NT) printTestLogs() {
-	// Print the logs for the current container instances.
+	nt.T.Log("[CLEANUP] Printing test logs for current container instances")
 	nt.testLogs(false)
-	// print the logs for the previous container instances if they exist.
+	nt.T.Log("[CLEANUP] Printing test logs for previous container instances")
 	nt.testLogs(true)
+	nt.T.Log("[CLEANUP] Printing test logs for running pods")
 	for _, ns := range CSNamespaces {
 		nt.testPods(ns)
 	}
+	nt.T.Log("[CLEANUP] Describing not-ready pods")
 	for _, ns := range CSNamespaces {
 		nt.describeNotRunningTestPods(ns)
 	}

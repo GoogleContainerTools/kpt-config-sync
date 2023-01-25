@@ -214,7 +214,9 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	resetSyncedRepos(nt, opts)
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.
-	installWebhook(nt)
+	if err := installWebhook(nt); err != nil {
+		nt.T.Fatal(err)
+	}
 	setupTestCase(nt, opts)
 	return nt
 }
@@ -352,7 +354,9 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		}
 	})
 
-	installConfigSync(nt, opts.Nomos)
+	if err := installConfigSync(nt, opts.Nomos); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	setupTestCase(nt, opts)
 	return nt

@@ -82,9 +82,11 @@ func StopWebhook(nt *NT) {
 	*nt.WebhookDisabled = true
 }
 
-func installWebhook(nt *NT) {
-	nt.T.Helper()
-	objs := parseManifests(nt)
+func installWebhook(nt *NT) error {
+	objs, err := parseManifests(nt)
+	if err != nil {
+		return err
+	}
 	for _, o := range objs {
 		labels := o.GetLabels()
 		if labels == nil || labels["app"] != "admission-webhook" {
@@ -93,11 +95,11 @@ func installWebhook(nt *NT) {
 		nt.T.Logf("installWebhook obj: %v", core.GKNN(o))
 		err := nt.Create(o)
 		if err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				continue
+			if !apierrors.IsAlreadyExists(err) {
+				return err
 			}
-			nt.T.Fatal(err)
 		}
 	}
 	*nt.WebhookDisabled = false
+	return nil
 }

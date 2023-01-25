@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,8 +101,10 @@ func IsReconcilerManagerConfigMap(obj client.Object) bool {
 // ResetReconcilerManagerConfigMap resets the reconciler manager config map
 // to what is defined in the manifest
 func ResetReconcilerManagerConfigMap(nt *NT) error {
-	nt.T.Helper()
-	objs := parseManifests(nt)
+	objs, err := parseManifests(nt)
+	if err != nil {
+		return err
+	}
 	for _, obj := range objs {
 		if !IsReconcilerManagerConfigMap(obj) {
 			continue
@@ -116,39 +119,62 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 	return fmt.Errorf("failed to reset reconciler manager ConfigMap")
 }
 
-func parseManifests(nt *NT) []client.Object {
-	nt.T.Helper()
+func parseManifests(nt *NT) ([]client.Object, error) {
 	tmpManifestsDir := filepath.Join(nt.TmpDir, Manifests)
-
-	objs := installationManifests(nt, tmpManifestsDir)
-	objs = convertObjects(nt, objs)
+	objs, err := installationManifests(nt, tmpManifestsDir)
+	if err != nil {
+		return nil, err
+	}
+	objs, err = convertObjects(nt, objs)
+	if err != nil {
+		return nil, err
+	}
 	reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
 	hydrationPollingPeriod = nt.HydrationPollingPeriod
-	objs = multiRepoObjects(nt.T, objs, setReconcilerDebugMode, setPollingPeriods)
-
-	return objs
+	objs, err = multiRepoObjects(objs, setReconcilerDebugMode, setPollingPeriods)
+	if err != nil {
+		return nil, err
+	}
+	return objs, nil
 }
 
-// installConfigSync installs ConfigSync on the test cluster, and returns a
-// callback for checking that the installation succeeded.
-func installConfigSync(nt *NT, nomos ntopts.Nomos) {
-	nt.T.Helper()
-	objs := parseManifests(nt)
+// installConfigSync installs ConfigSync on the test cluster
+func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
+	objs, err := parseManifests(nt)
+	if err != nil {
+		return err
+	}
 	for _, o := range objs {
 		nt.T.Logf("installConfigSync obj: %v", core.GKNN(o))
 		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.ConfigMap().GroupKind() && o.GetName() == reconcilermanager.SourceFormat {
 			cm := o.(*corev1.ConfigMap)
 			cm.Data[filesystem.SourceFormatKey] = string(nomos.SourceFormat)
 		}
-
-		err := nt.Create(o)
-		if err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				continue
+		if err := nt.Create(o); err != nil {
+			if !apierrors.IsAlreadyExists(err) {
+				return err
 			}
-			nt.T.Fatal(err)
 		}
 	}
+	return nil
+}
+
+// uninstallConfigSync uninstalls ConfigSync on the test cluster
+func uninstallConfigSync(nt *NT) error {
+	objs, err := parseManifests(nt)
+	if err != nil {
+		return err
+	}
+	for _, o := range objs {
+		nt.T.Logf("uninstallConfigSync obj: %v", core.GKNN(o))
+		if err := nt.Delete(o); err != nil {
+			if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func isPSPCluster() bool {
@@ -158,7 +184,7 @@ func isPSPCluster() bool {
 // convertObjects converts objects to their literal types. We can do this as
 // we should have all required types in the scheme anyway. This keeps us from
 // having to do ugly Unstructured operations.
-func convertObjects(nt *NT, objs []client.Object) []client.Object {
+func convertObjects(nt *NT, objs []client.Object) ([]client.Object, error) {
 	result := make([]client.Object, len(objs))
 	for i, obj := range objs {
 		u, ok := obj.(*unstructured.Unstructured)
@@ -171,25 +197,25 @@ func convertObjects(nt *NT, objs []client.Object) []client.Object {
 
 		o, err := nt.scheme.New(u.GroupVersionKind())
 		if err != nil {
-			nt.T.Fatalf("installed type %v not in Scheme: %v", u.GroupVersionKind(), err)
+			return nil, fmt.Errorf("installed type %v not in Scheme: %v", u.GroupVersionKind(), err)
 		}
 
 		jsn, err := u.MarshalJSON()
 		if err != nil {
-			nt.T.Fatalf("marshalling object into JSON: %v", err)
+			return nil, fmt.Errorf("marshalling object into JSON: %v", err)
 		}
 
 		err = json.Unmarshal(jsn, o)
 		if err != nil {
-			nt.T.Fatalf("unmarshalling JSON into object: %v", err)
+			return nil, fmt.Errorf("unmarshalling JSON into object: %v", err)
 		}
 		newObj, ok := o.(client.Object)
 		if !ok {
-			nt.T.Fatalf("trying to install non-object type %v", u.GroupVersionKind())
+			return nil, fmt.Errorf("trying to install non-object type %v", u.GroupVersionKind())
 		}
 		result[i] = newObj
 	}
-	return result
+	return result, nil
 }
 
 func copyFile(src, dst string) error {
@@ -224,29 +250,28 @@ func copyDirContents(src, dest string) error {
 
 // installationManifests generates the ConfigSync installation YAML and copies
 // it to the test's temporary directory.
-func installationManifests(nt *NT, tmpManifestsDir string) []client.Object {
-	nt.T.Helper()
+func installationManifests(nt *NT, tmpManifestsDir string) ([]client.Object, error) {
 	err := os.MkdirAll(tmpManifestsDir, fileMode)
 	if err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 
 	// Copy all manifests to temporary dir
 	if err := copyDirContents(outputManifestsDir, tmpManifestsDir); err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 	if err := copyFile(multiConfigMaps, filepath.Join(tmpManifestsDir, multiConfigMapsName)); err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 
 	// Create the list of paths for the File to read.
 	readPath, err := cmpath.AbsoluteOS(tmpManifestsDir)
 	if err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 	files, err := ioutil.ReadDir(tmpManifestsDir)
 	if err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 	paths := make([]cmpath.Absolute, len(files))
 	for i, f := range files {
@@ -260,17 +285,17 @@ func installationManifests(nt *NT, tmpManifestsDir string) []client.Object {
 	}
 	fos, err := r.Read(filePaths)
 	if err != nil {
-		nt.T.Fatal(err)
+		return nil, err
 	}
 
 	var objs []client.Object
 	for _, o := range fos {
 		objs = append(objs, o.Unstructured)
 	}
-	return objs
+	return objs, nil
 }
 
-func multiRepoObjects(t testing.NTB, objects []client.Object, opts ...func(t testing.NTB, obj client.Object)) []client.Object {
+func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) error) ([]client.Object, error) {
 	var filtered []client.Object
 	found := false
 	for _, obj := range objects {
@@ -283,14 +308,16 @@ func multiRepoObjects(t testing.NTB, objects []client.Object, opts ...func(t tes
 			found = true
 		}
 		for _, opt := range opts {
-			opt(t, obj)
+			if err := opt(obj); err != nil {
+				return nil, err
+			}
 		}
 		filtered = append(filtered, obj)
 	}
 	if !found {
-		t.Fatal("Did not find Reconciler Manager ConfigMap")
+		return nil, fmt.Errorf("Reconciler Manager ConfigMap not found")
 	}
-	return filtered
+	return filtered, nil
 }
 
 // ValidateMultiRepoDeployments validates if all Config Sync Components are available.
@@ -549,20 +576,20 @@ func revokeRepoSyncNamespace(nt *NT, ns string) {
 }
 
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
-func setReconcilerDebugMode(t testing.NTB, obj client.Object) {
+func setReconcilerDebugMode(obj client.Object) error {
 	if !IsReconcilerManagerConfigMap(obj) {
-		return
+		return nil
 	}
 
 	cm, ok := obj.(*corev1.ConfigMap)
 	if !ok {
-		t.Fatalf("parsed Reconciler Manager ConfigMap was %T %v", obj, obj)
+		return fmt.Errorf("parsed Reconciler Manager ConfigMap was %T %v", obj, obj)
 	}
 
 	key := "deployment.yaml"
 	deploymentYAML, found := cm.Data[key]
 	if !found {
-		t.Fatal("Reconciler Manager ConfigMap has no deployment.yaml entry")
+		return fmt.Errorf("Reconciler Manager ConfigMap has no deployment.yaml entry")
 	}
 
 	// The Deployment YAML for Reconciler deployments is a raw YAML string embedded
@@ -587,29 +614,29 @@ func setReconcilerDebugMode(t testing.NTB, obj client.Object) {
 		}
 	}
 	if !found {
-		t.Fatal("Unable to set debug mode for reconciler")
+		return fmt.Errorf("Unable to set debug mode for reconciler")
 	}
 
 	cm.Data[key] = strings.Join(lines, "\n")
-	t.Log("Set deployment.yaml")
+	return nil
 }
 
 // setPollingPeriods update Reconciler Manager configmap
 // reconciler-manager-cm with reconciler and hydration-controller polling
 // periods to override the default.
-func setPollingPeriods(t testing.NTB, obj client.Object) {
+func setPollingPeriods(obj client.Object) error {
 	if !IsReconcilerManagerConfigMap(obj) {
-		return
+		return nil
 	}
 
 	cm, ok := obj.(*corev1.ConfigMap)
 	if !ok {
-		t.Fatalf("parsed Reconciler Manager ConfigMap was not ConfigMap %T %v", obj, obj)
+		return fmt.Errorf("parsed Reconciler Manager ConfigMap was not ConfigMap %T %v", obj, obj)
 	}
 
 	cm.Data[reconcilermanager.ReconcilerPollingPeriod] = reconcilerPollingPeriod.String()
 	cm.Data[reconcilermanager.HydrationPollingPeriod] = hydrationPollingPeriod.String()
-	t.Log("Set filesystem polling period")
+	return nil
 }
 
 func setupDelegatedControl(nt *NT, opts *ntopts.New) {

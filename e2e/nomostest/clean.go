@@ -21,20 +21,24 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -78,9 +82,46 @@ func Clean(nt *NT, failOnError FailOnError) {
 	// The admission-webhook prevents deleting test resources. Hence we delete it before cleaning other resources.
 	removeAdmissionWebhook(nt, failOnError)
 
-	// RepoSync finalizers can block namespace deletion.
-	// Disable deletion-propagation and delete the finalizers.
+	// Delete the reconciler-manager to stop reconcilers from being updated/re-created
+	if err := deleteReconcilerManager(nt); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
+	// Delete the reconcilers to stop syncing
+	if err := deleteReconcilersBySyncKind(nt, configsync.RepoSyncKind); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
+	if err := deleteReconcilersBySyncKind(nt, configsync.RootSyncKind); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
+	// Remove RSync finalizers to unblock namespace deletion.
 	if err := disableRepoSyncDeletionPropagation(nt); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
+	if err := disableRootSyncDeletionPropagation(nt); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
+	// Completely uninstall any remaining config-sync components
+	if err := uninstallConfigSync(nt); err != nil {
 		if failOnError {
 			nt.T.Fatal(err)
 		} else {
@@ -385,6 +426,36 @@ func removeResourceGroupController(nt *NT, failOnError FailOnError) {
 	}
 }
 
+func deleteReconcilerManager(nt *NT) error {
+	obj := &appsv1.Deployment{}
+	obj.Namespace = configmanagement.ControllerNamespace
+	obj.Name = reconcilermanager.ManagerName
+	if err := nt.Delete(obj); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func deleteReconcilersBySyncKind(nt *NT, kind string) error {
+	dList := &appsv1.DeploymentList{}
+	labelSelectorOption := client.MatchingLabelsSelector{
+		Selector: labels.Set{metadata.SyncKindLabel: kind}.AsSelector(),
+	}
+	if err := nt.List(dList, client.InNamespace(configmanagement.ControllerNamespace), labelSelectorOption); err != nil {
+		return err
+	}
+	for _, obj := range dList.Items {
+		if err := nt.Delete(&obj); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func listType(nt *NT, gvk schema.GroupVersionKind) ([]unstructured.Unstructured, error) {
 	list := &unstructured.UnstructuredList{}
 	list.GetObjectKind().SetGroupVersionKind(gvk)
@@ -483,6 +554,31 @@ func disableRepoSyncDeletionPropagation(nt *NT) error {
 			rsCopy := rs.DeepCopy()
 			// Disable deletion-propagation and delete finalizers
 			// This should unblock RepoSync & Namespace deletion.
+			RemoveDeletionPropagationPolicy(rsCopy)
+			rsCopy.Finalizers = nil
+			if err := nt.Update(rsCopy); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func disableRootSyncDeletionPropagation(nt *NT) error {
+	// List all RootSyncs in all namespaces
+	rsList := &v1beta1.RootSyncList{}
+	if err := nt.List(rsList); err != nil {
+		if meta.IsNoMatchError(err) {
+			// RootSync resource not registered. So none can exist.
+			return nil
+		}
+		return err
+	}
+	for _, rs := range rsList.Items {
+		if IsDeletionPropagationEnabled(&rs) {
+			rsCopy := rs.DeepCopy()
+			// Disable deletion-propagation and delete finalizers
+			// This should unblock RootSync & `config-management-system` Namespace deletion.
 			RemoveDeletionPropagationPolicy(rsCopy)
 			rsCopy.Finalizers = nil
 			if err := nt.Update(rsCopy); err != nil {

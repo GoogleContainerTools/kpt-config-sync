@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -260,6 +261,24 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add RepoSync v1alpha1")
 	// Add the bookstore namespace repo back to NamespaceRepos to verify that it is synced.
 	nt.WaitForRepoSyncs()
+}
+
+func TestManageSelfRepoSync(t *testing.T) {
+	bsNamespace := "bookstore"
+	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
+		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName))
+
+	rs := &v1beta1.RepoSync{}
+	if err := nt.Get(configsync.RepoSyncName, bsNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	sanitizedRs := fake.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
+	sanitizedRs.Spec = rs.Spec
+	rsNN := nomostest.RepoSyncNN(rs.Namespace, rs.Name)
+	nt.NonRootRepos[rsNN].Add("acme/repo-sync.yaml", sanitizedRs)
+	nt.NonRootRepos[rsNN].CommitAndPush("add the repo-sync object that configures the reconciler")
+	nt.WaitForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, "RepoSync bookstore/repo-sync must not manage itself in its repo")
 }
 
 func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {

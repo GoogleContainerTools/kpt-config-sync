@@ -40,7 +40,12 @@ test-e2e-go-nobuild:
 .PHONY: test-e2e-kind-multi-repo
 test-e2e-kind-multi-repo: config-sync-manifest-local
 	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh --timeout 60m --parallel 15 $(E2E_ARGS)
+	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh \
+		--timeout 60m \
+		--test.v -v \
+		--parallel 15 \
+		--p 1 \
+		$(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group1

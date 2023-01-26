@@ -33,11 +33,13 @@ __docker-run-e2e-go-gke: config-sync-manifest __build-e2e-go-container
 		--env GCP_REGION=$(GCP_REGION) \
 		--network=host \
 		nomos-gcloud-image \
-		./build/test-e2e-go/e2e.sh $(E2E_ARGS) \
+		./build/test-e2e-go/e2e.sh \
 			--timeout $(GKE_E2E_TIMEOUT) \
+			--test.v -v \
 			--parallel 1 \
 			--p 1 \
-			--test-cluster=gke
+			--test-cluster=gke \
+			$(E2E_ARGS)
 
 # The CI target that runs the golang e2e test on a GKE cluster in prow with various E2E_ARGS.
 # Examples:

@@ -57,7 +57,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	var b strings.Builder
 	for i, status := range actuationStatuses {
 		if i > 0 {
-			b.WriteString(commaNewlineDelimiter)
+			b.WriteString(commaEscapedNewlineDelimiter)
 		}
 		ids := m.Filter(actuation.ActuationStrategyApply, status, -1)
 		count += len(ids)
@@ -66,14 +66,14 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	if count == 0 {
 		logger.Infof("Apply Actuations (Total: %d)", count)
 	} else {
-		logger.Infof("Apply Actuations (Total: %d):\n%s", count, b.String())
+		logger.Infof("Apply Actuations (Total: %d):\\n%s", count, b.String())
 	}
 
 	count = 0
 	b.Reset()
 	for i, status := range reconcileStatuses {
 		if i > 0 {
-			b.WriteString(commaNewlineDelimiter)
+			b.WriteString(commaEscapedNewlineDelimiter)
 		}
 		ids := m.Filter(actuation.ActuationStrategyApply, -1, status)
 		count += len(ids)
@@ -82,14 +82,14 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	if count == 0 {
 		logger.Infof("Apply Reconciles (Total: %d)", count)
 	} else {
-		logger.Infof("Apply Reconciles (Total: %d):\n%s", count, b.String())
+		logger.Infof("Apply Reconciles (Total: %d):\\n%s", count, b.String())
 	}
 
 	count = 0
 	b.Reset()
 	for i, status := range actuationStatuses {
 		if i > 0 {
-			b.WriteString(commaNewlineDelimiter)
+			b.WriteString(commaEscapedNewlineDelimiter)
 		}
 		ids := m.Filter(actuation.ActuationStrategyDelete, status, -1)
 		count += len(ids)
@@ -98,14 +98,14 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	if count == 0 {
 		logger.Infof("Delete Actuations (Total: %d)", count)
 	} else {
-		logger.Infof("Delete Actuations (Total: %d):\n%s", count, b.String())
+		logger.Infof("Delete Actuations (Total: %d):\\n%s", count, b.String())
 	}
 
 	count = 0
 	b.Reset()
 	for i, status := range reconcileStatuses {
 		if i > 0 {
-			b.WriteString(commaNewlineDelimiter)
+			b.WriteString(commaEscapedNewlineDelimiter)
 		}
 		ids := m.Filter(actuation.ActuationStrategyDelete, -1, status)
 		count += len(ids)
@@ -114,7 +114,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	if count == 0 {
 		logger.Infof("Delete Reconciles (Total: %d)", count)
 	} else {
-		logger.Infof("Delete Reconciles (Total: %d):\n%s", count, b.String())
+		logger.Infof("Delete Reconciles (Total: %d):\\n%s", count, b.String())
 	}
 }
 

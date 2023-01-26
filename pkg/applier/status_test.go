@@ -179,23 +179,23 @@ func TestObjectStatusMapLog(t *testing.T) {
 				},
 			},
 			expected: []string{
-				"Apply Actuations (Total: 1):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
+				"Apply Actuations (Total: 1):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (1): [apps/namespaces/test-namespace/Deployment/random-name],\\n" +
 					"Failed (0)",
-				"Apply Reconciles (Total: 1):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (0),\n" +
-					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
+				"Apply Reconciles (Total: 1):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (0),\\n" +
+					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\\n" +
 					"Timeout (0)",
-				"Delete Actuations (Total: 1):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+				"Delete Actuations (Total: 1):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\\n" +
 					"Failed (0)",
-				"Delete Reconciles (Total: 1):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
-					"Failed (0),\n" +
+				"Delete Reconciles (Total: 1):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\\n" +
+					"Failed (0),\\n" +
 					"Timeout (0)",
 			},
 		},
@@ -216,14 +216,14 @@ func TestObjectStatusMapLog(t *testing.T) {
 			expected: []string{
 				"Apply Actuations (Total: 0)",
 				"Apply Reconciles (Total: 0)",
-				"Delete Actuations (Total: 2):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (2): [apps/namespaces/test-namespace/Deployment/random-name, configsync.test/namespaces/test-namespace/Test/random-name],\n" +
+				"Delete Actuations (Total: 2):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (2): [apps/namespaces/test-namespace/Deployment/random-name, configsync.test/namespaces/test-namespace/Test/random-name],\\n" +
 					"Failed (0)",
-				"Delete Reconciles (Total: 2):\n" +
-					"Skipped (0),\n" +
-					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\n" +
-					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\n" +
+				"Delete Reconciles (Total: 2):\\n" +
+					"Skipped (0),\\n" +
+					"Succeeded (1): [configsync.test/namespaces/test-namespace/Test/random-name],\\n" +
+					"Failed (1): [apps/namespaces/test-namespace/Deployment/random-name],\\n" +
 					"Timeout (0)",
 			},
 		},

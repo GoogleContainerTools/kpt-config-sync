@@ -166,10 +166,8 @@ func stringsFromRefs(refs ...mutation.ResourceReference) []string {
 }
 
 const (
-	// Uncomment if needed for building depends-on annotations (deadcode)
-	// commaDelimiter        = ","
-	commaSpaceDelimiter   = ", "
-	commaNewlineDelimiter = ",\n"
+	commaSpaceDelimiter          = ", "
+	commaEscapedNewlineDelimiter = ",\\n"
 )
 
 // joinIDs joins the object IDs (GKNN) using ResourceReference string format
@@ -180,7 +178,7 @@ const (
 // by commas.
 //
 // This can be used to build depends-on annotations when commaDelimiter is used,
-// or for log messages with commaSpaceDelimiter or commaNewlineDelimiter.
+// or for log messages with commaSpaceDelimiter or commaEscapedNewlineDelimiter.
 func joinIDs(delimiter string, ids ...core.ID) string {
 	if len(ids) == 0 {
 		return ""

@@ -319,6 +319,9 @@ func Generate() AllExamples {
 	// 1068
 	result.add(status.HydrationError(status.ActionableHydrationErrorCode, errors.New("user actionable rendering error")))
 
+	// 1069
+	result.add(validate.SelfReconcileError(fake.RootSyncV1Beta1(configsync.RootSyncName)))
+
 	// 2001
 	result.add(status.PathWrapError(errors.New("error creating directory"), "namespaces/foo"))
 

@@ -25,7 +25,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
@@ -49,6 +51,32 @@ import (
 )
 
 const dir = "acme"
+
+func validRootSync(name, path string, opts ...core.MetaMutator) ast.FileObject {
+	rs := fake.RootSyncObjectV1Beta1(name)
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.Git = &v1beta1.Git{
+		Repo: "https://github.com/test/abc",
+		Auth: "none",
+	}
+	for _, opt := range opts {
+		opt(rs)
+	}
+	return fake.FileObject(rs, path)
+}
+
+func validRepoSync(ns, name, path string, opts ...core.MetaMutator) ast.FileObject {
+	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.Git = &v1beta1.Git{
+		Repo: "https://github.com/test/abc",
+		Auth: "none",
+	}
+	for _, opt := range opts {
+		opt(rs)
+	}
+	return fake.FileObject(rs, path)
+}
 
 func clusterSelector(name, key, value string) *v1.ClusterSelector {
 	cs := fake.ClusterSelectorObject(core.Name(name))
@@ -871,6 +899,42 @@ func TestHierarchical(t *testing.T) {
 			},
 			wantErrs: fake.Errors(validate.InvalidSyncCode),
 		},
+		{
+			name: "RepoSync manages itself",
+			options: Options{
+				ReconcilerName: "ns-reconciler-bookstore",
+			},
+			objs: []ast.FileObject{
+				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
+				fake.Repo(),
+				validRepoSync("bookstore", "repo-sync", "namespaces/bookstore/rs.yaml"),
+			},
+			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+		},
+		{
+			name: "RepoSync manages other RepoSync object",
+			options: Options{
+				ReconcilerName: "ns-reconciler-bookstore",
+			},
+			objs: []ast.FileObject{
+				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
+				fake.Repo(),
+				validRepoSync("bookstore", "repo-sync-1", "namespaces/bookstore/rs.yaml"),
+			},
+			want: []ast.FileObject{
+				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml",
+					core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/namespaces/bookstore/ns.yaml"),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{},"f:status":{}}`),
+					core.Annotation(csmetadata.HNCManagedBy, configmanagement.GroupName),
+					core.Label("bookstore"+csmetadata.DepthSuffix, "0"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+				),
+				validRepoSync("bookstore", "repo-sync-1", "namespaces/bookstore/rs.yaml",
+					core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/namespaces/bookstore/rs.yaml"),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
+				)},
+		},
 	}
 
 	converter, err := openapitest.ValueConverterForTest()
@@ -1166,6 +1230,54 @@ func TestUnstructured(t *testing.T) {
 				fake.AnvilAtPath("anvil.yaml"),
 			},
 			wantErrs: fake.Errors(nonhierarchical.UnsupportedCRDRemovalErrorCode),
+		},
+		{
+			name: "RootSync manages itself",
+			options: Options{
+				ReconcilerName: "root-reconciler",
+			},
+			objs: []ast.FileObject{
+				validRootSync("root-sync", "rs.yaml"),
+			},
+			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+		},
+		{
+			name: "RootSync manages other RootSync object",
+			options: Options{
+				ReconcilerName: "root-reconciler",
+			},
+			objs: []ast.FileObject{
+				validRootSync("root-sync-1", "rs.yaml"),
+			},
+			want: []ast.FileObject{validRootSync("root-sync-1", "rs.yaml",
+				core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/rs.yaml"),
+				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+				core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
+			)},
+		},
+		{
+			name: "RepoSync manages itself",
+			options: Options{
+				ReconcilerName: "ns-reconciler-bookstore",
+			},
+			objs: []ast.FileObject{
+				validRepoSync("bookstore", "repo-sync", "rs.yaml"),
+			},
+			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+		},
+		{
+			name: "RepoSync manages other RepoSync object",
+			options: Options{
+				ReconcilerName: "ns-reconciler-bookstore",
+			},
+			objs: []ast.FileObject{
+				validRepoSync("bookstore", "repo-sync-1", "rs.yaml"),
+			},
+			want: []ast.FileObject{validRepoSync("bookstore", "repo-sync-1", "rs.yaml",
+				core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/rs.yaml"),
+				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+				core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
+			)},
 		},
 	}
 

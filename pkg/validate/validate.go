@@ -39,6 +39,8 @@ type Options struct {
 	// ClusterName is the spec.clusterName of the cluster's ConfigManagement. This
 	// is used when hydrating cluster selectors.
 	ClusterName string
+	// ReconcilerName is the name of the reconciler.
+	ReconcilerName string
 	// PolicyDir is the relative path of the root policy directory within the
 	// repo.
 	PolicyDir cmpath.Relative
@@ -83,6 +85,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	//   - adding metadata to resources (such as their filepath in the repo)
 	rawObjects := &objects.Raw{
 		ClusterName:       opts.ClusterName,
+		ReconcilerName:    opts.ReconcilerName,
 		PolicyDir:         opts.PolicyDir,
 		Objects:           objs,
 		PreviousCRDs:      opts.PreviousCRDs,
@@ -162,6 +165,7 @@ func Unstructured(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	//   - adding metadata to resources (such as their filepath in the repo)
 	rawObjects := &objects.Raw{
 		ClusterName:       opts.ClusterName,
+		ReconcilerName:    opts.ReconcilerName,
 		PolicyDir:         opts.PolicyDir,
 		Objects:           objs,
 		PreviousCRDs:      opts.PreviousCRDs,

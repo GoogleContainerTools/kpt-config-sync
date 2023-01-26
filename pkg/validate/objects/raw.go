@@ -35,6 +35,7 @@ type ObjectVisitor func(obj ast.FileObject) status.Error
 // Git repo for a cluster.
 type Raw struct {
 	ClusterName       string
+	ReconcilerName    string
 	PolicyDir         cmpath.Relative
 	Objects           []ast.FileObject
 	PreviousCRDs      []*v1beta1.CustomResourceDefinition

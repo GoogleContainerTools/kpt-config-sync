@@ -16,12 +16,17 @@ package e2e
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/cloud-provider-gcp/providers/gce"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -33,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -47,6 +53,29 @@ const (
 
 var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", nomostesting.GCPProjectIDFromEnv)
 
+// deleteServiceLoadBalancerFirewall deletes the Firewall rule in GCP created
+// by cloud-provider-gce when a Service of type LoadBalancer is created.
+//
+// This is suppossed to be done by finalizer when the Service is deleted, but
+// it doesn't seem to be working.
+// https://github.com/kubernetes/cloud-provider-gcp/blob/master/providers/gce/gce_loadbalancer_internal.go#L325
+func deleteServiceLoadBalancerFirewall(nt *nomostest.NT, svc *corev1.Service) error {
+	loadBalancerName := cloudprovider.DefaultLoadBalancerName(svc)
+	fwName := gce.MakeFirewallName(loadBalancerName)
+	args := []string{
+		"gcloud", "compute", "firewall-rules", "delete", fwName,
+		"--project", nomostesting.GCPProjectIDFromEnv,
+	}
+	nt.T.Log(strings.Join(args, " "))
+	cmd := exec.Command(args[0], args[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(out)
+		return err
+	}
+	return nil
+}
+
 // TestPublicHelm can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public Helm repo without any authentication.
 func TestPublicHelm(t *testing.T) {
@@ -58,11 +87,46 @@ func TestPublicHelm(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
+
+	// Track the nginx-controller Services of type LoadBalancer to clean up
+	// the Firewalls they leave behind.
+	// TODO: remove when this bug is fixed in cloud-provider-gce
+	nsSvc := &corev1.Service{}
+	defaultSvc := &corev1.Service{}
+
 	nt.T.Cleanup(func() {
 		// Change the rs back so that it works in the shared test environment.
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
+		nt.WaitForRepoSyncs()
+
+		// Delete the Firewall Rules left behind by the Service of type LoadBalancer
+		// TODO: remove when this bug is fixed in cloud-provider-gce
+		if *e2e.TestCluster == e2e.GKE {
+			if nsSvc.UID != "" {
+				if err := deleteServiceLoadBalancerFirewall(nt, nsSvc); err != nil {
+					nt.T.Error(err)
+				}
+			}
+			if defaultSvc.UID != "" {
+				if err := deleteServiceLoadBalancerFirewall(nt, defaultSvc); err != nil {
+					nt.T.Error(err)
+				}
+			}
+		}
 	})
+
+	// Get the controller service for cleanup
+	// TODO: remove when this bug is fixed in cloud-provider-gce
+	if err := nomostest.WatchObject(nt, kinds.Service(), "my-ingress-nginx-controller", "ingress-nginx", []nomostest.Predicate{
+		func(obj client.Object) error {
+			nsSvc = obj.(*corev1.Service)
+			return nil
+		},
+	}); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
 	var expectedCPURequest string
@@ -110,6 +174,18 @@ func TestPublicHelm(t *testing.T) {
 	// the commit didn't change, and the commit was already previously Synced.
 	// If sync state could be confirmed, the objects would already be updated,
 	// and we wouldn't need to wait for it.
+
+	// Get the controller service for cleanup
+	// TODO: remove when this bug is fixed in cloud-provider-gce
+	if err := nomostest.WatchObject(nt, kinds.Service(), "my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, []nomostest.Predicate{
+		func(obj client.Object) error {
+			defaultSvc = obj.(*corev1.Service)
+			return nil
+		},
+	}); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// if err := nt.Validate("my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
 	// 	nt.T.Error(err)
 	// }

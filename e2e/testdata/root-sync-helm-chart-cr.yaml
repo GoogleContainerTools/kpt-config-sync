@@ -21,39 +21,27 @@ spec:
   sourceFormat: unstructured
   sourceType: helm
   helm:
-    repo: https://kubernetes.github.io/ingress-nginx
-    chart: ingress-nginx
-    version: 4.0.5
+    repo: https://charts.bitnami.com/bitnami
+    chart: wordpress
+    version: 15.2.35
     values:
-      controller:
-        resources:
-          requests:
-            cpu: 150m
-            memory: 250Mi
-          limits:
-            cpu: 1
-            memory: 300Mi
-        metrics:
-          enabled: true
-          service:
-            annotations:
-              prometheus.io/scrape: "true"
-              prometheus.io/port: "10254"
-        image:
-          pullPolicy: Always
-          image: ingress-nginx/controller
-          tag: "v1.4.0"
-          digest: sha256:54f7fe2c6c5a9db9a0ebf1131797109bb7a4d91f56b9b362bde2abd237dd1974
-        extraEnvs:
-        - name: TEST_1
-          value: "val1"
-        - name: TEST_2
-          value: "val2"
-      defaultBackend:
-        enabled: true
-        image:
-          image: defaultbackend-amd64
-          tag: "1.4"
-    releaseName: my-ingress-nginx
-    namespace: "ingress-nginx"
+      image:
+        digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+        pullPolicy: Always
+      wordpressUsername: test-user
+      wordpressEmail: test-user@example.com
+      extraEnvVars:
+      - name: TEST_1
+        value: "val1"
+      - name: TEST_2
+        value: "val2"
+      resources:
+        requests:
+          cpu: 150m
+          memory: 250Mi
+        limits:
+          cpu: 1
+          memory: 300Mi
+    releaseName: my-wordpress
+    namespace: "wordpress"
     auth: none

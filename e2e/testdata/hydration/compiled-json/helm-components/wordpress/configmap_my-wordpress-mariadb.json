@@ -1,0 +1,28 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "v1",
+			"data": {
+				"my.cnf": "[mysqld]\nskip-name-resolve\nexplicit_defaults_for_timestamp\nbasedir=/opt/bitnami/mariadb\nplugin_dir=/opt/bitnami/mariadb/plugin\nport=3306\nsocket=/opt/bitnami/mariadb/tmp/mysql.sock\ntmpdir=/opt/bitnami/mariadb/tmp\nmax_allowed_packet=16M\nbind-address=*\npid-file=/opt/bitnami/mariadb/tmp/mysqld.pid\nlog-error=/opt/bitnami/mariadb/logs/mysqld.log\ncharacter-set-server=UTF8\ncollation-server=utf8_general_ci\nslow_query_log=0\nslow_query_log_file=/opt/bitnami/mariadb/logs/mysqld.log\nlong_query_time=10.0\n\n[client]\nport=3306\nsocket=/opt/bitnami/mariadb/tmp/mysql.sock\ndefault-character-set=UTF8\nplugin_dir=/opt/bitnami/mariadb/plugin\n\n[manager]\nport=3306\nsocket=/opt/bitnami/mariadb/tmp/mysql.sock\npid-file=/opt/bitnami/mariadb/tmp/mysqld.pid"
+			},
+			"kind": "ConfigMap",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
+				},
+				"labels": {
+					"app.kubernetes.io/component": "primary",
+					"app.kubernetes.io/instance": "my-wordpress",
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name": "mariadb",
+					"helm.sh/chart": "mariadb-11.4.4",
+					"test-case": "hydration"
+				},
+				"name": "my-wordpress-mariadb",
+				"namespace": "wordpress"
+			}
+		}
+	],
+	"kind": "List"
+}

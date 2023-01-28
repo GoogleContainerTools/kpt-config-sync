@@ -1,0 +1,207 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "apps/v1",
+			"kind": "StatefulSet",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
+				},
+				"labels": {
+					"app.kubernetes.io/component": "primary",
+					"app.kubernetes.io/instance": "my-wordpress",
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name": "mariadb",
+					"helm.sh/chart": "mariadb-11.4.4",
+					"test-case": "hydration"
+				},
+				"name": "my-wordpress-mariadb",
+				"namespace": "wordpress"
+			},
+			"spec": {
+				"replicas": 1,
+				"revisionHistoryLimit": 10,
+				"selector": {
+					"matchLabels": {
+						"app.kubernetes.io/component": "primary",
+						"app.kubernetes.io/instance": "my-wordpress",
+						"app.kubernetes.io/name": "mariadb",
+						"test-case": "hydration"
+					}
+				},
+				"serviceName": "my-wordpress-mariadb",
+				"template": {
+					"metadata": {
+						"annotations": {
+							"checksum/configuration": "42d2e6177856f422d877c19b6921bc89f5ac30388c2e541be9a2a60450566aad"
+						},
+						"labels": {
+							"app.kubernetes.io/component": "primary",
+							"app.kubernetes.io/instance": "my-wordpress",
+							"app.kubernetes.io/managed-by": "Helm",
+							"app.kubernetes.io/name": "mariadb",
+							"helm.sh/chart": "mariadb-11.4.4",
+							"test-case": "hydration"
+						}
+					},
+					"spec": {
+						"affinity": {
+							"nodeAffinity": null,
+							"podAffinity": null,
+							"podAntiAffinity": {
+								"preferredDuringSchedulingIgnoredDuringExecution": [
+									{
+										"podAffinityTerm": {
+											"labelSelector": {
+												"matchLabels": {
+													"app.kubernetes.io/component": "primary",
+													"app.kubernetes.io/instance": "my-wordpress",
+													"app.kubernetes.io/name": "mariadb",
+													"test-case": "hydration"
+												}
+											},
+											"topologyKey": "kubernetes.io/hostname"
+										},
+										"weight": 1
+									}
+								]
+							}
+						},
+						"containers": [
+							{
+								"env": [
+									{
+										"name": "BITNAMI_DEBUG",
+										"value": "false"
+									},
+									{
+										"name": "MARIADB_ROOT_PASSWORD",
+										"valueFrom": {
+											"secretKeyRef": {
+												"key": "mariadb-root-password",
+												"name": "my-wordpress-mariadb"
+											}
+										}
+									},
+									{
+										"name": "MARIADB_USER",
+										"value": "bn_wordpress"
+									},
+									{
+										"name": "MARIADB_PASSWORD",
+										"valueFrom": {
+											"secretKeyRef": {
+												"key": "mariadb-password",
+												"name": "my-wordpress-mariadb"
+											}
+										}
+									},
+									{
+										"name": "MARIADB_DATABASE",
+										"value": "bitnami_wordpress"
+									}
+								],
+								"image": "docker.io/bitnami/mariadb:10.6.11-debian-11-r22",
+								"imagePullPolicy": "IfNotPresent",
+								"livenessProbe": {
+									"exec": {
+										"command": [
+											"/bin/bash",
+											"-ec",
+											"password_aux=\"${MARIADB_ROOT_PASSWORD:-}\"\nif [[ -f \"${MARIADB_ROOT_PASSWORD_FILE:-}\" ]]; then\n    password_aux=$(cat \"$MARIADB_ROOT_PASSWORD_FILE\")\nfi\nmysqladmin status -uroot -p\"${password_aux}\"\n"
+										]
+									},
+									"failureThreshold": 3,
+									"initialDelaySeconds": 120,
+									"periodSeconds": 10,
+									"successThreshold": 1,
+									"timeoutSeconds": 1
+								},
+								"name": "mariadb",
+								"ports": [
+									{
+										"containerPort": 3306,
+										"name": "mysql"
+									}
+								],
+								"readinessProbe": {
+									"exec": {
+										"command": [
+											"/bin/bash",
+											"-ec",
+											"password_aux=\"${MARIADB_ROOT_PASSWORD:-}\"\nif [[ -f \"${MARIADB_ROOT_PASSWORD_FILE:-}\" ]]; then\n    password_aux=$(cat \"$MARIADB_ROOT_PASSWORD_FILE\")\nfi\nmysqladmin status -uroot -p\"${password_aux}\"\n"
+										]
+									},
+									"failureThreshold": 3,
+									"initialDelaySeconds": 30,
+									"periodSeconds": 10,
+									"successThreshold": 1,
+									"timeoutSeconds": 1
+								},
+								"resources": {
+									"limits": {},
+									"requests": {}
+								},
+								"securityContext": {
+									"runAsNonRoot": true,
+									"runAsUser": 1001
+								},
+								"volumeMounts": [
+									{
+										"mountPath": "/bitnami/mariadb",
+										"name": "data"
+									},
+									{
+										"mountPath": "/opt/bitnami/mariadb/conf/my.cnf",
+										"name": "config",
+										"subPath": "my.cnf"
+									}
+								]
+							}
+						],
+						"securityContext": {
+							"fsGroup": 1001
+						},
+						"serviceAccountName": "my-wordpress-mariadb",
+						"volumes": [
+							{
+								"configMap": {
+									"name": "my-wordpress-mariadb"
+								},
+								"name": "config"
+							}
+						]
+					}
+				},
+				"updateStrategy": {
+					"type": "RollingUpdate"
+				},
+				"volumeClaimTemplates": [
+					{
+						"metadata": {
+							"labels": {
+								"app.kubernetes.io/component": "primary",
+								"app.kubernetes.io/instance": "my-wordpress",
+								"app.kubernetes.io/name": "mariadb",
+								"test-case": "hydration"
+							},
+							"name": "data"
+						},
+						"spec": {
+							"accessModes": [
+								"ReadWriteOnce"
+							],
+							"resources": {
+								"requests": {
+									"storage": "8Gi"
+								}
+							}
+						}
+					}
+				]
+			}
+		}
+	],
+	"kind": "List"
+}

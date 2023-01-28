@@ -1,0 +1,263 @@
+{
+	"apiVersion": "v1",
+	"items": [
+		{
+			"apiVersion": "apps/v1",
+			"kind": "Deployment",
+			"metadata": {
+				"annotations": {
+					"config.kubernetes.io/origin": "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
+				},
+				"labels": {
+					"app.kubernetes.io/instance": "my-wordpress",
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name": "wordpress",
+					"helm.sh/chart": "wordpress-15.2.35",
+					"test-case": "hydration"
+				},
+				"name": "my-wordpress",
+				"namespace": "wordpress"
+			},
+			"spec": {
+				"replicas": 1,
+				"selector": {
+					"matchLabels": {
+						"app.kubernetes.io/instance": "my-wordpress",
+						"app.kubernetes.io/name": "wordpress",
+						"test-case": "hydration"
+					}
+				},
+				"strategy": {
+					"rollingUpdate": {},
+					"type": "RollingUpdate"
+				},
+				"template": {
+					"metadata": {
+						"labels": {
+							"app.kubernetes.io/instance": "my-wordpress",
+							"app.kubernetes.io/managed-by": "Helm",
+							"app.kubernetes.io/name": "wordpress",
+							"helm.sh/chart": "wordpress-15.2.35",
+							"test-case": "hydration"
+						}
+					},
+					"spec": {
+						"affinity": {
+							"nodeAffinity": null,
+							"podAffinity": null,
+							"podAntiAffinity": {
+								"preferredDuringSchedulingIgnoredDuringExecution": [
+									{
+										"podAffinityTerm": {
+											"labelSelector": {
+												"matchLabels": {
+													"app.kubernetes.io/instance": "my-wordpress",
+													"app.kubernetes.io/name": "wordpress",
+													"test-case": "hydration"
+												}
+											},
+											"topologyKey": "kubernetes.io/hostname"
+										},
+										"weight": 1
+									}
+								]
+							}
+						},
+						"containers": [
+							{
+								"env": [
+									{
+										"name": "BITNAMI_DEBUG",
+										"value": "false"
+									},
+									{
+										"name": "ALLOW_EMPTY_PASSWORD",
+										"value": "yes"
+									},
+									{
+										"name": "MARIADB_HOST",
+										"value": "my-wordpress-mariadb"
+									},
+									{
+										"name": "MARIADB_PORT_NUMBER",
+										"value": "3306"
+									},
+									{
+										"name": "WORDPRESS_DATABASE_NAME",
+										"value": "bitnami_wordpress"
+									},
+									{
+										"name": "WORDPRESS_DATABASE_USER",
+										"value": "bn_wordpress"
+									},
+									{
+										"name": "WORDPRESS_DATABASE_PASSWORD",
+										"valueFrom": {
+											"secretKeyRef": {
+												"key": "mariadb-password",
+												"name": "my-wordpress-mariadb"
+											}
+										}
+									},
+									{
+										"name": "WORDPRESS_USERNAME",
+										"value": "user"
+									},
+									{
+										"name": "WORDPRESS_PASSWORD",
+										"valueFrom": {
+											"secretKeyRef": {
+												"key": "wordpress-password",
+												"name": "my-wordpress"
+											}
+										}
+									},
+									{
+										"name": "WORDPRESS_EMAIL",
+										"value": "user@example.com"
+									},
+									{
+										"name": "WORDPRESS_FIRST_NAME",
+										"value": "FirstName"
+									},
+									{
+										"name": "WORDPRESS_LAST_NAME",
+										"value": "LastName"
+									},
+									{
+										"name": "WORDPRESS_HTACCESS_OVERRIDE_NONE",
+										"value": "no"
+									},
+									{
+										"name": "WORDPRESS_ENABLE_HTACCESS_PERSISTENCE",
+										"value": "no"
+									},
+									{
+										"name": "WORDPRESS_BLOG_NAME",
+										"value": "User's Blog!"
+									},
+									{
+										"name": "WORDPRESS_SKIP_BOOTSTRAP",
+										"value": "no"
+									},
+									{
+										"name": "WORDPRESS_TABLE_PREFIX",
+										"value": "wp_"
+									},
+									{
+										"name": "WORDPRESS_SCHEME",
+										"value": "http"
+									},
+									{
+										"name": "WORDPRESS_EXTRA_WP_CONFIG_CONTENT",
+										"value": ""
+									},
+									{
+										"name": "WORDPRESS_PLUGINS",
+										"value": "none"
+									},
+									{
+										"name": "APACHE_HTTP_PORT_NUMBER",
+										"value": "8080"
+									},
+									{
+										"name": "APACHE_HTTPS_PORT_NUMBER",
+										"value": "8443"
+									}
+								],
+								"envFrom": null,
+								"image": "docker.io/bitnami/wordpress:6.1.1-debian-11-r34",
+								"imagePullPolicy": "IfNotPresent",
+								"livenessProbe": {
+									"failureThreshold": 6,
+									"httpGet": {
+										"httpHeaders": [],
+										"path": "/wp-admin/install.php",
+										"port": "http",
+										"scheme": "HTTP"
+									},
+									"initialDelaySeconds": 120,
+									"periodSeconds": 10,
+									"successThreshold": 1,
+									"timeoutSeconds": 5
+								},
+								"name": "wordpress",
+								"ports": [
+									{
+										"containerPort": 8080,
+										"name": "http"
+									},
+									{
+										"containerPort": 8443,
+										"name": "https"
+									}
+								],
+								"readinessProbe": {
+									"failureThreshold": 6,
+									"httpGet": {
+										"httpHeaders": [],
+										"path": "/wp-login.php",
+										"port": "http",
+										"scheme": "HTTP"
+									},
+									"initialDelaySeconds": 30,
+									"periodSeconds": 10,
+									"successThreshold": 1,
+									"timeoutSeconds": 5
+								},
+								"resources": {
+									"limits": {},
+									"requests": {
+										"cpu": "300m",
+										"memory": "512Mi"
+									}
+								},
+								"securityContext": {
+									"allowPrivilegeEscalation": false,
+									"capabilities": {
+										"drop": [
+											"ALL"
+										]
+									},
+									"runAsNonRoot": true,
+									"runAsUser": 1001
+								},
+								"volumeMounts": [
+									{
+										"mountPath": "/bitnami/wordpress",
+										"name": "wordpress-data",
+										"subPath": "wordpress"
+									}
+								]
+							}
+						],
+						"hostAliases": [
+							{
+								"hostnames": [
+									"status.localhost"
+								],
+								"ip": "127.0.0.1"
+							}
+						],
+						"securityContext": {
+							"fsGroup": 1001,
+							"seccompProfile": {
+								"type": "RuntimeDefault"
+							}
+						},
+						"serviceAccountName": "default",
+						"volumes": [
+							{
+								"name": "wordpress-data",
+								"persistentVolumeClaim": {
+									"claimName": "my-wordpress"
+								}
+							}
+						]
+					}
+				}
+			}
+		}
+	],
+	"kind": "List"
+}

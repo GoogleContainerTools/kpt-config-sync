@@ -32,12 +32,12 @@ generators:
       releaseName: my-coredns
       namespace: coredns
   - chartArgs:
-      name: ingress-nginx
-      repo: https://kubernetes.github.io/ingress-nginx
-      version: 4.0.5
+      name: wordpress
+      repo: https://charts.bitnami.com/bitnami
+      version: 15.2.35
     templateOptions:
-      releaseName: my-ingress-nginx
-      namespace: ingress-nginx
+      releaseName: my-wordpress
+      namespace: wordpress
 
 commonLabels:
   test-case: hydration

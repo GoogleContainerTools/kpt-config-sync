@@ -39,9 +39,9 @@ const (
 	privateHelmChart          = "coredns"
 	privateNSHelmChart        = "ns-chart"
 	privateNSHelmChartVersion = "0.1.0"
-	publicHelmRepo            = "https://charts.bitnami.com/bitnami"
-	publicHelmChart           = "wordpress"
-	publicHelmChartVersion    = "15.2.35"
+	publicHelmRepo            = "https://kubernetes-sigs.github.io/metrics-server"
+	publicHelmChart           = "metrics-server"
+	publicHelmChartVersion    = "3.8.3"
 )
 
 var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", nomostesting.GCPProjectIDFromEnv)

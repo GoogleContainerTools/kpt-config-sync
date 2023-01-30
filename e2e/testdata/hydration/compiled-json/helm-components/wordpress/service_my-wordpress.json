@@ -9,28 +9,25 @@
 					"config.kubernetes.io/origin": "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
 				},
 				"labels": {
-					"app.kubernetes.io/component": "controller",
-					"app.kubernetes.io/instance": "my-ingress-nginx",
+					"app.kubernetes.io/instance": "my-wordpress",
 					"app.kubernetes.io/managed-by": "Helm",
-					"app.kubernetes.io/name": "ingress-nginx",
-					"app.kubernetes.io/version": "1.0.3",
-					"helm.sh/chart": "ingress-nginx-4.0.5",
+					"app.kubernetes.io/name": "wordpress",
+					"helm.sh/chart": "wordpress-15.2.35",
 					"test-case": "hydration"
 				},
-				"name": "my-ingress-nginx-controller",
-				"namespace": "ingress-nginx"
+				"name": "my-wordpress",
+				"namespace": "wordpress"
 			},
 			"spec": {
+				"externalTrafficPolicy": "Cluster",
 				"ports": [
 					{
-						"appProtocol": "http",
 						"name": "http",
 						"port": 80,
 						"protocol": "TCP",
 						"targetPort": "http"
 					},
 					{
-						"appProtocol": "https",
 						"name": "https",
 						"port": 443,
 						"protocol": "TCP",
@@ -38,11 +35,11 @@
 					}
 				],
 				"selector": {
-					"app.kubernetes.io/component": "controller",
-					"app.kubernetes.io/instance": "my-ingress-nginx",
-					"app.kubernetes.io/name": "ingress-nginx",
+					"app.kubernetes.io/instance": "my-wordpress",
+					"app.kubernetes.io/name": "wordpress",
 					"test-case": "hydration"
 				},
+				"sessionAffinity": "None",
 				"type": "LoadBalancer"
 			}
 		}

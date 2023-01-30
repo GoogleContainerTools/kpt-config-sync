@@ -14,8 +14,7 @@
 
 ---
 apiVersion: v1
-automountServiceAccountToken: true
-kind: ServiceAccount
+kind: PersistentVolumeClaim
 metadata:
   annotations:
     config.kubernetes.io/origin: |
@@ -24,12 +23,16 @@ metadata:
         apiVersion: builtin
         kind: HelmChartInflationGenerator
   labels:
-    app.kubernetes.io/component: controller
-    app.kubernetes.io/instance: my-ingress-nginx
+    app.kubernetes.io/instance: my-wordpress
     app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: ingress-nginx
-    app.kubernetes.io/version: 1.0.3
-    helm.sh/chart: ingress-nginx-4.0.5
+    app.kubernetes.io/name: wordpress
+    helm.sh/chart: wordpress-15.2.35
     test-case: hydration
-  name: my-ingress-nginx
-  namespace: ingress-nginx
+  name: my-wordpress
+  namespace: wordpress
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

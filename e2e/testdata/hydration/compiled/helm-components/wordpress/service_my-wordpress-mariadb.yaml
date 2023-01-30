@@ -13,8 +13,8 @@
 # limitations under the License.
 
 ---
-apiVersion: networking.k8s.io/v1
-kind: IngressClass
+apiVersion: v1
+kind: Service
 metadata:
   annotations:
     config.kubernetes.io/origin: |
@@ -23,13 +23,25 @@ metadata:
         apiVersion: builtin
         kind: HelmChartInflationGenerator
   labels:
-    app.kubernetes.io/component: controller
-    app.kubernetes.io/instance: my-ingress-nginx
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: my-wordpress
     app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: ingress-nginx
-    app.kubernetes.io/version: 1.0.3
-    helm.sh/chart: ingress-nginx-4.0.5
+    app.kubernetes.io/name: mariadb
+    helm.sh/chart: mariadb-11.4.4
     test-case: hydration
-  name: nginx
+  name: my-wordpress-mariadb
+  namespace: wordpress
 spec:
-  controller: k8s.io/ingress-nginx
+  ports:
+  - name: mysql
+    nodePort: null
+    port: 3306
+    protocol: TCP
+    targetPort: mysql
+  selector:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: my-wordpress
+    app.kubernetes.io/name: mariadb
+    test-case: hydration
+  sessionAffinity: None
+  type: ClusterIP

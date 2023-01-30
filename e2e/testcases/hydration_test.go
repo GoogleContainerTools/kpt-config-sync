@@ -502,7 +502,7 @@ func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx",
+	if err := nt.Validate("my-wordpress", "wordpress",
 		&appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"),
 		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {

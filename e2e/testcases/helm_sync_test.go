@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -40,9 +39,9 @@ const (
 	privateHelmChart          = "coredns"
 	privateNSHelmChart        = "ns-chart"
 	privateNSHelmChartVersion = "0.1.0"
-	publicHelmRepo            = "https://kubernetes.github.io/ingress-nginx"
-	publicHelmChart           = "ingress-nginx"
-	publicHelmChartVersion    = "4.0.5"
+	publicHelmRepo            = "https://charts.bitnami.com/bitnami"
+	publicHelmChart           = "wordpress"
+	publicHelmChartVersion    = "15.2.35"
 )
 
 var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", nomostesting.GCPProjectIDFromEnv)
@@ -63,8 +62,8 @@ func TestPublicHelm(t *testing.T) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	var expectedCPURequest string
 	var expectedCPULimit string
 	var expectedMemoryRequest string
@@ -80,21 +79,17 @@ func TestPublicHelm(t *testing.T) {
 		expectedMemoryRequest = "250Mi"
 		expectedMemoryLimit = "300Mi"
 	}
-	if err := nt.Validate("my-ingress-nginx-controller", "ingress-nginx", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
-		nomostest.HasCorrectResourceRequestsLimits("controller",
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+		nomostest.HasCorrectResourceRequestsLimits("wordpress",
 			resource.MustParse(expectedCPURequest),
 			resource.MustParse(expectedCPULimit),
 			resource.MustParse(expectedMemoryRequest),
 			resource.MustParse(expectedMemoryLimit)),
-		nomostest.HasExactlyImage("controller", "ingress-nginx/controller", "v1.4.0", "sha256:54f7fe2c6c5a9db9a0ebf1131797109bb7a4d91f56b9b362bde2abd237dd1974"),
-		nomostest.DeploymentHasEnvVar("controller", "TEST_1", "val1"), nomostest.DeploymentHasEnvVar("controller", "TEST_2", "val2")); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("my-ingress-nginx-defaultbackend", "ingress-nginx", &appsv1.Deployment{},
-		nomostest.HasExactlyImage("ingress-nginx-default-backend", "defaultbackend-amd64", "1.4", "")); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("my-ingress-nginx-controller-metrics", "ingress-nginx", &corev1.Service{}, nomostest.HasAnnotation("prometheus.io/port", "10254"), nomostest.HasAnnotation("prometheus.io/scrape", "true")); err != nil {
+		nomostest.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+		nomostest.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user"),
+		nomostest.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		nomostest.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		nomostest.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {
@@ -103,20 +98,20 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": ""}}}`)
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("ingress-nginx:4.0.5")),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "ingress-nginx"}))
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
 	// If sync state could be confirmed, the objects would already be updated,
 	// and we wouldn't need to wait for it.
-	// if err := nt.Validate("my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
+	// if err := nt.Validate("my-wordpress", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
 	// 	nt.T.Error(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "my-ingress-nginx-controller", configsync.DefaultHelmReleaseNamespace); err != nil {
+	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "my-wordpress", configsync.DefaultHelmReleaseNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "my-ingress-nginx-controller", "ingress-nginx"); err != nil {
+	if err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "my-wordpress", "wordpress"); err != nil {
 		nt.T.Fatal(err)
 	}
 }

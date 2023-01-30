@@ -13,8 +13,8 @@
 # limitations under the License.
 
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+apiVersion: v1
+kind: Service
 metadata:
   annotations:
     config.kubernetes.io/origin: |
@@ -22,22 +22,28 @@ metadata:
       configuredBy:
         apiVersion: builtin
         kind: HelmChartInflationGenerator
-    helm.sh/hook: pre-install,pre-upgrade,post-install,post-upgrade
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
   labels:
-    app.kubernetes.io/component: admission-webhook
-    app.kubernetes.io/instance: my-ingress-nginx
+    app.kubernetes.io/instance: my-wordpress
     app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: ingress-nginx
-    app.kubernetes.io/version: 1.0.3
-    helm.sh/chart: ingress-nginx-4.0.5
+    app.kubernetes.io/name: wordpress
+    helm.sh/chart: wordpress-15.2.35
     test-case: hydration
-  name: my-ingress-nginx-admission
-rules:
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
-  - validatingwebhookconfigurations
-  verbs:
-  - get
-  - update
+  name: my-wordpress
+  namespace: wordpress
+spec:
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+  selector:
+    app.kubernetes.io/instance: my-wordpress
+    app.kubernetes.io/name: wordpress
+    test-case: hydration
+  sessionAffinity: None
+  type: LoadBalancer

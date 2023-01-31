@@ -42,6 +42,10 @@ spec:
         limits:
           cpu: 1
           memory: 300Mi
+      mariadb:
+        primary:
+          persistence:
+            enabled: false
     releaseName: my-wordpress
     namespace: "wordpress"
     auth: none

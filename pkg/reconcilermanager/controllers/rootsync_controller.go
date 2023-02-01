@@ -658,7 +658,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			switch container.Name {
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
+				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.HydrationController:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 				if rs.Spec.SafeOverride().EnableShellInRendering == nil || !*rs.Spec.SafeOverride().EnableShellInRendering {
@@ -666,7 +666,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")
 				}
-				mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
+				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
 				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.OciSource {
@@ -674,7 +674,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					injectFWICredsToContainer(&container, injectFWICreds)
-					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
+					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.HelmSync:
 				// Don't add the helm-sync container when sourceType is NOT helm.
@@ -687,6 +687,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
 					}
 					injectFWICredsToContainer(&container, injectFWICreds)
+					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -705,7 +706,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: secretName}
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
-					mutateContainerResource(ctx, &container, rs.Spec.Override, string(RootReconcilerType))
+					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case metrics.OtelAgentName:
 				// The no-op case to avoid unknown container error after

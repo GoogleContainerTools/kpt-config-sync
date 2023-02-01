@@ -426,7 +426,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
-func mutateContainerResource(ctx context.Context, c *corev1.Container, override *v1beta1.OverrideSpec, reconcilerType string) {
+func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec) {
 	if override == nil {
 		return
 	}

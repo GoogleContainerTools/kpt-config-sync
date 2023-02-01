@@ -167,7 +167,7 @@ data:
              runAsUser: 65533
            resources:
              requests:
-               cpu: "10m"
+               cpu: "50m"
                memory: "200Mi"
          - name: otel-agent
            image: gcr.io/config-management-release/otelcontribcol:v0.54.0

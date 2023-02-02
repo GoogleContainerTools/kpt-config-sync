@@ -50,6 +50,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// FieldManager is the field manager to use when creating, updating, and
+// patching kubernetes objects with kubectl and client-go. This is used to
+// uniquely identify the nomostest client, to enable field pruning and merging.
+// This must be different from the field manager used by config sync, in order
+// to allow both clients to manage different fields on the same objects.
+const FieldManager = configsync.GroupName + "/nomostest"
+
 // NT represents the test environment for a single Nomos end-to-end test case.
 type NT struct {
 	Context context.Context
@@ -357,14 +364,27 @@ func (nt *NT) Create(obj client.Object, opts ...client.CreateOption) error {
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("creating %s", fmtObj(obj))
 	AddTestLabel(obj)
+	opts = append(opts, client.FieldOwner(FieldManager))
 	return nt.Client.Create(nt.Context, obj, opts...)
 }
 
 // Update is identical to Update defined for client.Client, but without requiring Context.
+// All fields will be adopted by the nomostest field manager.
 func (nt *NT) Update(obj client.Object, opts ...client.UpdateOption) error {
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("updating %s", fmtObj(obj))
+	opts = append(opts, client.FieldOwner(FieldManager))
 	return nt.Client.Update(nt.Context, obj, opts...)
+}
+
+// Apply wraps Patch to perform a server-side apply.
+// All non-nil fields will be adopted by the nomostest field manager.
+func (nt *NT) Apply(obj client.Object, opts ...client.PatchOption) error {
+	FailIfUnknown(nt.T, nt.scheme, obj)
+	nt.DebugLogf("applying %s", fmtObj(obj))
+	AddTestLabel(obj)
+	opts = append(opts, client.FieldOwner(FieldManager), client.ForceOwnership)
+	return nt.Client.Patch(nt.Context, obj, client.Apply, opts...)
 }
 
 // Delete is identical to Delete defined for client.Client, but without requiring Context.
@@ -382,10 +402,12 @@ func (nt *NT) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) e
 }
 
 // MergePatch uses the object to construct a merge patch for the fields provided.
+// All specified fields will be adopted by the nomostest field manager.
 func (nt *NT) MergePatch(obj client.Object, patch string, opts ...client.PatchOption) error {
 	FailIfUnknown(nt.T, nt.scheme, obj)
 	nt.DebugLogf("Applying patch %s", patch)
 	AddTestLabel(obj)
+	opts = append(opts, client.FieldOwner(FieldManager))
 	return nt.Client.Patch(nt.Context, obj, client.RawPatch(types.MergePatchType, []byte(patch)), opts...)
 }
 
@@ -476,6 +498,10 @@ func (nt *NT) Kubectl(args ...string) ([]byte, error) {
 
 	prefix := []string{"--kubeconfig", nt.kubeconfigPath}
 	args = append(prefix, args...)
+	// Ensure field manager is specified
+	if stringArrayContains(args, "apply") && !stringArrayContains(args, "--field-manager") {
+		args = append(args, "--field-manager", FieldManager)
+	}
 	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
 	return exec.Command("kubectl", args...).CombinedOutput()
 }
@@ -487,6 +513,10 @@ func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error
 
 	prefix := []string{"--kubeconfig", nt.kubeconfigPath}
 	args = append(prefix, args...)
+	// Ensure field manager is specified
+	if stringArrayContains(args, "apply") && !stringArrayContains(args, "--field-manager") {
+		args = append(args, "--field-manager", FieldManager)
+	}
 	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
 	return exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
 }
@@ -872,4 +902,13 @@ func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 		return "", err
 	}
 	return rs.Status.LastSyncedCommit, nil
+}
+
+func stringArrayContains(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }

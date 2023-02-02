@@ -151,10 +151,8 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 			cm := o.(*corev1.ConfigMap)
 			cm.Data[filesystem.SourceFormatKey] = string(nomos.SourceFormat)
 		}
-		if err := nt.Create(o); err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return err
-			}
+		if err := nt.Apply(o); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -461,10 +459,8 @@ func noOOMKilledContainer(nt *NT) Predicate {
 func setupRootSync(nt *NT, rsName string) {
 	// create RootSync to initialize the root reconciler.
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-	if err := nt.Create(rs); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			nt.T.Fatal(err)
-		}
+	if err := nt.Apply(rs); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

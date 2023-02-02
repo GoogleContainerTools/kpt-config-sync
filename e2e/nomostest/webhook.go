@@ -20,7 +20,6 @@ import (
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
@@ -93,11 +92,8 @@ func installWebhook(nt *NT) error {
 			continue
 		}
 		nt.T.Logf("installWebhook obj: %v", core.GKNN(o))
-		err := nt.Create(o)
-		if err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return err
-			}
+		if err := nt.Apply(o); err != nil {
+			return err
 		}
 	}
 	*nt.WebhookDisabled = false

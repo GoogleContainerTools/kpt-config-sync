@@ -71,9 +71,9 @@ type OverrideSpec struct {
 // ContainerResourcesSpec allows to override the resource requirements for a container
 type ContainerResourcesSpec struct {
 	// containerName specifies the name of a container whose resource requirements will be overridden.
-	// Must be "reconciler", "git-sync", "hydration-controller", or "oci-sync".
+	// Must be "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
 	//
-	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync)$
+	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
 	// +optional
 	ContainerName string `json:"containerName,omitempty"`
 	// cpuRequest allows one to override the CPU request of a container

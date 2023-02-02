@@ -1940,7 +1940,46 @@ func TestRootSyncWithHelm(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
+
+	t.Log("Test overriding the cpu request and memory limits of the helm-sync container")
+	overrideHelmSyncResources := []v1beta1.ContainerResourcesSpec{
+		{
+			ContainerName: reconcilermanager.HelmSync,
+			CPURequest:    resource.MustParse("200m"),
+			MemoryLimit:   resource.MustParse("1Gi"),
+		},
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	rs.Spec.Override = &v1beta1.OverrideSpec{
+		Resources: overrideHelmSyncResources,
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		containersWithRepoVolumeMutator(noneHelmContainers()),
+		containerResourcesMutator(overrideHelmSyncResources),
+		containerEnvMutator(rootContainerEnvs),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
 }
+
 func TestRootSyncWithOCI(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -2682,7 +2721,9 @@ func containerResourcesMutator(overrides []v1beta1.ContainerResourcesSpec) depMu
 	return func(dep *appsv1.Deployment) {
 		for _, container := range dep.Spec.Template.Spec.Containers {
 			switch container.Name {
-			case reconcilermanager.Reconciler, reconcilermanager.GitSync, reconcilermanager.HydrationController, reconcilermanager.OciSync:
+			case reconcilermanager.Reconciler, reconcilermanager.GitSync,
+				reconcilermanager.HydrationController, reconcilermanager.OciSync,
+				reconcilermanager.HelmSync:
 				for _, override := range overrides {
 					if override.ContainerName == container.Name {
 						mutateContainerResourceRequestsLimits(&container, override)

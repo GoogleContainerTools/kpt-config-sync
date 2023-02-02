@@ -15,20 +15,20 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/v1/google"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -38,7 +38,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -88,14 +87,14 @@ func TestPublicOCI(t *testing.T) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicARImage, true)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicARImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
 	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, publicGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage, true)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "tenant-a"}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
@@ -122,14 +121,14 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": null, "git": {"dir": "acme", "branch": "main", "repo": "%s", "auth": "ssh","gcpServiceAccountEmail": "", "secretRef": {"name": "git-creds"}}}}`,
 			v1beta1.GitSource, origRepoURL))
 	})
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateARImage, false)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateARImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 
 	tenant = "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage, false)),
+	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
@@ -155,7 +154,7 @@ func TestOCIARGKEWorkloadIdentity(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage, false),
+		rootCommitFn: imageDigestFunc(privateARImage),
 	})
 }
 
@@ -180,7 +179,7 @@ func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage, false),
+		rootCommitFn: imageDigestFunc(privateGCRImage),
 	})
 }
 
@@ -205,7 +204,7 @@ func TestOCIARFleetWISameProject(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage, false),
+		rootCommitFn: imageDigestFunc(privateARImage),
 	})
 }
 
@@ -230,7 +229,7 @@ func TestOCIGCRFleetWISameProject(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage, false),
+		rootCommitFn: imageDigestFunc(privateGCRImage),
 	})
 }
 
@@ -256,7 +255,7 @@ func TestOCIARFleetWIDifferentProject(t *testing.T) {
 		sourceRepo:   privateARImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage, false),
+		rootCommitFn: imageDigestFunc(privateARImage),
 	})
 }
 
@@ -282,7 +281,7 @@ func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
 		sourceRepo:   privateGCRImage,
 		sourceType:   v1beta1.OciSource,
 		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage, false),
+		rootCommitFn: imageDigestFunc(privateGCRImage),
 	})
 }
 
@@ -366,7 +365,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	nt.T.Log("Verify the namespace objects are updated")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, imageDigestFunc(imageURL, true), nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -411,7 +410,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	nt.T.Log("Verify the namespace objects are synced")
 	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, imageDigestFunc(imageURL, true), nomostest.RepoSyncHasStatusSyncCommit, nil)
+		nt.DefaultWaitTimeout, imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -522,33 +521,49 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 }
 */
 
-func getImageDigest(imageName string, publicImage bool) (string, error) {
-	var auth authn.Authenticator
-	if publicImage {
-		auth = authn.Anonymous
-	} else {
-		a, err := google.NewEnvAuthenticator()
-		if err != nil {
-			return "", err
-		}
-		auth = a
+// getImageDigest uses gcloud to read the image digest of the specified image.
+// Using gcloud, instead of the OCI SDK, allows authenticating with local user
+// auth OR default app credentials. gcloud can authenticate with Google Artifact
+// Registry and Google Container Registry or pull with anonymous auth.
+// This allows reading the image digest without pulling the whole image.
+// Requires a sha256 image digest.
+func getImageDigest(nt *nomostest.NT, imageName string) (string, error) {
+	args := []string{
+		"gcloud", "container", "images", "describe",
+		imageName,
+		"--format", "value(image_summary.digest)",
+		"--verbosity", "error", // hide the warning about using "latest"
 	}
-	image, err := oci.PullImage(imageName, remote.WithContext(context.TODO()), remote.WithAuth(auth))
+	if *e2e.Debug {
+		nt.T.Log(strings.Join(args, " "))
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
+		nt.T.Log(string(out))
 		return "", err
 	}
-
-	// Determine the digest of the image that was extracted
-	imageDigestHash, err := image.Digest()
-	if err != nil {
-		return "", err
+	hex, found := cutPrefix(strings.TrimSpace(string(out)), "sha256:")
+	if !found {
+		return "", fmt.Errorf("image %q has invalid digest %q", imageName, string(out))
 	}
-	return imageDigestHash.Hex, nil
+	return hex, nil
 }
 
-func imageDigestFunc(imageName string, publicImage bool) nomostest.Sha1Func {
-	return func(*nomostest.NT, types.NamespacedName) (string, error) {
-		return getImageDigest(imageName, publicImage)
+// imageDigestFunc wraps getImageDigest to return a Sha1Func that caches the
+// image digest, to avoid polling the image registry unnecessarily.
+func imageDigestFunc(imageName string) nomostest.Sha1Func {
+	var cached bool
+	var digest string
+	var err error
+	return func(nt *nomostest.NT, _ types.NamespacedName) (string, error) {
+		if cached {
+			return digest, err
+		}
+		digest, err = getImageDigest(nt, imageName)
+		cached = true
+		return digest, err
 	}
 }
 
@@ -662,3 +677,12 @@ func archiveAndPushOCIImage(imageName string, dir string, options ...remote.Opti
 	return imageDigestHash.Hex, nil
 }
 */
+
+// cutPrefix is like strings.TrimPrefix, but also returns whether the prefix was
+// found or not. Backported from Go 1.20.
+func cutPrefix(s, prefix string) (after string, found bool) {
+	if !strings.HasPrefix(s, prefix) {
+		return s, false
+	}
+	return s[len(prefix):], true
+}

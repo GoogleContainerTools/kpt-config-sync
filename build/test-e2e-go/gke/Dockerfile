@@ -17,7 +17,7 @@ FROM gcr.io/google.com/cloudsdktool/cloud-sdk:369.0.0-slim as gcloud-install
 RUN apt-get install -y kubectl
 
 # Build e2e image
-FROM golang:1.17.7-alpine
+FROM golang:1.17.7-alpine as kpt-config-sync-e2e
 
 WORKDIR /repo
 
@@ -25,10 +25,9 @@ WORKDIR /repo
 ENV GO111MODULE=on
 # Build static binaries; otherwise go test complains.
 ENV CGO_ENABLED=0
-# Set Kubernetes environment.
-ENV KUBERNETES_ENV=GKE
 
-RUN apk add bash curl docker gcc git jq make openssh-client python3 diffutils
+RUN apk add --no-cache \
+  bash curl docker gcc git jq make openssh-client python3 diffutils
 
 ARG HELM_VERSION=v3.6.3
 ARG KUSTOMIZE_VERSION=v4.5.2
@@ -58,6 +57,9 @@ ENV PATH /opt/gcloud/google-cloud-sdk/bin:$PATH
 # Get go-junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
 
+# GKE-specific image with latest config-sync code
+FROM kpt-config-sync-e2e
+
 # Steps after here can't be cached since they touch the local filesystem.
 
 # Just copy everything in the nomos repository so we have whatever we might need.
@@ -68,3 +70,6 @@ RUN go install kpt.dev/configsync/cmd/nomos
 
 # Make sure the junit-report command is available for tests.
 RUN go install kpt.dev/configsync/cmd/junit-report
+
+# Set Kubernetes environment.
+ENV KUBERNETES_ENV=GKE

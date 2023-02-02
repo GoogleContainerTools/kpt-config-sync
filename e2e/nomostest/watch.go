@@ -201,7 +201,7 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 					Name:             name,
 					Namespace:        namespace,
 				}
-			}
+			} // Else, continue watching. The object may be re-created.
 		case watch.Added, watch.Modified:
 			eType := event.Type
 			if eType == watch.Added && prevObj != nil {

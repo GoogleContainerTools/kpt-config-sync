@@ -204,13 +204,13 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Cleanup(func() {
 		// Reset the otel-collector pod name to get a new forwarding port because the current process is killed.
 		nt.otelCollectorPodName = ""
-		nt.T.Log("`resetSyncedRepos` after a test as a part of `Cleanup` on SharedTestEnv")
+		nt.T.Log("[RESET] SharedTestEnv after test")
 		resetSyncedRepos(nt, opts)
 	})
 
 	skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 
-	nt.T.Log("`resetSyncedRepos` before a test on SharedTestEnv")
+	nt.T.Log("[RESET] SharedTestEnv before test")
 	resetSyncedRepos(nt, opts)
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.
@@ -222,6 +222,12 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 }
 
 func resetSyncedRepos(nt *NT, opts *ntopts.New) {
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		nt.T.Logf("[RESET] Test environment reset took %v", elapsed)
+	}()
+
 	nnList := nt.NonRootRepos
 	// clear the namespace resources in the namespace repo to avoid admission validation failure.
 	resetNamespaceRepos(nt)
@@ -308,11 +314,11 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	} else {
 		// We aren't using an ephemeral Kind cluster, so make sure the cluster is
 		// clean before and after running the test.
-		t.Log("`Clean` before running the test on FreshTestEnv")
+		nt.T.Log("[CLEANUP] FreshTestEnv before test")
 		Clean(nt, true)
 		t.Cleanup(func() {
 			// Clean the cluster now that the test is over.
-			t.Log("`Clean` after running the test on FreshTestEnv")
+			nt.T.Log("[CLEANUP] FreshTestEnv after test")
 			Clean(nt, false)
 		})
 	}
@@ -363,6 +369,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 }
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] New test case")
+
 	// allRepos specifies the slice all repos for port forwarding.
 	var allRepos []types.NamespacedName
 	for repo := range opts.RootRepos {
@@ -401,6 +409,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// understand the Repo and RootSync types as ConfigSync is now installed.
 	nt.RenewClient()
 
+	// Create the RootSync if it doesn't exist, and wait for it to be Synced.
 	if err := WaitForConfigSyncReady(nt, opts.Nomos); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

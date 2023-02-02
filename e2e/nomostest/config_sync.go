@@ -140,6 +140,7 @@ func parseManifests(nt *NT) ([]client.Object, error) {
 
 // installConfigSync installs ConfigSync on the test cluster
 func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
+	nt.T.Log("[SETUP] Installing Config Sync")
 	objs, err := parseManifests(nt)
 	if err != nil {
 		return err
@@ -161,6 +162,7 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 
 // uninstallConfigSync uninstalls ConfigSync on the test cluster
 func uninstallConfigSync(nt *NT) error {
+	nt.T.Log("[CLEANUP] Uninstalling Config Sync")
 	objs, err := parseManifests(nt)
 	if err != nil {
 		return err
@@ -640,6 +642,8 @@ func setPollingPeriods(obj client.Object) error {
 }
 
 func setupDelegatedControl(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] Delegated control")
+
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
 	if err := nt.Create(nt.RepoSyncClusterRole()); err != nil {
 		nt.T.Fatal(err)
@@ -890,6 +894,8 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 // setupCentralizedControl is a pure central-control mode.
 // A default root repo (root-sync) manages all other root repos and namespace repos.
 func setupCentralizedControl(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] Centralized control")
+
 	rsCount := 0
 
 	// Add any RootSyncs specified by the test options

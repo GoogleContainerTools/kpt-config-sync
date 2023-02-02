@@ -73,6 +73,11 @@ type FailOnError bool
 // duration of a single test.
 func Clean(nt *NT, failOnError FailOnError) {
 	nt.T.Helper()
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		nt.T.Logf("[CLEANUP] Test environment cleanup took %v", elapsed)
+	}()
 
 	// Delete remote repos that were created 24 hours ago on the Git provider.
 	if err := nt.GitProvider.DeleteObsoleteRepos(); err != nil {

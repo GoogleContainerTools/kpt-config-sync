@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -153,9 +154,12 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 func (g *Repository) gitCmd(command ...string) *exec.Cmd {
 	// The -C flag executes git from repository root.
 	// https://git-scm.com/docs/git#Documentation/git.txt--Cltpathgt
-	args := []string{"-C", g.Root}
+	args := []string{"git", "-C", g.Root}
 	args = append(args, command...)
-	return exec.Command("git", args...)
+	if *e2e.Debug {
+		g.T.Logf("[repo %s] %s", path.Base(g.Root), strings.Join(args, " "))
+	}
+	return exec.Command(args[0], args[1:]...)
 }
 
 // Git wraps shelling out to git, ensuring we're running from the git repository

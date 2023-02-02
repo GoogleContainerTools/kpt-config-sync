@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -107,17 +108,27 @@ type MetricsSyncOption func(csm *testmetrics.ConfigSyncMetrics) error
 
 // SyncMetricsToLatestCommit syncs metrics to the latest synced commit
 func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
+	// Cache all the commit hashes up front to avoid spamming git CLI calls
+	rootSyncCommits := make(map[string]string, len(nt.RootRepos))
+	for syncName, repo := range nt.RootRepos {
+		rootSyncCommits[syncName] = repo.Hash()
+	}
+	repoSyncCommits := make(map[types.NamespacedName]string, len(nt.NonRootRepos))
+	for syncNN, repo := range nt.NonRootRepos {
+		repoSyncCommits[syncNN] = repo.Hash()
+	}
+
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
 		for syncName := range nt.RootRepos {
 			reconcilerName := core.RootReconcilerName(syncName)
-			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, nt.RootRepos[syncName].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, rootSyncCommits[syncName]); err != nil {
 				return err
 			}
 		}
 
 		for syncNN := range nt.NonRootRepos {
 			reconcilerName := core.NsReconcilerName(syncNN.Namespace, syncNN.Name)
-			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, nt.NonRootRepos[syncNN].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSynced(reconcilerName, repoSyncCommits[syncNN]); err != nil {
 				return err
 			}
 		}
@@ -130,17 +141,27 @@ func SyncMetricsToLatestCommit(nt *NT) MetricsSyncOption {
 // SyncMetricsToLatestCommitSyncedWithSuccess syncs metrics to the latest
 // commit that was applied without errors.
 func SyncMetricsToLatestCommitSyncedWithSuccess(nt *NT) MetricsSyncOption {
+	// Cache all the commit hashes up front to avoid spamming git CLI calls
+	rootSyncCommits := make(map[string]string, len(nt.RootRepos))
+	for syncName, repo := range nt.RootRepos {
+		rootSyncCommits[syncName] = repo.Hash()
+	}
+	repoSyncCommits := make(map[types.NamespacedName]string, len(nt.NonRootRepos))
+	for syncNN, repo := range nt.NonRootRepos {
+		repoSyncCommits[syncNN] = repo.Hash()
+	}
+
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
 		for syncName := range nt.RootRepos {
 			reconcilerName := core.RootReconcilerName(syncName)
-			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, nt.RootRepos[syncName].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, rootSyncCommits[syncName]); err != nil {
 				return err
 			}
 		}
 
 		for syncNN := range nt.NonRootRepos {
 			reconcilerName := core.NsReconcilerName(syncNN.Namespace, syncNN.Name)
-			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, nt.NonRootRepos[syncNN].Hash()); err != nil {
+			if err := metrics.ValidateMetricsCommitSyncedWithSuccess(reconcilerName, repoSyncCommits[syncNN]); err != nil {
 				return err
 			}
 		}

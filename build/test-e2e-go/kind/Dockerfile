@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.17.7-alpine
+# Build intermediate image for gcloud / kubectl
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:369.0.0-slim as gcloud-install
+RUN apt-get install -y kubectl
+
+# Build e2e image
+FROM golang:1.17.7-alpine as kpt-config-sync-e2e
 
 WORKDIR /repo
 
@@ -20,21 +25,9 @@ WORKDIR /repo
 ENV GO111MODULE=on
 # Build static binaries; otherwise go test complains.
 ENV CGO_ENABLED=0
-# Set Kubernetes environment.
-ENV KUBERNETES_ENV=KIND
-
-# We're running tests within kind clusters.
-# If you upgrade the version, you also need to update the special kubekins-with-Kind
-# images we use in the test-infra repository. See Makefile.prow.
-RUN go install sigs.k8s.io/kind@v0.14.0
 
 RUN apk add --no-cache \
-  bash curl docker gcc git jq make openssh-client diffutils
-
-# Install kubectl and make sure it's available in the PATH.
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
-RUN chmod +x ./kubectl
-RUN mv ./kubectl /bin
+  bash curl docker gcc git jq make openssh-client python3 diffutils
 
 ARG HELM_VERSION=v3.6.3
 ARG KUSTOMIZE_VERSION=v4.5.2
@@ -56,8 +49,22 @@ RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomiz
   mv /tmp/kustomize /usr/local/bin/kustomize && \
   rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
 
-# Get go-junit-report.
+# Copy installed gcloud and kubectl into image
+COPY --from=gcloud-install /usr/lib/google-cloud-sdk /opt/gcloud/google-cloud-sdk
+COPY --from=gcloud-install /usr/bin/kubectl /opt/gcloud/google-cloud-sdk/bin/kubectl
+ENV PATH /opt/gcloud/google-cloud-sdk/bin:$PATH
+
+# Get go-junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
+
+# KinD-specific image with latest config-sync code
+FROM kpt-config-sync-e2e
+
+# We're running tests within kind clusters.
+# If you upgrade the version, you also need to update the special kubekins-with-Kind
+# images we use in the test-infra repository. See Makefile.prow.
+ARG KIND_VERSION=v0.14.0
+RUN go install sigs.k8s.io/kind@${KIND_VERSION}
 
 # Steps after here can't be cached since they touch the local filesystem.
 
@@ -69,3 +76,6 @@ RUN go install kpt.dev/configsync/cmd/nomos
 
 # Make sure the junit-report command is available for tests.
 RUN go install kpt.dev/configsync/cmd/junit-report
+
+# Set Kubernetes environment.
+ENV KUBERNETES_ENV=KIND

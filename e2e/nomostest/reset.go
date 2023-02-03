@@ -118,87 +118,95 @@ func protectedNamespaceList() []string {
 	return list
 }
 
-type resetRecord struct {
-	Objects          map[types.NamespacedName]struct{}
-	ManagedObjects   map[types.NamespacedName]struct{}
-	ObjectNamespaces map[string]struct{}
-}
-
-func newResetRecord() *resetRecord {
-	return &resetRecord{
-		Objects:          make(map[types.NamespacedName]struct{}),
-		ManagedObjects:   make(map[types.NamespacedName]struct{}),
-		ObjectNamespaces: make(map[string]struct{}),
-	}
-}
-
 // ResetRootSyncs cleans up one or more RootSyncs and all their managed objects.
 // Use this for cleaning up RootSyncs in tests that use delegated control.
+// All the RootSyncs are deleted in parallel.
 func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 	if len(rsList) == 0 {
 		return nil
 	}
-
 	nt.T.Logf("[RESET] Deleting RootSyncs (%d)", len(rsList))
-
-	record := newResetRecord()
-
-	for _, item := range rsList {
-		rs := &item
-		rsNN := client.ObjectKeyFromObject(rs)
-		record.Objects[rsNN] = struct{}{}
-		record.ObjectNamespaces[rsNN.Namespace] = struct{}{}
-
-		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[rsNN] = struct{}{}
-			nt.T.Logf("[RESET] RootSync %s managed by %q", rsNN, manager)
-			if !IsDeletionPropagationEnabled(rs) {
-				// If you go this error, make sure your test cleanup ensures
-				// that the managed RootSync has deletion propagation enabled.
-				return errors.Errorf("RootSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
-			}
-			continue
-		}
-
-		// Enable deletion propagation, if not enabled
-		if EnableDeletionPropagation(rs) {
-			nt.T.Logf("[RESET] Enabling deletion propagation on RootSync %s", rsNN)
-			if err := nt.Update(rs); err != nil {
-				return err
-			}
-			if err := WatchObject(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
-				HasFinalizer(metadata.ReconcilerFinalizer),
-			}); err != nil {
-				return err
-			}
-		}
-
-		// Print reconciler logs in case of failure.
-		// This ensures the logs are printed, even if the reconciler is deleted.
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		go TailReconcilerLogs(ctx, nt, RootReconcilerObjectKey(rsNN.Name))
-
-		// DeletePropagationBackground is required when deleting RSyncs with
-		// dependencies that have owners references. Otherwise the reconciler
-		// and dependenencies will be garbage collected before the finalizer
-		// can delete the managed resources.
-		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-		nt.T.Logf("[RESET] Deleting RootSync %s", rsNN)
-		if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
-		}
-	}
 	tg := taskgroup.New()
 	for _, item := range rsList {
 		rs := &item
-		rsNN := client.ObjectKeyFromObject(rs)
-		nt.T.Logf("[RESET] Waiting for deletion of RootSync %s ...", rsNN)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+			return resetRootSyncAndWait(nt, rs)
 		})
 	}
 	return tg.Wait()
+}
+
+// resetRootSyncAndWait wraps resetRootSync and WatchForNotFound.
+// The reconciler logs will be printed if the delete fails.
+func resetRootSyncAndWait(nt *NT, rs *v1beta1.RootSync) error {
+	rsNN := client.ObjectKeyFromObject(rs)
+
+	// Print reconciler logs in case of failure.
+	// This ensures the logs are printed, even if the reconciler is deleted.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go TailReconcilerLogs(ctx, nt, RootReconcilerObjectKey(rsNN.Name))
+
+	if err := resetRootSync(nt, rs); err != nil {
+		return err
+	}
+
+	nt.T.Logf("[RESET] Waiting for deletion of RootSync %s ...", rsNN)
+	return WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+}
+
+// resetRootSync deletes a RootSync with deletion-propagation enabled, if not
+// already terminating.
+func resetRootSync(nt *NT, rs *v1beta1.RootSync) error {
+	rsNN := client.ObjectKeyFromObject(rs)
+
+	if !rs.DeletionTimestamp.IsZero() {
+		nt.T.Logf("[RESET] RootSync %s already terminating", rsNN)
+		return nil
+	}
+
+	if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
+		nt.T.Logf("[RESET] RootSync %s managed by %q", rsNN, manager)
+		if !IsDeletionPropagationEnabled(rs) {
+			// If you go this error, make sure your test cleanup ensures
+			// that the managed RootSync has deletion propagation enabled.
+			return errors.Errorf("RootSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
+		}
+		return nil
+	}
+
+	// Enable deletion propagation, if not enabled
+	if EnableDeletionPropagation(rs) {
+		nt.T.Logf("[RESET] Enabling deletion propagation on RootSync %s", rsNN)
+		if err := nt.Update(rs); err != nil {
+			return err
+		}
+		if err := WatchObject(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
+			HasFinalizer(metadata.ReconcilerFinalizer),
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Print reconciler logs in case of failure.
+	// This ensures the logs are printed, even if the reconciler is deleted.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go TailReconcilerLogs(ctx, nt, RootReconcilerObjectKey(rsNN.Name))
+
+	// DeletePropagationBackground is required when deleting RSyncs with
+	// dependencies that have owners references. Otherwise the reconciler
+	// and dependenencies will be garbage collected before the finalizer
+	// can delete the managed resources.
+	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
+	nt.T.Logf("[RESET] Deleting RootSync %s", rsNN)
+	if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		// Tolerate asynchronous deletion
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // ResetRepoSyncs cleans up one or more RepoSyncs and all their managed objects.
@@ -215,74 +223,25 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 
 	nt.T.Logf("[RESET] Deleting RepoSyncs (%d)", len(rsList))
 
-	record := newResetRecord()
-
 	// Apply ClusterRole with the permissions specified by this test.
 	rsCR := nt.RepoSyncClusterRole()
 	if err := nt.Apply(rsCR); err != nil {
 		return err
 	}
 
+	tg := taskgroup.New()
 	for _, item := range rsList {
 		rs := &item
 		rsNN := client.ObjectKeyFromObject(rs)
-		record.Objects[rsNN] = struct{}{}
-		record.ObjectNamespaces[rsNN.Namespace] = struct{}{}
 
-		// If managed, skip direct deletion
-		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[rsNN] = struct{}{}
-			nt.T.Logf("[RESET] RepoSync %s managed by %q", rsNN, manager)
-			if !IsDeletionPropagationEnabled(rs) {
-				// If you go this error, make sure your test cleanup ensures
-				// that the managed RepoSync has deletion propagation enabled.
-				return errors.Errorf("RepoSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
-			}
-			continue
-		}
-
-		// Enable deletion propagation, if not enabled
-		if EnableDeletionPropagation(rs) {
-			nt.T.Logf("[RESET] Enabling deletion propagation on RepoSync %s", rsNN)
-			if err := nt.Update(rs); err != nil {
-				return err
-			}
-			if err := WatchObject(nt, kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
-				HasFinalizer(metadata.ReconcilerFinalizer),
-			}); err != nil {
-				return err
-			}
-		}
-
-		// Grant the reconcile the permissions specified by this test.
+		// Grant the reconciler the permissions specified by this test.
 		rsCRB := RepoSyncRoleBinding(rsNN)
 		if err := nt.Apply(rsCRB); err != nil {
 			return err
 		}
 
-		// Print reconciler logs in case of failure.
-		// This ensures the logs are printed, even if the reconciler is deleted.
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		go TailReconcilerLogs(ctx, nt, NsReconcilerObjectKey(rsNN.Namespace, rsNN.Name))
-
-		// DeletePropagationBackground is required when deleting RSyncs with
-		// dependencies that have owners references. Otherwise the reconciler
-		// and dependenencies will be garbage collected before the finalizer
-		// can delete the managed resources.
-		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-		nt.T.Logf("[RESET] Deleting RepoSync %s", rsNN)
-		if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
-		}
-	}
-	tg := taskgroup.New()
-	for _, item := range rsList {
-		obj := &item
-		nn := client.ObjectKeyFromObject(obj)
-		nt.T.Logf("[RESET] Waiting for deletion of RepoSync %s ...", nn)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), obj.Name, obj.Namespace)
+			return resetRepoSyncAndWait(nt, rs)
 		})
 	}
 	if err := tg.Wait(); err != nil {
@@ -294,7 +253,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	// but for delegated control and other edge cases clean them up regardless.
 	nt.T.Log("[RESET] Deleting test RoleBindings")
 	var rbs []client.Object
-	for rsNN := range record.Objects {
+	for _, item := range rsList {
+		rs := &item
+		rsNN := client.ObjectKeyFromObject(rs)
 		rbs = append(rbs, RepoSyncRoleBinding(rsNN))
 	}
 	// Skip deleting managed RoleBindings
@@ -310,7 +271,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	// CRBs are usually only applied if PSP was enabled, but clean them up regardless.
 	nt.T.Log("[RESET] Deleting test ClusterRoleBindings")
 	var crbs []client.Object
-	for rsNN := range record.Objects {
+	for _, item := range rsList {
+		rs := &item
+		rsNN := client.ObjectKeyFromObject(rs)
 		crbs = append(crbs, repoSyncClusterRoleBinding(rsNN))
 	}
 	// Skip deleting managed ClusterRoleBindings
@@ -325,6 +288,80 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	return deleteRepoSyncClusterRole(nt)
 }
 
+// resetRepoSyncAndWait wraps resetRepoSync and WatchForNotFound.
+// The reconciler logs will be printed if the delete fails.
+func resetRepoSyncAndWait(nt *NT, rs *v1beta1.RepoSync) error {
+	rsNN := client.ObjectKeyFromObject(rs)
+
+	// Print reconciler logs in case of failure.
+	// This ensures the logs are printed, even if the reconciler is deleted.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go TailReconcilerLogs(ctx, nt, NsReconcilerObjectKey(rsNN.Namespace, rsNN.Name))
+
+	if err := resetRepoSync(nt, rs); err != nil {
+		return err
+	}
+
+	nt.T.Logf("[RESET] Waiting for deletion of RepoSync %s ...", rsNN)
+	return WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace)
+}
+
+// resetRepoSync deletes a RepoSync with deletion-propagation enabled, if not
+// already terminating.
+func resetRepoSync(nt *NT, rs *v1beta1.RepoSync) error {
+	rsNN := client.ObjectKeyFromObject(rs)
+
+	// Grant the reconciler the permissions specified by this test.
+	rsCRB := RepoSyncRoleBinding(rsNN)
+	if err := nt.Apply(rsCRB); err != nil {
+		return err
+	}
+
+	if !rs.DeletionTimestamp.IsZero() {
+		nt.T.Logf("[RESET] RepoSync %s already terminating", rsNN)
+		return nil
+	}
+
+	// If managed, skip direct deletion
+	if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
+		nt.T.Logf("[RESET] RepoSync %s managed by %q", rsNN, manager)
+		if !IsDeletionPropagationEnabled(rs) {
+			// If you go this error, make sure your test cleanup ensures
+			// that the managed RepoSync has deletion propagation enabled.
+			return errors.Errorf("RepoSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
+		}
+		return nil
+	}
+
+	// Enable deletion propagation, if not enabled
+	if EnableDeletionPropagation(rs) {
+		nt.T.Logf("[RESET] Enabling deletion propagation on RepoSync %s", rsNN)
+		if err := nt.Update(rs); err != nil {
+			return err
+		}
+		if err := WatchObject(nt, kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
+			HasFinalizer(metadata.ReconcilerFinalizer),
+		}); err != nil {
+			return err
+		}
+	}
+
+	// DeletePropagationBackground is required when deleting RSyncs with
+	// dependencies that have owners references. Otherwise the reconciler
+	// and dependenencies will be garbage collected before the finalizer
+	// can delete the managed resources.
+	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
+	nt.T.Logf("[RESET] Deleting RepoSync %s", rsNN)
+	if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		// Tolerate asynchronous deletion
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // ResetNamespaces cleans up one or more Namespaces and all their namespaced objects.
 // Use this for cleaning up Namespaces in tests that use delegated control.
 func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
@@ -334,17 +371,17 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 
 	nt.T.Logf("[RESET] Deleting Namespaces (%d)", len(nsList))
 
-	record := newResetRecord()
-
 	for _, item := range nsList {
 		obj := &item
 		nn := client.ObjectKeyFromObject(obj)
-		record.Objects[nn] = struct{}{}
-		record.ObjectNamespaces[nn.Namespace] = struct{}{}
+
+		if !obj.DeletionTimestamp.IsZero() {
+			nt.T.Logf("[RESET] Namespace %s already terminating", nn)
+			continue
+		}
 
 		// If managed, skip direct deletion
 		if manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[nn] = struct{}{}
 			nt.T.Logf("[RESET] Namespace %s managed by %q", nn, manager)
 			continue
 		}

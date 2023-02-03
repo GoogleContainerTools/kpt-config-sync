@@ -536,43 +536,6 @@ func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
 	return nt.Validate(nn.Name, nn.Namespace, &rbacv1.RoleBinding{})
 }
 
-func revokeRepoSyncClusterRoleBinding(nt *NT, nn types.NamespacedName) {
-	if err := nt.Delete(repoSyncClusterRoleBinding(nn)); err != nil {
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		nt.T.Fatal(err)
-	}
-	if err := WatchForNotFound(nt, kinds.ClusterRoleBinding(), nn.Name+"-"+nn.Namespace, ""); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
-func revokeRepoSyncNamespace(nt *NT, ns string) {
-	// TODO: Ideally we can delete the namespace directly and check if it is terminated.
-	// Due to b/184680603, we have to check if the namespace is in a terminating state to avoid the error:
-	//   Operation cannot be fulfilled on namespaces "bookstore": The system is ensuring all content is removed from this namespace.
-	//   Upon completion, this namespace will automatically be purged by the system.
-	namespace := &corev1.Namespace{}
-	if err := nt.Get(ns, "", namespace); err != nil {
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		nt.T.Fatal(err)
-	}
-	if namespace.Status.Phase != corev1.NamespaceTerminating {
-		if err := nt.Delete(fake.NamespaceObject(ns)); err != nil {
-			if apierrors.IsNotFound(err) {
-				return
-			}
-			nt.T.Fatal(err)
-		}
-	}
-	if err := WatchForNotFound(nt, kinds.Namespace(), ns, ""); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
 func setReconcilerDebugMode(obj client.Object) error {
 	if !IsReconcilerManagerConfigMap(obj) {
@@ -731,6 +694,9 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 			Name: controllers.GitCredentialVolume,
 		},
 	}
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -764,6 +730,9 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 			Name: controllers.GitCredentialVolume,
 		},
 	}
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -818,6 +787,9 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 			Name: "ssh-key",
 		},
 	}
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -833,6 +805,13 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	rs := RepoSyncObjectV1Alpha1(nn, repoURL)
 	if nt.DefaultReconcileTimeout != 0 {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(rs)
+	// Add dependencies to ensure managed objects can be deleted.
+	if err := SetRepoSyncDependencies(nt, rs); err != nil {
+		nt.T.Fatal(err)
 	}
 	return rs
 }
@@ -852,6 +831,9 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 			Name: "ssh-key",
 		},
 	}
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -868,6 +850,10 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	if nt.DefaultReconcileTimeout != 0 {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
 	}
+	// Add dependencies to ensure managed objects can be deleted.
+	if err := SetRepoSyncDependencies(nt, rs); err != nil {
+		nt.T.Fatal(err)
+	}
 	return rs
 }
 
@@ -883,6 +869,10 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != 0 {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	}
+	// Add dependencies to ensure managed objects can be deleted.
+	if err := SetRepoSyncDependencies(nt, rs); err != nil {
+		nt.T.Fatal(err)
 	}
 	return rs
 }
@@ -927,7 +917,6 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 		rsNamespaces[ns] = struct{}{}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
 		rb := RepoSyncRoleBinding(nn)
-		dependencies := []client.Object{cr, rb}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), rb)
 		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
@@ -937,16 +926,10 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			// TODO: Remove the psp related change when Kubernetes 1.25 is
 			// available on GKE.
 			crb := repoSyncClusterRoleBinding(nn)
-			dependencies = append(dependencies, crb)
 			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
 		}
 
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-		// [Cluster]RoleBinding & ClusterRole must be deleted after the RepoSync,
-		// so the reconciler has the right permissions until it's fully exited.
-		if err := SetDependencies(rs, dependencies...); err != nil {
-			nt.T.Fatal(err)
-		}
 		if opts.MultiRepo.ReconcileTimeout != nil {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
 		}
@@ -1002,6 +985,38 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+// SetRepoSyncDependencies sets the depends-on annotation on the RepoSync for
+// other objects managed by CentralControl (`setupCentralizedControl`).
+//
+// RootSync dependencies aren't managed by another RootSync, and
+// DelegatedControl doesn't apply with ConfigSync, so depends-on won't have
+// any effect in those scenerios.
+//
+// Takes an Object because it supports both v1alpha1 and v1beta1 RepoSyncs.
+func SetRepoSyncDependencies(nt *NT, rs client.Object) error {
+	if nt.Control != ntopts.CentralControl {
+		return nil
+	}
+	gvk, err := kinds.Lookup(rs, nt.scheme)
+	if err != nil {
+		return err
+	}
+	if gvk.Kind != "RepoSync" {
+		return fmt.Errorf("expected RepoSync, but got %s", gvk.Kind)
+	}
+
+	rsNN := client.ObjectKeyFromObject(rs)
+	dependencies := []client.Object{
+		nt.RepoSyncClusterRole(),
+		RepoSyncRoleBinding(rsNN),
+	}
+	if isPSPCluster() {
+		crb := repoSyncClusterRoleBinding(rsNN)
+		dependencies = append(dependencies, crb)
+	}
+	return SetDependencies(rs, dependencies...)
 }
 
 // SetDependencies sets the specified objects as dependencies of the first object.
@@ -1089,156 +1104,6 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 		}
 		return NewPodReady(nt, label, value, "", oldPods.Items, nil)
 	}, WaitTimeout(nt.DefaultWaitTimeout))
-}
-
-// resetRepository re-initializes an existing remote repository or creates a new remote repository.
-func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
-	if repo, found := nt.RemoteRepositories[nn]; found {
-		repo.ReInit(nt, sourceFormat)
-		return repo
-	}
-	repo := NewRepository(nt, repoType, nn, sourceFormat)
-	return repo
-}
-
-func resetRootRepo(nt *NT, rsName string, sourceFormat filesystem.SourceFormat) {
-	rs := fake.RootSyncObjectV1Beta1(rsName)
-	if err := nt.Get(rs.Name, rs.Namespace, rs); err != nil && !apierrors.IsNotFound(err) {
-		nt.T.Fatal(err)
-	} else {
-		nt.RootRepos[rsName] = resetRepository(nt, RootRepo, RootSyncNN(rsName), sourceFormat)
-		if err == nil {
-			nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceFormat": "%s", "git": {"dir": "%s"}}}`, sourceFormat, AcmeDir))
-		} else {
-			rs.Spec.SourceFormat = string(sourceFormat)
-			rs.Spec.Git = &v1beta1.Git{
-				Repo:      nt.GitProvider.SyncURL(nt.RootRepos[rsName].RemoteRepoName),
-				Branch:    MainBranch,
-				Dir:       AcmeDir,
-				Auth:      "ssh",
-				SecretRef: &v1beta1.SecretReference{Name: controllers.GitCredentialVolume},
-			}
-			if err = nt.Create(rs); err != nil {
-				nt.T.Fatal(err)
-			}
-		}
-	}
-}
-
-// resetRootRepos resets all RootSync objects to the initial commit to delete
-// managed testing resources.
-//
-// The spec.sourceFormat is reset to the specified format, to ensure the
-// remaining objects are deleted without erroring from format mismatch.
-//
-// The spec.git.dir is reset to "acme", which is created by
-// NewRepository and Repository.ReInit and must still exist.
-//
-// TODO: reset everything else, including the branch
-func resetRootRepos(nt *NT, sourceFormat filesystem.SourceFormat) {
-	// Reset the default root repo first so that other managed RootSyncs can be re-created and initialized.
-	rootRepo := nt.RootRepos[configsync.RootSyncName]
-	// Update the sourceFormat as the test case might use a different sourceFormat
-	// than the one that is created initially.
-	rootRepo.Format = sourceFormat
-	resetRootRepo(nt, configsync.RootSyncName, sourceFormat)
-	nt.WaitForSync(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
-
-	for name := range nt.RootRepos {
-		if name != configsync.RootSyncName {
-			resetRootRepo(nt, name, nt.RootRepos[name].Format)
-			nt.WaitForSync(kinds.RootSyncV1Beta1(), name, configsync.ControllerNamespace,
-				nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
-			// Now the repo is back to the initial commit, we can delete the safety check Namespace & ClusterRole
-			nt.RootRepos[name].RemoveSafetyNamespace()
-			nt.RootRepos[name].RemoveSafetyClusterRole()
-			nt.RootRepos[name].CommitAndPush("delete the safety check Namespace & ClusterRole")
-			nt.WaitForSync(kinds.RootSyncV1Beta1(), name, configsync.ControllerNamespace,
-				nt.DefaultWaitTimeout, DefaultRootSha1Fn, RootSyncHasStatusSyncCommit, nil)
-		}
-	}
-}
-
-// resetNamespaceRepos sets the namespace repo to the initial state. That should delete all resources in the namespace.
-func resetNamespaceRepos(nt *NT) {
-	namespaceRepos := &v1beta1.RepoSyncList{}
-	if err := nt.List(namespaceRepos); err != nil {
-		nt.T.Fatal(err)
-	}
-	for _, nr := range namespaceRepos.Items {
-		// reset the namespace repo only when it is in 'nt.NonRootRepos' (created by test).
-		// This prevents from resetting an existing namespace repo from a remote git provider.
-		nn := RepoSyncNN(nr.Namespace, nr.Name)
-		if _, found := nt.NonRootRepos[nn]; found {
-			nt.NonRootRepos[nn] = resetRepository(nt, NamespaceRepo, nn, filesystem.SourceFormatUnstructured)
-			rs := &v1beta1.RepoSync{}
-			if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
-				if apierrors.IsNotFound(err) {
-					// The RepoSync might be declared in other namespace repos and get pruned in the reset process.
-					// If that happens, re-create the object to clean up the managed testing resources.
-					rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-					if err := nt.Create(rs); err != nil {
-						nt.T.Fatal(err)
-					}
-				} else {
-					nt.T.Fatal(err)
-				}
-			}
-			nt.WaitForSync(kinds.RepoSyncV1Beta1(), nr.Name, nr.Namespace,
-				nt.DefaultWaitTimeout, DefaultRepoSha1Fn, RepoSyncHasStatusSyncCommit, nil)
-		}
-	}
-}
-
-// deleteRootRepos deletes RootSync objects except for the default one (root-sync).
-// It also deletes the safety check namespace managed by the root repo.
-func deleteRootRepos(nt *NT) {
-	rootSyncs := &v1beta1.RootSyncList{}
-	if err := nt.List(rootSyncs); err != nil {
-		nt.T.Fatal(err)
-	}
-	for _, rs := range rootSyncs.Items {
-		// Keep the default RootSync object
-		if rs.Name == configsync.RootSyncName {
-			continue
-		}
-		if err := nt.Delete(&rs); err != nil {
-			nt.T.Fatal(err)
-		}
-		if err := WatchForNotFound(nt, kinds.Deployment(), core.RootReconcilerName(rs.Name), rs.Namespace); err != nil {
-			nt.T.Fatal(err)
-		}
-		if err := WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace); err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-}
-
-// deleteNamespaceRepos deletes the repo-sync and the namespace.
-func deleteNamespaceRepos(nt *NT) {
-	repoSyncs := &v1beta1.RepoSyncList{}
-	if err := nt.List(repoSyncs); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	for _, rs := range repoSyncs.Items {
-		// revokeRepoSyncNamespace will delete the namespace of RepoSync, which
-		// auto-deletes the resources, including RepoSync, Deployment, RoleBinding, Secret, and etc.
-		revokeRepoSyncNamespace(nt, rs.Namespace)
-		nn := RepoSyncNN(rs.Namespace, rs.Name)
-		if isPSPCluster() {
-			revokeRepoSyncClusterRoleBinding(nt, nn)
-		}
-	}
-
-	rsClusterRole := nt.RepoSyncClusterRole()
-	if err := nt.Delete(rsClusterRole); err != nil && !apierrors.IsNotFound(err) {
-		nt.T.Fatal(err)
-	}
-	if err := WatchForNotFound(nt, kinds.ClusterRole(), rsClusterRole.Name, ""); err != nil {
-		nt.T.Fatal(err)
-	}
 }
 
 // SetPolicyDir updates the root-sync object with the provided policyDir.

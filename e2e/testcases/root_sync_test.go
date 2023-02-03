@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -53,11 +54,9 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 		nt.T.Fatalf("deleting RootSync: %v", err)
 	}
 
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		return nt.ValidateNotFound(configsync.RootSyncName, v1.NSConfigManagementSystem, fake.RootSyncObjectV1Beta1(configsync.RootSyncName))
-	})
-	if err != nil {
-		nt.T.Errorf("RootSync present after deletion: %v", err)
+	// Verify RootSync no longer present.
+	if err := nomostest.WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.GetName(), rs.GetNamespace()); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Verify Root Reconciler deployment no longer present.

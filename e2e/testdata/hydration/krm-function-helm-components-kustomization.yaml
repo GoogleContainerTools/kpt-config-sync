@@ -38,6 +38,10 @@ generators:
     templateOptions:
       releaseName: my-wordpress
       namespace: wordpress
+      values:
+        valuesInline:
+          service:
+            type: ClusterIP
 
 commonLabels:
   test-case: hydration

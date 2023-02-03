@@ -27,6 +27,8 @@ helmCharts:
       auth:
         rootPassword: abcdefg
         password: abcdefg
+    service:
+      type: ClusterIP
 
 commonLabels:
   test-case: hydration

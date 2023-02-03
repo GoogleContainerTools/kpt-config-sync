@@ -46,6 +46,8 @@ spec:
         primary:
           persistence:
             enabled: false
+      service:
+        type: ClusterIP
     releaseName: my-wordpress
     namespace: "wordpress"
     auth: none

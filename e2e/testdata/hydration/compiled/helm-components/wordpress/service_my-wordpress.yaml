@@ -31,13 +31,14 @@ metadata:
   name: my-wordpress
   namespace: wordpress
 spec:
-  externalTrafficPolicy: Cluster
   ports:
   - name: http
+    nodePort: null
     port: 80
     protocol: TCP
     targetPort: http
   - name: https
+    nodePort: null
     port: 443
     protocol: TCP
     targetPort: https
@@ -46,4 +47,4 @@ spec:
     app.kubernetes.io/name: wordpress
     test-case: hydration
   sessionAffinity: None
-  type: LoadBalancer
+  type: ClusterIP

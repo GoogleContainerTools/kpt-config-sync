@@ -88,6 +88,16 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		opt(&spec)
 	}
 
+	eval := func(obj client.Object) []error {
+		var errs []error
+		for _, predicate := range predicates {
+			if err := predicate(obj); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errs
+	}
+
 	cObjList, err := newObjectListForObjectKind(gvk, nt.scheme)
 	if err != nil {
 		return err
@@ -120,6 +130,9 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		return errors.Wrapf(err, "%s unable to understand list result %#v",
 			errPrefix, cObjList)
 	}
+	// Save the predicate errors from the last state change and return them
+	// if the watch closes before the predicates all pass.
+	var evalErrs []error
 	// Iterate through the list to find the desired object, if it exists
 	var prevObj client.Object
 	for _, rObj := range items {
@@ -152,6 +165,12 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
 		nt.DebugLogf("%s GET Diff (+ Current):\n%s",
 			errPrefix, log.AsYAMLDiffWithScheme(nil, prevObj, nt.scheme))
+		// Evaluate predicates
+		evalErrs = eval(prevObj)
+		if len(evalErrs) == 0 {
+			// Success! All predicates passed!
+			return nil
+		}
 	}
 
 	rv := cObjList.GetResourceVersion()
@@ -171,10 +190,6 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	if err != nil {
 		return err
 	}
-
-	// Save the predicate errors from the last state change and return them
-	// if the watch closes before the predicates all pass.
-	var prevErrs []error
 
 	for event := range result.ResultChan() {
 		rObj := event.Object
@@ -211,17 +226,12 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 			nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
 				errPrefix, eType,
 				log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
-			var errs []error
-			for _, predicate := range predicates {
-				if err := predicate(cObj); err != nil {
-					errs = append(errs, err)
-				}
-			}
-			if len(errs) == 0 {
-				// Success! passed all predicates!
+			// Evaluate predicates
+			evalErrs = eval(cObj)
+			if len(evalErrs) == 0 {
+				// Success! All predicates passed!
 				return nil
 			}
-			prevErrs = errs
 			prevObj = cObj
 		case watch.Error:
 			return errors.Errorf("%s received error event: %#v",
@@ -232,9 +242,9 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		}
 	}
 
-	if len(prevErrs) > 0 {
+	if len(evalErrs) > 0 {
 		// watch exited with predicate errors
-		return multierr.Combine(prevErrs...)
+		return multierr.Combine(evalErrs...)
 	}
 	return errors.Errorf("%s exited before any add/update events were received",
 		errPrefix)

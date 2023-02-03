@@ -22,6 +22,9 @@ helmCharts:
   version: 15.2.35
   releaseName: my-wordpress
   namespace: wordpress
+  valuesInline:
+    service:
+      type: ClusterIP
 
 commonLabels:
   test-case: hydration

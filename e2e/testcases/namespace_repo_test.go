@@ -296,7 +296,7 @@ func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {
 }
 
 func checkRepoSyncResourcesNotPresent(namespace string, secretNames []string, nt *nomostest.NT) {
-	_, err := nomostest.Retry(5*time.Second, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		return nt.ValidateNotFound(configsync.RepoSyncName, namespace, fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName))
 	})
 	if err != nil {

@@ -807,6 +807,9 @@ func configMapHasClusterName(clusterName string) nomostest.Predicate {
 // resourceQuotaHasHardPods validates if the resource quota has the expected hard pods in `.spec.hard.pods`.
 func resourceQuotaHasHardPods(nt *nomostest.NT, pods string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rObj, err := kinds.ToTypedObject(o, nt.Client.Scheme())
 		if err != nil {
 			return err

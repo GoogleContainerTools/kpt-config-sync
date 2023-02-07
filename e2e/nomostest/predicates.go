@@ -38,11 +38,16 @@ import (
 )
 
 // Predicate evaluates a client.Object, returning an error if it fails validation.
+// The object will be nil if the object was deleted or never existed.
 type Predicate func(o client.Object) error
 
 // ErrWrongType indicates that the caller passed an object of the incorrect type
 // to the Predicate.
 var ErrWrongType = errors.New("wrong type")
+
+// ErrObjectNotFound indicates that the caller passed a nil object, indicating
+// the object was deleted or never existed.
+var ErrObjectNotFound = errors.New("object not found")
 
 // WrongTypeErr reports that the passed type was not equivalent to the wanted
 // type.
@@ -54,10 +59,24 @@ func WrongTypeErr(got, want interface{}) error {
 // the Predicate.
 var ErrFailedPredicate = errors.New("failed predicate")
 
+// EvaluatePredicates evaluates a list of predicates and returns any errors
+func EvaluatePredicates(obj client.Object, predicates []Predicate) []error {
+	var errs []error
+	for _, predicate := range predicates {
+		if err := predicate(obj); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
 // HasAnnotation returns a predicate that tests if an Object has the specified
 // annotation key/value pair.
 func HasAnnotation(key, value string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		got, ok := o.GetAnnotations()[key]
 		if !ok {
 			return fmt.Errorf("object %q does not have annotation %q; want %q", o.GetName(), key, value)
@@ -73,6 +92,9 @@ func HasAnnotation(key, value string) Predicate {
 // annotation key.
 func HasAnnotationKey(key string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		_, ok := o.GetAnnotations()[key]
 		if !ok {
 			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), key)
@@ -85,6 +107,9 @@ func HasAnnotationKey(key string) Predicate {
 // annotation keys.
 func HasAllAnnotationKeys(keys ...string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		for _, key := range keys {
 			predicate := HasAnnotationKey(key)
 
@@ -101,6 +126,9 @@ func HasAllAnnotationKeys(keys ...string) Predicate {
 // a specified annotation.
 func MissingAnnotation(key string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		_, ok := o.GetAnnotations()[key]
 		if ok {
 			return fmt.Errorf("object %v has annotation %s, want missing", o.GetName(), key)
@@ -112,6 +140,9 @@ func MissingAnnotation(key string) Predicate {
 // HasLabel returns a predicate that tests if an Object has the specified label key/value pair.
 func HasLabel(key, value string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		got, ok := o.GetLabels()[key]
 		if !ok {
 			return fmt.Errorf("object %q does not have label %q; wanted %q", o.GetName(), key, value)
@@ -127,6 +158,9 @@ func HasLabel(key, value string) Predicate {
 // a specified label.
 func MissingLabel(key string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		_, ok := o.GetLabels()[key]
 		if ok {
 			return fmt.Errorf("object %v has label %s, want missing", o.GetName(), key)
@@ -140,6 +174,9 @@ func MissingLabel(key string) Predicate {
 func HasExactlyAnnotationKeys(wantKeys ...string) Predicate {
 	sort.Strings(wantKeys)
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		annotations := o.GetAnnotations()
 		var gotKeys []string
 		for k := range annotations {
@@ -159,6 +196,9 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 	wantKeys = append(wantKeys, TestLabel)
 	sort.Strings(wantKeys)
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		labels := o.GetLabels()
 		var gotKeys []string
 		for k := range labels {
@@ -175,6 +215,9 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 // HasExactlyImage ensures a container has the expected image.
 func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImageDigest string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(dep, &appsv1.Deployment{})
@@ -204,6 +247,9 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 // HasCorrectResourceRequestsLimits verify a root/namespace reconciler container has the correct resource requests and limits.
 func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit, memoryRequest, memoryLimit resource.Quantity) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(dep, &appsv1.Deployment{})
@@ -235,6 +281,9 @@ func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit
 // Check this when the object could be scheduled for deletion, to avoid flaky
 // behavior when we're ensuring we don't want something to be deleted.
 func NotPendingDeletion(o client.Object) error {
+	if o == nil {
+		return ErrObjectNotFound
+	}
 	if o.GetDeletionTimestamp() == nil {
 		return nil
 	}
@@ -245,9 +294,11 @@ func NotPendingDeletion(o client.Object) error {
 // nomos labels and annotations.
 func HasAllNomosMetadata() Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		annotationKeys := metadata.GetNomosAnnotationKeys()
 		labels := metadata.SyncerLabels()
-
 		predicates := []Predicate{
 			HasAllAnnotationKeys(annotationKeys...),
 			HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -255,14 +306,12 @@ func HasAllNomosMetadata() Predicate {
 		for labelKey, value := range labels {
 			predicates = append(predicates, HasLabel(labelKey, value))
 		}
-
 		for _, predicate := range predicates {
 			err := predicate(o)
 			if err != nil {
 				return err
 			}
 		}
-
 		return nil
 	}
 }
@@ -271,6 +320,9 @@ func HasAllNomosMetadata() Predicate {
 // contain configsync labels and annotations.
 func NoConfigSyncMetadata() Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		if metadata.HasConfigSyncMetadata(o) {
 			return fmt.Errorf("object %q shouldn't have configsync metadata (labels: %v, annotations: %v)",
 				o.GetName(), o.GetLabels(), o.GetAnnotations())
@@ -283,6 +335,9 @@ func NoConfigSyncMetadata() Predicate {
 // are all Current in the ResourceGroup CR.
 func AllResourcesAreCurrent() Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		u, ok := o.(*unstructured.Unstructured)
 		if !ok {
 			return WrongTypeErr(u, &unstructured.Unstructured{})
@@ -345,6 +400,9 @@ func NoStatus() Predicate {
 }
 
 func hasStatus(o client.Object) (bool, error) {
+	if o == nil {
+		return false, ErrObjectNotFound
+	}
 	u, ok := o.(*unstructured.Unstructured)
 	if !ok {
 		return false, WrongTypeErr(u, &unstructured.Unstructured{})
@@ -363,8 +421,10 @@ func hasStatus(o client.Object) (bool, error) {
 // DeploymentHasEnvVar check whether the deployment contains environment variable
 // with specified name and value
 func DeploymentHasEnvVar(containerName, key, value string) Predicate {
-
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(o, d)
@@ -389,8 +449,10 @@ func DeploymentHasEnvVar(containerName, key, value string) Predicate {
 // DeploymentMissingEnvVar check whether the deployment does not contain environment variable
 // with specified name and value
 func DeploymentMissingEnvVar(containerName, key string) Predicate {
-
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(o, d)
@@ -414,6 +476,9 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 // Use diff.IsManager if you just need a boolean without errors.
 func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
 		// Make sure GVK is populated (it's usually not for typed structs).
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
@@ -458,6 +523,9 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 // Use differ.ManagedByConfigSync if you just need a boolean without errors.
 func IsNotManaged(nt *NT) Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
 		// Make sure GVK is populated (it's usually not for typed structs).
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
@@ -492,6 +560,9 @@ func IsNotManaged(nt *NT) Predicate {
 // specified value.
 func ResourceVersionEquals(nt *NT, expected string) Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
 		resourceVersion := obj.GetResourceVersion()
 		if resourceVersion == expected {
 			return nil
@@ -514,6 +585,9 @@ func ResourceVersionEquals(nt *NT, expected string) Predicate {
 // match specified value.
 func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
 		resourceVersion := obj.GetResourceVersion()
 		if resourceVersion != unexpected {
 			return nil
@@ -536,6 +610,9 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 // status.
 func StatusEquals(nt *NT, expected status.Status) Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
 		uObj, err := kinds.ToUnstructured(obj, nt.scheme)
 		if err != nil {
 			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
@@ -561,6 +638,9 @@ func StatusEquals(nt *NT, expected status.Status) Predicate {
 // SecretHasKey checks that the secret contains key with value
 func SecretHasKey(key, value string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		secret := o.(*corev1.Secret)
 		actual, ok := secret.Data[key]
 		if !ok {
@@ -577,6 +657,9 @@ func SecretHasKey(key, value string) Predicate {
 // SecretMissingKey checks that the secret does not contain key
 func SecretMissingKey(key string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		secret := o.(*corev1.Secret)
 		_, ok := secret.Data[key]
 		if ok {
@@ -589,6 +672,9 @@ func SecretMissingKey(key string) Predicate {
 // RoleBindingHasName will check the Rolebindings name and compare it with expected value
 func RoleBindingHasName(expectedName string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
 		if actualName != expectedName {
 			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
@@ -601,6 +687,9 @@ func RoleBindingHasName(expectedName string) Predicate {
 // specified Source error code and (optional, partial) message.
 func RootSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -613,6 +702,9 @@ func RootSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 // specified Source error code and (optional, partial) message.
 func RepoSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
@@ -625,6 +717,9 @@ func RepoSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 // specified Rendering error code and (optional, partial) message.
 func RootSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -637,6 +732,9 @@ func RootSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 // less than the expected generation.
 func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -654,6 +752,9 @@ func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {
 // specified Rendering error code and (optional, partial) message.
 func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
@@ -666,6 +767,9 @@ func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 // specified Sync error code and (optional, partial) message.
 func RootSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -678,6 +782,9 @@ func RootSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 // specified Sync error code and (optional, partial) message.
 func RepoSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
@@ -689,6 +796,9 @@ func RepoSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 // HasFinalizer returns a predicate that tests that an Object has the specified finalizer.
 func HasFinalizer(name string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		for _, finalizer := range o.GetFinalizers() {
 			if finalizer == name {
 				return nil
@@ -701,6 +811,9 @@ func HasFinalizer(name string) Predicate {
 // MissingFinalizer returns a predicate that tests that an Object does NOT have the specified finalizer.
 func MissingFinalizer(name string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		for _, finalizer := range o.GetFinalizers() {
 			if finalizer == name {
 				return fmt.Errorf("expected finalizer %q to be missing", name)
@@ -708,4 +821,15 @@ func MissingFinalizer(name string) Predicate {
 		}
 		return nil
 	}
+}
+
+// ObjectNotFoundPredicate returns an error unless the object is nil (deleted).
+func ObjectNotFoundPredicate(o client.Object) error {
+	if o == nil {
+		// Success! Object Deleted.
+		return nil
+	}
+	// If you see this error, the WatchObject timeout was probably reached.
+	return errors.Errorf("expected %T object %s to be not found",
+		o, core.ObjectNamespacedName(o))
 }

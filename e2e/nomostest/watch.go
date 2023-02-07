@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/util/log"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,8 +42,7 @@ import (
 type WatchOption func(watch *watchSpec)
 
 type watchSpec struct {
-	timeout         time.Duration
-	errorOnNotFound bool
+	timeout time.Duration
 }
 
 // WatchTimeout provides the timeout option to Watch.
@@ -54,31 +52,10 @@ func WatchTimeout(timeout time.Duration) WatchOption {
 	}
 }
 
-// watchErrorOnNotFound configures Watch to error if the object is deleted or
-// not found.
-// This is a private option. You probably want to use WatchForNotFound instead.
-func watchErrorOnNotFound() WatchOption {
-	return func(watch *watchSpec) {
-		watch.errorOnNotFound = true
-	}
-}
-
-// WatchObjectNotFoundError is returned by WatchObject when the watched object
-// is deleted or not found, if WatchErrorOnDelete is enabled.
-type WatchObjectNotFoundError struct {
-	GroupVersionKind schema.GroupVersionKind
-	Name             string
-	Namespace        string
-}
-
-func (wde *WatchObjectNotFoundError) Error() string {
-	return fmt.Sprintf("expected %s %s/%s to exist and continue to exist, but it was deleted or not found",
-		wde.GroupVersionKind.Kind, wde.Namespace, wde.Name)
-}
-
 // WatchObject watches the specified object util all predicates return nil,
 // or the timeout is reached. Object does not need to exist yet, as long as the
 // resource type exists.
+// All Predicates need to handle nil objects (nil means Not Found).
 func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, predicates []Predicate, opts ...WatchOption) error {
 	errPrefix := fmt.Sprintf("WatchObject(%s %s/%s)", gvk.Kind, namespace, name)
 
@@ -133,37 +110,30 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		return errors.Wrap(err, errPrefix)
 	}
 
-	// Save the predicate errors from the last state change and return them
-	// if the watch closes before the predicates all pass.
-	var evalErrs []error
-	// Save the last known object state for diffing with the new state.
+	// Cache the last known object state for diffing with the new state.
 	var prevObj client.Object
+
 	if cObj == nil {
-		// Normally, we ignore NotFound and wait for the object to exist,
-		// unless the caller is specifically waiting for NotFound.
-		// TODO: Refactor Predicates to accept nil objects so we can remove this hacky workaround.
-		if spec.errorOnNotFound {
-			return &WatchObjectNotFoundError{
-				GroupVersionKind: gvk,
-				Name:             name,
-				Namespace:        namespace,
-			}
-		}
 		nt.T.Logf("%s GET Not Found", errPrefix)
+		// Predicates expect the object to be nil when Not Found.
 	} else {
 		nt.T.Logf("%s GET Found", errPrefix)
 		// Log the initial/current state as a diff to make it easy to compare with update diffs.
 		// Use diff.Diff because it doesn't truncate like cmp.Diff does.
 		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
 		nt.DebugLogf("%s GET Diff (+ Current):\n%s",
-			errPrefix, log.AsYAMLDiffWithScheme(nil, cObj, nt.scheme))
-		evalErrs = evaluate(cObj, predicates)
-		if len(evalErrs) == 0 {
-			// Success! All predicates passed!
-			return nil
-		}
-		prevObj = cObj
+			errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
 	}
+
+	// Cache the predicate errors from the last evaluation and return them
+	// if the watch closes before the predicates all pass.
+	evalErrs := EvaluatePredicates(cObj, predicates)
+	if len(evalErrs) == 0 {
+		// Success! All predicates passed!
+		return nil
+	}
+	// Update object cache for subsequent diffs
+	prevObj = cObj
 
 	// Specify ResourceVersion to ensure the Watch starts where the List stopped.
 	// watch.Until will update the ListOptions for us.
@@ -212,36 +182,16 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 			}
 
 			if eType == watch.Deleted {
-				// For delete events, the object is the last known state, which
-				// we can ignore because we already have the last known state
-				// cached in prevObj.
+				// For delete events, the object is the last known state, but
+				// Predicates expect the object to be nil when Not Found.
 				cObj = nil
-				nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
-					errPrefix, eType,
-					log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
-
-				// TODO: Refactor Predicates to accept nil objects so we can remove this hacky workaround.
-				if spec.errorOnNotFound {
-					return false, &WatchObjectNotFoundError{
-						GroupVersionKind: gvk,
-						Name:             name,
-						Namespace:        namespace,
-					}
-				}
-
-				// Invalidate previous predicate errors
-				evalErrs = []error{errors.New("object deleted")}
-				// Reset object cache for subsequent diffs
-				prevObj = nil
-				// Continue watching. The object may be re-created.
-				return false, nil
 			}
 
 			nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
 				errPrefix, eType,
 				log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
-			// Evaluate predicates
-			evalErrs = evaluate(cObj, predicates)
+
+			evalErrs = EvaluatePredicates(cObj, predicates)
 			if len(evalErrs) == 0 {
 				// Success! All predicates returned without error.
 				return true, nil
@@ -333,17 +283,6 @@ func getObjectFromList(objList client.ObjectList, name, namespace string) (clien
 	return nil, nil
 }
 
-// evaluate a list of predicates and return any errors
-func evaluate(obj client.Object, predicates []Predicate) []error {
-	var errs []error
-	for _, predicate := range predicates {
-		if err := predicate(obj); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errs
-}
-
 // WatchForCurrentStatus watches the object until it reconciles (Current).
 func WatchForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
 	return WatchObject(nt, gvk, name, namespace,
@@ -352,28 +291,9 @@ func WatchForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace 
 }
 
 // WatchForNotFound waits for the passed object to be fully deleted or not found.
-// Returns an error if the object is not deleted within the timeout.
+// Returns an error if the object is not deleted before the timeout.
 func WatchForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
-	opts = append(opts, watchErrorOnNotFound())
-	err := WatchObject(nt, gvk, name, namespace,
-		[]Predicate{objectNotFoundPredicate},
+	return WatchObject(nt, gvk, name, namespace,
+		[]Predicate{ObjectNotFoundPredicate},
 		opts...)
-	if err == nil {
-		// Should never happen!
-		panic("WatchForNotFound exited without error or timeout")
-	}
-	if nfe := (&WatchObjectNotFoundError{}); errors.As(err, &nfe) {
-		// yay!
-		return nil
-	}
-	return err
-}
-
-// objectNotFound always returns an error.
-// This is a dummy predicate which will cause WatchOject to continue watching
-// until another error or timeout is reached.
-// If you see this error, the timeout was probably reached.
-func objectNotFoundPredicate(o client.Object) error {
-	return errors.Errorf("expected %T object %s to be not found",
-		o, core.ObjectNamespacedName(o))
 }

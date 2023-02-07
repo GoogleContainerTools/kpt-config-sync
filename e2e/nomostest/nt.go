@@ -75,10 +75,6 @@ type NT struct {
 	// Config specifies how to create a new connection to the cluster.
 	Config *rest.Config
 
-	// WatchConfig specifies how to create a new connection to the cluster for
-	// watches.
-	WatchConfig *rest.Config
-
 	// Client is the underlying client used to talk to the Kubernetes cluster.
 	//
 	// Most tests shouldn't need to talk directly to this, unless simulating
@@ -483,9 +479,7 @@ func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 // CRD directly to the API Server.
 func (nt *NT) RenewClient() {
 	nt.T.Helper()
-
 	nt.Client = connect(nt.T, nt.Config, nt.scheme)
-	nt.WatchClient = connect(nt.T, nt.WatchConfig, nt.scheme)
 }
 
 // Kubectl is a convenience method for calling kubectl against the

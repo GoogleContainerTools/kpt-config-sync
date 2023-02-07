@@ -143,7 +143,6 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 		sharedNt := SharedNT(tw)
 		t.Logf("using shared test env %s", sharedNt.ClusterName)
 		ntOptions = append(ntOptions, ntopts.WithRestConfig(sharedNt.Config))
-		ntOptions = append(ntOptions, ntopts.WithWatchConfig(sharedNt.WatchConfig))
 	}
 
 	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
@@ -165,7 +164,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
-		WatchConfig:             opts.WatchConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		Client:                  sharedNt.Client,
 		WatchClient:             sharedNt.WatchClient,
@@ -251,7 +249,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
-		WatchConfig:             opts.WatchConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,

@@ -45,10 +45,6 @@ type New struct {
 	// RESTConfig is the config for creating a Client connection to a K8s cluster.
 	RESTConfig *rest.Config
 
-	// WatchConfig is the config for creating a Client connection to a K8s
-	// cluster for watches.
-	WatchConfig *rest.Config
-
 	// KubeconfigPath is the path to the kubeconfig file
 	KubeconfigPath string
 
@@ -110,13 +106,6 @@ func WithInitialCommit(initialCommit Commit) func(opt *New) {
 func WithRestConfig(restConfig *rest.Config) Opt {
 	return func(opt *New) {
 		opt.RESTConfig = restConfig
-	}
-}
-
-// WithWatchConfig uses the provided rest.Config for watches
-func WithWatchConfig(watchConfig *rest.Config) Opt {
-	return func(opt *New) {
-		opt.WatchConfig = watchConfig
 	}
 }
 

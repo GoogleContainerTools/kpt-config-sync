@@ -36,7 +36,6 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
-	"kpt.dev/configsync/pkg/remediator/watch"
 	resourcegroupv1alpha1 "kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -114,8 +113,4 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 		t.Fatalf("building rest.Config: %v", err)
 	}
 	opts.RESTConfig = restConfig
-
-	// Copy the RESTConfig to create the WatchConfig, but use a longer timeout.
-	opts.WatchConfig = restconfig.DeepCopy(restConfig)
-	opts.WatchConfig.Timeout = watch.RESTConfigTimeout
 }

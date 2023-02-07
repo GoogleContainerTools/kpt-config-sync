@@ -21,15 +21,22 @@ import (
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/util/log"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // WatchOption is an optional parameter for Watch
@@ -88,69 +95,53 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		opt(&spec)
 	}
 
-	eval := func(obj client.Object) []error {
-		var errs []error
-		for _, predicate := range predicates {
-			if err := predicate(obj); err != nil {
-				errs = append(errs, err)
-			}
-		}
-		return errs
-	}
-
-	cObjList, err := newObjectListForObjectKind(gvk, nt.scheme)
-	if err != nil {
-		return err
-	}
-
-	var listOpts []client.ListOption
-	listOpts = append(listOpts, client.MatchingFieldsSelector{
-		Selector: fields.OneTermEqualSelector("metadata.name", name),
-	})
-	if namespace != "" {
-		listOpts = append(listOpts, client.InNamespace(namespace))
-	}
-
+	// Use the context to stop the List and/or Watch if they run too long.
 	ctx, cancel := context.WithTimeout(nt.Context, spec.timeout)
 	defer cancel()
 
-	// Use LIST with a single-object selector, instead of GET, because we want
-	// the resource version of the LIST response to start the watch with, so we
-	// don't miss any updates.
+	lw, err := newListWatchForObject(nt, gvk, name, namespace, spec.timeout)
+	if err != nil {
+		return errors.Wrap(err, errPrefix)
+	}
 
-	// Use the Client, instead of the WatchClient, because it has a shorter timeout.
-	err = nt.Client.List(ctx, cObjList, listOpts...)
+	// Don't need to specify the FieldSelector again.
+	// NewListWatchFromClient does it for us.
+	listOpts := metav1.ListOptions{}
+
+	// LIST with a name selector is functionally equivalent to a GET, except it
+	// can be performed with the same ListerWatcher, so we can re-use the same
+	// client.
+	// Using LIST also allows us to get the latest ResourceVersion for the whole
+	// resource, not just the RV when the object was last updated. This makes
+	// the subsequent WATCH a little more efficient, because it can skip the
+	// intermediate ResourceVersions (when only other objects were changed).
+	rObjList, err := lw.List(listOpts)
 	if err != nil {
-		return err
+		return errors.Wrap(err, errPrefix)
 	}
-	// The Items field of a ObjectList is a typed array.
-	// So we have to use reflection to get the items out.
-	items, err := meta.ExtractList(cObjList)
+	// This cast should almost always work, except on some rarely used internal types.
+	cObjList, ok := rObjList.(client.ObjectList)
+	if !ok {
+		return errors.Wrapf(
+			WrongTypeErr(rObjList, client.ObjectList(nil)),
+			"%s unexpected list type", errPrefix)
+	}
+	// Since items are typed, we have to use some reflection to extract them.
+	// But since we filtered by name and namespace, there should only be one item.
+	cObj, err := getObjectFromList(cObjList, name, namespace)
 	if err != nil {
-		return errors.Wrapf(err, "%s unable to understand list result %#v",
-			errPrefix, cObjList)
+		return errors.Wrap(err, errPrefix)
 	}
+
 	// Save the predicate errors from the last state change and return them
 	// if the watch closes before the predicates all pass.
 	var evalErrs []error
-	// Iterate through the list to find the desired object, if it exists
+	// Save the last known object state for diffing with the new state.
 	var prevObj client.Object
-	for _, rObj := range items {
-		cObj, ok := rObj.(client.Object)
-		if !ok {
-			return errors.Wrapf(
-				WrongTypeErr(rObj, client.Object(nil)),
-				"%s unexpected list item type", errPrefix)
-		}
-		if cObj.GetName() != name {
-			// Ignore other objects, if any.
-			// Should never happen, due to name selector.
-			continue
-		}
-		prevObj = cObj
-		break
-	}
-	if prevObj == nil {
+	if cObj == nil {
+		// Normally, we ignore NotFound and wait for the object to exist,
+		// unless the caller is specifically waiting for NotFound.
+		// TODO: Refactor Predicates to accept nil objects so we can remove this hacky workaround.
 		if spec.errorOnNotFound {
 			return &WatchObjectNotFoundError{
 				GroupVersionKind: gvk,
@@ -158,96 +149,199 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 				Namespace:        namespace,
 			}
 		}
-		nt.DebugLogf("%s GET Not Found", errPrefix)
+		nt.T.Logf("%s GET Not Found", errPrefix)
 	} else {
+		nt.T.Logf("%s GET Found", errPrefix)
 		// Log the initial/current state as a diff to make it easy to compare with update diffs.
 		// Use diff.Diff because it doesn't truncate like cmp.Diff does.
 		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
 		nt.DebugLogf("%s GET Diff (+ Current):\n%s",
-			errPrefix, log.AsYAMLDiffWithScheme(nil, prevObj, nt.scheme))
-		// Evaluate predicates
-		evalErrs = eval(prevObj)
+			errPrefix, log.AsYAMLDiffWithScheme(nil, cObj, nt.scheme))
+		evalErrs = evaluate(cObj, predicates)
 		if len(evalErrs) == 0 {
 			// Success! All predicates passed!
 			return nil
 		}
-	}
-
-	rv := cObjList.GetResourceVersion()
-
-	// Create a new empty list to use with WATCH
-	cObjList, err = newObjectListForObjectKind(gvk, nt.scheme)
-	if err != nil {
-		return err
+		prevObj = cObj
 	}
 
 	// Specify ResourceVersion to ensure the Watch starts where the List stopped.
-	cObjList.SetResourceVersion(rv)
+	// watch.Until will update the ListOptions for us.
+	initialResourceVersion := cObjList.GetResourceVersion()
 
-	// Use the WatchClient, instead of the Client, because it has a longer timeout.
-	result, err := nt.WatchClient.Watch(ctx, cObjList, listOpts...)
-	defer result.Stop()
-	if err != nil {
-		return err
-	}
+	// Enable bookmarks to ensure retries start from the latest ResourceVersion,
+	// even if there haven't been any updates to the object being watched.
+	listOpts.AllowWatchBookmarks = true
 
-	for event := range result.ResultChan() {
-		rObj := event.Object
-		cObj, ok := rObj.(client.Object)
-		if !ok {
-			return errors.Errorf("%s expected event object of type client.Object but got %T",
-				errPrefix, rObj)
-		}
-		if cObj.GetName() != name {
-			// Ignore events for other objects, if any.
-			// Should never happen, due to name selector.
-			continue
-		}
-
+	// watch.Until watches the object and executes this ConditionFunc on each
+	// event until one of the following conditions is true:
+	// - The conditon function returns true (all predicates succeeded)
+	// - The condition function returns an error
+	// - The context is cancelled (timeout)
+	condition := func(event watch.Event) (bool, error) {
 		switch event.Type {
-		case watch.Bookmark:
-			// do nothing
-		case watch.Deleted:
-			nt.DebugLogf("%s %s", errPrefix, event.Type)
-			prevObj = nil
-			if spec.errorOnNotFound {
-				return &WatchObjectNotFoundError{
-					GroupVersionKind: gvk,
-					Name:             name,
-					Namespace:        namespace,
-				}
-			} // Else, continue watching. The object may be re-created.
-		case watch.Added, watch.Modified:
+		case watch.Error:
+			// Error events are not handled by watch.Util. So catch them here.
+			// For error events, the object is usually *metav1.Status,
+			// indicating a server-side error. So stop watching.
+			return false, errors.Wrap(
+				apierrors.FromObject(event.Object),
+				"received error event")
+		case watch.Added, watch.Modified, watch.Deleted:
 			eType := event.Type
 			if eType == watch.Added && prevObj != nil {
-				// Added to cache for the first time, but not to k8s
+				// Added to watch cache for the first time, but not to k8s
 				eType = watch.Modified
 			}
+			nt.T.Logf("%s %s", errPrefix, eType)
+
+			// For Added/Modified/Deleted events, the object should be of the
+			// type being watched.
+			// This cast should almost always work, except on some rarely used
+			// internal types.
+			cObj, ok := event.Object.(client.Object)
+			if !ok {
+				return false, errors.Errorf(
+					"expected event object of type client.Object but got %T",
+					event.Object)
+			}
+			if cObj.GetName() != name {
+				// Ignore events for other objects, if any.
+				// Should never happen, due to name selector.
+				return false, nil
+			}
+
+			if eType == watch.Deleted {
+				// For delete events, the object is the last known state, which
+				// we can ignore because we already have the last known state
+				// cached in prevObj.
+				cObj = nil
+				nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
+					errPrefix, eType,
+					log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
+
+				// TODO: Refactor Predicates to accept nil objects so we can remove this hacky workaround.
+				if spec.errorOnNotFound {
+					return false, &WatchObjectNotFoundError{
+						GroupVersionKind: gvk,
+						Name:             name,
+						Namespace:        namespace,
+					}
+				}
+
+				// Invalidate previous predicate errors
+				evalErrs = []error{errors.New("object deleted")}
+				// Reset object cache for subsequent diffs
+				prevObj = nil
+				// Continue watching. The object may be re-created.
+				return false, nil
+			}
+
 			nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
 				errPrefix, eType,
 				log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
 			// Evaluate predicates
-			evalErrs = eval(cObj)
+			evalErrs = evaluate(cObj, predicates)
 			if len(evalErrs) == 0 {
-				// Success! All predicates passed!
-				return nil
+				// Success! All predicates returned without error.
+				return true, nil
 			}
+			// Update object cache for subsequent diffs
 			prevObj = cObj
-		case watch.Error:
-			return errors.Errorf("%s received error event: %#v",
-				errPrefix, event)
+			// Continue watching.
+			return false, nil
+		case watch.Bookmark:
+			// Bookmark indicates the ResourceVersion was updated, but the
+			// object(s) being watched did not (some other object did).
+			// Continue watching.
+			return false, nil
 		default:
-			return errors.Errorf("%s received unexpected event: %#v",
-				errPrefix, event)
+			// Stop watching.
+			return false, errors.Errorf("received unexpected event: %#v", event)
 		}
 	}
-
-	if len(evalErrs) > 0 {
-		// watch exited with predicate errors
-		return multierr.Combine(evalErrs...)
+	_, err = watchtools.Until(ctx, initialResourceVersion, lw, condition)
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			if len(evalErrs) > 0 {
+				return errors.Wrapf(
+					multierr.Combine(evalErrs...),
+					"%s timed out waiting for predicates", errPrefix)
+			}
+			return errors.Errorf("%s timed out before any watch events were received", errPrefix)
+		}
+		return errors.Wrap(err, errPrefix)
 	}
-	return errors.Errorf("%s exited before any add/update events were received",
-		errPrefix)
+	// Success! Condition returned true.
+	return nil
+}
+
+// newListWatchForObject returns a ListWatch that does server-side filtering
+// down to a single resource object.
+// Optionally specify the minimum timeout for the REST client.
+func newListWatchForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
+	restConfig := nt.Config
+	// Make sure the client-side watch timeout isn't too short.
+	// If not, duplicate the config and update the timeout.
+	// You can use the Context for timeout, so the rest.Config timeout just needs to be longer.
+	if restConfig.Timeout < timeout*2 {
+		restConfig = rest.CopyConfig(restConfig)
+		restConfig.Timeout = timeout * 2
+	}
+	// Use the custom client scheme to encode requests and decode responses
+	codecs := serializer.NewCodecFactory(nt.Client.Scheme())
+	restClient, err := apiutil.RESTClientForGVK(gvk, false, restConfig, codecs)
+	if err != nil {
+		return nil, err
+	}
+	// Lookup the resource name from the GVK using discovery (usually cached)
+	mapping, err := nt.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return nil, err
+	}
+	// Use a selector to filter the events down to just the object we care about.
+	nameSelector := fields.OneTermEqualSelector("metadata.name", name)
+	// Create a ListerWatcher for this resource and namespace
+	lw := cache.NewListWatchFromClient(restClient, mapping.Resource.Resource, namespace, nameSelector)
+	return lw, nil
+}
+
+// getObjectFromList loops through the items in an ObjectList and returns the
+// one with the specified name and namespace.
+// This compexity is required because the items are typed without generics.
+// So we have to use reflection to read the type so we can access the fields.
+func getObjectFromList(objList client.ObjectList, name, namespace string) (client.Object, error) {
+	items, err := meta.ExtractList(objList)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to understand list result %#v",
+			objList)
+	}
+	// Iterate through the list to find the desired object, if it exists
+	for _, rObj := range items {
+		cObj, ok := rObj.(client.Object)
+		if !ok {
+			return nil, errors.Wrap(
+				WrongTypeErr(rObj, client.Object(nil)),
+				"unexpected list item type")
+		}
+		if cObj.GetName() == name && cObj.GetNamespace() == namespace {
+			return cObj, nil
+		}
+		// Ignore other objects, if any.
+	}
+	// Object Not Found
+	return nil, nil
+}
+
+// evaluate a list of predicates and return any errors
+func evaluate(obj client.Object, predicates []Predicate) []error {
+	var errs []error
+	for _, predicate := range predicates {
+		if err := predicate(obj); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
 }
 
 // WatchForCurrentStatus watches the object until it reconciles (Current).
@@ -282,19 +376,4 @@ func WatchForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace strin
 func objectNotFoundPredicate(o client.Object) error {
 	return errors.Errorf("expected %T object %s to be not found",
 		o, core.ObjectNamespacedName(o))
-}
-
-func newObjectListForObjectKind(gvk schema.GroupVersionKind, scheme *runtime.Scheme) (client.ObjectList, error) {
-	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	rObjList, err := scheme.New(listGVK)
-	if err != nil {
-		return nil, err
-	}
-	cObjList, ok := rObjList.(client.ObjectList)
-	if !ok {
-		return nil, errors.Wrapf(
-			WrongTypeErr(rObjList, client.ObjectList(nil)),
-			"list type is invalid: %s", listGVK)
-	}
-	return cObjList, nil
 }

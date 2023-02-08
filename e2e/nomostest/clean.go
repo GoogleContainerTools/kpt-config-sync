@@ -282,6 +282,9 @@ func deleteConfigSyncAndTestAnnotationsAndLabels(nt *NT, ns *corev1.Namespace) e
 
 func namespaceHasNoConfigSyncAnnotationsAndLabels() Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		ns, ok := o.(*corev1.Namespace)
 		if !ok {
 			return WrongTypeErr(ns, &corev1.Namespace{})
@@ -395,9 +398,9 @@ func removeKubevirt(nt *NT, failOnError FailOnError) {
 	nt.MustKubectl("delete", "validatingwebhookconfigurations", "virt-api-mutator", "virt-operator-validator", "--ignore-not-found")
 	nt.MustKubectl("patch", "kubevirt", "kubevirt", "-n=kubevirt", "--type=merge", "-p={\"metadata\":{\"finalizers\":null}}")
 
-	if _, err := Retry(120*time.Second, func() error {
-		return nt.ValidateNotFound("kubevirt", "", &corev1.Namespace{})
-	}); err != nil {
+	err := WatchForNotFound(nt, kinds.Namespace(), "kubevirt", "",
+		WatchTimeout(120*time.Second))
+	if err != nil {
 		if failOnError {
 			nt.T.Fatalf("failed to clean up the Kubevirt resources", err)
 		} else {

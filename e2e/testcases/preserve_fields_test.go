@@ -29,6 +29,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,9 +67,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	// Ensure the Service has the target port we set.
-	_, err := nomostest.Retry(nt.DefaultReconcileTimeout, func() error {
-		return nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort1))
-	})
+	err := nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
+		[]nomostest.Predicate{hasTargetPort(targetPort1)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -100,19 +100,17 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	generatedNodePort := gotService.Spec.Ports[0].NodePort
 	generatedClusterIP := gotService.Spec.ClusterIP
 
-	// 5 seconds is more than enough time for this to happen.
-	_, err = nomostest.Retry(5*time.Second, func() error {
-		// This can only return nil if the NodePort/ClusterIP was updated.
-		// Potentially flaky check since other things can cause NodePort/ClusterIP
-		// to change; copied from bats.
-		return nt.Validate(serviceName, ns, &corev1.Service{},
-			hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP))
-	})
+	// This can only return nil if the NodePort/ClusterIP was updated.
+	// Potentially flaky check since other things can cause NodePort/ClusterIP
+	// to change; copied from bats.
+	err = nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
+		[]nomostest.Predicate{hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP)},
+		nomostest.WatchTimeout(30*time.Second))
 	if err == nil {
 		// We want non-nil error from the Retry above - if err is nil then at least
 		// one was incorrectly changed.
 		// The node port or cluster IP was updated, so we aren't using StrategicMergePatch.
-		nt.T.Fatal("not using strategic merge patch")
+		nt.T.Fatalf("not using strategic merge patch: %v", err)
 	}
 
 	// Validate multi-repo metrics.
@@ -136,9 +134,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	// Ensure the Service has the new target port we set.
-	_, err = nomostest.Retry(nt.DefaultReconcileTimeout, func() error {
-		return nt.Validate(serviceName, ns, &corev1.Service{}, hasTargetPort(targetPort2))
-	})
+	err = nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
+		[]nomostest.Predicate{hasTargetPort(targetPort2)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -198,12 +195,13 @@ aggregationRule:
 	nt.WaitForRepoSyncs()
 
 	// Ensure the aggregate rule is actually aggregated.
-	duration, err := nomostest.Retry(20*time.Second, func() error {
-		return nt.Validate(aggregateRoleName, "", &rbacv1.ClusterRole{}, clusterRoleHasRules([]rbacv1.PolicyRule{
-			nsViewer.Rules[0], rbacViewer.Rules[0],
-		}))
-	})
-	nt.T.Logf("took %v to wait for aggregate ClusterRole", duration)
+	err := nomostest.WatchObject(nt, kinds.ClusterRole(), aggregateRoleName, "",
+		[]nomostest.Predicate{
+			clusterRoleHasRules([]rbacv1.PolicyRule{
+				nsViewer.Rules[0], rbacViewer.Rules[0],
+			}),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -275,10 +273,10 @@ func TestPreserveLastApplied(t *testing.T) {
 		nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
 	}
 
-	_, err = nomostest.Retry(20*time.Second, func() error {
-		return nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{},
-			nomostest.HasExactlyAnnotationKeys(annotationKeys...))
-	})
+	err = nomostest.WatchObject(nt, kinds.ClusterRole(), nsViewerName, "",
+		[]nomostest.Predicate{
+			nomostest.HasExactlyAnnotationKeys(annotationKeys...),
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -445,6 +443,9 @@ func hasDifferentNodePortOrClusterIP(nodePort int32, clusterIP string) nomostest
 	// We have to check both in the same Predicate as predicates are AND-ed together.
 	// We want to return nil if EITHER nodePort or clusterIP changes.
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		service, ok := o.(*corev1.Service)
 		if !ok {
 			return nomostest.WrongTypeErr(o, &corev1.Service{})
@@ -459,6 +460,9 @@ func hasDifferentNodePortOrClusterIP(nodePort int32, clusterIP string) nomostest
 }
 
 func specifiesClusterIP(o client.Object) error {
+	if o == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	service, ok := o.(*corev1.Service)
 	if !ok {
 		return nomostest.WrongTypeErr(o, &corev1.Service{})
@@ -470,6 +474,9 @@ func specifiesClusterIP(o client.Object) error {
 }
 
 func specifiesNodePort(o client.Object) error {
+	if o == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	service, ok := o.(*corev1.Service)
 	if !ok {
 		return nomostest.WrongTypeErr(o, &corev1.Service{})
@@ -482,6 +489,9 @@ func specifiesNodePort(o client.Object) error {
 
 func hasTargetPort(want int) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		service, ok := o.(*corev1.Service)
 		if !ok {
 			return nomostest.WrongTypeErr(o, &corev1.Service{})

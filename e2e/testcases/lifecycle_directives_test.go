@@ -17,7 +17,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -27,6 +26,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
@@ -269,7 +269,8 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 		checkpointProtectedNamespace(nt, ns)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns))
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", fake.NamespaceObject("bookstore"))
+	bookstoreNS := fake.NamespaceObject("bookstore")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", bookstoreNS)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace")
 	nt.WaitForRepoSyncs()
 
@@ -284,7 +285,7 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	}
 
 	// Verify that the bookstore namespace does not have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
-	err := nt.Validate("bookstore", "", &corev1.Namespace{},
+	err := nt.Validate(bookstoreNS.Name, bookstoreNS.Namespace, &corev1.Namespace{},
 		nomostest.NotPendingDeletion,
 		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
 		nomostest.HasAllNomosMetadata())
@@ -310,12 +311,10 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	}
 
 	// Verify that the bookstore namespace is removed.
-	// Use `nomostest.Retry` here because sometimes some resources have not been applied/pruned successfully
-	// when Config Sync reports that a commit is synced successfully. go/cs-sync-status-accuracy proposes a
-	// solution to fix this.
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.ValidateNotFound("bookstore", "", &corev1.Namespace{})
-	})
+	// Namespace should be marked as deleted, but may not be NotFound yet,
+	// because its  finalizer will block until all objects in that namespace are
+	// deleted.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

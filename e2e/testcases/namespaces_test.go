@@ -679,16 +679,18 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 
 	// Test Setup + Preconditions.
 	// Declare two Namespaces.
+	fooNS := fake.NamespaceObject("foo")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
+	barNS := fake.NamespaceObject("bar")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bar/ns.yaml", fake.NamespaceObject("bar"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare multiple Namespaces")
 	nt.WaitForRepoSyncs()
 
-	err := nt.Validate("foo", "", &corev1.Namespace{})
+	err := nt.Validate(fooNS.Name, fooNS.Namespace, &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("bar", "", &corev1.Namespace{})
+	err = nt.Validate(barNS.Name, barNS.Namespace, &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -735,11 +737,11 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	// TODO: Is this a bug? Why are we allowing premature deletion?
 	time.Sleep(10 * time.Second)
 
-	err = nt.Validate("foo", "", &corev1.Namespace{})
+	err = nt.Validate(fooNS.Name, fooNS.Namespace, &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("bar", "", &corev1.Namespace{})
+	err = nt.Validate(barNS.Name, barNS.Namespace, &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -768,10 +770,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(10*time.Second, func() error {
-		// It takes a few seconds for Namespaces to terminate.
-		return nt.ValidateNotFound("bar", "", &corev1.Namespace{})
-	})
+	// Namespace should be marked as deleted, but may not be NotFound yet,
+	// because its  finalizer will block until all objects in that namespace are
+	// deleted.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), barNS.Name, barNS.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -810,14 +812,14 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare safety Namespace")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(10*time.Second, func() error {
-		// It takes a few seconds for Namespaces to terminate.
-		return nt.ValidateNotFound(safetyNs, "", &corev1.Namespace{})
-	})
+	// Namespace should be marked as deleted, but may not be NotFound yet,
+	// because its  finalizer will block until all objects in that namespace are
+	// deleted.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), safetyNs, "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.ValidateNotFound("bar", "", &corev1.Namespace{})
+	err = nt.ValidateNotFound(barNS.Name, barNS.Namespace, &corev1.Namespace{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

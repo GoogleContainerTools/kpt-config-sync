@@ -497,10 +497,10 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Stop the admission webhook, the remediator should report the conflicts")
 	nomostest.StopWebhook(nt)
 	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
-	if _, err := nomostest.Retry(90*time.Second, func() error {
-		return nt.Validate("pods", testNs, &rbacv1.Role{},
-			nomostest.ResourceVersionNotEquals(nt, roleResourceVersion))
-	}); err != nil {
+	err = nomostest.WatchObject(nt, kinds.Role(), "pods", testNs,
+		[]nomostest.Predicate{nomostest.ResourceVersionNotEquals(nt, roleResourceVersion)},
+		nomostest.WatchTimeout(90*time.Second))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -533,11 +533,13 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role is managed by the other Root repo %s", rootSync2)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
 	// Therefore, we need to retry here to wait until the `root-test` Root repo recreates the pod role.
-	if _, err := nomostest.Retry(90*time.Second, func() error {
-		return nt.Validate("pods", testNs, &rbacv1.Role{},
+	err = nomostest.WatchObject(nt, kinds.Role(), "pods", testNs,
+		[]nomostest.Predicate{
 			roleHasRules(rootPodRole().Rules),
-			nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2))
-	}); err != nil {
+			nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2),
+		},
+		nomostest.WatchTimeout(90*time.Second))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -758,6 +760,9 @@ func namespacePodRole() *rbacv1.Role {
 
 func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		r, isRole := o.(*rbacv1.Role)
 		if !isRole {
 			return nomostest.WrongTypeErr(o, &rbacv1.Role{})

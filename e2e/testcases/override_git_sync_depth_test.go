@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -38,17 +39,23 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	key := "GIT_SYNC_DEPTH"
+	rootReconcilerNN := types.NamespacedName{
+		Name:      nomostest.DefaultRootReconcilerName,
+		Namespace: v1.NSConfigManagementSystem,
+	}
+	nsReconcilerNN := types.NamespacedName{
+		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Namespace: v1.NSConfigManagementSystem,
+	}
 
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
-	})
+	err := validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, controllers.SyncDepthNoRev)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, controllers.SyncDepthNoRev)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -60,9 +67,8 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	// Override the git sync depth setting for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 5}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "5"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "5")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -74,18 +80,16 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "33")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Override the git sync depth setting for root-reconciler to 0
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 0}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "0")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -100,9 +104,8 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "0")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -113,9 +116,8 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "1")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -125,18 +127,25 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 	nt.WaitForRepoSyncs()
-	key := "GIT_SYNC_DEPTH"
 
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
-	})
+	key := "GIT_SYNC_DEPTH"
+	rootReconcilerNN := types.NamespacedName{
+		Name:      nomostest.DefaultRootReconcilerName,
+		Namespace: v1.NSConfigManagementSystem,
+	}
+	nsReconcilerNN := types.NamespacedName{
+		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Namespace: v1.NSConfigManagementSystem,
+	}
+
+	err := validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, controllers.SyncDepthNoRev)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, controllers.SyncDepthNoRev))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, controllers.SyncDepthNoRev)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -148,9 +157,8 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 	// Override the git sync depth setting for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 5}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "5"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "5")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -162,18 +170,16 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "33"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "33")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Override the git sync depth setting for root-reconciler to 0
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 0}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "0")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -188,9 +194,8 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "0"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "0")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -201,10 +206,17 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "1"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "1")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func validateDeploymentContainerHasEnvVar(nt *nomostest.NT, nn types.NamespacedName, container, key, value string) error {
+	return nomostest.WatchObject(nt, kinds.Deployment(), nn.Name, nn.Namespace,
+		[]nomostest.Predicate{
+			nomostest.DeploymentHasEnvVar(container, key, value),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 }

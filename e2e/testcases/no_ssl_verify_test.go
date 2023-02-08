@@ -18,13 +18,14 @@ import (
 	"testing"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -35,17 +36,23 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	key := "GIT_SSL_NO_VERIFY"
+	rootReconcilerNN := types.NamespacedName{
+		Name:      nomostest.DefaultRootReconcilerName,
+		Namespace: v1.NSConfigManagementSystem,
+	}
+	nsReconcilerNN := types.NamespacedName{
+		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Namespace: v1.NSConfigManagementSystem,
+	}
 
-	// verify the deployment doesn't have the key yet
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	// verify the reconciler deployments don't have the key yet
+	err := validateDeploymentContainerMissingEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -57,9 +64,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 
 	// Set noSSLVerify to true for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": true}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "true"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "true")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -70,18 +76,16 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to true")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "true"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "true")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Set noSSLVerify to false for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": false}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -92,9 +96,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to false")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -106,17 +109,23 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	key := "GIT_SSL_NO_VERIFY"
+	rootReconcilerNN := types.NamespacedName{
+		Name:      nomostest.DefaultRootReconcilerName,
+		Namespace: v1.NSConfigManagementSystem,
+	}
+	nsReconcilerNN := types.NamespacedName{
+		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Namespace: v1.NSConfigManagementSystem,
+	}
 
-	// verify the deployment doesn't have the key yet
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	// verify the reconciler deployments don't have the key yet
+	err := validateDeploymentContainerMissingEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -128,9 +137,8 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 
 	// Set noSSLVerify to true for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": true}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "true"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key, "true")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -141,18 +149,16 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to true")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, "true"))
-	})
+	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key, "true")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Set noSSLVerify to false for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"git": {"noSSLVerify": false}}}`)
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, rootReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -163,10 +169,17 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to false")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
-	})
+	err = validateDeploymentContainerMissingEnvVar(nt, nsReconcilerNN,
+		reconcilermanager.GitSync, key)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func validateDeploymentContainerMissingEnvVar(nt *nomostest.NT, nn types.NamespacedName, container, key string) error {
+	return nomostest.WatchObject(nt, kinds.Deployment(), nn.Name, nn.Namespace,
+		[]nomostest.Predicate{
+			nomostest.DeploymentMissingEnvVar(container, key),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 }

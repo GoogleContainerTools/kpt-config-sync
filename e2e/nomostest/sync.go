@@ -48,6 +48,9 @@ func (sipe *SyncInProgressError) Error() string {
 
 // MonoRepoSyncNotInProgress ensures the Repo does not have a sync in-progress.
 func MonoRepoSyncNotInProgress(o client.Object) error {
+	if o == nil {
+		return ErrObjectNotFound
+	}
 	repo, ok := o.(*v1.Repo)
 	if !ok {
 		return WrongTypeErr(o, &v1.Repo{})
@@ -63,6 +66,9 @@ func MonoRepoSyncNotInProgress(o client.Object) error {
 // successfully synced to the repository.
 func RepoHasStatusSyncLatestToken(sha1 string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		repo, ok := o.(*v1.Repo)
 		if !ok {
 			return WrongTypeErr(o, &v1.Repo{})
@@ -107,6 +113,9 @@ func RepoHasStatusSyncLatestToken(sha1 string) Predicate {
 // latest repo commit to the cluster.
 func ClusterConfigHasToken(sha1 string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		cc, ok := o.(*v1.ClusterConfig)
 		if !ok {
 			return WrongTypeErr(o, &v1.ClusterConfig{})
@@ -128,6 +137,9 @@ func ClusterConfigHasToken(sha1 string) Predicate {
 // .status.sync.gitStatus.dir field on the passed RootSync matches the provided dir.
 func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -152,6 +164,9 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 // .status.sync.gitStatus.dir field on the passed RepoSync matches the provided dir.
 func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
@@ -176,6 +191,9 @@ func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
 // .status.sync.commit field on the passed RootSync matches sha1.
 func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
@@ -209,6 +227,9 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 // .status.sync.commit field on the passed RepoSync matches sha1.
 func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})

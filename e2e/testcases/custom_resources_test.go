@@ -26,9 +26,11 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -74,9 +76,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.Validate("heavy", "prod", anvilCR("v1", "", 0))
-	})
+	err = nomostest.WatchForCurrentStatus(nt, anvilGVK("v1"), "heavy", "prod",
+		nomostest.WatchTimeout(60*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -159,8 +160,11 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	// Use Retry & Validate instead of WatchForCurrentStatus, because
+	// watching would require creating API objects and updating the scheme.
 	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.Validate("heavy", "foo", anvilCR("v1", "", 0))
+		return nt.Validate("heavy", "foo", anvilCR("v1", "", 0),
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -228,9 +232,9 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished)
-	})
+	err = nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), "anvils.acme.com", "",
+		[]nomostest.Predicate{nomostest.IsEstablished},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -260,6 +264,9 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 }
 
 func weightEqual100(obj client.Object) error {
+	if obj == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	u := obj.(*unstructured.Unstructured)
 	val, _, err := unstructured.NestedInt64(u.Object, "spec", "lbs")
 	if err != nil {
@@ -272,6 +279,9 @@ func weightEqual100(obj client.Object) error {
 }
 
 func weightEqual10(obj client.Object) error {
+	if obj == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	u := obj.(*unstructured.Unstructured)
 	val, _, err := unstructured.NestedInt64(u.Object, "spec", "lbs")
 	if err != nil {

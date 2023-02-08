@@ -446,6 +446,9 @@ func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.
 func isSourceType(sourceType v1beta1.SourceType) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
 			return nomostest.WrongTypeErr(rs, &v1beta1.RepoSync{})

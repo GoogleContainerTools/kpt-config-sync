@@ -17,7 +17,6 @@ package e2e
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -42,6 +41,9 @@ func sortPolicyRules(l, r rbacv1.PolicyRule) bool {
 
 func clusterRoleHasRules(rules []rbacv1.PolicyRule) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		cr, ok := o.(*rbacv1.ClusterRole)
 		if !ok {
 			return nomostest.WrongTypeErr(cr, &rbacv1.ClusterRole{})
@@ -57,6 +59,9 @@ func clusterRoleHasRules(rules []rbacv1.PolicyRule) nomostest.Predicate {
 
 func managerFieldsNonEmpty() nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		fields := o.GetManagedFields()
 		if len(fields) == 0 {
 			return errors.New("expect non empty manager fields")
@@ -114,27 +119,10 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 
 	// Ensure the conflict is reverted.
-	d, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate(crName, "", &rbacv1.ClusterRole{},
-			clusterRoleHasRules(declaredRules))
-	})
-
+	err = nomostest.WatchObject(nt, kinds.ClusterRole(), crName, "",
+		[]nomostest.Predicate{clusterRoleHasRules(declaredRules)})
 	if err != nil {
-		// err is non-nil about 1% of the time, making this a flaky test.
-		// So, wait for up to ten minutes for the ClusterRole to be reverted.
-		// If it doesn't after ten minutes, this is definitely a bug.
-		d2, err := nomostest.Retry(20*time.Minute, func() error {
-			return nt.Validate(crName, "", &rbacv1.ClusterRole{},
-				clusterRoleHasRules(declaredRules))
-		})
-		if err == nil {
-			// This was probably a flake. Consider increasing test resources or
-			// reducing test parallelism.
-			nt.T.Fatalf("reverted ClusterRole conflict after %v: %v", d+d2, err)
-		}
-
-		// There is definitely some sort of bug in ACM.
-		nt.T.Errorf("bug alert: did not revert ClusterRole conflict after %v: %v", d+d2, err)
+		nt.T.Error(err)
 	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {

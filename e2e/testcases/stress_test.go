@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -203,9 +204,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", oldCrdFilePath)
 
 	nt.T.Logf("Wait until the old CRD is established")
-	_, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(crdName, "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished)
-	})
+	err := nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), crdName, "",
+		[]nomostest.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -215,9 +215,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
 
 	nt.T.Logf("Verify that the source errors are truncated")
-	_, err = nomostest.Retry(5*time.Minute, func() error {
-		return nt.Validate("root-sync", configmanagement.ControllerNamespace, fake.RootSyncObjectV1Beta1(configsync.RootSyncName), truncateSourceErrors())
-	})
+	err = nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), "root-sync", configmanagement.ControllerNamespace,
+		[]nomostest.Predicate{truncateSourceErrors()})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -227,9 +226,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", newCrdFilePath)
 
 	nt.T.Logf("Wait until the new CRD is established")
-	_, err = nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(crdName, "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished)
-	})
+	err = nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), crdName, "",
+		[]nomostest.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -242,6 +240,9 @@ func TestStressLargeRequest(t *testing.T) {
 
 func truncateSourceErrors() nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
 			return nomostest.WrongTypeErr(o, &v1beta1.RepoSync{})

@@ -136,6 +136,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 // resourceStatusEquals verifies that an object has actuation and reconcile status as expected
 func resourceStatusEquals(id core.ID, expectActuation, expectReconcile string) nomostest.Predicate {
 	return func(obj client.Object) error {
+		if obj == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
 		if !ok {
 			return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})

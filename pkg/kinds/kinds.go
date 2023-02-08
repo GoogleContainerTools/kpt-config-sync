@@ -16,6 +16,7 @@ package kinds
 
 import (
 	kptfilev1 "github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -256,4 +257,9 @@ func KptFile() schema.GroupVersionKind {
 // APIService returns the APIService kind.
 func APIService() schema.GroupVersionKind {
 	return schema.GroupVersionKind{Group: "apiregistration.k8s.io", Version: "v1", Kind: "APIService"}
+}
+
+// ValidatingWebhookConfiguration returns the ValidatingWebhookConfiguration kind.
+func ValidatingWebhookConfiguration() schema.GroupVersionKind {
+	return admissionv1.SchemeGroupVersion.WithKind("ValidatingWebhookConfiguration")
 }

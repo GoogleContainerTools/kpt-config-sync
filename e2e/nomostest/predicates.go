@@ -369,55 +369,6 @@ func AllResourcesAreCurrent() Predicate {
 	}
 }
 
-// HasStatus checks that the ResourceGroup object
-// has a non empty status field.
-func HasStatus() Predicate {
-	return func(o client.Object) error {
-		hasStatus, err := hasStatus(o)
-		if err != nil {
-			return err
-		}
-		if hasStatus {
-			return nil
-		}
-		return fmt.Errorf("not found status in %v", o)
-	}
-}
-
-// NoStatus checks that the ResourceGroup object
-// has an empty status field.
-func NoStatus() Predicate {
-	return func(o client.Object) error {
-		hasStatus, err := hasStatus(o)
-		if err != nil {
-			return err
-		}
-		if hasStatus {
-			return fmt.Errorf("found non empty status in %v", o)
-		}
-		return nil
-	}
-}
-
-func hasStatus(o client.Object) (bool, error) {
-	if o == nil {
-		return false, ErrObjectNotFound
-	}
-	u, ok := o.(*unstructured.Unstructured)
-	if !ok {
-		return false, WrongTypeErr(u, &unstructured.Unstructured{})
-	}
-	status, found, err := unstructured.NestedMap(u.Object, "status")
-	if err != nil {
-		return false, err
-	}
-	if !found || len(status) <= 1 {
-		// By default, it contains the field .status.observedGeneration: 0.
-		return false, nil
-	}
-	return true, nil
-}
-
 // DeploymentHasEnvVar check whether the deployment contains environment variable
 // with specified name and value
 func DeploymentHasEnvVar(containerName, key, value string) Predicate {
@@ -603,6 +554,21 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 		return errors.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
 			gvk.Kind, core.ObjectNamespacedName(obj),
 			unexpected, resourceVersion)
+	}
+}
+
+// HasGenerationAtLeast checks that the object's Generation is greater than or
+// equal to the specified value.
+func HasGenerationAtLeast(minGeneration int64) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		gen := obj.GetGeneration()
+		if gen < minGeneration {
+			return fmt.Errorf("expected generation of at least %d, but found %d", minGeneration, gen)
+		}
+		return nil
 	}
 }
 
@@ -823,7 +789,7 @@ func MissingFinalizer(name string) Predicate {
 	}
 }
 
-// ObjectNotFoundPredicate returns an error unless the object is nil (deleted).
+// ObjectNotFoundPredicate returns an error unless the object is nil (not found).
 func ObjectNotFoundPredicate(o client.Object) error {
 	if o == nil {
 		// Success! Object Deleted.
@@ -832,4 +798,12 @@ func ObjectNotFoundPredicate(o client.Object) error {
 	// If you see this error, the WatchObject timeout was probably reached.
 	return errors.Errorf("expected %T object %s to be not found",
 		o, core.ObjectNamespacedName(o))
+}
+
+// ObjectFoundPredicate returns ErrObjectNotFound if the object is nil (not found).
+func ObjectFoundPredicate(o client.Object) error {
+	if o == nil {
+		return ErrObjectNotFound
+	}
+	return nil
 }

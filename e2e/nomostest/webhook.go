@@ -18,10 +18,9 @@ import (
 	"fmt"
 	"time"
 
-	admissionv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 )
@@ -29,23 +28,12 @@ import (
 // WaitForWebhookReadiness waits up to 3 minutes for the wehbook becomes ready.
 // If the webhook still is not ready after 3 minutes, the test would fail.
 func WaitForWebhookReadiness(nt *NT) {
-	nt.T.Logf("Waiting for the webhook to become ready: %v", time.Now())
-	_, err := Retry(3*time.Minute, func() error {
-		return webhookReadiness(nt)
-	})
+	err := WatchForCurrentStatus(nt, kinds.Deployment(),
+		configuration.ShortName, configmanagement.ControllerNamespace,
+		WatchTimeout(3*time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Logf("The webhook is ready at %v", time.Now())
-}
-
-func webhookReadiness(nt *NT) error {
-	err := nt.Validate(configuration.ShortName, configmanagement.ControllerNamespace,
-		&appsv1.Deployment{}, isAvailableDeployment)
-	if err != nil {
-		return fmt.Errorf("webhook server is not ready: %w", err)
-	}
-	return nil
 }
 
 // StopWebhook removes the Config Sync ValidatingWebhookConfiguration object.
@@ -59,10 +47,12 @@ func StopWebhook(nt *NT) {
 			webhookGK, webhookName, metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled, err, out)
 	}
 
-	_, err = Retry(30*time.Second, func() error {
-		return nt.Validate(webhookName, "", &admissionv1.ValidatingWebhookConfiguration{},
-			HasAnnotation(metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled))
-	})
+	err = WatchObject(nt, kinds.ValidatingWebhookConfiguration(),
+		webhookName, "",
+		[]Predicate{
+			HasAnnotation(metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled),
+		},
+		WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -72,9 +62,9 @@ func StopWebhook(nt *NT) {
 		nt.T.Fatalf("got `kubectl delete %s %s` error %v %s, want return nil", webhookGK, webhookName, err, out)
 	}
 
-	_, err = Retry(30*time.Second, func() error {
-		return nt.ValidateNotFound(webhookName, "", &admissionv1.ValidatingWebhookConfiguration{})
-	})
+	err = WatchForNotFound(nt, kinds.ValidatingWebhookConfiguration(),
+		webhookName, "",
+		WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

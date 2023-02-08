@@ -112,7 +112,7 @@ COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
-RUN apt-get update && apt-get install -y git
+RUN apt-get update && apt-get -y upgrade && apt-get install -y git
 
 # License file required for on-prem release.
 COPY LICENSE LICENSE

@@ -106,7 +106,8 @@ USER 1000
 ENTRYPOINT ["/helm-sync"]
 
 # Hydration controller image with shell
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.2-gke.7 as hydration-controller-with-shell
+# TODO: this is a temporary image. Replace with the new debian-base image when it's available
+FROM gcr.io/config-management-release/debian-base:bullseye-v1.4.2-gke.7-upgrade as hydration-controller-with-shell
 WORKDIR /
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
@@ -164,11 +165,11 @@ ENTRYPOINT ["/admission-webhook"]
 # Nomos image
 # Not used by Config Sync backend components. Intended for use cases with the
 # nomos CLI (e.g. containerized CI/CD)
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.2-gke.7 as nomos
+# TODO: this is a temporary image. Replace with the new debian-base image when it's available
+FROM gcr.io/config-management-release/debian-base:bullseye-v1.4.2-gke.7-upgrade as nomos
 
 # https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
 RUN apt-get update && \
-  apt-get -y upgrade && \
   apt-get install -y bash git
 
 RUN mkdir -p /opt/nomos/bin

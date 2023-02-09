@@ -278,11 +278,7 @@ func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
 
 func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
 	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "acme.com",
-		Version: version,
-		Kind:    "Anvil",
-	})
+	u.SetGroupVersionKind(anvilGVK(version))
 	if name != "" {
 		u.SetName(name)
 	}
@@ -292,6 +288,14 @@ func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
 		}
 	}
 	return u
+}
+
+func anvilGVK(version string) schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "acme.com",
+		Version: version,
+		Kind:    "Anvil",
+	}
 }
 
 func TestMultipleVersions_RoleBinding(t *testing.T) {
@@ -414,6 +418,9 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 
 func hasV1Subjects(subjects ...string) func(o client.Object) error {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		r, ok := o.(*rbacv1.RoleBinding)
 		if !ok {
 			return nomostest.WrongTypeErr(o, r)
@@ -438,6 +445,9 @@ func hasV1Subjects(subjects ...string) func(o client.Object) error {
 
 func hasV1Beta1Subjects(subjects ...string) func(o client.Object) error {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		r, ok := o.(*rbacv1beta1.RoleBinding)
 		if !ok {
 			return nomostest.WrongTypeErr(o, r)

@@ -423,6 +423,9 @@ func validateNamespaces(nt *nomostest.NT, expectedNamespaces []string, expectedO
 
 func containerImagePullPolicy(policy string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rq, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(rq, &appsv1.Deployment{})

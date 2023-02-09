@@ -21,12 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
-	admissionv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,8 +31,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -51,9 +50,9 @@ import (
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	webhookconfig "kpt.dev/configsync/pkg/webhook/configuration"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -329,59 +328,49 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 		}
 	}
 
-	deployments := map[client.ObjectKey]time.Duration{
-		{Name: reconcilermanager.ManagerName, Namespace: configmanagement.ControllerNamespace}:       nt.DefaultWaitTimeout,
-		{Name: DefaultRootReconcilerName, Namespace: configmanagement.ControllerNamespace}:           nt.DefaultWaitTimeout,
-		{Name: webhookconfig.ShortName, Namespace: configmanagement.ControllerNamespace}:             nt.DefaultWaitTimeout * 2,
-		{Name: metrics.OtelCollectorName, Namespace: metrics.MonitoringNamespace}:                    nt.DefaultWaitTimeout,
-		{Name: configmanagement.RGControllerName, Namespace: configmanagement.RGControllerNamespace}: nt.DefaultWaitTimeout,
-	}
-
-	var wg sync.WaitGroup
-	errCh := make(chan error)
-
-	// Wait for deployments asynchronously, for more accurate time reporting.
-	for deployment, timeout := range deployments {
-		wg.Add(1)
-		timeoutCopy := timeout // copy loop var for use in goroutine
-		go func(key client.ObjectKey) {
-			defer wg.Done()
-			took, err := Retry(timeoutCopy, func() error {
-				return nt.Validate(key.Name, key.Namespace,
-					&appsv1.Deployment{}, isAvailableDeployment)
-			})
-			if err != nil {
-				errCh <- err
-				return
-			}
-			nt.T.Logf("took %v to wait for Deployment %s", took, key)
-		}(deployment)
-	}
-
-	// Close error channel when all retry loops are done.
-	go func() {
-		wg.Wait()
-		close(errCh)
-	}()
-
-	// Collect errors until error channel is closed.
-	var errs status.MultiError
-	for err := range errCh {
-		errs = status.Append(errs, err)
-	}
-	if errs != nil {
-		return errs
-	}
-
-	// Validate the webhook config separately, since it's not a Deployment.
-	if !*nt.WebhookDisabled {
-		took, err := Retry(nt.DefaultWaitTimeout, func() error {
-			return nt.Validate("admission-webhook.configsync.gke.io", "", &admissionv1.ValidatingWebhookConfiguration{})
-		})
-		if err != nil {
-			return err
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return WatchForCurrentStatus(nt, kinds.Deployment(),
+			configmanagement.RGControllerName, configmanagement.RGControllerNamespace)
+	})
+	tg.Go(func() error {
+		return WatchForCurrentStatus(nt, kinds.Deployment(),
+			reconcilermanager.ManagerName, configmanagement.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		predicates := []Predicate{StatusEquals(nt, kstatus.CurrentStatus)}
+		// If testing on GKE, ensure that the otel-collector deployment has
+		// picked up the `otel-collector-googlecloud` configmap.
+		// This bumps the deployment generation.
+		if *e2e.TestCluster == e2e.GKE {
+			predicates = append(predicates, HasGenerationAtLeast(2))
 		}
-		nt.T.Logf("took %v to wait for %s %s", took, "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io")
+		return WatchObject(nt, kinds.Deployment(),
+			metrics.OtelCollectorName, metrics.MonitoringNamespace, predicates)
+	})
+	tg.Go(func() error {
+		// The root-reconciler is created after the reconciler-manager is ready.
+		// So wait longer for it to come up.
+		return WatchForCurrentStatus(nt, kinds.Deployment(),
+			DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+			WatchTimeout(nt.DefaultWaitTimeout*2))
+	})
+	if !*nt.WebhookDisabled {
+		// If disabled, we don't need to wait for the webhook to be ready.
+		tg.Go(func() error {
+			return WatchForCurrentStatus(nt, kinds.ValidatingWebhookConfiguration(),
+				"admission-webhook.configsync.gke.io", "")
+		})
+		tg.Go(func() error {
+			// The webhook takes a long time to come up, because of SSL cert
+			// injection. So wait longer for it to come up.
+			return WatchForCurrentStatus(nt, kinds.Deployment(),
+				webhookconfig.ShortName, configmanagement.ControllerNamespace,
+				WatchTimeout(nt.DefaultWaitTimeout*2))
+		})
+	}
+	if err := tg.Wait(); err != nil {
+		return err
 	}
 
 	return validateMultiRepoPods(nt)
@@ -426,6 +415,9 @@ func validateMultiRepoPods(nt *NT) error {
 //	E0826 07:55:17.436945       1 logr.go:265] setup "msg"="starting manager" "error"="Get \"https://10.96.0.1:443/api?timeout=32s\": dial tcp 10.96.0.1:443: i/o timeout"
 func noOOMKilledContainer(nt *NT) Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
 		pod, ok := o.(*corev1.Pod)
 		if !ok {
 			return WrongTypeErr(o, pod)
@@ -473,16 +465,9 @@ func setupRepoSync(nt *NT, nn types.NamespacedName) {
 }
 
 func waitForReconciler(nt *NT, name string) error {
-	took, err := Retry(60*time.Second, func() error {
-		return nt.Validate(name, configmanagement.ControllerNamespace,
-			&appsv1.Deployment{}, isAvailableDeployment)
-	})
-	if err != nil {
-		return err
-	}
-	nt.T.Logf("took %v to wait for %s", took, name)
-
-	return nil
+	return WatchForCurrentStatus(nt, kinds.Deployment(),
+		name, configmanagement.ControllerNamespace,
+		WatchTimeout(60*time.Second))
 }
 
 // RepoSyncRoleBinding returns rolebinding that grants service account
@@ -538,6 +523,9 @@ func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
 
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
 func setReconcilerDebugMode(obj client.Object) error {
+	if obj == nil {
+		return ErrObjectNotFound
+	}
 	if !IsReconcilerManagerConfigMap(obj) {
 		return nil
 	}
@@ -586,6 +574,9 @@ func setReconcilerDebugMode(obj client.Object) error {
 // reconciler-manager-cm with reconciler and hydration-controller polling
 // periods to override the default.
 func setPollingPeriods(obj client.Object) error {
+	if obj == nil {
+		return ErrObjectNotFound
+	}
 	if !IsReconcilerManagerConfigMap(obj) {
 		return nil
 	}

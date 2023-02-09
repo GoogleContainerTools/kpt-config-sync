@@ -56,6 +56,7 @@ func WatchTimeout(timeout time.Duration) WatchOption {
 // or the timeout is reached. Object does not need to exist yet, as long as the
 // resource type exists.
 // All Predicates need to handle nil objects (nil means Not Found).
+// If no Predicates are specified, WatchObject watches until the object exists.
 func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, predicates []Predicate, opts ...WatchOption) error {
 	errPrefix := fmt.Sprintf("WatchObject(%s %s/%s)", gvk.Kind, namespace, name)
 
@@ -70,6 +71,11 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	}
 	for _, opt := range opts {
 		opt(&spec)
+	}
+
+	// Default to waiting until the object exists
+	if len(predicates) == 0 {
+		predicates = append(predicates, ObjectFoundPredicate)
 	}
 
 	// Use the context to stop the List and/or Watch if they run too long.

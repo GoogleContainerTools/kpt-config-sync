@@ -16,11 +16,11 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/kinds"
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -51,7 +51,10 @@ spec:
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod missing protocol from port")
 	nt.WaitForRepoSyncs()
 
-	err := nt.Validate("nginx", namespace.Name, &corev1.Pod{})
+	// Parse the pod yaml into an object
+	pod := nt.RootRepos[configsync.RootSyncName].Get("acme/pod.yaml")
+
+	err := nt.Validate(pod.GetName(), pod.GetNamespace(), &corev1.Pod{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -60,9 +63,7 @@ spec:
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the pod")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateNotFound("nginx", namespace.Name, &corev1.Pod{})
-	})
+	err = nomostest.WatchForNotFound(nt, kinds.Pod(), pod.GetName(), pod.GetNamespace())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

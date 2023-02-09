@@ -17,14 +17,12 @@ package e2e
 import (
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
+	"kpt.dev/configsync/pkg/kinds"
 )
 
 const (
@@ -88,15 +86,9 @@ func TestImporterAndSyncerResilientToFlakyAPIService(t *testing.T) {
 
 	nt.T.Log("Wait for test resource to have status CURRENT")
 	nt.WaitForRepoSyncs()
-	_, e := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		err := nt.Validate("resilient", "", &corev1.Namespace{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if e != nil {
+
+	err := nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "resilient", "")
+	if err != nil {
 		nt.T.Fatal("validate failed test resource to have status CURRENT")
 	}
 
@@ -106,46 +98,32 @@ func TestImporterAndSyncerResilientToFlakyAPIService(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml")
 	nt.T.Log("Waiting for nomos to stabilize")
 	nt.WaitForRepoSyncs()
-	err := validateStackdriverAdapterStatusCurrent(nt)
+
+	err = validateStackdriverAdapterStatusCurrent(nt)
 	if err != nil {
 		nt.T.Fatalf("validate failed %s", err)
 	}
 }
 
 func validateStackdriverAdapterStatusCurrent(nt *nomostest.NT) error {
-	// Add retry for backward compatibility for mono repo mode as the status update
-	// does not wait for reconciliation
-	t, e := nomostest.Retry(nt.DefaultReconcileTimeout, func() error {
-		var err error
-		err = nt.Validate("custom-metrics-stackdriver-adapter", "custom-metrics", &corev1.Service{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("custom-metrics-stackdriver-adapter", "custom-metrics", &appsv1.Deployment{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("external-metrics-reader", "custom-metrics", &rbacv1.ClusterRole{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("custom-metrics-auth-reader", "custom-metrics", &rbacv1.RoleBinding{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("custom-metrics-stackdriver-adapter", "custom-metrics", &corev1.ServiceAccount{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		if err != nil {
-			return err
-		}
-		err = nt.Validate("custom-metrics", "", &corev1.Namespace{},
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-		return err
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.Service(), "custom-metrics-stackdriver-adapter", "custom-metrics")
 	})
-	nt.T.Logf("took %v to wait for custom metrics stackdriver adapter", t)
-	return e
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "custom-metrics-stackdriver-adapter", "custom-metrics")
+	})
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.ClusterRole(), "external-metrics-reader", "custom-metrics")
+	})
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), "custom-metrics-auth-reader", "custom-metrics")
+	})
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.ServiceAccount(), "custom-metrics-stackdriver-adapter", "custom-metrics")
+	})
+	tg.Go(func() error {
+		return nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "custom-metrics", "")
+	})
+	return tg.Wait()
 }

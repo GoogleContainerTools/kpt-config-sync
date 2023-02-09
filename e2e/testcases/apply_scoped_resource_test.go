@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -59,7 +60,15 @@ func TestApplyScopedResources(t *testing.T) {
 		// Wait for the kubevirt custom resource to be deleted to prevent the custom resource from
 		// being stuck in the Terminating state which can occur if the operator is deleted prior
 		// to the resource.
-		waitForKubeVirtDeletion(nt)
+
+		// Use Retry & ValidateNotFound instead of WatchForNotFound, because
+		// watching would require importing the KubeVirt API objects.
+		_, err := nomostest.Retry(30*time.Second, func() error {
+			return nt.ValidateNotFound("kubevirt", "kubevirt", kubeVirtObject())
+		})
+		if err != nil {
+			nt.T.Error(err)
+		}
 
 		// Avoids KNV2006 since the repo contains a number of cluster scoped resources
 		// https://cloud.google.com/anthos-config-management/docs/reference/errors#knv2006
@@ -80,9 +89,11 @@ func TestApplyScopedResources(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	// Use Retry & Validate instead of WatchForCurrentStatus, because
+	// watching would require importing the KubeVirt API objects.
 	_, err = nomostest.Retry(60*time.Second, func() error {
-		_, err := nt.Kubectl("get", "vm", "testvm", "-n", "bookstore1")
-		return err
+		return nt.Validate("testvm", "bookstore1", virtualMachineObject(),
+			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -96,22 +107,22 @@ func TestApplyScopedResources(t *testing.T) {
 	}
 }
 
-func waitForKubeVirtDeletion(nt *nomostest.NT) {
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		return nt.ValidateNotFound("kubevirt", "kubevirt", kubeVirtObject())
-	})
-	if err != nil {
-		nt.T.Error(err)
-	}
-}
-
 func kubeVirtObject() client.Object {
 	kubeVirtObj := &unstructured.Unstructured{}
 	kubeVirtObj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "kubevirt.io",
 		Version: "v1",
-		Kind:    "kubevirt",
+		Kind:    "KubeVirt",
 	})
+	return kubeVirtObj
+}
 
+func virtualMachineObject() client.Object {
+	kubeVirtObj := &unstructured.Unstructured{}
+	kubeVirtObj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "kubevirt.io",
+		Version: "v1",
+		Kind:    "VirtualMachine",
+	})
 	return kubeVirtObj
 }

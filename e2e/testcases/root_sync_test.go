@@ -153,9 +153,10 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	}
 
 	// Validate namespace 'audit' no longer present.
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.ValidateNotFound(acmeNS, "", fake.NamespaceObject(acmeNS))
-	})
+	// Namespace should be marked as deleted, but may not be NotFound yet,
+	// because its finalizer will block until all objects in that namespace are
+	// deleted.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), acmeNS, "")
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -239,11 +240,12 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	// Validate namespace 'audit-test' not present to vaidate rootsync is not syncing
-	// from 'test-branch' anymore.
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.ValidateNotFound(testNS, "", fake.NamespaceObject(testNS))
-	})
+	// Validate namespace 'audit-test' not present to vaidate rootsync is not
+	// syncing from 'test-branch' anymore.
+	// Namespace should be marked as deleted, but may not be NotFound yet,
+	// because its finalizer will block until all objects in that namespace are
+	// deleted.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), testNS, "")
 	if err != nil {
 		nt.T.Fatalf("RootSync update failed: %v", err)
 	}
@@ -292,10 +294,12 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 	// Deployment is successfully created.
 	// Log error if the Reconciling condition does not progress to False before the timeout
 	// expires.
-	_, err := nomostest.Retry(15*time.Second, func() error {
-		return nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &v1beta1.RootSync{},
-			hasRootSyncReconcilingStatus(metav1.ConditionFalse), hasRootSyncStalledStatus(metav1.ConditionFalse))
-	})
+	err := nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, v1.NSConfigManagementSystem,
+		[]nomostest.Predicate{
+			hasRootSyncReconcilingStatus(metav1.ConditionFalse),
+			hasRootSyncStalledStatus(metav1.ConditionFalse),
+		},
+		nomostest.WatchTimeout(15*time.Second))
 	if err != nil {
 		nt.T.Errorf("RootSync did not finish reconciling: %v", err)
 	}
@@ -323,6 +327,9 @@ func TestManageSelfRootSync(t *testing.T) {
 
 func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rs := o.(*v1beta1.RootSync)
 		conditions := rs.Status.Conditions
 		for _, condition := range conditions {
@@ -336,6 +343,9 @@ func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate 
 
 func hasRootSyncStalledStatus(r metav1.ConditionStatus) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		rs := o.(*v1beta1.RootSync)
 		conditions := rs.Status.Conditions
 		for _, condition := range conditions {

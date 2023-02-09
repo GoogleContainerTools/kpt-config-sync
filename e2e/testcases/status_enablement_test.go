@@ -15,6 +15,8 @@
 package e2e
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,8 +26,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/resourcegroup"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
+	resourcegroupv1alpha1 "kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
+	"sigs.k8s.io/cli-utils/pkg/common"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // This file includes testcases to enable status
@@ -46,15 +51,13 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap")
 	nt.WaitForRepoSyncs()
 
-	_, err := nomostest.Retry(120*time.Second, func() error {
-		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
-		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
-			nomostest.NoStatus())
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+	err := nomostest.WatchObject(nt, kinds.ResourceGroup(),
+		configsync.RootSyncName, configsync.ControllerNamespace,
+		[]nomostest.Predicate{
+			resourceGroupHasNoStatus,
+			nomostest.HasLabel(common.InventoryLabel, id),
+		},
+		nomostest.WatchTimeout(120*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -63,16 +66,47 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "enabled"}}}`)
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(120*time.Second, func() error {
-		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
-		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
-			nomostest.HasStatus())
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+	err = nomostest.WatchObject(nt, kinds.ResourceGroup(),
+		configsync.RootSyncName, configsync.ControllerNamespace,
+		[]nomostest.Predicate{
+			resourceGroupHasStatus,
+			nomostest.HasLabel(common.InventoryLabel, id),
+		},
+		nomostest.WatchTimeout(120*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func resourceGroupHasNoStatus(obj client.Object) error {
+	if obj == nil {
+		return nomostest.ErrObjectNotFound
+	}
+	rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
+	if !ok {
+		return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
+	}
+	// We can't check that the status field is missing, because the
+	// ResourceGroup object doesn't use a pointer for status.
+	// But we can check that the status is empty, which is what we really care
+	// about, to reduce the size of the object in etcd.
+	if !reflect.ValueOf(rg.Status).IsZero() {
+		return fmt.Errorf("found non-empty status in %s", core.IDOf(obj))
+	}
+	return nil
+}
+
+func resourceGroupHasStatus(obj client.Object) error {
+	if obj == nil {
+		return nomostest.ErrObjectNotFound
+	}
+	rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
+	if !ok {
+		return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
+	}
+	// When status is enabled, the resource statuses are computed and populated.
+	if len(rg.Status.ResourceStatuses) == 0 {
+		return fmt.Errorf("found empty status in %s", core.IDOf(obj))
+	}
+	return nil
 }

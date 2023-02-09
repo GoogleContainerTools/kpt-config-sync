@@ -25,12 +25,9 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
-	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -66,57 +63,8 @@ func installGitServer(nt *NT) func() error {
 	}
 
 	return func() error {
-		// In CI, 2% of the time this takes longer than 60 seconds, so 120 seconds
-		// seems like a reasonable amount of time to wait before erroring out.
-		took, err := Retry(nt.DefaultWaitTimeout, func() error {
-			return nt.Validate(testGitServer, testGitNamespace,
-				&appsv1.Deployment{}, isAvailableDeployment)
-		})
-		if err != nil {
-			return err
-		}
-		nt.T.Logf("took %v to wait for git-server to come up", took)
-		return nil
+		return WatchForCurrentStatus(nt, kinds.Deployment(), testGitServer, testGitNamespace)
 	}
-}
-
-// isAvailableDeployment ensures all of the passed Deployment's replicas are
-// available.
-func isAvailableDeployment(o client.Object) error {
-	d, ok := o.(*appsv1.Deployment)
-	if !ok {
-		return WrongTypeErr(o, d)
-	}
-	ud, err := kinds.ToUnstructured(d, core.Scheme)
-	if err != nil {
-		return fmt.Errorf("failed to convert Deployment Object to Unstructured: %v", err)
-	}
-	result, err := kstatus.Compute(ud)
-	if err != nil {
-		// Display the full state of the malfunctioning Deployment to aid in debugging.
-		jsn, e := json.MarshalIndent(d, "", "  ")
-		if e != nil {
-			return e
-		}
-		return fmt.Errorf("%w for deployment/%s in namespace %s: status check failed %v\n\n%s",
-			ErrFailedPredicate, d.GetName(), d.GetNamespace(), err, string(jsn))
-	}
-	if result.Status != kstatus.CurrentStatus {
-		// Display the full state of the malfunctioning Deployment to aid in debugging.
-		jsn, err := json.MarshalIndent(d, "", "  ")
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("%w for deployment/%s in namespace %s: got status %s, want %s\n\n%s",
-			ErrFailedPredicate, d.GetName(), d.GetNamespace(), result.Status.String(), kstatus.CurrentStatus.String(), string(jsn))
-	}
-
-	// otel_controller.go:configureGooglecloudConfigMap creates or updates `otel-collector-googlecloud` configmap
-	// which causes the deployment to be updated. We need to make sure the updated deployment is available.
-	if *e2e.TestCluster == e2e.GKE && d.Name == metrics.OtelCollectorName && d.ObjectMeta.Generation < 2 {
-		return fmt.Errorf("deployment/%s in namespace %s should be updated after creation", d.Name, d.Namespace)
-	}
-	return nil
 }
 
 func gitServer() []client.Object {

@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -36,16 +37,13 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/proxy")
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/proxy")
-		_, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-			return nt.ValidateNotFound("tinyproxy-deployment", "proxy-test", &appsv1.Deployment{})
-		})
+		err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "tinyproxy-deployment", "proxy-test")
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 	})
-	_, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.Validate("tinyproxy-deployment", "proxy-test", &appsv1.Deployment{}, hasReadyReplicas(1))
-	})
+	err := nomostest.WatchObject(nt, kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
+		[]nomostest.Predicate{hasReadyReplicas(1)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -76,6 +74,9 @@ func TestSyncingThroughAProxy(t *testing.T) {
 
 func hasReadyReplicas(replicas int32) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		deployment, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(deployment, &appsv1.Deployment{})

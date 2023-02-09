@@ -218,6 +218,9 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, genera
 
 func hasGeneration(generation int64) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -230,6 +233,9 @@ func hasGeneration(generation int64) nomostest.Predicate {
 }
 func firstContainerTerminationMessagePathIs(terminationMessagePath string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -242,6 +248,9 @@ func firstContainerTerminationMessagePathIs(terminationMessagePath string) nomos
 }
 func firstContainerStdinIs(stdin bool) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -254,6 +263,9 @@ func firstContainerStdinIs(stdin bool) nomostest.Predicate {
 }
 func hasTolerations(tolerations []corev1.Toleration) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -268,6 +280,9 @@ func hasTolerations(tolerations []corev1.Toleration) nomostest.Predicate {
 }
 func hasPriorityClassName(priorityClassName string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -280,6 +295,9 @@ func hasPriorityClassName(priorityClassName string) nomostest.Predicate {
 }
 func firstContainerImageIs(image string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -293,6 +311,9 @@ func firstContainerImageIs(image string) nomostest.Predicate {
 
 func firstContainerImageIsNot(image string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -306,6 +327,9 @@ func firstContainerImageIsNot(image string) nomostest.Predicate {
 
 func hasReplicas(replicas int32) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -319,6 +343,9 @@ func hasReplicas(replicas int32) nomostest.Predicate {
 
 func firstContainerMemoryLimitIs(memoryLimit string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -333,6 +360,9 @@ func firstContainerMemoryLimitIs(memoryLimit string) nomostest.Predicate {
 
 func firstContainerCPULimitIs(cpuLimit string) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -347,6 +377,9 @@ func firstContainerCPULimitIs(cpuLimit string) nomostest.Predicate {
 
 func gitCredsVolumeDeleted(volumesCount int) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -366,6 +399,9 @@ func gitCredsVolumeDeleted(volumesCount int) nomostest.Predicate {
 
 func templateForGcpServiceAccountAuthType() nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -386,6 +422,9 @@ func templateForGcpServiceAccountAuthType() nomostest.Predicate {
 
 func templateForSSHAuthType() nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -406,6 +445,9 @@ func templateForSSHAuthType() nomostest.Predicate {
 
 func totalContainerMemoryRequestIs(memoryRequest int64) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -432,6 +474,9 @@ func getTotalContainerMemoryRequest(d *appsv1.Deployment) int {
 
 func totalContainerCPURequestIs(expectedCPURequest int64) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -458,6 +503,9 @@ func getTotalContainerCPURequest(d *appsv1.Deployment) int {
 
 func firstContainerCPURequestIs(cpuRequest int64) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
@@ -472,6 +520,9 @@ func firstContainerCPURequestIs(cpuRequest int64) nomostest.Predicate {
 
 func firstContainerMemoryRequestIs(memoryRequest int64) nomostest.Predicate {
 	return func(o client.Object) error {
+		if o == nil {
+			return nomostest.ErrObjectNotFound
+		}
 		memoryRequest *= memoryMB
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {

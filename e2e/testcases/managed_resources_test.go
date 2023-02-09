@@ -403,9 +403,8 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("cm-1", "bookstore", &corev1.ConfigMap{})
-	})
+	err = nomostest.WatchForCurrentStatus(nt, kinds.ConfigMap(), "cm-1", "bookstore",
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -417,9 +416,8 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{})
-	})
+	err = nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "bookstore", "",
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -463,9 +461,8 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("cm-1", "bookstore", &corev1.ConfigMap{})
-	})
+	err = nomostest.WatchForCurrentStatus(nt, kinds.ConfigMap(), "cm-1", "bookstore",
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -477,9 +474,8 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{})
-	})
+	err = nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "bookstore", "",
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -502,9 +498,11 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync does not remove this field
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation("season", "summer"))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation("season", "summer"),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -529,9 +527,11 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync does not remove this field
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -555,9 +555,11 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 	}
 
 	// Verify Config Sync does not remove this field
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation("season", "summer"))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation("season", "summer"),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -596,9 +598,11 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 
 	// Verify Config Sync corrects it
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation("season", "summer"))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation("season", "summer"),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -610,9 +614,11 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 
 	// Verify Config Sync corrects it
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -695,9 +701,11 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation("season", "summer"))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation("season", "summer"),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -708,9 +716,11 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		return nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled))
-	})
+	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
+		[]nomostest.Predicate{
+			nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+		},
+		nomostest.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -17,7 +17,9 @@ package e2e
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -27,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
@@ -181,9 +184,8 @@ func TestMultiDependencies(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Verify that cm3 is removed")
-	if _, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.ValidateNotFound(cm3Name, namespaceName, &corev1.ConfigMap{})
-	}); err != nil {
+	err := nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm3Name, namespaceName)
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -205,16 +207,14 @@ func TestMultiDependencies(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	nt.T.Log("Verify that cm1 is removed")
-	if _, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.ValidateNotFound(cm1Name, namespaceName, &corev1.ConfigMap{})
-	}); err != nil {
+	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm1Name, namespaceName)
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Verify that cm2 is removed")
-	if _, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
-		return nt.ValidateNotFound(cm2Name, namespaceName, &corev1.ConfigMap{})
-	}); err != nil {
+	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm2Name, namespaceName)
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -442,18 +442,14 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.WaitForRepoSyncs()
 
 	var pod1, pod2 *corev1.Pod
-	_, err := nomostest.Retry(nt.DefaultWaitTimeout, func() error {
+	_, err := nomostest.Retry(30*time.Second, func() error {
 		pod1 = &corev1.Pod{}
 		pod2 = &corev1.Pod{}
-		err := nt.Validate(pod1Name, namespaceName,
-			pod1, isPodReady)
-		if err != nil {
-			return err
-		}
-		return nt.Validate(pod2Name, namespaceName,
-			pod2, isPodReady)
+		var errs error
+		errs = multierr.Append(errs, nt.Validate(pod1Name, namespaceName, pod1, isPodReady))
+		errs = multierr.Append(errs, nt.Validate(pod2Name, namespaceName, pod2, isPodReady))
+		return errs
 	})
-
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -470,14 +466,11 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod1 and pod2")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(20, func() error {
-		pod1 = &corev1.Pod{}
-		pod2 = &corev1.Pod{}
-		err := nt.ValidateNotFound(pod1Name, namespaceName, pod1)
-		if err != nil {
-			return err
-		}
-		return nt.ValidateNotFound(pod2Name, namespaceName, pod2)
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}))
+		errs = multierr.Append(errs, nt.ValidateNotFound(pod2Name, namespaceName, &corev1.Pod{}))
+		return errs
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -494,20 +487,16 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode,
 		"skipped apply of Pod, bookstore/pod4: dependency apply reconcile timeout: bookstore_pod3__Pod")
 
-	_, err = nomostest.Retry(20, func() error {
-		pod3 := &corev1.Pod{}
-		pod4 := &corev1.Pod{}
-		err := nt.Validate("pod3", namespaceName,
-			pod3, isPodNotReady)
-		if err != nil {
-			return err
-		}
-		return nt.ValidateNotFound("pod4", namespaceName, pod4)
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.Validate("pod3", namespaceName, &corev1.Pod{}, isPodNotReady))
+		errs = multierr.Append(errs, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
+		return errs
 	})
-
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
 	nt.T.Log("cleanup")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod3.yaml")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod4.yaml")
@@ -527,18 +516,12 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod5 and pod6")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(20, func() error {
-		pod5 := &corev1.Pod{}
-		pod6 := &corev1.Pod{}
-		err := nt.Validate("pod5", namespaceName,
-			pod5, isPodReady)
-		if err != nil {
-			return err
-		}
-		return nt.Validate("pod6", namespaceName,
-			pod6, isPodReady)
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.Validate("pod5", namespaceName, &corev1.Pod{}, isPodReady))
+		errs = multierr.Append(errs, nt.Validate("pod6", namespaceName, &corev1.Pod{}, isPodReady))
+		return errs
 	})
-
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -548,16 +531,12 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod5")
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency")
 
-	_, err = nomostest.Retry(20, func() error {
-		pod5 := &corev1.Pod{}
-		pod6 := &corev1.Pod{}
-		err := nt.Validate("pod5", namespaceName, pod5)
-		if err != nil {
-			return err
-		}
-		return nt.Validate("pod6", namespaceName, pod6)
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.Validate("pod5", namespaceName, &corev1.Pod{}))
+		errs = multierr.Append(errs, nt.Validate("pod6", namespaceName, &corev1.Pod{}))
+		return errs
 	})
-
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -567,22 +546,21 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod6")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(20, func() error {
-		pod5 := &corev1.Pod{}
-		pod6 := &corev1.Pod{}
-		err := nt.ValidateNotFound("pod5", namespaceName, pod5)
-		if err != nil {
-			return err
-		}
-		return nt.ValidateNotFound("pod6", namespaceName, pod6)
+	_, err = nomostest.Retry(30*time.Second, func() error {
+		var errs error
+		errs = multierr.Append(errs, nt.ValidateNotFound("pod5", namespaceName, &corev1.Pod{}))
+		errs = multierr.Append(errs, nt.ValidateNotFound("pod6", namespaceName, &corev1.Pod{}))
+		return errs
 	})
-
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
 func isPodReady(o client.Object) error {
+	if o == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	pod := o.(*corev1.Pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == "Ready" {
@@ -596,6 +574,9 @@ func isPodReady(o client.Object) error {
 }
 
 func isPodNotReady(o client.Object) error {
+	if o == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	pod := o.(*corev1.Pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == "Ready" {

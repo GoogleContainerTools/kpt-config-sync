@@ -93,6 +93,9 @@ func validateKCCResourceReady(nt *nomostest.NT, gvk schema.GroupVersionKind, nam
 }
 
 func kccResourceReady(o client.Object) error {
+	if o == nil {
+		return nomostest.ErrObjectNotFound
+	}
 	u := o.(*unstructured.Unstructured)
 	conditions, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
 	if err != nil || !found || len(conditions) == 0 {

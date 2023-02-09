@@ -255,10 +255,15 @@ func newListWatchForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace 
 	if err != nil {
 		return nil, err
 	}
+	resource := mapping.Resource.Resource
+	// Validate namespace is empty for cluster-scoped resources
+	if mapping.Scope.Name() == meta.RESTScopeNameRoot && namespace != "" {
+		return nil, errors.Errorf("cannot watch cluster-scoped resource %q in namespace %q", resource, namespace)
+	}
 	// Use a selector to filter the events down to just the object we care about.
 	nameSelector := fields.OneTermEqualSelector("metadata.name", name)
 	// Create a ListerWatcher for this resource and namespace
-	lw := cache.NewListWatchFromClient(restClient, mapping.Resource.Resource, namespace, nameSelector)
+	lw := cache.NewListWatchFromClient(restClient, resource, namespace, nameSelector)
 	return lw, nil
 }
 

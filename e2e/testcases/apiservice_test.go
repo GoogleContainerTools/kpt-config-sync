@@ -114,7 +114,7 @@ func validateStackdriverAdapterStatusCurrent(nt *nomostest.NT) error {
 		return nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "custom-metrics-stackdriver-adapter", "custom-metrics")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.ClusterRole(), "external-metrics-reader", "custom-metrics")
+		return nomostest.WatchForCurrentStatus(nt, kinds.ClusterRole(), "external-metrics-reader", "")
 	})
 	tg.Go(func() error {
 		return nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), "custom-metrics-auth-reader", "custom-metrics")

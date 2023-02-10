@@ -25,6 +25,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -187,6 +188,10 @@ func gitDeployment() *appsv1.Deployment {
 							{Name: "keys", MountPath: "/git-server/keys"},
 							{Name: "repos", MountPath: "/git-server/repos"},
 						},
+						// Restart the container if 6 probes fail
+						LivenessProbe: newTCPSocketProbe(22, 6),
+						// Mark pod as unready if 2 probes fail
+						ReadinessProbe: newTCPSocketProbe(22, 2),
 					},
 					{
 						Name:  testGitHTTPServer,
@@ -196,6 +201,10 @@ func gitDeployment() *appsv1.Deployment {
 							{Name: "repos", MountPath: "/git-server/repos"},
 							{Name: "ssl-cert", MountPath: "/etc/nginx/ssl"},
 						},
+						// Restart the container if 6 probes fail
+						LivenessProbe: newTCPSocketProbe(443, 6),
+						// Mark pod as unready if 2 probes fail
+						ReadinessProbe: newTCPSocketProbe(443, 2),
 					},
 				},
 				ImagePullSecrets: []corev1.LocalObjectReference{},
@@ -206,6 +215,21 @@ func gitDeployment() *appsv1.Deployment {
 		},
 	}
 	return deployment
+}
+
+func newTCPSocketProbe(port int, failureThreshold int32) *corev1.Probe {
+	return &corev1.Probe{
+		FailureThreshold:    failureThreshold,
+		InitialDelaySeconds: 2,
+		PeriodSeconds:       10,
+		SuccessThreshold:    1,
+		TimeoutSeconds:      1,
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt(port),
+			},
+		},
+	}
 }
 
 // portForwardGitServer forwards the git-server deployment to a port.

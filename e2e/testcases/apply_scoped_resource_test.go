@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -84,17 +84,21 @@ func TestApplyScopedResources(t *testing.T) {
 	// The example also includes a VirtualMachine, which will be skipped until the CRD is applied.
 	nt.WaitForRepoSyncs(nomostest.WithTimeout(nt.DefaultWaitTimeout * 2))
 
-	err := nomostest.WaitForCRDs(nt, []string{"virtualmachines.kubevirt.io"})
+	// The VirtualMachine CRD should already be reconciled, because if not the
+	// VirtualMachine object wouldn't have been applied, and WaitForRepoSyncs
+	// would have failed.
+	err := nt.Validate("virtualmachines.kubevirt.io", "", &apiextensionsv1.CustomResourceDefinition{},
+		nomostest.IsEstablished)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	// Use Retry & Validate instead of WatchForCurrentStatus, because
-	// watching would require importing the KubeVirt API objects.
-	_, err = nomostest.Retry(60*time.Second, func() error {
-		return nt.Validate("testvm", "bookstore1", virtualMachineObject(),
-			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
-	})
+	// The VirtualMachine should already be applied, but it may or may not ever
+	// reconcile. KubeVirt does nested virtualization, which requires certain
+	// compute instance types, which may not be satisfied by all test clusters.
+	// https://kubevirt.io/quickstart_cloud/
+	// https://cloud.google.com/compute/docs/instances/nested-virtualization/overview#restrictions
+	err = nt.Validate("testvm", "bookstore1", virtualMachineObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

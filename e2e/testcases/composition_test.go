@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -370,12 +371,17 @@ func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.O
 }
 
 func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
+	tg := taskgroup.New()
 	for _, obj := range objs {
-		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj,
-			nomostest.StatusEquals(nt, status.CurrentStatus))
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		tg.Go(func() error {
+			return nomostest.WatchForCurrentStatus(
+				nt, obj.GetObjectKind().GroupVersionKind(), obj.GetName(), obj.GetNamespace(),
+			)
+		})
+	}
+	err := tg.Wait()
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -789,6 +790,28 @@ func MissingFinalizer(name string) Predicate {
 	}
 }
 
+// HasDeletionTimestamp is a predicate that tests that an Object has a DeletionTimestamp.
+func HasDeletionTimestamp(o client.Object) error {
+	if o == nil {
+		return ErrObjectNotFound
+	}
+	if o.GetDeletionTimestamp().IsZero() {
+		return errors.New("expected deletion timestamp not found")
+	}
+	return nil
+}
+
+// MissingDeletionTimestamp is a predicate that tests that an Object does NOT have a DeletionTimestamp.
+func MissingDeletionTimestamp(o client.Object) error {
+	if o == nil {
+		return ErrObjectNotFound
+	}
+	if !o.GetDeletionTimestamp().IsZero() {
+		return errors.New("expected deletion timestamp to be missing")
+	}
+	return nil
+}
+
 // ObjectNotFoundPredicate returns an error unless the object is nil (not found).
 func ObjectNotFoundPredicate(o client.Object) error {
 	if o == nil {
@@ -806,4 +829,19 @@ func ObjectFoundPredicate(o client.Object) error {
 		return ErrObjectNotFound
 	}
 	return nil
+}
+
+// WatchSyncPredicate returns a predicate and a channel.
+// The channel will be closed when the predicate is first called.
+// Use this to block until WatchObject has completed its first LIST call.
+// This will help avoid missed events when WatchObject is run asynchronously.
+func WatchSyncPredicate() (Predicate, <-chan struct{}) {
+	var once sync.Once
+	syncCh := make(chan struct{})
+	return func(_ client.Object) error {
+		once.Do(func() {
+			close(syncCh)
+		})
+		return nil
+	}, syncCh
 }

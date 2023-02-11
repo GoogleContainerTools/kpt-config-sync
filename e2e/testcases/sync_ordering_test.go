@@ -15,16 +15,17 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
@@ -32,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -406,7 +408,9 @@ func TestExternalDependencyError(t *testing.T) {
 }
 
 func TestDependencyWithReconciliation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
+	// Increase reconcile timeout to account for slow pod scheduling due to cluster autoscaling.
+	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured,
+		ntopts.WithReconcileTimeout(5*time.Minute))
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -438,42 +442,143 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/pod2.yaml", fake.PodObject(pod2Name, []corev1.Container{container},
 		core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod1")))
+
+	pod1 := &corev1.Pod{}
+	pod2 := &corev1.Pod{}
+	pod1SyncPredicate, pod1SyncCh := nomostest.WatchSyncPredicate()
+	pod2SyncPredicate, pod2SyncCh := nomostest.WatchSyncPredicate()
+
+	nt.T.Logf("Wait for both pods to become ready (background)")
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.Pod(), pod1Name, namespaceName,
+			[]nomostest.Predicate{
+				pod1SyncPredicate,
+				podCachePredicate(pod1),
+				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			},
+			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+	})
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.Pod(), pod2Name, namespaceName,
+			[]nomostest.Predicate{
+				pod2SyncPredicate,
+				podCachePredicate(pod2),
+				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			},
+			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+	})
+	// Watch in the background
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		errCh <- tg.Wait()
+	}()
+
+	// Wait for both watches to be synchronized.
+	// This means it knows the ResourceVersion from before the following changes.
+	<-pod1SyncCh
+	<-pod2SyncCh
+
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod1 and pod2 (pod2 depends on pod1)")
 	nt.WaitForRepoSyncs()
 
-	var pod1, pod2 *corev1.Pod
-	_, err := nomostest.Retry(30*time.Second, func() error {
-		pod1 = &corev1.Pod{}
-		pod2 = &corev1.Pod{}
-		var errs error
-		errs = multierr.Append(errs, nt.Validate(pod1Name, namespaceName, pod1, isPodReady))
-		errs = multierr.Append(errs, nt.Validate(pod2Name, namespaceName, pod2, isPodReady))
-		return errs
-	})
-	if err != nil {
+	nt.T.Logf("Wait for both pods to become ready (foreground)")
+	if err := <-errCh; err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Verify that pod2 is created after pod1 is ready")
-	readyTime := getPodReadyTimestamp(pod1)
-	if pod2.CreationTimestamp.Before(readyTime) {
-		nt.T.Fatalf("an object (%s) should be created after its dependency (%s) is ready", core.GKNN(pod2), core.GKNN(pod1))
+	// Apply order: pod1 -> pod2 (pod2 depends on pod1)
+	nt.T.Logf("Verify that pod2 was created after pod1 was ready")
+	if pod2.CreationTimestamp.Before(getPodReadyTimestamp(pod1)) {
+		nt.T.Fatalf("an object (%s) should be created after its dependency (%s) is ready",
+			core.GKNN(pod2), core.GKNN(pod1))
 	}
 
 	nt.T.Logf("Remove Pod1 and Pod2")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod1.yaml")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod2.yaml")
+
+	pod1 = &corev1.Pod{}
+	pod2 = &corev1.Pod{}
+	pod1SyncPredicate, pod1SyncCh = nomostest.WatchSyncPredicate()
+	pod2SyncPredicate, pod2SyncCh = nomostest.WatchSyncPredicate()
+
+	// Delete order: pod2 -> pod1 (pod2 depends on pod1)
+	// Unfortunately, there's no "not found timestamp" to compare with the
+	// deletion timestamp, so we're using `metadata.managedFields[*].time` as
+	// a proxy for the "last update timestamp".
+	// Note: We can't use client-side timestamps here, because the events are
+	// not always received in the same order they happened, between two watches.
+	var pod1DeletionTimestamp time.Time   // when pod1 is first MODIFIED to have a DeletionTimestamp
+	var pod2LastUpdateTimestamp time.Time // when pod2 is last MODIFIED before being DELETED
+	pod1DeletionPredicate := func(obj client.Object) error {
+		if obj != nil && pod1DeletionTimestamp.IsZero() && !obj.GetDeletionTimestamp().IsZero() {
+			pod1DeletionTimestamp = obj.GetDeletionTimestamp().Time
+		}
+		return nil
+	}
+	pod2LastUpdatedPredicate := func(obj client.Object) error {
+		if obj != nil {
+			lastUpdateTimestamp := getLastUpdateTimestamp(obj)
+			if lastUpdateTimestamp.IsZero() {
+				return errors.New("last update timestamp is missing for pod2")
+			}
+			pod2LastUpdateTimestamp = lastUpdateTimestamp.Time
+		}
+		return nil
+	}
+
+	nt.T.Logf("Wait for both pods to become not found (background)")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.Pod(), pod1Name, namespaceName,
+			[]nomostest.Predicate{
+				pod1SyncPredicate,
+				podCachePredicate(pod1),
+				pod1DeletionPredicate,
+				nomostest.ObjectNotFoundPredicate,
+			},
+			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+	})
+	tg.Go(func() error {
+		return nomostest.WatchObject(nt, kinds.Pod(), pod2Name, namespaceName,
+			[]nomostest.Predicate{
+				pod2SyncPredicate,
+				podCachePredicate(pod2),
+				pod2LastUpdatedPredicate,
+				nomostest.ObjectNotFoundPredicate,
+			},
+			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+	})
+
+	// Watch in the background
+	errCh = make(chan error)
+	go func() {
+		defer close(errCh)
+		errCh <- tg.Wait()
+	}()
+
+	// Wait for both watches to be synchronized.
+	// This means it knows the ResourceVersion from before the following changes.
+	<-pod1SyncCh
+	<-pod2SyncCh
+
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod1 and pod2")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		var errs error
-		errs = multierr.Append(errs, nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}))
-		errs = multierr.Append(errs, nt.ValidateNotFound(pod2Name, namespaceName, &corev1.Pod{}))
-		return errs
-	})
-	if err != nil {
+	nt.T.Logf("Wait for both pods to become not found (foreground)")
+	if err := <-errCh; err != nil {
 		nt.T.Fatal(err)
+	}
+
+	// Delete order: pod2 -> pod1 (pod2 depends on pod1)
+	nt.T.Logf("Verify that pod1 was deleted after pod2 was not found")
+	if !pod1DeletionTimestamp.After(pod2LastUpdateTimestamp) {
+		nt.T.Logf("pod2 last update timestamp: %s", pod2LastUpdateTimestamp.Format(time.RFC3339Nano))
+		nt.T.Logf("pod1 deletion timestamp: %s", pod1DeletionTimestamp.Format(time.RFC3339Nano))
+		nt.T.Fatalf("an object (%s) should be deleted after its dependency (%s) is not found",
+			core.GKNN(pod1), core.GKNN(pod2))
 	}
 
 	nt.T.Log("add pod3 and pod4, pod3's image is not valid, pod4 depends on pod3")
@@ -487,12 +592,13 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode,
 		"skipped apply of Pod, bookstore/pod4: dependency apply reconcile timeout: bookstore_pod3__Pod")
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		var errs error
-		errs = multierr.Append(errs, nt.Validate("pod3", namespaceName, &corev1.Pod{}, isPodNotReady))
-		errs = multierr.Append(errs, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
-		return errs
-	})
+	nt.T.Logf("Verify that pod3 is created but not ready and pod4 is not found")
+	var err error
+	// pod3 will never reconcile (image pull failure)
+	// TODO: kstatus should probably detect image pull failure and time out to Failure status, like it does for scheduling failure.
+	err = multierr.Append(err, nt.Validate("pod3", namespaceName, &corev1.Pod{},
+		nomostest.StatusEquals(nt, kstatus.InProgressStatus)))
+	err = multierr.Append(err, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -502,6 +608,13 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod4.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod3 and pod4")
 	nt.WaitForRepoSyncs()
+
+	nt.T.Logf("Verify that pod3 and pod4 are not found")
+	err = multierr.Append(err, nt.ValidateNotFound("pod3", namespaceName, &corev1.Pod{}))
+	err = multierr.Append(err, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// TestCase: pod6 depends on pod5; both are managed by ConfigSync.
 	// Both exist in the repo and in the cluster.
@@ -516,12 +629,11 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod5 and pod6")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		var errs error
-		errs = multierr.Append(errs, nt.Validate("pod5", namespaceName, &corev1.Pod{}, isPodReady))
-		errs = multierr.Append(errs, nt.Validate("pod6", namespaceName, &corev1.Pod{}, isPodReady))
-		return errs
-	})
+	nt.T.Logf("Verify that pod5 and pod6 are ready")
+	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
+		nomostest.StatusEquals(nt, kstatus.CurrentStatus)))
+	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
+		nomostest.StatusEquals(nt, kstatus.CurrentStatus)))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -531,12 +643,11 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod5")
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency")
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		var errs error
-		errs = multierr.Append(errs, nt.Validate("pod5", namespaceName, &corev1.Pod{}))
-		errs = multierr.Append(errs, nt.Validate("pod6", namespaceName, &corev1.Pod{}))
-		return errs
-	})
+	nt.T.Logf("Verify that pod5 and pod6 were not deleted")
+	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
+		nomostest.MissingDeletionTimestamp))
+	err = multierr.Append(err, nt.Validate("pod6", namespaceName, &corev1.Pod{},
+		nomostest.MissingDeletionTimestamp))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -546,54 +657,49 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod6")
 	nt.WaitForRepoSyncs()
 
-	_, err = nomostest.Retry(30*time.Second, func() error {
-		var errs error
-		errs = multierr.Append(errs, nt.ValidateNotFound("pod5", namespaceName, &corev1.Pod{}))
-		errs = multierr.Append(errs, nt.ValidateNotFound("pod6", namespaceName, &corev1.Pod{}))
-		return errs
-	})
+	nt.T.Logf("Verify that pod5 and pod6 were deleted")
+	err = multierr.Append(err, nt.ValidateNotFound("pod5", namespaceName, &corev1.Pod{}))
+	err = multierr.Append(err, nt.ValidateNotFound("pod6", namespaceName, &corev1.Pod{}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-func isPodReady(o client.Object) error {
-	if o == nil {
-		return nomostest.ErrObjectNotFound
-	}
-	pod := o.(*corev1.Pod)
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == "Ready" {
-			if condition.Status == "True" {
-				return nil
-			}
-			return fmt.Errorf("%s is not ready", core.GKNN(pod))
-		}
-	}
-	return fmt.Errorf("Ready condition not found in %s", core.GKNN(pod))
-}
-
-func isPodNotReady(o client.Object) error {
-	if o == nil {
-		return nomostest.ErrObjectNotFound
-	}
-	pod := o.(*corev1.Pod)
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == "Ready" {
-			if condition.Status == "False" {
-				return nil
-			}
-			return fmt.Errorf("%s is ready", core.GKNN(pod))
-		}
-	}
-	return nil
-}
-
 func getPodReadyTimestamp(pod *corev1.Pod) *metav1.Time {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == "Ready" {
-			return &condition.LastTransitionTime
+			return condition.LastTransitionTime.DeepCopy()
 		}
 	}
 	return nil
+}
+
+// getLastUpdateTimestamp uses the newest `metadata.managedFields[*].time`
+// value as a proxy for the time when the object was last updated.
+func getLastUpdateTimestamp(obj client.Object) *metav1.Time {
+	var lastUpdateTimestamp *metav1.Time
+	for _, entry := range obj.GetManagedFields() {
+		if !entry.Time.IsZero() {
+			if lastUpdateTimestamp.IsZero() || entry.Time.Time.After(lastUpdateTimestamp.Time) {
+				lastUpdateTimestamp = entry.Time.DeepCopy()
+			}
+		}
+	}
+	return lastUpdateTimestamp
+}
+
+// podCachePredicate returns a predicate which overwrites the specified pod with
+// the latest pod, every time the predicate is called with a non-nil object.
+// This can be used to export the last known pod state during a watch or wait.
+func podCachePredicate(pod *corev1.Pod) nomostest.Predicate {
+	return func(obj client.Object) error {
+		if obj != nil {
+			latestPod, ok := obj.(*corev1.Pod)
+			if !ok {
+				return nomostest.WrongTypeErr(obj, &corev1.Pod{})
+			}
+			latestPod.DeepCopyInto(pod)
+		}
+		return nil
+	}
 }

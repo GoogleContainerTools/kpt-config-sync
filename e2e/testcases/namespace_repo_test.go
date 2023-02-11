@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -328,8 +329,9 @@ func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secret
 		return nomostest.WatchForNotFound(nt, kinds.ServiceAccount(), controllers.RepoSyncPermissionsName(), configsync.ControllerNamespace)
 	})
 	for _, sName := range secretNames {
+		nn := types.NamespacedName{Name: sName, Namespace: configsync.ControllerNamespace}
 		tg.Go(func() error {
-			return nomostest.WatchForNotFound(nt, kinds.Secret(), sName, configsync.ControllerNamespace)
+			return nomostest.WatchForNotFound(nt, kinds.Secret(), nn.Name, nn.Namespace)
 		})
 	}
 	if err := tg.Wait(); err != nil {

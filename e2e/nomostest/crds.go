@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,8 +40,10 @@ var (
 func WaitForCRDs(nt *NT, crds []string) error {
 	tg := taskgroup.New()
 	for _, crd := range crds {
+		nn := types.NamespacedName{Name: crd}
 		tg.Go(func() error {
-			return WatchObject(nt, kinds.CustomResourceDefinitionV1(), crd, "",
+			return WatchObject(nt, kinds.CustomResourceDefinitionV1(),
+				nn.Name, nn.Namespace,
 				[]Predicate{IsEstablished})
 		})
 	}

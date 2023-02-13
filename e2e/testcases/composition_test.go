@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -373,10 +374,11 @@ func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.O
 func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	tg := taskgroup.New()
 	for _, obj := range objs {
+		nn := client.ObjectKeyFromObject(obj)
+		gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
+		require.NoError(nt.T, err)
 		tg.Go(func() error {
-			return nomostest.WatchForCurrentStatus(
-				nt, obj.GetObjectKind().GroupVersionKind(), obj.GetName(), obj.GetNamespace(),
-			)
+			return nomostest.WatchForCurrentStatus(nt, gvk, nn.Name, nn.Namespace)
 		})
 	}
 	err := tg.Wait()

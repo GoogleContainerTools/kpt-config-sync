@@ -195,7 +195,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		rsNN := client.ObjectKeyFromObject(rs)
 		nt.T.Logf("[RESET] Waiting for deletion of RootSync %s ...", rsNN)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace)
+			return WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rsNN.Name, rsNN.Namespace)
 		})
 	}
 	return tg.Wait()
@@ -282,7 +282,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		nn := client.ObjectKeyFromObject(obj)
 		nt.T.Logf("[RESET] Waiting for deletion of RepoSync %s ...", nn)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), obj.Name, obj.Namespace)
+			return WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace)
 		})
 	}
 	if err := tg.Wait(); err != nil {
@@ -354,16 +354,16 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 			return err
 		}
 	}
+	tg := taskgroup.New()
 	for _, item := range nsList {
 		obj := &item
 		nn := client.ObjectKeyFromObject(obj)
 		nt.T.Logf("[RESET] Waiting for deletion of Namespace %s ...", nn)
-		if err := WatchForNotFound(nt, kinds.Namespace(), obj.Name, obj.Namespace); err != nil {
-			return err
-		}
+		tg.Go(func() error {
+			return WatchForNotFound(nt, kinds.Namespace(), nn.Name, nn.Namespace)
+		})
 	}
-
-	return nil
+	return tg.Wait()
 }
 
 // deleteRepoSyncClusterRole deletes the ClusterRole used by RepoSync
@@ -401,8 +401,9 @@ func batchDeleteAndWait(nt *NT, objs ...client.Object) error {
 		if err != nil {
 			return err
 		}
+		nn := client.ObjectKeyFromObject(obj)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, gvk, obj.GetName(), obj.GetNamespace())
+			return WatchForNotFound(nt, gvk, nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()

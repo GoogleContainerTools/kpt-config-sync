@@ -25,11 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -218,15 +220,66 @@ func Clean(nt *NT, failOnError FailOnError) {
 		nt.T.Fatal("error waiting for test objects to be deleted")
 	}
 
-	DeleteManagedNamespaces(nt)
+	if err := DeleteManagedNamespaces(nt); err != nil {
+		if failOnError {
+			nt.T.Fatal(err)
+		} else {
+			nt.T.Error(err)
+		}
+	}
 	deleteImplicitNamespaces(nt, failOnError)
 }
 
 // DeleteManagedNamespaces deletes all the namespaces managed by Config Sync.
-func DeleteManagedNamespaces(nt *NT) {
-	nt.T.Logf("Started deleting managed namespaces at %v", time.Now())
-	nt.MustKubectl("delete", "ns", "-l", fmt.Sprintf("%s=%s", metadata.ManagedByKey, metadata.ManagedByValue))
-	nt.T.Logf("Finished deleting managed namespaces at %v", time.Now())
+func DeleteManagedNamespaces(nt *NT) error {
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		nt.T.Logf("[CLEANUP] Deleting managed namespaces took %v", elapsed)
+	}()
+
+	// Delete all Namespaces with the test label (except protected).
+	nsList := &corev1.NamespaceList{}
+	if err := nt.List(nsList, withLabelListOption(metadata.ManagedByKey, metadata.ManagedByValue)); err != nil {
+		return err
+	}
+
+	// Error if any protected namespace are managed by config sync
+	// (managed-by label added) and not reverted by the test.
+	protectedNamespacesWithTestLabel, nsListItems := filterNamespaces(nsList.Items,
+		protectedNamespaces...)
+	if len(protectedNamespacesWithTestLabel) > 0 {
+		return errors.Errorf("protected namespace(s) managed by config sync and cannot be cleaned: %+v",
+			protectedNamespacesWithTestLabel)
+	}
+	return DeleteNamespaces(nt, nsListItems)
+}
+
+// DeleteNamespaces cleans up one or more Namespaces and all their namespaced objects.
+// Use this for bulk deletion of Namespaces.
+func DeleteNamespaces(nt *NT, nsList []corev1.Namespace) error {
+	nt.T.Logf("[CLEANUP] Deleting Namespaces (%d)", len(nsList))
+	if len(nsList) == 0 {
+		return nil
+	}
+	for _, item := range nsList {
+		obj := &item
+		nn := client.ObjectKeyFromObject(obj)
+		nt.T.Logf("[CLEANUP] Deleting Namespace %s", nn)
+		if err := nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+			return err
+		}
+	}
+	tg := taskgroup.New()
+	for _, item := range nsList {
+		obj := &item
+		nn := client.ObjectKeyFromObject(obj)
+		nt.T.Logf("[CLEANUP] Waiting for deletion of Namespace %s ...", nn)
+		tg.Go(func() error {
+			return WatchForNotFound(nt, kinds.Namespace(), nn.Name, nn.Namespace)
+		})
+	}
+	return tg.Wait()
 }
 
 func filterMutableListTypes(nt *NT) map[schema.GroupVersionKind]reflect.Type {

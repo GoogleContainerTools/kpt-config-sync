@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -38,6 +39,32 @@ import (
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// sharedTestNamespaces is a list of namespaces that should not be deleted or
+// reset between tests in a shared environment.
+//
+// Reset will skip deletion of these namespaces, if they exist.
+var sharedTestNamespaces = []string{
+	configsync.ControllerNamespace,
+	configmanagement.RGControllerNamespace,
+	metrics.MonitoringNamespace,
+	testGitNamespace,
+}
+
+// protectedNamespaces is a list of namespaces that should never be deleted.
+//
+// Reset will error if these namespaces exist and have the test label.
+//
+// Individual test cleanup MUST revert these namespaces, if modified.
+// See `checkpointProtectedNamespace` for an example.
+var protectedNamespaces = func() []string {
+	// Convert official map to list
+	list := make([]string, 0, len(differ.SpecialNamespaces))
+	for ns := range differ.SpecialNamespaces {
+		list = append(list, ns)
+	}
+	return list
+}()
 
 // Reset performs multi-repo test reset:
 // - Delete unmanaged RootSyncs & RepoSyncs (with deletion propagation)
@@ -78,24 +105,18 @@ func Reset(nt *NT) error {
 	}
 
 	// Delete all Namespaces with the test label (except shared).
-	nsList, err := listNamespaces(nt)
+	nsList, err := listNamespaces(nt, withNameNotInListOption(sharedTestNamespaces...))
 	if err != nil {
 		return err
 	}
 	// Error if any protected namespace was modified by a test (test label added)
 	// and not reverted by the test.
-	protectedNamespaces, nsListItems := filterNamespaces(nsList.Items,
-		protectedNamespaceList()...)
-	if len(protectedNamespaces) > 0 {
+	protectedNamespacesWithTestLabel, nsListItems := filterNamespaces(nsList.Items,
+		protectedNamespaces...)
+	if len(protectedNamespacesWithTestLabel) > 0 {
 		return errors.Errorf("protected namespace(s) modified by test: %+v",
-			protectedNamespaces)
+			protectedNamespacesWithTestLabel)
 	}
-	// Skip deleting namespaces that contain test infra or Config Sync itself.
-	_, nsListItems = filterNamespaces(nsListItems,
-		configsync.ControllerNamespace,
-		configmanagement.RGControllerNamespace,
-		metrics.MonitoringNamespace,
-		testGitNamespace)
 	if err := ResetNamespaces(nt, nsListItems); err != nil {
 		return err
 	}
@@ -110,47 +131,19 @@ func Reset(nt *NT) error {
 	return nil
 }
 
-func protectedNamespaceList() []string {
-	list := make([]string, 0, len(differ.SpecialNamespaces))
-	for ns := range differ.SpecialNamespaces {
-		list = append(list, ns)
-	}
-	return list
-}
-
-type resetRecord struct {
-	Objects          map[types.NamespacedName]struct{}
-	ManagedObjects   map[types.NamespacedName]struct{}
-	ObjectNamespaces map[string]struct{}
-}
-
-func newResetRecord() *resetRecord {
-	return &resetRecord{
-		Objects:          make(map[types.NamespacedName]struct{}),
-		ManagedObjects:   make(map[types.NamespacedName]struct{}),
-		ObjectNamespaces: make(map[string]struct{}),
-	}
-}
-
 // ResetRootSyncs cleans up one or more RootSyncs and all their managed objects.
 // Use this for cleaning up RootSyncs in tests that use delegated control.
 func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
+	nt.T.Logf("[RESET] Deleting RootSyncs (%d)", len(rsList))
 	if len(rsList) == 0 {
 		return nil
 	}
 
-	nt.T.Logf("[RESET] Deleting RootSyncs (%d)", len(rsList))
-
-	record := newResetRecord()
-
 	for _, item := range rsList {
 		rs := &item
 		rsNN := client.ObjectKeyFromObject(rs)
-		record.Objects[rsNN] = struct{}{}
-		record.ObjectNamespaces[rsNN.Namespace] = struct{}{}
 
 		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[rsNN] = struct{}{}
 			nt.T.Logf("[RESET] RootSync %s managed by %q", rsNN, manager)
 			if !IsDeletionPropagationEnabled(rs) {
 				// If you go this error, make sure your test cleanup ensures
@@ -208,14 +201,11 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 // ClusterRole and RoleBindings will be created and then later deleted.
 // This also cleans up any CRs, RBs, and CRBs left behind by delegated control.
 func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
+	nt.T.Logf("[RESET] Deleting RepoSyncs (%d)", len(rsList))
 	if len(rsList) == 0 {
 		// Clean up after `setupDelegatedControl`
 		return deleteRepoSyncClusterRole(nt)
 	}
-
-	nt.T.Logf("[RESET] Deleting RepoSyncs (%d)", len(rsList))
-
-	record := newResetRecord()
 
 	// Apply ClusterRole with the permissions specified by this test.
 	rsCR := nt.RepoSyncClusterRole()
@@ -226,12 +216,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	for _, item := range rsList {
 		rs := &item
 		rsNN := client.ObjectKeyFromObject(rs)
-		record.Objects[rsNN] = struct{}{}
-		record.ObjectNamespaces[rsNN.Namespace] = struct{}{}
 
 		// If managed, skip direct deletion
 		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[rsNN] = struct{}{}
 			nt.T.Logf("[RESET] RepoSync %s managed by %q", rsNN, manager)
 			if !IsDeletionPropagationEnabled(rs) {
 				// If you go this error, make sure your test cleanup ensures
@@ -294,7 +281,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	// but for delegated control and other edge cases clean them up regardless.
 	nt.T.Log("[RESET] Deleting test RoleBindings")
 	var rbs []client.Object
-	for rsNN := range record.Objects {
+	for _, item := range rsList {
+		rs := &item
+		rsNN := client.ObjectKeyFromObject(rs)
 		rbs = append(rbs, RepoSyncRoleBinding(rsNN))
 	}
 	// Skip deleting managed RoleBindings
@@ -310,7 +299,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	// CRBs are usually only applied if PSP was enabled, but clean them up regardless.
 	nt.T.Log("[RESET] Deleting test ClusterRoleBindings")
 	var crbs []client.Object
-	for rsNN := range record.Objects {
+	for _, item := range rsList {
+		rs := &item
+		rsNN := client.ObjectKeyFromObject(rs)
 		crbs = append(crbs, repoSyncClusterRoleBinding(rsNN))
 	}
 	// Skip deleting managed ClusterRoleBindings
@@ -325,26 +316,19 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	return deleteRepoSyncClusterRole(nt)
 }
 
-// ResetNamespaces cleans up one or more Namespaces and all their namespaced objects.
-// Use this for cleaning up Namespaces in tests that use delegated control.
+// ResetNamespaces resets one or more Namespaces and all their namespaced objects.
+// Use this for resetting Namespaces in tests that use delegated control.
 func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
+	nt.T.Logf("[RESET] Deleting Namespaces (%d)", len(nsList))
 	if len(nsList) == 0 {
 		return nil
 	}
-
-	nt.T.Logf("[RESET] Deleting Namespaces (%d)", len(nsList))
-
-	record := newResetRecord()
-
 	for _, item := range nsList {
 		obj := &item
 		nn := client.ObjectKeyFromObject(obj)
-		record.Objects[nn] = struct{}{}
-		record.ObjectNamespaces[nn.Namespace] = struct{}{}
 
 		// If managed, skip direct deletion
 		if manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			record.ManagedObjects[nn] = struct{}{}
 			nt.T.Logf("[RESET] Namespace %s managed by %q", nn, manager)
 			continue
 		}
@@ -439,6 +423,19 @@ func listNamespaces(nt *NT, opts ...client.ListOption) (*corev1.NamespaceList, e
 func withLabelListOption(key, value string) client.MatchingLabelsSelector {
 	labelSelector := labels.Set{key: value}.AsSelector()
 	return client.MatchingLabelsSelector{Selector: labelSelector}
+}
+
+func withNameNotInListOption(values ...string) client.MatchingFieldsSelector {
+	// The fields package doesn't expose a good way to use the NotIn operator,
+	// so we instead AND together a list of != selectors.
+	var fieldSelectors []fields.Selector
+	for _, ns := range values {
+		fieldSelectors = append(fieldSelectors,
+			fields.OneTermNotEqualSelector("metadata.name", ns))
+	}
+	return client.MatchingFieldsSelector{
+		Selector: fields.AndSelectors(fieldSelectors...),
+	}
 }
 
 func filterNamespaces(nsList []corev1.Namespace, excludes ...string) (found []corev1.Namespace, remaining []corev1.Namespace) {

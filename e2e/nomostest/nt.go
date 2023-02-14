@@ -761,6 +761,7 @@ func (nt *NT) PortForwardOtelCollector() {
 func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 	nt.T.Helper()
 
+	nt.T.Log("starting port-forward process")
 	cmd := exec.Command("kubectl", "--kubeconfig", nt.kubeconfigPath, "port-forward",
 		"-n", ns, pod, port)
 
@@ -777,12 +778,37 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 		return 0, fmt.Errorf(stderr.String())
 	}
 
+	var cleanup bool
+	var mux sync.Mutex
+
 	nt.T.Cleanup(func() {
+		mux.Lock()
+		defer mux.Unlock()
+		cleanup = true
+		nt.T.Log("stopping port-forward process")
 		err := cmd.Process.Kill()
 		if err != nil {
-			nt.T.Errorf("killing port forward process: %v", err)
+			nt.T.Errorf("killing port-forward process: %v", err)
 		}
 	})
+
+	// Fail the test if port-forward exits prematurely
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			// ignore errors if cleanup has started
+			mux.Lock()
+			defer mux.Unlock()
+			if cleanup {
+				return
+			}
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				nt.T.Errorf("port-forward errored (%v): stderr:\n%s", err, string(exitErr.Stderr))
+			} else {
+				nt.T.Errorf("port-forward errored (%v)", err)
+			}
+		}
+	}()
 
 	localPort := 0
 	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
@@ -806,7 +832,7 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	nt.T.Logf("took %v to wait for port-forward", took)
+	nt.T.Logf("took %v to wait for port-forward to pod %s/%s (localhost:%d)", took, ns, pod, localPort)
 
 	return localPort, nil
 }

@@ -26,25 +26,28 @@ import (
 //
 // Returns an error if:
 // 1) previous contains more than 1 Namespace.
-// 2) current contains zero Namespaces.
+// 2) intersection of current and previous namespaces is zero.
 //
 // Otherwise returns nil.
 func deletesAllNamespaces(previous, current map[core.ID]*unstructured.Unstructured) status.Error {
-	var previousNamespaces []string
-	var currentNamespaces []string
+	previousNamespaces := make(map[string]struct{})
+	var intersectionOfNamespaces []string
 
 	for p := range previous {
 		if p.GroupKind == kinds.Namespace().GroupKind() {
-			previousNamespaces = append(previousNamespaces, p.Name)
+			previousNamespaces[p.Name] = struct{}{}
 		}
 	}
 	for c := range current {
-		if c.GroupKind == kinds.Namespace().GroupKind() {
-			currentNamespaces = append(currentNamespaces, c.Name)
+		if !(c.GroupKind == kinds.Namespace().GroupKind()) {
+			continue
+		}
+		if _, ok := previousNamespaces[c.Name]; ok {
+			intersectionOfNamespaces = append(intersectionOfNamespaces, c.Name)
 		}
 	}
 
-	if len(currentNamespaces) == 0 && len(previousNamespaces) >= 2 {
+	if len(intersectionOfNamespaces) == 0 && len(previousNamespaces) >= 2 {
 		return DeleteAllNamespacesError(previousNamespaces)
 	}
 	return nil
@@ -58,7 +61,7 @@ func deletesAllNamespaces(previous, current map[core.ID]*unstructured.Unstructur
 // before deleting the final one. This is the error we show to prevent us from
 // taking such destructive action, and ensuring users know how to tell ACM that
 // they really do want to delete all Namespaces.
-func DeleteAllNamespacesError(previous []string) status.Error {
+func DeleteAllNamespacesError(previous map[string]struct{}) status.Error {
 	return status.EmptySourceErrorBuilder.Sprintf(
 		"New commit would delete all Namespaces %v. "+
 			"If this is not a mistake, follow directions for safely deleting all Namespaces.",

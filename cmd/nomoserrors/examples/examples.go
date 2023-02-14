@@ -339,7 +339,7 @@ func Generate() AllExamples {
 
 	// 2006
 	result.add(status.EmptySourceError(10, "namespaces"))
-	result.add(declared.DeleteAllNamespacesError([]string{"shipping", "billing"}))
+	result.add(declared.DeleteAllNamespacesError(map[string]struct{}{"shipping": {}, "billing": {}}))
 
 	// 2007 is Deprecated.
 	result.markDeprecated("2007")

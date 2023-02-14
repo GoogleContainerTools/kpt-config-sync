@@ -84,6 +84,12 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 			current:  []string{"baz", "qux"},
 			want:     DeleteAllNamespacesError(map[string]struct{}{"foo": {}, "bar": {}}),
 		},
+		{
+			name:     "two to new one",
+			previous: []string{"foo", "bar"},
+			current:  []string{"baz"},
+			want:     DeleteAllNamespacesError(map[string]struct{}{"foo": {}, "bar": {}}),
+		},
 	}
 
 	for _, tc := range testCases {

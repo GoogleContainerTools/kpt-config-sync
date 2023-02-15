@@ -466,8 +466,7 @@ func setupRepoSync(nt *NT, nn types.NamespacedName) {
 
 func waitForReconciler(nt *NT, name string) error {
 	return WatchForCurrentStatus(nt, kinds.Deployment(),
-		name, configmanagement.ControllerNamespace,
-		WatchTimeout(60*time.Second))
+		name, configmanagement.ControllerNamespace)
 }
 
 // RepoSyncRoleBinding returns rolebinding that grants service account

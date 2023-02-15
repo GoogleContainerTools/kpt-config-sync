@@ -929,6 +929,10 @@ k8s.io/klog/v2/internal/dbg
 k8s.io/klog/v2/internal/serialize
 k8s.io/klog/v2/internal/severity
 k8s.io/klog/v2/klogr
+# k8s.io/kube-aggregator v0.24.0
+## explicit; go 1.16
+k8s.io/kube-aggregator/pkg/apis/apiregistration
+k8s.io/kube-aggregator/pkg/apis/apiregistration/v1
 # k8s.io/kube-openapi v0.0.0-20220413171646-5e7f5fdc6da6
 ## explicit; go 1.16
 k8s.io/kube-openapi/pkg/builder3/util

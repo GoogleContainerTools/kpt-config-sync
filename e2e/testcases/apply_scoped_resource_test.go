@@ -19,13 +19,11 @@ import (
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/kubevirt/v1"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestApplyScopedResources(t *testing.T) {
@@ -64,7 +62,7 @@ func TestApplyScopedResources(t *testing.T) {
 		// Use Retry & ValidateNotFound instead of WatchForNotFound, because
 		// watching would require importing the KubeVirt API objects.
 		_, err := nomostest.Retry(30*time.Second, func() error {
-			return nt.ValidateNotFound("kubevirt", "kubevirt", kubeVirtObject())
+			return nt.ValidateNotFound("kubevirt", "kubevirt", kubevirt.NewKubeVirtObject())
 		})
 		if err != nil {
 			nt.T.Error(err)
@@ -98,7 +96,7 @@ func TestApplyScopedResources(t *testing.T) {
 	// compute instance types, which may not be satisfied by all test clusters.
 	// https://kubevirt.io/quickstart_cloud/
 	// https://cloud.google.com/compute/docs/instances/nested-virtualization/overview#restrictions
-	err = nt.Validate("testvm", "bookstore1", virtualMachineObject())
+	err = nt.Validate("testvm", "bookstore1", kubevirt.NewVirtualMachineObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -109,24 +107,4 @@ func TestApplyScopedResources(t *testing.T) {
 	if err != nil {
 		nt.T.Error(err)
 	}
-}
-
-func kubeVirtObject() client.Object {
-	kubeVirtObj := &unstructured.Unstructured{}
-	kubeVirtObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "kubevirt.io",
-		Version: "v1",
-		Kind:    "KubeVirt",
-	})
-	return kubeVirtObj
-}
-
-func virtualMachineObject() client.Object {
-	kubeVirtObj := &unstructured.Unstructured{}
-	kubeVirtObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "kubevirt.io",
-		Version: "v1",
-		Kind:    "VirtualMachine",
-	})
-	return kubeVirtObj
 }

@@ -165,12 +165,10 @@ func uninstallConfigSync(nt *NT) error {
 		return err
 	}
 	for _, o := range objs {
-		nt.T.Logf("uninstallConfigSync obj: %v", core.GKNN(o))
 		if err := nt.Delete(o); err != nil {
-			if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-				continue
+			if !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+				return err
 			}
-			return err
 		}
 	}
 	return nil

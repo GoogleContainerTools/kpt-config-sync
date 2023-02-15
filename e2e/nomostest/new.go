@@ -289,11 +289,15 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		// We aren't using an ephemeral Kind cluster, so make sure the cluster is
 		// clean before and after running the test.
 		nt.T.Log("[CLEANUP] FreshTestEnv before test")
-		Clean(nt, true)
+		if err := Clean(nt); err != nil {
+			nt.T.Fatalf("[CLEANUP] Failed to clean test environment: %v", err)
+		}
 		t.Cleanup(func() {
 			// Clean the cluster now that the test is over.
 			nt.T.Log("[CLEANUP] FreshTestEnv after test")
-			Clean(nt, false)
+			if err := Clean(nt); err != nil {
+				nt.T.Errorf("[CLEANUP] Failed to clean test environment: %v", err)
+			}
 		})
 	}
 

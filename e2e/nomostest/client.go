@@ -29,6 +29,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -83,6 +84,7 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 		rbacv1.SchemeBuilder,
 		rbacv1beta1.SchemeBuilder,
 		resourcegroupv1alpha1.SchemeBuilder.SchemeBuilder,
+		apiregistrationv1.SchemeBuilder,
 	}
 	for _, b := range builders {
 		err := b.AddToScheme(s)

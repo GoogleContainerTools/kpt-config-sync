@@ -263,7 +263,10 @@ func (snt *sharedNTs) destroy() {
 				// Run Cleanup to destroy kind clusters
 				nt.fakeNTB.RunCleanup()
 			} else {
-				Clean(nt.sharedNT, false)
+				nt.sharedNT.T.Log("[CLEANUP] CleanSharedNTs after all tests")
+				if err := Clean(nt.sharedNT); err != nil {
+					nt.sharedNT.T.Errorf("[CLEANUP] Failed to clean shared test environment: %v", err)
+				}
 			}
 		}(nt)
 	}
@@ -489,15 +492,7 @@ func (nt *NT) RenewClient() {
 // If you want to fail the test immediately on failure, use MustKubectl.
 func (nt *NT) Kubectl(args ...string) ([]byte, error) {
 	nt.T.Helper()
-
-	prefix := []string{"--kubeconfig", nt.kubeconfigPath}
-	args = append(prefix, args...)
-	// Ensure field manager is specified
-	if stringArrayContains(args, "apply") && !stringArrayContains(args, "--field-manager") {
-		args = append(args, "--field-manager", FieldManager)
-	}
-	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
-	return exec.Command("kubectl", args...).CombinedOutput()
+	return nt.KubectlContext(nt.Context, args...)
 }
 
 // KubectlContext is similar to nt.Kubectl but allows using a context to cancel
@@ -512,7 +507,15 @@ func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error
 		args = append(args, "--field-manager", FieldManager)
 	}
 	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
-	return exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
+	if err != nil {
+		if !*e2e.Debug {
+			nt.T.Logf("kubectl %s", strings.Join(args, " "))
+		}
+		nt.T.Log(string(out))
+		return out, err
+	}
+	return out, nil
 }
 
 // Command is a convenience method for invoking a subprocess with the
@@ -521,7 +524,7 @@ func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error
 func (nt *NT) Command(name string, args ...string) *exec.Cmd {
 	nt.T.Helper()
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(nt.Context, name, args...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("KUBECONFIG=%s", nt.KubeconfigPath()))
 	return cmd
@@ -534,10 +537,6 @@ func (nt *NT) MustKubectl(args ...string) []byte {
 
 	out, err := nt.Kubectl(args...)
 	if err != nil {
-		if !*e2e.Debug {
-			nt.T.Logf("kubectl %s", strings.Join(args, " "))
-		}
-		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
 	return out

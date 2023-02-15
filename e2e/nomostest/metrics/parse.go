@@ -27,9 +27,12 @@ import (
 // and parses the output into a map of metrics and measurements.
 func ParseMetrics(port int) (ConfigSyncMetrics, error) {
 	var out []byte
-	out, err := exec.Command("curl", "-s", fmt.Sprintf("localhost:%d/metrics", port)).CombinedOutput()
+	address := fmt.Sprintf("localhost:%d/metrics", port)
+	out, err := exec.Command("curl", "-s", address).CombinedOutput()
 	if err != nil {
-		return nil, errors.Errorf("error parsing metrics from port %d: %v", port, err)
+		return nil, errors.Errorf(
+			"error fetching metrics (%s): %v: combined output:\n%s",
+			address, err, string(out))
 	}
 
 	entry := strings.Split(string(out), "\n")
@@ -55,11 +58,14 @@ func ParseMetrics(port int) (ConfigSyncMetrics, error) {
 }
 
 // parseMetricName filters for the name of the metric.
-
+//
 // Example input string:
-//   `config_sync_api_duration_seconds_sum{root_reconciler="root-reconciler",operation="create",status="success",type="Namespace"} 0.02125483`
+//
+//	`config_sync_api_duration_seconds_sum{root_reconciler="root-reconciler",operation="create",status="success",type="Namespace"} 0.02125483`
+//
 // Output:
-//   `api_duration_seconds`
+//
+//	`api_duration_seconds`
 func parseMetricName(m string) (string, error) {
 	regex := regexp.MustCompile(`config_sync_(.*?)(?:_sum)?[{ ]`)
 	ss := regex.FindStringSubmatch(m)

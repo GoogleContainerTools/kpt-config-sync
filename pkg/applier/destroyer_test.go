@@ -69,8 +69,10 @@ func TestDestroy(t *testing.T) {
 	deployment2Obj.SetName("deployment-2")
 	deployment2ID := object.UnstructuredToObjMetadata(deployment2Obj)
 
-	testObj := newTestObj()
+	testObj := newTestObj("test-1")
 	testID := object.UnstructuredToObjMetadata(testObj)
+
+	testObj2 := newTestObj("test-2")
 
 	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
 		core.Name("test-namespace"))
@@ -97,8 +99,8 @@ func TestDestroy(t *testing.T) {
 		{
 			name: "unknown type for some resource",
 			events: []event.Event{
-				formDeleteEvent(event.DeleteFailed, &testID, applyerror.NewUnknownTypeError(testError1)),
-				formDeleteEvent(event.DeletePending, nil, nil),
+				formDeleteEvent(event.DeleteFailed, testObj, applyerror.NewUnknownTypeError(testError1)),
+				formDeleteEvent(event.DeletePending, testObj2, nil),
 			},
 			multiErr: newMultiError(DeleteErrorForResource(testError1, idFrom(testID))),
 		},
@@ -110,7 +112,7 @@ func TestDestroy(t *testing.T) {
 					Policy:   inventory.PolicyMustMatch,
 					Status:   inventory.NoMatch,
 				}),
-				formDeleteEvent(event.DeletePending, nil, nil),
+				formDeleteEvent(event.DeletePending, testObj2, nil),
 			},
 			// Prunes and Deletes ignore PolicyPreventedActuationErrors.
 			// This allows abandoning of managed objects.
@@ -126,19 +128,19 @@ func TestDestroy(t *testing.T) {
 		{
 			name: "failed to delete",
 			events: []event.Event{
-				formDeleteEvent(event.DeleteFailed, &testID, testError1),
-				formDeleteEvent(event.DeletePending, nil, nil),
+				formDeleteEvent(event.DeleteFailed, testObj, testError1),
+				formDeleteEvent(event.DeletePending, testObj2, nil),
 			},
 			multiErr: newMultiError(DeleteErrorForResource(testError1, idFrom(testID))),
 		},
 		{
 			name: "skipped delete",
 			events: []event.Event{
-				formDeleteEvent(event.DeleteSuccessful, &testID, nil),
-				formDeleteEvent(event.DeleteSkipped, &namespaceID, &filter.NamespaceInUseError{
+				formDeleteEvent(event.DeleteSuccessful, testObj, nil),
+				formDeleteEvent(event.DeleteSkipped, namespaceObj, &filter.NamespaceInUseError{
 					Namespace: "test-namespace",
 				}),
-				formDeleteEvent(event.DeleteSuccessful, nil, nil),
+				formDeleteEvent(event.DeleteSuccessful, testObj2, nil),
 			},
 			multiErr: newMultiError(SkipErrorForResource(
 				errors.New("namespace still in use: test-namespace"),
@@ -148,17 +150,17 @@ func TestDestroy(t *testing.T) {
 		{
 			name: "all passed",
 			events: []event.Event{
-				formDeleteEvent(event.DeletePending, nil, nil),
-				formDeleteEvent(event.DeleteSuccessful, &testID, nil),
-				formDeleteEvent(event.DeleteSuccessful, &deploymentID, nil),
+				formDeleteEvent(event.DeletePending, testObj2, nil),
+				formDeleteEvent(event.DeleteSuccessful, testObj, nil),
+				formDeleteEvent(event.DeleteSuccessful, deploymentObj, nil),
 			},
 		},
 		{
 			name: "all failed",
 			events: []event.Event{
-				formDeleteEvent(event.DeletePending, nil, nil),
-				formDeleteEvent(event.DeleteFailed, &testID, testError1),
-				formDeleteEvent(event.DeleteFailed, &deploymentID, testError2),
+				formDeleteEvent(event.DeletePending, testObj2, nil),
+				formDeleteEvent(event.DeleteFailed, testObj, testError1),
+				formDeleteEvent(event.DeleteFailed, deploymentObj, testError2),
 			},
 			multiErr: newMultiError(
 				DeleteErrorForResource(testError1, idFrom(testID)),
@@ -213,19 +215,16 @@ func newMultiError(errs ...error) error {
 	return testutil.EqualError(multiErr)
 }
 
-func formDeleteEvent(status event.DeleteEventStatus, id *object.ObjMetadata, err error) event.Event {
-	e := event.Event{
+func formDeleteEvent(status event.DeleteEventStatus, obj *unstructured.Unstructured, err error) event.Event {
+	return event.Event{
 		Type: event.DeleteType,
 		DeleteEvent: event.DeleteEvent{
-			Status: status,
-			Error:  err,
+			Identifier: object.UnstructuredToObjMetadata(obj),
+			Object:     obj,
+			Status:     status,
+			Error:      err,
 		},
 	}
-	if id != nil {
-		e.DeleteEvent.Identifier = *id
-		e.DeleteEvent.Object = &unstructured.Unstructured{}
-	}
-	return e
 }
 
 func formDeleteSkipEvent(id object.ObjMetadata, obj *unstructured.Unstructured, err error) event.Event {

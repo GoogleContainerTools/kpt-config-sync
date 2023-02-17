@@ -19,8 +19,10 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -35,12 +37,19 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Update RootSync to valid branch name
@@ -50,11 +59,8 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
-	})
-	if err != nil {
-		nt.T.Error(err)
+	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -68,32 +74,56 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
 
-	nsReconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		// Validate reconciler error metric is emitted.
-		err := nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
-		if err != nil {
-			return err
-		}
-		return nt.ValidateReconcilerErrors(nsReconcilerName, 1, 0)
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+		// RepoSync already included in the default resource count and operations
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	nsReconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
+	nsReconcilerPod, err := nt.GetDeploymentPod(nsReconcilerName, configmanagement.ControllerNamespace)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		// Source error prevents apply, so don't wait for a sync with the current commit.
+		nomostest.ReconcilerErrorMetrics(nt, nsReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	rs.Spec.Branch = nomostest.MainBranch
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to valid branch name")
 
+	// Ensure RepoSync's active branch is checked out, so the correct commit is used for validation.
+	nt.NonRootRepos[nn].CheckoutBranch(nomostest.MainBranch)
+
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+		// RepoSync already included in the default resource count and operations
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync:        nn,
+		ObjectCount: 0, // no additional managed objects
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

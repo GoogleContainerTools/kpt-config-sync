@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -42,7 +43,7 @@ import (
 
 func TestNamespaceRepo_Centralized(t *testing.T) {
 	bsNamespace := "bookstore"
-
+	repoSyncNN := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
@@ -67,8 +68,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
 
-	nn := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
-	repo, exist := nt.NonRootRepos[nn]
+	repo, exist := nt.NonRootRepos[repoSyncNN]
 	if !exist {
 		nt.T.Fatal("nonexistent repo")
 	}
@@ -93,18 +93,13 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 		nt.T.Fatalf("service account store not found: %v", err)
 	}
 
-	// Validate multi-repo metrics from namespace reconciler.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespace, configsync.RepoSyncName),
-			1, // 1 for the test ServiceAccount
-			metrics.ResourceCreated("ServiceAccount"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSyncNN, sa)
+
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: repoSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -142,7 +137,7 @@ func hasStalledStatus(r metav1.ConditionStatus) nomostest.Predicate {
 
 func TestNamespaceRepo_Delegated(t *testing.T) {
 	bsNamespaceRepo := "bookstore"
-
+	repoSyncNN := nomostest.RepoSyncNN(bsNamespaceRepo, configsync.RepoSyncName)
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
@@ -151,12 +146,6 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 
-	nn := nomostest.RepoSyncNN(bsNamespaceRepo, configsync.RepoSyncName)
-	repo, exist := nt.NonRootRepos[nn]
-	if !exist {
-		nt.T.Fatal("nonexistent repo")
-	}
-
 	// Validate service account 'store' not present.
 	err := nt.ValidateNotFound("store", bsNamespaceRepo, &corev1.ServiceAccount{})
 	if err != nil {
@@ -164,8 +153,8 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	}
 
 	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
-	repo.Add("acme/sa.yaml", sa)
-	repo.CommitAndPush("Adding service account")
+	nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa)
+	nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -176,18 +165,13 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	// Validate multi-repo metrics from namespace reconciler.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(core.NsReconcilerName(bsNamespaceRepo, configsync.RepoSyncName),
-			1, // 1 for the test ServiceAccount
-			metrics.ResourceCreated("ServiceAccount"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSyncNN, sa)
+
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: repoSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -227,6 +211,7 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 }
 
 func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	bsNamespace := "bookstore"
 
 	nt := nomostest.New(
@@ -256,21 +241,13 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	checkRepoSyncResourcesNotPresent(nt, bsNamespace, secretNames)
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, repoSyncObj)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, repoSyncObj)
 
-	// Validate multi-repo metrics from root reconciler.
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceDeleted(configsync.RepoSyncKind))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Test RepoSync v1alpha1 version in central control mode")
@@ -280,6 +257,22 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add RepoSync v1alpha1")
 	// Add the bookstore namespace repo back to NamespaceRepos to verify that it is synced.
 	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: nn,
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -352,12 +345,16 @@ func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secret
 
 func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	bsNamespace := "bookstore"
+	repoSyncNN := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)
+
+	rootReconciler := core.RootReconcilerName(configsync.RootSyncName)
+	nsReconciler := core.NsReconcilerName(bsNamespace, configsync.RepoSyncName)
 
 	// Validate status condition "Reconciling" and Stalled is set to "False" after
 	// the reconciler deployment is successfully created.
@@ -380,8 +377,7 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	// Delete namespace reconciler deployment in bookstore namespace.
 	// The point here is to test that we properly respond to kubectl commands,
 	// so this should NOT be replaced with nt.Delete.
-	nsReconcilerDeployment := "ns-reconciler-bookstore"
-	nt.MustKubectl("delete", "deployment", nsReconcilerDeployment,
+	nt.MustKubectl("delete", "deployment", nsReconciler,
 		"-n", configsync.ControllerNamespace)
 
 	// Verify that the deployment is re-created after deletion by checking the
@@ -395,10 +391,24 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
-	})
+	rootSyncReconcilerPod, err := nt.GetDeploymentPod(rootReconciler, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+	repoSyncReconcilerPod, err := nt.GetDeploymentPod(nsReconciler, configmanagement.ControllerNamespace)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rootCommitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+	nnCommitHash := nt.NonRootRepos[repoSyncNN].Hash()
+
+	// Skip sync & ops metrics and just validate reconciler-manager and reconciler errors.
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerManagerMetrics(nt),
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncReconcilerPod.Name, rootCommitHash, metrics.ErrorSummary{}),
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncReconcilerPod.Name, nnCommitHash, metrics.ErrorSummary{}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }

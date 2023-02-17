@@ -49,6 +49,7 @@ var sharedTestNamespaces = []string{
 	configmanagement.RGControllerNamespace,
 	metrics.MonitoringNamespace,
 	testGitNamespace,
+	prometheusNamespace,
 }
 
 // protectedNamespaces is a list of namespaces that should never be deleted.
@@ -129,7 +130,7 @@ func Reset(nt *NT) error {
 	nt.RootRepos = make(map[string]*Repository)
 
 	// Reset expected objects
-	nt.expectedObjects = make(map[string]map[types.NamespacedName]map[core.ID]bool)
+	nt.MetricsExpectations.Reset()
 
 	return nil
 }
@@ -472,15 +473,11 @@ func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceF
 	// Reset expected objects.
 	// These are used to offset metrics expectations.
 	if repoType == RootRepo {
-		if nt.expectedObjects != nil && nt.expectedObjects[configsync.RootSyncKind] != nil {
-			nt.expectedObjects[configsync.RootSyncKind][nn] = make(map[core.ID]bool)
-		}
-		nt.AddExpectedObject(configsync.RootSyncKind, nn, repo.Get(repo.SafetyNSPath))
-		nt.AddExpectedObject(configsync.RootSyncKind, nn, repo.Get(repo.SafetyClusterRolePath))
+		nt.MetricsExpectations.ResetRootSync(nn.Name)
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.Get(repo.SafetyNSPath))
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.Get(repo.SafetyClusterRolePath))
 	} else {
-		if nt.expectedObjects != nil && nt.expectedObjects[configsync.RepoSyncKind] != nil {
-			nt.expectedObjects[configsync.RepoSyncKind][nn] = make(map[core.ID]bool)
-		}
+		nt.MetricsExpectations.ResetRepoSync(nn)
 	}
 	return repo
 }

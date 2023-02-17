@@ -86,6 +86,10 @@ func Clean(nt *NT) error {
 	if err := nt.GitProvider.DeleteObsoleteRepos(); err != nil {
 		return err
 	}
+	// Uninstall prometheus components
+	if err := uninstallPrometheus(nt); err != nil {
+		return err
+	}
 	// The admission-webhook prevents deleting test resources. Hence we delete it before cleaning other resources.
 	if err := deleteAdmissionWebhook(nt); err != nil {
 		return err

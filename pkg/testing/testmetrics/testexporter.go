@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -57,20 +58,28 @@ func RegisterMetrics(views ...*view.View) *TestExporter {
 
 // diff compares the exported rows' Tags and data Value with the expected
 // rows' Tags and data Value. It excludes the Start time field from the comparison.
-func diff(r []*view.Row, other []*view.Row) string {
-	for i := 0; i < len(r); i++ {
-		if r[i] == other[i] {
+func diff(got, want []*view.Row) string {
+	for i := 0; i < len(got); i++ {
+		if got[i] == want[i] {
 			continue
 		}
-		if len(r[i].Tags) > 0 && len(other[i].Tags) > 0 && !reflect.DeepEqual(r[i].Tags, other[i].Tags) {
-			return fmt.Sprintf("Unexpected metric tags, -got, +want: -%v\n+%v", r[i].Tags, other[i].Tags)
+		if len(got[i].Tags) > 0 && len(want[i].Tags) > 0 && !reflect.DeepEqual(got[i].Tags, want[i].Tags) {
+			return fmt.Sprintf("Expected metric tags not found, -want, +got:\n- %s\n+ %s",
+				want[i].Tags, got[i].Tags)
 		}
-		if !cmp.Equal(r[i].Data, other[i].Data, cmpopts.IgnoreTypes(time.Time{})) {
-			return fmt.Sprintf("Unexpected metric value, -got, +want: -%v\n+%v", r[i].Data, other[i].Data)
+		if !cmp.Equal(got[i].Data, want[i].Data, cmpopts.IgnoreTypes(time.Time{})) {
+			return fmt.Sprintf("Expected metric value not found, -want, +got:\n- %s\n+ %s",
+				want[i].Data, got[i].Data)
 		}
 	}
-	if len(other) > len(r) {
-		return fmt.Sprintf("Unexpected metric value(s): %v", other[len(r):])
+	if len(want) > len(got) {
+		var sb strings.Builder
+		sb.WriteString("Expected metric(s) not found:\n")
+		for _, row := range want[len(got):] {
+			sb.WriteString("- ")
+			sb.WriteString(row.String())
+		}
+		return sb.String()
 	}
 	return ""
 }

@@ -60,9 +60,6 @@ func secretDataPatch(key, value string) string {
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	key := "GIT_SSL_CAINFO"
 	caCertSecret := "git-cert-pub"
@@ -181,9 +178,6 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	key := "GIT_SSL_CAINFO"
 	caCertSecret := "git-cert-pub"
@@ -307,9 +301,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 func TestCACertSecretWatch(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+
 	key := "GIT_SSL_CAINFO"
 	caCertSecret := "git-cert-pub"
 	caCertPath := "/etc/ca-cert/cert"

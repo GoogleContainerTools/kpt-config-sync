@@ -67,10 +67,34 @@ func backoff(timeout time.Duration) wait.Backoff {
 // defaultErrorFilter returns false if the error's type indicates continuing
 // will not produce a positive result.
 func defaultErrorFilter(err error) bool {
-	// The type expected by a Predicate is incorrect.
-	return !errors.Is(err, ErrWrongType) &&
+	_, isTerminal := err.(*TerminalError)
+	return !isTerminal &&
+		// The type expected by a Predicate is incorrect.
+		!errors.Is(err, ErrWrongType) &&
 		// The type isn't registered in the Client's schema.
 		!runtime.IsNotRegisteredError(err) &&
 		// The type wasn't available on the API Server when the Client was created.
 		!meta.IsNoMatchError(err)
+}
+
+// TerminalError will stop a Retry loop if returned.
+type TerminalError struct {
+	Cause error
+}
+
+// NewTerminalError constructs a new TerminalError
+func NewTerminalError(cause error) *TerminalError {
+	return &TerminalError{
+		Cause: cause,
+	}
+}
+
+// Error returns the error message
+func (te *TerminalError) Error() string {
+	return te.Cause.Error()
+}
+
+// Unwrap returns the cause of this TerminalError
+func (te *TerminalError) Unwrap() error {
+	return te.Cause
 }

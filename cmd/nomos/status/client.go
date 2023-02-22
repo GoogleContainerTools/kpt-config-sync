@@ -28,6 +28,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -54,6 +55,8 @@ const (
 	// ACMOperatorDeployment is the name of the ACM operator Deployment.
 	ACMOperatorDeployment            = "config-management-operator"
 	syncingConditionSupportedVersion = "v1.10.0-rc.1"
+	rootSyncCRDName                  = "rootsyncs.configsync.gke.io"
+	repoSyncCRDName                  = "reposyncs.configsync.gke.io"
 )
 
 // ClusterClient is the client that talks to the cluster.
@@ -139,7 +142,16 @@ func (c *ClusterClient) resourceGroups(ctx context.Context, ns string, nsAndName
 // clusterStatus returns the ClusterState for the cluster this client is connected to.
 func (c *ClusterClient) clusterStatus(ctx context.Context, cluster, namespace string) *ClusterState {
 	cs := &ClusterState{Ref: cluster}
-	var err error
+	isOss, err := c.IsOssInstallation(ctx, cs)
+	if err != nil {
+		return cs
+	}
+
+	if isOss {
+		c.multiRepoClusterStatus(ctx, cs)
+		return cs
+	}
+
 	cs.isMulti, err = c.ConfigManagement.IsMultiRepo(ctx)
 
 	if !c.IsInstalled(ctx, cs) {
@@ -352,6 +364,35 @@ func (c *ClusterClient) namespaceRepoClusterStatus(ctx context.Context, cs *Clus
 		cs.status = util.UnknownMsg
 		cs.Error = "No RepoSync resources found"
 	}
+}
+
+// IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
+// If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
+func (c *ClusterClient) IsOssInstallation(ctx context.Context, cs *ClusterState) (bool, error) {
+	v, cmErr := c.ConfigManagement.Version(ctx)
+	if cmErr != nil {
+		err := fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
+		cs.Error = err.Error()
+		return false, err
+	}
+	_, operatorDepErr := c.K8sClient.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
+	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
+		err := fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
+		cs.Error = err.Error() 
+		return false, err
+	}
+
+	if v != util.NotInstalledMsg && operatorDepErr == nil {
+		return false, nil
+	}
+
+	rootSyncCRDErr := c.Client.Get(ctx, client.ObjectKey{Name: rootSyncCRDName}, &apiextensionsv1.CustomResourceDefinition{})
+	if rootSyncCRDErr == nil {
+		return true, nil
+	}
+	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr) 
+	cs.Error = err.Error()
+	return false, err
 }
 
 // IsInstalled returns true if the ClusterClient is connected to a cluster where

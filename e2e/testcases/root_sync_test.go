@@ -341,7 +341,7 @@ func TestForceRevert(t *testing.T) {
 	}
 
 	nt.RootRepos[configsync.RootSyncName].Git("reset", "--hard", "HEAD^")
-	nt.RootRepos[configsync.RootSyncName].Git("push", "-f", "origin", "main")
+	nt.RootRepos[configsync.RootSyncName].Push(syncBranch, "-f")
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

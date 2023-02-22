@@ -200,7 +200,6 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 	if err != nil {
 		return nil, err
 	}
-	tc.Logger.Infof("took %v to wait for deployment pod", took)
-	tc.Logger.Debugf("Found deployment pod: %s", client.ObjectKeyFromObject(pod))
+	tc.Logger.Infof("took %v to wait for deployment pod %s", took, client.ObjectKeyFromObject(pod))
 	return pod, nil
 }

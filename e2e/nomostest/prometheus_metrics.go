@@ -47,23 +47,23 @@ type MetricsPredicate func(context.Context, prometheusv1.API) error
 // until successful (with timeout).
 func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 	ctx, cancel := context.WithCancel(nt.Context)
-	defer cancel() // stop port-forward
-	address, err := portForwardPrometheus(ctx, nt)
-	if err != nil {
-		return err
-	}
-	client, err := prometheusapi.NewClient(prometheusapi.Config{
-		Address: fmt.Sprintf("http://%s", address),
-	})
-	if err != nil {
-		return err
-	}
-	v1api := prometheusv1.NewAPI(client)
+	defer cancel()
 
 	nt.T.Log("[METRICS] validating prometheus metrics...")
 	for i, predicate := range predicates {
 		duration, err := retry.Retry(nt.DefaultMetricsTimeout, func() error {
-			err := predicate(ctx, v1api)
+			port, err := nt.prometheusPortForwarder.LocalPort()
+			if err != nil {
+				return err
+			}
+			client, err := prometheusapi.NewClient(prometheusapi.Config{
+				Address: fmt.Sprintf("http://localhost:%d", port),
+			})
+			if err != nil {
+				return err
+			}
+			v1api := prometheusv1.NewAPI(client)
+			err = predicate(ctx, v1api)
 			if err != nil && errors.Is(err, syscall.ECONNREFUSED) {
 				return retry.NewTerminalError(errors.Wrapf(err, "port-forwarding failed waiting for metrics predicate[%d]", i))
 			}

@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -29,7 +28,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
-	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/portforwarder"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -148,11 +147,11 @@ type NT struct {
 	// caCertPath is the path to the CA cert used for communicating with the Git server.
 	caCertPath string
 
-	// gitRepoPort is the local port that forwards to the git repo deployment.
-	gitRepoPort int
+	// gitRepoPortForwarder is the local port forwarding for the git server deployment.
+	gitRepoPortForwarder *portforwarder.PortForwarder
 
-	// gitRepoPodName is the pod name of the git repo.
-	gitRepoPodName string
+	// prometheusPortForwarder is the local port forwarding for the prometheus deployment.
+	prometheusPortForwarder *portforwarder.PortForwarder
 
 	// kubeconfigPath is the path to the kubeconfig file for the kind cluster
 	kubeconfigPath string
@@ -160,11 +159,8 @@ type NT struct {
 	// Scheme is the Scheme for the test suite that maps from structs to GVKs.
 	Scheme *runtime.Scheme
 
-	// otelCollectorPort is the local port that forwards to the otel-collector.
-	otelCollectorPort int
-
-	// otelCollectorPodName is the pod name of the otel-collector.
-	otelCollectorPodName string
+	// otelCollectorPort is the local port forwarding for the otel-collector.
+	otelCollectorPortForwarder *portforwarder.PortForwarder
 
 	// GitProvider is the provider that hosts the Git repositories.
 	GitProvider gitproviders.GitProvider
@@ -568,123 +564,83 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 	nt.MustKubectl("delete", "-f", absPath, "--ignore-not-found", "--wait")
 }
 
-// PortForwardOtelCollector forwards the otel-collector pod.
-func (nt *NT) PortForwardOtelCollector() {
-	// Retry otel-collector port-forwarding in case it is in the process of upgrade.
-	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
-		pod, err := nt.KubeClient.GetDeploymentPod(ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, nt.DefaultWaitTimeout)
-		if err != nil {
-			return err
-		}
-		// The otel-collector forwarding port needs to be updated after otel-collector restarts or starts for the first time.
-		// It sets otelCollectorPodName and otelCollectorPort to point to the current running pod that forwards the port.
-		if pod.Name != nt.otelCollectorPodName {
-			ctx, cancel := context.WithCancel(nt.Context)
-			port, err := nt.ForwardToFreePort(ctx, ocmetrics.MonitoringNamespace, pod.Name,
-				testmetrics.OtelCollectorMetricsPort)
-			if err != nil {
-				cancel()
-				return err
-			}
-			nt.T.Cleanup(cancel) // stop port-forward
-			nt.otelCollectorPort = port
-			nt.otelCollectorPodName = pod.Name
-		}
-		return nil
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.T.Logf("took %v to wait for otel-collector port-forward", took)
+func (nt *NT) newPortForwarder(ns, deployment, port string, opts ...portforwarder.PortForwardOpt) *portforwarder.PortForwarder {
+	ctx, cancel := context.WithCancel(nt.Context)
+	nt.T.Cleanup(cancel)
+	return portforwarder.NewPortForwarder(
+		ctx,
+		nt.KubeClient,
+		nt.Watcher,
+		nt.Logger,
+		nt.DefaultWaitTimeout,
+		nt.kubeconfigPath,
+		ns, deployment, port,
+		opts...,
+	)
 }
 
-// PortForwardGitServer forwards the git-server deployment to a port.
-func (nt *NT) PortForwardGitServer() {
-	nt.T.Helper()
-
-	pod, err := nt.KubeClient.GetDeploymentPod(testGitServer, testGitNamespace, nt.DefaultWaitTimeout)
-	if err != nil {
-		nt.T.Fatal(err)
+// portForwardOtelCollector forwards the otel-collector deployment to a port.
+func (nt *NT) portForwardOtelCollector() {
+	if nt.otelCollectorPortForwarder != nil {
+		nt.T.Fatal("otel collector port forward already initialized")
 	}
-	podName := pod.Name
-
-	if podName != nt.gitRepoPodName {
-		ctx, cancel := context.WithCancel(nt.Context)
-		port, err := nt.ForwardToFreePort(ctx, testGitNamespace, podName, 22)
-		if err != nil {
-			cancel()
-			nt.T.Fatal(err)
-		}
-		nt.T.Cleanup(cancel) // stop port-forward
-		nt.gitRepoPort = port
-		nt.gitRepoPodName = podName
-	}
+	nt.otelCollectorPortForwarder = nt.newPortForwarder(
+		ocmetrics.MonitoringNamespace,
+		ocmetrics.OtelCollectorName,
+		fmt.Sprintf(":%d", testmetrics.OtelCollectorMetricsPort),
+	)
 }
 
-// ForwardToFreePort forwards a local port to a port on the pod and returns the
-// local port chosen by kubectl.
-func (nt *NT) ForwardToFreePort(ctx context.Context, ns, pod string, port int) (int, error) {
+// portForwardGitServer forwards the git-server deployment to a port.
+func (nt *NT) portForwardGitServer() {
 	nt.T.Helper()
-
-	nt.T.Logf("starting port-forward to pod %s/%s", ns, pod)
-	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", nt.Shell.KubeConfigPath, "port-forward",
-		"-n", ns, pod, fmt.Sprintf(":%d", port))
-
-	stdout := &strings.Builder{}
-	stderr := &strings.Builder{}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	err := cmd.Start()
-	if err != nil {
-		return 0, err
+	if nt.gitRepoPortForwarder != nil {
+		nt.T.Fatal("git server port forward already initialized")
 	}
-	if stderr.Len() != 0 {
-		return 0, fmt.Errorf(stderr.String())
-	}
-
-	// Log when the command exits
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			nt.T.Logf("port-forward exited to pod %s/%s (%v)", ns, pod, err)
+	prevPodName := ""
+	resetGitRepos := func(newPort int, podName string) {
+		// pod unchanged, don't reset
+		if prevPodName == "" || prevPodName == podName {
+			prevPodName = podName
+			return
 		}
-	}()
-
-	localPort := 0
-	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
-	// like a reasonable amount of time to wait.
-	took, err := retry.Retry(30*time.Second, func() error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			s := stdout.String()
-			if !strings.Contains(s, "\n") {
-				return fmt.Errorf(
-					"nothing written to stdout for kubectl port-forward to pod %s/%s, stdout=%s",
-					ns, pod, s)
-			}
-
-			line := strings.Split(s, "\n")[0]
-
-			// Sample output:
-			// Forwarding from 127.0.0.1:44043
-			_, err = fmt.Sscanf(line, "Forwarding from 127.0.0.1:%d", &localPort)
-			if err != nil {
-				nt.T.Fatalf(
-					"unable to parse output of port-forward to pod %s/%s: %q",
-					ns, pod, s)
-			}
-			return nil
+		// allRepos specifies the slice all repos for port forwarding.
+		var allRepos []types.NamespacedName
+		for repo := range nt.RootRepos {
+			allRepos = append(allRepos, RootSyncNN(repo))
 		}
-	})
-	if err != nil {
-		return 0, err
+		for repo := range nt.NonRootRepos {
+			allRepos = append(allRepos, repo)
+		}
+		// re-init all repos
+		InitGitRepos(nt, allRepos...)
+		// attempt to recover by re-pushing the local repo states
+		for nn, remoteRepo := range nt.RemoteRepositories {
+			remoteURL := nt.GitProvider.RemoteURL(newPort, nn.String())
+			remoteRepo.pushAllToRemote(remoteURL)
+			remoteRepo.RemoteURL = remoteURL
+		}
+		prevPodName = podName
 	}
-	nt.T.Logf("took %v to wait for port-forward to pod %s/%s (localhost:%d)",
-		took, ns, pod, localPort)
+	nt.gitRepoPortForwarder = nt.newPortForwarder(
+		testGitNamespace,
+		testGitServer,
+		":22",
+		portforwarder.WithSetPortCallback(resetGitRepos),
+	)
+}
 
-	return localPort, nil
+// portForwardGitServer forwards the prometheus deployment to a port.
+func (nt *NT) portForwardPrometheus() {
+	nt.T.Helper()
+	if nt.prometheusPortForwarder != nil {
+		nt.T.Fatal("prometheus port forward already initialized")
+	}
+	nt.prometheusPortForwarder = nt.newPortForwarder(
+		prometheusNamespace,
+		prometheusServerDeploymentName,
+		fmt.Sprintf(":%d", prometheusServerPort),
+	)
 }
 
 func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {

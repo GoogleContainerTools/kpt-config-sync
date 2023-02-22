@@ -23,10 +23,12 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -39,9 +41,6 @@ import (
 )
 
 const (
-	// remoteOrigin is static as every git repository has exactly one remote.
-	remoteOrigin = "origin"
-
 	// MainBranch is static as behavior when switching branches is never under
 	// test.
 	MainBranch = "main"
@@ -140,7 +139,11 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		nt.T.Fatal(err)
 	}
 	g.RemoteRepoName = repoName
-	g.RemoteURL = nt.GitProvider.RemoteURL(nt.gitRepoPort, repoName)
+	port, err := nt.gitRepoPortForwarder.LocalPort()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	g.RemoteURL = nt.GitProvider.RemoteURL(port, repoName)
 
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -154,8 +157,12 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 
 	// Update test environment
 	g.T = nt.T
+	port, err := nt.gitRepoPortForwarder.LocalPort()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	// Update URL to use latest port-forward port
-	g.RemoteURL = nt.GitProvider.RemoteURL(nt.gitRepoPort, g.RemoteRepoName)
+	g.RemoteURL = nt.GitProvider.RemoteURL(port, g.RemoteRepoName)
 	// Reset repo contents
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -241,8 +248,6 @@ func (g *Repository) init(privateKey string) {
 	// 2) Use the private key file we generated.
 	g.Git("config", "core.sshCommand",
 		fmt.Sprintf("ssh -q -o StrictHostKeyChecking=no -i %s", privateKey))
-	// Point the origin remote
-	g.Git("remote", "add", remoteOrigin, g.RemoteURL)
 }
 
 // Add writes a YAML or JSON representation of obj to `path` in the git
@@ -501,7 +506,35 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) {
 	g.Git("commit", "-m", msg)
 
 	g.Logger.Infof("[repo %s] committing %q (%s)", path.Base(g.Root), msg, g.Hash())
-	g.Git("push", "-f", "-u", remoteOrigin, branch)
+	g.Push(branch, "-f")
+}
+
+// Push pushes the provided refspec to the git server.
+// Performs a retry using RemoteURL, which may change if the port forwarding restarts.
+func (g *Repository) Push(refspec string, flags ...string) {
+	var out []byte
+	took, err := retry.Retry(1*time.Minute, func() error {
+		args := []string{"push"}
+		args = append(args, flags...)
+		args = append(args, g.RemoteURL, refspec)
+		cmd := g.gitCmd(args...)
+		var err error
+		out, err = cmd.CombinedOutput()
+		return err
+	})
+	if err != nil {
+		g.T.Log(string(out))
+		g.T.Fatalf("took %v, err %v", took, err)
+	}
+}
+
+func (g *Repository) pushAllToRemote(remote string) {
+	cmd := g.gitCmd("push", remote, "--all")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		g.T.Log(string(out))
+		g.T.Errorf("failed to push to remote %s: %v", remote, err)
+	}
 }
 
 // CreateBranch creates and checkouts a new branch at once.
@@ -525,8 +558,8 @@ func (g *Repository) RenameBranch(current, new string) {
 	g.T.Helper()
 
 	g.Git("branch", "-m", current, new)
-	g.Git("push", remoteOrigin, "-u", new)
-	g.Git("push", remoteOrigin, "--delete", current)
+	g.Push(new)
+	g.Push(current, "--delete")
 }
 
 // Hash returns the current hash of the git repository.

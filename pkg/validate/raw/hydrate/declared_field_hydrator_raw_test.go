@@ -353,6 +353,21 @@ spec:
     app: nginx
 `,
 		},
+		{
+			name:   "ExternalName Service with no ports should not error",
+			expErr: false,
+			yaml: `
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  type: ExternalName
+  selector:
+    app: nginx
+`,
+		},
 	}
 
 	for _, tc := range testCases {

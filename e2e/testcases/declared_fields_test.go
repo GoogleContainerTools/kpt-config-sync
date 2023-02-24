@@ -27,7 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
-func TestDeclaredFieldsPod(t *testing.T) {
+func TestDeclaredFields(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
 	namespace := fake.NamespaceObject("bookstore")
@@ -48,7 +48,18 @@ spec:
     ports:
     - containerPort: 80
 `))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod missing protocol from port")
+	nt.RootRepos[configsync.RootSyncName].AddFile("acme/service.yaml", []byte(`
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: bookstore
+spec:
+  type: ExternalName
+  selector:
+    app: nginx
+`))
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a pod missing protocol from port and a ExternalName-type Service")
 	nt.WaitForRepoSyncs()
 
 	// Parse the pod yaml into an object
@@ -59,11 +70,25 @@ spec:
 		nt.T.Fatal(err)
 	}
 
+	// Parse the service yaml into an object
+	svc := nt.RootRepos[configsync.RootSyncName].Get("acme/service.yaml")
+
+	err = nt.Validate(svc.GetName(), svc.GetNamespace(), &corev1.Service{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the pod")
+	nt.RootRepos[configsync.RootSyncName].Remove("acme/service.yaml")
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the pod and the service")
 	nt.WaitForRepoSyncs()
 
 	err = nomostest.WatchForNotFound(nt, kinds.Pod(), pod.GetName(), pod.GetNamespace())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err = nomostest.WatchForNotFound(nt, kinds.Service(), svc.GetName(), svc.GetNamespace())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

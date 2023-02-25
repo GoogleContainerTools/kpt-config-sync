@@ -140,6 +140,8 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
+	klog.V(3).Infof("UpdateWatches(%v)", gvkMap)
+
 	m.needsUpdate = false
 
 	var startedWatches, stoppedWatches uint64

@@ -130,7 +130,7 @@ func TestDeclarations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := dr.Declarations()
+	got := dr.DeclaredUnstructureds()
 	// Sort got decls to ensure determinism.
 	sort.Slice(got, func(i, j int) bool {
 		return core.IDOf(got[i]).String() < core.IDOf(got[j]).String()
@@ -177,10 +177,10 @@ func TestGVKSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := dr.GVKSet()
-	want := map[schema.GroupVersionKind]bool{
-		obj1.GroupVersionKind(): true,
-		obj2.GroupVersionKind(): true,
+	got := dr.DeclaredGVKs()
+	want := map[schema.GroupVersionKind]struct{}{
+		obj1.GroupVersionKind(): {},
+		obj2.GroupVersionKind(): {},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Error(diff)

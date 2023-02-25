@@ -240,7 +240,9 @@ data:
 	}
 
 	// Config Sync should remove `test-ns`.
-	if err := nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore"); err != nil {
+	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore",
+		nomostest.WatchTimeout(30*time.Second))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 

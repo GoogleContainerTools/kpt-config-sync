@@ -460,23 +460,18 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role")
 
 	// When the webhook is enabled, it will block adoption of managed objects.
-	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook enabled")
+	nt.T.Logf("Only the second RootSyncs should report a conflict with the webhook enabled")
 	tg := taskgroup.New()
-	// Reconciler conflict, detected by the second reconciler & reported to the first reconciler's RootSync
+	// The first reconciler never encounters any conflict.
+	// The second reconciler pauses its remediator before applying, but then its
+	// apply is rejected by the webhook, so the remediator remains paused.
+	// So there's no need to report the error to the first reconciler.
+	// So the first reconciler apply succeeds and no further error is expected.
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-			})
+		return nomostest.WatchForCurrentStatus(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace)
 	})
-	// Reconciler conflict, detected by the second reconciler
-	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
-			})
-	})
-	// Webhook rejection detected by the second reconciler's applier
+	// The second reconciler's applier will report the conflict, when the update
+	// is rejected by the webhook.
 	// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
 	tg.Go(func() error {
 		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
@@ -504,7 +499,12 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// When the webhook is disabled, both RootSyncs will repeatedly try to adopt the object.
+	// When the webhook is disabled, both RootSyncs will repeatedly try to adopt
+	// the object.
+	// This error can be reported from two sources:
+	// - `KptManagementConflictError` is returned by the applier
+	// - `ManagementConflictErrorWrap` is returned by the remediator
+	// Both use the phrase "declared in another repository".
 	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook disabled")
 	tg = taskgroup.New()
 	// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler

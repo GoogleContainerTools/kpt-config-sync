@@ -215,9 +215,9 @@ func TestFilteredWatcher(t *testing.T) {
 
 			var got []core.ID
 			for q.Len() > 0 {
-				obj, shutdown := q.Get()
-				if shutdown {
-					t.Fatal("Object queue was shut down unexpectedly.")
+				obj, err := q.Get(context.Background())
+				if err != nil {
+					t.Fatalf("Object queue was shut down unexpectedly: %v", err)
 				}
 				got = append(got, core.IDOf(obj))
 			}

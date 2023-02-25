@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -134,10 +135,10 @@ func (w *filteredWatcher) pruneErrors() {
 
 // addError checks whether an error identified by the errorID has been tracked,
 // and handles it in one of the following ways:
-//   * tracks it if it has not yet been tracked;
-//   * updates the time for this error to time.Now() if `errorLoggingInterval` has passed
+//   - tracks it if it has not yet been tracked;
+//   - updates the time for this error to time.Now() if `errorLoggingInterval` has passed
 //     since the same error happened last time;
-//   * ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
+//   - ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
 //
 // addError returns false if the error is ignored, and true if it is not ignored.
 func (w *filteredWatcher) addError(errorID string) bool {
@@ -406,20 +407,31 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 		metrics.RecordInternalError(ctx, "remediator")
 		return "", false, nil
 	}
+
+	if klog.V(5).Enabled() {
+		klog.V(5).Infof("Received watch event for object: %q (generation: %d): %s",
+			core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
+	} else {
+		klog.V(3).Infof("Received watch event for object: %q (generation: %d)",
+			core.IDOf(object), object.GetGeneration())
+	}
+
 	// filter objects.
 	if !w.shouldProcess(object) {
-		klog.V(4).Infof("Ignoring event for object: %v", object)
+		klog.V(4).Infof("Ignoring event for object: %q (generation: %d)",
+			core.IDOf(object), object.GetGeneration())
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
-		klog.V(2).Infof("Received watch event for deleted object %q", core.IDOf(object))
+		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d)",
+			core.IDOf(object), object.GetGeneration())
 		object = queue.MarkDeleted(ctx, object)
 	} else {
-		klog.V(2).Infof("Received watch event for created/updated object %q", core.IDOf(object))
+		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d)",
+			core.IDOf(object), object.GetGeneration())
 	}
 
-	klog.V(3).Infof("Received object: %v", object)
 	w.queue.Add(object)
 	return object.GetResourceVersion(), false, nil
 }

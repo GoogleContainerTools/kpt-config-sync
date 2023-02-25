@@ -204,7 +204,16 @@ func (csm ConfigSyncMetrics) ValidateGVKMetrics(reconcilerName string, gvkMetric
 			return err
 		}
 	}
-	return errors.Wrapf(reconcilerMetrics.validateRemediateDuration(gvkMetric.GVK), "for reconciler %s", reconcilerName)
+	err := reconcilerMetrics.validateRemediateDuration(gvkMetric.GVK)
+	if err != nil {
+		// Tolerate missing RemediateDuration metric (but not status=Error).
+		// Remediation may not have happened.
+		if errors.Is(err, &MetricNotFoundError{Name: ocmetrics.RemediateDurationView.Name}) {
+			return nil
+		}
+		return errors.Wrapf(err, "for reconciler %s", reconcilerName)
+	}
+	return nil
 }
 
 // ValidateMetricsCommitSynced checks that the `last_sync_timestamp` metric has

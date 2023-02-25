@@ -15,6 +15,8 @@
 package queue
 
 import (
+	"context"
+	"errors"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -44,11 +46,15 @@ func GVKNNOf(obj client.Object) GVKNN {
 	}
 }
 
+// ErrShutdown is returned by `ObjectQueue.Get` if the queue is shut down
+// before an object is available/added.
+var ErrShutdown = errors.New("object queue shutting down")
+
 // Interface is the methods ObjectQueue satisfies.
 // See ObjectQueue for method definitions.
 type Interface interface {
 	Add(obj client.Object)
-	Get() (client.Object, bool)
+	Get(context.Context) (client.Object, error)
 	Done(obj client.Object)
 	Forget(obj client.Object)
 	Retry(obj client.Object)
@@ -105,7 +111,8 @@ func (q *ObjectQueue) Add(obj client.Object) {
 	// generation is equal, we default to accepting the new object as it may have
 	// new labels or annotations or other metadata.
 	if current, ok := q.objects[gvknn]; ok && current.GetGeneration() > obj.GetGeneration() {
-		klog.V(4).Infof("Queue already contains object %q with generation %d; ignoring object: %v", gvknn, current.GetGeneration(), obj)
+		klog.V(1).Infof("ObjectQueue.Add: already contains object %q with generation %d; ignoring object with generation %d",
+			gvknn, current.GetGeneration(), obj.GetGeneration())
 		return
 	}
 
@@ -124,12 +131,14 @@ func (q *ObjectQueue) Add(obj client.Object) {
 	// 9. The gvknn is no longer marked dirty.
 	// 10. The reconciler finishes processing gen2 of the resource and calls Done().
 	// 11. Since the gvknn is not marked dirty, we remove the resource from q.objects.
-	klog.V(2).Infof("Upserting object into queue: %v", obj)
+	klog.V(2).Infof("ObjectQueue.Add: %v (generation: %d)",
+		gvknn, obj.GetGeneration())
 	q.objects[gvknn] = obj
 	q.underlying.Add(gvknn)
 
 	if !q.dirty[gvknn] {
 		q.dirty[gvknn] = true
+		// Signal the Get Wait to continue, to detect the new object
 		q.cond.Signal()
 	}
 }
@@ -140,47 +149,79 @@ func (q *ObjectQueue) Retry(obj client.Object) {
 	q.delayer.AddAfter(obj, q.rateLimiter.When(gvknn))
 }
 
-// Get blocks until it can return an item to be processed.
+// Get blocks until one of the following conditions:
+// A) An item is ready to be processed
+// B) The context is cancelled or times out
+// C) The queue is shutting down
 //
-// Returns the next item to process, and whether the queue has been shut down
-// and has no more items to process.
+// Returns the next item to process, and either a `context.Canceled`,
+// `context.DeadlineExceeded`, or `queue.ErrShutdown`.
 //
 // If the queue has been shut down the caller should end their goroutine.
 //
 // You must call Done with item when you have finished processing it or else the
 // item will never be processed again.
-func (q *ObjectQueue) Get() (client.Object, bool) {
+func (q *ObjectQueue) Get(ctx context.Context) (client.Object, error) {
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
+
+	// This background thread converts a done channel into a condition signal.
+	// This is required because the underlying workqueue.Interface doesn't use
+	// channels to communicate.
+	innerCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-innerCtx.Done():
+			// Stop waiting for ctx to be cancelled
+		case <-ctx.Done():
+			// Signal the Get Wait to continue, to detect the context error
+			klog.V(3).Infof("ObjectQueue.Get interrupted: %v", ctx.Err())
+			q.cond.Signal()
+		}
+	}()
 
 	// This is a yielding block that will allow Add() and Done() to be called
 	// while it blocks.
 	for q.underlying.Len() == 0 {
-		if q.underlying.ShuttingDown() {
-			klog.V(1).Info("Get returning: Shutting Down")
-			return nil, true
+		if err := ctx.Err(); err != nil {
+			klog.V(3).Infof("ObjectQueue.Get returning: %v", err)
+			return nil, err
 		}
-		klog.V(1).Info("Get waiting: Empty Queue")
+		if q.underlying.ShuttingDown() {
+			klog.V(3).Info("ObjectQueue.Get returning: Shutting Down")
+			return nil, ErrShutdown
+		}
+		klog.V(3).Info("ObjectQueue.Get waiting: Empty Queue")
 		q.cond.Wait()
 	}
 
+	// Stop waiting for ctx to be cancelled
+	cancel()
+
+	// Because length > 0 and nothing else can remove from it while locked,
+	// Get should return immediately.
 	item, shutdown := q.underlying.Get()
-	if item == nil || shutdown {
-		return nil, shutdown
+	if shutdown {
+		return nil, ErrShutdown
+	}
+	if item == nil {
+		return nil, nil
 	}
 
 	gvknn, isID := item.(GVKNN)
 	if !isID {
-		klog.Warningf("Got non GVKNN from work queue: %v", item)
+		klog.Warningf("ObjectQueue.Get: expected GVKNN from work queue, but found %T: %v", item, item)
 		q.underlying.Done(item)
 		q.rateLimiter.Forget(item)
-		return nil, false
+		return nil, nil
 	}
 
 	obj := q.objects[gvknn]
 	delete(q.dirty, gvknn)
-	klog.V(4).Infof("Fetched object for processing: %v", obj)
-	return obj.DeepCopyObject().(client.Object), false
+	klog.V(2).Infof("ObjectQueue.Get: returning object: %v (generation: %d)",
+		gvknn, obj.GetGeneration())
+	return obj.DeepCopyObject().(client.Object), nil
 }
 
 // Done marks item as done processing, and if it has been marked as dirty again
@@ -194,10 +235,13 @@ func (q *ObjectQueue) Done(obj client.Object) {
 	q.underlying.Done(gvknn)
 
 	if q.dirty[gvknn] {
-		klog.V(4).Infof("Leaving dirty object reference in place: %v", q.objects[gvknn])
+		klog.V(3).Infof("ObjectQueue.Done: retaining object for retry: %v (generation: %d)",
+			gvknn, obj.GetGeneration())
+		// Signal the Get Wait to continue, to detect the new object
 		q.cond.Signal()
 	} else {
-		klog.V(2).Infof("Removing clean object reference: %v", q.objects[gvknn])
+		klog.V(3).Infof("ObjectQueue.Done: removing object from queue: %v (generation: %d)",
+			gvknn, obj.GetGeneration())
 		delete(q.objects, gvknn)
 	}
 }
@@ -216,9 +260,9 @@ func (q *ObjectQueue) Len() int {
 
 // ShutDown shuts down the object queue.
 func (q *ObjectQueue) ShutDown() {
-	klog.V(1).Info("ShutDown()")
+	klog.V(1).Info("ObjectQueue.ShutDown()")
 	q.underlying.ShutDown()
-	// Unblock q.cond.Wait() to unblock q.Get() to detect shutdown and return
+	// Signal the Get Wait to continue, to detect the shutdown
 	q.cond.Signal()
 }
 
@@ -251,7 +295,8 @@ func (g *genericWrapper) Add(item interface{}) {
 
 // Get implements workqueue.Interface.
 func (g *genericWrapper) Get() (item interface{}, shutdown bool) {
-	return g.oq.Get()
+	obj, err := g.oq.Get(context.Background())
+	return obj, (err != nil)
 }
 
 // Done implements workqueue.Interface.

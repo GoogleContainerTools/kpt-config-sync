@@ -1034,3 +1034,19 @@ func checkFileExists(prefix string, targetFiles, allFiles []string) status.Multi
 	}
 	return err
 }
+
+func TestNomosStatus(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	// get status
+	cmd := nt.Command("nomos", "status")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), "git@test-git-server.config-management-system-test:/git-server/repos/config-management-system/root-sync/acme@main") {
+		nt.T.Fatalf("Expected to find Git provider string in output:\n%s\n", string(out))
+	}
+}

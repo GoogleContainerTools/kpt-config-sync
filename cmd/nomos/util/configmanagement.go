@@ -38,8 +38,10 @@ const (
 	ConfigManagementResource = "configmanagements"
 	// ConfigManagementVersionName is the field name that indicates the ConfigManagement version.
 	ConfigManagementVersionName = "configManagementVersion"
-	ACMOperatorDeployment       = "config-management-operator"
-	rootSyncCRDName             = "rootsyncs.configsync.gke.io"
+	// ACMOperatorDeployment is the name of ACM Operator Deployment
+	ACMOperatorDeployment = "config-management-operator"
+	// rootSyncCRDName is the name of RootSync CRD
+	rootSyncCRDName = "rootsyncs.configsync.gke.io"
 )
 
 // DynamicClient obtains a client based on the supplied REST config.  Can be overridden in tests.

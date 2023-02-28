@@ -141,18 +141,24 @@ func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool,
 	if err != nil {
 		return util.ErrorMsg, nil, err
 	}
-	cl, err := ctrl.New(cfg, ctrl.Options{})
-	if err != nil {
-		return util.ErrorMsg, nil, err
+	if cfg != nil {
+		cl, err := ctrl.New(cfg, ctrl.Options{})
+		if err != nil {
+			return util.ErrorMsg, nil, err
+		}
+		ck, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return util.ErrorMsg, nil, err
+		}
+		isOss, err := util.IsOssInstallation(ctx, cmClient, cl, ck)
+		if err != nil {
+			return util.ErrorMsg, nil, err
+		}
+		if isOss {
+			return util.OSSMsg, &isOss, nil
+		}
 	}
-	ck, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return util.ErrorMsg, nil, err
-	}
-	isOss, err := util.IsOssInstallation(ctx, cmClient, cl, ck)
-	if isOss {
-		return util.OSSMsg, &isOss, nil
-	}
+
 	v, err := cmClient.Version(ctx)
 	if err != nil {
 		return util.ErrorMsg, nil, err

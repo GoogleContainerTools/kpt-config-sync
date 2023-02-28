@@ -48,12 +48,16 @@ func TestApplyScopedResources(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/namespace_bookstore1.yaml")
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/bookstore1")
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove bookstore1 namespace")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		// kubevirt must be removed separately to allow the custom resource to be deleted
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/kubevirt/kubevirt_kubevirt.yaml")
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove kubevirt custom resource")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		// Wait for the kubevirt custom resource to be deleted to prevent the custom resource from
 		// being stuck in the Terminating state which can occur if the operator is deleted prior
@@ -75,17 +79,22 @@ func TestApplyScopedResources(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrolebinding_kubevirt-operator.yaml")
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/priorityclass_kubevirt-cluster-critical.yaml")
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cluster roles and priority class")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 	})
 
 	// The example includes the virt-operator deployment, which installs the VirtualMachine CRD.
 	// The example also includes a VirtualMachine, which will be skipped until the CRD is applied.
-	nt.WaitForRepoSyncs(nomostest.WithTimeout(nt.DefaultWaitTimeout * 2))
+	err := nt.WatchForAllSyncs(nomostest.WithTimeout(nt.DefaultWaitTimeout * 2))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// The VirtualMachine CRD should already be reconciled, because if not the
 	// VirtualMachine object wouldn't have been applied, and WaitForRepoSyncs
 	// would have failed.
-	err := nt.Validate("virtualmachines.kubevirt.io", "", &apiextensionsv1.CustomResourceDefinition{},
+	err = nt.Validate("virtualmachines.kubevirt.io", "", &apiextensionsv1.CustomResourceDefinition{},
 		nomostest.IsEstablished)
 	if err != nil {
 		nt.T.Fatal(err)

@@ -48,7 +48,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
 			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// Pre-provision a low priority workload to force the cluster to scale up.
 	// Later, when the real workload is being scheduled, if there's no more resources available
 	// (common on Autopilot clusters, which are optimized for utilization),
@@ -94,7 +96,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	expectActuationStatus := "Succeeded"
 	expectReconcileStatus := "Timeout"
 	if err := nt.Validate("root-sync", "config-management-system", &resourcegroupv1alpha1.ResourceGroup{},
@@ -111,11 +115,15 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
 			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Verify pod is deleted.
 	if err := nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}); err != nil {
@@ -123,7 +131,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s", pod1Name))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	expectActuationStatus = "Succeeded"
 	expectReconcileStatus = "Succeeded"

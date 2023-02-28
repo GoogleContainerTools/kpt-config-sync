@@ -433,7 +433,9 @@ func testSyncFromNomosHydrateOutput(t *testing.T, config string) {
 
 	nt.RootRepos[configsync.RootSyncName].Copy(config, "acme")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cluster-dev configs")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err := nt.Validate("bookstore1", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)

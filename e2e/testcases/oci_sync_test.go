@@ -81,15 +81,27 @@ func TestPublicOCI(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
 		v1beta1.OciSource, publicARImage))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicARImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
+	err := nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(publicARImage)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: ".",
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, publicGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "tenant-a"}))
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: "tenant-a",
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
@@ -109,15 +121,27 @@ func TestGCENodeOCI(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
 		v1beta1.OciSource, tenant, privateARImage))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateARImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	err := nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(privateARImage)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: tenant,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 
 	tenant = "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage, tenant))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: tenant,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
@@ -309,7 +333,9 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name), rsRB)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.T.Log("Verify an implicit namespace is created")
 	implictNs := &corev1.Namespace{}
 	if err := nt.Validate(namespace, "", implictNs,
@@ -321,8 +347,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
-	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -347,13 +376,18 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncOCI)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Verify the namespace objects are updated")
-	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
+	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -366,7 +400,9 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.T.Log("Remove RepoSync from the root repository")
 	nt.RootRepos[configsync.RootSyncName].Remove(repoResourcePath)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.T.Log("Verify the RepoSync object doesn't exist")
 	if err := nt.ValidateNotFound(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}); err != nil {
 		nt.T.Error(err)
@@ -380,8 +416,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
-	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
@@ -397,8 +436,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Error(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
-	nt.WaitForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nt.DefaultWaitTimeout, imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
+	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)

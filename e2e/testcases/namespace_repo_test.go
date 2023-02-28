@@ -82,7 +82,9 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespace))
 	repo.Add("acme/sa.yaml", sa)
 	repo.CommitAndPush("Adding service account")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate service account 'store' is current.
 	err = nomostest.WatchForCurrentStatus(nt, kinds.ServiceAccount(), "store", bsNamespace,
@@ -164,7 +166,9 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
 	repo.Add("acme/sa.yaml", sa)
 	repo.CommitAndPush("Adding service account")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate service account 'store' is present.
 	err = nt.Validate("store", bsNamespaceRepo, &corev1.ServiceAccount{})
@@ -217,7 +221,9 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	if err := nt.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
@@ -246,7 +252,9 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nn := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
 	nsRepo := nt.NonRootRepos[nn]
 	delete(nt.NonRootRepos, nn)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	checkRepoSyncResourcesNotPresent(nt, bsNamespace, secretNames)
 
@@ -270,7 +278,9 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(bsNamespace, rs.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add RepoSync v1alpha1")
 	// Add the bookstore namespace repo back to NamespaceRepos to verify that it is synced.
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestManageSelfRepoSync(t *testing.T) {

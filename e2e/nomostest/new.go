@@ -412,7 +412,9 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		setupCentralizedControl(nt, opts)
 	}
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestDir creates a unique temporary directory for the E2E test.

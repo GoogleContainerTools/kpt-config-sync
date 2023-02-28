@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -385,38 +384,34 @@ func (id gvknn) String() string {
 // So this function uses the same sha1Func for all R*Syncs.
 func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.Object) {
 	nt.T.Helper()
-	var wg sync.WaitGroup
+
+	tg := taskgroup.New()
 	for _, obj := range objs {
 		switch rsync := obj.(type) {
 		case *v1beta1.RootSync:
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				nt.WaitForSync(kinds.RootSyncV1Beta1(), rsync.Name, rsync.Namespace,
-					nt.DefaultWaitTimeout, sha1Func, nomostest.RootSyncHasStatusSyncCommit,
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RootSyncV1Beta1(), rsync.Name, rsync.Namespace,
+					sha1Func, nomostest.RootSyncHasStatusSyncCommit,
 					&nomostest.SyncDirPredicatePair{
 						Dir:       rsync.Spec.Git.Dir,
 						Predicate: nomostest.RootSyncHasStatusSyncDirectory,
 					})
-			}()
+			})
 		case *v1beta1.RepoSync:
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				nt.WaitForSync(kinds.RepoSyncV1Beta1(), rsync.Name, rsync.Namespace,
-					nt.DefaultWaitTimeout, sha1Func, nomostest.RepoSyncHasStatusSyncCommit,
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), rsync.Name, rsync.Namespace,
+					sha1Func, nomostest.RepoSyncHasStatusSyncCommit,
 					&nomostest.SyncDirPredicatePair{
 						Dir:       rsync.Spec.Git.Dir,
 						Predicate: nomostest.RepoSyncHasStatusSyncDirectory,
 					})
-			}()
+			})
 		default:
 			nt.T.Fatal("Invalid R*Sync type: %T", obj)
 		}
 	}
-	wg.Wait()
-	if nt.T.Failed() {
-		nt.T.Fatal("R*Syncs not synced")
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatalf("R*Syncs not synced: %v", err)
 	}
 }
 

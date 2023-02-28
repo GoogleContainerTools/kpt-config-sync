@@ -52,7 +52,9 @@ func TestDeclareNamespace(t *testing.T) {
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the Namespace "foo" exists.
 	err = nt.Validate("foo", "", &corev1.Namespace{})
@@ -83,7 +85,9 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	fooNamespace := fake.NamespaceObject("foo")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create foo namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists.
 	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{})
@@ -110,7 +114,9 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	fooNamespace.Annotations["annotation"] = "test-annotation"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace to include label and annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists with label and annotation.
 	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "test-label"), nomostest.HasAnnotation("annotation", "test-annotation"))
@@ -137,7 +143,9 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	fooNamespace.Annotations["annotation"] = "updated-test-annotation"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace to include label and annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists with the updated label and annotation.
 	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "updated-test-label"), nomostest.HasAnnotation("annotation", "updated-test-annotation"))
@@ -164,7 +172,9 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	delete(fooNamespace.Annotations, "annotation")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace, removing label and annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists without the label and annotation.
 	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.MissingLabel("label"), nomostest.MissingAnnotation("annotation"))
@@ -196,7 +206,9 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "acme/namespaces/decl-namespace-annotation-none/ns.yaml"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespace")
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists after sync.
 	err := nt.Validate(namespace.Name, "", &corev1.Namespace{})
@@ -229,7 +241,9 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns.yaml"))
 	nt.RootRepos[configsync.RootSyncName].Remove("ns.yaml")
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists after sync.
 	err := nt.Validate(namespace.Name, "", &corev1.Namespace{})
@@ -266,7 +280,9 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), namespace)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a namespace and a configmap")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		// Test that the namespace exists with expected config management labels and annotations.
 		err := nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
@@ -300,7 +316,9 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), namespace)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Unmanage the namespace and the configmap")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		// Test that the now unmanaged namespace does not contain any config management labels or annotations
 		err = nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
@@ -331,7 +349,9 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		// Remove the namspace and the configmap from the repository
 		nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/namespaces/%s", nsName))
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the namespace and the configmap")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		// Test that the namespace still exists on the cluster, and does not contain any config management labels or annotations
 		err = nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
@@ -422,7 +442,9 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/cm1.yaml", cm1)
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/cm3.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Unmanage cm1 and remove cm3")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the now unmanaged configmap does not contain any config management labels or annotations
 	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
@@ -454,7 +476,9 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	// Remove the configmap from the repository
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/cm1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the configmap")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the configmap still exists on the cluster, and does not contain any config management labels or annotations
 	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
@@ -488,7 +512,9 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	kubeSystemNamespace.Annotations["test-corp.com/awesome-controller-mixin"] = "green"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/kube-system/ns.yaml", kubeSystemNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the kube-system namespace exists with label and annotation.
 	err := nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
@@ -518,7 +544,9 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	delete(kubeSystemNamespace.Annotations, "test-corp.com/awesome-controller-mixin")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/kube-system/ns.yaml", kubeSystemNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove label and annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the kube-system namespace exists without the label and annotation.
 	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
@@ -545,7 +573,9 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	kubeSystemNamespace.Annotations["configmanagement.gke.io/managed"] = "disabled"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/kube-system/ns.yaml", kubeSystemNamespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update namespace to no longer be managed")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the now unmanaged kube-system namespace does not contain any config management labels or annotations.
 	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
@@ -578,7 +608,9 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns.yaml"))
 	nt.RootRepos[configsync.RootSyncName].Remove("ns.yaml")
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Test that the namespace exists with managed by helm label.
 	err := nt.Validate(helmManagedNamespace.Name, "", &corev1.Namespace{},
@@ -619,7 +651,9 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 	// gets created.
 	nt.RootRepos[configsync.RootSyncName].Add("acme/role.yaml", fake.RoleObject(core.Name("admin"), core.Namespace(implicitNamespace)))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Role in implicit Namespace " + implicitNamespace)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
 	if err != nil {
@@ -648,7 +682,9 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 	// Phase 2: Remove the Role, and ensure the implicit Namespace is NOT deleted.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/role.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
 	if err != nil {
@@ -684,7 +720,9 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	barNS := fake.NamespaceObject("bar")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bar/ns.yaml", fake.NamespaceObject("bar"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare multiple Namespaces")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nt.Validate(fooNS.Name, fooNS.Namespace, &corev1.Namespace{})
 	if err != nil {
@@ -764,7 +802,9 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	safetyNs := nt.RootRepos[configsync.RootSyncName].SafetyNSName
 	nt.RootRepos[configsync.RootSyncName].AddSafetyNamespace()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("re-declare safety Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate(safetyNs, "", &corev1.Namespace{})
 	if err != nil {
@@ -810,7 +850,9 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	// all Namespaces to be removed.
 	nt.RootRepos[configsync.RootSyncName].Remove(nt.RootRepos[configsync.RootSyncName].SafetyNSPath)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare safety Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its  finalizer will block until all objects in that namespace are

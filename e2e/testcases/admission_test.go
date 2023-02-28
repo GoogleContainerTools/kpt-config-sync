@@ -40,7 +40,9 @@ func TestAdmission(t *testing.T) {
 		fake.NamespaceObject("hello",
 			core.Annotation("goodbye", "moon")))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure we properly forbid changing declared information.
 
@@ -156,7 +158,9 @@ metadata:
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "webhook.yaml"), webhook, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
@@ -179,7 +183,9 @@ metadata:
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/test/ns.yaml", fake.NamespaceObject("test"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add another Namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.WaitForWebhookReadiness(nt)
 

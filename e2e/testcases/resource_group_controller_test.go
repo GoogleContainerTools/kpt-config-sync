@@ -39,7 +39,9 @@ func TestResourceGroupController(t *testing.T) {
 	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a ConfigMap to repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Checking that the ResourceGroup controller captures the status of the
 	// managed resources.

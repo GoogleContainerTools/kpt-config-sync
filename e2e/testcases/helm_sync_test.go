@@ -56,8 +56,11 @@ func TestPublicHelm(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	var expectedCPURequest string
 	var expectedCPULimit string
 	var expectedMemoryRequest string
@@ -92,8 +95,11 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": ""}}}`)
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -153,7 +159,10 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	}}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources")
-	nt.WaitForRepoSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChart+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: privateNSHelmChart}))
+	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChart+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: privateNSHelmChart}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+privateNSHelmChart, testNs, &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}
@@ -255,8 +264,11 @@ func TestHelmGCENode(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
 
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		containerImagePullPolicy("IfNotPresent")); err != nil {
 		nt.T.Error(err)
@@ -291,8 +303,11 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
 		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}

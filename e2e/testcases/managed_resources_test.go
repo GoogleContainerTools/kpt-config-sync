@@ -63,7 +63,9 @@ func TestKubectlCreatesManagedNamespaceResourceMultiRepo(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	/* A new test */
 	ns := []byte(`
@@ -209,11 +211,15 @@ func TestKubectlCreatesManagedConfigMapResource(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", fake.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore")))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	/* A new test */
 	cm := []byte(`
@@ -407,11 +413,15 @@ func TestDeleteManagedResources(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", fake.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore")))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -465,11 +475,15 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", fake.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore")))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -522,7 +536,9 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Add a new annotation into the namespace object
 	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season=summer")
@@ -579,7 +595,9 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 	namespace := fake.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Add a new annotation into the namespace object
 	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season=summer")
@@ -605,7 +623,9 @@ func TestModifyManagedFields(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -667,7 +687,9 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Modify a managed field
 	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
@@ -709,7 +731,9 @@ func TestDeleteManagedFields(t *testing.T) {
 	namespace := fake.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -769,7 +793,9 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Delete a managed field
 	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season-")

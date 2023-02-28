@@ -84,7 +84,9 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	if err := nt.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
@@ -113,7 +115,9 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		fake.RepoObject())
 
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate namespace 'audit' created.
 	err = nt.Validate(acmeNS, "", fake.NamespaceObject(acmeNS))
@@ -144,7 +148,10 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	// Update RootSync.
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, fooDir)
 	syncDirectoryMap := map[types.NamespacedName]string{nomostest.RootSyncNN(configsync.RootSyncName): fooDir}
-	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(syncDirectoryMap))
+	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirectoryMap))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate namespace 'shipping' created with the correct sourcePath annotation.
 	if err := nt.Validate(fooNS, "", fake.NamespaceObject(fooNS),
@@ -191,7 +198,9 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", auditNS),
 		fake.NamespaceObject(auditNS))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate namespace 'acme' created.
 	err := nt.Validate(auditNS, "", fake.NamespaceObject(auditNS))
@@ -219,7 +228,9 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	// Set branch to "test-branch"
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, testBranch)
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate namespace 'audit-test' created after updating rootsync.
 	err = nt.Validate(testNS, "", fake.NamespaceObject(testNS))
@@ -232,7 +243,9 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
 	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate namespace 'acme' present.
 	err = nt.Validate(auditNS, "", fake.NamespaceObject(auditNS))
@@ -277,7 +290,9 @@ func TestForceRevert(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Git("reset", "--hard", "HEAD^")
 	nt.RootRepos[configsync.RootSyncName].Git("push", "-f", "origin", "main")
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)

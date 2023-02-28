@@ -888,7 +888,9 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 
 	if len(opts.NamespaceRepos) == 0 {
 		// Wait for the RootSyncs and exit early
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 		return
 	}
 
@@ -942,7 +944,9 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 	}
 
 	// Wait for all RootSyncs and all RepoSyncs to be reconciled
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate all RepoSyncs exist
 	for nn := range opts.NamespaceRepos {

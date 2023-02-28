@@ -48,7 +48,9 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding apiservice resources")
 	nt.T.Log("Waiting for nomos to sync new APIService")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := validateStackdriverAdapterStatusCurrent(nt)
 	if err != nil {
@@ -59,13 +61,17 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	// the test repo from cleaning up
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/apiservice.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter API service")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Remove the backend Deployment of test APIService
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace-custom-metrics.yaml")
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
@@ -93,7 +99,9 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add testing resources")
 
 	nt.T.Log("Wait for test resource to have status CURRENT")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "resilient", "")
 	if err != nil {
@@ -105,7 +113,9 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/rbac.yaml")
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml")
 	nt.T.Log("Waiting for nomos to stabilize")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateStackdriverAdapterStatusCurrent(nt)
 	if err != nil {

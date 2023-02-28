@@ -117,8 +117,9 @@ func encodeDeclaredFields(converter *declared.ValueConverter, obj runtime.Object
 }
 
 // setDefaultProtocol sets the nested protocol field in anything containing
-// an array of Ports.
-// TODO: This should be deleted once we've upgraded to k8s 1.21 libraries.
+// an array of Ports. This function is required in OpenAPI v2 to fulfill the
+// missing defaults.
+// TODO: This should be deleted once OpenAPI v3 is available
 func setDefaultProtocol(u *unstructured.Unstructured) status.MultiError {
 	var errs []error
 	switch u.GroupVersionKind().GroupKind() {
@@ -134,7 +135,7 @@ func setDefaultProtocol(u *unstructured.Unstructured) status.MultiError {
 	case kinds.CronJob().GroupKind():
 		errs = setDefaultProtocolInNestedPodSpec(u.Object, "spec", "jobTemplate", "spec", "template", "spec")
 	case kinds.Service().GroupKind():
-		errs = setDefaultProtocolInNestedPorts(u.Object, true, "spec", "ports")
+		errs = setDefaultProtocolInNestedPorts(u.Object, "spec", "ports")
 	}
 
 	if len(errs) > 0 {
@@ -234,20 +235,15 @@ func setDefaultProtocolInContainer(container interface{}) []error {
 		return []error{errors.New("container must be a map")}
 	}
 
-	return setDefaultProtocolInNestedPorts(mContainer, false, "ports")
+	return setDefaultProtocolInNestedPorts(mContainer, "ports")
 }
 
-func setDefaultProtocolInNestedPorts(obj map[string]interface{}, mustExist bool, fields ...string) []error {
+func setDefaultProtocolInNestedPorts(obj map[string]interface{}, fields ...string) []error {
 	ports, found, err := unstructured.NestedFieldNoCopy(obj, fields...)
 	if err != nil {
 		return []error{err}
 	}
 	if !found || ports == nil {
-		// Service resource requires the port field to be specified, or it is not a valid resource.
-		if mustExist {
-			return []error{fmt.Errorf(".%s is required", strings.Join(fields, "."))}
-		}
-		// Other resources can have empty ports field, and we can gracefully return early.
 		return nil
 	}
 

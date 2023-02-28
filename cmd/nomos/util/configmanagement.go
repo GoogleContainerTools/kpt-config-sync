@@ -16,14 +16,19 @@ package util
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -33,6 +38,8 @@ const (
 	ConfigManagementResource = "configmanagements"
 	// ConfigManagementVersionName is the field name that indicates the ConfigManagement version.
 	ConfigManagementVersionName = "configManagementVersion"
+	ACMOperatorDeployment       = "config-management-operator"
+	rootSyncCRDName             = "rootsyncs.configsync.gke.io"
 )
 
 // DynamicClient obtains a client based on the supplied REST config.  Can be overridden in tests.
@@ -160,4 +167,31 @@ func (c *ConfigManagementClient) IsMultiRepo(ctx context.Context) (*bool, error)
 		return nil, err
 	}
 	return &isMulti, nil
+}
+
+// IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
+// If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
+func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {
+	v, cmErr := c.Version(ctx)
+	if cmErr != nil {
+		err := fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
+
+		return false, err
+	}
+	_, operatorDepErr := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
+	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
+		err := fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
+		return false, err
+	}
+
+	if v != NotInstalledMsg && operatorDepErr == nil {
+		return false, nil
+	}
+
+	rootSyncCRDErr := cl.Get(ctx, client.ObjectKey{Name: rootSyncCRDName}, &apiextensionsv1.CustomResourceDefinition{})
+	if rootSyncCRDErr == nil {
+		return true, nil
+	}
+	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr)
+	return false, err
 }

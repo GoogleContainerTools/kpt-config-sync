@@ -28,7 +28,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -53,9 +53,8 @@ const (
 	// ACMOperatorLabelSelector is the label selector for the ACM operator Pod.
 	ACMOperatorLabelSelector = "k8s-app=config-management-operator"
 	// ACMOperatorDeployment is the name of the ACM operator Deployment.
-	ACMOperatorDeployment            = "config-management-operator"
+
 	syncingConditionSupportedVersion = "v1.10.0-rc.1"
-	rootSyncCRDName                  = "rootsyncs.configsync.gke.io"
 )
 
 // ClusterClient is the client that talks to the cluster.
@@ -141,8 +140,9 @@ func (c *ClusterClient) resourceGroups(ctx context.Context, ns string, nsAndName
 // clusterStatus returns the ClusterState for the cluster this client is connected to.
 func (c *ClusterClient) clusterStatus(ctx context.Context, cluster, namespace string) *ClusterState {
 	cs := &ClusterState{Ref: cluster}
-	isOss, err := c.IsOssInstallation(ctx, cs)
+	isOss, err := util.IsOssInstallation(ctx, c.ConfigManagement, c.Client, c.K8sClient)
 	if err != nil {
+		cs.Error = err.Error()
 		return cs
 	}
 
@@ -365,35 +365,6 @@ func (c *ClusterClient) namespaceRepoClusterStatus(ctx context.Context, cs *Clus
 	}
 }
 
-// IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
-// If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
-func (c *ClusterClient) IsOssInstallation(ctx context.Context, cs *ClusterState) (bool, error) {
-	v, cmErr := c.ConfigManagement.Version(ctx)
-	if cmErr != nil {
-		err := fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
-		cs.Error = err.Error()
-		return false, err
-	}
-	_, operatorDepErr := c.K8sClient.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
-	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
-		err := fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
-		cs.Error = err.Error()
-		return false, err
-	}
-
-	if v != util.NotInstalledMsg && operatorDepErr == nil {
-		return false, nil
-	}
-
-	rootSyncCRDErr := c.Client.Get(ctx, client.ObjectKey{Name: rootSyncCRDName}, &apiextensionsv1.CustomResourceDefinition{})
-	if rootSyncCRDErr == nil {
-		return true, nil
-	}
-	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr)
-	cs.Error = err.Error()
-	return false, err
-}
-
 // IsInstalled returns true if the ClusterClient is connected to a cluster where
 // Config Sync is installed (ACM operator Pod is running). Updates the given ClusterState with status info if
 // Config Sync is not installed.
@@ -403,8 +374,8 @@ func (c *ClusterClient) IsInstalled(ctx context.Context, cs *ClusterState) bool 
 		cs.Error = fmt.Sprintf("The %q namespace is not found", configmanagement.ControllerNamespace)
 		return false
 	}
-	_, errDeploymentKubeSystem := c.K8sClient.AppsV1().Deployments(metav1.NamespaceSystem).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
-	_, errDeploymentCMSystem := c.K8sClient.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
+	_, errDeploymentKubeSystem := c.K8sClient.AppsV1().Deployments(metav1.NamespaceSystem).Get(ctx, util.ACMOperatorDeployment, metav1.GetOptions{})
+	_, errDeploymentCMSystem := c.K8sClient.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, util.ACMOperatorDeployment, metav1.GetOptions{})
 	podListKubeSystem, errPodsKubeSystem := c.K8sClient.CoreV1().Pods(metav1.NamespaceSystem).List(ctx, metav1.ListOptions{LabelSelector: ACMOperatorLabelSelector})
 	podListCMSystem, errPodsCMSystem := c.K8sClient.CoreV1().Pods(configmanagement.ControllerNamespace).List(ctx, metav1.ListOptions{LabelSelector: ACMOperatorLabelSelector})
 

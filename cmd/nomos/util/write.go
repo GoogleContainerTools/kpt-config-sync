@@ -31,6 +31,8 @@ const (
 	NotConfiguredMsg = "NOT CONFIGURED"
 	// UnknownMsg indicates that a field's value is unknown or unavailable.
 	UnknownMsg = "UNKNOWN"
+	// OSSMsg indicates OSS installation
+	OSSMsg              = "OSS Installation"
 )
 
 // NewWriter returns a standardized writer for the CLI for writing tabular output to the console.

@@ -27,12 +27,14 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/version"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func init() {
@@ -138,6 +140,18 @@ func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool,
 	cmClient, err := util.NewConfigManagementClient(cfg)
 	if err != nil {
 		return util.ErrorMsg, nil, err
+	}
+	cl, err := ctrl.New(cfg, ctrl.Options{})
+	if err != nil {
+		return util.ErrorMsg, nil, err
+	}
+	ck, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return util.ErrorMsg, nil, err
+	}
+	isOss, err := util.IsOssInstallation(ctx, cmClient, cl, ck)
+	if isOss {
+		return util.OSSMsg, &isOss, nil
 	}
 	v, err := cmClient.Version(ctx)
 	if err != nil {

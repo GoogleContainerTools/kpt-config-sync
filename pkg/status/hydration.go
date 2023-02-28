@@ -33,8 +33,12 @@ func InternalHydrationError(err error, format string, a ...interface{}) Error {
 
 // HydrationError returns a hydration error.
 func HydrationError(code string, err error) Error {
-	if code == ActionableHydrationErrorCode {
+	switch code {
+	case TransientErrorCode:
+		return TransientError(err)
+	case ActionableHydrationErrorCode:
 		return actionableHydrationErrorBuilder.Wrap(err).Build()
+	default:
+		return internalHydrationErrorBuilder.Wrap(err).Build()
 	}
-	return internalHydrationErrorBuilder.Wrap(err).Build()
 }

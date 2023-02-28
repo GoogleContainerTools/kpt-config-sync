@@ -36,6 +36,23 @@ var nonBlockingErrorCodes = map[string]struct{}{
 	EncodeDeclaredFieldErrorCode: {},
 }
 
+// HasTransientErrors return whether `errs` include any transient errors.
+//
+// A transient error is not exposed in the R*Sync API, and is expected to be
+// auto-resolved in the next retry loop.
+func HasTransientErrors(errs MultiError) bool {
+	if errs == nil {
+		return false
+	}
+
+	for _, err := range errs.Errors() {
+		if err.Code() == TransientErrorCode {
+			return true
+		}
+	}
+	return false
+}
+
 // HasBlockingErrors return whether `errs` include any blocking errors.
 //
 // An error is blocking if it requires the users to do something so that

@@ -167,6 +167,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	rs := renderingStatus{
 		commit: gs.commit,
 	}
+
 	// set the rendering status by checking the done file.
 	doneFilePath := p.options().RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
 	_, err := os.Stat(doneFilePath)
@@ -234,6 +235,14 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 // It also updates the .status.rendering and .status.source fields.
 func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) status.MultiError {
 	hydrationStatus, sourceStatus := readFromSource(ctx, p, trigger, state, sourceState)
+	// Return the transient errors here to avoid surfacing them to the R*Sync status field.
+	// The transient errors might be auto-resolved in the next retry loop, so no need to expose to users.
+	if status.HasTransientErrors(hydrationStatus.errs) {
+		return hydrationStatus.errs
+	}
+	if status.HasTransientErrors(sourceStatus.errs) {
+		return sourceStatus.errs
+	}
 	hydrationStatus.lastUpdate = metav1.Now()
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.

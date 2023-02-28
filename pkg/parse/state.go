@@ -159,10 +159,14 @@ func (s *reconcilerState) resetAllButSourceState() {
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
 func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
-	return !newStatus.equal(s.sourceStatus) || s.sourceStatus.lastUpdate.IsZero() || s.sourceStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
+	return !status.HasTransientErrors(newStatus.errs) && (!newStatus.equal(s.sourceStatus) ||
+		s.sourceStatus.lastUpdate.IsZero() ||
+		s.sourceStatus.lastUpdate.Before(&s.syncingConditionLastUpdate))
 }
 
 // needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
 func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
-	return !newStatus.equal(s.syncStatus) || s.syncStatus.lastUpdate.IsZero() || s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate)
+	return !status.HasTransientErrors(newStatus.errs) && (!newStatus.equal(s.syncStatus) ||
+		s.syncStatus.lastUpdate.IsZero() ||
+		s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate))
 }

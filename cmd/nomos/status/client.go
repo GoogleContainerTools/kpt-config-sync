@@ -56,7 +56,6 @@ const (
 	ACMOperatorDeployment            = "config-management-operator"
 	syncingConditionSupportedVersion = "v1.10.0-rc.1"
 	rootSyncCRDName                  = "rootsyncs.configsync.gke.io"
-	repoSyncCRDName                  = "reposyncs.configsync.gke.io"
 )
 
 // ClusterClient is the client that talks to the cluster.
@@ -378,7 +377,7 @@ func (c *ClusterClient) IsOssInstallation(ctx context.Context, cs *ClusterState)
 	_, operatorDepErr := c.K8sClient.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
 	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
 		err := fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
-		cs.Error = err.Error() 
+		cs.Error = err.Error()
 		return false, err
 	}
 
@@ -390,7 +389,7 @@ func (c *ClusterClient) IsOssInstallation(ctx context.Context, cs *ClusterState)
 	if rootSyncCRDErr == nil {
 		return true, nil
 	}
-	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr) 
+	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr)
 	cs.Error = err.Error()
 	return false, err
 }

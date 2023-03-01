@@ -369,6 +369,10 @@ func Generate() AllExamples {
 	// 2015
 	result.add(status.InternalHydrationError(errors.New("internal rendering error"), "internal rendering error"))
 
+	// 2016
+	// The transient error is not exposed in the R*Sync API, and is supposed to be autoresolvable.
+	result.add(status.TransientError(errors.New("transient error")))
+
 	// 9998
 	result.add(status.InternalError("we made a mistake"))
 

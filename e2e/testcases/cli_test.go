@@ -1046,8 +1046,7 @@ func TestNomosStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if !strings.Contains(string(out), "SYNCED") && !strings.Contains(string(out), "PENDING") &&
-		!strings.Contains(string(out), "RECONCILING") && !strings.Contains(string(out), "STALLED") {
+	if !strings.Contains(string(out), "SYNCED") {
 		nt.T.Fatalf("Expected to find sync status in string output:\n%s\n", string(out))
 	}
 }

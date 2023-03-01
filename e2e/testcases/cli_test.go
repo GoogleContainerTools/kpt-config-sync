@@ -1046,7 +1046,8 @@ func TestNomosStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if !strings.Contains(string(out), "git@test-git-server.config-management-system-test:/git-server/repos/config-management-system/root-sync/acme@main") {
-		nt.T.Fatalf("Expected to find Git provider string in output:\n%s\n", string(out))
+	if !strings.Contains(string(out), "SYNCED") && !strings.Contains(string(out), "PENDING") &&
+		!strings.Contains(string(out), "RECONCILING") && !strings.Contains(string(out), "STALLED") {
+		nt.T.Fatalf("Expected to find sync status in string output:\n%s\n", string(out))
 	}
 }

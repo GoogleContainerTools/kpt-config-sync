@@ -176,14 +176,11 @@ func (c *ConfigManagementClient) IsMultiRepo(ctx context.Context) (*bool, error)
 func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {
 	v, cmErr := c.Version(ctx)
 	if cmErr != nil {
-		err := fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
-
-		return false, err
+		return false, fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
 	}
 	_, operatorDepErr := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
 	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
-		err := fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
-		return false, err
+		return false, fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
 	}
 
 	if v != NotInstalledMsg && operatorDepErr == nil {

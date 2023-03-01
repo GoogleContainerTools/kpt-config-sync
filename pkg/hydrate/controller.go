@@ -26,9 +26,9 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/importer/git"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
@@ -298,9 +298,14 @@ func deleteErrorFile(file string) error {
 }
 
 // SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest or a helm chart version), the absolute path of the sync directory, and source errors.
-func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
+func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
+	// Check if the source root directory is mounted
+	sourceRoot := path.Dir(sourceRevDir.OSPath())
+	if _, err := os.Stat(sourceRoot); err != nil && os.IsNotExist(err) {
+		return "", "", status.TransientError(err)
+	}
 	// Check if the source configs are synced successfully.
-	errFilePath := filepath.Join(path.Dir(sourceRoot.OSPath()), git.ErrorFile)
+	errFilePath := filepath.Join(sourceRoot, ErrorFile)
 
 	var containerName string
 	switch sourceType {
@@ -312,24 +317,25 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRoot cmpath.Absolut
 		containerName = reconcilermanager.HelmSync
 	}
 
-	// A function that turns an error to a status sourceError.
-	toSourceError := func(err error) status.Error {
-		if err == nil {
-			err = errors.Errorf("unable to sync repo\n%s",
-				git.SyncError(containerName, errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
-		} else {
-			err = errors.Wrapf(err, "unable to sync repo\n%s",
-				git.SyncError(containerName, errFilePath, fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconcilerName)))
-		}
-		return status.SourceError.Wrap(err).Build()
+	content, err := os.ReadFile(errFilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", "", status.TransientError(
+			fmt.Errorf("unable to load %s: %v. Please "+
+				"check %s logs for more info: kubectl logs -n %s -l %s -c %s",
+				errFilePath, err, containerName, configsync.ControllerNamespace,
+				metadata.ReconcilerLabel, reconcilerName))
+	} else if err == nil && len(content) == 0 {
+		return "", "", status.SourceError.Sprintf("%s is "+
+			"empty. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
+			errFilePath, containerName, configsync.ControllerNamespace,
+			metadata.ReconcilerLabel, reconcilerName).Build()
+	} else if err == nil {
+		return "", "", status.SourceError.Sprintf("error in the %s container: %s", containerName, string(content)).Build()
 	}
 
-	if _, err := os.Stat(errFilePath); err == nil || !os.IsNotExist(err) {
-		return "", "", toSourceError(err)
-	}
-	gitDir, err := sourceRoot.EvalSymlinks()
+	gitDir, err := sourceRevDir.EvalSymlinks()
 	if err != nil {
-		return "", "", toSourceError(err)
+		return "", "", status.SourceError.Sprintf("unable to evaluate the source link %s: %v", sourceRevDir, err).Build()
 	}
 
 	commit := filepath.Base(gitDir.OSPath())

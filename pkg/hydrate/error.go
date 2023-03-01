@@ -53,6 +53,21 @@ func (e InternalError) Code() string {
 	return status.InternalHydrationErrorCode
 }
 
+// TransientError represents the transient error that will be autoresolved in the retry.
+type TransientError struct {
+	error
+}
+
+// NewTransientError returns the wrapper of the transient error.
+func NewTransientError(e error) TransientError {
+	return TransientError{e}
+}
+
+// Code returns the transient error code.
+func (e TransientError) Code() string {
+	return status.TransientErrorCode
+}
+
 // HydrationErrorPayload is the payload of the hydration error in the error file.
 type HydrationErrorPayload struct {
 	// Code is the error code to indicate if it is a user error or an internal error.

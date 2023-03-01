@@ -17,60 +17,48 @@ package watch
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
 
-type startWatchFunc func(metav1.ListOptions) (watch.Interface, error)
-
 // watcherConfig contains the options needed
 // to create a watcher.
 type watcherConfig struct {
 	gvk                     schema.GroupVersionKind
-	mapper                  meta.RESTMapper
 	config                  *rest.Config
 	resources               *declared.Resources
 	queue                   *queue.ObjectQueue
 	scope                   declared.Scope
 	syncName                string
-	startWatch              startWatchFunc
+	startWatch              WatchFunc
 	addConflictErrorFunc    func(status.ManagementConflictError)
 	removeConflictErrorFunc func(status.ManagementConflictError)
 }
 
-// createWatcherFunc is the type of functions to create watchers
-type createWatcherFunc func(ctx context.Context, cfg watcherConfig) (Runnable, status.Error)
+// watcherFactory knows how to build watch.Runnables.
+type watcherFactory func(cfg watcherConfig) (Runnable, status.Error)
 
-// createWatcher creates a watcher for a given GVK
-func createWatcher(ctx context.Context, cfg watcherConfig) (Runnable, status.Error) {
-	if cfg.startWatch == nil {
-		mapping, err := cfg.mapper.RESTMapping(cfg.gvk.GroupKind(), cfg.gvk.Version)
-		if err != nil {
-			return nil, status.APIServerErrorf(err, "watcher failed to get REST mapping for %s", cfg.gvk.String())
-		}
-
-		dynamicClient, err := dynamic.NewForConfig(cfg.config)
-		if err != nil {
-			return nil, status.APIServerErrorf(err, "watcher failed to get dynamic client for %s", cfg.gvk.String())
-		}
-
-		if cfg.scope == declared.RootReconciler {
-			cfg.startWatch = func(options metav1.ListOptions) (watch.Interface, error) {
-				return dynamicClient.Resource(mapping.Resource).Watch(ctx, options)
-			}
-		} else {
-			cfg.startWatch = func(options metav1.ListOptions) (watch.Interface, error) {
-				return dynamicClient.Resource(mapping.Resource).Namespace(string(cfg.scope)).Watch(ctx, options)
+// watcherFactoryFromListerWatcherFactory returns a new watcherFactory that uses
+// the specified ListerWatcherFactory.
+func watcherFactoryFromListerWatcherFactory(factory ListerWatcherFactory) watcherFactory {
+	factoryPtr := factory
+	return func(cfg watcherConfig) (Runnable, status.Error) {
+		if cfg.startWatch == nil {
+			cfg.startWatch = func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				namespace := "" // RootSync watches at the cluster scope or all namespaces
+				if cfg.scope != declared.RootReconciler {
+					// RepoSync only watches at the namespace scope
+					namespace = string(cfg.scope)
+				}
+				lw := factoryPtr(cfg.gvk, namespace)
+				return ListAndWatch(ctx, lw, options)
 			}
 		}
+		return NewFiltered(cfg), nil
 	}
-
-	return NewFiltered(ctx, cfg), nil
 }

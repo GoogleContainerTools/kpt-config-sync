@@ -18,14 +18,12 @@ import (
 	"context"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Manager accepts new resource lists that are parsed from Git and then
@@ -40,17 +38,14 @@ type Manager struct {
 	// cfg is the rest config used to talk to apiserver.
 	cfg *rest.Config
 
-	// mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources.
-	mapper meta.RESTMapper
-
 	// resources is the declared resources that are parsed from Git.
 	resources *declared.Resources
 
 	// queue is the work queue for remediator.
 	queue *queue.ObjectQueue
 
-	// createWatcherFunc is the function to create a watcher.
-	createWatcherFunc createWatcherFunc
+	// watcherFactory is the function to create a watcher.
+	watcherFactory watcherFactory
 
 	// The following fields are guarded by the mutex.
 	mux sync.Mutex
@@ -66,24 +61,19 @@ type Manager struct {
 
 // Options contains options for creating a watch manager.
 type Options struct {
-	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources.
-	Mapper meta.RESTMapper
-
-	watcherFunc createWatcherFunc
+	watcherFactory watcherFactory
 }
 
-// DefaultOptions return the default options:
-// - create discovery RESTmapper from the passed rest.Config
-// - use createWatcher to create watchers
+// DefaultOptions return the default options with a ListerWatcherFactory built
+// from the specified REST config.
 func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	factory, err := NewListerWatcherFactoryFromClient(cfg)
 	if err != nil {
-		return nil, err
+		return nil, status.APIServerError(err, "failed to build ListerWatcherFactory")
 	}
 
 	return &Options{
-		Mapper:      mapper,
-		watcherFunc: createWatcher,
+		watcherFactory: watcherFactoryFromListerWatcherFactory(factory),
 	}, nil
 }
 
@@ -106,8 +96,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		cfg:                     cfg,
 		resources:               decls,
 		watcherMap:              make(map[schema.GroupVersionKind]Runnable),
-		createWatcherFunc:       options.watcherFunc,
-		mapper:                  options.Mapper,
+		watcherFactory:          options.watcherFactory,
 		queue:                   q,
 		addConflictErrorFunc:    addConflictErrorFunc,
 		removeConflictErrorFunc: removeConflictErrorFunc,
@@ -141,10 +130,10 @@ func (m *Manager) ManagementConflict() bool {
 
 // UpdateWatches accepts a map of GVKs that should be watched and takes the
 // following actions:
-// - stop watchers for any GroupVersionKind that is not present in the given
-//   map.
-// - start watchers for any GroupVersionKind that is present in the given map
-//   and not present in the current watch map.
+//   - stop watchers for any GroupVersionKind that is not present in the given
+//     map.
+//   - start watchers for any GroupVersionKind that is present in the given map
+//     and not present in the current watch map.
 //
 // This function is threadsafe.
 func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {
@@ -161,7 +150,6 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 			// It is safe to stop the watcher.
 			m.stopWatcher(gvk)
 			stoppedWatches++
-
 		}
 	}
 
@@ -204,7 +192,6 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 	}
 	cfg := watcherConfig{
 		gvk:                     gvk,
-		mapper:                  m.mapper,
 		config:                  m.cfg,
 		resources:               m.resources,
 		queue:                   m.queue,
@@ -213,7 +200,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		addConflictErrorFunc:    m.addConflictErrorFunc,
 		removeConflictErrorFunc: m.removeConflictErrorFunc,
 	}
-	w, err := m.createWatcherFunc(ctx, cfg)
+	w, err := m.watcherFactory(cfg)
 	if err != nil {
 		return err
 	}

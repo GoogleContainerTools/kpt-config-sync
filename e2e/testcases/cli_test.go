@@ -1050,3 +1050,19 @@ func TestNomosStatus(t *testing.T) {
 		nt.T.Fatalf("Expected to find Git provider string in output:\n%s\n", string(out))
 	}
 }
+
+func TestNomosVersion(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	// get version
+	cmd := nt.Command("nomos", "version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), "OSS Installation") {
+		nt.T.Fatalf("Expected to find Git provider string in output:\n%s\n", string(out))
+	}
+}

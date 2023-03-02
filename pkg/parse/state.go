@@ -159,14 +159,38 @@ func (s *reconcilerState) resetAllButSourceState() {
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
 func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
-	return !status.HasTransientErrors(newStatus.errs) && (!newStatus.equal(s.sourceStatus) ||
-		s.sourceStatus.lastUpdate.IsZero() ||
-		s.sourceStatus.lastUpdate.Before(&s.syncingConditionLastUpdate))
+	if status.HasTransientErrors(newStatus.errs) {
+		return false
+	}
+	// Update if not initialized
+	if s.sourceStatus.lastUpdate.IsZero() {
+		return true
+	}
+	// Update if source status was last updated before the rendering status
+	if s.sourceStatus.lastUpdate.Before(&s.renderingStatus.lastUpdate) {
+		return true
+	}
+	// Update if there's a diff
+	return !newStatus.equal(s.sourceStatus)
 }
 
 // needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
 func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
-	return !status.HasTransientErrors(newStatus.errs) && (!newStatus.equal(s.syncStatus) ||
-		s.syncStatus.lastUpdate.IsZero() ||
-		s.syncStatus.lastUpdate.Before(&s.syncingConditionLastUpdate))
+	if status.HasTransientErrors(newStatus.errs) {
+		return false
+	}
+	// Update if not initialized
+	if s.syncStatus.lastUpdate.IsZero() {
+		return true
+	}
+	// Update if sync status was last updated before the rendering status
+	if s.syncStatus.lastUpdate.Before(&s.renderingStatus.lastUpdate) {
+		return true
+	}
+	// Update if sync status was last updated before the source status
+	if s.syncStatus.lastUpdate.Before(&s.sourceStatus.lastUpdate) {
+		return true
+	}
+	// Update if there's a diff
+	return !newStatus.equal(s.syncStatus)
 }

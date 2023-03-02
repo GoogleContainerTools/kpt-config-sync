@@ -154,6 +154,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		gs.lastUpdate = metav1.Now()
 		var setSourceStatusErr error
 		if state.needToSetSourceStatus(gs) {
+			klog.V(3).Info("Updating source status (before read): %#v", gs)
 			setSourceStatusErr = p.setSourceStatus(ctx, gs)
 			if setSourceStatusErr == nil {
 				state.sourceStatus = gs
@@ -174,6 +175,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.commit) {
 		rs.message = RenderingInProgress
 		rs.lastUpdate = metav1.Now()
+		klog.V(3).Info("Updating rendering status (before read): %#v", rs)
 		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
 		if setRenderingStatusErr == nil {
 			state.reset()
@@ -189,6 +191,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		rs.message = RenderingFailed
 		rs.lastUpdate = metav1.Now()
 		rs.errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
+		klog.V(3).Info("Updating rendering status (before read): %#v", rs)
 		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
 		if setRenderingStatusErr == nil {
 			state.renderingStatus = rs
@@ -246,6 +249,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 	hydrationStatus.lastUpdate = metav1.Now()
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
+	klog.V(3).Info("Updating rendering status (after read): %#v", hydrationStatus)
 	setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, hydrationStatus)
 	if setRenderingStatusErr == nil {
 		state.renderingStatus = hydrationStatus
@@ -265,6 +269,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 	sourceStatus.lastUpdate = metav1.Now()
 	var setSourceStatusErr error
 	if state.needToSetSourceStatus(sourceStatus) {
+		klog.V(3).Info("Updating source status (after read): %#v", sourceStatus)
 		setSourceStatusErr := p.setSourceStatus(ctx, sourceStatus)
 		if setSourceStatusErr == nil {
 			state.sourceStatus = sourceStatus
@@ -369,6 +374,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 		lastUpdate: metav1.Now(),
 	}
 	if state.needToSetSourceStatus(newSourceStatus) {
+		klog.V(3).Info("Updating source status (after parse): %#v", newSourceStatus)
 		if err := p.setSourceStatus(ctx, newSourceStatus); err != nil {
 			// If `p.setSourceStatus` fails, we terminate the reconciliation.
 			// If we call `update` in this case and `update` succeeds, `Status.Source.Commit` would end up be older

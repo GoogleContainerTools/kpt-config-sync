@@ -15,6 +15,8 @@
 package e2e
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -282,9 +284,51 @@ func TestComposition(t *testing.T) {
 		synedObjs[id] = obj
 	}
 
-	nt.T.Log("Waiting 1m to make sure there's no unnecessary updates...")
-	time.Sleep(1 * time.Minute)
+	nt.T.Log("Watching for 1m to make sure there's no unnecessary updates...")
+	// Watch the managed objects to log diffs (debug) and fail fast.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tg := taskgroup.New()
+	for id := range synedObjs {
+		idPtr := id
+		synedObj := synedObjs[id]
+		tg.Go(func() error {
+			// Stop early if the RV changes. Otherwise wait until timeout.
+			rvne := nomostest.ResourceVersionNotEquals(nt, synedObj.GetResourceVersion())
+			return nomostest.WatchObject(nt, idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace, []nomostest.Predicate{
+				func(obj client.Object) error {
+					if err := ctx.Err(); err != nil {
+						return err // cancelled
+					}
+					if err := rvne(obj); err != nil {
+						// ResourceVersion changed! Cancel other watches.
+						cancel()
+						return err
+					}
+					return nil
+				},
+			}, nomostest.WatchTimeout(1*time.Minute))
+		})
+	}
+	if err := tg.Wait(); err != nil {
+		if me, ok := err.(multiErr); ok {
+			for _, err := range me.Errors() {
+				// Timeout or Cancel expected. Otherwise it probably means the RV changed.
+				var timeoutErr *nomostest.ErrWatchTimeout
+				if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
+					nt.T.Fatal(err)
+				}
+			}
+		} else {
+			// Timeout or Cancel expected. Otherwise it probably means the RV changed.
+			var timeoutErr *nomostest.ErrWatchTimeout
+			if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
+				nt.T.Fatal(err)
+			}
+		}
+	}
 
+	// Assuming the watches timed out, validate that the objects are still reconciled.
 	for id, synedObj := range synedObjs {
 		nt.T.Logf("Ensure %q exists, is current, and its ResourceVersion has not changed", id)
 		obj := &unstructured.Unstructured{}
@@ -299,6 +343,11 @@ func TestComposition(t *testing.T) {
 			nt.T.Logf("Diff (- Expected, + Actual):\n%s", cmp.Diff(synedObj, obj))
 		}
 	}
+}
+
+// multiErr matches multi-errors, like those from TaskGroup.Wait
+type multiErr interface {
+	Errors() []error
 }
 
 type manager struct {

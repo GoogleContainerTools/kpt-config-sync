@@ -220,9 +220,10 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			if len(evalErrs) > 0 {
-				return errors.Wrapf(
-					multierr.Combine(evalErrs...),
-					"%s timed out waiting for predicates", errPrefix)
+				return &ErrWatchTimeout{
+					cause:  multierr.Combine(evalErrs...),
+					prefix: errPrefix,
+				}
 			}
 			return errors.Errorf("%s timed out before any watch events were received", errPrefix)
 		}
@@ -231,6 +232,20 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	// Success! Condition returned true.
 	return nil
 }
+
+// ErrWatchTimeout is returned by Watch functions to indicate timeout.
+type ErrWatchTimeout struct {
+	cause  error
+	prefix string
+}
+
+// Error returns the error message.
+func (ewt *ErrWatchTimeout) Error() string {
+	return fmt.Sprintf("%s timed out waiting for predicates: %v", ewt.prefix, ewt.cause)
+}
+
+// Unwrap provides compatibility for Go 1.13 error chains.
+func (ewt *ErrWatchTimeout) Unwrap() error { return ewt.cause }
 
 // newListWatchForObject returns a ListWatch that does server-side filtering
 // down to a single resource object.

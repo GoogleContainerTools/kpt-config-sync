@@ -43,7 +43,7 @@ func NewSyncInProgressError(repo *v1.Repo) *SyncInProgressError {
 // Error constructs an error string
 func (sipe *SyncInProgressError) Error() string {
 	return fmt.Sprintf("status.sync.inProgress contains changes that haven't been synced: %s\nRepo: %s",
-		log.AsJSON(sipe.Repo.Status.Sync.InProgress), log.AsJSON(sipe.Repo))
+		log.AsJSON(sipe.Repo.Status.Sync.InProgress), log.AsYAML(sipe.Repo))
 }
 
 // MonoRepoSyncNotInProgress ensures the Repo does not have a sync in-progress.
@@ -76,11 +76,11 @@ func RepoHasStatusSyncLatestToken(sha1 string) Predicate {
 
 		if len(repo.Status.Source.Errors) > 0 {
 			return fmt.Errorf("status.source.errors contains errors: %s\nRepo: %s",
-				log.AsJSON(repo.Status.Source.Errors), log.AsJSON(repo))
+				log.AsJSON(repo.Status.Source.Errors), log.AsYAML(repo))
 		}
 		if len(repo.Status.Import.Errors) > 0 {
 			return fmt.Errorf("status.import.errors contains errors: %s\nRepo: %s",
-				log.AsJSON(repo.Status.Import.Errors), log.AsJSON(repo))
+				log.AsJSON(repo.Status.Import.Errors), log.AsYAML(repo))
 		}
 
 		// Ensure there aren't any pending changes to sync.
@@ -149,11 +149,11 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d] is True: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsYAML(rs))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d] contains errors: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsYAML(rs))
 			}
 		}
 		return statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir, configsync.RootSyncKind, rs)
@@ -176,11 +176,11 @@ func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d] is True: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsYAML(rs))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d] contains errors: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsYAML(rs))
 			}
 		}
 		return statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir, configsync.RepoSyncKind, rs)
@@ -203,11 +203,11 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d] is True: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsYAML(rs))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d] contains errors: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RootSyncKind, log.AsYAML(rs))
 			}
 		}
 
@@ -217,7 +217,7 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 		syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 		if syncingCondition != nil && syncingCondition.Commit != sha1 {
 			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s: %s",
-				syncingCondition.Commit, sha1, configsync.RootSyncKind, log.AsJSON(rs))
+				syncingCondition.Commit, sha1, configsync.RootSyncKind, log.AsYAML(rs))
 		}
 		return nil
 	}
@@ -239,11 +239,11 @@ func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 		for i, condition := range rs.Status.Conditions {
 			if condition.Status == metav1.ConditionTrue {
 				return fmt.Errorf("status.conditions[%d] is True: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsYAML(rs))
 			}
 			if condition.ErrorSummary != nil && condition.ErrorSummary.TotalCount > 0 {
 				return fmt.Errorf("status.conditions[%d] contains errors: %s\n%s: %s",
-					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsJSON(rs))
+					i, log.AsJSON(condition), configsync.RepoSyncKind, log.AsYAML(rs))
 			}
 		}
 		if err := statusHasSyncCommitAndNoErrors(rs.Status.Status, sha1, configsync.RepoSyncKind, rs); err != nil {
@@ -252,7 +252,7 @@ func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 		syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 		if syncingCondition != nil && syncingCondition.Commit != sha1 {
 			return fmt.Errorf("status.conditions['Syncing'].commit %q does not match git revision %q:\n%s: %s",
-				syncingCondition.Commit, sha1, configsync.RepoSyncKind, log.AsJSON(rs))
+				syncingCondition.Commit, sha1, configsync.RepoSyncKind, log.AsYAML(rs))
 		}
 		return nil
 	}
@@ -260,75 +260,75 @@ func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
 
 func statusHasSyncCommitAndNoErrors(status v1beta1.Status, sha1, kind string, rs client.Object) error {
 	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.source contains %d errors:\n%s: %s", status.Source.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.source contains %d errors:\n%s: %s", status.Source.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if commit := status.Source.Commit; commit != sha1 {
-		return fmt.Errorf("status.source.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.source.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsYAML(rs))
 	}
 	if status.Sync.ErrorSummary != nil && status.Sync.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.sync contains %d errors:\n%s: %s", status.Sync.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.sync contains %d errors:\n%s: %s", status.Sync.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if commit := status.Sync.Commit; commit != sha1 {
-		return fmt.Errorf("status.sync.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.sync.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsYAML(rs))
 	}
 	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.rendering contains %d errors:\n%s: %s", status.Rendering.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.rendering contains %d errors:\n%s: %s", status.Rendering.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if commit := status.Rendering.Commit; commit != sha1 {
-		return fmt.Errorf("status.rendering.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.rendering.commit %q does not match git revision %q:\n%s: %s", commit, sha1, kind, log.AsYAML(rs))
 	}
 	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s: %s", message, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s: %s", message, kind, log.AsYAML(rs))
 	}
 	if commit := status.LastSyncedCommit; commit != sha1 {
-		return fmt.Errorf("status.lastSyncedCommit %q does not match commit hash %q:\n%s: %s", commit, sha1, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.lastSyncedCommit %q does not match commit hash %q:\n%s: %s", commit, sha1, kind, log.AsYAML(rs))
 	}
 	return nil
 }
 
 func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.SourceType, dir, kind string, rs client.Object) error {
 	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.source contains %d errors:\n%s: %s", status.Source.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.source contains %d errors:\n%s: %s", status.Source.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if status.Sync.ErrorSummary != nil && status.Sync.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.sync contains %d errors:\n%s: %s", status.Sync.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.sync contains %d errors:\n%s: %s", status.Sync.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
-		return fmt.Errorf("status.rendering contains %d errors:\n%s: %s", status.Rendering.ErrorSummary.TotalCount, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.rendering contains %d errors:\n%s: %s", status.Rendering.ErrorSummary.TotalCount, kind, log.AsYAML(rs))
 	}
 	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
-		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s: %s", message, kind, log.AsJSON(rs))
+		return fmt.Errorf("status.rendering.message %q does not indicate a successful state:\n%s: %s", message, kind, log.AsYAML(rs))
 	}
 	switch sourceType {
 	case v1beta1.OciSource:
 		if ociDir := status.Source.Oci.Dir; ociDir != dir {
-			return fmt.Errorf("status.source.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.source.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsYAML(rs))
 		}
 		if ociDir := status.Sync.Oci.Dir; ociDir != dir {
-			return fmt.Errorf("status.sync.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.sync.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsYAML(rs))
 		}
 		if ociDir := status.Rendering.Oci.Dir; ociDir != dir {
-			return fmt.Errorf("status.rendering.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.rendering.ociStatus.dir %q does not match the provided directory %q:\n%s: %s", ociDir, dir, kind, log.AsYAML(rs))
 		}
 	case v1beta1.GitSource:
 		if gitDir := status.Source.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.source.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsYAML(rs))
 		}
 		if gitDir := status.Sync.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.sync.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsYAML(rs))
 		}
 		if gitDir := status.Rendering.Git.Dir; gitDir != dir {
-			return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.rendering.gitStatus.dir %q does not match the provided directory %q:\n%s: %s", gitDir, dir, kind, log.AsYAML(rs))
 		}
 	case v1beta1.HelmSource:
 		if helmChart := status.Source.Helm.Chart; helmChart != dir {
-			return fmt.Errorf("status.source.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.source.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsYAML(rs))
 		}
 		if helmChart := status.Sync.Helm.Chart; helmChart != dir {
-			return fmt.Errorf("status.sync.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.sync.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsYAML(rs))
 		}
 		if helmChart := status.Rendering.Helm.Chart; helmChart != dir {
-			return fmt.Errorf("status.rendering.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsJSON(rs))
+			return fmt.Errorf("status.rendering.helmStatus.chart %q does not match the provided chart %q:\n%s: %s", helmChart, dir, kind, log.AsYAML(rs))
 		}
 	}
 	return nil

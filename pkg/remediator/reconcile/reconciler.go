@@ -80,7 +80,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 	case diff.NoOp:
 		return nil
 	case diff.Create:
-		klog.V(3).Infof("The remediator is about to create object %v", core.GKNN(declU))
+		klog.V(3).Infof("Remediator creating object: %v", core.GKNN(declU))
 		_, err := r.applier.Create(ctx, declU)
 		return err
 	case diff.Update:
@@ -88,7 +88,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("The remediator is about to update object %v", core.GKNN(actual))
+		klog.V(3).Infof("Remediator updating object: %v", core.GKNN(actual))
 		_, err = r.applier.Update(ctx, declU, actual)
 		return err
 	case diff.Delete:
@@ -96,7 +96,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("The remediator is about to delete object %v", core.GKNN(actual))
+		klog.V(3).Infof("Remediator deleting object: %v", core.GKNN(actual))
 		_, err = r.applier.Delete(ctx, actual)
 		return err
 	case diff.Error:
@@ -106,12 +106,12 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 			d.Declared,
 			d.Declared.GetAnnotations()[metadata.ResourceManagementKey],
 		)
-	case diff.Unmanage:
+	case diff.Abandon:
 		actual, err := d.UnstructuredActual()
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("The remediator is about to unmanage object %v", core.GKNN(actual))
+		klog.V(3).Infof("Remediator abandoning object %v", core.GKNN(actual))
 		_, err = r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 		return err
 	default:

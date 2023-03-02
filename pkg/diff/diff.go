@@ -53,8 +53,8 @@ const (
 	// Error indicates the resource's management annotation in the API server is invalid.
 	Error = Operation("error")
 
-	// Unmanage indicates the resource's management annotation should be removed from the API Server.
-	Unmanage = Operation("unmanage")
+	// Abandon indicates the resource's management annotation should be removed from the API Server.
+	Abandon = Operation("abandon")
 
 	// ManagementConflict represents the case where Declared and Actual both exist,
 	// but the Actual one is managed by a Reconciler that supersedes this one.
@@ -148,7 +148,7 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 		if metadata.HasConfigSyncMetadata(d.Actual) {
 			manager := d.Actual.GetAnnotations()[metadata.ResourceManagerKey]
 			if manager == "" || manager == declared.ResourceManager(scope, syncName) {
-				return Unmanage
+				return Abandon
 			}
 		}
 		return NoOp
@@ -184,12 +184,12 @@ func (d Diff) deleteType(scope declared.Scope, syncName string) Operation {
 	// and is managed by Config Sync.
 	switch {
 	case lifecycle.HasPreventDeletion(d.Actual):
-		// We aren't supposed to delete this, so just unmanage it.
+		// We aren't supposed to delete this, so just abandon it.
 		// It is never valid to have ACM metadata on non-ACM-managed objects.
-		return Unmanage
+		return Abandon
 	case differ.IsManageableSystemNamespace(d.Actual):
 		// This is a special Namespace we never want to remove.
-		return Unmanage
+		return Abandon
 	default:
 		// The expected path. Delete the resource from the cluster.
 		return Delete

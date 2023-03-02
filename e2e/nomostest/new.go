@@ -252,8 +252,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,
-		ReconcilerPollingPeriod: 50 * time.Millisecond,
-		HydrationPollingPeriod:  50 * time.Millisecond,
 		RootRepos:               make(map[string]*Repository),
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
 		scheme:                  scheme,
@@ -262,6 +260,13 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
 	}
+
+	// Speed up the delay between sync attempts to speed up testing
+	// (default: 15s), but leave the remediator (paused while syncing) and retry
+	// code (1s delay) time to execute between sync attempts.
+	nt.ReconcilerPollingPeriod = 2 * time.Second
+	// Speed up the delay between rendering attempts to speed up testing (default: 5s)
+	nt.HydrationPollingPeriod = 1 * time.Second
 
 	// init the Client & WatchClient
 	nt.RenewClient()

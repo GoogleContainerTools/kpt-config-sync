@@ -1,23 +1,20 @@
-approvers:
-  - sdowell
-  - mortent
-  - janetkuo
-  - karlkfi
-  - mikebz
-  - nan-yu
-  - xinnywinne
-  - tiffanny29631
-  - haiyanmeng
-  - victorpras
-
-reviewers:
-  - sdowell
-  - mortent
-  - janetkuo
-  - karlkfi
-  - mikebz
-  - nan-yu
-  - xinnywinne
-  - tiffanny29631
-  - haiyanmeng
-  - victorpras
+filters:
+  ".*":
+    approvers:
+      - maintainers
+    reviewers:
+      - maintainers
+  "^docs/.*":
+    approvers:
+      - sig-docs
+      - maintainers
+    reviewers:
+      - sig-docs
+      - maintainers
+  ".*.md$":
+    approvers:
+      - sig-docs
+      - maintainers
+    reviewers:
+      - sig-docs
+      - maintainers

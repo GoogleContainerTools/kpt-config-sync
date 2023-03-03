@@ -42,6 +42,8 @@ const (
 	ACMOperatorDeployment = "config-management-operator"
 	// rootSyncCRDName is the name of RootSync CRD
 	rootSyncCRDName = "rootsyncs.configsync.gke.io"
+	// ConfigSyncName is the name of the ConfigSync object for OSS installation.
+	ConfigSyncName = "config-sync"
 )
 
 // DynamicClient obtains a client based on the supplied REST config.  Can be overridden in tests.

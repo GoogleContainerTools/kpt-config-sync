@@ -1062,7 +1062,7 @@ func TestNomosVersion(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if !strings.Contains(string(out), "OSS Installation") {
+	if !strings.Contains(string(out), "config-sync") {
 		nt.T.Fatalf("Expected to find Git provider string in output:\n%s\n", string(out))
 	}
 }

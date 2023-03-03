@@ -192,11 +192,11 @@ func TestFilteredWatcher(t *testing.T) {
 				syncName:  syncName,
 				resources: dr,
 				queue:     q,
-				startWatch: func(options metav1.ListOptions) (watch.Interface, error) {
+				startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
 					return base, nil
 				},
 			}
-			w := NewFiltered(ctx, cfg)
+			w := NewFiltered(cfg)
 
 			go func() {
 				for _, a := range tc.actions {

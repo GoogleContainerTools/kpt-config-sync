@@ -84,7 +84,7 @@ const errorLoggingInterval = time.Second
 // - or managed by the same reconciler.
 type filteredWatcher struct {
 	gvk        string
-	startWatch startWatchFunc
+	startWatch WatchFunc
 	resources  *declared.Resources
 	queue      *queue.ObjectQueue
 	scope      declared.Scope
@@ -105,8 +105,8 @@ type filteredWatcher struct {
 // filteredWatcher implements the Runnable interface.
 var _ Runnable = &filteredWatcher{}
 
-// NewFiltered returns a new filtered watch initialized with the given options.
-func NewFiltered(_ context.Context, cfg watcherConfig) Runnable {
+// NewFiltered returns a new filtered watcher initialized with the given options.
+func NewFiltered(cfg watcherConfig) Runnable {
 	return &filteredWatcher{
 		gvk:                     cfg.gvk.String(),
 		startWatch:              cfg.startWatch,
@@ -268,7 +268,7 @@ func (w *filteredWatcher) Run(ctx context.Context) status.Error {
 		// 1. false, error -> We were unable to start the watch, so exit Run().
 		// 2. false, nil   -> We have been stopped via Stop(), so exit Run().
 		// 3. true,  nil   -> We have not been stopped and we started a new watch.
-		started, err := w.start(resourceVersion)
+		started, err := w.start(ctx, resourceVersion)
 		if err != nil {
 			return err
 		}
@@ -318,7 +318,7 @@ func (w *filteredWatcher) Run(ctx context.Context) status.Error {
 // threadsafe manner and returns true if the new base watch was created. Returns
 // false if the filteredWatcher is already stopped and returns error if the base
 // watch could not be started.
-func (w *filteredWatcher) start(resourceVersion string) (bool, status.Error) {
+func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bool, status.Error) {
 	w.mux.Lock()
 	defer w.mux.Unlock()
 
@@ -337,7 +337,7 @@ func (w *filteredWatcher) start(resourceVersion string) (bool, status.Error) {
 		Watch:               true,
 	}
 
-	base, err := w.startWatch(options)
+	base, err := w.startWatch(ctx, options)
 	if err != nil {
 		return false, status.APIServerErrorf(err, "failed to start watch for %s", w.gvk)
 	}

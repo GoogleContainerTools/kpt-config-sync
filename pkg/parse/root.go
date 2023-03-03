@@ -126,11 +126,12 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 	}
 
 	options := validate.Options{
-		ClusterName:  p.clusterName,
-		PolicyDir:    p.SyncDir,
-		PreviousCRDs: crds,
-		BuildScoper:  builder,
-		Converter:    p.converter,
+		ClusterName:    p.clusterName,
+		ReconcilerName: p.reconcilerName,
+		PolicyDir:      p.SyncDir,
+		PreviousCRDs:   crds,
+		BuildScoper:    builder,
+		Converter:      p.converter,
 	}
 	options = OptionsForScope(options, p.scope)
 

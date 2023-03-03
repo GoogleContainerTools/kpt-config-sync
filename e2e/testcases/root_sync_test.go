@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -33,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -305,6 +307,19 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 	if err != nil {
 		nt.T.Error(err)
 	}
+}
+
+func TestManageSelfRootSync(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
+	rs := &v1beta1.RootSync{}
+	if err := nt.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	sanitizedRs := fake.RootSyncObjectV1Beta1(rs.Name)
+	sanitizedRs.Spec = rs.Spec
+	nt.RootRepos[configsync.RootSyncName].Add("acme/root-sync.yaml", sanitizedRs)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add the root-sync object that configures the reconciler")
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, validate.SelfReconcileErrorCode, "RootSync config-management-system/root-sync must not manage itself in its repo")
 }
 
 func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {

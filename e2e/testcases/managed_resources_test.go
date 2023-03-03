@@ -86,8 +86,11 @@ metadata:
 		nt.T.Fatalf("got `kubectl apply -f test-ns1.yaml` error %v %s, want return nil", err, out)
 	}
 
-	// Config Sync should remove `test-ns1`.
-	if err := nomostest.WatchForNotFound(nt, kinds.Namespace(), "test-ns1", ""); err != nil {
+	// Remediator should delete `test-ns1`, because it says it's managed by the
+	// root-reconciler, but it's not in the source declared resources.
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), "test-ns1", "",
+		nomostest.WatchTimeout(30*time.Second))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -117,8 +120,12 @@ metadata:
 
 	// The `configsync.gke.io/manager` annotation of `test-ns2` suggests that its manager is ':abcdef'.
 	// The root reconciler does not manage `test-ns2`, therefore should not remove `test-ns2`.
-	err = nt.Validate("test-ns2", "", &corev1.Namespace{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, metadata.ResourceManagerKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-ns2", "", &corev1.Namespace{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -147,8 +154,12 @@ metadata:
 	time.Sleep(5 * time.Second)
 
 	// Config Sync should not modify the namespace, since it does not have a `configsync.gke.io/manager` annotation.
-	err = nt.Validate("test-ns3", "", &corev1.Namespace{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-ns3", "", &corev1.Namespace{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			// no manager
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -179,8 +190,12 @@ metadata:
 
 	// Config Sync should not modify the namespace, since its `configsync.gke.io/resource-id`
 	// annotation is incorrect.
-	err = nt.Validate("test-ns4", "", &corev1.Namespace{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, metadata.ResourceManagerKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-ns4", "", &corev1.Namespace{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -258,8 +273,12 @@ data:
 
 	// Config Sync should not modify the configmap, since its `configsync.gke.io/resource-id`
 	// annotation is incorrect.
-	err = nt.Validate("test-cm2", "bookstore", &corev1.ConfigMap{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, metadata.ResourceManagerKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-cm2", "bookstore", &corev1.ConfigMap{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -293,8 +312,12 @@ data:
 
 	// The `configsync.gke.io/manager` annotation of `test-ns3` suggests that its manager is ':abcdef'.
 	// The root reconciler does not manage `test-ns3`, therefore should not remove `test-ns3`.
-	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, metadata.ResourceManagerKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -326,8 +349,12 @@ data:
 	time.Sleep(5 * time.Second)
 
 	// Config Sync should not modify the configmap, since it does not have a `configsync.gke.io/manager` annotation.
-	err = nt.Validate("test-cm4", "bookstore", &corev1.ConfigMap{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-cm4", "bookstore", &corev1.ConfigMap{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			// no manager
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -359,8 +386,12 @@ metadata:
 
 	// Config Sync should not modify the secret, since the GVKs of the resources declared in the git repository
 	// do not include the GVK for Secret.
-	err = nt.Validate("test-secret", "bookstore", &corev1.Secret{}, nomostest.HasExactlyAnnotationKeys(
-		metadata.ResourceManagementKey, metadata.ResourceIDKey, metadata.ResourceManagerKey, "kubectl.kubernetes.io/last-applied-configuration"))
+	err = nt.Validate("test-secret", "bookstore", &corev1.Secret{},
+		nomostest.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

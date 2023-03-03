@@ -335,7 +335,7 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 
 	gitDir, err := sourceRevDir.EvalSymlinks()
 	if err != nil {
-		return "", "", status.SourceError.Sprintf("unable to evaluate the source link %s: %v", sourceRevDir, err).Build()
+		return "", "", status.SourceError.Sprintf("unable to evaluate the source link %s", sourceRevDir).Wrap(err).Build()
 	}
 
 	commit := filepath.Base(gitDir.OSPath())

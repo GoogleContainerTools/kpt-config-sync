@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/util/repo"
 )
 
@@ -482,14 +483,15 @@ func validateError(errs []v1beta1.ConfigSyncError, code, message string) error {
 	if len(errs) == 0 {
 		return errors.Errorf("no errors present")
 	}
-	var codes []string
 	for _, e := range errs {
 		if e.Code == code {
 			if message == "" || strings.Contains(e.ErrorMessage, message) {
 				return nil
 			}
 		}
-		codes = append(codes, e.Code)
 	}
-	return errors.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
+	if message != "" {
+		return errors.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
+	}
+	return errors.Errorf("error %s not present: %s", code, log.AsJSON(errs))
 }

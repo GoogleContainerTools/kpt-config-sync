@@ -20,7 +20,6 @@ import (
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/cli-utils/pkg/apply"
@@ -45,13 +44,12 @@ type KptDestroyer interface {
 // ClientSet wraps the various Kubernetes clients required for building a
 // Config Sync applier.Applier.
 type ClientSet struct {
-	KptApplier    KptApplier
-	KptDestroyer  KptDestroyer
-	InvClient     inventory.Client
-	Client        client.Client
-	DynamicClient dynamic.Interface
-	Mapper        meta.RESTMapper
-	StatusMode    string
+	KptApplier   KptApplier
+	KptDestroyer KptDestroyer
+	InvClient    inventory.Client
+	Client       client.Client
+	Mapper       meta.RESTMapper
+	StatusMode   string
 }
 
 // NewClientSet constructs a new ClientSet.
@@ -89,22 +87,17 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		return nil, err
 	}
 
-	dynamicClient, err := f.DynamicClient()
-	if err != nil {
-		return nil, err
-	}
 	mapper, err := f.ToRESTMapper()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ClientSet{
-		KptApplier:    applier,
-		KptDestroyer:  destroyer,
-		InvClient:     invClient,
-		Client:        c,
-		DynamicClient: dynamicClient,
-		Mapper:        mapper,
-		StatusMode:    statusMode,
+		KptApplier:   applier,
+		KptDestroyer: destroyer,
+		InvClient:    invClient,
+		Client:       c,
+		Mapper:       mapper,
+		StatusMode:   statusMode,
 	}, nil
 }

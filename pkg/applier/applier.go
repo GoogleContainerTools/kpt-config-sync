@@ -384,14 +384,15 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-		err := a.disableObject(ctx, obj)
+		err := a.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
 		if err != nil {
-			errorMsg := "failed to remove the Config Sync metadata from %v (which is a special namespace): %v"
-			klog.Errorf(errorMsg, id, err)
-			return applierErrorBuilder.Wrap(fmt.Errorf(errorMsg, id, err)).Build()
+			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (protected namespace): %v",
+				id, err)
+			klog.Error(err)
+			return applierErrorBuilder.Wrap(err).Build()
 		}
-		klog.V(4).Infof("removed the Config Sync metadata from %v (which is a special namespace)", id)
+		klog.V(4).Infof("removed the Config Sync metadata from %v (protected namespace)", id)
 	}
 
 	var depErr *filter.DependencyPreventedActuationError
@@ -416,7 +417,7 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 
 	var policyErr *inventory.PolicyPreventedActuationError
 	if errors.As(err, &policyErr) {
-		// For prunes, this is desired behavior, not a fatal error.
+		// For prunes/deletes, this is desired behavior, not a fatal error.
 		klog.Infof("Resource object removed from inventory,  but not deleted: %v: %v", id, err)
 		return nil
 	}
@@ -428,8 +429,18 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 
 	var abandonErr *filter.AnnotationPreventedDeletionError
 	if errors.As(err, &abandonErr) {
-		// For prunes, this is desired behavior, not a fatal error.
+		// For prunes/deletes, this is desired behavior, not a fatal error.
 		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
+		// The `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
+		err := a.abandonObject(ctx, obj)
+		handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
+		if err != nil {
+			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
+				id, abandonErr.Annotation, abandonErr.Value, err)
+			klog.Error(err)
+			return applierErrorBuilder.Wrap(err).Build()
+		}
+		klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)", id)
 		return nil
 	}
 
@@ -757,13 +768,17 @@ func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 	}
 	var errs status.MultiError
 	for _, obj := range objs {
-		err := a.disableObject(ctx, obj)
+		id := core.IDOf(obj)
+		err := a.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err, obj.GetObjectKind().GroupVersionKind())
 		if err != nil {
-			klog.Warningf("failed to disable object %v", core.IDOf(obj))
+			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
+				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled, err)
+			klog.Warning(err)
 			errs = status.Append(errs, Error(err))
 		} else {
-			klog.V(4).Infof("disabled object %v", core.IDOf(obj))
+			klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)",
+				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)
 			disabledCount++
 		}
 	}
@@ -797,30 +812,44 @@ func (a *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs [
 	return a.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
 }
 
-// disableObject disables the management for a single object by removing the
-// ConfigSync labels and annotations.
-func (a *supervisor) disableObject(ctx context.Context, obj client.Object) error {
-	meta := ObjMetaFromObject(obj)
-	mapping, err := a.clientSet.Mapper.RESTMapping(meta.GroupKind)
+// abandonObject removes ConfigSync labels and annotations from an object,
+// disabling management.
+func (a *supervisor) abandonObject(ctx context.Context, obj client.Object) error {
+	gvk, err := kinds.Lookup(obj, a.clientSet.Client.Scheme())
 	if err != nil {
 		return err
 	}
-	uObj, err := a.clientSet.DynamicClient.Resource(mapping.Resource).
-		Namespace(meta.Namespace).
-		Get(ctx, meta.Name, metav1.GetOptions{})
+	uObj := &unstructured.Unstructured{}
+	uObj.SetGroupVersionKind(gvk)
+	err = a.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			klog.Warningf("Failed to abandon object: object not found: %s", core.IDOf(obj))
 			return nil
 		}
 		return err
 	}
+	klog.Infof("Abandoning object: %s", core.IDOf(obj))
 	if metadata.HasConfigSyncMetadata(uObj) {
-		updated := metadata.RemoveConfigSyncMetadata(uObj)
+		// Use minimal before & after objects to simplify DeepCopy and building
+		// the merge patch.
+		fromObj := &unstructured.Unstructured{}
+		fromObj.SetGroupVersionKind(uObj.GroupVersionKind())
+		fromObj.SetNamespace(uObj.GetNamespace())
+		fromObj.SetName(uObj.GetName())
+		fromObj.SetAnnotations(uObj.GetAnnotations())
+		fromObj.SetLabels(uObj.GetLabels())
+
+		toObj := fromObj.DeepCopy()
+		updated := metadata.RemoveConfigSyncMetadata(toObj)
 		if !updated {
 			return nil
 		}
-		uObj.SetManagedFields(nil)
-		return a.clientSet.Client.Patch(ctx, uObj, client.Apply, client.FieldOwner(configsync.FieldManager), client.ForceOwnership)
+		// Use merge-patch instead of server-side-apply, because we don't have
+		// the object's source of truth handy and don't want to take ownership
+		// of all the fields managed by other clients.
+		return a.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
+			client.FieldOwner(configsync.FieldManager))
 	}
 	return nil
 }

@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -31,7 +32,11 @@ const (
 )
 
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.RequireGKE(t),
+		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
+		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
+		ntopts.WithReconcileTimeout(5*time.Minute))
 	t.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs(adapterNamespace, adapterName, "pod-custom-metrics-stackdriver-adapter", true)
@@ -64,8 +69,12 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt.WaitForRepoSyncs()
 }
 
-func TestImporterAndSyncerResilientToFlakyAPIService(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t), ntopts.Unstructured)
+func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t),
+		ntopts.Unstructured,
+		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
+		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
+		ntopts.WithReconcileTimeout(5*time.Minute))
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/apiservice.yaml", "--ignore-not-found")
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml", "--ignore-not-found")

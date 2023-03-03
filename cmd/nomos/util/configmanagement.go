@@ -44,6 +44,8 @@ const (
 	rootSyncCRDName = "rootsyncs.configsync.gke.io"
 	// ConfigSyncName is the name of the ConfigSync object for OSS installation.
 	ConfigSyncName = "config-sync"
+	// ReconcilerManagerName is the name of reconciler-manger
+	ReconcilerManagerName = "reconciler-manager"
 )
 
 // DynamicClient obtains a client based on the supplied REST config.  Can be overridden in tests.

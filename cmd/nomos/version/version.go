@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/client-go/kubernetes"
@@ -141,13 +142,24 @@ func filterConfigs(contexts []string, all map[string]*rest.Config) map[string]*r
 }
 
 func getImageVersion(deployment *v1.Deployment) (string, error) {
-	reconcilerImage := strings.Split(deployment.Spec.Template.Spec.Containers[0].Image, ":")
-	if len(reconcilerImage) <= 1 {
-		return "", fmt.Errorf("Failed to get valid image version from: %s", reconcilerImage)
+	var container corev1.Container
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		if c.Name == util.ReconcilerManagerName {
+			container = c
+			break
+		}
 	}
-	return reconcilerImage[1], nil
+
+	reconcilerManagerImage := strings.Split(container.Image, ":")
+	if len(reconcilerManagerImage) <= 1 {
+		return "", fmt.Errorf("Failed to get valid image version from: %s", reconcilerManagerImage)
+	}
+	return reconcilerManagerImage[1], nil
 }
 
+// lookupVersionAndMode will check for installation type (oss or operator)
+// and will return ACM version, isMultiRepo state, installation type, and error if needed
+// OSS installation will check version from image used, while operator will check from ConfigManagement
 func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool, string, error) {
 	cmClient, err := util.NewConfigManagementClient(cfg)
 	if err != nil {
@@ -167,7 +179,7 @@ func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool,
 			return util.ErrorMsg, nil, "", err
 		}
 		if isOss {
-			reconcilerDeployment, err := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, "reconciler-manager", metav1.GetOptions{})
+			reconcilerDeployment, err := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, util.ReconcilerManagerName, metav1.GetOptions{})
 			if err != nil {
 				return util.ErrorMsg, nil, "", err
 			}

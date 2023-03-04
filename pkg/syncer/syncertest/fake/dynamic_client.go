@@ -20,9 +20,10 @@ import (
 	"testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
-	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -69,13 +70,103 @@ func NewDynamicClient(t *testing.T, scheme *runtime.Scheme) *DynamicClient {
 		resources[singular.Resource] = struct{}{}
 	}
 	for resource := range resources {
+		fakeClient.PrependReactor("create", resource, dc.create)
 		fakeClient.PrependReactor("get", resource, dc.get)
 		fakeClient.PrependReactor("update", resource, dc.update)
 		fakeClient.PrependReactor("patch", resource, dc.patch)
 		fakeClient.PrependReactor("delete", resource, dc.delete)
-		// TODO: add support for create, list, delete-collection, and watch, if needed
+		// TODO: add support for list, delete-collection, and watch, if needed
 	}
 	return dc
+}
+
+// PutAll loops through the objects and adds them to the cache, with metadata
+// validation.
+//
+// Use for test initialization to simulate exact cluster state.
+func (dc *DynamicClient) PutAll(t *testing.T, objs ...*unstructured.Unstructured) {
+	for _, obj := range objs {
+		dc.Put(t, obj)
+	}
+}
+
+// Put adds the object to the cache, with metadata validation.
+//
+// Use for test initialization to simulate exact cluster state.
+func (dc *DynamicClient) Put(t *testing.T, obj *unstructured.Unstructured) {
+	// don't modify original or allow later modification of the cache
+	obj = obj.DeepCopy()
+	gvk := obj.GroupVersionKind()
+	id := genID(obj.GetNamespace(), obj.GetName(), gvk.GroupKind())
+	mapping, err := dc.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mapping.Scope == meta.RESTScopeNamespace {
+		if obj.GetNamespace() == "" {
+			t.Fatalf("namespace-scoped object must have a namespace: %s %s",
+				gvk.Kind, id.ObjectKey)
+		}
+	} else {
+		if obj.GetNamespace() != "" {
+			t.Fatalf("cluster-scoped object must not have a namespace: %s %s",
+				gvk.Kind, id.ObjectKey)
+		}
+	}
+	if obj.GetUID() == "" {
+		obj.SetUID("1")
+	}
+	if obj.GetResourceVersion() == "" {
+		obj.SetResourceVersion("1")
+	}
+	if obj.GetGeneration() == 0 {
+		obj.SetGeneration(1)
+	}
+	klog.V(5).Infof("Putting %s (ResourceVersion: %q): Diff (- Old, + New):\n%s",
+		id, obj.GetResourceVersion(),
+		log.AsYAMLDiffWithScheme(nil, obj, dc.scheme))
+	dc.objects[id] = obj
+}
+
+func (dc *DynamicClient) create(action clienttesting.Action) (bool, runtime.Object, error) {
+	createAction := action.(clienttesting.CreateAction)
+	if createAction.GetSubresource() != "" {
+		// TODO: add support for subresource updates, if needed
+		return true, nil, fmt.Errorf("subresource updates not supported by fake.DynamicClient for %s of %s",
+			createAction.GetSubresource(), createAction.GetResource().Resource)
+	}
+	gvk, err := dc.mapper.KindFor(createAction.GetResource())
+	if err != nil {
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
+	}
+	rObj := createAction.GetObject()
+	uObj, err := kinds.ToUnstructured(rObj, dc.scheme)
+	if err != nil {
+		return true, nil, err
+	}
+	if uObj.IsList() {
+		// TODO: add support for list creates, if needed
+		return true, nil, fmt.Errorf("list creates not supported by fake.DynamicClient for %s",
+			createAction.GetResource().Resource)
+	}
+	if uObj.GetNamespace() != "" && uObj.GetNamespace() != createAction.GetNamespace() {
+		return true, nil, fmt.Errorf("invalid metadata.namespace: expected %q but found %q",
+			createAction.GetNamespace(), uObj.GetNamespace())
+	}
+	id := genID(createAction.GetNamespace(), uObj.GetName(), gvk.GroupKind())
+	_, found := dc.objects[id]
+	if found {
+		return true, nil, newAlreadyExists(id)
+	}
+	uObj.SetUID("1")
+	uObj.SetResourceVersion("1")
+	uObj.SetGeneration(1)
+	klog.V(5).Infof("Creating %s (ResourceVersion: %q): Diff (- Old, + New):\n%s",
+		id, uObj.GetResourceVersion(),
+		log.AsYAMLDiffWithScheme(nil, uObj, dc.scheme))
+	dc.objects[id] = uObj
+	// return a copy to make sure the caller can't modify the cached object
+	return true, uObj.DeepCopy(), nil
 }
 
 func (dc *DynamicClient) get(action clienttesting.Action) (bool, runtime.Object, error) {
@@ -89,8 +180,8 @@ func (dc *DynamicClient) get(action clienttesting.Action) (bool, runtime.Object,
 	if !found {
 		return true, nil, newNotFound(id)
 	}
-	klog.V(5).Infof("Getting %s (ResourceVersion: %q): %s",
-		id, cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
+	klog.V(5).Infof("Getting %s (ResourceVersion: %q):\n%s",
+		id, cachedObj.GetResourceVersion(), log.AsYAML(cachedObj))
 	return true, cachedObj.DeepCopy(), nil
 }
 
@@ -137,9 +228,9 @@ func (dc *DynamicClient) update(action clienttesting.Action) (bool, runtime.Obje
 	if err = updateGeneration(cachedObj, uObj, dc.scheme); err != nil {
 		return true, nil, fmt.Errorf("failed to update generation: %w", err)
 	}
-	klog.V(5).Infof("Updating %s (ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
-		id, found, uObj.GetResourceVersion(),
-		log.AsJSON(uObj), cmp.Diff(cachedObj, uObj))
+	klog.V(5).Infof("Updating %s (ResourceVersion: %q): Diff (- Old, + New):\n%s",
+		id, uObj.GetResourceVersion(),
+		log.AsYAMLDiffWithScheme(cachedObj, uObj, dc.scheme))
 	dc.objects[id] = uObj
 	// return a copy to make sure the caller can't modify the cached object
 	return true, uObj.DeepCopy(), nil
@@ -232,9 +323,9 @@ func (dc *DynamicClient) patch(action clienttesting.Action) (bool, runtime.Objec
 	} else {
 		patchedObj.SetGeneration(1)
 	}
-	klog.V(5).Infof("Patching %s (Found: %v, ResourceVersion: %q): %s\nDiff (- Old, + New):\n%s",
+	klog.V(5).Infof("Patching %s (Found: %v, ResourceVersion: %q): Diff (- Old, + New):\n%s",
 		id, found, patchedObj.GetResourceVersion(),
-		log.AsJSON(patchedObj), cmp.Diff(cachedObj, patchedObj))
+		log.AsYAMLDiffWithScheme(cachedObj, patchedObj, dc.scheme))
 	dc.objects[id] = patchedObj
 	// return a copy to make sure the caller can't modify the cached object
 	return true, patchedObj.DeepCopy(), nil
@@ -253,7 +344,8 @@ func (dc *DynamicClient) delete(action clienttesting.Action) (bool, runtime.Obje
 	}
 	// TODO: Handle DeletionTimestamp when Finalizers exist
 	klog.V(5).Infof("Deleting %s (ResourceVersion: %q): %s",
-		id, cachedObj.GetResourceVersion(), log.AsJSON(cachedObj))
+		id, cachedObj.GetResourceVersion(),
+		log.AsYAMLDiffWithScheme(cachedObj, nil, dc.scheme))
 	delete(dc.objects, id)
 	return true, nil, nil
 }
@@ -298,4 +390,42 @@ func updateGeneration(oldObj, newObj client.Object, scheme *runtime.Scheme) erro
 		newObj.SetGeneration(oldObj.GetGeneration())
 	}
 	return nil
+}
+
+// Check reports an error to `t` if the passed objects in wants do not match the
+// expected set of objects in the fake.Client, and only the passed updates to
+// Status fields were recorded.
+func (dc *DynamicClient) Check(t *testing.T, wants ...client.Object) {
+	t.Helper()
+
+	wantMap := make(map[core.ID]*unstructured.Unstructured)
+
+	for _, obj := range wants {
+		uObj, err := kinds.ToUnstructured(obj, dc.scheme)
+		if err != nil {
+			// This is a test precondition, not a validation failure
+			t.Fatal(err)
+		}
+		wantMap[core.IDOf(uObj)] = uObj
+	}
+
+	asserter := testutil.NewAsserter(
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(metav1.Time{}, "Time"),
+	)
+	checked := make(map[core.ID]bool)
+	for id, want := range wantMap {
+		checked[id] = true
+		actual, found := dc.objects[id]
+		if !found {
+			t.Errorf("fake.DynamicClient missing %s", id.String())
+			continue
+		}
+		asserter.Equal(t, want, actual, "expected object (%s) to be equal", id)
+	}
+	for id := range dc.objects {
+		if !checked[id] {
+			t.Errorf("fake.DynamicClient unexpectedly contains %s", id.String())
+		}
+	}
 }

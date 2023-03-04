@@ -21,17 +21,22 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/version"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,44 +141,72 @@ func filterConfigs(contexts []string, all map[string]*rest.Config) map[string]*r
 	return cfgs
 }
 
-func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool, error) {
+func getImageVersion(deployment *v1.Deployment) (string, error) {
+	var container corev1.Container
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		if c.Name == util.ReconcilerManagerName {
+			container = c
+			break
+		}
+	}
+
+	reconcilerManagerImage := strings.Split(container.Image, ":")
+	if len(reconcilerManagerImage) <= 1 {
+		return "", fmt.Errorf("Failed to get valid image version from: %s", reconcilerManagerImage)
+	}
+	return reconcilerManagerImage[1], nil
+}
+
+// lookupVersionAndMode will check for installation type (oss or operator)
+// and will return ACM version, isMultiRepo state, installation type, and error if needed
+// OSS installation will check version from image used, while operator will check from ConfigManagement
+func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool, string, error) {
 	cmClient, err := util.NewConfigManagementClient(cfg)
 	if err != nil {
-		return util.ErrorMsg, nil, err
+		return util.ErrorMsg, nil, "", err
 	}
 	if cfg != nil {
 		cl, err := ctrl.New(cfg, ctrl.Options{})
 		if err != nil {
-			return util.ErrorMsg, nil, err
+			return util.ErrorMsg, nil, "", err
 		}
 		ck, err := kubernetes.NewForConfig(cfg)
 		if err != nil {
-			return util.ErrorMsg, nil, err
+			return util.ErrorMsg, nil, "", err
 		}
 		isOss, err := util.IsOssInstallation(ctx, cmClient, cl, ck)
 		if err != nil {
-			return util.ErrorMsg, nil, err
+			return util.ErrorMsg, nil, "", err
 		}
 		if isOss {
-			return util.OSSMsg, &isOss, nil
+			reconcilerDeployment, err := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, util.ReconcilerManagerName, metav1.GetOptions{})
+			if err != nil {
+				return util.ErrorMsg, nil, "", err
+			}
+			imageVersion, err := getImageVersion(reconcilerDeployment)
+			if err != nil {
+				return util.ErrorMsg, nil, "", err
+			}
+			return imageVersion, &isOss, util.ConfigSyncName, nil
 		}
 	}
 
 	v, err := cmClient.Version(ctx)
 	if err != nil {
-		return util.ErrorMsg, nil, err
+		return util.ErrorMsg, nil, "", err
 	}
 	isMulti, err := cmClient.IsMultiRepo(ctx)
 	if apierrors.IsNotFound(err) {
-		return v, isMulti, nil
+		return v, isMulti, util.ConfigManagementName, nil
 	}
-	return v, isMulti, err
+	return v, isMulti, util.ConfigManagementName, err
 }
 
 // vErr is either a version or an error.
 type vErr struct {
-	version string
-	err     error
+	version   string
+	component string
+	err       error
 }
 
 // versions obtains the versions of all configmanagements from the contexts
@@ -194,7 +227,7 @@ func versions(ctx context.Context, cfgs map[string]*rest.Config) (map[string]vEr
 			defer g.Done()
 			var ve vErr
 			var isMulti *bool
-			ve.version, isMulti, ve.err = lookupVersionAndMode(ctx, c)
+			ve.version, isMulti, ve.component, ve.err = lookupVersionAndMode(ctx, c)
 			if isMulti != nil && !*isMulti {
 				monoRepoClusters = append(monoRepoClusters, n)
 			}
@@ -234,7 +267,7 @@ func entries(vs map[string]vErr) []entry {
 		if n == currentContext && err == nil {
 			curr = "*"
 		}
-		es = append(es, entry{current: curr, name: n, component: util.ConfigManagementName, vErr: v})
+		es = append(es, entry{current: curr, name: n, component: v.component, vErr: v})
 	}
 	// Also fill in the client version here.
 	es = append(es, entry{

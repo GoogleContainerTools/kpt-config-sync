@@ -77,7 +77,7 @@ type sourceState struct {
 // - if rendered is true, state.syncDir contains the hydrated files.
 // - if rendered is false, state.syncDir contains the source files.
 // readConfigFiles should be called after sourceState is populated.
-func (o *files) readConfigFiles(state *sourceState) status.Error {
+func (o *files) readConfigFiles(state *sourceState, p Parser) status.Error {
 	if state == nil || state.commit == "" || state.syncDir.OSPath() == "" {
 		return status.InternalError("sourceState is not populated yet")
 	}
@@ -95,6 +95,14 @@ func (o *files) readConfigFiles(state *sourceState) status.Error {
 	if err != nil {
 		return status.PathWrapError(errors.Wrap(err, "listing files in the configs directory"), syncDir.OSPath())
 	}
+
+	newCommit, err := hydrate.ComputeCommit(p.options().SourceDir)
+	if err != nil {
+		return status.TransientError(err)
+	} else if newCommit != state.commit {
+		return status.TransientError(fmt.Errorf("source commit changed while listing files, was %s, now %s. It will be retried in the next sync", state.commit, newCommit))
+	}
+
 	state.files = fileList
 	return nil
 }

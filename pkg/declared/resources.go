@@ -91,8 +91,8 @@ func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, bool) {
 	return u.DeepCopy(), found
 }
 
-// Declarations returns all resource declarations from Git.
-func (r *Resources) Declarations() []*unstructured.Unstructured {
+// DeclaredUnstructureds returns all resource objects declared in the source.
+func (r *Resources) DeclaredUnstructureds() []*unstructured.Unstructured {
 	var objects []*unstructured.Unstructured
 	objSet := r.getObjectSet()
 
@@ -104,18 +104,28 @@ func (r *Resources) Declarations() []*unstructured.Unstructured {
 	return objects
 }
 
-// GVKSet returns the set of all GroupVersionKind found in the git repo.
-func (r *Resources) GVKSet() map[schema.GroupVersionKind]bool {
-	gvkSet := make(map[schema.GroupVersionKind]bool)
+// DeclaredObjects returns all resource objects declared in the source.
+func (r *Resources) DeclaredObjects() []client.Object {
+	var objects []client.Object
+	objSet := r.getObjectSet()
+
+	// A local reference to the map is threadsafe since only the struct reference
+	// is replaced on update.
+	for _, obj := range objSet {
+		objects = append(objects, obj)
+	}
+	return objects
+}
+
+// DeclaredGVKs returns the set of all GroupVersionKind found in the source.
+func (r *Resources) DeclaredGVKs() map[schema.GroupVersionKind]struct{} {
+	gvkSet := make(map[schema.GroupVersionKind]struct{})
 	objSet := r.getObjectSet()
 
 	// A local reference to the objSet map is threadsafe since only the pointer to
 	// the map is replaced on update.
 	for _, obj := range objSet {
-		gvk := obj.GroupVersionKind()
-		if !gvkSet[gvk] {
-			gvkSet[gvk] = true
-		}
+		gvkSet[obj.GroupVersionKind()] = struct{}{}
 	}
 	return gvkSet
 }

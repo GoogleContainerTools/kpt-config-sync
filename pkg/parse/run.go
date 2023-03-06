@@ -367,7 +367,9 @@ func parseSource(ctx context.Context, p Parser, trigger string, state *reconcile
 }
 
 func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconcilerState) status.MultiError {
+	klog.V(3).Info("Parser starting...")
 	sourceErrs := parseSource(ctx, p, trigger, state)
+	klog.V(3).Info("Parser stopped")
 	newSourceStatus := sourceStatus{
 		commit:     state.cache.source.commit,
 		errs:       sourceErrs,
@@ -394,9 +396,11 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 
 	go updateSyncStatusPeriodically(ctxForUpdateSyncStatus, p, state)
 
+	klog.V(3).Info("Updater starting...")
 	start := time.Now()
 	syncErrs := p.options().Update(ctx, &state.cache)
 	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(syncErrs), start)
+	klog.V(3).Info("Updater stopped")
 
 	// This is to terminate `updateSyncStatusPeriodically`.
 	cancel()
@@ -447,6 +451,7 @@ func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncin
 // updateSyncStatusPeriodically update the sync status periodically until the
 // cancellation function of the context is called.
 func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcilerState) {
+	klog.V(3).Info("Periodic sync status updates starting...")
 	updatePeriod := p.options().statusUpdatePeriod
 	updateTimer := time.NewTimer(updatePeriod)
 	defer updateTimer.Stop()
@@ -454,6 +459,7 @@ func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcil
 		select {
 		case <-ctx.Done():
 			// ctx.Done() is closed when the cancellation function of the context is called.
+			klog.V(3).Info("Periodic sync status updates stopped")
 			return
 
 		case <-updateTimer.C:

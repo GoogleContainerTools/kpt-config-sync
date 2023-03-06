@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // updater mutates the most-recently-seen versions of objects stored in memory.
@@ -62,12 +63,20 @@ func (u *updater) Errors() status.MultiError {
 	defer u.errorMux.RUnlock()
 
 	var errs status.MultiError
-	for _, conflictErr := range u.remediator.ConflictErrors() {
-		errs = status.Append(errs, conflictErr)
-	}
+	errs = status.Append(errs, u.conflictErrors())
 	errs = status.Append(errs, u.validationErrs)
 	errs = status.Append(errs, u.applier.Errors())
 	errs = status.Append(errs, u.watchErrs)
+	return errs
+}
+
+// conflictErrors converts []ManagementConflictError into []MultiErrors.
+// This method is safe to call while Update is running.
+func (u *updater) conflictErrors() status.MultiError {
+	var errs status.MultiError
+	for _, conflictErr := range u.remediator.ConflictErrors() {
+		errs = status.Append(errs, conflictErr)
+	}
 	return errs
 }
 
@@ -92,7 +101,7 @@ func (u *updater) Updating() bool {
 // declared resources.
 func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
 	var crds []*v1beta1.CustomResourceDefinition
-	for _, obj := range u.resources.Declarations() {
+	for _, obj := range u.resources.DeclaredUnstructureds() {
 		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
 			continue
 		}
@@ -105,8 +114,17 @@ func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.Mu
 	return crds, nil
 }
 
-// Update updates the declared resources in memory, applies the resources, and sets
-// up the watches.
+// Update does the following:
+// 1. Pauses the remediator
+// 2. Validates and sterilizes the objects
+// 3. Updates the declared resource objects in memory
+// 4. Applies the objects
+// 5. Updates the remediator watches
+// 6. Restarts the remediator
+//
+// Any errors returned will be prepended with any known conflict errors from the
+// remediator. This is required to preserve errors that have been reported by
+// another reconciler.
 func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.MultiError {
 	u.updateMux.Lock()
 	u.updating = true
@@ -115,54 +133,111 @@ func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.Mult
 		u.updateMux.Unlock()
 	}()
 
-	objs := filesystem.AsCoreObjects(cache.objsToApply)
+	updateErrs := u.update(ctx, cache)
 
-	// Update the declared resources so that the Remediator immediately
-	// starts enforcing the updated state.
-	if !cache.resourceDeclSetUpdated {
-		var validationErrs status.MultiError
-		objs, validationErrs = u.resources.Update(ctx, objs)
-		u.setValidationErrs(validationErrs)
-		if validationErrs != nil {
-			klog.Warningf("Failed to validate declared resources: %v", validationErrs)
-			return validationErrs
+	// Prepend current conflict errors
+	var errs status.MultiError
+	errs = status.Append(errs, u.conflictErrors())
+	errs = status.Append(errs, updateErrs)
+	return errs
+}
+
+// update performs most of the work for `Update`, making it easier to
+// consistently prepend the conflict errors.
+func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+	// Stop remediator workers.
+	// This prevents objects been updated in the wrong order (dependencies).
+	// Continue watching previously declared objects and updating the queue.
+	// Queued objects will be remediated when the workers are started again.
+	u.remediator.Pause()
+
+	// Update the declared resources (source of truth for the Remediator).
+	// After this, any objects removed from the declared resources will no
+	// longer be remediated, if they drift.
+	if !cache.declaredResourcesUpdated {
+		objs := filesystem.AsCoreObjects(cache.objsToApply)
+		_, err := u.declare(ctx, objs)
+		if err != nil {
+			return err
 		}
-
+		// Only mark the declared resources as updated if there were no (non-blocking) parse errors.
+		// This ensures the update will be retried until parsing fully succeeds.
 		if cache.parserErrs == nil {
-			cache.resourceDeclSetUpdated = true
-		}
-	}
-	// else - there were no previous validation errors
-
-	var gvks map[schema.GroupVersionKind]struct{}
-	var applyErrs status.MultiError
-	if cache.hasApplierResult {
-		gvks = cache.applierResult
-		// there were no previous applier errors
-	} else {
-		applyStart := time.Now()
-		gvks, applyErrs = u.applier.Apply(ctx, objs)
-		metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(applyErrs), cache.source.commit, applyStart)
-		if applyErrs != nil {
-			klog.Warningf("Failed to apply declared resources: %v", applyErrs)
-		} else if cache.parserErrs == nil {
-			cache.setApplierResult(gvks)
+			cache.declaredResourcesUpdated = true
 		}
 	}
 
-	// Update the Remediator's watches to start new ones and stop old ones.
+	// Apply the declared resources
+	if !cache.applied {
+		_, err := u.apply(ctx, u.resources.DeclaredObjects(), cache.source.commit)
+		if err != nil {
+			return err
+		}
+		// Only mark the commit as applied if there were no (non-blocking) parse errors.
+		// This ensures the apply will be retried until parsing fully succeeds.
+		if cache.parserErrs == nil {
+			cache.applied = true
+		}
+	}
+
+	// Update the resource watches (triggers for the Remediator).
+	if !cache.watchesUpdated {
+		err := u.watch(ctx, u.resources.DeclaredGVKs())
+		if err != nil {
+			return err
+		}
+		// Only mark the watches as updated if there were no (non-blocking) parse errors.
+		// This ensures the update will be retried until parsing fully succeeds.
+		if cache.parserErrs == nil {
+			cache.watchesUpdated = true
+		}
+	}
+
+	// Restart remediator workers.
+	// Queue will probably include all the declared objects, but they should
+	// show no diff, unless they've been updated asynchronously.
+	// Only resume after validation & apply & watch update are successful,
+	// otherwise the objects may be updated in the wrong order (dependencies).
+	u.remediator.Resume()
+
+	return nil
+}
+
+func (u *updater) declare(ctx context.Context, objs []client.Object) ([]client.Object, status.MultiError) {
+	klog.V(1).Info("Declared resources updating...")
+	objs, err := u.resources.Update(ctx, objs)
+	u.setValidationErrs(err)
+	if err != nil {
+		klog.Warningf("Failed to validate declared resources: %v", err)
+		return nil, err
+	}
+	klog.V(3).Info("Declared resources updated...")
+	return objs, nil
+}
+
+func (u *updater) apply(ctx context.Context, objs []client.Object, commit string) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+	klog.V(1).Info("Applier starting...")
+	start := time.Now()
+	gvks, err := u.applier.Apply(ctx, objs)
+	metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(err), commit, start)
+	if err != nil {
+		klog.Warningf("Failed to apply declared resources: %v", err)
+		return nil, err
+	}
+	klog.V(3).Info("Applier stopped")
+	return gvks, nil
+}
+
+// watch updates the Remediator's watches to start new ones and stop old
+// ones.
+func (u *updater) watch(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
+	klog.V(1).Info("Remediator watches updating...")
 	watchErrs := u.remediator.UpdateWatches(ctx, gvks)
 	u.setWatchErrs(watchErrs)
 	if watchErrs != nil {
 		klog.Warningf("Failed to update resource watches: %v", watchErrs)
+		return watchErrs
 	}
-
-	// Prepend any conflict errors that happened during updating
-	var errs status.MultiError
-	for _, conflictErr := range u.remediator.ConflictErrors() {
-		errs = status.Append(errs, conflictErr)
-	}
-	errs = status.Append(errs, applyErrs)
-	errs = status.Append(errs, watchErrs)
-	return errs
+	klog.V(3).Info("Remediator watches updated")
+	return nil
 }

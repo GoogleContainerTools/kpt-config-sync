@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	v1 "k8s.io/api/rbac/v1"
@@ -43,6 +44,184 @@ import (
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// TestWorker_Run_Remediates verifies that worker.Run remediates declared
+// objects added to the queue.
+func TestWorker_Run_Remediates(t *testing.T) {
+	ctx := context.Background()
+
+	existingObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	declaredObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	changedObjs := []client.Object{
+		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.Label("new", "label")),
+	}
+	expectedObjs := []client.Object{
+		// CRB delete should be reverted
+		// TODO: Upgrade FakeClient to increment UID after deletion
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		),
+		// Role change should be reverted
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
+		),
+	}
+
+	q := queue.New("test")
+	defer q.ShutDown()
+
+	c := testingfake.NewClient(t, core.Scheme)
+	for _, obj := range existingObjs {
+		if err := c.Create(ctx, obj); err != nil {
+			t.Fatalf("Failed to create object in fake client: %v", err)
+		}
+	}
+
+	d := makeDeclared(t, declaredObjs...)
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Run worker in the background
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		w.Run(ctx)
+	}()
+
+	// Execute runtime changes
+	for _, obj := range changedObjs {
+		if deletedObj, ok := obj.(*queue.Deleted); ok {
+			if err := c.Delete(ctx, deletedObj.Object); err != nil {
+				t.Fatalf("Failed to delete object in fake client: %v", err)
+			}
+		} else {
+			if err := c.Update(ctx, obj); err != nil {
+				t.Fatalf("Failed to update object in fake client: %v", err)
+			}
+		}
+	}
+
+	// Simulate watch events to add the objects to the queue
+	for _, obj := range changedObjs {
+		q.Add(obj)
+	}
+
+	// Give the worker a few seconds to remediate
+	// TODO: use client.Watch to watch for the desired changes (requires FakeClient to impl Watch).
+	time.Sleep(2 * time.Second)
+	cancel()
+
+	// Wait for worker to exit or timeout
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+		// fail
+		t.Error("Run() failed to return when context was cancelled")
+	case <-doneCh:
+		// pass
+		c.Check(t, expectedObjs...)
+	}
+}
+
+// TestWorker_Run_RemediatesExisting verifies that worker.Run remediates declared
+// objects from a queue populated before the Worker started.
+func TestWorker_Run_RemediatesExisting(t *testing.T) {
+	ctx := context.Background()
+
+	existingObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	declaredObjs := []client.Object{
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	}
+	changedObjs := []client.Object{
+		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.Label("new", "label")),
+	}
+	expectedObjs := []client.Object{
+		// CRB delete should be reverted
+		// TODO: Upgrade FakeClient to increment UID after deletion
+		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		),
+		// Role change should be reverted
+		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+			core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
+		),
+	}
+
+	q := queue.New("test")
+	defer q.ShutDown()
+
+	c := testingfake.NewClient(t, core.Scheme)
+	for _, obj := range existingObjs {
+		if err := c.Create(ctx, obj); err != nil {
+			t.Fatalf("Failed to create object in fake client: %v", err)
+		}
+	}
+
+	// Execute runtime changes
+	for _, obj := range changedObjs {
+		if deletedObj, ok := obj.(*queue.Deleted); ok {
+			if err := c.Delete(ctx, deletedObj.Object); err != nil {
+				t.Fatalf("Failed to delete object in fake client: %v", err)
+			}
+		} else {
+			if err := c.Update(ctx, obj); err != nil {
+				t.Fatalf("Failed to update object in fake client: %v", err)
+			}
+		}
+	}
+
+	// Simulate watch events to add the objects to the queue
+	for _, obj := range changedObjs {
+		q.Add(obj)
+	}
+
+	d := makeDeclared(t, declaredObjs...)
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Run worker in the background
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		w.Run(ctx)
+	}()
+
+	// Give the worker a few seconds to remediate
+	// TODO: use client.Watch to watch for the desired changes (requires FakeClient to impl Watch).
+	time.Sleep(2 * time.Second)
+	cancel()
+
+	// Wait for worker to exit or timeout
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+		// fail
+		t.Error("Run() failed to return when context was cancelled")
+	case <-doneCh:
+		// pass
+		c.Check(t, expectedObjs...)
+	}
+}
 
 func TestWorker_ProcessNextObject(t *testing.T) {
 	testCases := []struct {
@@ -125,8 +304,8 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 			w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
 			for _, obj := range tc.toProcess {
-				if ok := w.processNextObject(context.Background()); !ok {
-					t.Errorf("unexpected false result from processNextObject() for object: %v", obj)
+				if err := w.processNextObject(context.Background()); err != nil {
+					t.Errorf("unexpected error from processNextObject() for object %q: %v", core.IDOf(obj), err)
 				}
 			}
 
@@ -136,9 +315,10 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 }
 
 // TestWorker_Run_Cancelled verifies that worker.Run can be cancelled when the
-// queue is empty.
+// queue is empty and shut down.
 func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	q := queue.New("test") // empty queue
+	defer q.ShutDown()
 	c := testingfake.NewClient(t, core.Scheme)
 	d := makeDeclared(t) // no resources declared
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
@@ -203,6 +383,7 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	}
 
 	q := queue.New("test")
+	defer q.ShutDown()
 
 	c := testingfake.NewClient(t, core.Scheme)
 	for _, obj := range existingObjs {
@@ -248,7 +429,8 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 		q.Add(obj)
 	}
 
-	// Cancel the worker before all the changes are processed
+	// Let the worker run for a bit and then stop it.
+	time.Sleep(1 * time.Second)
 	cancel()
 
 	// Wait for worker to exit or timeout
@@ -381,14 +563,16 @@ func TestWorker_ResourceConflictMetricValidation(t *testing.T) {
 			m := testmetrics.RegisterMetrics(metrics.ResourceConflictsView)
 
 			for _, obj := range tc.objects {
+				conflictErr := syncerclient.ConflictUpdateDoesNotExist(errors.New("resource conflict error"), obj)
 				w := &Worker{
 					objectQueue: &fakeQueue{},
 					reconciler: fakeReconciler{
 						client:       testingfake.NewClient(t, core.Scheme),
-						remediateErr: syncerclient.ConflictUpdateDoesNotExist(errors.New("resource conflict error"), obj),
+						remediateErr: conflictErr,
 					},
 				}
-				w.process(context.Background(), obj)
+				err := w.process(context.Background(), obj)
+				require.Equal(t, fmt.Errorf("failed to remediate %q: %w", core.IDOf(obj), conflictErr), err)
 			}
 			if diff := m.ValidateMetrics(metrics.ResourceConflictsView, tc.wantMetrics); diff != "" {
 				t.Errorf(diff)

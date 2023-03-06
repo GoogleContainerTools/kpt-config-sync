@@ -38,9 +38,26 @@ import (
 // synchronously add and consume work items.
 type Remediator struct {
 	watchMgr *watch.Manager
-	workers  []*reconcile.Worker
-	// The following fields are guarded by the mutex.
-	mux sync.Mutex
+
+	// lifecycleMux guards start/stop/add/remove of the workers, as well as
+	// updates to queue, parentContext, doneCh, and stopFn.
+	lifecycleMux sync.Mutex
+	// workers pull objects from the queue and remediate them
+	workers []*reconcile.Worker
+	// objectQueue is a queue of objects that have received watch events and
+	// need to be processed by the workers.
+	objectQueue *queue.ObjectQueue
+	// parentContext is set by Start and should be cancelled by the caller when
+	// the Remediator should stop.
+	parentContext context.Context
+	// doneCh indicates that the workers have fully stopped after parentContext
+	// is cancelled.
+	doneCh chan struct{}
+	// stopFn cancels the internal context, stopping the workers.
+	stopFn context.CancelFunc
+
+	// conflictMux guards the conflictErrs
+	conflictMux sync.Mutex
 	// conflictErrs tracks all the management conflicts the remediator encounters,
 	// and report to RootSync|RepoSync status.
 	conflictErrs []status.ManagementConflictError
@@ -51,6 +68,10 @@ type Remediator struct {
 //
 // Placed here to make discovering the production implementation (above) easier.
 type Interface interface {
+	// Pause the Remediator by stopping the workers and waiting for them to be done.
+	Pause()
+	// Resume the Remediator by starting the workers.
+	Resume()
 	// NeedsUpdate returns true if the Remediator needs its watches to be updated
 	// (typically due to some asynchronous error that occurred).
 	NeedsUpdate() bool
@@ -78,7 +99,8 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 	}
 
 	remediator := &Remediator{
-		workers: workers,
+		workers:     workers,
+		objectQueue: q,
 	}
 
 	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil,
@@ -91,9 +113,39 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 	return remediator, nil
 }
 
-// Start begins the asynchronous processes for the Remediator's reconcile workers.
-// Returns a done channel that will be closed after all the workers have exited.
+// Start the Remediator's asynchronous reconcile workers.
+// Returns a done channel that will be closed after the context is cancelled and
+// all the workers have exited.
 func (r *Remediator) Start(ctx context.Context) <-chan struct{} {
+	r.lifecycleMux.Lock()
+	defer r.lifecycleMux.Unlock()
+
+	if r.parentContext != nil {
+		panic("Remediator must only be started once!")
+	}
+
+	klog.V(1).Info("Remediator starting...")
+	r.parentContext = ctx
+	r.startWorkers()
+	klog.V(3).Info("Remediator started")
+
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh) // inform caller the workers are done
+		<-ctx.Done()        // wait until cancelled
+		klog.V(1).Info("Remediator stopping...")
+		r.objectQueue.ShutDown()
+		<-r.doneCh // wait until workers are done (if running)
+		klog.V(3).Info("Remediator stopped")
+	}()
+	return doneCh
+}
+
+// startWorkers starts the workers and sets doneCh & stopFn.
+// This should always be called while lifecycleMux is locked.
+func (r *Remediator) startWorkers() {
+	ctx, cancel := context.WithCancel(r.parentContext)
+
 	doneCh := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := range r.workers {
@@ -108,7 +160,30 @@ func (r *Remediator) Start(ctx context.Context) <-chan struct{} {
 		defer close(doneCh)
 		wg.Wait()
 	}()
-	return doneCh
+
+	r.doneCh = doneCh
+	r.stopFn = cancel
+}
+
+// Pause the Remediator by stopping the workers and waiting for them to be done.
+func (r *Remediator) Pause() {
+	r.lifecycleMux.Lock()
+	defer r.lifecycleMux.Unlock()
+
+	klog.V(1).Info("Remediator pausing...")
+	r.stopFn() // tell the workers to stop
+	<-r.doneCh // wait until workers are done (if running)
+	klog.V(3).Info("Remediator paused")
+}
+
+// Resume the Remediator by starting the workers.
+func (r *Remediator) Resume() {
+	r.lifecycleMux.Lock()
+	defer r.lifecycleMux.Unlock()
+
+	klog.V(1).Info("Remediator resuming...")
+	r.startWorkers()
+	klog.V(3).Info("Remediator resumed")
 }
 
 // NeedsUpdate implements Interface.
@@ -128,16 +203,16 @@ func (r *Remediator) ManagementConflict() bool {
 
 // ConflictErrors implements Interface.
 func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
-	r.mux.Lock()
-	defer r.mux.Unlock()
+	r.conflictMux.Lock()
+	defer r.conflictMux.Unlock()
 
 	// Return a copy
 	return append([]status.ManagementConflictError(nil), r.conflictErrs...)
 }
 
 func (r *Remediator) addConflictError(e status.ManagementConflictError) {
-	r.mux.Lock()
-	defer r.mux.Unlock()
+	r.conflictMux.Lock()
+	defer r.conflictMux.Unlock()
 
 	for _, existingErr := range r.conflictErrs {
 		if e.Error() == existingErr.Error() {
@@ -148,8 +223,8 @@ func (r *Remediator) addConflictError(e status.ManagementConflictError) {
 }
 
 func (r *Remediator) removeConflictError(e status.ManagementConflictError) {
-	r.mux.Lock()
-	defer r.mux.Unlock()
+	r.conflictMux.Lock()
+	defer r.conflictMux.Unlock()
 
 	newErrs := make([]status.ManagementConflictError, len(r.conflictErrs))
 	i := 0

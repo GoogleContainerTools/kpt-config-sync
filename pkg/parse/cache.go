@@ -18,7 +18,6 @@ import (
 	"sort"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -31,8 +30,8 @@ import (
 // The reconciler resets the whole cache when a new commit is detected.
 //
 // The reconciler resets the whole cache except for the cached sourceState when:
-//   * a force-resync happens, or
-//   * one of the watchers noticed a management conflict.
+//   - a force-resync happens, or
+//   - one of the watchers noticed a management conflict.
 type cacheForCommit struct {
 	// source tracks the state of the source repo.
 	// This field is only set after the reconciler successfully reads all the source files.
@@ -52,19 +51,17 @@ type cacheForCommit struct {
 	// parserErrs includes the parser errors.
 	parserErrs status.MultiError
 
-	// resourceDeclSetUpdated indicates whether the resource declaration set has been updated.
-	resourceDeclSetUpdated bool
+	// declaredResourcesUpdated indicates whether the resource declaration set
+	// has been updated.
+	declaredResourcesUpdated bool
 
-	// hasApplierResult indicates whether the cache includes the parser result.
-	//
-	// An alternative is to determining whether the cache includes the parser result by
-	// checking whether the `applierResult` field is empty. However, an empty `applierResult`
-	// field may also indicate that the source repo is empty and there is nothing to be applied.
-	hasApplierResult bool
+	// applied indicates whether the applier has successfully applied the
+	// declared resources.
+	applied bool
 
-	// applierResult contains the applier result.
-	// The field is only set when the applier succeeded applied all the declared resources.
-	applierResult map[schema.GroupVersionKind]struct{}
+	// watchesUpdated indicates whether the remediator watches have been updated
+	// for the latest declared resources.
+	watchesUpdated bool
 
 	// needToRetry indicates whether a retry is needed.
 	needToRetry bool
@@ -85,11 +82,6 @@ func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs statu
 	c.objsToApply = knownScopeObjs
 	c.parserErrs = parserErrs
 	c.hasParserResult = true
-}
-
-func (c *cacheForCommit) setApplierResult(result map[schema.GroupVersionKind]struct{}) {
-	c.hasApplierResult = true
-	c.applierResult = result
 }
 
 func (c *cacheForCommit) readyToRetry() bool {

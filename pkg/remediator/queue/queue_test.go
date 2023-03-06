@@ -15,6 +15,7 @@
 package queue
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -38,9 +39,9 @@ func add(toAdd client.Object, wantLen int) action {
 func get(wantObj client.Object, wantLen int) action {
 	return func(t *testing.T, q *ObjectQueue) {
 		t.Helper()
-		got, shutdown := q.Get()
-		if shutdown {
-			t.Fatal("unexpected shutdown of queue")
+		got, err := q.Get(context.Background())
+		if err != nil {
+			t.Fatalf("Object queue was shut down unexpectedly: %v", err)
 		}
 		if diff := cmp.Diff(got, wantObj); diff != "" {
 			t.Errorf("unexpected object from queue; diff: %s", diff)

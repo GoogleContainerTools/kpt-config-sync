@@ -435,7 +435,7 @@ func validateUpdateOptions(opts *client.UpdateOptions) error {
 	return nil
 }
 
-func validatePatchOptions(opts *client.PatchOptions) error {
+func validatePatchOptions(opts *client.PatchOptions, patch client.Patch) error {
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
 			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
@@ -443,6 +443,9 @@ func validatePatchOptions(opts *client.PatchOptions) error {
 	}
 	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
 		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+	}
+	if patch != client.Apply && opts.Force != nil {
+		return errors.Errorf("invalid force option: Forbidden: may not be specified for non-apply patch")
 	}
 	return nil
 }
@@ -522,7 +525,7 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	patchOpts := &client.PatchOptions{}
 	patchOpts.ApplyOptions(opts)
-	err := validatePatchOptions(patchOpts)
+	err := validatePatchOptions(patchOpts, patch)
 	if err != nil {
 		return err
 	}

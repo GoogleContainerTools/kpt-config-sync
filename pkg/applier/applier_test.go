@@ -30,7 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -39,6 +41,7 @@ import (
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
+	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
@@ -70,6 +73,10 @@ func (a *fakeKptApplier) Run(_ context.Context, _ inventory.Info, _ object.Unstr
 }
 
 func TestApply(t *testing.T) {
+	syncScope := declared.Scope("test-namespace")
+	syncName := "rs"
+	resourceManager := declared.ResourceManager(syncScope, syncName)
+
 	deploymentObj := newDeploymentObj()
 	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
 
@@ -77,18 +84,36 @@ func TestApply(t *testing.T) {
 	testID := object.UnstructuredToObjMetadata(testObj)
 	testGVK := testObj.GroupVersionKind()
 
+	abandonObj := deploymentObj.DeepCopy()
+	abandonObj.SetName("abandon-me")
+	abandonObj.SetAnnotations(map[string]string{
+		common.LifecycleDeleteAnnotation: common.PreventDeletion,
+		metadata.ResourceManagementKey:   metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:           core.GKNN(abandonObj),
+		metadata.ResourceManagerKey:      resourceManager,
+		metadata.OwningInventoryKey:      "anything",
+		metadata.SyncTokenAnnotationKey:  "anything",
+		"example-to-not-delete":          "anything",
+	})
+	abandonObj.SetLabels(map[string]string{
+		metadata.ManagedByKey:   metadata.ManagedByValue,
+		metadata.SystemLabel:    "anything",
+		metadata.ArchLabel:      "anything",
+		"example-to-not-delete": "anything",
+	})
+
 	objs := []client.Object{deploymentObj, testObj}
 
 	namespaceID := &object.ObjMetadata{
-		Name:      "test-namespace",
+		Name:      string(syncScope),
 		GroupKind: kinds.Namespace().GroupKind(),
 	}
 
 	uid := core.ID{
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
 		ObjectKey: client.ObjectKey{
-			Name:      "rs",
-			Namespace: "test-namespace",
+			Name:      syncName,
+			Namespace: string(syncScope),
 		},
 	}
 
@@ -97,10 +122,12 @@ func TestApply(t *testing.T) {
 	etcdError := errors.New("etcdserver: request is too large") // satisfies util.IsRequestTooLargeError
 
 	testcases := []struct {
-		name     string
-		events   []event.Event
-		multiErr status.MultiError
-		gvks     map[schema.GroupVersionKind]struct{}
+		name               string
+		serverObjs         []client.Object
+		events             []event.Event
+		expectedError      status.MultiError
+		expectedGVKs       map[schema.GroupVersionKind]struct{}
+		expectedServerObjs []client.Object
 	}{
 		{
 			name: "unknown type for some resource",
@@ -108,8 +135,8 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
 				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("unknown type"), idFrom(testID)),
-			gvks:     map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
+			expectedError: ErrorForResource(errors.New("unknown type"), idFrom(testID)),
+			expectedGVKs:  map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
 		},
 		{
 			name: "conflict error for some resource",
@@ -121,8 +148,8 @@ func TestApply(t *testing.T) {
 				}),
 				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: KptManagementConflictError(testObj),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedError: KptManagementConflictError(testObj),
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -132,8 +159,8 @@ func TestApply(t *testing.T) {
 			events: []event.Event{
 				formErrorEvent(etcdError),
 			},
-			multiErr: largeResourceGroupError(etcdError, uid),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedError: largeResourceGroupError(etcdError, uid),
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -144,8 +171,8 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewApplyRunError(errors.New("failed apply"))),
 				formApplyEvent(event.ApplyPending, nil, nil),
 			},
-			multiErr: ErrorForResource(errors.New("failed apply"), idFrom(testID)),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedError: ErrorForResource(errors.New("failed apply"), idFrom(testID)),
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -156,8 +183,8 @@ func TestApply(t *testing.T) {
 				formPruneEvent(event.PruneFailed, &testID, errors.New("failed pruning")),
 				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			multiErr: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedError: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -171,11 +198,11 @@ func TestApply(t *testing.T) {
 				}),
 				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			multiErr: SkipErrorForResource(
+			expectedError: SkipErrorForResource(
 				errors.New("namespace still in use: test-namespace"),
 				idFrom(*namespaceID),
 				actuation.ActuationStrategyDelete),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -188,7 +215,7 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, nil, nil),
 				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
@@ -201,21 +228,23 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, nil, nil),
 				formPruneEvent(event.PruneSuccessful, nil, nil),
 			},
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 			},
-			multiErr: status.Append(ErrorForResource(errors.New("unknown type"), idFrom(testID)), ErrorForResource(errors.New("failed apply"), idFrom(deploymentID))),
+			expectedError: status.Append(
+				ErrorForResource(errors.New("unknown type"), idFrom(testID)),
+				ErrorForResource(errors.New("failed apply"), idFrom(deploymentID))),
 		},
 		{
 			name: "failed dependency during apply",
 			events: []event.Event{
 				formApplySkipEventWithDependency(deploymentID, deploymentObj.DeepCopy()),
 			},
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
 			},
-			multiErr: status.Append(SkipErrorForResource(
+			expectedError: status.Append(SkipErrorForResource(
 				errors.New("dependency apply reconcile timeout: namespace_name_group_kind"),
 				idFrom(deploymentID),
 				actuation.ActuationStrategyApply),
@@ -226,38 +255,77 @@ func TestApply(t *testing.T) {
 			events: []event.Event{
 				formPruneSkipEventWithDependency(deploymentID),
 			},
-			multiErr: SkipErrorForResource(
+			expectedError: SkipErrorForResource(
 				errors.New("dependent delete actuation failed: namespace_name_group_kind"),
 				idFrom(deploymentID),
 				actuation.ActuationStrategyDelete),
-			gvks: map[schema.GroupVersionKind]struct{}{
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
+			},
+		},
+		{
+			name: "abandon object",
+			serverObjs: []client.Object{
+				abandonObj,
+			},
+			events: []event.Event{
+				formPruneSkipEventWithDetach(abandonObj),
+			},
+			expectedError: nil,
+			expectedGVKs: map[schema.GroupVersionKind]struct{}{
+				kinds.Deployment(): {},
+				testGVK:            {},
+			},
+			expectedServerObjs: []client.Object{
+				func() client.Object {
+					obj := abandonObj.DeepCopy()
+					obj.SetAnnotations(map[string]string{
+						common.LifecycleDeleteAnnotation: common.PreventDeletion,
+						// all configsync annotations removed
+						"example-to-not-delete": "anything",
+					})
+					obj.SetLabels(map[string]string{
+						// all configsync labels removed
+						"example-to-not-delete": "anything",
+					})
+					obj.SetUID("1")
+					obj.SetResourceVersion("2")
+					obj.SetGeneration(1)
+					return obj
+				}(),
 			},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			u := &unstructured.Unstructured{}
-			u.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
-			u.SetNamespace("test-namespace")
-			u.SetName("rs")
+			rsObj := &unstructured.Unstructured{}
+			rsObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
+			rsObj.SetNamespace(string(syncScope))
+			rsObj.SetName(syncName)
+			tc.serverObjs = append(tc.serverObjs, rsObj)
 
-			fakeClient := testingfake.NewClient(t, core.Scheme, u)
+			expectedRSObj := rsObj.DeepCopy()
+			expectedRSObj.SetUID("1")
+			expectedRSObj.SetResourceVersion("1")
+			expectedRSObj.SetGeneration(1)
+			tc.expectedServerObjs = append(tc.expectedServerObjs, expectedRSObj)
+
+			fakeClient := testingfake.NewClient(t, core.Scheme, tc.serverObjs...)
 			cs := &ClientSet{
 				KptApplier: newFakeKptApplier(tc.events),
 				Client:     fakeClient,
-				// TODO: Add tests to cover disabling objects
+				Mapper:     fakeClient.RESTMapper(),
 				// TODO: Add tests to cover status mode
 			}
-			applier, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
+			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
 			require.NoError(t, err)
 
 			gvks, errs := applier.Apply(context.Background(), objs)
-			testutil.AssertEqual(t, tc.gvks, gvks)
+			testutil.AssertEqual(t, tc.expectedGVKs, gvks)
 
-			if tc.multiErr == nil {
+			if tc.expectedError == nil {
 				if errs != nil {
 					t.Errorf("%s: unexpected error %v", tc.name, errs)
 				}
@@ -265,7 +333,7 @@ func TestApply(t *testing.T) {
 				t.Errorf("%s: expected some error, but not happened", tc.name)
 			} else {
 				actualErrs := errs.Errors()
-				expectedErrs := tc.multiErr.Errors()
+				expectedErrs := tc.expectedError.Errors()
 				if len(actualErrs) != len(expectedErrs) {
 					t.Errorf("%s: number of error is not as expected %v", tc.name, actualErrs)
 				} else {
@@ -279,6 +347,8 @@ func TestApply(t *testing.T) {
 					}
 				}
 			}
+
+			fakeClient.Check(t, tc.expectedServerObjs...)
 		})
 	}
 }
@@ -361,6 +431,21 @@ func formPruneSkipEventWithDependency(id object.ObjMetadata) event.Event {
 				RelationPhase:           filter.PhaseActuation,
 				RelationActuationStatus: actuation.ActuationFailed,
 				RelationReconcileStatus: actuation.ReconcilePending,
+			},
+		},
+	}
+}
+
+func formPruneSkipEventWithDetach(obj *unstructured.Unstructured) event.Event {
+	return event.Event{
+		Type: event.PruneType,
+		PruneEvent: event.PruneEvent{
+			Status:     event.PruneSkipped,
+			Identifier: object.UnstructuredToObjMetadata(obj),
+			Object:     obj,
+			Error: &filter.AnnotationPreventedDeletionError{
+				Annotation: common.LifecycleDeleteAnnotation,
+				Value:      common.PreventDeletion,
 			},
 		},
 	}

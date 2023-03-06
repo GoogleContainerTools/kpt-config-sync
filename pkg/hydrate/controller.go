@@ -76,7 +76,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 	defer runTimer.Stop()
 	rehydrateTimer := time.NewTimer(h.RehydratePeriod)
 	defer rehydrateTimer.Stop()
-	absSourceDir := h.SourceRoot.Join(cmpath.RelativeSlash(h.SourceLink))
+	absSourceDir := h.absSourceDir()
 	for {
 		select {
 		case <-ctx.Done():
@@ -115,11 +115,36 @@ func (h *Hydrator) runHydrate(sourceCommit, syncDir string) HydrationError {
 	if err := kustomizeBuild(syncDir, dest, true); err != nil {
 		return err
 	}
+
+	newCommit, err := ComputeCommit(h.absSourceDir())
+	if err != nil {
+		return NewTransientError(err)
+	} else if sourceCommit != newCommit {
+		return NewTransientError(fmt.Errorf("source commit changed while running Kustomize build, was %s, now %s. It will be retried in the next sync", sourceCommit, newCommit))
+	}
+
 	if err := updateSymlink(h.HydratedRoot.OSPath(), h.HydratedLink, newHydratedDir.OSPath()); err != nil {
 		return NewInternalError(errors.Wrapf(err, "unable to update the symbolic link to %s", newHydratedDir.OSPath()))
 	}
 	klog.Infof("Successfully rendered %s for commit %s", syncDir, sourceCommit)
 	return nil
+}
+
+// ComputeCommit returns the computed commit from given sourceDir, or error
+// if the sourceDir fails symbolic link evaluation
+func ComputeCommit(sourceDir cmpath.Absolute) (string, error) {
+	dir, err := sourceDir.EvalSymlinks()
+	if err != nil {
+		return "", errors.Wrapf(err, "unable to evaluate the symbolic link of sourceDir %s", dir)
+	}
+	newCommit := filepath.Base(dir.OSPath())
+	return newCommit, nil
+}
+
+// absSourceDir returns the absolute path of a source directory by joining the
+// root source directory path and a relative path to the source directory
+func (h *Hydrator) absSourceDir() cmpath.Absolute {
+	return h.SourceRoot.Join(cmpath.RelativeSlash(h.SourceLink))
 }
 
 // hydrate renders the source git repo to hydrated configs.

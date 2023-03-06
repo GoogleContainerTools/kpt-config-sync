@@ -330,7 +330,7 @@ func readFromSource(ctx context.Context, p Parser, trigger string, state *reconc
 	state.resetCache()
 
 	// Read all the files under state.syncDir
-	sourceStatus.errs = opts.readConfigFiles(&sourceState)
+	sourceStatus.errs = opts.readConfigFiles(&sourceState, p)
 	if sourceStatus.errs == nil {
 		// Set `state.cache.source` after `readConfigFiles` succeeded
 		state.cache.source = sourceState

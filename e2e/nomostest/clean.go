@@ -458,7 +458,7 @@ func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructur
 	list := &unstructured.UnstructuredList{}
 	list.GetObjectKind().SetGroupVersionKind(gvk)
 	if err := nt.List(list, withLabelListOption(TestLabel, TestLabelValue)); err != nil {
-		if meta.IsNoMatchError(err) {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 			// Resource not registered. So none can exist.
 			return nil, nil
 		}
@@ -501,7 +501,7 @@ func deleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 		} else {
 			nt.T.Logf("[CLEANUP] deleting %s object %s ...", gvk.Kind, nn)
 			if err := nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-				if apierrors.IsNotFound(err) {
+				if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 					// skip waiting
 					continue
 				}

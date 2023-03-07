@@ -518,6 +518,23 @@ func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error
 	return out, nil
 }
 
+// Git is a convenience method for calling git.
+// Returns STDOUT & STDERR combined, and an error if git exited abnormally.
+func (nt *NT) Git(args ...string) ([]byte, error) {
+	nt.T.Helper()
+
+	nt.DebugLogf("git %s", strings.Join(args, " "))
+	out, err := exec.Command("git", args...).CombinedOutput()
+	if err != nil {
+		if !*e2e.Debug {
+			nt.T.Logf("git %s", strings.Join(args, " "))
+		}
+		nt.T.Log(string(out))
+		return out, err
+	}
+	return out, nil
+}
+
 // Command is a convenience method for invoking a subprocess with the
 // KUBECONFIG environment variable set. Setting the environment variable
 // directly in the test process is not thread safe.
@@ -907,22 +924,74 @@ func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
 	return cr
 }
 
-// RemoteRootRepoSha1Fn returns .status.lastSyncedCommit as the latest sha1.
+// RemoteRootRepoSha1Fn returns the latest commit from a RootSync Git spec.
 func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RootSync{}
 	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
-	return rs.Status.LastSyncedCommit, nil
+	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to lookup git commit for RootSync")
+	}
+	return commit, nil
 }
 
-// RemoteNsRepoSha1Fn returns .status.lastSyncedCommit as the latest sha1 for the Namespace Repo.
+// RemoteNsRepoSha1Fn returns the latest commit from a RepoSync Git spec.
 func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RepoSync{}
 	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
-	return rs.Status.LastSyncedCommit, nil
+	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to lookup git commit for RepoSync")
+	}
+	return commit, nil
+}
+
+// gitCommitFromSpec returns the latest commit from a Git spec.
+// Uses git ls-remote to avoid needing to clone the repo.
+// Warning: may not work if authentication is required.
+func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
+	if gitSpec == nil {
+		return "", errors.New("spec.git is nil")
+	}
+	if gitSpec.Repo == "" {
+		return "", errors.New("spec.git.repo is empty")
+	}
+	// revision specified
+	if gitSpec.Revision != "" {
+		return gitSpec.Revision, nil
+	}
+	var pattern string
+	if gitSpec.Branch != "" {
+		// HEAD of specified branch
+		pattern = gitSpec.Branch // HEAD of specified branch
+	} else {
+		// HEAD of default branch
+		pattern = "HEAD"
+	}
+	// List remote references (branches and tags).
+	// Expected Output: GIT_COMMIT\tREF_NAME
+	args := []string{"ls-remote", gitSpec.Repo, pattern}
+	out, err := nt.Git(args...)
+	if err != nil {
+		return "", err
+	}
+	// Trim subsequent lines, if more than one
+	lines := strings.SplitN(string(out), "\n", 2)
+	if len(lines) == 0 {
+		return "", fmt.Errorf("empty output from command: git %s",
+			strings.Join(args, " "))
+	}
+	// Trim subsequent columns, if more than one
+	columns := strings.SplitN(lines[0], "\t", 2)
+	if len(lines) == 0 {
+		return "", fmt.Errorf("invalid output from command: git %s: %s",
+			strings.Join(args, " "), lines[0])
+	}
+	return columns[0], nil
 }
 
 func stringArrayContains(list []string, value string) bool {

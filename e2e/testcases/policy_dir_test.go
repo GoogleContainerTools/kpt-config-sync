@@ -49,10 +49,15 @@ func TestPolicyDirUnset(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces", ".")
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/system", ".")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the root directory")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "")
-	nt.WaitForRepoSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
+	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestInvalidPolicyDir(t *testing.T) {
@@ -67,5 +72,7 @@ func TestInvalidPolicyDir(t *testing.T) {
 	nt.T.Log("Fix the policydir in the repo")
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "acme")
 	nt.T.Log("Expect repo to recover from the error in source message")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }

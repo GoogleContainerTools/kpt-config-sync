@@ -36,7 +36,9 @@ import (
 func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	key := "GIT_SYNC_DEPTH"
 	rootReconcilerNN := types.NamespacedName{
@@ -78,7 +80,9 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "33")
@@ -102,7 +106,9 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "0")
@@ -114,7 +120,9 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.Override = &v1alpha1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "1")
@@ -126,7 +134,9 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	key := "GIT_SYNC_DEPTH"
 	rootReconcilerNN := types.NamespacedName{
@@ -168,7 +178,9 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 33")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "33")
@@ -192,7 +204,9 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync git sync depth to 0")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "0")
@@ -204,7 +218,9 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.Override = &v1beta1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = validateDeploymentContainerHasEnvVar(nt, nsReconcilerNN,
 		reconcilermanager.GitSync, key, "1")

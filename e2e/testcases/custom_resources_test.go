@@ -65,7 +65,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", fake.NamespaceObject("prod"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
@@ -124,7 +126,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	// This should fix the error.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil-v1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
@@ -149,7 +153,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
@@ -212,7 +218,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// This should fix the error.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestSyncUpdateCustomResource(t *testing.T) {
@@ -242,7 +250,9 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.RenewClient()
 
 	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual10)
@@ -253,7 +263,9 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 	// Update CustomResource
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updating Anvil CR")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.RenewClient()
 
 	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual100)

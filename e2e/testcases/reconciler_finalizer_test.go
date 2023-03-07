@@ -75,7 +75,9 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -161,7 +163,9 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -252,7 +256,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -264,7 +270,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment2.SetNamespace(deployment1NN.Namespace)
 	nsRepo.Add(deployment2Path, deployment2)
 	nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -302,7 +310,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		rootRepo.Add(repoSyncPath, repoSync)
 		rootRepo.CommitAndPush("Enabling RepoSync deletion propagation")
 	}
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	require.NoError(nt.T,
 		nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
 			nomostest.StatusEquals(nt, kstatus.CurrentStatus),
@@ -372,7 +382,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment1.SetNamespace(deployment2NN.Namespace)
 	rootRepo.Add(deployment1Path, deployment1)
 	rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -384,7 +396,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment2.SetNamespace(deployment2NN.Namespace)
 	nsRepo.Add(deployment2Path, deployment2)
 	nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -421,7 +435,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	if nomostest.RemoveDeletionPropagationPolicy(repoSync) {
 		rootRepo.Add(repoSyncPath, repoSync)
 		rootRepo.CommitAndPush("Disabling RepoSync deletion propagation")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 	require.NoError(nt.T,
 		nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []nomostest.Predicate{
@@ -435,7 +451,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	core.SetAnnotation(namespace1, common.LifecycleDeleteAnnotation, common.PreventDeletion)
 	rootRepo.Add(namespace1Path, namespace1)
 	rootRepo.CommitAndPush("Adding annotation to keep test namespace on removal from git")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Delete the RootSync
 	// DeletePropagationBackground is required when deleting RootSync, to

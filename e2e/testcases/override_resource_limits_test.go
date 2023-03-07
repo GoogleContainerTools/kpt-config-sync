@@ -82,7 +82,9 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
@@ -220,7 +222,9 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nsReconcilerBackendDeploymentGeneration++
 	nsReconcilerFrontendDeploymentGeneration++
@@ -326,7 +330,9 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.Override = &v1alpha1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nsReconcilerBackendDeploymentGeneration++
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
@@ -360,7 +366,9 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	repoSyncFrontend.Spec.Override = &v1alpha1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nsReconcilerFrontendDeploymentGeneration++
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
@@ -377,7 +385,9 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
@@ -515,7 +525,9 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nsReconcilerBackendDeploymentGeneration++
 	nsReconcilerFrontendDeploymentGeneration++
@@ -621,7 +633,9 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.Override = &v1beta1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nsReconcilerBackendDeploymentGeneration++
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
@@ -655,7 +669,9 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	repoSyncFrontend.Spec.Override = &v1beta1.OverrideSpec{}
 	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nsReconcilerFrontendDeploymentGeneration++
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits

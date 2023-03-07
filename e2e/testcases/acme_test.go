@@ -54,7 +54,9 @@ func TestAcmeCorpRepo(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].SafetyNSName: ""}
 	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme", ".")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the acme directory")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	checkResourceCount(nt, kinds.Namespace(), "", len(nsToFolder), nil, configSyncManagementAnnotations)
 	for namespace, folder := range nsToFolder {
@@ -172,7 +174,9 @@ func TestAcmeCorpRepo(t *testing.T) {
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
 	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestObjectInCMSNamespace will test that user can sync object to CMS namespace
@@ -181,7 +185,9 @@ func TestObjectInCMSNamespace(t *testing.T) {
 
 	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// validate the resources synced successfully in CMS namespace
 	namespace := configmanagement.ControllerNamespace

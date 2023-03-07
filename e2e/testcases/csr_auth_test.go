@@ -71,8 +71,11 @@ func TestGCENode(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcenode", "secretRef": {"name": ""}}}}`,
 		tenant, syncBranch, csrRepo))
 
-	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	if err := validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent); err != nil {
 		nt.T.Fatal(err)
@@ -311,14 +314,20 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		})
 	}
 	if testSpec.sourceType == v1beta1.HelmSource {
-		nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
+		err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
 			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: testSpec.sourceChart}))
+		if err != nil {
+			nt.T.Fatal(err)
+		}
 		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}); err != nil {
 			nt.T.Error(err)
 		}
 	} else {
-		nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
+		err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(testSpec.rootCommitFn),
 			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+		if err != nil {
+			nt.T.Fatal(err)
+		}
 		validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	}
 }

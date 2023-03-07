@@ -122,13 +122,17 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/frontend/quota-inline.yaml", rqInline)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/frontend/quota-legacy.yaml", rqLegacy)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a resource quota")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(nt, prodPodsQuota)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, testClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -143,7 +147,9 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 		}))
 
 	renameCluster(nt, configMapName, prodClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -177,7 +183,9 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 		namespaceObject(backendNamespace, map[string]string{}))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -193,13 +201,17 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	rb.Annotations = legacyTestClusterSelectorAnnotation
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Change cluster selector to match test cluster")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, testClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -216,13 +228,17 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	rb.Annotations = inlineProdClusterSelectorAnnotation
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Revert cluster selector to match prod cluster")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, prodClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -257,7 +273,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/namespace.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a namespace and a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(namespace.Name, namespace.Namespace, &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -290,7 +308,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	namespace.Annotations = legacyTestClusterSelectorAnnotation
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/namespace.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Change namespace to match test cluster")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -313,7 +333,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	}
 
 	renameCluster(nt, configMapName, testClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -351,7 +373,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	rb.Annotations = map[string]string{}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update bob-rolebinding to NOT have cluster-selector")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -374,7 +398,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	namespace.Annotations = inlineProdClusterSelectorAnnotation
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/namespace.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Revert namespace to match prod cluster")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -397,7 +423,9 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	}
 
 	renameCluster(nt, configMapName, prodClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -441,7 +469,9 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 		namespaceObject(backendNamespace, map[string]string{}))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -450,7 +480,9 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a, b, c"}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify the cluster selector to select an excluded cluster list")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -480,7 +512,9 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 		namespaceObject(backendNamespace, map[string]string{}))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -489,7 +523,9 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 	prodClusterWithADifferentSelector := clusterSelector(prodClusterSelectorName, environmentLabelKey, "other")
 	nt.RootRepos[configsync.RootSyncName].Add("acme/clusterregistry/clusterselector-prod.yaml", prodClusterWithADifferentSelector)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify the cluster selector to select a different environment")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -524,7 +560,9 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/anvil-2.yaml", cr2)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource without its CRD")
 
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		return nt.ValidateErrorMetricsNotFound()
@@ -546,7 +584,9 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
 	nt.NonRootRepos[nn].Add("acme/bob-rolebinding.yaml", rb)
 	nt.NonRootRepos[nn].CommitAndPush("Add a valid cluster selector annotation to a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -555,7 +595,9 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,b,,,c,d"}
 	nt.NonRootRepos[nn].Add("acme/bob-rolebinding.yaml", rb)
 	nt.NonRootRepos[nn].CommitAndPush("Modify the cluster selector to select an excluded cluster list")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -568,7 +610,9 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.LegacyClusterSelectorAnnotationKey: prodClusterSelectorName}
 	nt.NonRootRepos[nn].Add("acme/bob-rolebinding.yaml", rb)
 	nt.NonRootRepos[nn].CommitAndPush("Add cluster registry data and use the legacy ClusterSelector")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -594,7 +638,9 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		namespaceObject(backendNamespace, map[string]string{}))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a role binding without any cluster selectors")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -603,13 +649,17 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	rb.Annotations = inlineProdClusterSelectorAnnotation
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a prod cluster selector to the role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, prodClusterName)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// TODO: Confirm that the change was Synced.
 	// This is not currently possible using the RootSync status API, because
 	// the commit didn't change, and the commit was already previously Synced.
@@ -626,7 +676,9 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: ""}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add an empty cluster selector annotation to a role binding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -635,7 +687,9 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: fmt.Sprintf("a,%s,b", prodClusterName)}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a cluster selector annotation to a role binding with a list of included clusters")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -644,7 +698,9 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,,b"}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a cluster selector annotation to a role binding with a list of excluded clusters")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -653,7 +709,9 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: fmt.Sprintf("a , %s , b", prodClusterName)}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a cluster selector annotation to a role binding with a list of included clusters (with spaces)")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -697,7 +755,9 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	crd := anvilV1CRD()
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource definition")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -707,7 +767,9 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	crd.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: testClusterName})
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource definition with an unselected cluster-name-selector annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
 	err := nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
@@ -719,7 +781,9 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	crd.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: prodClusterName})
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource definition with an selected cluster-name-selector annotation")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -738,7 +802,9 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	crd.SetAnnotations(legacyTestClusterSelectorAnnotation)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource definition with an unselected ClusterSelector")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
 	err = nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
@@ -750,7 +816,9 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	crd.SetAnnotations(map[string]string{metadata.LegacyClusterSelectorAnnotationKey: prodClusterSelectorName})
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a custom resource definition with an selected ClusterSelector")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
 		nt.T.Fatal(err)
 	}

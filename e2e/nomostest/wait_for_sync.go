@@ -23,8 +23,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reposync"
@@ -34,7 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/util/repo"
 )
 
-type waitForRepoSyncsOptions struct {
+type watchForAllSyncsOptions struct {
 	timeout            time.Duration
 	syncNamespaceRepos bool
 	rootSha1Fn         Sha1Func
@@ -42,22 +43,12 @@ type waitForRepoSyncsOptions struct {
 	syncDirectoryMap   map[types.NamespacedName]string
 }
 
-func newWaitForRepoSyncsOptions(timeout time.Duration, rootFn, repoFn Sha1Func) waitForRepoSyncsOptions {
-	return waitForRepoSyncsOptions{
-		timeout:            timeout,
-		syncNamespaceRepos: true,
-		rootSha1Fn:         rootFn,
-		repoSha1Fn:         repoFn,
-		syncDirectoryMap:   map[types.NamespacedName]string{},
-	}
-}
-
-// WaitForRepoSyncsOption is an optional parameter for WaitForRepoSyncs.
-type WaitForRepoSyncsOption func(*waitForRepoSyncsOptions)
+// WatchForAllSyncsOptions is an optional parameter for WaitForRepoSyncs.
+type WatchForAllSyncsOptions func(*watchForAllSyncsOptions)
 
 // WithTimeout provides the timeout to WaitForRepoSyncs.
-func WithTimeout(timeout time.Duration) WaitForRepoSyncsOption {
-	return func(options *waitForRepoSyncsOptions) {
+func WithTimeout(timeout time.Duration) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
 		options.timeout = timeout
 	}
 }
@@ -66,22 +57,22 @@ func WithTimeout(timeout time.Duration) WaitForRepoSyncsOption {
 type Sha1Func func(nt *NT, nn types.NamespacedName) (string, error)
 
 // WithRootSha1Func provides the function to get RootSync commit sha1 to WaitForRepoSyncs.
-func WithRootSha1Func(fn Sha1Func) WaitForRepoSyncsOption {
-	return func(options *waitForRepoSyncsOptions) {
+func WithRootSha1Func(fn Sha1Func) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
 		options.rootSha1Fn = fn
 	}
 }
 
 // WithRepoSha1Func provides the function to get RepoSync commit sha1 to WaitForRepoSyncs.
-func WithRepoSha1Func(fn Sha1Func) WaitForRepoSyncsOption {
-	return func(options *waitForRepoSyncsOptions) {
+func WithRepoSha1Func(fn Sha1Func) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
 		options.repoSha1Fn = fn
 	}
 }
 
 // RootSyncOnly specifies that only the root-sync repo should be synced.
-func RootSyncOnly() WaitForRepoSyncsOption {
-	return func(options *waitForRepoSyncsOptions) {
+func RootSyncOnly() WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
 		options.syncNamespaceRepos = false
 	}
 }
@@ -94,8 +85,8 @@ type SyncDirPredicatePair struct {
 
 // WithSyncDirectoryMap provides a map of RootSync|RepoSync and the corresponding sync directory.
 // The function is used to get the sync directory based on different RootSync|RepoSync name.
-func WithSyncDirectoryMap(syncDirectoryMap map[types.NamespacedName]string) WaitForRepoSyncsOption {
-	return func(options *waitForRepoSyncsOptions) {
+func WithSyncDirectoryMap(syncDirectoryMap map[types.NamespacedName]string) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
 		options.syncDirectoryMap = syncDirectoryMap
 	}
 }
@@ -109,102 +100,100 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 	return AcmeDir
 }
 
-// WaitForRepoSyncs is a convenience method that waits for all repositories
-// to sync.
+// WatchForAllSyncs calls WatchForSync on all Syncs in nt.RootRepos & nt.NonRootRepos.
 //
-// Unless you're testing pre-CSMR functionality related to in-cluster objects,
-// you should be using this function to block on ConfigSync to sync everything.
-//
-// If you want to check the internals of specific objects (e.g. the error field
-// of a RepoSync), use nt.Validate() - possibly in a Retry.
-func (nt *NT) WaitForRepoSyncs(options ...WaitForRepoSyncsOption) {
-	nt.T.Helper()
-
-	waitForRepoSyncsOptions := newWaitForRepoSyncsOptions(nt.DefaultWaitTimeout, DefaultRootSha1Fn, DefaultRepoSha1Fn)
+// If you want to validate specific fields of a Sync object, use
+// nomostest.WatchObject() instead.
+func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
+	waitForRepoSyncsOptions := watchForAllSyncsOptions{
+		timeout:            nt.DefaultWaitTimeout,
+		syncNamespaceRepos: true,
+		rootSha1Fn:         DefaultRootSha1Fn,
+		repoSha1Fn:         DefaultRepoSha1Fn,
+		syncDirectoryMap:   map[types.NamespacedName]string{},
+	}
+	// Override defaults with specified options
 	for _, option := range options {
 		option(&waitForRepoSyncsOptions)
 	}
 
-	syncTimeout := waitForRepoSyncsOptions.timeout
-
 	if err := ValidateMultiRepoDeployments(nt); err != nil {
-		nt.T.Fatal(err)
-	}
-	for name := range nt.RootRepos {
-		syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, RootSyncNN(name))
-		nt.WaitForSync(kinds.RootSyncV1Beta1(), name,
-			configmanagement.ControllerNamespace, syncTimeout,
-			waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
-			&SyncDirPredicatePair{syncDir, RootSyncHasStatusSyncDirectory})
+		return err
 	}
 
-	syncNamespaceRepos := waitForRepoSyncsOptions.syncNamespaceRepos
-	if syncNamespaceRepos {
+	tg := taskgroup.New()
+
+	for name := range nt.RootRepos {
+		nn := RootSyncNN(name)
+		syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
+		tg.Go(func() error {
+			return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
+				waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
+				&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
+				WatchTimeout(waitForRepoSyncsOptions.timeout))
+		})
+	}
+
+	if waitForRepoSyncsOptions.syncNamespaceRepos {
 		for nn := range nt.NonRootRepos {
 			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
-			nt.WaitForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
-				syncTimeout, waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
-				&SyncDirPredicatePair{syncDir, RepoSyncHasStatusSyncDirectory})
+			nnPtr := nn
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nnPtr.Name, nnPtr.Namespace,
+					waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
+					&SyncDirPredicatePair{Dir: syncDir, Predicate: RepoSyncHasStatusSyncDirectory},
+					WatchTimeout(waitForRepoSyncsOptions.timeout))
+			})
 		}
 	}
+
+	return tg.Wait()
 }
 
-// WaitForSync waits for the specified object to be synced.
+// WatchForSync watches the specified sync object until it's synced.
 //
-// o returns a new object of the type to check is synced. It can't just be a
-// struct pointer as calling .Get on the same struct pointer multiple times
-// has undefined behavior.
-//
-// name and namespace identify the specific object to check.
-//
-// timeout specifies the maximum duration allowed for the object to sync.
-//
-// sha1Func is the function that dynamically computes the expected commit sha1.
-//
-// syncSha1 is a Predicate to use to tell whether the object is synced as desired.
-//
-// syncDirPair is a pair of sync dir and the corresponding predicate that tells
-// whether it is synced to the expected directory.
-// It will skip the validation if it is not provided.
-func (nt *NT) WaitForSync(gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration,
-	sha1Func Sha1Func, syncSha1 func(string) Predicate, syncDirPair *SyncDirPredicatePair) {
-	nt.T.Helper()
-	// Wait for the repository to report it is synced.
-	took, err := Retry(timeout, func() error {
-		var nn types.NamespacedName
-		if namespace == "" {
-			// If namespace is empty, that is the monorepo mode.
-			// So using the sha1 from the default RootSync, not the Repo.
-			nn = DefaultRootRepoNamespacedName
-		} else {
-			nn = types.NamespacedName{
-				Name:      name,
-				Namespace: namespace,
-			}
-		}
-		sha1, err := sha1Func(nt, nn)
-		if err != nil {
-			return errors.Wrapf(err, "failed to retrieve sha1")
-		}
-		isSynced := []Predicate{syncSha1(sha1)}
-		if syncDirPair != nil {
-			isSynced = append(isSynced, syncDirPair.Predicate(syncDirPair.Dir))
-		}
-		return nt.ValidateSyncObject(gvk, name, namespace, isSynced...)
-	})
+//   - gvk (required) is the sync object GroupVersionKind
+//   - name (required) is the sync object name
+//   - namespace (required) is the sync object namespace
+//   - sha1Func (required) is the function that to compute the expected commit.
+//   - syncSha1 (required) is a Predicate factory used to validate whether the
+//     object is synced, given the expected commit.
+//   - syncDirPair (optional) is a pair of sync dir and the corresponding
+//     predicate to validate the config directory.
+//   - opts (optional) allows configuring the watcher (e.g. timeout)
+func (nt *NT) WatchForSync(
+	gvk schema.GroupVersionKind,
+	name, namespace string,
+	sha1Func Sha1Func,
+	syncSha1 func(string) Predicate,
+	syncDirPair *SyncDirPredicatePair,
+	opts ...WatchOption,
+) error {
+	if namespace == "" {
+		// If namespace is empty, use the default namespace
+		namespace = configsync.ControllerNamespace
+	}
+	nn := types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+	sha1, err := sha1Func(nt, nn)
 	if err != nil {
-		nt.T.Logf("failed after %v to wait for %s/%s %v to be synced", took, namespace, name, gvk)
-
-		nt.T.Fatal(err)
+		return errors.Wrap(err, "failed to retrieve sha1")
 	}
-	nt.T.Logf("took %v to wait for %s/%s %v to be synced", took, namespace, name, gvk)
 
-	// Automatically renew the Client. We don't have tests that depend on behavior
-	// when the test's client is out of date, and if ConfigSync reports that
-	// everything has synced properly then (usually) new types should be available.
-	if gvk == kinds.Repo() || gvk == kinds.RepoSyncV1Beta1() {
-		nt.RenewClient()
+	var predicates []Predicate
+	predicates = append(predicates, syncSha1(sha1))
+	if syncDirPair != nil {
+		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Dir))
 	}
+
+	err = WatchObject(nt, gvk, name, namespace, predicates, opts...)
+	if err != nil {
+		return errors.Wrap(err, "waiting for sync")
+	}
+	nt.T.Logf("%s %s/%s is synced", gvk.Kind, namespace, name)
+	return nil
 }
 
 // WaitForRootSyncSourceError waits until the given error (code and message) is present on the RootSync resource

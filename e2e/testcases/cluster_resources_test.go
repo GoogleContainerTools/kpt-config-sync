@@ -94,7 +94,9 @@ func TestRevertClusterRole(t *testing.T) {
 	declaredCr.Rules = declaredRules
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate(crName, "", &rbacv1.ClusterRole{},
 		clusterRoleHasRules(declaredRules))
@@ -157,7 +159,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	declaredCr.Rules = declaredRules
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate(crName, "", &rbacv1.ClusterRole{},
 		clusterRoleHasRules(declaredRules), managerFieldsNonEmpty())
@@ -191,7 +195,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	updatedCr.Rules = updatedRules
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", updatedCr)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update ClusterRole to get/list")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure the resource is updated.
 	if err = nt.Validate(crName, "", &rbacv1.ClusterRole{}, clusterRoleHasRules(updatedRules), managerFieldsNonEmpty()); err != nil {
@@ -215,7 +221,9 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	// Delete the ClusterRole from the SOT.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusterrole.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("deleting ClusterRole")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.ValidateNotFound(crName, "", &rbacv1.ClusterRole{})
 	if err != nil {

@@ -64,7 +64,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), service)
 
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace and Service")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure the Service has the target port we set.
 	err := nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
@@ -131,7 +133,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	updatedService.Spec.Ports[0].TargetPort = intstr.FromInt(targetPort2)
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), updatedService)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update declared Service")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure the Service has the new target port we set.
 	err = nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
@@ -192,7 +196,9 @@ aggregationRule:
       permissions: viewer`))
 
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRoles")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure the aggregate rule is actually aggregated.
 	err := nomostest.WatchObject(nt, kinds.ClusterRole(), aggregateRoleName, "",
@@ -219,7 +225,9 @@ aggregationRule:
   - matchLabels:
       permissions: viewer`))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add label to aggregate ClusterRole")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Ensure we don't overwrite the aggregate rules.
 	err = nt.Validate(aggregateRoleName, "", &rbacv1.ClusterRole{},
@@ -255,7 +263,9 @@ func TestPreserveLastApplied(t *testing.T) {
 	}}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{})
 	if err != nil {
@@ -301,7 +311,9 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	cm := fake.ConfigMapObject(core.Name(cmName))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no labels to repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	var defaultLabels = []string{metadata.ManagedByKey, metadata.DeclaredVersionLabel}
 
@@ -316,7 +328,9 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	cm.Labels["baz"] = "qux"
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for ConfigMap in repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Checking that label is updated after syncing an update.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
@@ -328,7 +342,9 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	delete(cm.Labels, "baz")
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete label for configmap in repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Check that the label is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
@@ -357,7 +373,9 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	cm := fake.ConfigMapObject(core.Name(cmName))
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	annotationKeys := metadata.GetNomosAnnotationKeys()
 
@@ -386,7 +404,9 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	cm.Annotations["baz"] = "qux"
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update annotation for ConfigMap in repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	updatedKeys := append([]string{"baz"}, annotationKeys...)
 
@@ -415,7 +435,9 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	delete(cm.Annotations, "baz")
 	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete annotation for configmap in repo")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Check that the annotation is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},

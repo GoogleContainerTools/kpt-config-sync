@@ -33,7 +33,9 @@ func TestIgnoreKptfiles(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/subdir/Kptfile", []byte("# some comment"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding multiple Kptfiles")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.RenewClient()
 
 	err := nt.Validate("foo", "", fake.NamespaceObject("foo"))

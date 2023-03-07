@@ -48,7 +48,9 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a CRD and CR")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("my-cron-object", "foo", crForSchema())
 	if err != nil {
@@ -58,7 +60,9 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	// Restart the ConfigSync importer or reconciler pods.
 	// So that the old schema of the CRD is picked.
 	nt.MustKubectl("delete", "pods", "-n", "config-management-system", "-l", "configsync.gke.io/reconciler=root-reconciler")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Add the CRD with a new schema and a CR using the new schema to the repo
 	crdContent, err = ioutil.ReadFile(newCRDFile)
@@ -72,7 +76,9 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent)
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding the CRD with new schema and a CR using the new schema")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("my-new-cron-object", "foo", crForSchema())
 	if err != nil {

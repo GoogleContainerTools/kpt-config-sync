@@ -48,7 +48,9 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	// Add the Anvil CRD.
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", anvilV1Beta1CRD())
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.RenewClient()
 
 	// Add the v1 and v1beta1 Anvils and verify they are created.
@@ -56,7 +58,9 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 10))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 100))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 and v2 Anvil CRs")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -93,7 +97,9 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 20))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 200))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modifying v1 and v2 Anvil CRs")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -174,7 +180,9 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	// Add the Anvil CRD.
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", anvilV1CRD())
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.RenewClient()
 
 	// Add the v1 and v1beta1 Anvils and verify they are created.
@@ -182,7 +190,9 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 10))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 100))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 and v2 Anvil CRs")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -197,7 +207,9 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 20))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 200))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modifying v1 and v2 Anvil CRs")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -336,7 +348,9 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1beta1.yaml", rbV1Beta1)
 	}
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 and v1beta1 RoleBindings")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
 		hasV1Subjects("v1user@acme.com"))
@@ -370,7 +384,9 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1beta1.yaml", rbV1Beta1)
 	}
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modifying v1 and v1beta1 RoleBindings")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
 		hasV1Subjects("v1user@acme.com", "v1admin@acme.com"))
@@ -389,7 +405,9 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		// Remove the v1beta1 RoleBinding and verify that only it is deleted.
 		nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/rbv1beta1.yaml")
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing v1beta1 RoleBinding")
-		nt.WaitForRepoSyncs()
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
 
 		if err := nt.Validate("v1user", "foo", &rbacv1.RoleBinding{}); err != nil {
 			nt.T.Fatal(err)
@@ -402,7 +420,9 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	// Remove the v1 RoleBinding and verify that it is also deleted.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/rbv1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing v1 RoleBinding")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err := nt.ValidateNotFound("v1user", "foo", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)

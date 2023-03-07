@@ -43,13 +43,17 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	// Override the statusMode for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "disabled"}}}`)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	namespaceName := "status-test"
 	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespaceObject(namespaceName, nil))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName)))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nomostest.WatchObject(nt, kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
@@ -64,7 +68,9 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 
 	// Override the statusMode for root-reconciler to re-enable the status
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "enabled"}}}`)
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nomostest.WatchObject(nt, kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,

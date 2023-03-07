@@ -49,7 +49,9 @@ spec:
     - containerPort: 80
 `))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod missing protocol from port")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Parse the pod yaml into an object
 	pod := nt.RootRepos[configsync.RootSyncName].Get("acme/pod.yaml")
@@ -61,7 +63,9 @@ spec:
 
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the pod")
-	nt.WaitForRepoSyncs()
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err = nomostest.WatchForNotFound(nt, kinds.Pod(), pod.GetName(), pod.GetNamespace())
 	if err != nil {

@@ -145,16 +145,22 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 		ntOptions = append(ntOptions, ntopts.WithRestConfig(sharedNt.Config))
 	}
 
-	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
+	opts := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
 
+	var nt *NT
 	if *e2e.ShareTestEnv {
-		return SharedTestEnv(tw, optsStruct)
+		nt = sharedTestEnv(tw, opts)
+	} else {
+		nt = freshTestEnv(tw, opts)
 	}
-	return FreshTestEnv(tw, optsStruct)
+	if !opts.SkipConfigSyncInstall {
+		setupReposAndSyncs(nt, opts)
+	}
+	return nt
 }
 
-// SharedTestEnv connects to a shared test cluster.
-func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
+// sharedTestEnv connects to a shared test cluster.
+func sharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	sharedNt := SharedNT(t)
@@ -219,11 +225,10 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installWebhook(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	setupTestCase(nt, opts)
 	return nt
 }
 
-// FreshTestEnv establishes a connection to a test cluster based on the passed
+// freshTestEnv establishes a connection to a test cluster based on the passed
 //
 // options.
 //
@@ -236,7 +241,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 // 1) A connection to the Kubernetes cluster.
 // 2) A functioning git server hosted on the cluster.
 // 3) A fresh ACM installation.
-func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
+func freshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	scheme := newScheme(t)
@@ -346,13 +351,11 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installConfigSync(nt, opts.Nomos); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	setupTestCase(nt, opts)
 	return nt
 }
 
-func setupTestCase(nt *NT, opts *ntopts.New) {
-	nt.T.Log("[SETUP] New test case")
+func setupReposAndSyncs(nt *NT, opts *ntopts.New) {
+	nt.T.Log("[SETUP] Repositories, RootSyncs, & RepoSyncs")
 
 	// allRepos specifies the slice all repos for port forwarding.
 	var allRepos []types.NamespacedName
@@ -410,10 +413,6 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		// Most tests don't care about centralized/delegated control, but can
 		// specify the behavior if that distinction is under test.
 		setupCentralizedControl(nt, opts)
-	}
-
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
 	}
 }
 

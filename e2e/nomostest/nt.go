@@ -740,19 +740,11 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 
 // PortForwardOtelCollector forwards the otel-collector pod.
 func (nt *NT) PortForwardOtelCollector() {
-	ocPods := &corev1.PodList{}
 	// Retry otel-collector port-forwarding in case it is in the process of upgrade.
 	took, err := Retry(60*time.Second, func() error {
-		if err := nt.List(ocPods, client.InNamespace(ocmetrics.MonitoringNamespace)); err != nil {
+		pod, err := nt.GetDeploymentPod(ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace)
+		if err != nil {
 			return err
-		}
-		if nPods := len(ocPods.Items); nPods != 1 {
-			return fmt.Errorf("otel-collector: got len(podList.Items) = %d, want 1", nPods)
-		}
-
-		pod := ocPods.Items[0]
-		if pod.Status.Phase != corev1.PodRunning {
-			return fmt.Errorf("pod %q status is %q, want %q", pod.Name, pod.Status.Phase, corev1.PodRunning)
 		}
 		// The otel-collector forwarding port needs to be updated after otel-collector restarts or starts for the first time.
 		// It sets otelCollectorPodName and otelCollectorPort to point to the current running pod that forwards the port.
@@ -873,40 +865,60 @@ func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 }
 
 // GetDeploymentPod is a convenience method to look up the pod for a deployment.
-// It requires that exactly one pod exist and that the deoployment uses label
-// selectors to uniquely identify its pods.
-// This is promarily useful for finding the current pod for a reconciler or
+// It requires that exactly one pod exists, is running, and that the deployment
+// uses label selectors to uniquely identify its pods.
+// This is primarily useful for finding the current pod for a reconciler or
 // other single-replica controller deployments.
-// Any error will cause a fatal test failure.
-func (nt *NT) GetDeploymentPod(deploymentName, namespace string) *corev1.Pod {
-	deployment := &appsv1.Deployment{}
-	if err := nt.Get(deploymentName, namespace, deployment); err != nil {
-		nt.T.Fatal(err)
-	}
-	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if selector.Empty() {
-		nt.T.Fatal("deployment has no label selectors: %s/%s", namespace, deploymentName)
-	}
-
-	pods := &corev1.PodList{}
-	Wait(nt.T, fmt.Sprintf("listing pods for deployment %s/%s", namespace, deploymentName), 1*time.Minute, func() error {
-		err = nt.List(pods, client.InNamespace(namespace), client.MatchingLabelsSelector{
-			Selector: selector,
-		})
+func (nt *NT) GetDeploymentPod(deploymentName, namespace string) (*corev1.Pod, error) {
+	deploymentNN := types.NamespacedName{Name: deploymentName, Namespace: namespace}
+	var pod *corev1.Pod
+	took, err := Retry(nt.DefaultWaitTimeout, func() error {
+		deployment := &appsv1.Deployment{}
+		if err := nt.Get(deploymentNN.Name, deploymentNN.Namespace, deployment); err != nil {
+			return err
+		}
+		// Note: Waiting for updated & ready should be good enough.
+		// But if there's problems with flapping pods, we should wait for
+		// AvailableReplicas too, which respects MinReadySeconds.
+		// We're choosing to use ReadyReplicas here instead because it's faster.
+		if deployment.Status.UpdatedReplicas != 1 {
+			return errors.Errorf("deployment has %d updated pods, expected 1: %s",
+				deployment.Status.UpdatedReplicas, deploymentNN)
+		}
+		if deployment.Status.ReadyReplicas != 1 {
+			return errors.Errorf("deployment has %d ready pods, expected 1: %s",
+				deployment.Status.ReadyReplicas, deploymentNN)
+		}
+		selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
+		if err != nil {
+			return err
+		}
+		if selector.Empty() {
+			return errors.Errorf("deployment has no label selectors: %s", deploymentNN)
+		}
+		pods := &corev1.PodList{}
+		err = nt.List(pods, client.InNamespace(deploymentNN.Namespace),
+			client.MatchingLabelsSelector{Selector: selector})
 		if err != nil {
 			return err
 		}
 		if len(pods.Items) != 1 {
-			return errors.Errorf("deployment has %d pods but expected %d: %s/%s", len(pods.Items), 1, namespace, deploymentName)
+			return errors.Errorf("deployment has %d pods, expected 1: %s",
+				len(pods.Items), deploymentNN)
+		}
+		pod = pods.Items[0].DeepCopy()
+		if pod.Status.Phase != corev1.PodRunning {
+			return errors.Errorf("pod has status %q, want %q: %s",
+				pod.Status.Phase, corev1.PodRunning, client.ObjectKeyFromObject(pod))
 		}
 		return nil
 	})
-	pod := pods.Items[0]
-	nt.DebugLogf("Found deployment pod: %s/%s", pod.Namespace, pod.Name)
-	return &pod
+	if err != nil {
+		return nil, err
+	}
+	nt.T.Logf("took %v to wait for deployment pod", took)
+	nt.DebugLogf("Found deployment pod: %s", client.ObjectKeyFromObject(pod))
+	return pod, nil
 }
 
 // RepoSyncClusterRole returns the NS reconciler ClusterRole

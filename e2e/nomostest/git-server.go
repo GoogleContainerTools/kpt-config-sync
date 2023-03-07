@@ -15,7 +15,6 @@
 package nomostest
 
 import (
-	"encoding/json"
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -251,33 +250,20 @@ func portForwardGitServer(nt *NT, repos ...types.NamespacedName) int {
 
 // InitGitRepos initializes the repositories in the testing git-server and returns the pod names.
 func InitGitRepos(nt *NT, repos ...types.NamespacedName) string {
-	// This logic is not robust to the git-server pod being killed/restarted,
-	// but this is a rare occurrence.
-	// Consider if it is worth getting the Pod name again if port forwarding fails.
-	podList := &corev1.PodList{}
-	err := nt.List(podList, client.InNamespace(testGitNamespace))
+	pod, err := nt.GetDeploymentPod(testGitServer, testGitNamespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nPods := len(podList.Items); nPods != 1 {
-		podsJSON, err := json.MarshalIndent(podList, "", "  ")
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		nt.T.Log(string(podsJSON))
-		nt.T.Fatalf("got len(podList.Items) = %d, want 1", nPods)
-	}
-
-	podName := podList.Items[0].Name
+	podName := pod.Name
 
 	for _, repo := range repos {
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "--",
+		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "init", "--bare", "--shared", fmt.Sprintf("/git-server/repos/%s/%s", repo.Namespace, repo.Name))
 		// We set receive.denyNonFastforwards to allow force pushes for legacy test support (bats).  In the future we may
 		// need this support for testing GKE clusters since we will likely be re-using the cluster in that case.
 		// Alternatively, we could also run "rm -rf /git-server/repos/*" to clear out the state of the git server and
 		// re-initialize.
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "--",
+		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "-C", fmt.Sprintf("/git-server/repos/%s", repo), "config", "receive.denyNonFastforwards", "false")
 	}
 	return podName

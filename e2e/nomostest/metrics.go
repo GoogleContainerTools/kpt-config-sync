@@ -176,8 +176,11 @@ func SyncMetricsToReconcilerSourceError(nt *NT, reconcilerName string) MetricsSy
 	ntPtr := nt
 	reconcilerNameCopy := reconcilerName
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		pod := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
-		err := metrics.ValidateReconcilerErrors(pod.Name, 1, 0)
+		pod, err := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
+		if err != nil {
+			return err
+		}
+		err = metrics.ValidateReconcilerErrors(pod.Name, 1, 0)
 		if err != nil {
 			return err
 		}
@@ -191,8 +194,11 @@ func SyncMetricsToReconcilerSyncError(nt *NT, reconcilerName string) MetricsSync
 	ntPtr := nt
 	reconcilerNameCopy := reconcilerName
 	return func(metrics *testmetrics.ConfigSyncMetrics) error {
-		pod := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
-		err := metrics.ValidateReconcilerErrors(pod.Name, 0, 1)
+		pod, err := ntPtr.GetDeploymentPod(reconcilerNameCopy, configmanagement.ControllerNamespace)
+		if err != nil {
+			return err
+		}
+		err = metrics.ValidateReconcilerErrors(pod.Name, 0, 1)
 		if err != nil {
 			return err
 		}
@@ -226,14 +232,20 @@ func (nt *NT) ValidateMultiRepoMetrics(reconcilerName string, numResources int, 
 func (nt *NT) ValidateErrorMetricsNotFound() error {
 	for name := range nt.RootRepos {
 		reconcilerName := core.RootReconcilerName(name)
-		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		pod, err := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		if err != nil {
+			return err
+		}
 		if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
 			return err
 		}
 	}
 	for nn := range nt.NonRootRepos {
 		reconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
-		pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		pod, err := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+		if err != nil {
+			return err
+		}
 		if err := nt.ReconcilerMetrics.ValidateErrorMetrics(pod.Name); err != nil {
 			return err
 		}
@@ -252,6 +264,9 @@ func (nt *NT) ValidateMetricNotFound(metricName string) error {
 // ValidateReconcilerErrors validates that the `reconciler_error` metric exists
 // for the correct reconciler pod and the tagged component has the correct value.
 func (nt *NT) ValidateReconcilerErrors(reconcilerName string, sourceCount, syncCount int) error {
-	pod := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+	pod, err := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+	if err != nil {
+		return err
+	}
 	return nt.ReconcilerMetrics.ValidateReconcilerErrors(pod.Name, sourceCount, syncCount)
 }

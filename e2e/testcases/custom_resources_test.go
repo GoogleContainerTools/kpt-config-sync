@@ -84,9 +84,13 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/prod/ns.yaml"))
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/prod/anvil-v1.yaml"))
+
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Anvil
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
 		if err != nil {
 			return err
@@ -176,9 +180,13 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/foo/ns.yaml"))
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/foo/anvil-v1.yaml"))
+
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Anvil
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
 		if err != nil {
 			return err

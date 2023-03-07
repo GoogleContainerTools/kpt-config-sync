@@ -52,8 +52,8 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}}
 
 	// Declare the Namespace with the lifecycle annotation, and ensure it is created.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml",
-		fake.NamespaceObject("shipping", preventDeletion))
+	nsObj := fake.NamespaceObject("shipping", preventDeletion)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -68,10 +68,14 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, role)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Role
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Role"))
 		if err != nil {
 			return err
@@ -104,10 +108,13 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, role)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(),
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted("Role"))
 		if err != nil {
 			return err

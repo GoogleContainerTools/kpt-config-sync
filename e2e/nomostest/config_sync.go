@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
-	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -446,17 +446,23 @@ func noOOMKilledContainer(nt *NT) Predicate {
 	}
 }
 
-func setupRootSync(nt *NT, rsName string) {
+func setupRootSync(nt *NT, rsName string, reconcileTimeout *time.Duration) {
 	// create RootSync to initialize the root reconciler.
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
+	if reconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
+	}
 	if err := nt.Apply(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-func setupRepoSync(nt *NT, nn types.NamespacedName) {
+func setupRepoSync(nt *NT, nn types.NamespacedName, reconcileTimeout *time.Duration) {
 	// create RepoSync to initialize the Namespace reconciler.
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	if reconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
+	}
 	if err := nt.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -588,7 +594,7 @@ func setPollingPeriods(obj client.Object) error {
 	return nil
 }
 
-func setupDelegatedControl(nt *NT, opts *ntopts.New) {
+func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
 	nt.T.Log("[SETUP] Delegated control")
 
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
@@ -596,15 +602,15 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		nt.T.Fatal(err)
 	}
 
-	for rsName := range opts.RootRepos {
+	for rsName := range nt.RootRepos {
 		// The default RootSync is created manually, no need to set up again.
 		if rsName == configsync.RootSyncName {
 			continue
 		}
-		setupRootSync(nt, rsName)
+		setupRootSync(nt, rsName, reconcileTimeout)
 	}
 
-	for nn := range opts.NamespaceRepos {
+	for nn := range nt.NonRootRepos {
 		// Add a ClusterRoleBinding so that the pods can be created
 		// when the cluster has PodSecurityPolicy enabled.
 		// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
@@ -630,47 +636,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 			nt.T.Fatal(err)
 		}
 
-		setupRepoSync(nt, nn)
-	}
-
-	// Wait for all RootSyncs and all RepoSyncs to be reconciled
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Validate metrics from root-reconcilers.
-	for rsName := range opts.RootRepos {
-		rootReconciler := core.RootReconcilerName(rsName)
-		if err := waitForReconciler(nt, rootReconciler); err != nil {
-			nt.T.Fatal(err)
-		}
-
-		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			err := nt.ValidateMultiRepoMetrics(rootReconciler, nt.DefaultRootSyncObjectCount())
-			if err != nil {
-				return err
-			}
-			return nt.ValidateErrorMetricsNotFound()
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-
-	// Validate metrics from ns-reconcilers.
-	for nn := range opts.NamespaceRepos {
-		nsReconciler := core.NsReconcilerName(nn.Namespace, nn.Name)
-		if err := waitForReconciler(nt, nsReconciler); err != nil {
-			nt.T.Fatal(err)
-		}
-
-		// Validate multi-repo metrics in namespace reconciler.
-		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMultiRepoMetrics(nsReconciler, 0)
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		setupRepoSync(nt, nn, reconcileTimeout)
 	}
 }
 
@@ -873,47 +839,59 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 
 // setupCentralizedControl is a pure central-control mode.
 // A default root repo (root-sync) manages all other root repos and namespace repos.
-func setupCentralizedControl(nt *NT, opts *ntopts.New) {
+func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 	nt.T.Log("[SETUP] Centralized control")
 
 	rsCount := 0
 
+	rootSyncNN := RootSyncNN(configsync.RootSyncName)
+
 	// Add any RootSyncs specified by the test options
-	for rsName := range opts.RootRepos {
+	for rsName := range nt.RootRepos {
 		// The default RootSync is created manually, don't check it in the repo.
 		if rsName == configsync.RootSyncName {
 			continue
 		}
 		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-		if opts.MultiRepo.ReconcileTimeout != nil {
-			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
+		if reconcileTimeout != nil {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rs)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
 	}
 
-	if len(opts.NamespaceRepos) == 0 {
-		// Wait for the RootSyncs and exit early
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
+	if len(nt.NonRootRepos) == 0 {
 		return
 	}
 
+	// Add ClusterRole for all RepoSync reconcilers to use.
+	// TODO: Test different permissions for different RepoSyncs.
 	cr := nt.RepoSyncClusterRole()
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cr)
 
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
 
 	// Add any RepoSyncs specified by the test options
-	for nn := range opts.NamespaceRepos {
-		ns := nn.Namespace
+	for rsNN := range nt.NonRootRepos {
+		ns := rsNN.Namespace
 		rsCount++
 		rsNamespaces[ns] = struct{}{}
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), fake.NamespaceObject(ns))
-		rb := RepoSyncRoleBinding(nn)
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", nn.Name)), rb)
+
+		// Add Namespace for this RepoSync.
+		// This may replace an existing Namespace, if there are multiple
+		// RepoSyncs in the same namespace.
+		nsObj := fake.NamespaceObject(ns)
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
+		// Add RoleBinding to bind the ClusterRole to the RepoSync reconciler ServiceAccount
+		rb := RepoSyncRoleBinding(rsNN)
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
 			// when the cluster has PodSecurityPolicy enabled.
@@ -921,15 +899,18 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 			// it will only grant usage for pods being run in the same namespace as the binding.
 			// TODO: Remove the psp related change when Kubernetes 1.25 is
 			// available on GKE.
-			crb := repoSyncClusterRoleBinding(nn)
-			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, nn.Name), crb)
+			crb := repoSyncClusterRoleBinding(rsNN)
+			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, rsNN.Name), crb)
+			nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crb)
 		}
 
-		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-		if opts.MultiRepo.ReconcileTimeout != nil {
-			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*opts.MultiRepo.ReconcileTimeout)
+		// Add RepoSync pointing to the Git repo specified in nt.NonRootRepos[rsNN]
+		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, rsNN)
+		if reconcileTimeout != nil {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, nn.Name), rs)
+		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rs)
 
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
 	}
@@ -945,44 +926,27 @@ func setupCentralizedControl(nt *NT, opts *ntopts.New) {
 
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
-	for nn := range opts.NamespaceRepos {
+	for nn := range nt.NonRootRepos {
 		CreateNamespaceSecret(nt, nn.Namespace)
 	}
+}
 
-	// Wait for all RootSyncs and all RepoSyncs to be reconciled
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
+func validateRootSyncsExist(nt *NT) error {
+	var err error
+	for rsName := range nt.RootRepos {
+		err = multierr.Append(err,
+			nt.Validate(rsName, configsync.ControllerNamespace, &v1beta1.RootSync{}))
 	}
+	return err
+}
 
-	// Validate all RepoSyncs exist
-	for nn := range opts.NamespaceRepos {
-		err := nt.Validate(nn.Name, nn.Namespace, &v1beta1.RepoSync{})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+func validateRepoSyncsExist(nt *NT) error {
+	var err error
+	for nn := range nt.NonRootRepos {
+		err = multierr.Append(err,
+			nt.Validate(nn.Name, nn.Namespace, &v1beta1.RepoSync{}))
 	}
-
-	// Validate multi-repo metrics.
-	err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-		gvkMetrics := []testmetrics.GVKMetric{
-			testmetrics.ResourceCreated("Namespace"),
-			testmetrics.ResourceCreated("ClusterRole"),
-			testmetrics.ResourceCreated("RoleBinding"),
-			testmetrics.ResourceCreated(configsync.RepoSyncKind),
-		}
-		if isPSPCluster() {
-			gvkMetrics = append(gvkMetrics, testmetrics.ResourceCreated("ClusterRoleBinding"))
-		}
-		numObjects := nt.DefaultRootSyncObjectCount()
-		err := nt.ValidateMultiRepoMetrics(DefaultRootReconcilerName, numObjects, gvkMetrics...)
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	return err
 }
 
 // SetRepoSyncDependencies sets the depends-on annotation on the RepoSync for
@@ -1132,4 +1096,69 @@ func toMetav1Duration(t time.Duration) *metav1.Duration {
 	return &metav1.Duration{
 		Duration: t,
 	}
+}
+
+// isObjectDeclarable returns true if the object should be included in the
+// declared resources passed to the applier.
+func isObjectDeclarable(obj client.Object) bool {
+	// TODO: Update if any of the following are added using WithInitialCommit:
+	// - ClusterSelectors & Cluster definitions
+	// - Objects excluded by the current ClusterSelectors and Cluster
+	// - Objects of unknown scope
+	// - Objects outside of hierarchical directories when in hierarchical mode
+	// - Objects in unmanaged namespaces
+	// For now, WithInitialCommit is only used in a few places, and all of the
+	// objects specified are intended to be applied. So just return true.
+	return true
+}
+
+// isObjectApplyable returns true if the object will be applied by Config Sync
+// when included in the source.
+func isObjectApplyable(obj client.Object) bool {
+	switch {
+	case obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled:
+		// Disabled objects count towards declared objects, but are not applied
+		return false
+	case obj.GetAnnotations()[metadata.LocalConfigAnnotationKey] == "true":
+		// Local objects count towards declared objects, but are not applied
+		return false
+	default:
+		return true
+	}
+}
+
+// validateStandardMetrics loops through the RootRepos & NonRootRepos an
+// validates metrics for each reconciler.
+func validateStandardMetrics(nt *NT) error {
+	// Validate metrics from root-reconcilers.
+	for rsName := range nt.RootRepos {
+		rootReconciler := core.RootReconcilerName(rsName)
+		if err := waitForReconciler(nt, rootReconciler); err != nil {
+			return err
+		}
+		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
+			err := nt.ValidateMultiRepoMetrics(rootReconciler, nt.ExpectedRootSyncObjectCount(rsName))
+			if err != nil {
+				return err
+			}
+			return nt.ValidateErrorMetricsNotFound()
+		})
+		if err != nil {
+			return err
+		}
+	}
+	// Validate metrics from ns-reconcilers.
+	for nn := range nt.NonRootRepos {
+		nsReconciler := core.NsReconcilerName(nn.Namespace, nn.Name)
+		if err := waitForReconciler(nt, nsReconciler); err != nil {
+			return err
+		}
+		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
+			return nt.ValidateMultiRepoMetrics(nsReconciler, nt.ExpectedRepoSyncObjectCount(nn))
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -40,17 +40,17 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 
 	// Declare the Service's Namespace
 	ns := "autogen-fields"
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns),
-		fake.NamespaceObject(ns))
+	nsObj := fake.NamespaceObject(ns)
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns), nsObj)
 
 	// Declare the Service.
 	serviceName := "e2e-test-service"
-	service := fake.ServiceObject(core.Name(serviceName))
+	serviceObj := fake.ServiceObject(core.Name(serviceName))
 	// The port numbers are arbitrary - just any unused port.
 	// Don't reuse these port in other tests just in case.
 	targetPort1 := 9376
 	targetPort2 := 9377
-	service.Spec = corev1.ServiceSpec{
+	serviceObj.Spec = corev1.ServiceSpec{
 		SessionAffinity: corev1.ServiceAffinityClientIP,
 		Selector:        map[string]string{"app": serviceName},
 		Type:            corev1.ServiceTypeNodePort,
@@ -61,7 +61,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 			TargetPort: intstr.FromInt(targetPort1),
 		}},
 	}
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), service)
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), serviceObj)
 
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace and Service")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -115,10 +115,14 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		nt.T.Fatalf("not using strategic merge patch: %v", err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, serviceObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Service
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Service"))
 		if err != nil {
 			return err
@@ -129,7 +133,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	updatedService := service.DeepCopy()
+	updatedService := serviceObj.DeepCopy()
 	updatedService.Spec.Ports[0].TargetPort = intstr.FromInt(targetPort2)
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), updatedService)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update declared Service")
@@ -144,10 +148,12 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, updatedService)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Service
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 2), metrics.ResourcePatched("Service", 2))
 		if err != nil {
 			return err
@@ -365,13 +371,13 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-annotations"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml",
-		fake.NamespaceObject(ns))
+	nsObj := fake.NamespaceObject(ns)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml", nsObj)
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-annotations/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName))
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
+	cmObj := fake.ConfigMapObject(core.Name(cmName))
+	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -387,10 +393,14 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & ConfigMap
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
 		if err != nil {
 			return err
@@ -401,8 +411,8 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	cm.Annotations["baz"] = "qux"
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
+	cmObj.Annotations["baz"] = "qux"
+	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update annotation for ConfigMap in repo")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -418,10 +428,12 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & ConfigMap
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 2), metrics.ResourcePatched("ConfigMap", 2))
 		if err != nil {
 			return err
@@ -432,8 +444,8 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	delete(cm.Annotations, "baz")
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
+	delete(cmObj.Annotations, "baz")
+	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete annotation for configmap in repo")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -446,10 +458,12 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & ConfigMap
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 3), metrics.ResourcePatched("ConfigMap", 3))
 		if err != nil {
 			return err

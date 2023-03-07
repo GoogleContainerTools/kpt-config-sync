@@ -128,6 +128,9 @@ func Reset(nt *NT) error {
 	nt.NonRootRepos = make(map[types.NamespacedName]*Repository)
 	nt.RootRepos = make(map[string]*Repository)
 
+	// Reset expected objects
+	nt.expectedObjects = make(map[string]map[types.NamespacedName]map[core.ID]bool)
+
 	return nil
 }
 
@@ -460,11 +463,26 @@ func stringSliceContains(list []string, value string) bool {
 
 // resetRepository creates or re-initializes a remote repository.
 func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
-	if repo, found := nt.RemoteRepositories[nn]; found {
+	repo, found := nt.RemoteRepositories[nn]
+	if found {
 		repo.ReInit(nt, sourceFormat)
-		return repo
+	} else {
+		repo = NewRepository(nt, repoType, nn, sourceFormat)
 	}
-	return NewRepository(nt, repoType, nn, sourceFormat)
+	// Reset expected objects.
+	// These are used to offset metrics expectations.
+	if repoType == RootRepo {
+		if nt.expectedObjects != nil && nt.expectedObjects[configsync.RootSyncKind] != nil {
+			nt.expectedObjects[configsync.RootSyncKind][nn] = make(map[core.ID]bool)
+		}
+		nt.AddExpectedObject(configsync.RootSyncKind, nn, repo.Get(repo.SafetyNSPath))
+		nt.AddExpectedObject(configsync.RootSyncKind, nn, repo.Get(repo.SafetyClusterRolePath))
+	} else {
+		if nt.expectedObjects != nil && nt.expectedObjects[configsync.RepoSyncKind] != nil {
+			nt.expectedObjects[configsync.RepoSyncKind][nn] = make(map[core.ID]bool)
+		}
+	}
+	return repo
 }
 
 // TailReconcilerLogs starts tailing a reconciler's logs.

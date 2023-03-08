@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -509,13 +510,39 @@ func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error
 	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
 	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
 	if err != nil {
-		if !*e2e.Debug {
-			nt.T.Logf("kubectl %s", strings.Join(args, " "))
+		// log output, if not deliberately cancelled
+		if isSignalExitError(err, syscall.SIGKILL) && ctx.Err() == context.Canceled {
+			nt.DebugLogf("command cancelled: kubectl %s", strings.Join(args, " "))
+		} else {
+			if !*e2e.Debug {
+				nt.T.Logf("kubectl %s", strings.Join(args, " "))
+			}
+			nt.T.Log(string(out))
+			nt.T.Logf("kubectl error: %v", err)
 		}
-		nt.T.Log(string(out))
 		return out, err
 	}
 	return out, nil
+}
+
+// isSignalExitError returns true if the error is an ExitError caused by the
+// specified signal.
+func isSignalExitError(err error, sig syscall.Signal) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return false
+	}
+	if exitErr.ProcessState == nil {
+		return false
+	}
+	status, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus) // unix/posix
+	if !ok {
+		return false
+	}
+	if !status.Signaled() {
+		return false
+	}
+	return status.Signal() == sig
 }
 
 // Git is a convenience method for calling git.

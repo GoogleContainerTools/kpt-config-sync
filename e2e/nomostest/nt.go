@@ -304,7 +304,7 @@ func newSharedNT(name string) *NT {
 	fakeNTB := &testing.FakeNTB{}
 	wrapper := testing.NewShared(fakeNTB)
 	opts := newOptStruct(name, tmpDir, wrapper)
-	nt := freshTestEnv(wrapper, opts)
+	nt := FreshTestEnv(wrapper, opts)
 	mySharedNTs.newNT(nt, fakeNTB)
 	return nt
 }

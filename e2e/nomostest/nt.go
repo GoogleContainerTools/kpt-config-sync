@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 
@@ -984,9 +986,18 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 		// HEAD of default branch
 		pattern = "HEAD"
 	}
+	var args []string
+	if strings.Contains(gitSpec.Repo, "https://source.developers.google.com") {
+		cloneDir, err := cloneCloudSourceRepo(nt, gitSpec.Repo)
+		if err != nil {
+			return "", err
+		}
+		// use cloneDir as working directory so that git can authenticate
+		args = append(args, "-C", cloneDir)
+	}
 	// List remote references (branches and tags).
 	// Expected Output: GIT_COMMIT\tREF_NAME
-	args := []string{"ls-remote", gitSpec.Repo, pattern}
+	args = append(args, "ls-remote", gitSpec.Repo, pattern)
 	out, err := nt.Git(args...)
 	if err != nil {
 		return "", err
@@ -1004,6 +1015,26 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 			strings.Join(args, " "), lines[0])
 	}
 	return columns[0], nil
+}
+
+// cloneCloudSourceRepo clones the provided Cloud Source Repository to a local
+// temp directory and returns the directory path.
+// This special logic is needed to handle authentication to the repo in CI.
+func cloneCloudSourceRepo(nt *NT, repo string) (string, error) {
+	repoName := path.Base(repo)
+	cloneDir := path.Join(nt.TmpDir, "csr-repos", repoName)
+	// return if directory was already created
+	if _, err := os.Stat(cloneDir); err == nil {
+		return cloneDir, nil
+	}
+	args := []string{
+		"source", "repos", "clone", "--project", nomostesting.GCPProjectIDFromEnv, repoName, cloneDir,
+	}
+	cmd := nt.Command("gcloud", args...)
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return cloneDir, nil
 }
 
 func stringArrayContains(list []string, value string) bool {

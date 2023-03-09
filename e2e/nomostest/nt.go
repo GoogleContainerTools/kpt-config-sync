@@ -172,6 +172,11 @@ type NT struct {
 
 	// repoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	repoSyncPermissions []rbacv1.PolicyRule
+
+	// NotificationServer is the e2e test http notification server component.
+	// It is a test-only component that helps perform in-cluster testing of
+	// notifications using webhooks.
+	NotificationServer *NotificationServer
 }
 
 // Must not error.

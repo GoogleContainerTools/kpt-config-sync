@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -131,6 +132,9 @@ type NT struct {
 
 	// gitRepoPort is the local port that forwards to the git repo deployment.
 	gitRepoPort int
+
+	// gitRepoPodName is the pod name of the git repo.
+	gitRepoPodName string
 
 	// kubeconfigPath is the path to the kubeconfig file for the kind cluster
 	kubeconfigPath string
@@ -764,6 +768,26 @@ func (nt *NT) PortForwardOtelCollector() {
 	nt.T.Logf("took %v to wait for otel-collector port-forward", took)
 }
 
+// PortForwardGitServer forwards the git-server deployment to a port.
+func (nt *NT) PortForwardGitServer() {
+	nt.T.Helper()
+
+	pod, err := nt.GetDeploymentPod(testGitServer, testGitNamespace)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	podName := pod.Name
+
+	if podName != nt.gitRepoPodName {
+		port, err := nt.ForwardToFreePort(testGitNamespace, podName, ":22")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		nt.gitRepoPort = port
+		nt.gitRepoPodName = podName
+	}
+}
+
 // ForwardToFreePort forwards a local port to a port on the pod and returns the
 // local port chosen by kubectl.
 func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
@@ -843,6 +867,19 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 	nt.T.Logf("took %v to wait for port-forward to pod %s/%s (localhost:%d)", took, ns, pod, localPort)
 
 	return localPort, nil
+}
+
+func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
+	if !nt.IsGKEAutopilot {
+		isGKEAutopilot, err := util.IsGKEAutopilotCluster(nt.Client)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		nt.IsGKEAutopilot = isGKEAutopilot
+	}
+	if nt.IsGKEAutopilot && skipAutopilot {
+		nt.T.Skip("Test skipped when running on Autopilot clusters")
+	}
 }
 
 // SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are supported

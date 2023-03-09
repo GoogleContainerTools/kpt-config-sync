@@ -356,6 +356,21 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.T.Log("[SETUP] New test case")
+	// install notification server per-testcase only if the flag is provided
+	if opts.InstallNotificationServer {
+		nt.NotificationServer = &NotificationServer{}
+		nt.T.Cleanup(func() {
+			if err := nt.NotificationServer.uninstall(nt); err != nil {
+				nt.T.Errorf("failed to uninstall notification server: %v", err)
+			}
+		})
+		if err := nt.NotificationServer.install(nt); err != nil {
+			nt.T.Fatalf("failed to install notification server: %v", err)
+		}
+		if err := nt.NotificationServer.portForward(nt); err != nil {
+			nt.T.Fatalf("failed to port-forward notification server: %v", err)
+		}
+	}
 	// init all repositories. This ensures that:
 	// - local repo is initialized and empty
 	// - remote repo exists (except for LocalProvider, which is done in portForwardGitServer)

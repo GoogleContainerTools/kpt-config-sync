@@ -60,6 +60,9 @@ type New struct {
 	// TestFeature is the feature that the test verifies
 	TestFeature testing.Feature
 
+	// InstallNotificationServer will install the test-notification-webhook server in cluster.
+	InstallNotificationServer bool
+
 	Nomos
 	MultiRepo
 	TestType
@@ -112,4 +115,9 @@ func WithRestConfig(restConfig *rest.Config) Opt {
 // SkipConfigSyncInstall skip installation of Config Sync components in cluster
 func SkipConfigSyncInstall(opt *New) {
 	opt.SkipConfigSyncInstall = true
+}
+
+// InstallNotificationServer install the test-notification-webhook component in cluster
+func InstallNotificationServer(opt *New) {
+	opt.InstallNotificationServer = true
 }

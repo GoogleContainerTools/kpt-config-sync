@@ -219,6 +219,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installWebhook(nt); err != nil {
 		nt.T.Fatal(err)
 	}
+
 	setupTestCase(nt, opts)
 	return nt
 }
@@ -365,6 +366,22 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 
 	if nt.GitProvider.Type() == e2e.Local {
 		nt.gitRepoPort = portForwardGitServer(nt, allRepos...)
+	}
+
+	// install notification server per-testcase only if the flag is provided
+	if opts.InstallNotificationServer {
+		nt.NotificationServer = &NotificationServer{}
+		nt.T.Cleanup(func() {
+			if err := nt.NotificationServer.uninstall(nt); err != nil {
+				nt.T.Errorf("failed to uninstall notification server: %v", err)
+			}
+		})
+		if err := nt.NotificationServer.install(nt); err != nil {
+			nt.T.Fatalf("failed to install notification server: %v", err)
+		}
+		if err := nt.NotificationServer.portForward(nt); err != nil {
+			nt.T.Fatalf("failed to port-forward notification server: %v", err)
+		}
 	}
 
 	for name := range opts.RootRepos {

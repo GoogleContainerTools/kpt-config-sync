@@ -46,8 +46,8 @@ const (
 	// otel-collector ConfigMap.
 	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
 	// Used by TestOtelReconcilerGooglecloud.
-	depAnnotationGooglecloud = "1e0717923a4b449bfebd2e4c67f63206"
-	// depAnnotationCustom is the expected hash of the custom
+	depAnnotationGooglecloud = "00a85865e19d827bad96615656b05cef"
+	// depAnnotationGooglecloud is the expected hash of the custom
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerCustom.
 	depAnnotationCustom = "d166bfb4bea41bdc98b5b718e6c34b44"

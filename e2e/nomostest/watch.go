@@ -320,6 +320,6 @@ func WatchForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace 
 // Returns an error if the object is not deleted before the timeout.
 func WatchForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
 	return WatchObject(nt, gvk, name, namespace,
-		[]Predicate{ObjectNotFoundPredicate},
+		[]Predicate{ObjectNotFoundPredicate(nt)},
 		opts...)
 }

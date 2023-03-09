@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -813,14 +814,17 @@ func MissingDeletionTimestamp(o client.Object) error {
 }
 
 // ObjectNotFoundPredicate returns an error unless the object is nil (not found).
-func ObjectNotFoundPredicate(o client.Object) error {
-	if o == nil {
-		// Success! Object Deleted.
-		return nil
+func ObjectNotFoundPredicate(nt *NT) Predicate {
+	ntPtr := nt
+	return func(o client.Object) error {
+		if o == nil {
+			// Success! Object Deleted.
+			return nil
+		}
+		// If you see this error, the WatchObject timeout was probably reached.
+		return errors.Errorf("expected %T object %s to be not found:\n%s",
+			o, core.ObjectNamespacedName(o), log.AsYAMLWithScheme(o, ntPtr.scheme))
 	}
-	// If you see this error, the WatchObject timeout was probably reached.
-	return errors.Errorf("expected %T object %s to be not found",
-		o, core.ObjectNamespacedName(o))
 }
 
 // ObjectFoundPredicate returns ErrObjectNotFound if the object is nil (not found).

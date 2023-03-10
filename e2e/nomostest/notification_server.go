@@ -19,15 +19,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"go.uber.org/multierr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -234,4 +237,92 @@ func notificationWebhookService() *corev1.Service {
 		{Name: "http", Port: TestNotificationWebhookPort},
 	}
 	return service
+}
+
+const NotificationConfigMapRef = "test-notification-cm"
+const NotificationSecretRef = "test-notification-secret"
+
+// SubscribeAnnotationKey forms the subscription annotation key
+func SubscribeAnnotationKey(trigger, service string) string {
+	return fmt.Sprintf("%s/subscribe.%s.%s", util.AnnotationsPrefix, trigger, service)
+}
+
+// SubscribeRepoSyncNotification modifies the RepoSync in-place to enable notifications
+func SubscribeRepoSyncNotification(repoSync *v1beta1.RepoSync, trigger, service string) {
+	annotations := repoSync.GetAnnotations()
+	annotations[SubscribeAnnotationKey(trigger, service)] = ""
+	repoSync.Spec.NotificationConfig = &v1beta1.NotificationConfig{
+		ConfigMapRef: &v1beta1.ConfigMapReference{Name: NotificationConfigMapRef},
+		SecretRef:    &v1beta1.SecretReference{Name: NotificationSecretRef},
+	}
+}
+
+// UnsubscribeRepoSyncNotification modifies the RepoSync in-place to disable notifications
+func UnsubscribeRepoSyncNotification(repoSync *v1beta1.RepoSync) {
+	annotations := repoSync.GetAnnotations()
+	for a := range annotations {
+		if strings.HasPrefix(a, util.AnnotationsPrefix) {
+			delete(annotations, a)
+		}
+	}
+	repoSync.Spec.NotificationConfig = nil
+}
+
+// SubscribeRootSyncNotification modifies the RootSync in-place to enable notifications
+func SubscribeRootSyncNotification(rootSync *v1beta1.RootSync, trigger, service string) {
+	annotations := rootSync.GetAnnotations()
+	subscribeAnnotation := SubscribeAnnotationKey("on-sync-synced", "local")
+	annotations[subscribeAnnotation] = ""
+	rootSync.Spec.NotificationConfig = &v1beta1.NotificationConfig{
+		ConfigMapRef: &v1beta1.ConfigMapReference{Name: NotificationConfigMapRef},
+		SecretRef:    &v1beta1.SecretReference{Name: NotificationSecretRef},
+	}
+}
+
+// UnsubscribeRootSyncNotification modifies the RootSync in-place to disable notifications
+func UnsubscribeRootSyncNotification(rootSync *v1beta1.RootSync) {
+	annotations := rootSync.GetAnnotations()
+	for a := range annotations {
+		if strings.HasPrefix(a, util.AnnotationsPrefix) {
+			delete(annotations, a)
+		}
+	}
+
+	rootSync.Spec.NotificationConfig = nil
+}
+
+// NotificationConfigMap creates a notification ConfigMap with the provided data
+func NotificationConfigMap(nt *NT, ns string, mutators ...ConfigMapMutator) (*corev1.ConfigMap, error) {
+	cm := &corev1.ConfigMap{}
+	cm.Name = NotificationConfigMapRef
+	cm.Namespace = ns
+	cm.Data = map[string]string{}
+	for _, mut := range mutators {
+		mut(cm.Data)
+	}
+	err := nt.Create(cm)
+	nt.T.Cleanup(func() {
+		if err := nt.Delete(cm); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+	})
+	return cm, err
+}
+
+// NotificationSecret creates a notification Secret with the provided data
+func NotificationSecret(nt *NT, ns string, mutators ...SecretMutator) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	secret.Name = NotificationSecretRef
+	secret.Namespace = ns
+	secret.Data = map[string][]byte{}
+	for _, mut := range mutators {
+		mut(secret.Data)
+	}
+	err := nt.Create(secret)
+	nt.T.Cleanup(func() {
+		if err := nt.Delete(secret); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+	})
+	return secret, err
 }

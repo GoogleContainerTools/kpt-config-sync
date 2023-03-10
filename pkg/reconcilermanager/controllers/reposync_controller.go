@@ -46,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -292,8 +293,25 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, errors.Wrap(err, "RoleBinding reconcile failed")
 	}
 
-	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
-	mut := r.mutationsFor(ctx, rs, containerEnvs)
+	notificationEnabled, err := util.NotificationEnabled(ctx, r.client, rs.Namespace, rs.Annotations, rs.Spec.NotificationConfig)
+	if err != nil {
+		log.Error(err, "Check notification configuration failed")
+		reposync.SetStalled(rs, "Notification", err)
+		// check notification subscription errors should always trigger retry (return error),
+		// even if status update is successful.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			log.Error(updateErr, "Object status update failed",
+				logFieldObject, rsRef.String(),
+				logFieldKind, r.syncKind)
+		}
+		// Use the upsert error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, errors.Wrap(err, "Check notification configuration failed")
+	}
+
+	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name, notificationEnabled)
+	mut := r.mutationsFor(ctx, rs, notificationEnabled, containerEnvs)
 
 	// Upsert Namespace reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
@@ -664,10 +682,13 @@ func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile
 	}
 }
 
-func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
+func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string, notificationEnabled bool) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
 		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout)),
+	}
+	if notificationEnabled {
+		result[reconcilermanager.Notification] = notificationEnvs(r.syncKind, rs.Namespace, rs.Name, rs.Spec.NotificationConfig)
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -802,7 +823,7 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	return true, nil
 }
 
-func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
+func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, notificationEnabled bool, containerEnvs map[string][]corev1.EnvVar) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -909,6 +930,12 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(&container, rs.Spec.Override)
+				}
+			case reconcilermanager.Notification:
+				if !notificationEnabled {
+					addContainer = false
+				} else {
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
 				}
 			case metrics.OtelAgentName:
 				// The no-op case to avoid unknown container error after

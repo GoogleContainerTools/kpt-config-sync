@@ -203,50 +203,63 @@ include Makefile.oss.prow
 include Makefile.reconcilermanager
 -include Makefile.release
 
+.PHONY: all
 all: test deps configsync-crds
 
 # Cleans all artifacts.
+.PHONY: clean
 clean:
 	@echo "+++ Cleaning $(OUTPUT_DIR)"
 	@rm -rf $(OUTPUT_DIR)
 
+.PHONY: test-unit
 test-unit: pull-buildenv buildenv-dirs "$(BIN_DIR)/kustomize"
 	@echo "+++ Running unit tests in a docker container"
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
 # Runs unit tests and linter.
+.PHONY: test
 test: test-unit lint
 
 # The presubmits have made side-effects in the past, which makes their
 # validation suspect (as the repository they are validating is different
 # than what is checked in).  Run `test` but verify that repository is clean.
+.PHONY: test-presubmit
 test-presubmit: all
 	@./scripts/fail-if-dirty-repo.sh
 
 # Runs all tests.
 # This only runs on local dev environment not CI environment.
+.PHONY: test-all-local
 test-all-local: test test-e2e
 
 # Runs gofmt and goimports.
 # Even though goimports runs gofmt, it runs it without the -s (simplify) flag
 # and offers no option to turn it on. So we run them in sequence.
+.PHONY: fmt-go
 fmt-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) gofmt -s -w $(NOMOS_CODE_DIRS)
 	@docker run $(DOCKER_RUN_ARGS) goimports -w $(NOMOS_CODE_DIRS)
 
+.PHONY: tidy
 tidy:
 	go mod tidy -compat=1.17
 
+.PHONY: vendor
 vendor:
 	go mod vendor
 
+.PHONY: deps
 deps: tidy vendor
 
+.PHONY: lint
 lint: lint-go lint-bash lint-yaml lint-license lint-license-headers
 
+.PHONY: lint-go
 lint-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/lint-go.sh $(NOMOS_GO_PKG)
 
+.PHONY: lint-bash
 lint-bash:
 	@./scripts/lint-bash.sh
 
@@ -276,6 +289,7 @@ license-headers: "$(GOBIN)/addlicense"
 lint-license-headers: "$(GOBIN)/addlicense"
 	GOBIN=$(GOBIN) ./scripts/lint-license-headers.sh
 
+.PHONY: lint-yaml
 lint-yaml:
 	@./scripts/lint-yaml.sh
 
@@ -287,6 +301,7 @@ print-%:
 # MANUAL TESTING COMMANDS
 
 # Reapply the resources, including a new image.  Use this to update with your code changes.
+.PHONY: manual-test-refresh
 manual-test-refresh: config-sync-manifest
 	kubectl apply -f ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml
 

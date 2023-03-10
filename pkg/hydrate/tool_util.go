@@ -172,7 +172,7 @@ func validateTool(tool, version, requiredVersion string) error {
 		return err
 	}
 	if detectedVersion.LessThan(requiredSemVersion) {
-		return errors.Errorf("The current %s version is %q. The recommended version is %s. Please upgrade to the %s+ for compatibility.",
+		return errors.Errorf("the current %s version is %q. The recommended version is %s. Please upgrade to the %s+ for compatibility",
 			tool, detectedVersion, requiredVersion, requiredVersion)
 	}
 	return nil
@@ -197,7 +197,7 @@ func getVersion(tool string) (string, error) {
 func validateKustomize() error {
 	version, err := getVersion(Kustomize)
 	if err != nil {
-		return errors.Errorf("Kustomization file is detected, but Kustomize is not installed: %v. Please install Kustomize and re-run the command.", err)
+		return errors.Errorf("kustomization file is detected, but Kustomize is not installed: %v. Please install Kustomize and re-run the command", err)
 	}
 	if err := validateTool(Kustomize, version, KustomizeVersion); err != nil {
 		fmt.Printf("WARNING: %v\n", err)

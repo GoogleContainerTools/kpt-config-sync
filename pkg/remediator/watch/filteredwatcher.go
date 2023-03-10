@@ -134,10 +134,10 @@ func (w *filteredWatcher) pruneErrors() {
 
 // addError checks whether an error identified by the errorID has been tracked,
 // and handles it in one of the following ways:
-//   * tracks it if it has not yet been tracked;
-//   * updates the time for this error to time.Now() if `errorLoggingInterval` has passed
+//   - tracks it if it has not yet been tracked;
+//   - updates the time for this error to time.Now() if `errorLoggingInterval` has passed
 //     since the same error happened last time;
-//   * ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
+//   - ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
 //
 // addError returns false if the error is ignored, and true if it is not ignored.
 func (w *filteredWatcher) addError(errorID string) bool {

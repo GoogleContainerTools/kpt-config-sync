@@ -57,11 +57,11 @@ func FightWarning(frequency float64, resource client.Object) status.ResourceErro
 // Instantiate with newFightDetector().
 //
 // Performance characteristics:
-// 1. Current implementation is NOT threadsafe.
-// 2. Current implementation has unbounded memory usage on the order of the
-//   number of objects the Syncer updates through its lifetime.
-// 3. Updating an already-tracked resource requires no memory allocations and
-//   take approximately 30ns, ignoring logging time.
+//  1. Current implementation is NOT threadsafe.
+//  2. Current implementation has unbounded memory usage on the order of the
+//     number of objects the Syncer updates through its lifetime.
+//  3. Updating an already-tracked resource requires no memory allocations and
+//     take approximately 30ns, ignoring logging time.
 type fightDetector struct {
 	// fights is a record of how much the Syncer is fighting over any given
 	// API resource.

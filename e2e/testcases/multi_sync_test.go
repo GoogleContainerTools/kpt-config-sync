@@ -704,7 +704,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
-		fmt.Sprintf(`Invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters.`,
+		fmt.Sprintf(`invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters`,
 			testNs, veryLongName, len(veryLongName), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
 		if err := nt.Delete(rs); err != nil {

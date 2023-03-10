@@ -458,7 +458,7 @@ func getUpdatedRootSync(nt *nomostest.NT, name string, namespace string) *v1beta
 // validateRootSyncRepoState verifies the output from getRootSyncCommitStatusErrorSummary is as expected.
 func validateRootSyncRepoState(expectedCommit string, commit string, expectedStatus string, status string, errorSummary string) error {
 	if expectedCommit != commit || expectedStatus != status {
-		return errors.Errorf("Error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v\n",
+		return errors.Errorf("error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v",
 			commit, status, errorSummary, expectedCommit, expectedStatus)
 	}
 	return nil

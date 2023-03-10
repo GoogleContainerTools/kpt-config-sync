@@ -160,7 +160,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	)
 
 	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
-		err = errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
+		err = errors.Errorf("invalid reconciler name %q: %s", reconcilerRef.Name, strings.Join(errs, ", "))
 		log.Error(err, "Name or namespace invalid",
 			logFieldObject, rsRef.String(),
 			logFieldKind, r.syncKind)

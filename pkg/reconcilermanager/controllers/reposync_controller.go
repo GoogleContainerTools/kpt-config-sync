@@ -158,7 +158,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	r.repoSyncs[rsRef] = struct{}{}
 	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
-		err = errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
+		err = errors.Errorf("invalid reconciler name %q: %s", reconcilerRef.Name, strings.Join(errs, ", "))
 		log.Error(err, "Name or namespace invalid",
 			logFieldObject, rsRef.String(),
 			logFieldKind, r.syncKind)

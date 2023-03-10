@@ -81,7 +81,7 @@ REGISTRY ?= gcr.io/$(GCR_PREFIX)
 OLD_REGISTRY ?= $(REGISTRY)
 
 # Docker image used for build and test. This image does not support CGO.
-BUILDENV_IMAGE ?= gcr.io/stolos-dev/buildenv:v0.2.11
+BUILDENV_IMAGE ?= gcr.io/stolos-dev/buildenv:v0.2.12
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler
@@ -235,7 +235,7 @@ fmt-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) goimports -w $(NOMOS_CODE_DIRS)
 
 tidy:
-	go mod tidy -compat=1.17
+	go mod tidy
 
 vendor:
 	go mod vendor

@@ -106,6 +106,13 @@ build-images: license
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
+	@echo "+++ Building the Notification image: $(NOTIFICATION_TAG)"
+	@docker build $(DOCKER_BUILD_QUIET) \
+		--target $(NOTIFICATION_IMAGE) \
+		-t $(NOTIFICATION_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
 
 # Deprecated alias of build-images. Remove this once unused.
 .PHONY: build-images-multirepo
@@ -126,6 +133,7 @@ push-images:
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
 	docker push $(NOMOS_TAG)
+	docker push $(NOTIFICATION_TAG)
 
 # Deprecated alias of push-images. Remove this once unused.
 .PHONY: push-images-multirepo
@@ -143,6 +151,7 @@ pull-images:
 	docker pull $(OCI_SYNC_TAG)
 	docker pull $(HELM_SYNC_TAG)
 	docker pull $(NOMOS_TAG)
+	docker pull $(NOTIFICATION_TAG)
 
 # Deprecated alias of pull-images. Remove this once unused.
 .PHONY: pull-images-multirepo
@@ -160,6 +169,7 @@ retag-images:
 	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
+	docker tag $(OLD_REGISTRY)/$(NOTIFICATION_IMAGE):$(OLD_IMAGE_TAG) $(NOTIFICATION_TAG)
 
 # Deprecated alias of retag-images. Remove this once unused.
 .PHONY: retag-images-multirepo

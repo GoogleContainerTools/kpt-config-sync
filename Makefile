@@ -283,11 +283,11 @@ lint-license: pull-buildenv buildenv-dirs
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"
-	"$(GOBIN)/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE -ignore=vendor/** . 2>&1 | sed '/ skipping: / d'
+	GOBIN=$(GOBIN) ./scripts/license-headers.sh add
 
 .PHONY: lint-license-headers
 lint-license-headers: "$(GOBIN)/addlicense"
-	GOBIN=$(GOBIN) ./scripts/lint-license-headers.sh
+	GOBIN=$(GOBIN) ./scripts/license-headers.sh lint
 
 .PHONY: lint-yaml
 lint-yaml:

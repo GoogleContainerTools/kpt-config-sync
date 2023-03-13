@@ -20,7 +20,24 @@ if [ "${GOBIN:-"unset"}" == "unset" ]; then
   exit 1
 fi
 
-"${GOBIN}/addlicense" -check -ignore=vendor/** \
-  -ignore=e2e/testdata/helm-charts/** \
-  -ignore=.output/** \
-  -ignore=e2e/testdata/*.xml . 2>&1 | sed '/ skipping: / d'
+ignores=(
+  "-ignore=vendor/**"
+  "-ignore=e2e/testdata/helm-charts/**"
+  "-ignore=.output/**"
+  "-ignore=e2e/testdata/*.xml"
+)
+
+case "$1" in
+  lint)
+    "${GOBIN}/addlicense" -check "${ignores[@]}" . 2>&1 | sed '/ skipping: / d'
+    ;;
+  add)
+    "${GOBIN}/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE \
+     		"${ignores[@]}" \
+     		. 2>&1 | sed '/ skipping: / d'
+    ;;
+  *)
+    echo "Usage: $0 (lint|add)"
+    exit 1
+    ;;
+esac

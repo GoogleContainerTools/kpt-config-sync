@@ -27,7 +27,7 @@
 # when the go1.17 image is released in it.
 # Note that we shouldn't use the -alpine image here
 # since it is not allowed due to busybox for licensing.
-ARG GOLANG_CONTAINER=golang:1.17.7-buster
+ARG GOLANG_CONTAINER=golang:1.19.7-buster
 
 # Environment to build the helper binaries from.
 FROM ${GOLANG_CONTAINER} AS tools-base
@@ -51,7 +51,7 @@ ENV CGO_ENABLED=0
 # This is required by the `make fmt-go` target, even though it isn't used
 # in building the Nomos image. This was previously included in golang:alpine,
 # but not any more so we have to install it ourselves.
-RUN go install golang.org/x/tools/cmd/goimports
+RUN go install golang.org/x/tools/cmd/goimports@v0.7.0
 
 # gotopt2 parses command line options
 # v0.1.2

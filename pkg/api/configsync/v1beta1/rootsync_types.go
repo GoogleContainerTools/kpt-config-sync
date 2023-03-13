@@ -77,6 +77,11 @@ type RootSyncSpec struct {
 	// +nullable
 	// +optional
 	Override *OverrideSpec `json:"override,omitempty"`
+
+	// notification specifies references to the notification configs.
+	// +nullable
+	// +optional
+	NotificationConfig *NotificationConfig `json:"notificationConfig,omitempty"`
 }
 
 // RootSyncStatus defines the observed state of RootSync

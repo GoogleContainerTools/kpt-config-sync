@@ -224,6 +224,28 @@ spec:
                 - chart
                 - repo
                 type: object
+              notificationConfig:
+                description: notification specifies references to the notification
+                  configs.
+                nullable: true
+                properties:
+                  configmapRef:
+                    description: ConfigMapReference contains the reference to the
+                      ConfigMap.
+                    properties:
+                      name:
+                        description: name represents the ConfigMap name.
+                        type: string
+                    type: object
+                  secretRef:
+                    description: SecretReference contains the reference to the secret
+                      used to connect to Git source of truth.
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
+                type: object
               oci:
                 description: oci contains configuration specific to importing resources
                   from an OCI package.
@@ -1196,6 +1218,28 @@ spec:
                 - auth
                 - chart
                 - repo
+                type: object
+              notificationConfig:
+                description: notification specifies references to the notification
+                  configs.
+                nullable: true
+                properties:
+                  configmapRef:
+                    description: ConfigMapReference contains the reference to the
+                      ConfigMap.
+                    properties:
+                      name:
+                        description: name represents the ConfigMap name.
+                        type: string
+                    type: object
+                  secretRef:
+                    description: SecretReference contains the reference to the secret
+                      used to connect to Git source of truth.
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                 type: object
               oci:
                 description: oci contains configuration specific to importing resources

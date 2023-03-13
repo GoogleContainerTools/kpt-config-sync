@@ -57,7 +57,8 @@ func AddCachedAPIResources(file cmpath.Absolute) discovery.AddResourcesFunc {
 // the provided GKs their assigned scopes in the passed Scoper.
 //
 // data must begin with the header line, looking similar to:
-//   NAME   SHORTNAMES   APIGROUP   NAMESPACED   KIND
+//
+//	NAME   SHORTNAMES   APIGROUP   NAMESPACED   KIND
 func addLines(scoper *discovery.Scoper, path cmpath.Absolute, data string) status.MultiError {
 	lines := strings.Split(data, "\n")
 

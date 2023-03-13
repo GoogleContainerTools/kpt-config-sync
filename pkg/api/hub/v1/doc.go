@@ -17,7 +17,7 @@
 //
 // To regenerate clientset and deepcopy run:
 //
-//     make clientgen
+//	make clientgen
 //
 // DO NOT MOVE THESE OUT OF THE PACKAGE DOCSTRING, GENERATING CODE PROPERLY DEPENDS ON THEM BEING HERE.
 // +kubebuilder:object:generate=true

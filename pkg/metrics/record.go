@@ -155,7 +155,7 @@ func RecordResourceFight(ctx context.Context, operation string, gvk schema.Group
 func RecordRemediateDuration(ctx context.Context, status string, gvk schema.GroupVersionKind, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
-	//tag.Upsert(KeyType, gvk.Kind),
+		//tag.Upsert(KeyType, gvk.Kind),
 	)
 	measurement := RemediateDuration.M(time.Since(startTime).Seconds())
 	record(tagCtx, measurement)

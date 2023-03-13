@@ -419,7 +419,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, errors.Errorf(
-				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
+				"deployment %s not found in namespace: %s", dRef.Name, dRef.Namespace)
 		}
 		return nil, errors.Wrapf(err, "error while retrieving deployment")
 	}

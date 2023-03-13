@@ -23,8 +23,8 @@ import (
 // IsRequestTooLargeError determines whether `err` was caused by a large request.
 //
 // References:
-//  1) https://github.com/kubernetes/kubernetes/issues/74600
-//  2) https://github.com/kubernetes/kubernetes/blob/b0bc8adbc2178e15872f9ef040355c51c45d04bb/test/integration/controlplane/synthetic_controlplane_test.go#L310
+//  1. https://github.com/kubernetes/kubernetes/issues/74600
+//  2. https://github.com/kubernetes/kubernetes/blob/b0bc8adbc2178e15872f9ef040355c51c45d04bb/test/integration/controlplane/synthetic_controlplane_test.go#L310
 func IsRequestTooLargeError(err error) bool {
 	if err == nil {
 		return false

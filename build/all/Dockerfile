@@ -53,7 +53,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/hydration-controller \
     ./cmd/admission-webhook \
     ./cmd/oci-sync \
-    ./cmd/helm-sync
+    ./cmd/helm-sync \
+    ./cmd/notification
 
 # Hydration controller image
 FROM gcr.io/distroless/static:nonroot as hydration-controller
@@ -190,3 +191,15 @@ ENV HOME="/nomos"
 USER 1000
 
 ENTRYPOINT ["/opt/nomos/bin/nomos"]
+
+# Notification image
+FROM gcr.io/distroless/static:nonroot as notification
+WORKDIR /
+COPY --from=bins /go/bin/notification notification
+USER nonroot:nonroot
+
+# License file required for on-prem release.
+COPY LICENSE LICENSE
+COPY LICENSES.txt LICENSES.txt
+
+ENTRYPOINT ["/notification"]

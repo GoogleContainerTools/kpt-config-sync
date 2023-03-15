@@ -146,29 +146,28 @@ func (c *ClusterClient) clusterStatus(ctx context.Context, cluster, namespace st
 		return cs
 	}
 
-	if isOss {
-		c.multiRepoClusterStatus(ctx, cs)
-		return cs
+	if !isOss {
+		cs.isMulti, err = c.ConfigManagement.IsMultiRepo(ctx)
+
+		if !c.IsInstalled(ctx, cs) {
+			return cs
+		}
+		if !c.IsConfigured(ctx, cs) {
+			return cs
+		}
+
+		if err != nil {
+			cs.status = util.ErrorMsg
+			cs.Error = err.Error()
+			return cs
+		}
 	}
 
-	cs.isMulti, err = c.ConfigManagement.IsMultiRepo(ctx)
-
-	if !c.IsInstalled(ctx, cs) {
-		return cs
-	}
-	if !c.IsConfigured(ctx, cs) {
-		return cs
-	}
-
-	if err != nil {
-		cs.status = util.ErrorMsg
-		cs.Error = err.Error()
-		return cs
-	}
-
-	if namespace != "" {
+	if namespace == configsync.ControllerNamespace {
+		c.rootRepoClusterStatus(ctx, cs)
+	} else if namespace != "" {
 		c.namespaceRepoClusterStatus(ctx, cs, namespace)
-	} else if cs.isMulti != nil && *cs.isMulti {
+	} else if isOss || (cs.isMulti != nil && *cs.isMulti) {
 		c.multiRepoClusterStatus(ctx, cs)
 	} else {
 		c.monoRepoClusterStatus(ctx, cs)
@@ -249,6 +248,16 @@ func (c *ClusterClient) syncingConditionSupported(ctx context.Context) bool {
 // multiRepoClusterStatus populates the given ClusterState with the sync status of
 // the multi repos on the ClusterClient's cluster.
 func (c *ClusterClient) multiRepoClusterStatus(ctx context.Context, cs *ClusterState) {
+	// Get the status of all RootSyncs
+	c.rootRepoClusterStatus(ctx, cs)
+
+	// Get the status of all RepoSyncs
+	c.namespaceRepoClusterStatus(ctx, cs, "")
+}
+
+// rootRepoClusterStatus populates the given ClusterState with the sync status of
+// config-management-system namespace
+func (c *ClusterClient) rootRepoClusterStatus(ctx context.Context, cs *ClusterState) {
 	var errs []string
 	syncingConditionSupported := c.syncingConditionSupported(ctx)
 
@@ -275,36 +284,6 @@ func (c *ClusterClient) multiRepoClusterStatus(ctx context.Context, cs *ClusterS
 				errs = append(errs, rgNotFoundErrMsg(rootSyncNsAndNames[i].Name, rootSyncNsAndNames[i].Namespace))
 			}
 			repos = append(repos, RootRepoStatus(rs, rg, syncingConditionSupported))
-		}
-		sort.Slice(repos, func(i, j int) bool {
-			return repos[i].scope < repos[j].scope || (repos[i].scope == repos[j].scope && repos[i].syncName < repos[j].syncName)
-		})
-		cs.repos = append(cs.repos, repos...)
-	}
-
-	// Get the status of all RepoSyncs
-	var namespaceRGs []*unstructured.Unstructured
-	repoSyncs, repoSyncNsAndNames, err := c.repoSyncs(ctx, "")
-	if err != nil {
-		errs = append(errs, err.Error())
-	} else {
-		namespaceRGs, err = c.resourceGroups(ctx, "", repoSyncNsAndNames)
-		if err != nil {
-			errs = append(errs, err.Error())
-		}
-	}
-
-	if len(repoSyncs) != len(namespaceRGs) {
-		errs = append(errs, fmt.Sprintf("expected the number of RepoSyncs and ResourceGroups to be equal, but found %d RepoSyncs and %d ResourceGroups", len(repoSyncs), len(namespaceRGs)))
-	} else if len(repoSyncs) != 0 {
-		var repos []*RepoState
-		for i, rs := range repoSyncs {
-			rg := namespaceRGs[i]
-			if rg == nil {
-				// We always expect a ResourceGroup, even if we have no managed resources.
-				errs = append(errs, rgNotFoundErrMsg(repoSyncNsAndNames[i].Name, repoSyncNsAndNames[i].Namespace))
-			}
-			repos = append(repos, namespaceRepoStatus(rs, rg, syncingConditionSupported))
 		}
 		sort.Slice(repos, func(i, j int) bool {
 			return repos[i].scope < repos[j].scope || (repos[i].scope == repos[j].scope && repos[i].syncName < repos[j].syncName)

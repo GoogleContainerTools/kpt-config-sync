@@ -55,7 +55,9 @@ func (c *ClusterState) printRows(writer io.Writer) {
 	}
 	for _, repo := range c.repos {
 		fmt.Fprintf(writer, "%s%s\n", util.Indent, util.Separator)
-		repo.printRows(writer)
+		if name == "" || name == repo.syncName {
+			repo.printRows(writer)
+		}
 	}
 }
 

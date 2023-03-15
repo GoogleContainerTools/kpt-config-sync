@@ -33,7 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/util"
 )
 
 // fileMode is the file mode to use for all operations.
@@ -122,17 +121,6 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 	return optsStruct
 }
 
-func skipTestOnAutopilotCluster(nt *NT, skipAutopilot bool) bool {
-	isGKEAutopilot, err := util.IsGKEAutopilotCluster(nt.Client)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if isGKEAutopilot && skipAutopilot {
-		nt.T.Skip("Test skipped when running on Autopilot clusters")
-	}
-	return isGKEAutopilot
-}
-
 // New establishes a connection to a test cluster and prepares it for testing.
 func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) *NT {
 	t.Helper()
@@ -147,10 +135,16 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 
 	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
 
+	var nt *NT
 	if *e2e.ShareTestEnv {
-		return SharedTestEnv(tw, optsStruct)
+		nt = SharedTestEnv(tw, optsStruct)
+	} else {
+		nt = FreshTestEnv(tw, optsStruct)
 	}
-	return FreshTestEnv(tw, optsStruct)
+	if !optsStruct.SkipConfigSyncInstall {
+		setupTestCase(nt, optsStruct)
+	}
+	return nt
 }
 
 // SharedTestEnv connects to a shared test cluster.
@@ -175,22 +169,28 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
 		RootRepos:               sharedNt.RootRepos,
-		NonRootRepos:            make(map[types.NamespacedName]*Repository),
+		NonRootRepos:            sharedNt.NonRootRepos,
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		caCertPath:              sharedNt.caCertPath,
-		gitRepoPort:             sharedNt.gitRepoPort,
 		scheme:                  sharedNt.scheme,
-		otelCollectorPort:       sharedNt.otelCollectorPort,
-		otelCollectorPodName:    sharedNt.otelCollectorPodName,
-		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             sharedNt.GitProvider,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
+		// Reset cached metrics for each test
+		ReconcilerMetrics: make(testmetrics.ConfigSyncMetrics),
+		// Reset git-repo port-forward for each test
+		gitRepoPort:    0,
+		gitRepoPodName: "",
+		// Reset otel-collector port-forward for each test
+		otelCollectorPort:    0,
+		otelCollectorPodName: "",
 	}
 
 	if opts.SkipConfigSyncInstall {
 		return nt
 	}
+
+	nt.detectGKEAutopilot(opts.SkipAutopilot)
 
 	// Print container logs in its own cleanup block to catch fatal errors from
 	// tests and test setup (including resetSyncedRepos).
@@ -200,15 +200,11 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		}
 	})
 	t.Cleanup(func() {
-		// Reset the otel-collector pod name to get a new forwarding port because the current process is killed.
-		nt.otelCollectorPodName = ""
 		nt.T.Log("[RESET] SharedTestEnv after test")
 		if err := Reset(nt); err != nil {
 			nt.T.Errorf("[RESET] Failed to reset test environment: %v", err)
 		}
 	})
-
-	skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
 
 	nt.T.Log("[RESET] SharedTestEnv before test")
 	if err := Reset(nt); err != nil {
@@ -219,12 +215,10 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installWebhook(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	setupTestCase(nt, opts)
 	return nt
 }
 
 // FreshTestEnv establishes a connection to a test cluster based on the passed
-//
 // options.
 //
 // Marks the test as parallel. For now we have no tests which *can't* be made
@@ -275,7 +269,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		return nt
 	}
 
-	nt.IsGKEAutopilot = skipTestOnAutopilotCluster(nt, opts.SkipAutopilot)
+	nt.detectGKEAutopilot(opts.SkipAutopilot)
+
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 10 * time.Minute
 		nt.DefaultMetricsTimeout = 3 * time.Minute
@@ -346,8 +341,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installConfigSync(nt, opts.Nomos); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	setupTestCase(nt, opts)
 	return nt
 }
 
@@ -364,7 +357,8 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	if nt.GitProvider.Type() == e2e.Local {
-		nt.gitRepoPort = portForwardGitServer(nt, allRepos...)
+		InitGitRepos(nt, allRepos...)
+		nt.PortForwardGitServer()
 	}
 
 	for name := range opts.RootRepos {
@@ -410,10 +404,6 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		// Most tests don't care about centralized/delegated control, but can
 		// specify the behavior if that distinction is under test.
 		setupCentralizedControl(nt, opts)
-	}
-
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
 	}
 }
 

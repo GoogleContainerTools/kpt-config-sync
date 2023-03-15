@@ -147,6 +147,11 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 	nt.T.Helper()
 
+	// Update test environment
+	g.T = nt.T
+	// Update URL to use latest port-forward port
+	g.RemoteURL = nt.GitProvider.RemoteURL(nt.gitRepoPort, g.RemoteRepoName)
+	// Reset repo contents
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
 }

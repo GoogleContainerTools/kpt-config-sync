@@ -633,7 +633,12 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		setupRepoSync(nt, nn)
 	}
 
-	// Validate multi-repo metrics in root reconcilers.
+	// Wait for all RootSyncs and all RepoSyncs to be reconciled
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Validate metrics from root-reconcilers.
 	for rsName := range opts.RootRepos {
 		rootReconciler := core.RootReconcilerName(rsName)
 		if err := waitForReconciler(nt, rootReconciler); err != nil {
@@ -652,6 +657,7 @@ func setupDelegatedControl(nt *NT, opts *ntopts.New) {
 		}
 	}
 
+	// Validate metrics from ns-reconcilers.
 	for nn := range opts.NamespaceRepos {
 		nsReconciler := core.NsReconcilerName(nn.Namespace, nn.Name)
 		if err := waitForReconciler(nt, nsReconciler); err != nil {

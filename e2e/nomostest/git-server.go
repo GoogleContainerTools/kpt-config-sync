@@ -231,25 +231,10 @@ func newTCPSocketProbe(port int, failureThreshold int32) *corev1.Probe {
 	}
 }
 
-// portForwardGitServer forwards the git-server deployment to a port.
-// Returns the localhost port which forwards to the git-server Pod.
-func portForwardGitServer(nt *NT, repos ...types.NamespacedName) int {
+// InitGitRepos initializes the specified repositories in the test-git-server
+func InitGitRepos(nt *NT, repos ...types.NamespacedName) {
 	nt.T.Helper()
 
-	podName := InitGitRepos(nt, repos...)
-
-	if nt.gitRepoPort == 0 {
-		port, err := nt.ForwardToFreePort(testGitNamespace, podName, ":22")
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-		return port
-	}
-	return nt.gitRepoPort
-}
-
-// InitGitRepos initializes the repositories in the testing git-server and returns the pod names.
-func InitGitRepos(nt *NT, repos ...types.NamespacedName) string {
 	pod, err := nt.GetDeploymentPod(testGitServer, testGitNamespace)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -266,5 +251,4 @@ func InitGitRepos(nt *NT, repos ...types.NamespacedName) string {
 		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "-C", fmt.Sprintf("/git-server/repos/%s", repo), "config", "receive.denyNonFastforwards", "false")
 	}
-	return podName
 }

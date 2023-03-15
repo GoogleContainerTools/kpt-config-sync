@@ -571,7 +571,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 				pod1SyncPredicate,
 				podCachePredicate(pod1),
 				pod1DeletionPredicate,
-				nomostest.ObjectNotFoundPredicate,
+				nomostest.ObjectNotFoundPredicate(nt),
 			},
 			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
@@ -581,7 +581,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 				pod2SyncPredicate,
 				podCachePredicate(pod2),
 				pod2LastUpdatedPredicate,
-				nomostest.ObjectNotFoundPredicate,
+				nomostest.ObjectNotFoundPredicate(nt),
 			},
 			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})

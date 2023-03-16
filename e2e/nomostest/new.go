@@ -30,6 +30,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -170,6 +171,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
 		RootRepos:               sharedNt.RootRepos,
 		NonRootRepos:            sharedNt.NonRootRepos,
+		expectedObjects:         sharedNt.expectedObjects,
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		caCertPath:              sharedNt.caCertPath,
 		scheme:                  sharedNt.scheme,
@@ -248,6 +250,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		kubeconfigPath:          opts.KubeconfigPath,
 		RootRepos:               make(map[string]*Repository),
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
+		expectedObjects:         make(map[string]map[types.NamespacedName]map[core.ID]bool),
 		scheme:                  scheme,
 		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
@@ -369,8 +372,14 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	if opts.InitialCommit != nil {
+		rootSyncNN := RootSyncNN(configsync.RootSyncName)
 		for path, obj := range opts.InitialCommit.Files {
 			nt.RootRepos[configsync.RootSyncName].Add(path, obj)
+			// Some source objects are not included in the declared resources.
+			if isObjectDeclarable(obj) {
+				// Some source objects are included in the declared resources, but not applied.
+				nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, obj)
+			}
 		}
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message)
 	}
@@ -396,14 +405,30 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.Control = opts.Control
 	switch opts.Control {
 	case ntopts.DelegatedControl:
-		setupDelegatedControl(nt, opts)
+		setupDelegatedControl(nt, opts.ReconcileTimeout)
 	case ntopts.CentralControl:
-		setupCentralizedControl(nt, opts)
+		setupCentralizedControl(nt, opts.ReconcileTimeout)
 	default:
 		nt.Control = ntopts.CentralControl
 		// Most tests don't care about centralized/delegated control, but can
 		// specify the behavior if that distinction is under test.
-		setupCentralizedControl(nt, opts)
+		setupCentralizedControl(nt, opts.ReconcileTimeout)
+	}
+
+	// Wait for all RootSyncs and all RepoSyncs to be reconciled
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Validate all expected syncs exist (some may have been deployed by others)
+	if err := validateRootSyncsExist(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := validateRepoSyncsExist(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Validate metrics from each reconciler
+	if err := validateStandardMetrics(nt); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

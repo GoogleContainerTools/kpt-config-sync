@@ -238,13 +238,11 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
-	// Calculate the expected number of managed resource objects before removing the RepoSync.
-	// This accounts for all the other objects in the RootSync repo from CentralizedControl.
-	numObjects := nt.DefaultRootSyncObjectCount()
-	numObjects-- // -1 because the RepoSync will be deleted manually
+	repoSyncPath := nomostest.StructuredNSPath(bsNamespace, configsync.RepoSyncName)
+	repoSyncObj := nt.RootRepos[configsync.RootSyncName].Get(repoSyncPath)
 
 	// Remove RepoSync resource from Root Repository.
-	nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(bsNamespace, configsync.RepoSyncName))
+	nt.RootRepos[configsync.RootSyncName].Remove(repoSyncPath)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RepoSync from the Root Repository")
 
 	// Remove from NamespaceRepos so we don't try to check that it is syncing,
@@ -258,10 +256,13 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 
 	checkRepoSyncResourcesNotPresent(nt, bsNamespace, secretNames)
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, repoSyncObj)
+
 	// Validate multi-repo metrics from root reconciler.
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			numObjects,
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted(configsync.RepoSyncKind))
 		if err != nil {
 			return err

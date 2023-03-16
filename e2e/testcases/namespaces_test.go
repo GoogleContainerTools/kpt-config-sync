@@ -50,7 +50,8 @@ func TestDeclareNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -62,10 +63,13 @@ func TestDeclareNamespace(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate no error metrics are emitted.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -82,23 +86,26 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create foo namespace without any labels or annotations.
-	fooNamespace := fake.NamespaceObject("foo")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create foo namespace")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Test that the namespace exists.
-	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{})
+	err := nt.Validate(nsObj.Name, "", &corev1.Namespace{})
 	if err != nil {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -110,24 +117,26 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Add label and annotation to namespace.
-	fooNamespace.Labels["label"] = "test-label"
-	fooNamespace.Annotations["annotation"] = "test-annotation"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
+	nsObj.Labels["label"] = "test-label"
+	nsObj.Annotations["annotation"] = "test-annotation"
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace to include label and annotation")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Test that the namespace exists with label and annotation.
-	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "test-label"), nomostest.HasAnnotation("annotation", "test-annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "test-label"), nomostest.HasAnnotation("annotation", "test-annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 1))
 		if err != nil {
 			return err
@@ -139,24 +148,26 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Update label and annotation to namespace.
-	fooNamespace.Labels["label"] = "updated-test-label"
-	fooNamespace.Annotations["annotation"] = "updated-test-annotation"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
+	nsObj.Labels["label"] = "updated-test-label"
+	nsObj.Annotations["annotation"] = "updated-test-annotation"
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace to include label and annotation")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Test that the namespace exists with the updated label and annotation.
-	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "updated-test-label"), nomostest.HasAnnotation("annotation", "updated-test-annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "updated-test-label"), nomostest.HasAnnotation("annotation", "updated-test-annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 1))
 		if err != nil {
 			return err
@@ -168,24 +179,26 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Remove label and annotation to namespace and commit.
-	delete(fooNamespace.Labels, "label")
-	delete(fooNamespace.Annotations, "annotation")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fooNamespace)
+	delete(nsObj.Labels, "label")
+	delete(nsObj.Annotations, "annotation")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updated foo namespace, removing label and annotation")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Test that the namespace exists without the label and annotation.
-	err = nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.MissingLabel("label"), nomostest.MissingAnnotation("annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.MissingLabel("label"), nomostest.MissingAnnotation("annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 1))
 		if err != nil {
 			return err
@@ -200,9 +213,9 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 func TestNamespaceExistsAndDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	// Create namespace using kubectl first then commit.
-	namespace := fake.NamespaceObject("decl-namespace-annotation-none")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/decl-namespace-annotation-none/ns.yaml", namespace)
+	// Create nsObj using kubectl first then commit.
+	nsObj := fake.NamespaceObject("decl-namespace-annotation-none")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/decl-namespace-annotation-none/ns.yaml", nsObj)
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "acme/namespaces/decl-namespace-annotation-none/ns.yaml"))
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespace")
 
@@ -211,15 +224,18 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 	}
 
 	// Test that the namespace exists after sync.
-	err := nt.Validate(namespace.Name, "", &corev1.Namespace{})
+	err := nt.Validate(nsObj.Name, "", &corev1.Namespace{})
 	if err != nil {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -234,10 +250,10 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	// Create namespace with managed annotation using kubectl.
-	namespace := fake.NamespaceObject("undeclared-annotation-enabled")
-	namespace.Annotations["configmanagement.gke.io/managed"] = "enabled"
-	nt.RootRepos[configsync.RootSyncName].Add("ns.yaml", namespace)
+	// Create nsObj with managed annotation using kubectl.
+	nsObj := fake.NamespaceObject("undeclared-annotation-enabled")
+	nsObj.Annotations["configmanagement.gke.io/managed"] = "enabled"
+	nt.RootRepos[configsync.RootSyncName].Add("ns.yaml", nsObj)
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns.yaml"))
 	nt.RootRepos[configsync.RootSyncName].Remove("ns.yaml")
 
@@ -246,7 +262,7 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	}
 
 	// Test that the namespace exists after sync.
-	err := nt.Validate(namespace.Name, "", &corev1.Namespace{})
+	err := nt.Validate(nsObj.Name, "", &corev1.Namespace{})
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -254,8 +270,7 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(), // test Namespace not committed
-			metrics.ResourceCreated("Namespace"))
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName)) // test Namespace not committed)
 		if err != nil {
 			return err
 		}
@@ -272,12 +287,14 @@ func TestManagementDisabledNamespace(t *testing.T) {
 
 	checkpointProtectedNamespace(nt, metav1.NamespaceDefault)
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+
 	namespacesToTest := []string{"foo", metav1.NamespaceDefault}
 	for _, nsName := range namespacesToTest {
-		// Create namespace.
-		namespace := fake.NamespaceObject(nsName)
+		// Create nsObj.
+		nsObj := fake.NamespaceObject(nsName)
 		cm1 := fake.ConfigMapObject(core.Namespace(nsName), core.Name("cm1"))
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), namespace)
+		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), nsObj)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a namespace and a configmap")
 		if err := nt.WatchForAllSyncs(); err != nil {
@@ -285,7 +302,7 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the namespace exists with expected config management labels and annotations.
-		err := nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
+		err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
 		if err != nil {
 			nt.T.Error(err)
 		}
@@ -296,10 +313,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			nt.T.Error(err)
 		}
 
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cm1)
+
 		// Validate multi-repo metrics.
 		err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 			err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-				nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & ConfigMap
+				nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 				metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
 			if err != nil {
 				return err
@@ -311,9 +331,9 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Update the namespace and the configmap to be no longer be managed
-		namespace.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
+		nsObj.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
 		cm1.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), namespace)
+		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), nsObj)
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Unmanage the namespace and the configmap")
 		if err := nt.WatchForAllSyncs(); err != nil {
@@ -321,7 +341,7 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the now unmanaged namespace does not contain any config management labels or annotations
-		err = nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Error(err)
 		}
@@ -332,10 +352,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			nt.T.Error(err)
 		}
 
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cm1)
+
 		// Validate multi-repo metrics.
 		err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 			err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-				nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & ConfigMap
+				nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 				metrics.ResourcePatched("Namespace", 1), metrics.ResourcePatched("ConfigMap", 1))
 			if err != nil {
 				return err
@@ -354,7 +377,7 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the namespace still exists on the cluster, and does not contain any config management labels or annotations
-		err = nt.Validate(namespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Error(err)
 		}
@@ -365,10 +388,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 			nt.T.Error(err)
 		}
 
+		nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+		nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, cm1)
+
 		// Validate multi-repo metrics.
 		err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 			err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-				nt.DefaultRootSyncObjectCount())
+				nt.ExpectedRootSyncObjectCount(configsync.RootSyncName))
 			if err != nil {
 				return err
 			}
@@ -425,7 +451,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+4, // 4 for the test Namespace & ConfigMaps
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
 		if err != nil {
 			return err
@@ -458,10 +484,13 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, cm3)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+3, // 3 for the test Namespace & ConfigMaps
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("ConfigMap", 1))
 		if err != nil {
 			return err
@@ -486,10 +515,12 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, cm1)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2) // 2 for the test Namespace & ConfigMap
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName))
 		if err != nil {
 			return err
 		}
@@ -525,10 +556,13 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, kubeSystemNamespace)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -555,10 +589,12 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, kubeSystemNamespace)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 1))
 		if err != nil {
 			return err
@@ -583,10 +619,12 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, kubeSystemNamespace)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 1))
 		if err != nil {
 			return err
@@ -623,7 +661,7 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(), // test Namespace not committed
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName), // test Namespace not committed
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -649,7 +687,8 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 
 	// Phase 1: Declare a Role in a Namespace that doesn't exist, and ensure it
 	// gets created.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/role.yaml", fake.RoleObject(core.Name("admin"), core.Namespace(implicitNamespace)))
+	roleObj := fake.RoleObject(core.Name("admin"), core.Namespace(implicitNamespace))
+	nt.RootRepos[configsync.RootSyncName].Add("acme/role.yaml", roleObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Role in implicit Namespace " + implicitNamespace)
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -665,10 +704,14 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, fake.NamespaceObject(implicitNamespace)) // implicit
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, roleObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & Role
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Role"))
 		if err != nil {
 			return err
@@ -695,10 +738,13 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, fake.NamespaceObject(implicitNamespace)) // abandoned
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, roleObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(),
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted("Role"))
 		if err != nil {
 			return err
@@ -733,7 +779,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	numDeclaredObjs := nt.DefaultRootSyncObjectCount()
+	numDeclaredObjs := nt.ExpectedRootSyncObjectCount(configsync.RootSyncName)
 	numDeclaredObjs += 2 // 2 for the test Namespaces
 
 	// Validate multi-repo metrics.

@@ -119,6 +119,13 @@ type NT struct {
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*Repository
 
+	// expectedObjects tracks the objects expected to be declared and applied
+	// from a source for a RootSync or RepoSync.
+	// Excludes non-synced files, like cluster selectors.
+	// Includes skipped files, like local and disabled objects, with value set to false.
+	// Format: Map[RSYNC_KIND][RSYNC_NN][OBJ_ID] = APPLYABLE
+	expectedObjects map[string]map[types.NamespacedName]map[core.ID]bool
+
 	// ReconcilerPollingPeriod defines how often the reconciler should poll the
 	// filesystem for updates to the source or rendered configs.
 	ReconcilerPollingPeriod time.Duration
@@ -425,25 +432,40 @@ func (nt *NT) MustMergePatch(obj client.Object, patch string, opts ...client.Pat
 	}
 }
 
-// DefaultRootSyncObjectCount returns the number of objects expected to be in
-// the default RootSync repo, based on how many RepoSyncs it's managing.
-func (nt *NT) DefaultRootSyncObjectCount() int {
-	numObjects := 2 // 2 for the 'safety' Namespace & 'safety' ClusteRole
-
-	// Count the number of unique RepoSyncs
-	numRepoSyncs := len(nt.NonRootRepos)
-
-	// Account for objects added to the default RootRepo by setupCentralizedControl
-	if nt.Control == ntopts.CentralControl && numRepoSyncs > 0 {
-		numObjects++                             // 1 for the ClusterRole, shared by all RepoSyncs
-		numObjects += nt.NumRepoSyncNamespaces() // 1 for each unique RepoSync Namespace
-		numObjects += numRepoSyncs               // 1 for each RepoSync
-		numObjects += numRepoSyncs               // 1 for each RepoSync RoleBinding
-		if isPSPCluster() {
-			numObjects += numRepoSyncs // 1 for each RepoSync ClusterRoleBinding
-		}
+// AddExpectedObject specifies that an object is expected to be declared in the
+// source of truth for the specified RSync.
+func (nt *NT) AddExpectedObject(syncKind string, syncNN types.NamespacedName, obj client.Object) {
+	if nt.expectedObjects[syncKind] == nil {
+		nt.expectedObjects[syncKind] = make(map[types.NamespacedName]map[core.ID]bool)
 	}
-	return numObjects
+	if nt.expectedObjects[syncKind][syncNN] == nil {
+		nt.expectedObjects[syncKind][syncNN] = make(map[core.ID]bool)
+	}
+	nt.expectedObjects[syncKind][syncNN][core.IDOf(obj)] = isObjectApplyable(obj)
+}
+
+// RemoveExpectedObject removes an object from the set of objects expected to be
+// declared in the source of truth for the specified RSync.
+func (nt *NT) RemoveExpectedObject(syncKind string, syncNN types.NamespacedName, obj client.Object) {
+	if nt.expectedObjects[syncKind] == nil {
+		return
+	}
+	if nt.expectedObjects[syncKind][syncNN] == nil {
+		return
+	}
+	delete(nt.expectedObjects[syncKind][syncNN], core.IDOf(obj))
+}
+
+// ExpectedRootSyncObjectCount returns the expected number of declared resource
+// objects in the specified RootSync, according nt.expectedObjects.
+func (nt *NT) ExpectedRootSyncObjectCount(syncName string) int {
+	return len(nt.expectedObjects[configsync.RootSyncKind][RootSyncNN(syncName)])
+}
+
+// ExpectedRepoSyncObjectCount returns the expected number of declared resource
+// objects in the specified RepoSync, according nt.expectedObjects.
+func (nt *NT) ExpectedRepoSyncObjectCount(syncNN types.NamespacedName) int {
+	return len(nt.expectedObjects[configsync.RepoSyncKind][syncNN])
 }
 
 // NumRepoSyncNamespaces returns the number of unique namespaces managed by RepoSyncs.

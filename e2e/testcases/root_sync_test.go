@@ -107,8 +107,9 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	// Add namespace in policy directory 'foo'.
 	fooDir := "foo"
 	fooNS := "shipping"
-	sourcePath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
-	nt.RootRepos[configsync.RootSyncName].Add(sourcePath, fake.NamespaceObject(fooNS))
+	nsPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
+	nsObj := fake.NamespaceObject(fooNS)
+	nt.RootRepos[configsync.RootSyncName].Add(nsPath, nsObj)
 
 	// Add repo resource in policy directory 'foo'.
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/system/repo.yaml", fooDir),
@@ -131,10 +132,13 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		nt.T.Errorf("%s present after deletion: %v", fooNS, err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -155,7 +159,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 
 	// Validate namespace 'shipping' created with the correct sourcePath annotation.
 	if err := nt.Validate(fooNS, "", fake.NamespaceObject(fooNS),
-		nomostest.HasAnnotation(metadata.SourcePathAnnotationKey, sourcePath)); err != nil {
+		nomostest.HasAnnotation(metadata.SourcePathAnnotationKey, nsPath)); err != nil {
 		nt.T.Error(err)
 	}
 

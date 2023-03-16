@@ -169,10 +169,13 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		nt.T.Fatalf("validating ClusterRole precondition: %v", err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, declaredCr)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test ClusterRole
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("ClusterRole"))
 		if err != nil {
 			return err
@@ -204,10 +207,12 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		nt.T.Errorf("updating ClusterRole: %v", err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, updatedCr)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test ClusterRole
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("ClusterRole", 2))
 		if err != nil {
 			return err
@@ -230,10 +235,12 @@ func TestClusterRoleLifecycle(t *testing.T) {
 		nt.T.Errorf("deleting ClusterRole: %v", err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, updatedCr)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(),
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted("ClusterRole"))
 		if err != nil {
 			return err

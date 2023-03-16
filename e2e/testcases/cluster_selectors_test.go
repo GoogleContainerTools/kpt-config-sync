@@ -283,10 +283,14 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err
@@ -318,10 +322,13 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(),
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted("RoleBinding"))
 		if err != nil {
 			return err
@@ -355,10 +362,13 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+1, // 1 for the test Namespace
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"))
 		if err != nil {
 			return err
@@ -380,11 +390,13 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
-			metrics.ResourceCreated("RoleBinding"))
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
+			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err
 		}
@@ -408,10 +420,13 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount(),
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceDeleted("RoleBinding"))
 		if err != nil {
 			return err
@@ -444,10 +459,13 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+2, // 2 for the test Namespace & RoleBinding
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
 		if err != nil {
 			return err

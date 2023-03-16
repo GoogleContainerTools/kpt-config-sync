@@ -46,7 +46,8 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	}
 
 	// Add the Anvil CRD.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", anvilV1Beta1CRD())
+	crdObj := anvilV1Beta1CRD()
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crdObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -54,9 +55,12 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	nt.RenewClient()
 
 	// Add the v1 and v1beta1 Anvils and verify they are created.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 10))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 100))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
+	anvilv1Obj := anvilCR("v1", "first", 10)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj)
+	anvilv2Obj := anvilCR("v2", "second", 100)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 and v2 Anvil CRs")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -71,10 +75,16 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+4, // 4 for the test Namespace, CRD & Anvils
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Namespace"),
 			metrics.GVKMetric{
 				GVK:   "Anvil",
@@ -94,8 +104,10 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	}
 
 	// Modify the v1 and v1beta1 Anvils and verify they are updated.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 20))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 200))
+	anvilv1Obj = anvilCR("v1", "first", 20)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj)
+	anvilv2Obj = anvilCR("v2", "second", 200)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modifying v1 and v2 Anvil CRs")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -110,10 +122,14 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	// Sames IDs, so the new objects replace the old objects
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
+	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
+
 	// Validate multi-repo metrics.
 	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
 		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.DefaultRootSyncObjectCount()+4, // 4 for the test Namespace, CRD & Anvils
+			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
 			metrics.ResourcePatched("Namespace", 2),
 			metrics.GVKMetric{
 				GVK:   "Anvil",

@@ -103,17 +103,21 @@ func AutopilotResourceMutation(annotation string) (map[string]corev1.ResourceReq
 	if err := json.Unmarshal([]byte(annotation), rm); err != nil {
 		return input, output, err
 	}
-	for _, container := range rm.Input.InitContainers {
-		input[container.Name] = container.ResourceRequirements
+	if rm.Input != nil {
+		for _, container := range rm.Input.InitContainers {
+			input[container.Name] = container.ResourceRequirements
+		}
+		for _, container := range rm.Input.Containers {
+			input[container.Name] = container.ResourceRequirements
+		}
 	}
-	for _, container := range rm.Input.Containers {
-		input[container.Name] = container.ResourceRequirements
-	}
-	for _, container := range rm.Output.InitContainers {
-		output[container.Name] = container.ResourceRequirements
-	}
-	for _, container := range rm.Output.Containers {
-		output[container.Name] = container.ResourceRequirements
+	if rm.Output != nil {
+		for _, container := range rm.Output.InitContainers {
+			output[container.Name] = container.ResourceRequirements
+		}
+		for _, container := range rm.Output.Containers {
+			output[container.Name] = container.ResourceRequirements
+		}
 	}
 	return input, output, nil
 }

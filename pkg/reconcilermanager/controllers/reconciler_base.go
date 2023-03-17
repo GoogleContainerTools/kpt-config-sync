@@ -355,7 +355,7 @@ func adjustContainerResources(isAutopilot bool, declared, current *appsv1.Deploy
 	resourceMutationAnnotation, hasResourceMutationAnnotation := current.Annotations[metadata.AutoPilotAnnotation]
 	// If the current Deployment has not been adjusted by Autopilot yet, no adjustment to the declared Deployment is needed.
 	// The controller will apply the resource override and the next reconciliation can handle the compliance update.
-	if !hasResourceMutationAnnotation {
+	if !hasResourceMutationAnnotation || len(resourceMutationAnnotation) == 0 {
 		return false, nil
 	}
 

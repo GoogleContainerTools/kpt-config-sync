@@ -287,6 +287,24 @@ func TestAdjustContainerResources(t *testing.T) {
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: adjust5To6},
 			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
 		},
+		{
+			name:                       "Autopilot enabled, adjusted annotation is empty string => declared not adjusted, current won't be updated",
+			isAutopilot:                true,
+			adjusted:                   false,
+			declaredContainerResources: containerResources7,
+			currentContainerResources:  containerResources7,
+			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: ""},
+			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
+		},
+		{
+			name:                       "Autopilot enabled, adjusted annotation is empty JSON => declared not adjusted, current won't be updated",
+			isAutopilot:                true,
+			adjusted:                   false,
+			declaredContainerResources: containerResources7,
+			currentContainerResources:  containerResources7,
+			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: "{}"},
+			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
+		},
 	}
 
 	for _, tc := range testCases {

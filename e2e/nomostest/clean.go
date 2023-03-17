@@ -78,6 +78,10 @@ func Clean(nt *NT) error {
 		nt.T.Logf("[CLEANUP] Test environment cleanup took %v", elapsed)
 	}()
 
+	// Delete lingering APIService, as this will cause API discovery to fail
+	if err := deleteTestAPIServices(nt); err != nil {
+		return err
+	}
 	// Delete remote repos that were created 24 hours ago on the Git provider.
 	if err := nt.GitProvider.DeleteObsoleteRepos(); err != nil {
 		return err
@@ -605,4 +609,13 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 		}
 	}
 	return nil
+}
+
+func deleteTestAPIServices(nt *NT) error {
+	out, err := nt.Kubectl("delete", "apiservices", "-l", "testdata=true")
+	if err != nil {
+		nt.T.Logf("%v", out)
+		nt.T.Errorf("cleaning up apiservices: %v", err)
+	}
+	return err
 }

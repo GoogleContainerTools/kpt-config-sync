@@ -215,6 +215,10 @@ func deleteConfigSyncAndTestAnnotationsAndLabels(nt *NT, ns *corev1.Namespace) e
 			labels[k] = v
 		}
 	}
+	// return without updating if no annotations/labels were removed
+	if len(annotations) == len(ns.Annotations) && len(labels) == len(ns.Labels) {
+		return nil
+	}
 
 	ns.Annotations = annotations
 	ns.Labels = labels

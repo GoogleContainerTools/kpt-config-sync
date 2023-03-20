@@ -868,7 +868,7 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 		mux.Lock()
 		defer mux.Unlock()
 		cleanup = true
-		nt.T.Log("stopping port-forward %s/%s:%s process", ns, pod, port)
+		nt.T.Logf("stopping port-forward %s/%s:%s process", ns, pod, port)
 		err := cmd.Process.Kill()
 		if err != nil && !errors.Is(err, os.ErrProcessDone) {
 			nt.T.Errorf("killing port-forward %s/%s:%s process: %v", ns, pod, port, err)

@@ -31,7 +31,7 @@ var (
 		Name:        APICallDuration.Name(),
 		Measure:     APICallDuration,
 		Description: "The latency distribution of API server calls",
-		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
+		TagKeys:     []tag.Key{KeyOperation, KeyType, KeyStatus},
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -79,7 +79,7 @@ var (
 		Name:        LastSync.Name(),
 		Measure:     LastSync,
 		Description: "The timestamp of the most recent sync from Git",
-		TagKeys:     []tag.Key{KeyStatus, KeyCommit},
+		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
 		Aggregation: view.LastValue(),
 	}
 
@@ -88,6 +88,7 @@ var (
 		Name:        DeclaredResources.Name(),
 		Measure:     DeclaredResources,
 		Description: "The current number of declared resources parsed from Git",
+		TagKeys:     []tag.Key{KeyCommit},
 		Aggregation: view.LastValue(),
 	}
 
@@ -96,7 +97,7 @@ var (
 		Name:        ApplyOperations.Name() + "_total",
 		Measure:     ApplyOperations,
 		Description: "The total number of operations that have been performed to sync resources to source of truth",
-		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyStatus},
+		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyType, KeyStatus},
 		Aggregation: view.Count(),
 	}
 
@@ -105,7 +106,7 @@ var (
 		Name:        ApplyDuration.Name(),
 		Measure:     ApplyDuration,
 		Description: "The latency distribution of applier resource sync events",
-		TagKeys:     []tag.Key{KeyStatus},
+		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
 		Aggregation: view.Distribution(longDistributionBounds...),
 	}
 
@@ -114,7 +115,7 @@ var (
 		Name:        LastApply.Name(),
 		Measure:     LastApply,
 		Description: "The timestamp of the most recent applier resource sync event",
-		TagKeys:     []tag.Key{KeyStatus, KeyCommit},
+		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
 		Aggregation: view.LastValue(),
 	}
 
@@ -131,7 +132,7 @@ var (
 		Name:        RemediateDuration.Name(),
 		Measure:     RemediateDuration,
 		Description: "The latency distribution of remediator reconciliation events",
-		TagKeys:     []tag.Key{KeyStatus},
+		TagKeys:     []tag.Key{KeyType, KeyStatus},
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -140,6 +141,7 @@ var (
 		Name:        ResourceConflicts.Name() + "_total",
 		Measure:     ResourceConflicts,
 		Description: "The total number of resource conflicts resulting from a mismatch between the cached resources and cluster resources",
+		TagKeys:     []tag.Key{KeyCommit},
 		Aggregation: view.Count(),
 	}
 

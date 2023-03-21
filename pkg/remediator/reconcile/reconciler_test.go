@@ -19,16 +19,24 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/policycontroller"
+	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -227,7 +235,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			}
 			c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 			// Simulate the Parser having already parsed the resource and recorded it.
-			d := makeDeclared(t, tc.declared)
+			d := makeDeclared(t, "unused", tc.declared)
 
 			r := newReconciler(declared.RootReconciler, configsync.RootSyncName, c.Applier(), d)
 
@@ -257,10 +265,146 @@ func TestRemediator_Reconcile(t *testing.T) {
 	}
 }
 
-func makeDeclared(t *testing.T, objs ...client.Object) *declared.Resources {
+func TestRemediator_Reconcile_Metrics(t *testing.T) {
+	testCases := []struct {
+		name string
+		// version is Version (from GVK) of the object to try to remediate.
+		version string
+		// declared is the state of the object as returned by the Parser.
+		declared client.Object
+		// actual is the current state of the object on the cluster.
+		actual                                client.Object
+		createError, updateError, deleteError status.Error
+		// want is the expected final state of the object on the cluster after
+		// reconciliation.
+		want client.Object
+		// wantError is the expected error resulting from calling Reconcile
+		wantError error
+		// wantMetrics is the expected metrics resulting from calling Reconcile
+		wantMetrics map[*view.View][]*view.Row
+	}{
+		{
+			name: "ConflictUpdateDoesNotExist",
+			// Object declared with label
+			declared: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+				syncertest.ManagementEnabled,
+				core.Label("new-label", "one")),
+			// Object on cluster has no label and is unmanaged
+			actual: fake.RoleObject(core.Namespace("example"), core.Name("example")),
+			// Object update fails, because it was deleted by another client
+			updateError: syncerclient.ConflictUpdateDoesNotExist(
+				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
+				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+			// Object NOT updated on cluster, because update failed with conflict error
+			want: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+				core.UID("1"), core.ResourceVersion("1"), core.Generation(1)),
+			// Expect update error returned from Remediate
+			wantError: syncerclient.ConflictUpdateDoesNotExist(
+				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
+				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+			// Expect resource conflict error
+			wantMetrics: map[*view.View][]*view.Row{
+				metrics.ResourceConflictsView: {
+					{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{
+						// Re-enable "type" tag, if re-enabled in RecordResourceConflict
+						// {Key: metrics.KeyType, Value: kinds.Role().Kind},
+						{Key: metrics.KeyCommit, Value: "abc123"},
+					}},
+				},
+			},
+		},
+		{
+			name: "ConflictCreateAlreadyExists",
+			// Object declared with label
+			declared: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+				syncertest.ManagementEnabled,
+				core.Label("new-label", "one")),
+			// Object on cluster does not exist yet
+			actual: nil,
+			// Object create fails, because it was already created by another client
+			createError: syncerclient.ConflictCreateAlreadyExists(
+				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
+				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+			// Object NOT created on cluster, because update failed with conflict error
+			want: nil,
+			// Expect create error returned from Remediate
+			wantError: syncerclient.ConflictCreateAlreadyExists(
+				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
+				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+			// Expect resource conflict error
+			wantMetrics: map[*view.View][]*view.Row{
+				metrics.ResourceConflictsView: {
+					{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{
+						// Re-enable "type" tag, if re-enabled in RecordResourceConflict
+						// {Key: metrics.KeyType, Value: kinds.Role().Kind},
+						{Key: metrics.KeyCommit, Value: "abc123"},
+					}},
+				},
+			},
+		},
+		// ConflictUpdateOldVersion will never be reported by the remediator,
+		// because it uses server-side apply.
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up the fake client that represents the initial state of the cluster.
+			var existingObjs []client.Object
+			if tc.actual != nil {
+				existingObjs = append(existingObjs, tc.actual)
+			}
+			fakeClient := testingfake.NewClient(t, core.Scheme, existingObjs...)
+			// Simulate the Parser having already parsed the resource and recorded it.
+			d := makeDeclared(t, "abc123", tc.declared)
+
+			fakeApplier := &testingfake.Applier{Client: fakeClient}
+			fakeApplier.CreateError = tc.createError
+			fakeApplier.UpdateError = tc.updateError
+			fakeApplier.DeleteError = tc.deleteError
+
+			reconciler := newReconciler(declared.RootReconciler, configsync.RootSyncName, fakeApplier, d)
+
+			// Get the triggering object for the reconcile event.
+			var obj client.Object
+			switch {
+			case tc.declared != nil:
+				obj = tc.declared
+			case tc.actual != nil:
+				obj = tc.actual
+			default:
+				t.Fatal("at least one of actual or declared must be specified for a test")
+			}
+
+			var views []*view.View
+			for view := range tc.wantMetrics {
+				views = append(views, view)
+			}
+			m := testmetrics.RegisterMetrics(views...)
+
+			err := reconciler.Remediate(context.Background(), core.IDOf(obj), tc.actual)
+			if !errors.Is(err, tc.wantError) {
+				t.Errorf("Unexpected error: want:\n%v\ngot:\n%v", tc.wantError, err)
+			}
+
+			if tc.want == nil {
+				fakeClient.Check(t)
+			} else {
+				fakeClient.Check(t, tc.want)
+			}
+
+			for view, rows := range tc.wantMetrics {
+				if diff := m.ValidateMetrics(view, rows); diff != "" {
+					t.Errorf("Unexpected metrics recorded (%s): %v", view.Name, diff)
+				}
+			}
+		})
+	}
+}
+
+func makeDeclared(t *testing.T, commit string, objs ...client.Object) *declared.Resources {
 	t.Helper()
 	d := &declared.Resources{}
-	if _, err := d.Update(context.Background(), objs); err != nil {
+	if _, err := d.Update(context.Background(), objs, commit); err != nil {
 		// Test precondition; fail early.
 		t.Fatal(err)
 	}

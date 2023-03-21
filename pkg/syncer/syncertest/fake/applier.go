@@ -29,13 +29,18 @@ import (
 // reconcile.Applier not imported due to import cycle considerations.
 type Applier struct {
 	Client      *Client
-	UpdateError error
+	CreateError status.Error
+	UpdateError status.Error
+	DeleteError status.Error
 }
 
 var _ reconcile.Applier = &Applier{}
 
 // Create implements reconcile.Applier.
 func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+	if a.CreateError != nil {
+		return false, a.CreateError
+	}
 	err := a.Client.Create(ctx, obj)
 	if err != nil {
 		return false, status.APIServerError(err, "creating")
@@ -45,12 +50,10 @@ func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) (b
 
 // Update implements reconcile.Applier.
 func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) (bool, status.Error) {
-	var err error
 	if a.UpdateError != nil {
-		err = a.UpdateError
-	} else {
-		err = a.Client.Update(ctx, intendedState)
+		return false, a.UpdateError
 	}
+	err := a.Client.Update(ctx, intendedState)
 	if err != nil {
 		return false, status.APIServerError(err, "updating")
 	}
@@ -73,6 +76,9 @@ func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unst
 
 // Delete implements reconcile.Applier.
 func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+	if a.DeleteError != nil {
+		return false, a.DeleteError
+	}
 	err := a.Client.Delete(ctx, obj)
 	if err != nil {
 		return false, status.APIServerError(err, "deleting")

@@ -181,7 +181,7 @@ func TestFilteredWatcher(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dr := &declared.Resources{}
 			ctx := context.Background()
-			if _, err := dr.Update(ctx, tc.declared); err != nil {
+			if _, err := dr.Update(ctx, tc.declared, "unused"); err != nil {
 				t.Fatalf("unexpected error %v", err)
 			}
 

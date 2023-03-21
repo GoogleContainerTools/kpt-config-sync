@@ -101,7 +101,8 @@ func (u *updater) Updating() bool {
 // declared resources.
 func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
 	var crds []*v1beta1.CustomResourceDefinition
-	for _, obj := range u.resources.DeclaredUnstructureds() {
+	declaredObjs, _ := u.resources.DeclaredUnstructureds()
+	for _, obj := range declaredObjs {
 		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
 			continue
 		}
@@ -156,7 +157,7 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// longer be remediated, if they drift.
 	if !cache.declaredResourcesUpdated {
 		objs := filesystem.AsCoreObjects(cache.objsToApply)
-		_, err := u.declare(ctx, objs)
+		_, err := u.declare(ctx, objs, cache.source.commit)
 		if err != nil {
 			return err
 		}
@@ -169,7 +170,8 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	// Apply the declared resources
 	if !cache.applied {
-		_, err := u.apply(ctx, u.resources.DeclaredObjects(), cache.source.commit)
+		declaredObjs, _ := u.resources.DeclaredObjects()
+		_, err := u.apply(ctx, declaredObjs, cache.source.commit)
 		if err != nil {
 			return err
 		}
@@ -182,7 +184,8 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	// Update the resource watches (triggers for the Remediator).
 	if !cache.watchesUpdated {
-		err := u.watch(ctx, u.resources.DeclaredGVKs())
+		declaredGVKs, _ := u.resources.DeclaredGVKs()
+		err := u.watch(ctx, declaredGVKs)
 		if err != nil {
 			return err
 		}
@@ -203,9 +206,9 @@ func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	return nil
 }
 
-func (u *updater) declare(ctx context.Context, objs []client.Object) ([]client.Object, status.MultiError) {
+func (u *updater) declare(ctx context.Context, objs []client.Object, commit string) ([]client.Object, status.MultiError) {
 	klog.V(1).Info("Declared resources updating...")
-	objs, err := u.resources.Update(ctx, objs)
+	objs, err := u.resources.Update(ctx, objs, commit)
 	u.setValidationErrs(err)
 	if err != nil {
 		klog.Warningf("Failed to validate declared resources: %v", err)

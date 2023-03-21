@@ -522,7 +522,7 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 }
 
 // Patch implements client.Client.
-func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (c *Client) Patch(_ context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	patchOpts := &client.PatchOptions{}
 	patchOpts.ApplyOptions(opts)
 	err := validatePatchOptions(patchOpts, patch)
@@ -711,9 +711,9 @@ func (s *statusWriter) Update(_ context.Context, obj client.Object, opts ...clie
 }
 
 // Patch implements client.StatusWriter. It only updates the status field.
-func (s *statusWriter) Patch(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
-	// TODO: Impliment status patch, if needed
-	panic("fakeClient.Status().Patch() not yet implimented")
+func (s *statusWriter) Patch(_ context.Context, _ client.Object, _ client.Patch, _ ...client.PatchOption) error {
+	// TODO: Implement status patch, if needed
+	panic("fakeClient.Status().Patch() not yet implemented")
 }
 
 // Status implements client.Client.

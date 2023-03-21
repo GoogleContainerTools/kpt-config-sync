@@ -653,7 +653,7 @@ func RoleBindingHasName(expectedName string) Predicate {
 
 // RootSyncHasSourceError returns an error if the RootSync does not have the
 // specified Source error code and (optional, partial) message.
-func RootSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
+func RootSyncHasSourceError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -668,7 +668,7 @@ func RootSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 
 // RepoSyncHasSourceError returns an error if the RootSync does not have the
 // specified Source error code and (optional, partial) message.
-func RepoSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
+func RepoSyncHasSourceError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -683,7 +683,7 @@ func RepoSyncHasSourceError(nt *NT, errCode, errMessage string) Predicate {
 
 // RootSyncHasRenderingError returns an error if the RootSync does not have the
 // specified Rendering error code and (optional, partial) message.
-func RootSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
+func RootSyncHasRenderingError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -718,7 +718,7 @@ func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {
 
 // RepoSyncHasRenderingError returns an error if the RootSync does not have the
 // specified Rendering error code and (optional, partial) message.
-func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
+func RepoSyncHasRenderingError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -733,7 +733,7 @@ func RepoSyncHasRenderingError(nt *NT, errCode, errMessage string) Predicate {
 
 // RootSyncHasSyncError returns an error if the RootSync does not have the
 // specified Sync error code and (optional, partial) message.
-func RootSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
+func RootSyncHasSyncError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -748,7 +748,7 @@ func RootSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
 
 // RepoSyncHasSyncError returns an error if the RootSync does not have the
 // specified Sync error code and (optional, partial) message.
-func RepoSyncHasSyncError(nt *NT, errCode, errMessage string) Predicate {
+func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound

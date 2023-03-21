@@ -105,7 +105,7 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	case e2e.Kind:
 		ntopts.Kind(t, *e2e.KubernetesVersion)(opts)
 	case e2e.GKE:
-		ntopts.GKECluster(t, restconfig.DefaultTimeout)(opts)
+		ntopts.GKECluster(t)(opts)
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}

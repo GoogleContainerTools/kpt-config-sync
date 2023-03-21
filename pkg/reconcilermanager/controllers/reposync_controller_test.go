@@ -256,7 +256,7 @@ func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1
 	}
 	return rs
 }
-func rolebinding(name, reconcilerName string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
+func rolebinding(name string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
 	result := fake.RoleBindingObject(opts...)
 	result.Name = name
 
@@ -1842,7 +1842,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 
 	roleBinding1 := rolebinding(
 		RepoSyncPermissionsName(),
-		nsReconcilerName,
 		core.Namespace(rs1.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -1923,7 +1922,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 
 	roleBinding2 := rolebinding(
 		RepoSyncPermissionsName(),
-		nsReconcilerName2,
 		core.Namespace(rs2.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)

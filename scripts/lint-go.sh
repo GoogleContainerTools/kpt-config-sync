@@ -20,8 +20,8 @@ export CGO_ENABLED=0
 
 # TODO: It is best practice to install directly on the Docker image,
 #  but for now it's unclear how to do this sanely.
-wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-  sh -sx -- -b .output/go/bin v1.40.1
+wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/v1.52.0/install.sh | \
+  sh -sx -- -b .output/go/bin v1.52.0
 
 # golangci-lint uses $HOME to determine where to store .cache information.
 # For the docker image this is running in, $HOME is set to "/", so for this

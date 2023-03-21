@@ -33,10 +33,10 @@ import (
 // (The logic should be symmetric, so this shouldn't have to be the case.)
 //
 // The resulting merged Configuration meets the following criteria:
-// 1) All Webhooks contain exactly one rule, matching all resources of a given
-//      GroupVersion.
-// 2) Webhooks are sorted by the GroupVersion they match.
-// 3) All invalid webhooks are removed.
+//  1. All Webhooks contain exactly one rule, matching all resources of a given
+//     GroupVersion.
+//  2. Webhooks are sorted by the GroupVersion they match.
+//  3. All invalid webhooks are removed.
 //
 // Cannot return error or panic as we never want this to get stuck.
 //

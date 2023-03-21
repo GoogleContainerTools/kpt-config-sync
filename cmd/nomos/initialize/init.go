@@ -88,7 +88,7 @@ func Initialize(root string, force bool) error {
 		}
 	}
 
-	repoDir := repoDirectoryBuilder{root: rootDir}
+	repoDir := &repoDirectoryBuilder{root: rootDir}
 	repoDir.createFile("", readmeFile, rootReadmeContents)
 
 	// Create system/
@@ -135,7 +135,7 @@ type repoDirectoryBuilder struct {
 	errors status.MultiError
 }
 
-func (d repoDirectoryBuilder) createDir(dir string) {
+func (d *repoDirectoryBuilder) createDir(dir string) {
 	newDir := filepath.Join(d.root.OSPath(), dir)
 	err := os.Mkdir(newDir, os.ModePerm)
 	if err != nil {
@@ -143,7 +143,7 @@ func (d repoDirectoryBuilder) createDir(dir string) {
 	}
 }
 
-func (d repoDirectoryBuilder) createFile(dir string, path string, contents string) {
+func (d *repoDirectoryBuilder) createFile(dir string, path string, contents string) {
 	file, err := os.Create(filepath.Join(d.root.OSPath(), dir, path))
 	if err != nil {
 		d.errors = status.Append(d.errors, status.PathWrapError(err, path))
@@ -155,6 +155,6 @@ func (d repoDirectoryBuilder) createFile(dir string, path string, contents strin
 	}
 }
 
-func (d repoDirectoryBuilder) createSystemFile(path string, contents string) {
+func (d *repoDirectoryBuilder) createSystemFile(path string, contents string) {
 	d.createFile(v1repo.SystemDir, path, contents)
 }

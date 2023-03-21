@@ -28,4 +28,15 @@ linters-settings:
     locale: US
 
   staticcheck:
-    go: "1.15"
+    go: "1.17"
+  
+issues:
+  exclude-rules:
+    - linters:
+        - revive
+      # TODO: Add package comments and remove this exception
+      text: "should have a package comment"
+    - linters:
+        - revive
+      # Config Sync uses errors for human-readable status messages.
+      text: "error strings should not be capitalized"

@@ -173,7 +173,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err = r.validateSpec(ctx, rs, log); err != nil {
+	if err = r.validateSpec(ctx, rs); err != nil {
 		log.Error(err, "Spec invalid",
 			logFieldObject, rsRef.String(),
 			logFieldKind, r.syncKind)
@@ -497,10 +497,10 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result
 }
 
-func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
+func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		return r.validateGitSpec(ctx, rs, log)
+		return r.validateGitSpec(ctx, rs)
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
@@ -510,7 +510,7 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	}
 }
 
-func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, log logr.Logger) error {
+func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync) error {
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
 		return err
 	}

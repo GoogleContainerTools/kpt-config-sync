@@ -15,7 +15,6 @@
 package diff
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -402,8 +401,7 @@ func TestDiffType(t *testing.T) {
 				Actual:   tc.actual,
 			}
 
-			ctx := context.Background()
-			if d := cmp.Diff(tc.want, diff.Operation(ctx, scope, tc.syncName)); d != "" {
+			if d := cmp.Diff(tc.want, diff.Operation(scope, tc.syncName)); d != "" {
 				t.Fatal(d)
 			}
 		})

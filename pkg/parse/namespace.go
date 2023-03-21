@@ -89,7 +89,7 @@ func (p *namespace) options() *opts {
 }
 
 // parseSource implements the Parser interface
-func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 

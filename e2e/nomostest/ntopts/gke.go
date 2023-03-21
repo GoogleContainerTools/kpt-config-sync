@@ -18,13 +18,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"time"
 
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
 // GKECluster tells the test to use the GKE cluster pointed to by the config flags.
-func GKECluster(t testing.NTB, apiServerTimeout time.Duration) Opt {
+func GKECluster(t testing.NTB) Opt {
 	return func(opt *New) {
 		t.Helper()
 

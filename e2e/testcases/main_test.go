@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 		exitCode := m.Run()
 		nomostest.CleanSharedNTs()
 		os.Exit(exitCode)
-	} else {
-		os.Exit(m.Run())
+		return
 	}
+	os.Exit(m.Run())
 }

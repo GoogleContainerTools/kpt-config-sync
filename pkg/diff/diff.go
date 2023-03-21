@@ -17,8 +17,6 @@
 package diff
 
 import (
-	"context"
-
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -71,7 +69,7 @@ type Diff struct {
 }
 
 // Operation returns the type of the difference between the repository and the API Server.
-func (d Diff) Operation(ctx context.Context, scope declared.Scope, syncName string) Operation {
+func (d Diff) Operation(scope declared.Scope, syncName string) Operation {
 	switch {
 	case d.Declared != nil && d.Actual == nil:
 		// Create Branch.

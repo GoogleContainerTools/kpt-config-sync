@@ -120,7 +120,7 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 
 func parseManifests(nt *NT) ([]client.Object, error) {
 	tmpManifestsDir := filepath.Join(nt.TmpDir, Manifests)
-	objs, err := installationManifests(nt, tmpManifestsDir)
+	objs, err := installationManifests(tmpManifestsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func copyDirContents(src, dest string) error {
 
 // installationManifests generates the ConfigSync installation YAML and copies
 // it to the test's temporary directory.
-func installationManifests(nt *NT, tmpManifestsDir string) ([]client.Object, error) {
+func installationManifests(tmpManifestsDir string) ([]client.Object, error) {
 	err := os.MkdirAll(tmpManifestsDir, fileMode)
 	if err != nil {
 		return nil, err
@@ -1100,7 +1100,7 @@ func toMetav1Duration(t time.Duration) *metav1.Duration {
 
 // isObjectDeclarable returns true if the object should be included in the
 // declared resources passed to the applier.
-func isObjectDeclarable(obj client.Object) bool {
+func isObjectDeclarable(_ client.Object) bool {
 	// TODO: Update if any of the following are added using WithInitialCommit:
 	// - ClusterSelectors & Cluster definitions
 	// - Objects excluded by the current ClusterSelectors and Cluster

@@ -22,7 +22,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
@@ -90,7 +89,7 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 }
 
 // WaitForConfigSyncReady validates if the config sync deployments are ready.
-func WaitForConfigSyncReady(nt *NT, nomos ntopts.Nomos) error {
+func WaitForConfigSyncReady(nt *NT) error {
 	return ValidateMultiRepoDeployments(nt)
 }
 

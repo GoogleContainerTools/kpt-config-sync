@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package e2e and its subpacakages define go e2e tests for Nomos.
+// Package e2e and its sub-packages define go e2e tests for Nomos.
 //
-// Running the Tests
+// # Running the Tests
 //
 // A) With make, rebuilding the Nomos image:
 //
@@ -35,8 +35,7 @@
 // The `--e2e` is required or else the e2e tests won't run. This lets you run
 // go test ./... to just run unit/integration tests.
 //
-//
-// Debugging
+// # Debugging
 //
 // Use --debug to use the debug mode for tests. In this mode, on failure the
 // test does not destroy the kind cluster and delete the temporary directory.
@@ -44,11 +43,11 @@
 // the kind cluster.
 //
 // The temporary directory includes:
-// 1) All manifests used to install ConfigSync
-// 2) The private/public SSH keys to connect to git-server
-// 3) The local repository(ies), already configured to talk to git server.
-//      Just remember to port-forward to the git-server Pod if you want to read
-//      from/write to it.
+//  1. All manifests used to install ConfigSync
+//  2. The private/public SSH keys to connect to git-server
+//  3. The local repository(ies), already configured to talk to git server.
+//     Just remember to port-forward to the git-server Pod if you want to read
+//     from/write to it.
 //
 // If you want to stop the test at any time, just use t.FailNow().
 package e2e

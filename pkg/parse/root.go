@@ -99,7 +99,7 @@ func (p *root) options() *opts {
 }
 
 // parseSource implements the Parser interface
-func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *root) parseSource(_ context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
 	wantFiles := state.files
 	if p.sourceFormat == filesystem.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files

@@ -128,7 +128,7 @@ func useCACert(caCertSecretRef string) bool {
 	return caCertSecretRef != ""
 }
 
-func gitSyncEnvs(ctx context.Context, opts options) []corev1.EnvVar {
+func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	result = append(result, corev1.EnvVar{
 		Name:  "GIT_SYNC_REPO",

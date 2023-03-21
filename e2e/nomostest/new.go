@@ -396,7 +396,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.RenewClient()
 
 	// Create the RootSync if it doesn't exist, and wait for it to be Synced.
-	if err := WaitForConfigSyncReady(nt, opts.Nomos); err != nil {
+	if err := WaitForConfigSyncReady(nt); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}
 

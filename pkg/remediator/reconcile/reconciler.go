@@ -76,7 +76,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		Declared: decl,
 		Actual:   obj,
 	}
-	switch t := d.Operation(ctx, r.scope, r.syncName); t {
+	switch t := d.Operation(r.scope, r.syncName); t {
 	case diff.NoOp:
 		return nil
 	case diff.Create:

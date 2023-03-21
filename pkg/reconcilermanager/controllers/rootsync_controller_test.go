@@ -66,7 +66,7 @@ const (
 
 var rootReconcilerName = core.RootReconcilerName(rootsyncName)
 
-func clusterrolebinding(name, reconcilerName string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
+func clusterrolebinding(name string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
 	result := fake.ClusterRoleBindingObject(opts...)
 	result.Name = name
 
@@ -1548,7 +1548,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	crb := clusterrolebinding(
 		RootSyncPermissionsName(),
-		rootReconcilerName,
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)

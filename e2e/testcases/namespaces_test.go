@@ -812,7 +812,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 
 	require.NoError(nt.T,
 		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
-			nomostest.RootSyncHasSyncError(nt, status.EmptySourceErrorCode, ""),
+			nomostest.RootSyncHasSyncError(status.EmptySourceErrorCode, ""),
 		}))
 
 	// Wait 10 seconds before checking the namespaces.

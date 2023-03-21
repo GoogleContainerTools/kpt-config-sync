@@ -520,7 +520,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	tg.Go(func() error {
 		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
 			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(nt, applier.ApplierErrorCode, "denied the request"),
+				nomostest.RootSyncHasSyncError(applier.ApplierErrorCode, "denied the request"),
 			})
 	})
 	if err := tg.Wait(); err != nil {
@@ -555,14 +555,14 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	tg.Go(func() error {
 		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				nomostest.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
 			})
 	})
 	// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
 	tg.Go(func() error {
 		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
 			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(nt, status.ManagementConflictErrorCode, "declared in another repository"),
+				nomostest.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
 			})
 	})
 	if err := tg.Wait(); err != nil {

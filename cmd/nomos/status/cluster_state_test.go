@@ -455,11 +455,11 @@ func toOciStatus(oci *v1beta1.Oci) *v1beta1.OciStatus {
 	}
 }
 
-func toHelmStatus(oci *v1beta1.HelmBase) *v1beta1.HelmStatus {
+func toHelmStatus(h *v1beta1.HelmBase) *v1beta1.HelmStatus {
 	return &v1beta1.HelmStatus{
-		Repo:    helm.Repo,
-		Chart:   helm.Chart,
-		Version: helm.Version,
+		Repo:    h.Repo,
+		Chart:   h.Chart,
+		Version: h.Version,
 	}
 }
 

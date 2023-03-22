@@ -154,14 +154,20 @@ processors:
           # included by the 'regex include' filter above and is not included in
           # our Monarch metric definitions
           - kcc_resource_count_total
-  # Remove custom configsync metric labels that are not registered with Monarch
   attributes/kubernetes:
     actions:
+      # Remove custom configsync metric labels that are not registered with Monarch
       - key: configsync.sync.kind
         action: delete
       - key: configsync.sync.name
         action: delete
       - key: configsync.sync.namespace
+        action: delete
+      # Remove high cardinality configsync metric labels when sending to Monarch.
+      # These labels are useful to users, but too noisy for global aggregation.
+      - key: commit
+        action: delete
+      - key: type
         action: delete
   metricstransform/kubernetes:
     transforms:

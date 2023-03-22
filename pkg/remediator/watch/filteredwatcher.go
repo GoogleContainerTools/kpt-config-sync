@@ -63,7 +63,7 @@ type Runnable interface {
 	Stop()
 	Run(ctx context.Context) status.Error
 	ManagementConflict() bool
-	SetManagementConflict(object client.Object)
+	SetManagementConflict(object client.Object, commit string)
 	ClearManagementConflict()
 	removeManagementConflictError(object client.Object)
 	removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind)
@@ -156,7 +156,7 @@ func (w *filteredWatcher) ManagementConflict() bool {
 	return w.managementConflict
 }
 
-func (w *filteredWatcher) SetManagementConflict(object client.Object) {
+func (w *filteredWatcher) SetManagementConflict(object client.Object, commit string) {
 	w.mux.Lock()
 	defer w.mux.Unlock()
 
@@ -196,7 +196,7 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object) {
 	gvknn := queue.GVKNNOf(object)
 	w.conflictErrMap[gvknn] = status.ManagementConflictErrorWrap(object, newManager)
 	w.addConflictErrorFunc(w.conflictErrMap[gvknn])
-	metrics.RecordResourceConflict(context.Background(), object.GetObjectKind().GroupVersionKind())
+	metrics.RecordResourceConflict(context.Background(), object.GetObjectKind().GroupVersionKind(), commit)
 }
 
 func (w *filteredWatcher) ClearManagementConflict() {
@@ -445,8 +445,8 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		return true
 	}
 	id := core.IDOf(object)
-	decl, ok := w.resources.Get(id)
-	if !ok {
+	decl, commit, found := w.resources.Get(id)
+	if !found {
 		// The resource is neither declared nor managed by the same reconciler, so don't manage it.
 		return false
 	}
@@ -460,7 +460,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	}
 
 	if !diff.CanManage(w.scope, w.syncName, object, diff.OperationManage) {
-		w.SetManagementConflict(object)
+		w.SetManagementConflict(object, commit)
 		return false
 	}
 	w.removeManagementConflictError(object)

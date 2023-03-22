@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -43,9 +44,10 @@ var (
 func TestUpdate(t *testing.T) {
 	dr := Resources{}
 	objects := testSet
+	commit := "1"
 	expectedIDs := getIDs(objects)
 
-	newObjects, err := dr.Update(context.Background(), objects)
+	newObjects, err := dr.Update(context.Background(), objects, commit)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -60,6 +62,8 @@ func TestUpdate(t *testing.T) {
 	if diff := cmp.Diff(expectedIDs, gotIDs); diff != "" {
 		t.Error(diff)
 	}
+
+	require.Equal(t, commit, dr.commit)
 }
 
 func TestMutateImpossible(t *testing.T) {
@@ -70,7 +74,9 @@ func TestMutateImpossible(t *testing.T) {
 	o1.SetResourceVersion(wantResourceVersion)
 	o2 := asUnstructured(t, fake.RoleObject(core.Name("baz"), core.Namespace("bar")))
 	o2.SetResourceVersion(wantResourceVersion)
-	_, err := dr.Update(context.Background(), []client.Object{o1, o2})
+
+	expectedCommit := "example"
+	_, err := dr.Update(context.Background(), []client.Object{o1, o2}, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,14 +85,16 @@ func TestMutateImpossible(t *testing.T) {
 	o1.SetResourceVersion("version 1++")
 	o2.SetResourceVersion("version 1++")
 
-	got1, found := dr.Get(core.IDOf(o1))
+	got1, commit, found := dr.Get(core.IDOf(o1))
+	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got1, found)
 	}
 	if diff := cmp.Diff(wantResourceVersion, got1.GetResourceVersion()); diff != "" {
 		t.Error(diff)
 	}
-	got2, found := dr.Get(core.IDOf(o2))
+	got2, commit, found := dr.Get(core.IDOf(o2))
+	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got2, found)
 	}
@@ -98,14 +106,16 @@ func TestMutateImpossible(t *testing.T) {
 	got1.SetResourceVersion("version 2")
 	got2.SetResourceVersion("version 2")
 
-	got3, found := dr.Get(core.IDOf(o1))
+	got3, commit, found := dr.Get(core.IDOf(o1))
+	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got3, found)
 	}
 	if diff := cmp.Diff(wantResourceVersion, got3.GetResourceVersion()); diff != "" {
 		t.Error(diff)
 	}
-	got4, found := dr.Get(core.IDOf(o2))
+	got4, commit, found := dr.Get(core.IDOf(o2))
+	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got4, found)
 	}
@@ -125,12 +135,15 @@ func asUnstructured(t *testing.T, o client.Object) *unstructured.Unstructured {
 
 func TestDeclarations(t *testing.T) {
 	dr := Resources{}
-	objects, err := dr.Update(context.Background(), testSet)
+	expectedCommit := "example"
+	objects, err := dr.Update(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got := dr.DeclaredUnstructureds()
+	got, commit := dr.DeclaredUnstructureds()
+	require.Equal(t, expectedCommit, commit)
+
 	// Sort got decls to ensure determinism.
 	sort.Slice(got, func(i, j int) bool {
 		return core.IDOf(got[i]).String() < core.IDOf(got[j]).String()
@@ -156,12 +169,14 @@ func TestDeclarations(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	dr := Resources{}
-	_, err := dr.Update(context.Background(), testSet)
+	expectedCommit := "example"
+	_, err := dr.Update(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	actual, found := dr.Get(core.IDOf(obj1))
+	actual, commit, found := dr.Get(core.IDOf(obj1))
+	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatal("got not found, want found")
 	}
@@ -172,12 +187,14 @@ func TestGet(t *testing.T) {
 
 func TestGVKSet(t *testing.T) {
 	dr := Resources{}
-	_, err := dr.Update(context.Background(), testSet)
+	expectedCommit := "example"
+	_, err := dr.Update(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got := dr.DeclaredGVKs()
+	got, commit := dr.DeclaredGVKs()
+	require.Equal(t, expectedCommit, commit)
 	want := map[schema.GroupVersionKind]struct{}{
 		obj1.GroupVersionKind(): {},
 		obj2.GroupVersionKind(): {},
@@ -190,11 +207,16 @@ func TestGVKSet(t *testing.T) {
 func TestResources_InternalErrorMetricValidation(t *testing.T) {
 	m := testmetrics.RegisterMetrics(metrics.InternalErrorsView)
 	dr := Resources{}
-	if _, err := dr.Update(context.Background(), nilSet); err != nil {
+	if _, err := dr.Update(context.Background(), nilSet, "unused"); err != nil {
 		t.Fatal(err)
 	}
 	wantMetrics := []*view.Row{
-		{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{{Key: metrics.KeyInternalErrorSource, Value: "parser"}}},
+		{
+			Data: &view.CountData{Value: 1},
+			Tags: []tag.Tag{
+				{Key: metrics.KeyInternalErrorSource, Value: "parser"},
+			},
+		},
 	}
 	if diff := m.ValidateMetrics(metrics.InternalErrorsView, wantMetrics); diff != "" {
 		t.Errorf(diff)

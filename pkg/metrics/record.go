@@ -38,10 +38,10 @@ func record(ctx context.Context, ms ...stats.Measurement) {
 }
 
 // RecordAPICallDuration produces a measurement for the APICallDuration view.
-func RecordAPICallDuration(ctx context.Context, operation, status string, _ schema.GroupVersionKind, startTime time.Time) {
+func RecordAPICallDuration(ctx context.Context, operation, status string, gvk schema.GroupVersionKind, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyOperation, operation),
-		//tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, gvk.Kind),
 		tag.Upsert(KeyStatus, status))
 	measurement := APICallDuration.M(time.Since(startTime).Seconds())
 	record(tagCtx, measurement)
@@ -103,18 +103,20 @@ func RecordLastSync(ctx context.Context, status, commit string, timestamp time.T
 }
 
 // RecordDeclaredResources produces a measurement for the DeclaredResources view.
-func RecordDeclaredResources(ctx context.Context, numResources int) {
+func RecordDeclaredResources(ctx context.Context, commit string, numResources int) {
+	tagCtx, _ := tag.New(ctx,
+		tag.Upsert(KeyCommit, commit))
 	measurement := DeclaredResources.M(int64(numResources))
-	record(ctx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordApplyOperation produces a measurement for the ApplyOperations view.
-func RecordApplyOperation(ctx context.Context, controller, operation, status string, _ schema.GroupVersionKind) {
+func RecordApplyOperation(ctx context.Context, controller, operation, status string, gvk schema.GroupVersionKind) {
 	tagCtx, _ := tag.New(ctx,
 		//tag.Upsert(KeyName, GetResourceLabels()),
 		tag.Upsert(KeyOperation, operation),
 		tag.Upsert(KeyController, controller),
-		//tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, gvk.Kind),
 		tag.Upsert(KeyStatus, status))
 	measurement := ApplyOperations.M(1)
 	record(tagCtx, measurement)
@@ -127,17 +129,13 @@ func RecordApplyDuration(ctx context.Context, status, commit string, startTime t
 		commit = CommitNone
 	}
 	now := time.Now()
-	lastApplyTagCtx, _ := tag.New(ctx, tag.Upsert(KeyStatus, status), tag.Upsert(KeyCommit, commit))
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
-		//tag.Upsert(KeyCommit, commit),
+		tag.Upsert(KeyCommit, commit),
 	)
-
 	durationMeasurement := ApplyDuration.M(now.Sub(startTime).Seconds())
 	lastApplyMeasurement := LastApply.M(now.Unix())
-
-	record(lastApplyTagCtx, durationMeasurement, lastApplyMeasurement)
-	record(tagCtx, durationMeasurement)
+	record(tagCtx, durationMeasurement, lastApplyMeasurement)
 }
 
 // RecordResourceFight produces measurements for the ResourceFights view.
@@ -152,23 +150,24 @@ func RecordResourceFight(ctx context.Context, _ string, _ schema.GroupVersionKin
 }
 
 // RecordRemediateDuration produces measurements for the RemediateDuration view.
-func RecordRemediateDuration(ctx context.Context, status string, _ schema.GroupVersionKind, startTime time.Time) {
+func RecordRemediateDuration(ctx context.Context, status string, gvk schema.GroupVersionKind, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
-	//tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, gvk.Kind),
 	)
 	measurement := RemediateDuration.M(time.Since(startTime).Seconds())
 	record(tagCtx, measurement)
 }
 
 // RecordResourceConflict produces measurements for the ResourceConflicts view.
-func RecordResourceConflict(ctx context.Context, _ schema.GroupVersionKind) {
-	//tagCtx, _ := tag.New(ctx,
-	//	tag.Upsert(KeyName, GetResourceLabels()),
-	//tag.Upsert(KeyType, gvk.Kind),
-	//)
+func RecordResourceConflict(ctx context.Context, _ schema.GroupVersionKind, commit string) {
+	tagCtx, _ := tag.New(ctx,
+		// tag.Upsert(KeyName, GetResourceLabels()),
+		// tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyCommit, commit),
+	)
 	measurement := ResourceConflicts.M(1)
-	record(ctx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordInternalError produces measurements for the InternalErrors view.

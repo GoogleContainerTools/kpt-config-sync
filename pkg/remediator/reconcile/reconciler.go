@@ -16,6 +16,7 @@ package reconcile
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
@@ -25,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -63,7 +65,9 @@ func newReconciler(
 // Remediate takes a client.Object representing the object to update, and then
 // ensures that the version on the server matches it.
 func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Object) status.Error {
-	declU, found := r.declared.Get(id)
+	start := time.Now()
+
+	declU, commit, found := r.declared.Get(id)
 	// Yes, this if block is necessary because Go is pedantic about nil interfaces.
 	// 1) var decl client.Object = declU results in a panic.
 	// 2) Using declU as a client.Object results in a panic.
@@ -71,47 +75,70 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 	if found {
 		decl = declU
 	}
-
-	d := diff.Diff{
+	objDiff := diff.Diff{
 		Declared: decl,
 		Actual:   obj,
 	}
-	switch t := d.Operation(r.scope, r.syncName); t {
+
+	err := r.remediate(ctx, id, objDiff)
+
+	// Record duration, even if there's an error
+	metrics.RecordRemediateDuration(ctx, metrics.StatusTagKey(err), id.WithVersion(""), start)
+
+	// Record conflict, if there was one
+	if err != nil && err.Code() == syncerclient.ResourceConflictCode {
+		metrics.RecordResourceConflict(ctx, id.WithVersion(""), commit)
+	}
+	return err
+}
+
+// Remediate takes diff (declared & actual) and ensures the server matches the
+// declared state.
+func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Diff) status.Error {
+	switch t := objDiff.Operation(r.scope, r.syncName); t {
 	case diff.NoOp:
 		return nil
 	case diff.Create:
-		klog.V(3).Infof("Remediator creating object: %v", core.GKNN(declU))
-		_, err := r.applier.Create(ctx, declU)
+		declared, err := objDiff.UnstructuredDeclared()
+		if err != nil {
+			return err
+		}
+		klog.V(3).Infof("Remediator creating object: %v", id)
+		_, err = r.applier.Create(ctx, declared)
 		return err
 	case diff.Update:
-		actual, err := d.UnstructuredActual()
+		declared, err := objDiff.UnstructuredDeclared()
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("Remediator updating object: %v", core.GKNN(actual))
-		_, err = r.applier.Update(ctx, declU, actual)
+		actual, err := objDiff.UnstructuredActual()
+		if err != nil {
+			return err
+		}
+		klog.V(3).Infof("Remediator updating object: %v", id)
+		_, err = r.applier.Update(ctx, declared, actual)
 		return err
 	case diff.Delete:
-		actual, err := d.UnstructuredActual()
+		actual, err := objDiff.UnstructuredActual()
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("Remediator deleting object: %v", core.GKNN(actual))
+		klog.V(3).Infof("Remediator deleting object: %v", id)
 		_, err = r.applier.Delete(ctx, actual)
 		return err
 	case diff.Error:
 		// This is the case where the annotation in the *repository* is invalid.
 		// Should never happen as the Parser would have thrown an error.
 		return nonhierarchical.IllegalManagementAnnotationError(
-			d.Declared,
-			d.Declared.GetAnnotations()[metadata.ResourceManagementKey],
+			objDiff.Declared,
+			objDiff.Declared.GetAnnotations()[metadata.ResourceManagementKey],
 		)
 	case diff.Abandon:
-		actual, err := d.UnstructuredActual()
+		actual, err := objDiff.UnstructuredActual()
 		if err != nil {
 			return err
 		}
-		klog.V(3).Infof("Remediator abandoning object %v", core.GKNN(actual))
+		klog.V(3).Infof("Remediator abandoning object %v", id)
 		_, err = r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 		return err
 	default:

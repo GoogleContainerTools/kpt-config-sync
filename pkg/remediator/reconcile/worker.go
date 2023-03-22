@@ -25,7 +25,6 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
@@ -105,9 +104,7 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 		toRemediate = obj
 	}
 
-	now := time.Now()
 	err := w.reconciler.Remediate(ctx, id, toRemediate)
-	metrics.RecordRemediateDuration(ctx, metrics.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), now)
 	if err != nil {
 		// To debug the set of events we've missed, you may need to comment out this
 		// block. Specifically, this makes things smooth for production, but can
@@ -115,7 +112,6 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 		if err.Code() == syncerclient.ResourceConflictCode {
 			// This means our cached version of the object isn't the same as the one
 			// on the cluster. We need to refresh the cached version.
-			metrics.RecordResourceConflict(ctx, obj.GetObjectKind().GroupVersionKind())
 			if refreshErr := w.refresh(ctx, obj); refreshErr != nil {
 				klog.Errorf("Worker unable to update cached version of %q: %v", id, refreshErr)
 			}

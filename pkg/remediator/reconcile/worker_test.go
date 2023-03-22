@@ -22,9 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/tag"
+	"github.com/google/uuid"
 	v1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,15 +31,12 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
-	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -85,7 +80,7 @@ func TestWorker_Run_Remediates(t *testing.T) {
 		}
 	}
 
-	d := makeDeclared(t, declaredObjs...)
+	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -192,7 +187,7 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 		q.Add(obj)
 	}
 
-	d := makeDeclared(t, declaredObjs...)
+	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -300,7 +295,7 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 				}
 			}
 
-			d := makeDeclared(t, tc.declared...)
+			d := makeDeclared(t, randomCommitHash(), tc.declared...)
 			w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
 			for _, obj := range tc.toProcess {
@@ -320,7 +315,7 @@ func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	q := queue.New("test") // empty queue
 	defer q.ShutDown()
 	c := testingfake.NewClient(t, core.Scheme)
-	d := makeDeclared(t) // no resources declared
+	d := makeDeclared(t, randomCommitHash()) // no resources declared
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -392,7 +387,7 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 		}
 	}
 
-	d := makeDeclared(t, declaredObjs...)
+	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
 	a := &testingfake.Applier{Client: c}
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, a, q, d)
 
@@ -422,7 +417,7 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	// Configure the Applier to start erroring on Update.
 	// This will prevent the reconciler from reverting the ClusterRoleObject
 	// change, and prevent the queue from emptying.
-	a.UpdateError = fmt.Errorf("fake update error")
+	a.UpdateError = status.APIServerError(fmt.Errorf("fake update error"), "updating")
 
 	// Simulate watch events to add the objects to the queue
 	for _, obj := range changedObjs {
@@ -536,49 +531,8 @@ func TestWorker_Refresh(t *testing.T) {
 	}
 }
 
-func TestWorker_ResourceConflictMetricValidation(t *testing.T) {
-	testCases := []struct {
-		name        string
-		objects     []client.Object
-		wantMetrics []*view.Row
-	}{
-		{
-			name:    "single resource conflict for Role object",
-			objects: []client.Object{fake.UnstructuredObject(kinds.Role())},
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{{Key: metrics.KeyType, Value: fake.UnstructuredObject(kinds.Role()).GetKind()}}},
-			},
-		},
-		{
-			name:    "multiple resource conflicts for Role object",
-			objects: []client.Object{fake.UnstructuredObject(kinds.Role()), fake.UnstructuredObject(kinds.Role())},
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 2}, Tags: []tag.Tag{{Key: metrics.KeyType, Value: fake.UnstructuredObject(kinds.Role()).GetKind()}}},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			m := testmetrics.RegisterMetrics(metrics.ResourceConflictsView)
-
-			for _, obj := range tc.objects {
-				conflictErr := syncerclient.ConflictUpdateDoesNotExist(errors.New("resource conflict error"), obj)
-				w := &Worker{
-					objectQueue: &fakeQueue{},
-					reconciler: fakeReconciler{
-						client:       testingfake.NewClient(t, core.Scheme),
-						remediateErr: conflictErr,
-					},
-				}
-				err := w.process(context.Background(), obj)
-				require.Equal(t, fmt.Errorf("failed to remediate %q: %w", core.IDOf(obj), conflictErr), err)
-			}
-			if diff := m.ValidateMetrics(metrics.ResourceConflictsView, tc.wantMetrics); diff != "" {
-				t.Errorf(diff)
-			}
-		})
-	}
+func randomCommitHash() string {
+	return uuid.NewString()
 }
 
 type fakeReconciler struct {

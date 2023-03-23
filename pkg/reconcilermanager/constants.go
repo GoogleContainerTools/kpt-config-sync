@@ -58,6 +58,9 @@ const (
 	// HelmSync is the name of the helm-sync container in reconciler pods.
 	HelmSync = "helm-sync"
 
+	// Notification is the name of the notification container in reconciler pods.
+	Notification = "notification"
+
 	// HydrationController is the name of the hydration-controller container in reconciler pods.
 	HydrationController = "hydration-controller"
 

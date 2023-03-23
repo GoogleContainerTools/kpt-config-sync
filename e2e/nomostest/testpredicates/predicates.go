@@ -375,6 +375,62 @@ func AllResourcesAreCurrent() Predicate {
 	}
 }
 
+// DeploymentHasContainer checks that the Deployment exists and contains the
+// specified container.
+func DeploymentHasContainer(containerName string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(o, d)
+		}
+		for _, c := range d.Spec.Template.Spec.Containers {
+			if c.Name == containerName {
+				return nil
+			}
+		}
+		return errors.Errorf("Deployment %s does not have container %s", d.Name, containerName)
+	}
+}
+
+// DeploymentMissingContainer checks that the Deployment exists and does not contain
+// the specified container
+func DeploymentMissingContainer(containerName string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(o, d)
+		}
+		for _, c := range d.Spec.Template.Spec.Containers {
+			if c.Name == containerName {
+				return errors.Errorf("Deployment %s has container %s", d.Name, containerName)
+			}
+		}
+		return nil
+	}
+}
+
+// ObjectHasAnnotation checks that the Object has the specified annotation key
+func ObjectHasAnnotation(key string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		annotations := o.GetAnnotations()
+		for k := range annotations {
+			if k == key {
+				return nil
+			}
+		}
+		return errors.Errorf("%s missing annotation (%s). Got %v", o.GetName(), key, annotations)
+	}
+}
+
 // DeploymentHasEnvVar check whether the deployment contains environment variable
 // with specified name and value
 func DeploymentHasEnvVar(containerName, key, value string) Predicate {

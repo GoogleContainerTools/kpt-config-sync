@@ -195,6 +195,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
 	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
+	@ echo "    $(NOTIFICATION_IMAGE): $(NOTIFICATION_TAG)"
 	@ rm -f $(OSS_MANIFEST_STAGING_DIR)/*
 	@ "$(GOBIN)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
 		| sed \
@@ -203,6 +204,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
 			-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|g" \
 			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
+			-e "s|NOTIFICATION_IMAGE_NAME|$(NOTIFICATION_TAG)|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 
@@ -227,6 +229,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DI
 	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
+	@ echo "    $(NOTIFICATION_IMAGE): $(NOTIFICATION_TAG)"
 	@ rm -f $(NOMOS_MANIFEST_STAGING_DIR)/*
 	@ "$(GOBIN)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
 		| sed \
@@ -236,6 +239,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DI
 			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
 			-e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
+			-e "s|NOTIFICATION_IMAGE_NAME|$(NOTIFICATION_TAG)|g" \
 		> $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 

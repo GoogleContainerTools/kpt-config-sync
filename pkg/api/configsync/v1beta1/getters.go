@@ -37,6 +37,15 @@ func GetSecretName(secretRef *SecretReference) string {
 	return ""
 }
 
+// GetConfigMapName will return an empty string if the configmapRef.name is
+// empty or the configmapRef doesn't exist
+func GetConfigMapName(configmapRef *ConfigMapReference) string {
+	if configmapRef != nil {
+		return configmapRef.Name
+	}
+	return ""
+}
+
 // SafeOverride creates an override or returns an existing one
 // use it if you need to ensure that you are assigning
 // to an object, but not to test for nil (current existance)

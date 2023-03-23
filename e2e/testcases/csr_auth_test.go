@@ -147,64 +147,59 @@ func TestFleetWIDifferentProject(t *testing.T) {
 	})
 }
 
-// getMembershipIdentityProvider fetches the workload_identity_pool if the membership exists.
-func getMembershipIdentityProvider(nt *nomostest.NT) (bool, string, error) {
-	bytes, err := nt.Kubectl("get", "membership", "membership")
+// getMembership gets the membership resource in the GCP project.
+// It returns a boolean that indicates whether the membership exists, and an error
+func getMembership(fleetMembership, gcpProject string) (bool, error) {
+	bytes, err := exec.Command("gcloud", "container", "fleet", "memberships", "describe", fleetMembership, "--project", gcpProject).CombinedOutput()
 	out := string(bytes)
 	if err != nil {
-		if strings.Contains(out, `the server doesn't have a resource type "membership"`) || strings.Contains(out, "NotFound") {
-			return false, "", nil
+		// ERROR: (gcloud.container.fleet.memberships.describe) Membership xxx not found in the fleet.
+		if strings.Contains(out, fmt.Sprintf("Membership %s not found in the fleet", fleetMembership)) {
+			return false, nil
 		}
-		return false, "", fmt.Errorf("unable to get the membership %s: %w", out, err)
+		return false, fmt.Errorf("failed to describe the membership %s in project %s (out: %s\nerror: %w)", fleetMembership, gcpProject, out, err)
 	}
 
-	bytes, err = nt.Kubectl("get", "membership", "membership", "-o", "jsonpath={.spec.workload_identity_pool}")
-	out = string(bytes)
-	if err != nil {
-		return true, "", fmt.Errorf("unable to get the membership workload identity %s: %w", out, err)
-	}
-	return true, out, nil
+	return true, nil
 }
 
 // cleanMembershipInfo deletes the membership by unregistering the cluster.
 // It also deletes the reconciler-manager to ensure the membership watch is not set up.
 func cleanMembershipInfo(nt *nomostest.NT, fleetMembership, gcpProject, gkeURI string) {
-	membershipExists, wiPool, err := getMembershipIdentityProvider(nt)
+	exists, err := getMembership(fleetMembership, gcpProject)
 	if err != nil {
-		nt.T.Error(err)
-		nt.T.Skip("Skip the test because unable to check if membership exists")
-	} else if membershipExists {
-		fleetProject := gcpProject
-		if len(wiPool) > 0 {
-			fleetProject = strings.TrimSuffix(wiPool, ".svc.id.goog")
-		}
-		nt.T.Logf("The membership exits, unregistering the cluster from project %q to clean up the membership", fleetProject)
-		if err = unregisterCluster(fleetMembership, fleetProject, gkeURI); err != nil {
-			nt.T.Logf("failed to unregister the cluster: %v", err)
-			if err = deleteMembership(fleetMembership, fleetProject); err != nil {
-				nt.T.Logf("failed to delete the membership %q: %v", fleetMembership, err)
-			}
-			membershipExists, _, err = getMembershipIdentityProvider(nt)
-			if err != nil {
-				nt.T.Error(err)
-				nt.T.Skip("Skip the test because the unable to check if membership is deleted")
-			} else if membershipExists {
-				nt.T.Error("the membership should have been deleted")
-				nt.T.Skip("Skip the test because the membership wasn't deleted")
-			}
-		}
-		// b/226383057: DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
-		// is guaranteed to have no membership watch setup.
-		// This is to ensure consistent behavior when the membership is not cleaned up from previous runs.
-		// The underlying reconciler may or may not be restarted depending on the membership existence.
-		// If membership exists before the reconciler-manager is deployed (test leftovers), the reconciler will be updated.
-		// If membership doesn't exist (normal scenario), the reconciler should remain the same after the reconciler-manager restarts.
-		nt.T.Logf("Restart the reconciler-manager to ensure the membership watch is not set up")
-		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
-		nomostest.Wait(nt.T, "wait for FWI credentials to be absent", nt.DefaultWaitTimeout, func() error {
-			return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
-		})
+		nt.T.Fatalf("Unable to check the membership: %v", err)
 	}
+
+	if !exists {
+		return
+	}
+
+	nt.T.Logf("The membership exits, unregistering the cluster from project %q to clean up the membership", gcpProject)
+	if err = unregisterCluster(fleetMembership, gcpProject, gkeURI); err != nil {
+		nt.T.Logf("Failed to unregister the cluster: %v", err)
+		if err = deleteMembership(fleetMembership, gcpProject); err != nil {
+			nt.T.Logf("Failed to delete the membership %q: %v", fleetMembership, err)
+		}
+		exists, err = getMembership(fleetMembership, gcpProject)
+		if err != nil {
+			nt.T.Fatalf("Unable to check if membership is deleted: %v", err)
+		}
+		if exists {
+			nt.T.Fatalf("The membership wasn't deleted")
+		}
+	}
+	// b/226383057: DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
+	// is guaranteed to have no membership watch setup.
+	// This is to ensure consistent behavior when the membership is not cleaned up from previous runs.
+	// The underlying reconciler may or may not be restarted depending on the membership existence.
+	// If membership exists before the reconciler-manager is deployed (test leftovers), the reconciler will be updated.
+	// If membership doesn't exist (normal scenario), the reconciler should remain the same after the reconciler-manager restarts.
+	nt.T.Logf("Restart the reconciler-manager to ensure the membership watch is not set up")
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
+	nomostest.Wait(nt.T, "wait for FWI credentials to be absent", nt.DefaultWaitTimeout, func() error {
+		return validateFWICredentials(nt, nomostest.DefaultRootReconcilerName, fwiAnnotationAbsent)
+	})
 }
 
 type workloadIdentityTestSpec struct {
@@ -261,15 +256,13 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		}
 		nt.T.Logf("Register the cluster to a fleet in project %q", fleetProject)
 		if err := registerCluster(fleetMembership, fleetProject, gkeURI); err != nil {
-			nt.T.Errorf("failed to register the cluster: %v", err)
-			nt.T.Skipf("Skip the test because unable to register the cluster to project %q", fleetProject)
-			membershipExists, _, err := getMembershipIdentityProvider(nt)
+			nt.T.Fatalf("Failed to register the cluster to project %q: %v", fleetProject, err)
+			exists, err := getMembership(fleetMembership, fleetProject)
 			if err != nil {
-				nt.T.Error(err)
-				nt.T.Skip("Skip the test because unable to check if membership exists")
-			} else if !membershipExists {
-				nt.T.Error("the membership should be created, but not")
-				nt.T.Skip("Skip the test because the membership has not been created")
+				nt.T.Fatalf("Unable to check if membership exists: %v", err)
+			}
+			if !exists {
+				nt.T.Fatalf("The membership wasn't created")
 			}
 		}
 		nt.T.Logf("Restart the reconciler-manager to pick up the Membership")

@@ -47,6 +47,7 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -217,6 +218,16 @@ func reposyncCACert(caCertSecretRef string) func(sync *v1beta1.RepoSync) {
 	}
 }
 
+func reposyncNotificationConfig(notificationConfig *v1beta1.NotificationConfig) func(sync *v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		if rs.Annotations == nil {
+			rs.Annotations = make(map[string]string)
+		}
+		rs.Annotations[fmt.Sprintf("%s/subscribe.foo.bar", util.AnnotationsPrefix)] = ""
+		rs.Spec.NotificationConfig = notificationConfig
+	}
+}
+
 func repoSync(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1(ns, name)
 	rs.Spec.SourceType = string(v1beta1.GitSource)
@@ -329,7 +340,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -456,7 +467,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -685,7 +696,7 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -723,7 +734,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -859,7 +870,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1000,7 +1011,7 @@ func TestRepoSyncCreateWithCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 
 	nsSecretName := nsReconcilerName + "-" + secretName
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
@@ -1039,7 +1050,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	nsSecretName := nsReconcilerName + "-" + secretName
 	repoDeployment := rootSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1087,7 +1098,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
 	updatedRepoDeployment := rootSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1189,6 +1200,75 @@ func TestRepoSyncWithoutCACertSecret(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret), err.Error(), "unexpected function error")
 }
 
+func TestRepoSyncCreateWithNotifications(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+	configMapNN := types.NamespacedName{
+		Name:      "test-notification-cm",
+		Namespace: reposyncNs,
+	}
+	secretNN := types.NamespacedName{
+		Name:      "test-notification-secret",
+		Namespace: reposyncNs,
+	}
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
+		reposyncNotificationConfig(&v1beta1.NotificationConfig{
+			ConfigMapRef: &v1beta1.ConfigMapReference{Name: configMapNN.Name},
+			SecretRef:    &v1beta1.SecretReference{Name: secretNN.Name},
+		}),
+	)
+	repoSyncNN := namespacedName(rs.Name, rs.Namespace)
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+
+	notificationConfigMap := fake.ConfigMapObject(core.Name(configMapNN.Name), core.Namespace(configMapNN.Namespace))
+	notificationSecret := fake.SecretObject(secretNN.Name, core.Namespace(secretNN.Namespace))
+
+	// initial create without ConfigMap to check for error
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, notificationSecret, gitSecret)
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, repoSyncNN); err == nil {
+		t.Fatal("expected reconciliation error")
+	}
+
+	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	reposync.SetStalled(wantRs, "Notification",
+		fmt.Errorf("notification ConfigMap %s not found in the %s namespace", configMapNN.Name, configMapNN.Namespace),
+	)
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	if err := fakeClient.Create(ctx, notificationConfigMap); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, repoSyncNN); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, true)
+
+	nsSecretName := nsReconcilerName + "-" + secretName
+	rootDeployment := repoSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsSecretName),
+		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
+		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
+		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
+		notificationMutator(),
+		containerEnvMutator(repoContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	t.Log("Deployment successfully created")
+}
+
 func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -1203,7 +1283,7 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1235,7 +1315,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1267,7 +1347,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1299,7 +1379,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	updatedRepoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1376,7 +1456,7 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1408,7 +1488,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1440,7 +1520,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1517,7 +1597,7 @@ func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1547,7 +1627,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1576,7 +1656,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1666,7 +1746,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1705,7 +1785,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1736,7 +1816,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1775,7 +1855,7 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1909,7 +1989,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	roleBinding1.Subjects = addSubjectByName(roleBinding1.Subjects, nsReconcilerName)
 	wantRoleBindings := map[core.ID]*rbacv1.RoleBinding{core.IDOf(roleBinding1): roleBinding1}
 
-	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName, false)
 	repoDeployment1 := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1957,7 +2037,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
-	repoContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	repoContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2, false)
 	repoDeployment2 := repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
@@ -2019,7 +2099,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
-	repoContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	repoContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3, false)
 	repoDeployment3 := repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
@@ -2081,7 +2161,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
-	repoContainerEnv4 := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4)
+	repoContainerEnv4 := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4, false)
 	repoDeployment4 := repoSyncDeployment(
 		nsReconcilerName4,
 		setServiceAccountName(nsReconcilerName4),
@@ -2143,7 +2223,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
-	repoContainerEnv5 := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5)
+	repoContainerEnv5 := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5, false)
 	repoDeployment5 := repoSyncDeployment(
 		nsReconcilerName5,
 		setServiceAccountName(nsReconcilerName5),
@@ -2193,7 +2273,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	reposync.SetReconciling(wantRs1, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
-	repoContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	repoContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName, false)
 	repoDeployment1 = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2227,7 +2307,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	reposync.SetReconciling(wantRs2, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
-	repoContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	repoContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2, false)
 	repoDeployment2 = repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
@@ -2261,7 +2341,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	reposync.SetReconciling(wantRs3, "Deployment", "Replicas: 0/1")
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
-	repoContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	repoContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3, false)
 	repoDeployment3 = repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
@@ -2712,7 +2792,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -2779,7 +2859,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -2812,7 +2892,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2847,7 +2927,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 
 	repoDeployment := rootSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2877,7 +2957,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
@@ -2970,7 +3050,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3012,7 +3092,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3041,7 +3121,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName, false)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3500,7 +3580,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, testReconciler := setupNSReconciler(t, tc.repoSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.repoSync.Namespace)))
 
-			env := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName)
+			env := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName, false)
 
 			for container, vars := range env {
 				if diff := cmp.Diff(tc.expected[container], vars, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b corev1.EnvVar) bool { return a.Name < b.Name })); diff != "" {

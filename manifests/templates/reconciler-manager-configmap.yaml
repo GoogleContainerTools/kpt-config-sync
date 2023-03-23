@@ -169,6 +169,20 @@ data:
              requests:
                cpu: "50m"
                memory: "200Mi"
+         - name: notification
+           image: NOTIFICATION_IMAGE_NAME
+           command:
+           - /notification
+           terminationMessagePath: "/dev/termination-log"
+           terminationMessagePolicy: File
+           imagePullPolicy: IfNotPresent
+           securityContext:
+             allowPrivilegeEscalation: false
+             readOnlyRootFilesystem: true
+           resources:
+             requests:
+               cpu: 10m
+               memory: 50Mi
          - name: otel-agent
            image: gcr.io/config-management-release/otelcontribcol:v0.54.0
            command:

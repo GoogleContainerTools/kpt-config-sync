@@ -32,6 +32,9 @@ rules:
 - apiGroups: ["kpt.dev"]
   resources: ["resourcegroups/status"]
   verbs: ["*"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
 - apiGroups:
   - policy
   resources:

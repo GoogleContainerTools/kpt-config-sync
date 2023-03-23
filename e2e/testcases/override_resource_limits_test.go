@@ -67,19 +67,37 @@ func defaultResourceRequestsLimits(nt *nomostest.NT) (reconcilerRequests, reconc
 			}
 		}
 		if container.Name == reconcilermanager.Reconciler {
-			reconcilerRequests = container.Resources.Requests
-			reconcilerLimits = container.Resources.Limits
+			reconcilerRequests = container.Resources.Requests.DeepCopy()
+			reconcilerLimits = container.Resources.Limits.DeepCopy()
+			if nt.IsGKEAutopilot {
+				// Autopilot sets limit to request, if not set.
+				if reconcilerLimits.Cpu().IsZero() {
+					reconcilerLimits[corev1.ResourceCPU] = reconcilerRequests[corev1.ResourceCPU]
+				}
+				if reconcilerLimits.Memory().IsZero() {
+					reconcilerLimits[corev1.ResourceMemory] = reconcilerRequests[corev1.ResourceMemory]
+				}
+			}
 		}
 		if container.Name == reconcilermanager.GitSync {
-			gitSyncRequests = container.Resources.Requests
-			gitSyncLimits = container.Resources.Limits
+			gitSyncRequests = container.Resources.Requests.DeepCopy()
+			gitSyncLimits = container.Resources.Limits.DeepCopy()
+			if nt.IsGKEAutopilot {
+				// Autopilot sets limit to request, if not set.
+				if gitSyncLimits.Cpu().IsZero() {
+					gitSyncLimits[corev1.ResourceCPU] = gitSyncRequests[corev1.ResourceCPU]
+				}
+				if reconcilerLimits.Memory().IsZero() {
+					gitSyncLimits[corev1.ResourceMemory] = gitSyncRequests[corev1.ResourceMemory]
+				}
+			}
 		}
 	}
 	return
 }
 
 func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -382,7 +400,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 }
 
 func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	if err := nt.WatchForAllSyncs(); err != nil {

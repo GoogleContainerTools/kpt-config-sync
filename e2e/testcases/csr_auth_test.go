@@ -168,8 +168,13 @@ func getMembership(fleetMembership, gcpProject string) (bool, error) {
 	bytes, err := exec.Command("gcloud", "container", "fleet", "memberships", "describe", fleetMembership, "--project", gcpProject).CombinedOutput()
 	out := string(bytes)
 	if err != nil {
-		// ERROR: (gcloud.container.fleet.memberships.describe) Membership xxx not found in the fleet.
-		if strings.Contains(out, fmt.Sprintf("Membership %s not found in the fleet", fleetMembership)) {
+		// There are different error messages returned from the fleet:
+		// - ERROR: (gcloud.container.fleet.memberships.describe) Membership xxx not found in the fleet.
+		// - ERROR: (gcloud.container.fleet.memberships.describe) No memberships available in the fleet.
+		// - ERROR: (gcloud.container.fleet.memberships.describe) NOT_FOUND: Resource 'projects/gcpProject/locations/global/memberships/fleetMembership' was not found
+		if strings.Contains(out, fmt.Sprintf("Membership %s not found in the fleet", fleetMembership)) ||
+			strings.Contains(out, "No memberships available in the fleet") ||
+			strings.Contains(out, "NOT_FOUND") {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to describe the membership %s in project %s (out: %s\nerror: %w)", fleetMembership, gcpProject, out, err)

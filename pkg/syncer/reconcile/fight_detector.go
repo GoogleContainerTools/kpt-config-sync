@@ -40,16 +40,6 @@ func SetFightThreshold(updatesPerMinute float64) {
 	fightThreshold = updatesPerMinute
 }
 
-var fightWarningBuilder = status.NewErrorBuilder("2005")
-
-// FightWarning represents when the Syncer is fighting over a resource with
-// some other process on a Kubernetes cluster.
-func FightWarning(frequency float64, resource client.Object) status.ResourceError {
-	return fightWarningBuilder.Sprintf("syncer excessively updating resource, approximately %d times per minute. "+
-		"This may indicate ACM is fighting with another controller over the resource.", int(frequency)).
-		BuildWithResources(resource)
-}
-
 // fightDetector uses a linear differential equation to estimate the frequency
 // of updates to resources, then logs to klog.Warning when it detects resources
 // needing updates too frequently.
@@ -100,7 +90,7 @@ func (d *fightDetector) markUpdated(now time.Time, resource client.Object) statu
 		d.fights[i] = &fight{}
 	}
 	if frequency := d.fights[i].markUpdated(now); frequency >= fightThreshold {
-		return FightWarning(frequency, resource)
+		return status.FightError(frequency, resource)
 	}
 	return nil
 }

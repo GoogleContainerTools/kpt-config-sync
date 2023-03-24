@@ -42,7 +42,6 @@ import (
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/client"
-	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
@@ -335,7 +334,7 @@ func Generate() AllExamples {
 	result.add(status.SourceError.Sprint("unable to connect to Git repository").Build())
 
 	// 2005
-	result.add(reconcile.FightWarning(9.5, fake.NamespaceObject("gatekeeper-system")))
+	result.add(status.FightError(9.5, fake.NamespaceObject("gatekeeper-system")))
 
 	// 2006
 	result.add(status.EmptySourceError(10, "namespaces"))

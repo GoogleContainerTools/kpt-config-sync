@@ -53,11 +53,11 @@ const rmCreationTimestampPatch = "{\"metadata\":{\"creationTimestamp\":null}}"
 
 // Applier updates a resource from its current state to its intended state using apply operations.
 type Applier interface {
-	Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error)
-	Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (bool, status.Error)
+	Create(ctx context.Context, obj *unstructured.Unstructured) status.Error
+	Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error
 	// RemoveNomosMeta performs a PUT (rather than a PATCH) to ensure that labels and annotations are removed.
-	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) (bool, status.Error)
-	Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error)
+	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) status.Error
+	Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error
 	GetClient() client.Client
 }
 
@@ -105,7 +105,7 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) 
 }
 
 // Create implements Applier.
-func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.Unstructured) (bool, status.Error) {
+func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.Unstructured) status.Error {
 	var err status.Error
 	// APIService is handled specially by client-side apply due to
 	// https://github.com/kubernetes/kubernetes/issues/89264
@@ -121,28 +121,28 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 
 	if err != nil {
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
-		return false, err
+		return err
 	}
 	if c.fights.detectFight(ctx, time.Now(), intendedState, &c.fLogger, "create") {
 		klog.Warningf("Fight detected on create of %s.", description(intendedState))
 	}
 	klog.V(3).Infof("Created object %v", core.GKNN(intendedState))
-	return true, nil
+	return nil
 }
 
 // Update implements Applier.
-func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (bool, status.Error) {
+func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error {
 	patch, err := c.update(ctx, intendedState, currentState)
 	metrics.Operations.WithLabelValues("update", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
 	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err), intendedState.GroupVersionKind())
 
 	switch {
 	case apierrors.IsConflict(err):
-		return false, syncerclient.ConflictUpdateOldVersion(err, intendedState)
+		return syncerclient.ConflictUpdateOldVersion(err, intendedState)
 	case apierrors.IsNotFound(err):
-		return false, syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
+		return syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
 	case err != nil:
-		return false, status.ResourceWrap(err, "unable to update resource", intendedState)
+		return status.ResourceWrap(err, "unable to update resource", intendedState)
 	}
 
 	updated := !isNoOpPatch(patch)
@@ -155,11 +155,11 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 	} else {
 		klog.V(3).Infof("The object %v is up to date.", core.GKNN(currentState))
 	}
-	return updated, nil
+	return nil
 }
 
 // RemoveNomosMeta implements Applier.
-func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) (bool, status.Error) {
+func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) status.Error {
 	var changed bool
 	_, err := c.client.Apply(ctx, u, func(obj client.Object) (client.Object, error) {
 		changed = metadata.RemoveConfigSyncMetadata(obj)
@@ -176,24 +176,24 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 	} else {
 		klog.V(3).Infof("RemoveNomosMeta did not change the object %v", core.GKNN(u))
 	}
-	return changed, err
+	return err
 }
 
 // Delete implements Applier.
-func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	err := c.client.Delete(ctx, obj)
 	metrics.Operations.WithLabelValues("delete", obj.GetKind(), metrics.StatusLabel(err)).Inc()
 	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err), obj.GroupVersionKind())
 
 	if err != nil {
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
-		return false, err
+		return err
 	}
 	if c.fights.detectFight(ctx, time.Now(), obj, &c.fLogger, "delete") {
 		klog.Warningf("Fight detected on delete of %s.", description(obj))
 	}
 	klog.V(3).Infof("Deleted object %v", core.GKNN(obj))
-	return true, nil
+	return nil
 }
 
 // create creates the resource with the declared-config annotation set.

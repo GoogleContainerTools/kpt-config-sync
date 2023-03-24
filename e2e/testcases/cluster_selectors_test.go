@@ -100,6 +100,7 @@ func namespaceObject(name string, annotations map[string]string) *corev1.Namespa
 }
 
 func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.ClusterSelector)
 	configMapName := clusterNameConfigMapName(nt)
 
@@ -116,9 +117,9 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	testPodsQuota := "266"
 	rqInline := resourceQuota(resourceQuotaName, frontendNamespace, prodPodsQuota, inlineProdClusterSelectorAnnotation)
 	rqLegacy := resourceQuota(resourceQuotaName, frontendNamespace, testPodsQuota, legacyTestClusterSelectorAnnotation)
+	nsObj := namespaceObject(frontendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", frontendNamespace),
-		namespaceObject(frontendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", frontendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/frontend/quota-inline.yaml", rqInline)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/frontend/quota-legacy.yaml", rqLegacy)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a resource quota")
@@ -163,24 +164,29 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 			resourceQuotaHasHardPods(nt, prodPodsQuota),
 		}))
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rqInline)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestClusterSelectorOnObjects(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.ClusterSelector)
 
 	configMapName := clusterNameConfigMapName(nt)
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, backendNamespace, inlineProdClusterSelectorAnnotation)
+	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -251,11 +257,15 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -267,9 +277,6 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	nt.T.Log("Add a valid cluster selector annotation to a namespace")
 	namespace := namespaceObject(backendNamespace, inlineProdClusterSelectorAnnotation)
 	rb := roleBinding(roleBindingName, backendNamespace, inlineProdClusterSelectorAnnotation)
-	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/namespace.yaml", namespace)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a namespace and a role binding")
@@ -284,21 +291,15 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Add test cluster, and cluster registry data")
@@ -322,21 +323,15 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceDeleted("RoleBinding"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, testClusterName)
@@ -362,21 +357,15 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Updating bob-rolebinding to NOT have cluster-selector")
@@ -390,20 +379,14 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Revert namespace to match prod cluster")
@@ -420,21 +403,15 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceDeleted("RoleBinding"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	renameCluster(nt, configMapName, prodClusterName)
@@ -459,21 +436,15 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, namespace)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("RoleBinding"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -482,15 +453,27 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, backendNamespace, inlineProdClusterSelectorAnnotation)
+	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -505,11 +488,14 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -525,15 +511,26 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, backendNamespace, map[string]string{metadata.LegacyClusterSelectorAnnotationKey: prodClusterSelectorName})
+	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a valid cluster selector annotation to a role binding")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -548,11 +545,14 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -569,9 +569,9 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 	nt.T.Log("Add CRs (not targeted to this cluster) without its CRD")
 	cr := anvilCR("v1", "e2e-test-anvil", 10)
 	cr.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: testClusterSelectorName})
+	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/anvil.yaml", cr)
 	cr2 := anvilCR("v1", "e2e-test-anvil-2", 10)
 	cr2.SetAnnotations(legacyTestClusterSelectorAnnotation)
@@ -582,11 +582,15 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -609,6 +613,16 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, nn, rb)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: nn,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.T.Log("Modify the cluster selector to select an excluded cluster list")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,b,,,c,d"}
 	nt.NonRootRepos[nn].Add("acme/bob-rolebinding.yaml", rb)
@@ -617,6 +631,17 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Delete the object, since it's no longer specified for this cluster
+	nt.MetricsExpectations.AddObjectDelete(configsync.RepoSyncKind, nn, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: nn,
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -635,11 +660,16 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	// Expect ClusterObject & ClusterSelector to be excluded from declared
+	// resources and not applied.
+	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, nn, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync: nn,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -651,15 +681,27 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 
 	nt.T.Log("Add a role binding without any cluster selectors")
 	rb := roleBinding(roleBindingName, backendNamespace, map[string]string{})
+	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace),
-		namespaceObject(backendNamespace, map[string]string{}))
+		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a role binding without any cluster selectors")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -671,6 +713,16 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -690,6 +742,16 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.T.Log("Add an empty cluster selector annotation to a role binding")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: ""}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
@@ -698,6 +760,16 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -712,7 +784,17 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Add a cluster selector annotation to a role binding with a list of excluded clusters")
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Add a cluster selector annotation to a role binding that does not include the current cluster")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,,b"}
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a cluster selector annotation to a role binding with a list of excluded clusters")
@@ -720,6 +802,16 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -734,11 +826,14 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -757,12 +852,19 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add both cluster selector annotations to a role binding")
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -780,6 +882,17 @@ func TestClusterSelectorForCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
+
+	// Validate metrics.
+	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Test inline cluster-name-selector annotation
 	nt.T.Log("Set the cluster-name-selector annotation to a not-selected cluster")
 	crd.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: testClusterName})
@@ -790,7 +903,17 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err := nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	err = nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crd)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -803,6 +926,16 @@ func TestClusterSelectorForCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -830,6 +963,16 @@ func TestClusterSelectorForCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crd)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.T.Log("Set ClusterSelector to a selected cluster")
 	crd.SetAnnotations(map[string]string{metadata.LegacyClusterSelectorAnnotationKey: prodClusterSelectorName})
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
@@ -841,11 +984,14 @@ func TestClusterSelectorForCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 

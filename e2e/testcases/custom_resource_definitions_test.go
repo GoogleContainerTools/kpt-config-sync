@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
@@ -61,27 +62,15 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crd)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	// Validate multi-repo metrics.
-	// The "declared_resources" metric only includes the count of objects with
-	// known resources. On the first apply pass, the Anvil CR will be excluded,
-	// and the metric will be recorded with status=error. The second apply pass
-	// should include the Anvil CR, but will be reported as the same commit. So
-	// syncing to the latest commit isn't enough to ensure the metrics are up to
-	// date. We also have to make sure status=success.
-	// Unfortunately, this means failure will always time out.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
-		return nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"),
-			metrics.ResourceCreated("CustomResourceDefinition"),
-			metrics.ResourceCreated("Anvil"))
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// This should cause an error.
@@ -90,12 +79,19 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// This should fix the error.
@@ -105,25 +101,15 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		nt.T.Fatal(err)
 	}
 
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, crd)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crd)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
 	// Validate reconciler error is cleared.
-	// The applier can prune both the CR and CRD in the same pass. So for this
-	// validation we can just wait for the commit to match, which will
-	// allow faster failure on error.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceDeleted("CustomResourceDefinition"),
-			metrics.ResourceDeleted("Anvil"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
@@ -166,22 +152,15 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Anvil"))
-		if err != nil {
-			return err
-		}
-		return nil
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Errorf("validating metrics: %v", err)
+		nt.T.Fatal(err)
 	}
 
 	// Remove the CustomResource.
@@ -195,6 +174,15 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, anvilObj)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Remove the CustomResourceDefinition.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well")
@@ -202,6 +190,15 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crdObj)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -240,19 +237,14 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	nt.RenewClient()
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("CustomResourceDefinition"),
-			metrics.ResourceCreated("Namespace"))
-		return err
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
@@ -276,6 +268,15 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	}
 
 	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crdObj)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -318,29 +319,14 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, clusteranvilObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, clusteranvilObj)
 
-	// Validate multi-repo metrics.
-	// The "declared_resources" metric only includes the count of objects with
-	// known resources. On the first apply pass, the Anvil CR will be excluded,
-	// and the metric will be recorded with status=error. The second apply pass
-	// should include the Anvil CR, but will be reported as the same commit. So
-	// syncing to the latest commit isn't enough to ensure the metrics are up to
-	// date. We also have to make sure status=success.
-	// Unfortunately, this means failure will always time out.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("CustomResourceDefinition"),
-			metrics.ResourceCreated("ClusterAnvil"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Update the CRD from version v1 to version v2.
@@ -427,28 +413,15 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
-	// Validate multi-repo metrics.
-	// The "declared_resources" metric only includes the count of objects with
-	// known resources. On the first apply pass, the Anvil CR will be excluded,
-	// and the metric will be recorded with status=error. The second apply pass
-	// should include the Anvil CR, but will be reported as the same commit. So
-	// syncing to the latest commit isn't enough to ensure the metrics are up to
-	// date. We also have to make sure status=success.
-	// Unfortunately, this means failure will always time out.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommitSyncedWithSuccess(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("CustomResourceDefinition"),
-			metrics.ResourceCreated("Anvil"),
-			metrics.ResourceCreated("Namespace"))
-		return err
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Update the CRD from version v1 to version v2.
@@ -555,22 +528,14 @@ func TestLargeCRD(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/challenges-acme-cert-manager-io.yaml"))
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/solrclouds-solr-apache-org.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/challenges-acme-cert-manager-io.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/solrclouds-solr-apache-org.yaml"))
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("CustomResourceDefinition"),
-			metrics.ResourceCreated("CustomResourceDefinition"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// update one CRD

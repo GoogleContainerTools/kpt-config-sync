@@ -36,6 +36,7 @@ import (
 )
 
 func TestPreserveGeneratedServiceFields(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Declare the Service's Namespace
@@ -115,22 +116,14 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		nt.T.Fatalf("not using strategic merge patch: %v", err)
 	}
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, serviceObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, serviceObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Service"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	updatedService := serviceObj.DeepCopy()
@@ -148,24 +141,18 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, updatedService)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, updatedService)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourcePatched("Namespace", 2), metrics.ResourcePatched("Service", 2))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nsViewerName := "namespace-viewer"
@@ -200,6 +187,7 @@ aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
       permissions: viewer`))
+	aggregateViewer := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/aggregate-viewer-cr.yaml")
 
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRoles")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -218,6 +206,18 @@ aggregationRule:
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsViewer)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbacViewer)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, aggregateViewer)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Update aggregateRole with a new label.
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
 kind: ClusterRole
@@ -230,6 +230,7 @@ aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
       permissions: viewer`))
+	aggregateViewer = nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/aggregate-viewer-cr.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add label to aggregate ClusterRole")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -244,11 +245,14 @@ aggregationRule:
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, aggregateViewer)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -256,6 +260,7 @@ aggregationRule:
 // annotation.
 // TODO: Remove this test once all users are past 1.4.0.
 func TestPreserveLastApplied(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Declare a ClusterRole and wait for it to sync.
@@ -297,20 +302,24 @@ func TestPreserveLastApplied(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsViewer)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestAddUpdateDeleteLabels(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-labels"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml",
-		fake.NamespaceObject(ns))
+	nsObj := fake.NamespaceObject(ns)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml", nsObj)
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-labels/configmap.yaml"
@@ -359,15 +368,20 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cm)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestAddUpdateDeleteAnnotations(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-annotations"
@@ -393,22 +407,14 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cmObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("ConfigMap"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	cmObj.Annotations["baz"] = "qux"
@@ -428,20 +434,13 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cmObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourcePatched("Namespace", 2), metrics.ResourcePatched("ConfigMap", 2))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	delete(cmObj.Annotations, "baz")
@@ -458,20 +457,13 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cmObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cmObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourcePatched("Namespace", 3), metrics.ResourcePatched("ConfigMap", 3))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 

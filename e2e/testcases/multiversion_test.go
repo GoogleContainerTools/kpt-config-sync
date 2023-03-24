@@ -35,6 +35,7 @@ import (
 )
 
 func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	support, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
@@ -75,32 +76,16 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crdObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("CustomResourceDefinition"), metrics.ResourceCreated("Namespace"),
-			metrics.GVKMetric{
-				GVK:   "Anvil",
-				APIOp: "update",
-				ApplyOps: []metrics.Operation{
-					{Name: "update", Count: 2},
-				},
-				Watches: "2",
-			})
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Modify the v1 and v1beta1 Anvils and verify they are updated.
@@ -123,29 +108,14 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	}
 
 	// Sames IDs, so the new objects replace the old objects
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourcePatched("Namespace", 2),
-			metrics.GVKMetric{
-				GVK:   "Anvil",
-				APIOp: "update",
-				ApplyOps: []metrics.Operation{
-					{Name: "update", Count: 4},
-				},
-				Watches: "2",
-			})
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -191,10 +161,12 @@ func anvilV1Beta1CRD() *apiextensionsv1beta1.CustomResourceDefinition {
 }
 
 func TestMultipleVersions_CustomResourceV1(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
 	// Add the Anvil CRD.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", anvilV1CRD())
+	crdObj := anvilV1CRD()
+	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crdObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -202,9 +174,12 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	nt.RenewClient()
 
 	// Add the v1 and v1beta1 Anvils and verify they are created.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 10))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 100))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
+	anvilv1Obj := anvilCR("v1", "first", 10)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj)
+	anvilv2Obj := anvilCR("v2", "second", 100)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 and v2 Anvil CRs")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -220,8 +195,10 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	}
 
 	// Modify the v1 and v1beta1 Anvils and verify they are updated.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilCR("v1", "first", 20))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilCR("v2", "second", 200))
+	anvilv1Obj = anvilCR("v1", "first", 20)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj)
+	anvilv2Obj = anvilCR("v2", "second", 200)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modifying v1 and v2 Anvil CRs")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -236,11 +213,17 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crdObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv1Obj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilv2Obj)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -327,6 +310,7 @@ func anvilGVK(version string) schema.GroupVersionKind {
 }
 
 func TestMultipleVersions_RoleBinding(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	supportV1beta1, err := nt.SupportV1Beta1CRDAndRBAC()
 	if err != nil {
@@ -358,7 +342,8 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	})
 
 	// Add the v1 and v1beta1 RoleBindings and verify they are created.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1.yaml", rbV1)
 	if supportV1beta1 {
 		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1beta1.yaml", rbV1Beta1)
@@ -380,6 +365,18 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		if err != nil {
 			nt.T.Fatal(err)
 		}
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbV1Beta1)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbV1)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Modify the v1 and v1beta1 RoleBindings and verify they are updated.
@@ -394,7 +391,6 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		Name:     "v1beta1admin@acme.com",
 	})
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1.yaml", rbV1)
 	if supportV1beta1 {
 		nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1beta1.yaml", rbV1Beta1)
@@ -415,6 +411,17 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		if err != nil {
 			nt.T.Fatal(err)
 		}
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbV1Beta1)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbV1)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	if supportV1beta1 {
@@ -431,6 +438,16 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		if err := nt.ValidateNotFound("v1beta1user", "foo", &rbacv1beta1.RoleBinding{}); err != nil {
 			nt.T.Fatal(err)
 		}
+
+		nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rbV1Beta1)
+
+		// Validate metrics.
+		err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+			Sync: rootSyncNN,
+		})
+		if err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 
 	// Remove the v1 RoleBinding and verify that it is also deleted.
@@ -444,11 +461,14 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rbV1)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 

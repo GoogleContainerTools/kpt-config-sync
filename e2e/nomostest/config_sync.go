@@ -20,11 +20,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -47,7 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/metrics"
+	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -60,8 +63,9 @@ import (
 const (
 	// AcmeDir is the sync directory of the test source repository.
 	AcmeDir = "acme"
-	// Manifests is the folder of the test manifests
-	Manifests = "manifests"
+
+	// configSyncManifests is the folder of the test manifests
+	configSyncManifests = "manifests"
 
 	// e2e/raw-nomos/manifests/multi-repo-configmaps.yaml
 	multiConfigMapsName = "multi-repo-configmaps.yaml"
@@ -78,8 +82,7 @@ var (
 	baseDir            = filepath.FromSlash("../..")
 	outputManifestsDir = filepath.Join(baseDir, ".output", "staging", "oss")
 	configSyncManifest = filepath.Join(outputManifestsDir, "config-sync-manifest.yaml")
-
-	multiConfigMaps = filepath.Join(baseDir, "e2e", "raw-nomos", Manifests, multiConfigMapsName)
+	multiConfigMaps    = filepath.Join(baseDir, "e2e", "raw-nomos", configSyncManifests, multiConfigMapsName)
 )
 
 var (
@@ -97,10 +100,18 @@ func IsReconcilerManagerConfigMap(obj client.Object) bool {
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
 
+// isOtelCollectorDeployment returns true if passed obj is the
+// otel-collector Deployment in the config-management-monitoring namespace.
+func isOtelCollectorDeployment(obj client.Object) bool {
+	return obj.GetName() == ocmetrics.OtelCollectorName &&
+		obj.GetNamespace() == ocmetrics.MonitoringNamespace &&
+		obj.GetObjectKind().GroupVersionKind() == kinds.Deployment()
+}
+
 // ResetReconcilerManagerConfigMap resets the reconciler manager config map
 // to what is defined in the manifest
 func ResetReconcilerManagerConfigMap(nt *NT) error {
-	objs, err := parseManifests(nt)
+	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
 		return err
 	}
@@ -118,19 +129,22 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 	return fmt.Errorf("failed to reset reconciler manager ConfigMap")
 }
 
-func parseManifests(nt *NT) ([]client.Object, error) {
-	tmpManifestsDir := filepath.Join(nt.TmpDir, Manifests)
+func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
+	tmpManifestsDir := filepath.Join(nt.TmpDir, configSyncManifests)
 	objs, err := installationManifests(tmpManifestsDir)
 	if err != nil {
 		return nil, err
 	}
-	objs, err = convertObjects(nt, objs)
+	objs, err = convertToTypedObjects(nt, objs)
 	if err != nil {
 		return nil, err
 	}
 	reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
 	hydrationPollingPeriod = nt.HydrationPollingPeriod
-	objs, err = multiRepoObjects(objs, setReconcilerDebugMode, setPollingPeriods)
+	objs, err = multiRepoObjects(objs,
+		setReconcilerDebugMode,
+		setPollingPeriods,
+		setOtelCollectorPrometheusAnnotations)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +154,7 @@ func parseManifests(nt *NT) ([]client.Object, error) {
 // installConfigSync installs ConfigSync on the test cluster
 func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 	nt.T.Log("[SETUP] Installing Config Sync")
-	objs, err := parseManifests(nt)
+	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
 		return err
 	}
@@ -160,7 +174,7 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 // uninstallConfigSync uninstalls ConfigSync on the test cluster
 func uninstallConfigSync(nt *NT) error {
 	nt.T.Log("[CLEANUP] Uninstalling Config Sync")
-	objs, err := parseManifests(nt)
+	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
 		return err
 	}
@@ -178,39 +192,30 @@ func isPSPCluster() bool {
 	return strings.Contains(testing.GCPClusterFromEnv, "psp")
 }
 
-// convertObjects converts objects to their literal types. We can do this as
+// convertToTypedObjects converts objects to their literal types. We can do this as
 // we should have all required types in the scheme anyway. This keeps us from
 // having to do ugly Unstructured operations.
-func convertObjects(nt *NT, objs []client.Object) ([]client.Object, error) {
+func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error) {
 	result := make([]client.Object, len(objs))
 	for i, obj := range objs {
-		u, ok := obj.(*unstructured.Unstructured)
+		uObj, ok := obj.(*unstructured.Unstructured)
 		if !ok {
 			// Already converted when read from the disk, or added manually.
 			// We don't need to convert, so insert and go to the next element.
 			result[i] = obj
 			continue
 		}
-
-		o, err := nt.scheme.New(u.GroupVersionKind())
+		rObj, err := kinds.ToTypedObject(uObj, nt.scheme)
 		if err != nil {
-			return nil, fmt.Errorf("installed type %v not in Scheme: %v", u.GroupVersionKind(), err)
+			return nil, err
 		}
-
-		jsn, err := u.MarshalJSON()
-		if err != nil {
-			return nil, fmt.Errorf("marshalling object into JSON: %v", err)
-		}
-
-		err = json.Unmarshal(jsn, o)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshalling JSON into object: %v", err)
-		}
-		newObj, ok := o.(client.Object)
+		cObj, ok := rObj.(client.Object)
 		if !ok {
-			return nil, fmt.Errorf("trying to install non-object type %v", u.GroupVersionKind())
+			return nil, errors.Errorf(
+				"failed to cast object %T of kind %s to client.Object",
+				rObj, uObj.GroupVersionKind().Kind)
 		}
-		result[i] = newObj
+		result[i] = cObj
 	}
 	return result, nil
 }
@@ -261,12 +266,18 @@ func installationManifests(tmpManifestsDir string) ([]client.Object, error) {
 		return nil, err
 	}
 
+	return parseManifestDir(tmpManifestsDir)
+}
+
+// parseManifestDir reads YAML from all the files in a directory and parses them
+// into unstructured objects.
+func parseManifestDir(dirPath string) ([]client.Object, error) {
 	// Create the list of paths for the File to read.
-	readPath, err := cmpath.AbsoluteOS(tmpManifestsDir)
+	readPath, err := cmpath.AbsoluteOS(dirPath)
 	if err != nil {
 		return nil, err
 	}
-	files, err := ioutil.ReadDir(tmpManifestsDir)
+	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +355,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 			predicates = append(predicates, HasGenerationAtLeast(2))
 		}
 		return WatchObject(nt, kinds.Deployment(),
-			metrics.OtelCollectorName, metrics.MonitoringNamespace, predicates)
+			ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, predicates)
 	})
 	tg.Go(func() error {
 		// The root-reconciler is created after the reconciler-manager is ready.
@@ -468,11 +479,6 @@ func setupRepoSync(nt *NT, nn types.NamespacedName, reconcileTimeout *time.Durat
 	}
 }
 
-func waitForReconciler(nt *NT, name string) error {
-	return WatchForCurrentStatus(nt, kinds.Deployment(),
-		name, configmanagement.ControllerNamespace)
-}
-
 // RepoSyncRoleBinding returns rolebinding that grants service account
 // permission to manage resources in the namespace.
 func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
@@ -591,6 +597,27 @@ func setPollingPeriods(obj client.Object) error {
 
 	cm.Data[reconcilermanager.ReconcilerPollingPeriod] = reconcilerPollingPeriod.String()
 	cm.Data[reconcilermanager.HydrationPollingPeriod] = hydrationPollingPeriod.String()
+	return nil
+}
+
+// setOtelCollectorPrometheusAnnotations updates the otel-collector Deployment
+// to add pod annotations to enable metrics scraping.
+func setOtelCollectorPrometheusAnnotations(obj client.Object) error {
+	if obj == nil {
+		return ErrObjectNotFound
+	}
+	if !isOtelCollectorDeployment(obj) {
+		return nil
+	}
+	dep, ok := obj.(*appsv1.Deployment)
+	if !ok {
+		return fmt.Errorf("failed to cast %T to *appsv1.Deployment", obj)
+	}
+	if dep.Spec.Template.Annotations == nil {
+		dep.Spec.Template.Annotations = make(map[string]string, 2)
+	}
+	dep.Spec.Template.Annotations["prometheus.io/scrape"] = "true"
+	dep.Spec.Template.Annotations["prometheus.io/port"] = strconv.Itoa(metrics.OtelCollectorMetricsPort)
 	return nil
 }
 
@@ -857,7 +884,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs)
-		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rs)
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
 	}
 
@@ -869,7 +896,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 	// TODO: Test different permissions for different RepoSyncs.
 	cr := nt.RepoSyncClusterRole()
 	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, cr)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cr)
 
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
@@ -885,12 +912,12 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 		// RepoSyncs in the same namespace.
 		nsObj := fake.NamespaceObject(ns)
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj)
-		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
 		// Add RoleBinding to bind the ClusterRole to the RepoSync reconciler ServiceAccount
 		rb := RepoSyncRoleBinding(rsNN)
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb)
-		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rb)
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 		if isPSPCluster() {
 			// Add a ClusterRoleBinding so that the pods can be created
@@ -901,7 +928,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 			// available on GKE.
 			crb := repoSyncClusterRoleBinding(rsNN)
 			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, rsNN.Name), crb)
-			nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, crb)
+			nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crb)
 		}
 
 		// Add RepoSync pointing to the Git repo specified in nt.NonRootRepos[rsNN]
@@ -910,7 +937,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
 		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs)
-		nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, rs)
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
 	}
@@ -1096,69 +1123,4 @@ func toMetav1Duration(t time.Duration) *metav1.Duration {
 	return &metav1.Duration{
 		Duration: t,
 	}
-}
-
-// isObjectDeclarable returns true if the object should be included in the
-// declared resources passed to the applier.
-func isObjectDeclarable(_ client.Object) bool {
-	// TODO: Update if any of the following are added using WithInitialCommit:
-	// - ClusterSelectors & Cluster definitions
-	// - Objects excluded by the current ClusterSelectors and Cluster
-	// - Objects of unknown scope
-	// - Objects outside of hierarchical directories when in hierarchical mode
-	// - Objects in unmanaged namespaces
-	// For now, WithInitialCommit is only used in a few places, and all of the
-	// objects specified are intended to be applied. So just return true.
-	return true
-}
-
-// isObjectApplyable returns true if the object will be applied by Config Sync
-// when included in the source.
-func isObjectApplyable(obj client.Object) bool {
-	switch {
-	case obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled:
-		// Disabled objects count towards declared objects, but are not applied
-		return false
-	case obj.GetAnnotations()[metadata.LocalConfigAnnotationKey] == "true":
-		// Local objects count towards declared objects, but are not applied
-		return false
-	default:
-		return true
-	}
-}
-
-// validateStandardMetrics loops through the RootRepos & NonRootRepos an
-// validates metrics for each reconciler.
-func validateStandardMetrics(nt *NT) error {
-	// Validate metrics from root-reconcilers.
-	for rsName := range nt.RootRepos {
-		rootReconciler := core.RootReconcilerName(rsName)
-		if err := waitForReconciler(nt, rootReconciler); err != nil {
-			return err
-		}
-		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			err := nt.ValidateMultiRepoMetrics(rootReconciler, nt.ExpectedRootSyncObjectCount(rsName))
-			if err != nil {
-				return err
-			}
-			return nt.ValidateErrorMetricsNotFound()
-		})
-		if err != nil {
-			return err
-		}
-	}
-	// Validate metrics from ns-reconcilers.
-	for nn := range nt.NonRootRepos {
-		nsReconciler := core.NsReconcilerName(nn.Namespace, nn.Name)
-		if err := waitForReconciler(nt, nsReconciler); err != nil {
-			return err
-		}
-		err := nt.ValidateMetrics(SyncMetricsToLatestCommit(nt), func() error {
-			return nt.ValidateMultiRepoMetrics(nsReconciler, nt.ExpectedRepoSyncObjectCount(nn))
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

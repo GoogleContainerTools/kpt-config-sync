@@ -31,7 +31,8 @@ func TestIgnoreKptfiles(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/Kptfile", []byte("random content"))
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/Kptfile", nil)
 	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/subdir/Kptfile", []byte("# some comment"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding multiple Kptfiles")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -44,19 +45,12 @@ func TestIgnoreKptfiles(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/foo/ns.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err = nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }

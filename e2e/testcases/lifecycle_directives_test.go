@@ -36,6 +36,7 @@ import (
 var preventDeletion = core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)
 
 func TestPreventDeletionNamespace(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the Namespace doesn't already exist.
@@ -68,22 +69,14 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, role)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Role"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
@@ -108,32 +101,37 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
-	nt.RemoveExpectedObject(configsync.RootSyncKind, rootSyncNN, role)
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, role)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceDeleted("Role"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", fake.NamespaceObject("shipping"))
+	nsObj = fake.NamespaceObject("shipping")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Namespace")
 	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, role)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
 func TestPreventDeletionRole(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the Namespace doesn't already exist.
@@ -149,7 +147,8 @@ func TestPreventDeletionRole(t *testing.T) {
 		Resources: []string{"configmaps"},
 		Verbs:     []string{"get"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", fake.NamespaceObject("shipping"))
+	nsObj := fake.NamespaceObject("shipping")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
 	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -165,6 +164,17 @@ func TestPreventDeletionRole(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Delete the declaration and ensure the Namespace isn't deleted.
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role declaration")
@@ -176,6 +186,21 @@ func TestPreventDeletionRole(t *testing.T) {
 		nomostest.NotPendingDeletion,
 		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		nomostest.NoConfigSyncMetadata())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, role)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+		// Adjust operations for this edge case.
+		// Deletion is prevented, but management annotations/labels are removed.
+		Operations: []metrics.ObjectOperation{
+			{Kind: "Role", Operation: metrics.UpdateOperation, Count: 1},
+		},
+	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -196,15 +221,19 @@ func TestPreventDeletionRole(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestPreventDeletionClusterRole(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
 
 	// Ensure the ClusterRole doesn't already exist.
@@ -265,11 +294,14 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, clusterRole)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/kubevirt/v1"
+	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -110,10 +111,27 @@ func TestApplyScopedResources(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+		// Adjust count & operations manually, since we don't have the objects
+		// handy to add them to nt.ExpectedObjects.
+		ObjectCount: 13,
+		Operations: []metrics.ObjectOperation{
+			{Kind: "VirtualMachine", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "Deployment", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "KubeVirt", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "Role", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "RoleBinding", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "ServiceAccount", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "ClusterRole", Operation: metrics.UpdateOperation, Count: 2}, // kubevirt-operator & kubevirt.io:operator
+			{Kind: "ClusterRoleBinding", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "CustomResourceDefinition", Operation: metrics.UpdateOperation, Count: 1},
+			{Kind: "Namespace", Operation: metrics.UpdateOperation, Count: 2}, // kubevirt & bookstore1
+			{Kind: "PriorityClass", Operation: metrics.UpdateOperation, Count: 1},
+		},
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }

@@ -72,7 +72,7 @@ func StopWebhook(nt *NT) {
 }
 
 func installWebhook(nt *NT) error {
-	objs, err := parseManifests(nt)
+	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
 		return err
 	}

@@ -119,12 +119,10 @@ type NT struct {
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*Repository
 
-	// expectedObjects tracks the objects expected to be declared and applied
-	// from a source for a RootSync or RepoSync.
-	// Excludes non-synced files, like cluster selectors.
-	// Includes skipped files, like local and disabled objects, with value set to false.
-	// Format: Map[RSYNC_KIND][RSYNC_NN][OBJ_ID] = APPLYABLE
-	expectedObjects map[string]map[types.NamespacedName]map[core.ID]bool
+	// MetricsExpectations tracks the objects expected to be declared in the
+	// source and the operations expected to be performed on them by the set of
+	// RootSyncs and RepoSyncs managed by this test.
+	MetricsExpectations *testmetrics.SyncSetExpectations
 
 	// ReconcilerPollingPeriod defines how often the reconciler should poll the
 	// filesystem for updates to the source or rendered configs.
@@ -157,9 +155,6 @@ type NT struct {
 
 	// otelCollectorPodName is the pod name of the otel-collector.
 	otelCollectorPodName string
-
-	// ReconcilerMetrics is a map of scraped multirepo metrics.
-	ReconcilerMetrics testmetrics.ConfigSyncMetrics
 
 	// GitProvider is the provider that hosts the Git repositories.
 	GitProvider gitproviders.GitProvider
@@ -430,42 +425,6 @@ func (nt *NT) MustMergePatch(obj client.Object, patch string, opts ...client.Pat
 	if err := nt.MergePatch(obj, patch, opts...); err != nil {
 		nt.T.Fatal(err)
 	}
-}
-
-// AddExpectedObject specifies that an object is expected to be declared in the
-// source of truth for the specified RSync.
-func (nt *NT) AddExpectedObject(syncKind string, syncNN types.NamespacedName, obj client.Object) {
-	if nt.expectedObjects[syncKind] == nil {
-		nt.expectedObjects[syncKind] = make(map[types.NamespacedName]map[core.ID]bool)
-	}
-	if nt.expectedObjects[syncKind][syncNN] == nil {
-		nt.expectedObjects[syncKind][syncNN] = make(map[core.ID]bool)
-	}
-	nt.expectedObjects[syncKind][syncNN][core.IDOf(obj)] = isObjectApplyable(obj)
-}
-
-// RemoveExpectedObject removes an object from the set of objects expected to be
-// declared in the source of truth for the specified RSync.
-func (nt *NT) RemoveExpectedObject(syncKind string, syncNN types.NamespacedName, obj client.Object) {
-	if nt.expectedObjects[syncKind] == nil {
-		return
-	}
-	if nt.expectedObjects[syncKind][syncNN] == nil {
-		return
-	}
-	delete(nt.expectedObjects[syncKind][syncNN], core.IDOf(obj))
-}
-
-// ExpectedRootSyncObjectCount returns the expected number of declared resource
-// objects in the specified RootSync, according nt.expectedObjects.
-func (nt *NT) ExpectedRootSyncObjectCount(syncName string) int {
-	return len(nt.expectedObjects[configsync.RootSyncKind][RootSyncNN(syncName)])
-}
-
-// ExpectedRepoSyncObjectCount returns the expected number of declared resource
-// objects in the specified RepoSync, according nt.expectedObjects.
-func (nt *NT) ExpectedRepoSyncObjectCount(syncNN types.NamespacedName) int {
-	return len(nt.expectedObjects[configsync.RepoSyncKind][syncNN])
 }
 
 // NumRepoSyncNamespaces returns the number of unique namespaces managed by RepoSyncs.
@@ -804,10 +763,14 @@ func (nt *NT) PortForwardOtelCollector() {
 		// The otel-collector forwarding port needs to be updated after otel-collector restarts or starts for the first time.
 		// It sets otelCollectorPodName and otelCollectorPort to point to the current running pod that forwards the port.
 		if pod.Name != nt.otelCollectorPodName {
-			port, err := nt.ForwardToFreePort(ocmetrics.MonitoringNamespace, pod.Name, testmetrics.MetricsPort)
+			ctx, cancel := context.WithCancel(nt.Context)
+			port, err := nt.ForwardToFreePort(ctx, ocmetrics.MonitoringNamespace, pod.Name,
+				testmetrics.OtelCollectorMetricsPort)
 			if err != nil {
+				cancel()
 				return err
 			}
+			nt.T.Cleanup(cancel) // stop port-forward
 			nt.otelCollectorPort = port
 			nt.otelCollectorPodName = pod.Name
 		}
@@ -830,10 +793,13 @@ func (nt *NT) PortForwardGitServer() {
 	podName := pod.Name
 
 	if podName != nt.gitRepoPodName {
-		port, err := nt.ForwardToFreePort(testGitNamespace, podName, ":22")
+		ctx, cancel := context.WithCancel(nt.Context)
+		port, err := nt.ForwardToFreePort(ctx, testGitNamespace, podName, 22)
 		if err != nil {
+			cancel()
 			nt.T.Fatal(err)
 		}
+		nt.T.Cleanup(cancel) // stop port-forward
 		nt.gitRepoPort = port
 		nt.gitRepoPodName = podName
 	}
@@ -841,12 +807,12 @@ func (nt *NT) PortForwardGitServer() {
 
 // ForwardToFreePort forwards a local port to a port on the pod and returns the
 // local port chosen by kubectl.
-func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
+func (nt *NT) ForwardToFreePort(ctx context.Context, ns, pod string, port int) (int, error) {
 	nt.T.Helper()
 
-	nt.T.Log("starting port-forward process")
-	cmd := exec.Command("kubectl", "--kubeconfig", nt.kubeconfigPath, "port-forward",
-		"-n", ns, pod, port)
+	nt.T.Logf("starting port-forward to pod %s/%s", ns, pod)
+	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", nt.kubeconfigPath, "port-forward",
+		"-n", ns, pod, fmt.Sprintf(":%d", port))
 
 	stdout := &strings.Builder{}
 	stderr := &strings.Builder{}
@@ -861,35 +827,10 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 		return 0, fmt.Errorf(stderr.String())
 	}
 
-	var cleanup bool
-	var mux sync.Mutex
-
-	nt.T.Cleanup(func() {
-		mux.Lock()
-		defer mux.Unlock()
-		cleanup = true
-		nt.T.Logf("stopping port-forward %s/%s:%s process", ns, pod, port)
-		err := cmd.Process.Kill()
-		if err != nil && !errors.Is(err, os.ErrProcessDone) {
-			nt.T.Errorf("killing port-forward %s/%s:%s process: %v", ns, pod, port, err)
-		}
-	})
-
-	// Fail the test if port-forward exits prematurely
+	// Log when the command exits
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			// ignore errors if cleanup has started
-			mux.Lock()
-			defer mux.Unlock()
-			if cleanup {
-				return
-			}
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				nt.T.Errorf("port-forward errored (%v): stderr:\n%s", err, string(exitErr.Stderr))
-			} else {
-				nt.T.Errorf("port-forward errored (%v)", err)
-			}
+			nt.T.Logf("port-forward exited to pod %s/%s (%v)", ns, pod, err)
 		}
 	}()
 
@@ -897,25 +838,35 @@ func (nt *NT) ForwardToFreePort(ns, pod, port string) (int, error) {
 	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
 	// like a reasonable amount of time to wait.
 	took, err := Retry(30*time.Second, func() error {
-		s := stdout.String()
-		if !strings.Contains(s, "\n") {
-			return fmt.Errorf("nothing written to stdout for kubectl port-forward, stdout=%s", s)
-		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			s := stdout.String()
+			if !strings.Contains(s, "\n") {
+				return fmt.Errorf(
+					"nothing written to stdout for kubectl port-forward to pod %s/%s, stdout=%s",
+					ns, pod, s)
+			}
 
-		line := strings.Split(s, "\n")[0]
+			line := strings.Split(s, "\n")[0]
 
-		// Sample output:
-		// Forwarding from 127.0.0.1:44043
-		_, err = fmt.Sscanf(line, "Forwarding from 127.0.0.1:%d", &localPort)
-		if err != nil {
-			nt.T.Fatalf("unable to parse port-forward output: %q", s)
+			// Sample output:
+			// Forwarding from 127.0.0.1:44043
+			_, err = fmt.Sscanf(line, "Forwarding from 127.0.0.1:%d", &localPort)
+			if err != nil {
+				nt.T.Fatalf(
+					"unable to parse output of port-forward to pod %s/%s: %q",
+					ns, pod, s)
+			}
+			return nil
 		}
-		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
-	nt.T.Logf("took %v to wait for port-forward to pod %s/%s (localhost:%d)", took, ns, pod, localPort)
+	nt.T.Logf("took %v to wait for port-forward to pod %s/%s (localhost:%d)",
+		took, ns, pod, localPort)
 
 	return localPort, nil
 }

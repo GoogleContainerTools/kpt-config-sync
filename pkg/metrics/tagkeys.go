@@ -37,13 +37,21 @@ var (
 	// KeyComponent groups metrics by their component. Possible values: source, sync, rendering, readiness(from Resource Group Controller).
 	KeyComponent, _ = tag.NewKey("component")
 
+	// KeyExportedComponent groups metrics by their component.
+	// The "component" metric tag overlaps with a resource tag exported by
+	// resource_to_telemetry_conversion when using Prometheus. So it's renamed
+	// "exported_component" when exported to Prometheus.
+	// TODO: Fix this naming overlap by renaming the "component" metric tag.
+	// Possible values: source, sync, rendering, readiness (from Resource Group Controller).
+	KeyExportedComponent, _ = tag.NewKey("exported_component")
+
 	// KeyErrorClass groups metrics by their error code.
 	KeyErrorClass, _ = tag.NewKey("errorclass")
 
 	// KeyStatus groups metrics by their status. Possible values: success, error.
 	KeyStatus, _ = tag.NewKey("status")
 
-	// KeyType groups metrics by their resource GVK.
+	// KeyType groups metrics by their resource Kind.
 	KeyType, _ = tag.NewKey("type")
 
 	// KeyInternalErrorSource groups the InternalError metrics by their source. Possible values: parser, differ, remediator.

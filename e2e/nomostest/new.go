@@ -30,7 +30,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -171,15 +170,13 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
 		RootRepos:               sharedNt.RootRepos,
 		NonRootRepos:            sharedNt.NonRootRepos,
-		expectedObjects:         sharedNt.expectedObjects,
+		MetricsExpectations:     sharedNt.MetricsExpectations,
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		caCertPath:              sharedNt.caCertPath,
 		scheme:                  sharedNt.scheme,
 		GitProvider:             sharedNt.GitProvider,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
-		// Reset cached metrics for each test
-		ReconcilerMetrics: make(testmetrics.ConfigSyncMetrics),
 		// Reset git-repo port-forward for each test
 		gitRepoPort:    0,
 		gitRepoPodName: "",
@@ -221,6 +218,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 }
 
 // FreshTestEnv establishes a connection to a test cluster based on the passed
+//
 // options.
 //
 // Marks the test as parallel. For now we have no tests which *can't* be made
@@ -250,12 +248,12 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		kubeconfigPath:          opts.KubeconfigPath,
 		RootRepos:               make(map[string]*Repository),
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
-		expectedObjects:         make(map[string]map[types.NamespacedName]map[core.ID]bool),
+		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
 		scheme:                  scheme,
-		ReconcilerMetrics:       make(testmetrics.ConfigSyncMetrics),
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
+		DefaultMetricsTimeout:   30 * time.Second,
 	}
 
 	// Speed up the delay between sync attempts to speed up testing
@@ -276,10 +274,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	if nt.IsGKEAutopilot {
 		nt.DefaultWaitTimeout = 10 * time.Minute
-		nt.DefaultMetricsTimeout = 3 * time.Minute
 	} else {
 		nt.DefaultWaitTimeout = 6 * time.Minute
-		nt.DefaultMetricsTimeout = 1 * time.Minute
 	}
 
 	if *e2e.TestCluster == e2e.Kind {
@@ -344,6 +340,11 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := installConfigSync(nt, opts.Nomos); err != nil {
 		nt.T.Fatal(err)
 	}
+
+	if err := installPrometheus(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	return nt
 }
 
@@ -376,9 +377,9 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		for path, obj := range opts.InitialCommit.Files {
 			nt.RootRepos[configsync.RootSyncName].Add(path, obj)
 			// Some source objects are not included in the declared resources.
-			if isObjectDeclarable(obj) {
+			if testmetrics.IsObjectDeclarable(obj) {
 				// Some source objects are included in the declared resources, but not applied.
-				nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, obj)
+				nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, obj)
 			}
 		}
 		nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message)
@@ -427,7 +428,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		nt.T.Fatal(err)
 	}
 	// Validate metrics from each reconciler
-	if err := validateStandardMetrics(nt); err != nil {
+	if err := ValidateStandardMetrics(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 }

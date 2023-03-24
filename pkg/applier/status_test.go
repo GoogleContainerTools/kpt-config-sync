@@ -28,7 +28,7 @@ import (
 
 func TestObjectStatusMapFilter(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
-	testID := object.UnstructuredToObjMetadata(newTestObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj("test-1"))
 
 	testcases := []struct {
 		name      string
@@ -157,7 +157,7 @@ func TestObjectStatusMapFilter(t *testing.T) {
 
 func TestObjectStatusMapLog(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
-	testID := object.UnstructuredToObjMetadata(newTestObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj("random-name"))
 
 	testcases := []struct {
 		name     string

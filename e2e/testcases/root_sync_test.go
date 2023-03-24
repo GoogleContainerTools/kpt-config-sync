@@ -20,12 +20,14 @@ import (
 	"time"
 
 	"go.uber.org/multierr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -90,6 +92,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 }
 
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	// Validate RootSync is present.
@@ -100,16 +103,17 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	}
 
 	// Add audit namespace in policy directory acme.
-	acmeNS := "audit"
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/namespaces/%s/ns.yaml", rs.Spec.Git.Dir, acmeNS),
-		fake.NamespaceObject(acmeNS))
+	auditNS := "audit"
+	auditNSObj := fake.NamespaceObject(auditNS)
+	auditNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", rs.Spec.Git.Dir, auditNS)
+	nt.RootRepos[configsync.RootSyncName].Add(auditNSPath, auditNSObj)
 
 	// Add namespace in policy directory 'foo'.
 	fooDir := "foo"
 	fooNS := "shipping"
-	nsPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
-	nsObj := fake.NamespaceObject(fooNS)
-	nt.RootRepos[configsync.RootSyncName].Add(nsPath, nsObj)
+	fooNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
+	fooNSObj := fake.NamespaceObject(fooNS)
+	nt.RootRepos[configsync.RootSyncName].Add(fooNSPath, fooNSObj)
 
 	// Add repo resource in policy directory 'foo'.
 	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/system/repo.yaml", fooDir),
@@ -121,45 +125,37 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	}
 
 	// Validate namespace 'audit' created.
-	err = nt.Validate(acmeNS, "", fake.NamespaceObject(acmeNS))
+	err = nt.Validate(auditNS, "", auditNSObj)
 	if err != nil {
 		nt.T.Error(err)
 	}
 
 	// Validate namespace 'shipping' not present.
-	err = nt.ValidateNotFound(fooNS, "", fake.NamespaceObject(fooNS))
+	err = nt.ValidateNotFound(fooNS, "", fooNSObj)
 	if err != nil {
 		nt.T.Errorf("%s present after deletion: %v", fooNS, err)
 	}
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, auditNSObj)
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Update RootSync.
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, fooDir)
-	syncDirectoryMap := map[types.NamespacedName]string{nomostest.RootSyncNN(configsync.RootSyncName): fooDir}
+	syncDirectoryMap := map[types.NamespacedName]string{rootSyncNN: fooDir}
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirectoryMap))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Validate namespace 'shipping' created with the correct sourcePath annotation.
-	if err := nt.Validate(fooNS, "", fake.NamespaceObject(fooNS),
-		nomostest.HasAnnotation(metadata.SourcePathAnnotationKey, nsPath)); err != nil {
+	if err := nt.Validate(fooNS, "", fooNSObj,
+		nomostest.HasAnnotation(metadata.SourcePathAnnotationKey, fooNSPath)); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -167,111 +163,153 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), acmeNS, "")
+	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), auditNS, "")
 	if err != nil {
 		nt.T.Error(err)
 	}
 
-	// Validate multi-repo metrics.
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			1, // 1 for the test Namespace
-			metrics.GVKMetric{
-				GVK:   "Namespace",
-				APIOp: "delete",
-				ApplyOps: []metrics.Operation{
-					{Name: "delete", Count: 1},
-				},
-				Watches: "1",
-			})
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	nt.MetricsExpectations.Reset() // Not using the default PolicyDir
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, auditNSObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, fooNSObj)
+
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
 func TestUpdateRootSyncGitBranch(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource)
 
-	// Add audit namespace.
-	auditNS := "audit"
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", auditNS),
-		fake.NamespaceObject(auditNS))
+	nsA := "ns-a"
+	nsB := "ns-b"
+	nsAObj := fake.NamespaceObject(nsA)
+	nsBObj := fake.NamespaceObject(nsB)
+	branchA := nomostest.MainBranch
+	branchB := "test-branch"
+
+	// Add "ns-a" namespace.
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA), nsAObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	// Validate namespace 'acme' created.
-	err := nt.Validate(auditNS, "", fake.NamespaceObject(auditNS))
+	// "ns-a" namespace created
+	err := nt.Validate(nsA, "", &corev1.Namespace{})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
-	testBranch := "test-branch"
-	testNS := "audit-test"
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsAObj)
 
-	// Add a 'test-branch' branch with 'audit-test' namespace.
-	nt.RootRepos[configsync.RootSyncName].CreateBranch(testBranch)
-	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(testBranch)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", testNS),
-		fake.NamespaceObject(testNS))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add audit-test to acme directory", testBranch)
-
-	// Validate namespace 'audit-test' not present to vaidate rootsync is not syncing
-	// from 'test-branch' yet.
-	err = nt.ValidateNotFound(testNS, "", fake.NamespaceObject(testNS))
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
 	if err != nil {
-		nt.T.Errorf("%s present: %v", testNS, err)
+		nt.T.Fatal(err)
+	}
+
+	// Add a 'test-branch' branch with 'ns-b' namespace.
+	nt.RootRepos[configsync.RootSyncName].CreateBranch(branchB)
+	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchB)
+	nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA))
+	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsB), nsBObj)
+	nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add ns-b to acme directory", branchB)
+
+	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
+	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchA)
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// "ns-a" namespace still exists
+	err = nt.Validate(nsA, "", &corev1.Namespace{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// "ns-b" namespace not created
+	err = nt.ValidateNotFound(nsB, "", &corev1.Namespace{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsAObj)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Set branch to "test-branch"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, testBranch)
+	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchB)
+
+	// Checkout 'test-branch' branch to get the correct HEAD commit sha1.
+	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchB)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	// Validate namespace 'audit-test' created after updating rootsync.
-	err = nt.Validate(testNS, "", fake.NamespaceObject(testNS))
+	// "ns-a" namespace deleted
+	err = nt.ValidateNotFound(nsA, "", &corev1.Namespace{})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+	// "ns-b" namespace created
+	err = nt.Validate(nsB, "", &corev1.Namespace{})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, nsAObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsBObj)
+
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Set branch to "main"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchA)
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
-	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
+	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchA)
+
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	// Validate namespace 'acme' present.
-	err = nt.Validate(auditNS, "", fake.NamespaceObject(auditNS))
+	// "ns-a" namespace created
+	err = nt.Validate(nsA, "", &corev1.Namespace{})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+	// "ns-b" namespace deleted
+	err = nt.ValidateNotFound(nsB, "", &corev1.Namespace{})
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
-	// Validate namespace 'audit-test' not present to vaidate rootsync is not
-	// syncing from 'test-branch' anymore.
-	// Namespace should be marked as deleted, but may not be NotFound yet,
-	// because its finalizer will block until all objects in that namespace are
-	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), testNS, "")
-	if err != nil {
-		nt.T.Fatalf("RootSync update failed: %v", err)
-	}
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsAObj)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, nsBObj)
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
+	// Validate metrics.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -283,12 +321,18 @@ func TestForceRevert(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 
-	err := nt.ValidateMetrics(nomostest.SyncMetricsToReconcilerSourceError(nt, nomostest.DefaultRootReconcilerName), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	nt.RootRepos[configsync.RootSyncName].Git("reset", "--hard", "HEAD^")
@@ -298,11 +342,8 @@ func TestForceRevert(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 0, 0)
-	})
-	if err != nil {
-		nt.T.Error(err)
+	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -323,11 +364,8 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 		nt.T.Errorf("RootSync did not finish reconciling: %v", err)
 	}
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		return nt.ValidateErrorMetricsNotFound()
-	})
-	if err != nil {
-		nt.T.Error(err)
+	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

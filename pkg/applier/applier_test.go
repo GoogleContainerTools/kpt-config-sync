@@ -80,7 +80,7 @@ func TestApply(t *testing.T) {
 	deploymentObj := newDeploymentObj()
 	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
 
-	testObj := newTestObj()
+	testObj := newTestObj("test-1")
 	testID := object.UnstructuredToObjMetadata(testObj)
 	testGVK := testObj.GroupVersionKind()
 
@@ -102,12 +102,14 @@ func TestApply(t *testing.T) {
 		"example-to-not-delete": "anything",
 	})
 
+	testObj2 := newTestObj("test-2")
+	testObj3 := newTestObj("test-3")
+
 	objs := []client.Object{deploymentObj, testObj}
 
-	namespaceID := &object.ObjMetadata{
-		Name:      string(syncScope),
-		GroupKind: kinds.Namespace().GroupKind(),
-	}
+	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
+		core.Name(string(syncScope)))
+	namespaceID := object.UnstructuredToObjMetadata(namespaceObj)
 
 	uid := core.ID{
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
@@ -132,8 +134,8 @@ func TestApply(t *testing.T) {
 		{
 			name: "unknown type for some resource",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
-				formApplyEvent(event.ApplyPending, nil, nil),
+				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: ErrorForResource(errors.New("unknown type"), idFrom(testID)),
 			expectedGVKs:  map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
@@ -146,7 +148,7 @@ func TestApply(t *testing.T) {
 					Policy:   inventory.PolicyMustMatch,
 					Status:   inventory.NoMatch,
 				}),
-				formApplyEvent(event.ApplyPending, nil, nil),
+				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: KptManagementConflictError(testObj),
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
@@ -168,8 +170,8 @@ func TestApply(t *testing.T) {
 		{
 			name: "failed to apply",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewApplyRunError(errors.New("failed apply"))),
-				formApplyEvent(event.ApplyPending, nil, nil),
+				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
+				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: ErrorForResource(errors.New("failed apply"), idFrom(testID)),
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
@@ -180,8 +182,8 @@ func TestApply(t *testing.T) {
 		{
 			name: "failed to prune",
 			events: []event.Event{
-				formPruneEvent(event.PruneFailed, &testID, errors.New("failed pruning")),
-				formPruneEvent(event.PruneSuccessful, nil, nil),
+				formPruneEvent(event.PruneFailed, testObj, errors.New("failed pruning")),
+				formPruneEvent(event.PruneSuccessful, testObj2, nil),
 			},
 			expectedError: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
@@ -192,15 +194,15 @@ func TestApply(t *testing.T) {
 		{
 			name: "skipped pruning",
 			events: []event.Event{
-				formPruneEvent(event.PruneSuccessful, &testID, nil),
-				formPruneEvent(event.PruneSkipped, namespaceID, &filter.NamespaceInUseError{
+				formPruneEvent(event.PruneSuccessful, testObj, nil),
+				formPruneEvent(event.PruneSkipped, namespaceObj, &filter.NamespaceInUseError{
 					Namespace: "test-namespace",
 				}),
-				formPruneEvent(event.PruneSuccessful, nil, nil),
+				formPruneEvent(event.PruneSuccessful, testObj2, nil),
 			},
 			expectedError: SkipErrorForResource(
 				errors.New("namespace still in use: test-namespace"),
-				idFrom(*namespaceID),
+				idFrom(namespaceID),
 				actuation.ActuationStrategyDelete),
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
@@ -210,10 +212,10 @@ func TestApply(t *testing.T) {
 		{
 			name: "all passed",
 			events: []event.Event{
-				formApplyEvent(event.ApplySuccessful, &testID, nil),
-				formApplyEvent(event.ApplySuccessful, &deploymentID, nil),
-				formApplyEvent(event.ApplyPending, nil, nil),
-				formPruneEvent(event.PruneSuccessful, nil, nil),
+				formApplyEvent(event.ApplySuccessful, testObj, nil),
+				formApplyEvent(event.ApplySuccessful, deploymentObj, nil),
+				formApplyEvent(event.ApplyPending, testObj2, nil),
+				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
@@ -223,10 +225,10 @@ func TestApply(t *testing.T) {
 		{
 			name: "all failed",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, &testID, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
-				formApplyEvent(event.ApplyFailed, &deploymentID, applyerror.NewApplyRunError(errors.New("failed apply"))),
-				formApplyEvent(event.ApplyPending, nil, nil),
-				formPruneEvent(event.PruneSuccessful, nil, nil),
+				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyFailed, deploymentObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
+				formApplyEvent(event.ApplyPending, testObj2, nil),
+				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
@@ -353,19 +355,16 @@ func TestApply(t *testing.T) {
 	}
 }
 
-func formApplyEvent(status event.ApplyEventStatus, id *object.ObjMetadata, err error) event.Event {
-	e := event.Event{
+func formApplyEvent(status event.ApplyEventStatus, obj *unstructured.Unstructured, err error) event.Event {
+	return event.Event{
 		Type: event.ApplyType,
 		ApplyEvent: event.ApplyEvent{
-			Status: status,
-			Error:  err,
+			Identifier: object.UnstructuredToObjMetadata(obj),
+			Resource:   obj,
+			Status:     status,
+			Error:      err,
 		},
 	}
-	if id != nil {
-		e.ApplyEvent.Identifier = *id
-		e.ApplyEvent.Resource = &unstructured.Unstructured{}
-	}
-	return e
 }
 
 func formApplySkipEvent(id object.ObjMetadata, obj *unstructured.Unstructured, err error) event.Event {
@@ -451,19 +450,16 @@ func formPruneSkipEventWithDetach(obj *unstructured.Unstructured) event.Event {
 	}
 }
 
-func formPruneEvent(status event.PruneEventStatus, id *object.ObjMetadata, err error) event.Event {
-	e := event.Event{
+func formPruneEvent(status event.PruneEventStatus, obj *unstructured.Unstructured, err error) event.Event {
+	return event.Event{
 		Type: event.PruneType,
 		PruneEvent: event.PruneEvent{
-			Error:  err,
-			Status: status,
+			Object:     obj,
+			Identifier: object.UnstructuredToObjMetadata(obj),
+			Error:      err,
+			Status:     status,
 		},
 	}
-	if id != nil {
-		e.PruneEvent.Identifier = *id
-		e.PruneEvent.Object = &unstructured.Unstructured{}
-	}
-	return e
 }
 
 func formWaitEvent(status event.WaitEventStatus, id *object.ObjMetadata) event.Event {
@@ -490,19 +486,21 @@ func formErrorEvent(err error) event.Event {
 }
 
 func TestProcessApplyEvent(t *testing.T) {
-	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
-	testID := object.UnstructuredToObjMetadata(newTestObj())
+	deploymentObj := newDeploymentObj()
+	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
+	testObj := newTestObj("test-1")
+	testID := object.UnstructuredToObjMetadata(testObj)
 
 	ctx := context.Background()
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	unknownTypeResources := make(map[core.ID]struct{})
 
-	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, &deploymentID, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
+	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
 
-	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, &testID, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
+	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -528,8 +526,10 @@ func TestProcessApplyEvent(t *testing.T) {
 }
 
 func TestProcessPruneEvent(t *testing.T) {
-	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
-	testID := object.UnstructuredToObjMetadata(newTestObj())
+	deploymentObj := newDeploymentObj()
+	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
+	testObj := newTestObj("test-1")
+	testID := object.UnstructuredToObjMetadata(testObj)
 
 	ctx := context.Background()
 	s := stats.NewSyncStats()
@@ -539,11 +539,11 @@ func TestProcessPruneEvent(t *testing.T) {
 		clientSet: cs,
 	}
 
-	err := applier.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, &deploymentID, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
+	err := applier.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = applier.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, &testID, nil).PruneEvent, s.PruneEvent, objStatusMap)
+	err = applier.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, s.PruneEvent, objStatusMap)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -571,7 +571,7 @@ func TestProcessPruneEvent(t *testing.T) {
 
 func TestProcessWaitEvent(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
-	testID := object.UnstructuredToObjMetadata(newTestObj())
+	testID := object.UnstructuredToObjMetadata(newTestObj("test-1"))
 
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
@@ -609,10 +609,10 @@ func newDeploymentObj() *unstructured.Unstructured {
 		core.Namespace("test-namespace"), core.Name("random-name"))
 }
 
-func newTestObj() *unstructured.Unstructured {
+func newTestObj(name string) *unstructured.Unstructured {
 	return fake.UnstructuredObject(schema.GroupVersionKind{
 		Group:   "configsync.test",
 		Version: "v1",
 		Kind:    "Test",
-	}, core.Namespace("test-namespace"), core.Name("random-name"))
+	}, core.Namespace("test-namespace"), core.Name(name))
 }

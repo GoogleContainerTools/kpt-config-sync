@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -62,8 +63,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", fake.NamespaceObject("prod"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
+	nsObj := fake.NamespaceObject("prod")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj)
+	anvilObj := anvilCR("v1", "heavy", 10)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -85,20 +88,14 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/prod/ns.yaml"))
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/prod/anvil-v1.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Remove CRD
@@ -113,17 +110,25 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	// Modify the Anvil yaml to trigger immediate re-sync, instead of waiting
 	// for automatic retry (1hr default).
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
+	anvilObj = anvilCR("v1", "heavy", 100)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil-v1.yaml", anvilObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Remove the CR.
@@ -131,6 +136,16 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil-v1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well")
 	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, anvilObj)
+
+	// Validate reconciler error is cleared.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -154,9 +169,13 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10))
+	nsObj := fake.NamespaceObject("foo")
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
+	anvilObj := anvilCR("v1", "heavy", 10)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR")
+	firstCommitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -181,20 +200,14 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/foo/ns.yaml"))
-	nt.AddExpectedObject(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/namespaces/foo/anvil-v1.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		err := nt.ValidateMultiRepoMetrics(nomostest.DefaultRootReconcilerName,
-			nt.ExpectedRootSyncObjectCount(configsync.RootSyncName),
-			metrics.ResourceCreated("Namespace"), metrics.ResourceCreated("Anvil"))
-		if err != nil {
-			return err
-		}
-		return nt.ValidateErrorMetricsNotFound()
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
 	})
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// Remove CRD
@@ -209,17 +222,32 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	// Modify the Anvil yaml to trigger immediate re-sync, instead of waiting
 	// for automatic retry (1hr default).
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100))
+	anvilObj = anvilCR("v1", "heavy", 100)
+	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj)
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Modify Anvil CR")
+	secondCommitHash := nt.RootRepos[configsync.RootSyncName].Hash()
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	err = nt.ValidateMetrics(nomostest.SyncMetricsToLatestCommit(nt), func() error {
-		// Validate reconciler error metric is emitted.
-		return nt.ValidateReconcilerErrors(nomostest.DefaultRootReconcilerName, 1, 0)
-	})
+	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
 	if err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
+	}
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, firstCommitHash, metrics.ErrorSummary{
+			// Remediator conflict after the first commit, because the declared
+			// Anvil was deleted by another client after successful sync.
+			Conflicts: 1,
+		}),
+		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, secondCommitHash, metrics.ErrorSummary{
+			// No remediator conflict after the second commit, because the
+			// reconciler hasn't been updated with the latest declared resources,
+			// because there was a source error.
+			Source: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Remove the CR.
@@ -227,6 +255,17 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml")
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well")
 	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// CR wasn't added to the inventory, so it won't be deleted.
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
+
+	// Validate reconciler error is cleared.
+	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: rootSyncNN,
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }

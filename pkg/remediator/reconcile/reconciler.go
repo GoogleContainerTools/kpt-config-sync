@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,6 +46,8 @@ type reconciler struct {
 	applier syncerreconcile.Applier
 	// declared is the threadsafe in-memory representation of declared configuration.
 	declared *declared.Resources
+
+	fightHandler fight.Handler
 }
 
 // newReconciler instantiates a new reconciler.
@@ -53,12 +56,14 @@ func newReconciler(
 	syncName string,
 	applier syncerreconcile.Applier,
 	declared *declared.Resources,
+	fightHandler fight.Handler,
 ) *reconciler {
 	return &reconciler{
-		scope:    scope,
-		syncName: syncName,
-		applier:  applier,
-		declared: declared,
+		scope:        scope,
+		syncName:     syncName,
+		applier:      applier,
+		declared:     declared,
+		fightHandler: fightHandler,
 	}
 }
 
@@ -85,11 +90,21 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 	// Record duration, even if there's an error
 	metrics.RecordRemediateDuration(ctx, metrics.StatusTagKey(err), id.WithVersion(""), start)
 
-	// Record conflict, if there was one
-	if err != nil && err.Code() == syncerclient.ResourceConflictCode {
-		metrics.RecordResourceConflict(ctx, id.WithVersion(""), commit)
+	if err != nil {
+		switch err.Code() {
+		case syncerclient.ResourceConflictCode:
+			// Record conflict, if there was one
+			metrics.RecordResourceConflict(ctx, id.WithVersion(""), commit)
+		case status.FightErrorCode:
+			operation := objDiff.Operation(r.scope, r.syncName)
+			metrics.RecordResourceFight(ctx, string(operation), id.WithVersion(""))
+			r.fightHandler.AddFightError(id, err)
+		}
+		return err
 	}
-	return err
+
+	r.fightHandler.RemoveFightError(id)
+	return nil
 }
 
 // Remediate takes diff (declared & actual) and ensures the server matches the

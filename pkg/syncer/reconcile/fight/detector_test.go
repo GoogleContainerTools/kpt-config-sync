@@ -15,18 +15,12 @@
 package fight
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/tag"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/stretchr/testify/require"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/testing/testmetrics"
 )
 
 // durations creates a sequence of evenly-spaced time.Durations.
@@ -124,7 +118,7 @@ func TestFight(t *testing.T) {
 
 			heat := tc.startHeat
 			for _, d := range tc.deltas {
-				heat = f.markUpdated(now.Add(d))
+				heat = f.refreshUpdateFrequency(now.Add(d))
 			}
 
 			if heat < fightThreshold && tc.wantAboveThreshold {
@@ -194,78 +188,31 @@ func TestFightDetector(t *testing.T) {
 			fd := NewDetector()
 
 			now := time.Now()
-			for o, updates := range tc.updates {
-				u := fake.Unstructured(o.WithVersion(""), core.Namespace(o.Namespace), core.Name(o.Name))
+			for id, updates := range tc.updates {
+				u := fake.Unstructured(id.WithVersion(""), core.Namespace(id.Namespace), core.Name(id.Name))
 
 				aboveThreshold := false
-				for _, update := range updates {
-					fight := fd.markUpdated(now.Add(update), u)
-					aboveThreshold = aboveThreshold || fight != nil
+				logged := false
+				for i, update := range updates {
+					logErr, fightErr := fd.DetectFight(now.Add(update), u)
+					if i+1 >= int(fightThreshold) {
+						require.Error(t, fightErr)
+						aboveThreshold = true
+						if logged {
+							require.False(t, logErr)
+						} else {
+							require.True(t, logErr)
+							logged = true
+						}
+					} else {
+						require.NoError(t, fightErr)
+					}
 				}
-				if tc.wantAboveThreshold[o] && !aboveThreshold {
-					t.Errorf("got markUpdated(%v) = false, want true", o)
-				} else if !tc.wantAboveThreshold[o] && aboveThreshold {
-					t.Errorf("got markUpdated(%v) = true, want false", o)
+				if tc.wantAboveThreshold[id] && !aboveThreshold {
+					t.Errorf("got refreshUpdateFrequency(%v) = false, want true", id)
+				} else if !tc.wantAboveThreshold[id] && aboveThreshold {
+					t.Errorf("got refreshUpdateFrequency(%v) = true, want false", id)
 				}
-			}
-		})
-	}
-}
-
-func TestResourceFightsMetricValidation(t *testing.T) {
-	roleGVK := kinds.Role().GroupKind().WithVersion("")
-	roleBindingGVK := kinds.RoleBinding().GroupKind().WithVersion("")
-	testCases := []struct {
-		name           string
-		fightThreshold float64
-		operations     []string
-		gvk            schema.GroupVersionKind
-		wantMetrics    []*view.Row
-	}{
-		{
-			name:           "fight detected while creating Role",
-			fightThreshold: 0, // Setting to 0 to guarantee a fight is detected
-			operations:     []string{"create"},
-			gvk:            roleGVK,
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{
-					{Key: metrics.KeyOperation, Value: "create"},
-					{Key: metrics.KeyType, Value: "Role"}}},
-			},
-		},
-		{
-			name:           "multiple fights detected while deleting RoleBinding",
-			fightThreshold: 0,
-			operations:     []string{"delete", "delete"},
-			gvk:            roleBindingGVK,
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 2}, Tags: []tag.Tag{
-					{Key: metrics.KeyOperation, Value: "delete"},
-					{Key: metrics.KeyType, Value: "RoleBinding"}}},
-			},
-		},
-		{
-			name:           "no fights detected while updating Role",
-			fightThreshold: 5.0,
-			operations:     []string{"update"},
-			gvk:            roleGVK,
-			wantMetrics:    []*view.Row{},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			m := testmetrics.RegisterMetrics(metrics.ResourceFightsView)
-			fd := NewDetector()
-			SetFightThreshold(tc.fightThreshold)
-			u := fake.UnstructuredObject(tc.gvk)
-
-			for _, op := range tc.operations {
-				fd.DetectFight(context.Background(), time.Now(), u, op)
-			}
-
-			if diff := m.ValidateMetrics(metrics.ResourceFightsView, tc.wantMetrics); diff != "" {
-				t.Errorf(diff)
 			}
 		})
 	}

@@ -15,14 +15,11 @@
 package fight
 
 import (
-	ctx "context"
 	"math"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
-	m "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -36,7 +33,7 @@ import (
 var fightThreshold = 5.0
 
 // SetFightThreshold updates the maximum allowed rate of updates to a resource
-// per minute before we begin logging warnings to the user.
+// per minute before we begin logging errors to the user.
 func SetFightThreshold(updatesPerMinute float64) {
 	fightThreshold = updatesPerMinute
 }
@@ -73,32 +70,20 @@ func NewDetector() Detector {
 }
 
 // DetectFight detects whether the resource is needing updates too frequently.
-// If so, it increments the resource_fights metric and logs to klog.Warning.
-func (d *Detector) DetectFight(ctx ctx.Context, time time.Time, obj *unstructured.Unstructured, operation string) bool {
-	if fight := d.markUpdated(time, obj); fight != nil {
-		m.RecordResourceFight(ctx, operation, obj.GroupVersionKind())
-		if d.fLogger.logFight(time, fight) {
-			return true
-		}
-	}
-	return false
-}
-
-// markUpdated marks that API resource `resource` was updated at time `now`.
-// Returns a ResourceError if the estimated frequency of updates is greater than
-// `fightThreshold`.
-func (d *Detector) markUpdated(now time.Time, resource client.Object) status.ResourceError {
+// If so, it increments the resource_fights metric and logs to klog.Error.
+func (d *Detector) DetectFight(now time.Time, obj client.Object) (bool, status.ResourceError) {
 	d.mux.Lock()
 	defer d.mux.Unlock()
-	id := core.IDOf(resource)
+	id := core.IDOf(obj)
 
 	if d.fights[id] == nil {
 		d.fights[id] = &fight{}
 	}
-	if frequency := d.fights[id].markUpdated(now); frequency >= fightThreshold {
-		return status.FightError(frequency, resource)
+	if frequency := d.fights[id].refreshUpdateFrequency(now); frequency >= fightThreshold {
+		fightErr := status.FightError(frequency, obj)
+		return d.fLogger.logFight(now, fightErr), fightErr
 	}
-	return nil
+	return false, nil
 }
 
 // fight estimates how often a specific API resource is updated by the Syncer.
@@ -110,7 +95,7 @@ type fight struct {
 	last time.Time
 }
 
-// markUpdated advanced the time on fight to now and increases heat by 1.0.
+// refreshUpdateFrequency advanced the time on fight to now and increases heat by 1.0.
 // Returns the estimated frequency of updates per minute.
 //
 // Required reading to understand the math:
@@ -127,7 +112,7 @@ type fight struct {
 //
 // The implementation below uses an approximation to the above as updates are
 // quantized (there is no such thing as 0.5 of an update).
-func (f *fight) markUpdated(now time.Time) float64 {
+func (f *fight) refreshUpdateFrequency(now time.Time) float64 {
 	// How long to let the existing heat decay.
 	d := now.Sub(f.last).Minutes()
 	f.last = now

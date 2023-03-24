@@ -64,6 +64,7 @@ func (u *updater) Errors() status.MultiError {
 
 	var errs status.MultiError
 	errs = status.Append(errs, u.conflictErrors())
+	errs = status.Append(errs, u.fightErrors())
 	errs = status.Append(errs, u.validationErrs)
 	errs = status.Append(errs, u.applier.Errors())
 	errs = status.Append(errs, u.watchErrs)
@@ -76,6 +77,16 @@ func (u *updater) conflictErrors() status.MultiError {
 	var errs status.MultiError
 	for _, conflictErr := range u.remediator.ConflictErrors() {
 		errs = status.Append(errs, conflictErr)
+	}
+	return errs
+}
+
+// fightErrors converts []Error into []MultiErrors.
+// This method is safe to call while Update is running.
+func (u *updater) fightErrors() status.MultiError {
+	var errs status.MultiError
+	for _, fightErr := range u.remediator.FightErrors() {
+		errs = status.Append(errs, fightErr)
 	}
 	return errs
 }
@@ -136,9 +147,10 @@ func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	updateErrs := u.update(ctx, cache)
 
-	// Prepend current conflict errors
+	// Prepend current conflict and fight errors
 	var errs status.MultiError
 	errs = status.Append(errs, u.conflictErrors())
+	errs = status.Append(errs, u.fightErrors())
 	errs = status.Append(errs, updateErrs)
 	return errs
 }

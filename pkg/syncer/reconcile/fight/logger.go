@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -32,13 +33,13 @@ type logger struct {
 	mux sync.RWMutex
 
 	// lastLogged is when logger last logged about a given API resource.
-	lastLogged map[gknn]time.Time
+	lastLogged map[core.ID]time.Time
 }
 
 // newLogger instantiates a fight logger.
 func newLogger() *logger {
 	return &logger{
-		lastLogged: make(map[gknn]time.Time),
+		lastLogged: make(map[core.ID]time.Time),
 	}
 }
 
@@ -51,17 +52,13 @@ func (l *logger) logFight(now time.Time, err status.ResourceError) bool {
 	defer l.mux.Unlock()
 
 	resource := err.Resources()[0] // There is only ever one resource per fight error.
-	i := gknn{
-		gk:        resource.GetObjectKind().GroupVersionKind().GroupKind(),
-		namespace: resource.GetNamespace(),
-		name:      resource.GetName(),
-	}
+	id := core.IDOf(resource)
 
-	if now.Sub(l.lastLogged[i]) <= time.Minute {
+	if now.Sub(l.lastLogged[id]) <= time.Minute {
 		return false
 	}
 
 	klog.Warning(err)
-	l.lastLogged[i] = now
+	l.lastLogged[id] = now
 	return true
 }

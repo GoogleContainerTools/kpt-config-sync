@@ -45,6 +45,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -67,8 +68,7 @@ type clientApplier struct {
 	discoveryClient  discovery.DiscoveryInterface
 	openAPIResources openapi.Resources
 	client           *syncerclient.Client
-	fights           fightDetector
-	fLogger          fightLogger
+	fights           fight.Detector
 }
 
 var _ Applier = &clientApplier{}
@@ -99,8 +99,7 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) 
 		discoveryClient:  dc,
 		openAPIResources: oa,
 		client:           client,
-		fights:           newFightDetector(),
-		fLogger:          newFightLogger(),
+		fights:           fight.NewDetector(),
 	}, nil
 }
 
@@ -123,7 +122,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
 		return err
 	}
-	if c.fights.detectFight(ctx, time.Now(), intendedState, &c.fLogger, "create") {
+	if c.fights.DetectFight(ctx, time.Now(), intendedState, "create") {
 		klog.Warningf("Fight detected on create of %s.", description(intendedState))
 	}
 	klog.V(3).Infof("Created object %v", core.GKNN(intendedState))
@@ -147,7 +146,7 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 
 	updated := !isNoOpPatch(patch)
 	if updated {
-		if c.fights.detectFight(ctx, time.Now(), intendedState, &c.fLogger, "update") {
+		if c.fights.DetectFight(ctx, time.Now(), intendedState, "update") {
 			diff := cmp.Diff(currentState, intendedState)
 			klog.Warningf("Fight detected on update of %s with difference %s", description(intendedState), diff)
 		}
@@ -189,7 +188,7 @@ func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructur
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
 		return err
 	}
-	if c.fights.detectFight(ctx, time.Now(), obj, &c.fLogger, "delete") {
+	if c.fights.DetectFight(ctx, time.Now(), obj, "delete") {
 		klog.Warningf("Fight detected on delete of %s.", description(obj))
 	}
 	klog.V(3).Infof("Deleted object %v", core.GKNN(obj))

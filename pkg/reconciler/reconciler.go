@@ -37,6 +37,7 @@ import (
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -119,7 +120,7 @@ type RootOptions struct {
 
 // Run configures and starts the various components of a reconciler process.
 func Run(opts Options) {
-	reconcile.SetFightThreshold(opts.FightDetectionThreshold)
+	fight.SetFightThreshold(opts.FightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
 	apiServerTimeout, err := time.ParseDuration(opts.APIServerTimeout)

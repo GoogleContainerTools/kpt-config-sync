@@ -104,8 +104,7 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 			return err
 		}
 		klog.V(3).Infof("Remediator creating object: %v", id)
-		_, err = r.applier.Create(ctx, declared)
-		return err
+		return r.applier.Create(ctx, declared)
 	case diff.Update:
 		declared, err := objDiff.UnstructuredDeclared()
 		if err != nil {
@@ -116,16 +115,14 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 			return err
 		}
 		klog.V(3).Infof("Remediator updating object: %v", id)
-		_, err = r.applier.Update(ctx, declared, actual)
-		return err
+		return r.applier.Update(ctx, declared, actual)
 	case diff.Delete:
 		actual, err := objDiff.UnstructuredActual()
 		if err != nil {
 			return err
 		}
 		klog.V(3).Infof("Remediator deleting object: %v", id)
-		_, err = r.applier.Delete(ctx, actual)
-		return err
+		return r.applier.Delete(ctx, actual)
 	case diff.Error:
 		// This is the case where the annotation in the *repository* is invalid.
 		// Should never happen as the Parser would have thrown an error.
@@ -139,8 +136,7 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 			return err
 		}
 		klog.V(3).Infof("Remediator abandoning object %v", id)
-		_, err = r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
-		return err
+		return r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.
 		metrics.RecordInternalError(ctx, "remediator")

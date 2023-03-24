@@ -37,53 +37,53 @@ type Applier struct {
 var _ reconcile.Applier = &Applier{}
 
 // Create implements reconcile.Applier.
-func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	if a.CreateError != nil {
-		return false, a.CreateError
+		return a.CreateError
 	}
 	err := a.Client.Create(ctx, obj)
 	if err != nil {
-		return false, status.APIServerError(err, "creating")
+		return status.APIServerError(err, "creating")
 	}
-	return true, nil
+	return nil
 }
 
 // Update implements reconcile.Applier.
-func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) status.Error {
 	if a.UpdateError != nil {
-		return false, a.UpdateError
+		return a.UpdateError
 	}
 	err := a.Client.Update(ctx, intendedState)
 	if err != nil {
-		return false, status.APIServerError(err, "updating")
+		return status.APIServerError(err, "updating")
 	}
-	return true, nil
+	return nil
 }
 
 // RemoveNomosMeta implements reconcile.Applier.
-func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, _ string) (bool, status.Error) {
+func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, _ string) status.Error {
 	updated := metadata.RemoveConfigSyncMetadata(intent)
 	if !updated {
-		return false, nil
+		return nil
 	}
 
 	err := a.Client.Update(ctx, intent)
 	if err != nil {
-		return false, status.APIServerError(err, "removing meta")
+		return status.APIServerError(err, "removing meta")
 	}
-	return true, nil
+	return nil
 }
 
 // Delete implements reconcile.Applier.
-func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (bool, status.Error) {
+func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	if a.DeleteError != nil {
-		return false, a.DeleteError
+		return a.DeleteError
 	}
 	err := a.Client.Delete(ctx, obj)
 	if err != nil {
-		return false, status.APIServerError(err, "deleting")
+		return status.APIServerError(err, "deleting")
 	}
-	return true, nil
+	return nil
 }
 
 // GetClient implements reconcile.Applier.

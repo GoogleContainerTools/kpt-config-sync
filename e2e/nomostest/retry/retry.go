@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nomostest
+package retry
 
 import (
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -69,8 +68,6 @@ func backoff(timeout time.Duration) wait.Backoff {
 func defaultErrorFilter(err error) bool {
 	_, isTerminal := err.(*TerminalError)
 	return !isTerminal &&
-		// The type expected by a Predicate is incorrect.
-		!errors.Is(err, ErrWrongType) &&
 		// The type isn't registered in the Client's schema.
 		!runtime.IsNotRegisteredError(err) &&
 		// The type wasn't available on the API Server when the Client was created.

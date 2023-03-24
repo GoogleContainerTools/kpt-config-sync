@@ -27,6 +27,7 @@ import (
 	"go.uber.org/multierr"
 	"k8s.io/apimachinery/pkg/types"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -61,10 +62,10 @@ func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 
 	nt.T.Log("[METRICS] validating prometheus metrics...")
 	for i, predicate := range predicates {
-		duration, err := Retry(nt.DefaultMetricsTimeout, func() error {
+		duration, err := retry.Retry(nt.DefaultMetricsTimeout, func() error {
 			err := predicate(ctx, v1api)
 			if err != nil && errors.Is(err, syscall.ECONNREFUSED) {
-				return NewTerminalError(errors.Wrapf(err, "port-forwarding failed waiting for metrics predicate[%d]", i))
+				return retry.NewTerminalError(errors.Wrapf(err, "port-forwarding failed waiting for metrics predicate[%d]", i))
 			}
 			return err
 		})

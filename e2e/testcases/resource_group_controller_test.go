@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
@@ -46,7 +47,7 @@ func TestResourceGroupController(t *testing.T) {
 	// Checking that the ResourceGroup controller captures the status of the
 	// managed resources.
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
-	_, err := nomostest.Retry(60*time.Second, func() error {
+	_, err := retry.Retry(60*time.Second, func() error {
 		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
 		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
 			nomostest.AllResourcesAreCurrent())

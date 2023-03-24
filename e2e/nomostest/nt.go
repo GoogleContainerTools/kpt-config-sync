@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -755,7 +756,7 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 // PortForwardOtelCollector forwards the otel-collector pod.
 func (nt *NT) PortForwardOtelCollector() {
 	// Retry otel-collector port-forwarding in case it is in the process of upgrade.
-	took, err := Retry(60*time.Second, func() error {
+	took, err := retry.Retry(60*time.Second, func() error {
 		pod, err := nt.GetDeploymentPod(ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace)
 		if err != nil {
 			return err
@@ -837,7 +838,7 @@ func (nt *NT) ForwardToFreePort(ctx context.Context, ns, pod string, port int) (
 	localPort := 0
 	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
 	// like a reasonable amount of time to wait.
-	took, err := Retry(30*time.Second, func() error {
+	took, err := retry.Retry(30*time.Second, func() error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -911,7 +912,7 @@ func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 func (nt *NT) GetDeploymentPod(deploymentName, namespace string) (*corev1.Pod, error) {
 	deploymentNN := types.NamespacedName{Name: deploymentName, Namespace: namespace}
 	var pod *corev1.Pod
-	took, err := Retry(nt.DefaultWaitTimeout, func() error {
+	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
 		deployment := &appsv1.Deployment{}
 		if err := nt.Get(deploymentNN.Name, deploymentNN.Namespace, deployment); err != nil {
 			return err

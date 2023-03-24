@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -81,7 +82,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	// not modify these fields since they're never specified and StrategicMergePatch
 	// won't overwrite them otherwise.
 	var gotService *corev1.Service
-	duration, err := nomostest.Retry(60*time.Second, func() error {
+	duration, err := retry.Retry(60*time.Second, func() error {
 		service := &corev1.Service{}
 		err := nt.Validate(serviceName, ns, service,
 			specifiesClusterIP, specifiesNodePort)

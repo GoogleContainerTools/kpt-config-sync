@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -191,7 +192,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	// Use Retry & Validate instead of WatchForCurrentStatus, because
 	// watching would require creating API objects and updating the scheme.
-	_, err = nomostest.Retry(60*time.Second, func() error {
+	_, err = retry.Retry(60*time.Second, func() error {
 		return nt.Validate("heavy", "foo", anvilCR("v1", "", 0),
 			nomostest.StatusEquals(nt, kstatus.CurrentStatus))
 	})

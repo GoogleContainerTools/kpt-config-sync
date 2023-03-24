@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 )
@@ -37,7 +38,7 @@ func connectToLocalRegistry(nt *NT) {
 	// We get access to the kubectl API before the Kind cluster is finished being
 	// set up, so the control plane is sometimes still being modified when we do
 	// this.
-	_, err := Retry(20*time.Second, func() error {
+	_, err := retry.Retry(20*time.Second, func() error {
 		// See https://kind.sigs.k8s.io/docs/user/local-registry/ for explanation.
 		node := &corev1.Node{}
 		err := nt.Get(nt.ClusterName+"-control-plane", "", node)

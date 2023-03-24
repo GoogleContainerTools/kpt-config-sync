@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -54,7 +55,8 @@ var ErrObjectNotFound = errors.New("object not found")
 // WrongTypeErr reports that the passed type was not equivalent to the wanted
 // type.
 func WrongTypeErr(got, want interface{}) error {
-	return fmt.Errorf("%w: got %T, want %T", ErrWrongType, got, want)
+	return retry.NewTerminalError(
+		fmt.Errorf("%w: got %T, want %T", ErrWrongType, got, want))
 }
 
 // ErrFailedPredicate indicates the the object on the API server does not match

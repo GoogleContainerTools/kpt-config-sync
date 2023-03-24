@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
@@ -75,7 +76,7 @@ func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() 
 	}
 
 	// Wait for the repository to report it is synced.
-	took, err := Retry(wait.timeout, condition)
+	took, err := retry.Retry(wait.timeout, condition)
 	if err != nil {
 		t.Logf("failed after %v to wait for %s", took, opName)
 		switch wait.failureStrategy {
@@ -98,7 +99,7 @@ func WaitForNamespace(nt *NT, timeout time.Duration, namespace string) {
 	nt.T.Helper()
 
 	// Wait for the repository to report it is synced.
-	took, err := Retry(timeout, func() error {
+	took, err := retry.Retry(timeout, func() error {
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(schema.GroupVersionKind{
 			Group:   corev1.SchemeGroupVersion.Group,

@@ -105,7 +105,8 @@ func (nt *NT) ValidateSyncObject(gvk schema.GroupVersionKind, name, namespace st
 		// This means the GVK corresponded to a type registered in the Scheme
 		// which is not a valid Kubernetes object. We expect the only way this
 		// can happen is if gvk is for a List type, like NamespaceList.
-		return errors.Wrapf(ErrWrongType, "trying to wait for List type to sync: %T", cObj)
+		return errors.Wrapf(WrongTypeErr(rObj, client.Object(nil)),
+			"trying to wait for List type to sync: %T", cObj)
 	}
 	return nt.Validate(name, namespace, cObj, predicates...)
 }

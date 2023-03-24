@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -62,7 +63,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	}
 
 	// Verify Root Reconciler deployment no longer present.
-	_, err = nomostest.Retry(40*time.Second, func() error {
+	_, err = retry.Retry(40*time.Second, func() error {
 		var errs error
 		errs = multierr.Append(errs, nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject()))
 		// validate Root Reconciler configmaps are no longer present.

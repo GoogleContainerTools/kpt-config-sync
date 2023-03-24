@@ -22,6 +22,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,7 +119,7 @@ func parsePrometheusManifests(nt *NT) ([]client.Object, error) {
 // Cancel the context to kill the port-forward process.
 func portForwardPrometheus(ctx context.Context, nt *NT) (address string, err error) {
 	// Retry port-forwarding in case the Deployment is in the process of upgrade.
-	took, err := Retry(nt.DefaultWaitTimeout, func() error {
+	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
 		pod, err := nt.GetDeploymentPod(prometheusServerDeploymentName, prometheusNamespace)
 		if err != nil {
 			return err

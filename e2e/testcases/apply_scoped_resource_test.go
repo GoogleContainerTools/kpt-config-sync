@@ -23,6 +23,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/kubevirt/v1"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 )
@@ -66,7 +67,7 @@ func TestApplyScopedResources(t *testing.T) {
 
 		// Use Retry & ValidateNotFound instead of WatchForNotFound, because
 		// watching would require importing the KubeVirt API objects.
-		_, err := nomostest.Retry(30*time.Second, func() error {
+		_, err := retry.Retry(30*time.Second, func() error {
 			return nt.ValidateNotFound("kubevirt", "kubevirt", kubevirt.NewKubeVirtObject())
 		})
 		if err != nil {

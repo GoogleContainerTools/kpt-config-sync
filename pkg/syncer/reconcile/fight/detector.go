@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reconcile
+package fight
 
 import (
 	ctx "context"
 	"math"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -40,36 +41,43 @@ func SetFightThreshold(updatesPerMinute float64) {
 	fightThreshold = updatesPerMinute
 }
 
-// fightDetector uses a linear differential equation to estimate the frequency
+// Detector uses a linear differential equation to estimate the frequency
 // of updates to resources, then logs to klog.Warning when it detects resources
 // needing updates too frequently.
 //
-// Instantiate with newFightDetector().
+// Instantiate with NewDetector().
 //
 // Performance characteristics:
-//  1. Current implementation is NOT threadsafe.
+//  1. Current implementation is threadsafe.
 //  2. Current implementation has unbounded memory usage on the order of the
 //     number of objects the Syncer updates through its lifetime.
 //  3. Updating an already-tracked resource requires no memory allocations and
 //     take approximately 30ns, ignoring logging time.
-type fightDetector struct {
+type Detector struct {
+	// mux is a reader/writer mutual exclusion lock for the cached fights.
+	mux sync.RWMutex
+
 	// fights is a record of how much the Syncer is fighting over any given
 	// API resource.
 	fights map[gknn]*fight
+
+	fLogger *logger
 }
 
-func newFightDetector() fightDetector {
-	return fightDetector{
-		fights: make(map[gknn]*fight),
+// NewDetector instantiates a fight detector.
+func NewDetector() Detector {
+	return Detector{
+		fights:  make(map[gknn]*fight),
+		fLogger: newLogger(),
 	}
 }
 
-// detectFight detects whether the resource is needing updates too frequently.
+// DetectFight detects whether the resource is needing updates too frequently.
 // If so, it increments the resource_fights metric and logs to klog.Warning.
-func (d *fightDetector) detectFight(ctx ctx.Context, time time.Time, obj *unstructured.Unstructured, fLogger *fightLogger, operation string) bool {
+func (d *Detector) DetectFight(ctx ctx.Context, time time.Time, obj *unstructured.Unstructured, operation string) bool {
 	if fight := d.markUpdated(time, obj); fight != nil {
 		m.RecordResourceFight(ctx, operation, obj.GroupVersionKind())
-		if fLogger.logFight(time, fight) {
+		if d.fLogger.logFight(time, fight) {
 			return true
 		}
 	}
@@ -79,7 +87,9 @@ func (d *fightDetector) detectFight(ctx ctx.Context, time time.Time, obj *unstru
 // markUpdated marks that API resource `resource` was updated at time `now`.
 // Returns a ResourceError if the estimated frequency of updates is greater than
 // `fightThreshold`.
-func (d *fightDetector) markUpdated(now time.Time, resource client.Object) status.ResourceError {
+func (d *Detector) markUpdated(now time.Time, resource client.Object) status.ResourceError {
+	d.mux.Lock()
+	defer d.mux.Unlock()
 	i := gknn{
 		gk:        resource.GetObjectKind().GroupVersionKind().GroupKind(),
 		namespace: resource.GetNamespace(),
@@ -119,7 +129,7 @@ type fight struct {
 // Required reading to understand the math:
 // https://www.math24.net/linear-differential-equations-first-order/
 //
-// Specifically, fightDetector uses the below linear differential equation to
+// Specifically, Detector uses the below linear differential equation to
 // estimate the number of updates a resource has per minute.
 //
 // y' = -y + k(t)

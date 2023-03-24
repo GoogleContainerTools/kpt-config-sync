@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reconcile
+package fight
 
 import (
 	"context"
@@ -185,7 +185,7 @@ func TestFightDetector(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fd := newFightDetector()
+			fd := NewDetector()
 
 			now := time.Now()
 			for o, updates := range tc.updates {
@@ -209,7 +209,6 @@ func TestFightDetector(t *testing.T) {
 func TestResourceFightsMetricValidation(t *testing.T) {
 	roleGVK := kinds.Role().GroupKind().WithVersion("")
 	roleBindingGVK := kinds.RoleBinding().GroupKind().WithVersion("")
-	fl := newFightLogger()
 	testCases := []struct {
 		name           string
 		fightThreshold float64
@@ -251,12 +250,12 @@ func TestResourceFightsMetricValidation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := testmetrics.RegisterMetrics(metrics.ResourceFightsView)
-			fd := newFightDetector()
+			fd := NewDetector()
 			SetFightThreshold(tc.fightThreshold)
 			u := fake.UnstructuredObject(tc.gvk)
 
 			for _, op := range tc.operations {
-				fd.detectFight(context.Background(), time.Now(), u, &fl, op)
+				fd.DetectFight(context.Background(), time.Now(), u, op)
 			}
 
 			if diff := m.ValidateMetrics(metrics.ResourceFightsView, tc.wantMetrics); diff != "" {

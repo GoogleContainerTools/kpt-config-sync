@@ -136,49 +136,55 @@ func TestFight(t *testing.T) {
 	}
 }
 
+func roleID(name, ns string) core.ID {
+	return core.IDOf(fake.RoleObject(core.Name(name), core.Namespace(ns)))
+}
+
+func roleBindingID(name, ns string) core.ID {
+	return core.IDOf(fake.RoleBinding(core.Name(name), core.Namespace(ns)))
+}
+
 func TestFightDetector(t *testing.T) {
-	roleGK := kinds.Role().GroupKind()
-	roleBindingGK := kinds.RoleBinding().GroupKind()
 	testCases := []struct {
 		name               string
-		updates            map[gknn][]time.Duration
-		wantAboveThreshold map[gknn]bool
+		updates            map[core.ID][]time.Duration
+		wantAboveThreshold map[core.ID]bool
 	}{
 		{
 			name: "one object below threshold",
-			updates: map[gknn][]time.Duration{
-				{gk: roleGK, namespace: "foo", name: "admin"}: fourUpdatesAtOnce,
+			updates: map[core.ID][]time.Duration{
+				roleID("admin", "foo"): fourUpdatesAtOnce,
 			},
 		},
 		{
 			name: "one object above threshold",
-			updates: map[gknn][]time.Duration{
-				{gk: roleGK, namespace: "foo", name: "admin"}: sixUpdatesAtOnce,
+			updates: map[core.ID][]time.Duration{
+				roleID("admin", "foo"): sixUpdatesAtOnce,
 			},
-			wantAboveThreshold: map[gknn]bool{
-				{gk: roleGK, namespace: "foo", name: "admin"}: true,
+			wantAboveThreshold: map[core.ID]bool{
+				roleID("admin", "foo"): true,
 			},
 		},
 		{
 			name: "four objects objects below threshold",
-			updates: map[gknn][]time.Duration{
-				{gk: roleGK, namespace: "foo", name: "admin"}:        fourUpdatesAtOnce,
-				{gk: roleBindingGK, namespace: "foo", name: "admin"}: fourUpdatesAtOnce,
-				{gk: roleGK, namespace: "bar", name: "admin"}:        fourUpdatesAtOnce,
-				{gk: roleGK, namespace: "foo", name: "user"}:         fourUpdatesAtOnce,
+			updates: map[core.ID][]time.Duration{
+				roleID("admin", "foo"):        fourUpdatesAtOnce,
+				roleBindingID("admin", "foo"): fourUpdatesAtOnce,
+				roleID("admin", "bar"):        fourUpdatesAtOnce,
+				roleID("user", "foo"):         fourUpdatesAtOnce,
 			},
 		},
 		{
 			name: "two of four objects objects above threshold",
-			updates: map[gknn][]time.Duration{
-				{gk: roleGK, namespace: "foo", name: "admin"}:        sixUpdatesAtOnce,
-				{gk: roleBindingGK, namespace: "foo", name: "admin"}: fourUpdatesAtOnce,
-				{gk: roleGK, namespace: "bar", name: "admin"}:        fourUpdatesAtOnce,
-				{gk: roleGK, namespace: "foo", name: "user"}:         sixUpdatesAtOnce,
+			updates: map[core.ID][]time.Duration{
+				roleID("admin", "foo"):        sixUpdatesAtOnce,
+				roleBindingID("admin", "foo"): fourUpdatesAtOnce,
+				roleID("admin", "bar"):        fourUpdatesAtOnce,
+				roleID("user", "foo"):         sixUpdatesAtOnce,
 			},
-			wantAboveThreshold: map[gknn]bool{
-				{gk: roleGK, namespace: "foo", name: "admin"}: true,
-				{gk: roleGK, namespace: "foo", name: "user"}:  true,
+			wantAboveThreshold: map[core.ID]bool{
+				roleID("admin", "foo"): true,
+				roleID("user", "foo"):  true,
 			},
 		},
 	}
@@ -189,7 +195,7 @@ func TestFightDetector(t *testing.T) {
 
 			now := time.Now()
 			for o, updates := range tc.updates {
-				u := fake.Unstructured(o.gk.WithVersion(""), core.Namespace(o.namespace), core.Name(o.name))
+				u := fake.Unstructured(o.WithVersion(""), core.Namespace(o.Namespace), core.Name(o.Name))
 
 				aboveThreshold := false
 				for _, update := range updates {

@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core"
 	m "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +59,7 @@ type Detector struct {
 
 	// fights is a record of how much the Syncer is fighting over any given
 	// API resource.
-	fights map[gknn]*fight
+	fights map[core.ID]*fight
 
 	fLogger *logger
 }
@@ -67,7 +67,7 @@ type Detector struct {
 // NewDetector instantiates a fight detector.
 func NewDetector() Detector {
 	return Detector{
-		fights:  make(map[gknn]*fight),
+		fights:  make(map[core.ID]*fight),
 		fLogger: newLogger(),
 	}
 }
@@ -90,28 +90,15 @@ func (d *Detector) DetectFight(ctx ctx.Context, time time.Time, obj *unstructure
 func (d *Detector) markUpdated(now time.Time, resource client.Object) status.ResourceError {
 	d.mux.Lock()
 	defer d.mux.Unlock()
-	i := gknn{
-		gk:        resource.GetObjectKind().GroupVersionKind().GroupKind(),
-		namespace: resource.GetNamespace(),
-		name:      resource.GetName(),
-	}
+	id := core.IDOf(resource)
 
-	if d.fights[i] == nil {
-		d.fights[i] = &fight{}
+	if d.fights[id] == nil {
+		d.fights[id] = &fight{}
 	}
-	if frequency := d.fights[i].markUpdated(now); frequency >= fightThreshold {
+	if frequency := d.fights[id].markUpdated(now); frequency >= fightThreshold {
 		return status.FightError(frequency, resource)
 	}
 	return nil
-}
-
-// gknn uniquely identifies a resource on the API Server with the resource's
-// Group, Kind, Namespace, and Name.
-type gknn struct {
-	// Recall that two resources identical except for Version are the same
-	// resource.
-	gk              schema.GroupKind
-	namespace, name string
 }
 
 // fight estimates how often a specific API resource is updated by the Syncer.

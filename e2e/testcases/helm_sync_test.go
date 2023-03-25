@@ -144,7 +144,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Create secret for authentication")
-	_, err = nt.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", repoSyncNN.Namespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", repoSyncNN.Namespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
 	if err != nil {
 		nt.T.Fatalf("failed to create secret, err: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Create secret for authentication")
-	_, err = nt.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", v1.NSConfigManagementSystem), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", v1.NSConfigManagementSystem), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
 	if err != nil {
 		nt.T.Fatalf("failed to create secret, err: %v", err)
 	}

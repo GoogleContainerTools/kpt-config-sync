@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -40,8 +39,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// Override reconcileTimeout to a short time 30s, only actuation should succeed, reconcile should time out.
-	if err := nt.Client.Patch(nt.Context, rootSync, client.RawPatch(types.MergePatchType,
-		[]byte(`{"spec": {"override": {"reconcileTimeout": "30s"}}}`))); err != nil {
+	if err := nt.KubeClient.MergePatch(rootSync,
+		`{"spec": {"override": {"reconcileTimeout": "30s"}}}`); err != nil {
 		nt.T.Fatal(err)
 	}
 	require.NoError(nt.T,
@@ -107,8 +106,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	}
 
 	// Override reconcileTimeout to 5m, namespace actuation should succeed, namespace reconcile should succeed.
-	if err := nt.Client.Patch(nt.Context, rootSync, client.RawPatch(types.MergePatchType,
-		[]byte(`{"spec": {"override": {"reconcileTimeout": "5m"}}}`))); err != nil {
+	if err := nt.KubeClient.MergePatch(rootSync,
+		`{"spec": {"override": {"reconcileTimeout": "5m"}}}`); err != nil {
 		nt.T.Fatal(err)
 	}
 	require.NoError(nt.T,

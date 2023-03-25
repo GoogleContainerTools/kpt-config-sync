@@ -852,7 +852,9 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add both cluster selector annotations to a role binding")
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -999,7 +1001,7 @@ func TestClusterSelectorForCRD(t *testing.T) {
 func renameCluster(nt *nomostest.NT, configMapName, clusterName string) {
 	nt.T.Logf("Change the cluster name to %q", clusterName)
 	cm := &corev1.ConfigMap{}
-	err := nt.Get(configMapName, configmanagement.ControllerNamespace, cm)
+	err := nt.KubeClient.Get(configMapName, configmanagement.ControllerNamespace, cm)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -1044,7 +1046,7 @@ func resourceQuotaHasHardPods(nt *nomostest.NT, pods string) nomostest.Predicate
 		if o == nil {
 			return nomostest.ErrObjectNotFound
 		}
-		rObj, err := kinds.ToTypedObject(o, nt.Client.Scheme())
+		rObj, err := kinds.ToTypedObject(o, nt.KubeClient.Client.Scheme())
 		if err != nil {
 			return err
 		}

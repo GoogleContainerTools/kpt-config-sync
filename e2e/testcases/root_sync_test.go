@@ -52,7 +52,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	}
 
 	// Delete RootSync custom resource from the cluster.
-	err = nt.Delete(&rs)
+	err = nt.KubeClient.Delete(&rs)
 	if err != nil {
 		nt.T.Fatalf("deleting RootSync: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 
 	nt.T.Log("Test RootSync v1alpha1 version")
 	rsv1alpha1 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, configsync.RootSyncName)
-	if err := nt.Create(rsv1alpha1); err != nil {
+	if err := nt.KubeClient.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -322,7 +322,9 @@ func TestForceRevert(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -373,7 +375,7 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 func TestManageSelfRootSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
 	rs := &v1beta1.RootSync{}
-	if err := nt.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
+	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	sanitizedRs := fake.RootSyncObjectV1Beta1(rs.Name)

@@ -95,7 +95,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 		rsNNs := []types.NamespacedName{nn1, nn2, nn4}
 		for _, rsNN := range rsNNs {
 			rs := &v1beta1.RepoSync{}
-			err := nt.Get(rsNN.Name, rsNN.Namespace, rs)
+			err := nt.KubeClient.Get(rsNN.Name, rsNN.Namespace, rs)
 			if err != nil {
 				if !apierrors.IsNotFound(err) {
 					nt.T.Error(err)
@@ -163,7 +163,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Create RepoSync %s", nn2)
 	nt.NonRootRepos[nn2] = nn2Repo
 	nrs2 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn2)
-	if err := nt.Create(nrs2); err != nil {
+	if err := nt.KubeClient.Create(nrs2); err != nil {
 		nt.T.Fatal(err)
 	}
 	// RoleBinding (nrb2) managed by RootSync root-sync, because the namespace
@@ -249,7 +249,7 @@ func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, l
 	listGVK.Kind += "List"
 	list.SetGroupVersionKind(listGVK)
 
-	if err := nt.List(list, client.MatchingLabels(labels)); err != nil {
+	if err := nt.KubeClient.List(list, client.MatchingLabels(labels)); err != nil {
 		nt.T.Fatal(err)
 	}
 	if len(list.Items) != expectedCount {
@@ -306,7 +306,9 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
 	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
-	nsReconcilerPod, err := nt.GetDeploymentPod(nsReconcilerName, configmanagement.ControllerNamespace)
+	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nsReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -438,7 +440,9 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	// Validate reconciler error metric is emitted from namespace reconciler.
 	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
-	nsReconcilerPod, err := nt.GetDeploymentPod(nsReconcilerName, configmanagement.ControllerNamespace)
+	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nsReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -696,7 +700,9 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	}
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
 	nsReconciler2Name := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
-	nsReconciler2Pod, err := nt.GetDeploymentPod(nsReconciler2Name, configmanagement.ControllerNamespace)
+	nsReconciler2Pod, err := nt.KubeClient.GetDeploymentPod(
+		nsReconciler2Name, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -760,11 +766,11 @@ func TestControllerValidationErrors(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 
 	testNamespace := fake.NamespaceObject(testNs)
-	if err := nt.Create(testNamespace); err != nil {
+	if err := nt.KubeClient.Create(testNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := nt.Delete(testNamespace); err != nil {
+		if err := nt.KubeClient.Delete(testNamespace); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -780,23 +786,23 @@ func TestControllerValidationErrors(t *testing.T) {
 			},
 		},
 	}
-	if err := nt.Create(rootSync); err != nil {
+	if err := nt.KubeClient.Create(rootSync); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRootSyncStalledError(rootSync.Namespace, rootSync.Name, "Validation", "RootSync objects are only allowed in the config-management-system namespace, not in test-ns")
 	t.Cleanup(func() {
-		if err := nt.Delete(rootSync); err != nil {
+		if err := nt.KubeClient.Delete(rootSync); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
 
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", filesystem.SourceFormatUnstructured)
-	if err := nt.Create(rs); err != nil {
+	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "RepoSync objects are not allowed in the config-management-system namespace")
-	if err := nt.Delete(rs); err != nil {
+	if err := nt.KubeClient.Delete(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -807,14 +813,14 @@ func TestControllerValidationErrors(t *testing.T) {
 	veryLongName := string(longBytes)
 	nnTooLong := nomostest.RepoSyncNN(testNs, veryLongName)
 	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
-	if err := nt.Create(rs); err != nil {
+	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
 		fmt.Sprintf(`Invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters.`,
 			testNs, veryLongName, len(veryLongName), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
-		if err := nt.Delete(rs); err != nil {
+		if err := nt.KubeClient.Delete(rs); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -822,14 +828,14 @@ func TestControllerValidationErrors(t *testing.T) {
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
 	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
 	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
-	if err := nt.Create(rsInvalidSecretRef); err != nil {
+	if err := nt.KubeClient.Create(rsInvalidSecretRef); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
 		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
 			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretName(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
-		if err := nt.Delete(rsInvalidSecretRef); err != nil {
+		if err := nt.KubeClient.Delete(rsInvalidSecretRef); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

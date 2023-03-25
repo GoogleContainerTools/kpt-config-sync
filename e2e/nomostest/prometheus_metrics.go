@@ -136,12 +136,12 @@ func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, recon
 	ops := summary.Operations
 	if !summary.Absolute {
 		// Add expected objects
-		nt.DebugLogf("[METRICS] ExpectedObjects: %s", nt.MetricsExpectations)
+		nt.Logger.Debugf("[METRICS] ExpectedObjects: %s", nt.MetricsExpectations)
 		count += nt.MetricsExpectations.ExpectedObjectCount(syncKind, summary.Sync)
 		ops = testmetrics.AppendOperations(ops,
 			nt.MetricsExpectations.ExpectedObjectOperations(syncKind, summary.Sync)...)
 	}
-	pod, err := nt.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace)
+	pod, err := nt.KubeClient.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace, nt.DefaultWaitTimeout)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, recon
 // ReconcilerManagerMetrics returns a MetricsPredicate that validates the
 // ReconcileDurationView metric.
 func ReconcilerManagerMetrics(nt *NT) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting reconciler-manager reconciling status: %s", metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting reconciler-manager reconciling status: %s", metrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ReconcileDurationView.Name
 		// ReconcileDurationView is a distribution. Query count to aggregate.
@@ -173,7 +173,7 @@ func ReconcilerManagerMetrics(nt *NT) MetricsPredicate {
 // ReconcilerSourceMetrics returns a MetricsPredicate that validates the
 // DeclaredResourcesView metric.
 func ReconcilerSourceMetrics(nt *NT, reconcilerPodName, commitHash string, numResources int) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting declared resources (commit: %s): %d", commitHash, numResources)
+	nt.Logger.Debugf("[METRICS] Expecting declared resources (commit: %s): %d", commitHash, numResources)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricDeclaredResourcesViewHasValue(ctx, nt, v1api,
@@ -185,7 +185,7 @@ func ReconcilerSourceMetrics(nt *NT, reconcilerPodName, commitHash string, numRe
 // ReconcilerSyncMetrics returns a MetricsPredicate that validates the
 // LastApplyTimestampView, ApplyDurationView, and LastSyncTimestampView metrics.
 func ReconcilerSyncMetrics(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting last apply & sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting last apply & sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricLastApplyTimestampHasStatus(ctx, nt, v1api,
@@ -208,7 +208,7 @@ func ReconcilerOperationsMetrics(nt *NT, reconcilerPodName string, ops ...testme
 		}
 		predicates = append(predicates, reconcilerOperationMetrics(nt, reconcilerPodName, op))
 	}
-	nt.DebugLogf("[METRICS] Expecting operations: %s", log.AsJSON(ops))
+	nt.Logger.Debugf("[METRICS] Expecting operations: %s", log.AsJSON(ops))
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		for _, predicate := range predicates {
@@ -235,7 +235,7 @@ func reconcilerOperationMetrics(nt *NT, reconcilerPodName string, op testmetrics
 // - InternalErrorsView
 // - ReconcilerErrorsView
 func ReconcilerErrorMetrics(nt *NT, reconcilerPodName, commitHash string, summary testmetrics.ErrorSummary) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting reconciler errors: %s", log.AsJSON(summary))
+	nt.Logger.Debugf("[METRICS] Expecting reconciler errors: %s", log.AsJSON(summary))
 
 	var predicates []MetricsPredicate
 	// Metrics aggregated by total count
@@ -259,7 +259,7 @@ func ReconcilerErrorMetrics(nt *NT, reconcilerPodName, commitHash string, summar
 // ReconcilerSyncSuccess returns a MetricsPredicate that validates that the
 // latest commit synced successfully for the specified reconciler and commit.
 func ReconcilerSyncSuccess(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
 			reconcilerPodName, commitHash, metrics.StatusSuccess)
@@ -269,7 +269,7 @@ func ReconcilerSyncSuccess(nt *NT, reconcilerPodName, commitHash string) Metrics
 // ReconcilerSyncError returns a MetricsPredicate that validates that the
 // latest commit sync errored for the specified reconciler and commit.
 func ReconcilerSyncError(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
-	nt.DebugLogf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusError)
+	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusError)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
 			reconcilerPodName, commitHash, metrics.StatusError)
@@ -474,7 +474,7 @@ func metricQueryNow(ctx context.Context, nt *NT, v1api prometheusv1.API, query s
 	ctx, cancel := context.WithTimeout(ctx, prometheusQueryTimeout)
 	defer cancel()
 
-	nt.DebugLogf("prometheus query: %s", query)
+	nt.Logger.Debugf("prometheus query: %s", query)
 	response, warnings, err := v1api.Query(ctx, query, time.Now())
 	if err != nil {
 		return nil, err
@@ -494,13 +494,13 @@ func metricResultMustExist(nt *NT, query string, response prometheusmodel.Value)
 		if len(result) == 0 {
 			return errors.Errorf("no results from prometheus query: %s", query)
 		}
-		nt.DebugLogf("prometheus vector response:\n%s", result)
+		nt.Logger.Debugf("prometheus vector response:\n%s", result)
 		return nil
 	case prometheusmodel.Matrix:
 		if len(result) == 0 {
 			return errors.Errorf("no results from prometheus query: %s", query)
 		}
-		nt.DebugLogf("prometheus matrix response:\n%s", result)
+		nt.Logger.Debugf("prometheus matrix response:\n%s", result)
 		return nil
 	default:
 		return errors.Errorf("unsupported prometheus response: %T", response)
@@ -593,7 +593,7 @@ func metricExistsWithValueOrDoesNotExist(ctx context.Context, nt *NT, v1api prom
 		if len(result) == 0 {
 			return nil // no results
 		}
-		nt.DebugLogf("prometheus vector response:\n%s", result)
+		nt.Logger.Debugf("prometheus vector response:\n%s", result)
 		var values []prometheusmodel.SampleValue
 		for _, sample := range result {
 			if sample.Value.Equal(prometheusmodel.SampleValue(value)) {
@@ -606,7 +606,7 @@ func metricExistsWithValueOrDoesNotExist(ctx context.Context, nt *NT, v1api prom
 		if len(result) == 0 {
 			return nil // no results
 		}
-		nt.DebugLogf("prometheus matrix response:\n%s", result)
+		nt.Logger.Debugf("prometheus matrix response:\n%s", result)
 		var values []prometheusmodel.SampleValue
 		for _, samples := range result {
 			for _, sample := range samples.Values {

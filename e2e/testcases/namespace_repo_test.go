@@ -186,13 +186,13 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	)
 
 	var rs v1beta1.RepoSync
-	if err := nt.Get(configsync.RepoSyncName, bsNamespace, &rs); err != nil {
+	if err := nt.KubeClient.Get(configsync.RepoSyncName, bsNamespace, &rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
 	// Delete RepoSync custom resource from the cluster.
-	err := nt.Delete(&rs)
+	err := nt.KubeClient.Delete(&rs)
 	if err != nil {
 		nt.T.Fatalf("RepoSync delete failed: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.T.Log("Test RepoSync v1alpha1 version in delegated control mode")
 	nn := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
 	rsv1alpha1 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
-	if err := nt.Create(rsv1alpha1); err != nil {
+	if err := nt.KubeClient.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -284,7 +284,7 @@ func TestManageSelfRepoSync(t *testing.T) {
 		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName))
 
 	rs := &v1beta1.RepoSync{}
-	if err := nt.Get(configsync.RepoSyncName, bsNamespace, rs); err != nil {
+	if err := nt.KubeClient.Get(configsync.RepoSyncName, bsNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	sanitizedRs := fake.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
@@ -297,7 +297,7 @@ func TestManageSelfRepoSync(t *testing.T) {
 
 func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {
 	secretList := &corev1.SecretList{}
-	if err := nt.List(secretList, client.InNamespace(configsync.ControllerNamespace)); err != nil {
+	if err := nt.KubeClient.List(secretList, client.InNamespace(configsync.ControllerNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	var secretNames []string
@@ -391,11 +391,15 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
 
-	rootSyncReconcilerPod, err := nt.GetDeploymentPod(rootReconciler, configmanagement.ControllerNamespace)
+	rootSyncReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		rootReconciler, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	repoSyncReconcilerPod, err := nt.GetDeploymentPod(nsReconciler, configmanagement.ControllerNamespace)
+	repoSyncReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nsReconciler, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

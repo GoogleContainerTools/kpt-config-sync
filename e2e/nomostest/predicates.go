@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -197,7 +198,7 @@ func HasExactlyAnnotationKeys(wantKeys ...string) Predicate {
 // HasExactlyLabelKeys ensures the Object has exactly the passed set of
 // labels, ignoring values.
 func HasExactlyLabelKeys(wantKeys ...string) Predicate {
-	wantKeys = append(wantKeys, TestLabel)
+	wantKeys = append(wantKeys, testkubeclient.TestLabel)
 	sort.Strings(wantKeys)
 	return func(o client.Object) error {
 		if o == nil {

@@ -41,12 +41,12 @@ func connectToLocalRegistry(nt *NT) {
 	_, err := retry.Retry(20*time.Second, func() error {
 		// See https://kind.sigs.k8s.io/docs/user/local-registry/ for explanation.
 		node := &corev1.Node{}
-		err := nt.Get(nt.ClusterName+"-control-plane", "", node)
+		err := nt.KubeClient.Get(nt.ClusterName+"-control-plane", "", node)
 		if err != nil {
 			return err
 		}
 		node.Annotations["kind.x-k8s.io/registry"] = fmt.Sprintf("localhost:%d", docker.RegistryPort)
-		return nt.Update(node)
+		return nt.KubeClient.Update(node)
 	})
 	if err != nil {
 		nt.T.Fatalf("connecting cluster to local Docker registry: %v", err)

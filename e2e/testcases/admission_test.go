@@ -49,19 +49,19 @@ func TestAdmission(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// Prevent deleting declared objects.
-	_, err := nt.Kubectl("delete", "ns", "hello")
+	_, err := nt.Shell.Kubectl("delete", "ns", "hello")
 	if err == nil {
 		nt.T.Fatal("got `kubectl delete ns hello` success, want return err")
 	}
 
 	// Prevent changing declared data.
-	_, err = nt.Kubectl("annotate", "--overwrite", "ns", "hello", "goodbye=world")
+	_, err = nt.Shell.Kubectl("annotate", "--overwrite", "ns", "hello", "goodbye=world")
 	if err == nil {
 		nt.T.Fatal("got `kubectl annotate --overwrite ns hello goodbye=world` success, want return err")
 	}
 
 	// Prevent removing declared data from declared objects.
-	_, err = nt.Kubectl("annotate", "ns", "hello", "goodbye-")
+	_, err = nt.Shell.Kubectl("annotate", "ns", "hello", "goodbye-")
 	if err == nil {
 		nt.T.Fatal("got `kubectl annotate ns hello goodbye-` success, want return err")
 	}
@@ -69,19 +69,19 @@ func TestAdmission(t *testing.T) {
 	// Ensure we allow changing information which is not declared.
 
 	// Allow adding data in declared objects.
-	out, err := nt.Kubectl("annotate", "ns", "hello", "stop=go")
+	out, err := nt.Shell.Kubectl("annotate", "ns", "hello", "stop=go")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate ns hello stop=go` error %v %s, want return nil", err, out)
 	}
 
 	// Allow changing non-declared data in declared objects.
-	out, err = nt.Kubectl("annotate", "--overwrite", "ns", "hello", "stop='oh no'")
+	out, err = nt.Shell.Kubectl("annotate", "--overwrite", "ns", "hello", "stop='oh no'")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate --overwrite ns hello stop='oh no'` error %v %s, want return nil", err, out)
 	}
 
 	// Allow reing non-declared data in declared objects.
-	out, err = nt.Kubectl("annotate", "ns", "hello", "stop-")
+	out, err = nt.Shell.Kubectl("annotate", "ns", "hello", "stop-")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate ns hello stop-` error %v %s, want return nil", err, out)
 	}
@@ -103,7 +103,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	_, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
+	_, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
 	if err == nil {
 		nt.T.Fatal("got `kubectl apply -f test-ns.yaml` success, want return err")
 	}
@@ -130,12 +130,12 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-ns.yaml` error %v %s, want return nil", err, out)
 	}
 
-	out, err = nt.Kubectl("delete", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
+	out, err = nt.Shell.Kubectl("delete", "-f", filepath.Join(nt.TmpDir, "test-ns.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete -f test-ns.yaml` error %v %s, want return nil", err, out)
 	}
@@ -167,17 +167,17 @@ metadata:
 	}
 
 	// Recreate the admission webhook
-	if _, err := nt.Kubectl("replace", "-f", filepath.Join(nt.TmpDir, "webhook.yaml")); err != nil {
+	if _, err := nt.Shell.Kubectl("replace", "-f", filepath.Join(nt.TmpDir, "webhook.yaml")); err != nil {
 		nt.T.Fatalf("failed to replace the admission webhook %v", err)
 	}
 
 	// Verify that the webhook is disabled.
-	if _, err := nt.Kubectl("delete", "ns", "hello"); err != nil {
+	if _, err := nt.Shell.Kubectl("delete", "ns", "hello"); err != nil {
 		nt.T.Fatalf("failed to run `kubectl delete ns hello` %v", err)
 	}
 
 	// Remove the annotation for disabling webhook
-	if _, err := nt.Kubectl("annotate", "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io", "configsync.gke.io/webhook-configuration-update-"); err != nil {
+	if _, err := nt.Shell.Kubectl("annotate", "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io", "configsync.gke.io/webhook-configuration-update-"); err != nil {
 		nt.T.Fatalf("failed to remove the annotation in the admission webhook %v", err)
 	}
 
@@ -190,7 +190,7 @@ metadata:
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// Verify that the webhook is now enabled
-	if _, err := nt.Kubectl("delete", "ns", "test"); err == nil {
+	if _, err := nt.Shell.Kubectl("delete", "ns", "test"); err == nil {
 		nt.T.Fatal("got `kubectl delete ns hello` success, want return err")
 	}
 }

@@ -65,7 +65,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 	nt.T.Log("Verify no errors")
 	rs = &v1beta1.RootSync{}
-	if err = nt.Get("root-sync", configmanagement.ControllerNamespace, rs); err != nil {
+	if err = nt.KubeClient.Get("root-sync", configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	err = nt.WatchForAllSyncs(

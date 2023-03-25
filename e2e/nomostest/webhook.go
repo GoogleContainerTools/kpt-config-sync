@@ -41,7 +41,7 @@ func StopWebhook(nt *NT) {
 	webhookName := configuration.Name
 	webhookGK := "validatingwebhookconfigurations.admissionregistration.k8s.io"
 
-	out, err := nt.Kubectl("annotate", webhookGK, webhookName, fmt.Sprintf("%s=%s", metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled))
+	out, err := nt.Shell.Kubectl("annotate", webhookGK, webhookName, fmt.Sprintf("%s=%s", metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate %s %s %s=%s` error %v %s, want return nil",
 			webhookGK, webhookName, metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled, err, out)
@@ -57,7 +57,7 @@ func StopWebhook(nt *NT) {
 		nt.T.Fatal(err)
 	}
 
-	out, err = nt.Kubectl("delete", webhookGK, webhookName)
+	out, err = nt.Shell.Kubectl("delete", webhookGK, webhookName)
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete %s %s` error %v %s, want return nil", webhookGK, webhookName, err, out)
 	}
@@ -82,7 +82,7 @@ func installWebhook(nt *NT) error {
 			continue
 		}
 		nt.T.Logf("installWebhook obj: %v", core.GKNN(o))
-		if err := nt.Apply(o); err != nil {
+		if err := nt.KubeClient.Apply(o); err != nil {
 			return err
 		}
 	}

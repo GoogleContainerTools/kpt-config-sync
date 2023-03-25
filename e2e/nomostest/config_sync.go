@@ -120,7 +120,7 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 			continue
 		}
 		nt.T.Logf("ResetReconcilerManagerConfigMap obj: %v", core.GKNN(obj))
-		err := nt.Update(obj)
+		err := nt.KubeClient.Update(obj)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 			cm := o.(*corev1.ConfigMap)
 			cm.Data[filesystem.SourceFormatKey] = string(nomos.SourceFormat)
 		}
-		if err := nt.Apply(o); err != nil {
+		if err := nt.KubeClient.Apply(o); err != nil {
 			return err
 		}
 	}
@@ -179,7 +179,7 @@ func uninstallConfigSync(nt *NT) error {
 		return err
 	}
 	for _, o := range objs {
-		if err := nt.Delete(o); err != nil {
+		if err := nt.KubeClient.Delete(o); err != nil {
 			if !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 				return err
 			}
@@ -331,7 +331,7 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 // ValidateMultiRepoDeployments validates if all Config Sync Components are available.
 func ValidateMultiRepoDeployments(nt *NT) error {
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
-	if err := nt.Create(rs); err != nil {
+	if err := nt.KubeClient.Create(rs); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			nt.T.Fatal(err)
 		}
@@ -391,7 +391,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 func validateMultiRepoPods(nt *NT) error {
 	for _, ns := range CSNamespaces {
 		pods := corev1.PodList{}
-		if err := nt.List(&pods, client.InNamespace(ns)); err != nil {
+		if err := nt.KubeClient.List(&pods, client.InNamespace(ns)); err != nil {
 			return err
 		}
 		for _, pod := range pods.Items {
@@ -442,7 +442,7 @@ func noOOMKilledContainer(nt *NT) Predicate {
 				}
 				// Display the logs for the previous instance of the container.
 				args := []string{"logs", pod.Name, "-n", pod.Namespace, "-p"}
-				out, err := nt.Kubectl(args...)
+				out, err := nt.Shell.Kubectl(args...)
 				// Print a standardized header before each printed log to make ctrl+F-ing the
 				// log you want easier.
 				cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
@@ -463,7 +463,7 @@ func setupRootSync(nt *NT, rsName string, reconcileTimeout *time.Duration) {
 	if reconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 	}
-	if err := nt.Apply(rs); err != nil {
+	if err := nt.KubeClient.Apply(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -474,7 +474,7 @@ func setupRepoSync(nt *NT, nn types.NamespacedName, reconcileTimeout *time.Durat
 	if reconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 	}
-	if err := nt.Create(rs); err != nil {
+	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -522,7 +522,7 @@ func repoSyncClusterRoleBinding(nn types.NamespacedName) *rbacv1.ClusterRoleBind
 }
 
 func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
-	if err := nt.Create(RepoSyncRoleBinding(nn)); err != nil {
+	if err := nt.KubeClient.Create(RepoSyncRoleBinding(nn)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -625,7 +625,7 @@ func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
 	nt.T.Log("[SETUP] Delegated control")
 
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
-	if err := nt.Create(nt.RepoSyncClusterRole()); err != nil {
+	if err := nt.KubeClient.Create(nt.RepoSyncClusterRole()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -645,13 +645,13 @@ func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
 		// TODO: Remove the psp related change when Kubernetes 1.25 is
 		// available on GKE.
 		if isPSPCluster() {
-			if err := nt.Create(repoSyncClusterRoleBinding(nn)); err != nil {
+			if err := nt.KubeClient.Create(repoSyncClusterRoleBinding(nn)); err != nil {
 				nt.T.Fatal(err)
 			}
 		}
 
 		// create namespace for namespace reconciler.
-		err := nt.Create(fake.NamespaceObject(nn.Namespace))
+		err := nt.KubeClient.Create(fake.NamespaceObject(nn.Namespace))
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -1054,7 +1054,7 @@ func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentP
 		return nil
 	}
 	newPods := &corev1.PodList{}
-	if err := nt.List(newPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{labelName: currentLabel}); err != nil {
+	if err := nt.KubeClient.List(newPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{labelName: currentLabel}); err != nil {
 		nt.T.Fatal(err)
 	}
 	for _, newPod := range newPods.Items {
@@ -1073,17 +1073,17 @@ func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentP
 // DeletePodByLabel deletes pods that have the label and waits until new pods come up.
 func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 	oldPods := &corev1.PodList{}
-	if err := nt.List(oldPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
+	if err := nt.KubeClient.List(oldPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
 		nt.T.Fatal(err)
 	}
 	oldReconcilers := &corev1.PodList{}
 	if value == reconcilermanager.ManagerName && waitForChildren {
 		// Get the children pods managed by the reconciler-manager.
-		if err := nt.List(oldReconcilers, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: reconcilermanager.Reconciler}); err != nil {
+		if err := nt.KubeClient.List(oldReconcilers, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: reconcilermanager.Reconciler}); err != nil {
 			nt.T.Fatal(err)
 		}
 	}
-	if err := nt.DeleteAllOf(&corev1.Pod{}, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
+	if err := nt.KubeClient.DeleteAllOf(&corev1.Pod{}, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
 		nt.T.Fatalf("Pod delete failed: %v", err)
 	}
 	Wait(nt.T, "new pods come up", nt.DefaultWaitTimeout, func() error {
@@ -1099,7 +1099,7 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 func SetPolicyDir(nt *NT, syncName, policyDir string) {
 	nt.T.Logf("Set policyDir to %q", policyDir)
 	rs := fake.RootSyncObjectV1Beta1(syncName)
-	if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	if rs.Spec.Git.Dir != policyDir {
@@ -1111,7 +1111,7 @@ func SetPolicyDir(nt *NT, syncName, policyDir string) {
 func SetGitBranch(nt *NT, syncName, branch string) {
 	nt.T.Logf("Change git branch to %q", branch)
 	rs := fake.RootSyncObjectV1Beta1(syncName)
-	if err := nt.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	if rs.Spec.Git.Branch != branch {

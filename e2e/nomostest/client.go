@@ -28,11 +28,11 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -41,20 +41,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// connect creates a client.Client to the cluster
-func connect(t testing.NTB, cfg *rest.Config, scheme *runtime.Scheme) client.WithWatch {
-	t.Helper()
-
-	t.Log("creating Client")
-	c, err := client.NewWithWatch(cfg, client.Options{
+func newTestClient(nt *NT) *testkubeclient.KubeClient {
+	nt.T.Helper()
+	nt.Logger.Info("Creating Client")
+	kubeClient, err := client.NewWithWatch(nt.Config, client.Options{
 		// The Scheme is client-side, but this automatically fetches the RestMapper
 		// from the cluster.
-		Scheme: scheme,
+		Scheme: nt.scheme,
 	})
 	if err != nil {
-		t.Fatal(err)
+		nt.T.Fatal(err)
 	}
-	return c
+
+	return &testkubeclient.KubeClient{
+		Context: nt.Context,
+		Client:  kubeClient,
+		Logger:  nt.Logger,
+	}
 }
 
 // newScheme creates a new scheme to use to map Go types to types on a

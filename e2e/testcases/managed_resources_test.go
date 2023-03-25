@@ -83,7 +83,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err := nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns1.yaml"))
+	out, err := nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns1.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-ns1.yaml` error %v %s, want return nil", err, out)
 	}
@@ -112,7 +112,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns2.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns2.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-ns2.yaml` error %v %s, want return nil", err, out)
 	}
@@ -147,7 +147,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns3.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns3.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-ns3.yaml` error %v %s, want return nil", err, out)
 	}
@@ -182,7 +182,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns4.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns4.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-ns4.yaml` error %v %s, want return nil", err, out)
 	}
@@ -240,7 +240,7 @@ data:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err := nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm1.yaml"))
+	out, err := nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm1.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-cm1.yaml` error %v %s, want return nil", err, out)
 	}
@@ -271,7 +271,7 @@ data:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm2.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm2.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-cm2.yaml` error %v %s, want return nil", err, out)
 	}
@@ -310,7 +310,7 @@ data:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm3.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm3.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-cm3.yaml` error %v %s, want return nil", err, out)
 	}
@@ -348,7 +348,7 @@ data:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm4.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm4.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-cm4.yaml` error %v %s, want return nil", err, out)
 	}
@@ -384,7 +384,7 @@ metadata:
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
-	out, err = nt.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-secret.yaml"))
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-secret.yaml"))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl apply -f test-secret.yaml` error %v %s, want return nil", err, out)
 	}
@@ -426,12 +426,12 @@ func TestDeleteManagedResources(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
-	_, err := nt.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
+	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` successs, want err")
 	}
 
-	_, err = nt.Kubectl("delete", "ns", "bookstore")
+	_, err = nt.Shell.Kubectl("delete", "ns", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` success, want err")
 	}
@@ -440,7 +440,7 @@ func TestDeleteManagedResources(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Delete the configmap
-	out, err := nt.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
+	out, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` error %v %s, want return nil", err, out)
 	}
@@ -453,7 +453,7 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Delete the namespace
-	out, err = nt.Kubectl("delete", "ns", "bookstore")
+	out, err = nt.Shell.Kubectl("delete", "ns", "bookstore")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` error %v %s, want return nil", err, out)
 	}
@@ -488,12 +488,12 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
-	_, err := nt.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
+	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` successs, want err")
 	}
 
-	_, err = nt.Kubectl("delete", "ns", "bookstore")
+	_, err = nt.Shell.Kubectl("delete", "ns", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` success, want err")
 	}
@@ -502,7 +502,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Delete the configmap
-	out, err := nt.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
+	out, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` error %v %s, want return nil", err, out)
 	}
@@ -515,7 +515,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Delete the namespace
-	out, err = nt.Kubectl("delete", "ns", "bookstore")
+	out, err = nt.Shell.Kubectl("delete", "ns", "bookstore")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` error %v %s, want return nil", err, out)
 	}
@@ -541,7 +541,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 
 	// Add a new annotation into the namespace object
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season=summer")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season=summer")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season=summer` error %v %s, want return nil", err, out)
 	}
@@ -560,7 +560,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
 	// The webhook should deny the requests since this annotation is a part of the Config Sync metadata.
 	ignoreMutation := fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
-	_, err = nt.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
+	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` success, want err", ignoreMutation)
 	}
@@ -570,7 +570,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
 	ignoreMutation = fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
-	out, err = nt.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` error %v %s, want return nil", ignoreMutation, err, out)
 	}
@@ -600,7 +600,7 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 	}
 
 	// Add a new annotation into the namespace object
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season=summer")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season=summer")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season=summer` error %v %s, want return nil", err, out)
 	}
@@ -630,13 +630,13 @@ func TestModifyManagedFields(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from modifying a managed field.
-	_, err := nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
+	_, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` success, want err")
 	}
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from modifying Config Sync metadata.
-	_, err = nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
+	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` success, want err", metadata.ResourceManagementKey)
 	}
@@ -645,7 +645,7 @@ func TestModifyManagedFields(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Modify a managed field
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` error %v %s, want return nil", err, out)
 	}
@@ -661,7 +661,7 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 
 	// Modify a Config Sync annotation
-	out, err = nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
@@ -692,7 +692,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Modify a managed field
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` error %v %s, want return nil", err, out)
 	}
@@ -710,7 +710,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Modify a Config Sync annotation
-	out, err = nt.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
@@ -738,13 +738,13 @@ func TestDeleteManagedFields(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a managed field.
-	_, err := nt.Kubectl("annotate", "namespace", "bookstore", "season-")
+	_, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season-")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` success, want err")
 	}
 
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting Config Sync metadata.
-	_, err = nt.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` success, want err", metadata.ResourceManagementKey)
 	}
@@ -753,7 +753,7 @@ func TestDeleteManagedFields(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Delete a managed field
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season-")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season-")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
@@ -768,7 +768,7 @@ func TestDeleteManagedFields(t *testing.T) {
 	}
 
 	// Delete a Config Sync annotation
-	out, err = nt.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
@@ -798,7 +798,7 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Delete a managed field
-	out, err := nt.Kubectl("annotate", "namespace", "bookstore", "season-")
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season-")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
@@ -815,7 +815,7 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	// Delete a Config Sync annotation
-	out, err = nt.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}

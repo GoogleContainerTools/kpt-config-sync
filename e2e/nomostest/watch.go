@@ -127,7 +127,7 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 		// Log the initial/current state as a diff to make it easy to compare with update diffs.
 		// Use diff.Diff because it doesn't truncate like cmp.Diff does.
 		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
-		nt.DebugLogf("%s GET Diff (+ Current):\n%s",
+		nt.Logger.Debugf("%s GET Diff (+ Current):\n%s",
 			errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
 	}
 
@@ -193,7 +193,7 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 				cObj = nil
 			}
 
-			nt.DebugLogf("%s %s Diff (- Removed, + Added):\n%s",
+			nt.Logger.Debugf("%s %s Diff (- Removed, + Added):\n%s",
 				errPrefix, eType,
 				log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
 
@@ -260,13 +260,13 @@ func newListWatchForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace 
 		restConfig.Timeout = timeout * 2
 	}
 	// Use the custom client scheme to encode requests and decode responses
-	codecs := serializer.NewCodecFactory(nt.Client.Scheme())
+	codecs := serializer.NewCodecFactory(nt.KubeClient.Client.Scheme())
 	restClient, err := apiutil.RESTClientForGVK(gvk, false, restConfig, codecs)
 	if err != nil {
 		return nil, err
 	}
 	// Lookup the resource name from the GVK using discovery (usually cached)
-	mapping, err := nt.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := nt.KubeClient.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}

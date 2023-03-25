@@ -419,7 +419,7 @@ func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	tg := taskgroup.New()
 	for _, obj := range objs {
 		nn := client.ObjectKeyFromObject(obj)
-		gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
+		gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
 		require.NoError(nt.T, err)
 		tg.Go(func() error {
 			return nomostest.WatchForCurrentStatus(nt, gvk, nn.Name, nn.Namespace)

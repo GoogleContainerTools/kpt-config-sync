@@ -202,7 +202,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 		func() error {
 			nt.T.Helper()
 			rs := fake.RootSyncObjectV1Beta1(rsName)
-			if err := nt.Get(rs.GetName(), rs.GetNamespace(), rs); err != nil {
+			if err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs); err != nil {
 				return err
 			}
 			// Only validate the rendering status, not the Syncing condition
@@ -221,7 +221,7 @@ func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string,
 		func() error {
 			nt.T.Helper()
 			rs := fake.RootSyncObjectV1Beta1(rsName)
-			err := nt.Get(rs.GetName(), rs.GetNamespace(), rs)
+			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
 			}
@@ -241,7 +241,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts
 		func() error {
 			nt.T.Helper()
 			rs := fake.RootSyncObjectV1Beta1(rsName)
-			err := nt.Get(rs.GetName(), rs.GetNamespace(), rs)
+			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
 			}
@@ -261,7 +261,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 		func() error {
 			nt.T.Helper()
 			rs := fake.RepoSyncObjectV1Beta1(ns, rsName)
-			err := nt.Get(rs.GetName(), rs.GetNamespace(), rs)
+			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
 			}
@@ -281,7 +281,7 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 		func() error {
 			nt.T.Helper()
 			rs := fake.RepoSyncObjectV1Beta1(ns, rsName)
-			err := nt.Get(rs.GetName(), rs.GetNamespace(), rs)
+			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
 			}
@@ -300,7 +300,7 @@ func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("Repo source error code %s", code), nt.DefaultWaitTimeout,
 		func() error {
 			obj := &v1.Repo{}
-			err := nt.Get(repo.DefaultName, "", obj)
+			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
@@ -326,7 +326,7 @@ func (nt *NT) WaitForRepoSourceErrorClear(opts ...WaitOption) {
 	Wait(nt.T, "Repo source errors cleared", nt.DefaultWaitTimeout,
 		func() error {
 			obj := &v1.Repo{}
-			err := nt.Get(repo.DefaultName, "", obj)
+			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
@@ -349,7 +349,7 @@ func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("Repo import error code %s", code), nt.DefaultWaitTimeout,
 		func() error {
 			obj := &v1.Repo{}
-			err := nt.Get(repo.DefaultName, "", obj)
+			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
 			if err != nil {
 				return err
 			}
@@ -381,7 +381,7 @@ func (nt *NT) WaitForRootSyncStalledError(rsNamespace, rsName, reason, message s
 				},
 				TypeMeta: fake.ToTypeMeta(kinds.RootSyncV1Beta1()),
 			}
-			if err := nt.Get(rsName, rsNamespace, rs); err != nil {
+			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err
 			}
 			stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
@@ -412,7 +412,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 				},
 				TypeMeta: fake.ToTypeMeta(kinds.RepoSyncV1Beta1()),
 			}
-			if err := nt.Get(rsName, rsNamespace, rs); err != nil {
+			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err
 			}
 			stalledCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)

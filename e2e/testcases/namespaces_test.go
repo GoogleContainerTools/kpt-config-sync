@@ -724,7 +724,9 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	safetyNSObj := fake.NamespaceObject(nt.RootRepos[configsync.RootSyncName].SafetyNSName)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, safetyNSObj)
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -813,11 +815,11 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 func checkpointProtectedNamespace(nt *nomostest.NT, namespace string) {
 	nsObj := fake.NamespaceObject(namespace)
 
-	if err := nt.Get(nsObj.Name, "", nsObj); err != nil {
+	if err := nt.KubeClient.Get(nsObj.Name, "", nsObj); err != nil {
 		if apierrors.IsNotFound(err) {
 			nt.T.Cleanup(func() {
 				// Revert to initial state (not found).
-				if err := nt.Delete(nsObj); err != nil {
+				if err := nt.KubeClient.Delete(nsObj); err != nil {
 					if !apierrors.IsNotFound(err) {
 						nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
 					}
@@ -837,9 +839,9 @@ func checkpointProtectedNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Cleanup(func() {
 		// Revert to initial state.
 		// Removes the test label, which avoids triggering deletion by Reset/Clean.
-		if err := nt.Update(nsObj); err != nil {
+		if err := nt.KubeClient.Update(nsObj); err != nil {
 			if apierrors.IsNotFound(err) {
-				if err := nt.Create(nsObj); err != nil {
+				if err := nt.KubeClient.Create(nsObj); err != nil {
 					nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
 				}
 			} else {

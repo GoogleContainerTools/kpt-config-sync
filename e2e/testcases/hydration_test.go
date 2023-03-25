@@ -438,7 +438,7 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 
 func validateNamespaces(nt *nomostest.NT, expectedNamespaces []string, expectedOrigin string) {
 	namespaces := &corev1.NamespaceList{}
-	if err := nt.List(namespaces, testLabels); err != nil {
+	if err := nt.KubeClient.List(namespaces, testLabels); err != nil {
 		nt.T.Error(err)
 	}
 	var actualNamespaces []string
@@ -487,7 +487,7 @@ func getRootSyncCommitStatusErrorSummary(rootSync *v1beta1.RootSync, rg *unstruc
 // getUpdatedRootSync gets the most recent RootSync from Client
 func getUpdatedRootSync(nt *nomostest.NT, name string, namespace string) *v1beta1.RootSync {
 	rs := &v1beta1.RootSync{}
-	if err := nt.Get(name, namespace, rs); err != nil {
+	if err := nt.KubeClient.Get(name, namespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	return rs

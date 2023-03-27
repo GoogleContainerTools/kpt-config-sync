@@ -64,17 +64,17 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	ns := &corev1.Namespace{}
-	if err := nt.Get(namespaceName, "", ns); err != nil {
+	if err := nt.KubeClient.Get(namespaceName, "", ns); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	cm1 := &corev1.ConfigMap{}
-	if err := nt.Get(cm1Name, namespaceName, cm1); err != nil {
+	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	cm2 := &corev1.ConfigMap{}
-	if err := nt.Get(cm2Name, namespaceName, cm2); err != nil {
+	if err := nt.KubeClient.Get(cm2Name, namespaceName, cm2); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -113,12 +113,12 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Logf("Verify that cm1 is created before cm3")
 	cm1 = &corev1.ConfigMap{}
-	if err := nt.Get(cm1Name, namespaceName, cm1); err != nil {
+	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	cm3 := &corev1.ConfigMap{}
-	if err := nt.Get(cm3Name, namespaceName, cm3); err != nil {
+	if err := nt.KubeClient.Get(cm3Name, namespaceName, cm3); err != nil {
 		nt.T.Fatal(err)
 	}
 	if cm3.CreationTimestamp.Before(&cm1.CreationTimestamp) {
@@ -144,12 +144,12 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("Verify that cm1 is created before cm0")
 	cm1 = &corev1.ConfigMap{}
-	if err := nt.Get(cm1Name, namespaceName, cm1); err != nil {
+	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	cm0 := &corev1.ConfigMap{}
-	if err := nt.Get(cm3Name, namespaceName, cm0); err != nil {
+	if err := nt.KubeClient.Get(cm3Name, namespaceName, cm0); err != nil {
 		nt.T.Fatal(err)
 	}
 	if cm0.CreationTimestamp.Before(&cm1.CreationTimestamp) {
@@ -413,7 +413,7 @@ func TestExternalDependencyError(t *testing.T) {
 	// TestCase: cm1 depends on an object that is not in the repo, but in the cluster
 	// Expected an ExternalDependencyError
 	nt.T.Log("A new test: verify that a dependant is only in the cluster cause an external dependency error")
-	if _, err := nt.Kubectl("create", "configmap", "cm4", "-n", namespaceName); err != nil {
+	if _, err := nt.Shell.Kubectl("create", "configmap", "cm4", "-n", namespaceName); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify that cm4 is created in the cluster")
@@ -430,7 +430,7 @@ func TestExternalDependencyError(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	if _, err := nt.Kubectl("delete", "configmap", "cm4", "-n", namespaceName); err != nil {
+	if _, err := nt.Shell.Kubectl("delete", "configmap", "cm4", "-n", namespaceName); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify that cm4 is deleted in the cluster")

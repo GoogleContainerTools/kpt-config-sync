@@ -334,7 +334,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 // the FWI credentials annotation or not.
 func validateFWICredentials(nt *nomostest.NT, reconcilerName string, validationFn func(pod corev1.Pod) error) error {
 	var podList = &corev1.PodList{}
-	if err := nt.List(podList, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{metadata.ReconcilerLabel: reconcilerName}); err != nil {
+	if err := nt.KubeClient.List(podList, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{metadata.ReconcilerLabel: reconcilerName}); err != nil {
 		return err
 	}
 	if len(podList.Items) != 1 {

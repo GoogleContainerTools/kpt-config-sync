@@ -188,11 +188,11 @@ type updateFunc func(deployment *appsv1.Deployment)
 func mustUpdateRootReconciler(nt *nomostest.NT, f updateFunc) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		d := &appsv1.Deployment{}
-		if err := nt.Get(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, d); err != nil {
+		if err := nt.KubeClient.Get(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, d); err != nil {
 			return err
 		}
 		f(d)
-		return nt.Update(d)
+		return nt.KubeClient.Update(d)
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -547,7 +547,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	rs := &v1beta1.RootSync{}
 
-	if err := nt.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
+	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	generation := reconcilerDeployment.Generation

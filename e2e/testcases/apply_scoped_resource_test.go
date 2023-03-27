@@ -36,7 +36,7 @@ func TestApplyScopedResources(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		if nt.T.Failed() {
-			out, err := nt.Kubectl("get", "service", "-n", "kubevirt")
+			out, err := nt.Shell.Kubectl("get", "service", "-n", "kubevirt")
 			// Print a standardized header before each printed log to make ctrl+F-ing the
 			// log you want easier.
 			nt.T.Logf("kubectl get service -n kubevirt: \n%s", string(out))

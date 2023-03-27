@@ -114,7 +114,7 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 	appliedCr := fake.ClusterRoleObject(core.Name(crName))
 	appliedCr.Rules = appliedRules
-	err = nt.Update(appliedCr)
+	err = nt.KubeClient.Update(appliedCr)
 	// The admission webhook should deny the conflicting change.
 	if err == nil {
 		nt.T.Fatal("got Update error = nil, want admission webhook to deny conflicting update")

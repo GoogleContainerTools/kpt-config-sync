@@ -212,7 +212,7 @@ func checkResourceCount(nt *nomostest.NT, gvk schema.GroupVersionKind, namespace
 	if len(labels) > 0 {
 		opts = append(opts, (client.MatchingLabels)(labels))
 	}
-	if err := nt.Client.List(nt.Context, list, opts...); err != nil {
+	if err := nt.KubeClient.List(list, opts...); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -228,7 +228,7 @@ func checkResourceCount(nt *nomostest.NT, gvk schema.GroupVersionKind, namespace
 }
 
 func checkResource(nt *nomostest.NT, obj client.Object, namespace, name string, labels, annotations map[string]string) error {
-	if err := nt.Get(name, namespace, obj); err != nil {
+	if err := nt.KubeClient.Get(name, namespace, obj); err != nil {
 		return err
 	}
 	if !containsSubMap(obj.GetLabels(), labels) {

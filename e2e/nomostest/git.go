@@ -27,8 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
@@ -102,6 +103,9 @@ type Repository struct {
 
 	// Scheme used for encoding and decoding objects.
 	Scheme *runtime.Scheme
+
+	// Logger for methods to use.
+	Logger *testlogger.TestLogger
 }
 
 // NewRepository creates a remote repo on the git provider.
@@ -126,6 +130,7 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		SafetyClusterRoleName: safetyName,
 		SafetyClusterRolePath: fmt.Sprintf("acme/cluster/cluster-role-%s.yaml", safetyName),
 		Scheme:                nt.scheme,
+		Logger:                nt.Logger,
 	}
 
 	repoName, err := nt.GitProvider.CreateRepository(namespacedName)
@@ -161,9 +166,7 @@ func (g *Repository) gitCmd(command ...string) *exec.Cmd {
 	// https://git-scm.com/docs/git#Documentation/git.txt--Cltpathgt
 	args := []string{"git", "-C", g.Root}
 	args = append(args, command...)
-	if *e2e.Debug {
-		g.T.Logf("[repo %s] %s", path.Base(g.Root), strings.Join(args, " "))
-	}
+	g.Logger.Debugf("[repo %s] %s", path.Base(g.Root), strings.Join(args, " "))
 	return exec.Command(args[0], args[1:]...)
 }
 
@@ -176,7 +179,7 @@ func (g *Repository) Git(command ...string) {
 	cmd := g.gitCmd(command...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		g.T.Log(string(out))
+		g.Logger.Info(string(out))
 		g.T.Fatal(err)
 	}
 }
@@ -196,11 +199,11 @@ func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) {
 	switch sourceFormat {
 	case filesystem.SourceFormatHierarchy:
 		// Hierarchy format requires a Repo object.
-		g.T.Logf("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
+		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 		g.Add(filepath.Join(AcmeDir, "system", "repo.yaml"), fake.RepoObject())
 	case filesystem.SourceFormatUnstructured:
 		// It is an error for unstructured repos to include the Repo object.
-		g.T.Logf("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
+		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 	default:
 		g.T.Fatalf("Unrecognized SourceFormat: %q", sourceFormat)
 	}
@@ -252,7 +255,7 @@ func (g *Repository) init(privateKey string) {
 // files is the behavior under test. In that case, use AddFile.
 func (g *Repository) Add(path string, obj client.Object) {
 	g.T.Helper()
-	AddTestLabel(obj)
+	testkubeclient.AddTestLabel(obj)
 	// TODO: Figure out how to cleanly inject runtime.Scheme here.
 
 	// We have to make a pass through json since yaml.Marshal does not respect
@@ -497,7 +500,7 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) {
 
 	g.Git("commit", "-m", msg)
 
-	g.T.Logf("[repo %s] committing %q (%s)", path.Base(g.Root), msg, g.Hash())
+	g.Logger.Infof("[repo %s] committing %q (%s)", path.Base(g.Root), msg, g.Hash())
 	g.Git("push", "-f", "-u", remoteOrigin, branch)
 }
 
@@ -534,7 +537,7 @@ func (g *Repository) Hash() string {
 	// git rev-parse --verify HEAD
 	out, err := g.gitCmd("rev-parse", "--verify", "HEAD").CombinedOutput()
 	if err != nil {
-		g.T.Log(string(out))
+		g.Logger.Info(string(out))
 		g.T.Fatal(err)
 	}
 	return strings.TrimSpace(string(out))

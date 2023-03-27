@@ -36,10 +36,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/kubevirt/v1"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -49,20 +49,6 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// TestLabel is the label added to all test objects, ensuring we can clean up
-// non-ephemeral clusters when tests are complete.
-const TestLabel = "nomos-test"
-
-// TestLabelValue is the value assigned to the above label.
-const TestLabelValue = "enabled"
-
-// AddTestLabel is automatically added to objects created or declared with the
-// NT methods, or declared with Repository.Add.
-//
-// This isn't perfect - objects added via other means (such as kubectl) will
-// bypass this.
-var AddTestLabel = core.Label(TestLabel, TestLabelValue)
 
 // Clean removes all objects of types registered in the scheme, with the above
 // caveats. It should be run before and after a test is run against any
@@ -186,7 +172,7 @@ func deleteManagedNamespacesAndWait(nt *NT) error {
 
 	// Delete all Namespaces with the test label (except protected).
 	nsList := &corev1.NamespaceList{}
-	if err := nt.List(nsList, withLabelListOption(metadata.ManagedByKey, metadata.ManagedByValue)); err != nil {
+	if err := nt.KubeClient.List(nsList, withLabelListOption(metadata.ManagedByKey, metadata.ManagedByValue)); err != nil {
 		return err
 	}
 
@@ -210,7 +196,7 @@ func deleteImplicitNamespacesAndWait(nt *NT) error {
 	}()
 
 	nsList := &corev1.NamespaceList{}
-	if err := nt.List(nsList); err != nil {
+	if err := nt.KubeClient.List(nsList); err != nil {
 		return err
 	}
 	var nsListFiltered []corev1.Namespace
@@ -272,7 +258,7 @@ func isConfigSyncLabel(key, value string) bool {
 }
 
 func isTestLabel(key string) bool {
-	return key == TestLabel || strings.HasPrefix(key, "test-")
+	return key == testkubeclient.TestLabel || strings.HasPrefix(key, "test-")
 }
 
 // deleteConfigSyncAndTestAnnotationsAndLabels removes config sync and test annotations and labels from the namespace and update it.
@@ -297,7 +283,7 @@ func deleteConfigSyncAndTestAnnotationsAndLabels(nt *NT, ns *corev1.Namespace) e
 	ns.Annotations = annotations
 	ns.Labels = labels
 
-	return nt.Client.Update(nt.Context, ns)
+	return nt.KubeClient.Update(ns)
 }
 
 func namespaceHasNoConfigSyncAnnotationsAndLabels() Predicate {
@@ -326,7 +312,7 @@ func namespaceHasNoConfigSyncAnnotationsAndLabels() Predicate {
 // resetSystemNamespaces removes the config sync annotations and labels from the system namespaces.
 func resetSystemNamespaces(nt *NT) error {
 	nsList := &corev1.NamespaceList{}
-	if err := nt.List(nsList); err != nil {
+	if err := nt.KubeClient.List(nsList); err != nil {
 		return err
 	}
 	for _, ns := range nsList.Items {
@@ -358,7 +344,7 @@ func deleteKubevirt(nt *NT) error {
 	}()
 
 	kubevirtNS := corev1.Namespace{}
-	if err := nt.Get("kubevirt", "", &kubevirtNS); err != nil {
+	if err := nt.KubeClient.Get("kubevirt", "", &kubevirtNS); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -370,7 +356,7 @@ func deleteKubevirt(nt *NT) error {
 		obj := kubevirt.NewKubeVirtObject()
 		obj.SetName("kubevirt")
 		obj.SetNamespace("kubevirt")
-		if err := nt.MergePatch(obj, `{"metadata":{"finalizers":null}}`); err != nil {
+		if err := nt.KubeClient.MergePatch(obj, `{"metadata":{"finalizers":null}}`); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
@@ -414,7 +400,7 @@ func deleteKubevirt(nt *NT) error {
 
 	// Delete all KubeVirt labelled CRDs and wait for NotFound
 	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	if err := nt.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
+	if err := nt.KubeClient.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
 		return err
 	}
 	if len(crdList.Items) > 0 {
@@ -455,7 +441,7 @@ func deleteReconcilersBySyncKind(nt *NT, kind string) error {
 	opts = append(opts, client.InNamespace(configmanagement.ControllerNamespace))
 	opts = append(opts, withLabelListOption(metadata.SyncKindLabel, kind))
 	dList := &appsv1.DeploymentList{}
-	if err := nt.List(dList, opts...); err != nil {
+	if err := nt.KubeClient.List(dList, opts...); err != nil {
 		return err
 	}
 	for _, item := range dList.Items {
@@ -469,7 +455,7 @@ func deleteReconcilersBySyncKind(nt *NT, kind string) error {
 func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructured.Unstructured, error) {
 	list := &unstructured.UnstructuredList{}
 	list.GetObjectKind().SetGroupVersionKind(gvk)
-	if err := nt.List(list, withLabelListOption(TestLabel, TestLabelValue)); err != nil {
+	if err := nt.KubeClient.List(list, withLabelListOption(testkubeclient.TestLabel, testkubeclient.TestLabelValue)); err != nil {
 		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 			// Resource not registered. So none can exist.
 			return nil, nil
@@ -489,7 +475,7 @@ func deleteObject(nt *NT, obj client.Object) error {
 		// already terminating. skip deleting
 		return nil
 	}
-	if err = nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+	if err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return errors.Wrapf(err, "unable to delete %s object %s",
 				gvk.Kind, nn)
@@ -512,7 +498,7 @@ func deleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 			nt.T.Logf("[CLEANUP] already terminating %s object %s ...", gvk.Kind, nn)
 		} else {
 			nt.T.Logf("[CLEANUP] deleting %s object %s ...", gvk.Kind, nn)
-			if err := nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+			if err := nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
 				if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 					// skip waiting
 					continue
@@ -568,7 +554,7 @@ func DeleteRemoteRepos(nt *NT) {
 func disableRepoSyncDeletionPropagation(nt *NT) error {
 	// List all RepoSyncs in all namespaces
 	rsList := &v1beta1.RepoSyncList{}
-	if err := nt.List(rsList); err != nil {
+	if err := nt.KubeClient.List(rsList); err != nil {
 		if meta.IsNoMatchError(err) {
 			// RepoSync resource not registered. So none can exist.
 			return nil
@@ -582,7 +568,7 @@ func disableRepoSyncDeletionPropagation(nt *NT) error {
 			// This should unblock RepoSync & Namespace deletion.
 			RemoveDeletionPropagationPolicy(rsCopy)
 			rsCopy.Finalizers = nil
-			if err := nt.Update(rsCopy); err != nil {
+			if err := nt.KubeClient.Update(rsCopy); err != nil {
 				return err
 			}
 		}
@@ -593,7 +579,7 @@ func disableRepoSyncDeletionPropagation(nt *NT) error {
 func disableRootSyncDeletionPropagation(nt *NT) error {
 	// List all RootSyncs in all namespaces
 	rsList := &v1beta1.RootSyncList{}
-	if err := nt.List(rsList); err != nil {
+	if err := nt.KubeClient.List(rsList); err != nil {
 		if meta.IsNoMatchError(err) {
 			// RootSync resource not registered. So none can exist.
 			return nil
@@ -607,7 +593,7 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 			// This should unblock RootSync & `config-management-system` Namespace deletion.
 			RemoveDeletionPropagationPolicy(rsCopy)
 			rsCopy.Finalizers = nil
-			if err := nt.Update(rsCopy); err != nil {
+			if err := nt.KubeClient.Update(rsCopy); err != nil {
 				return err
 			}
 		}
@@ -616,7 +602,7 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 }
 
 func deleteTestAPIServices(nt *NT) error {
-	out, err := nt.Kubectl("delete", "apiservices", "-l", "testdata=true")
+	out, err := nt.Shell.Kubectl("delete", "apiservices", "-l", "testdata=true")
 	if err != nil {
 		nt.T.Logf("%v", out)
 		nt.T.Errorf("cleaning up apiservices: %v", err)

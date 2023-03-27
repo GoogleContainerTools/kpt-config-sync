@@ -103,7 +103,7 @@ func TestStressCRD(t *testing.T) {
 
 	nt.T.Logf("Verify that there are exactly 1000 Namespaces managed by Config Sync on the cluster")
 	nsList := &corev1.NamespaceList{}
-	if err := nt.Client.List(nt.Context, nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
+	if err := nt.KubeClient.List(nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
 	if len(nsList.Items) != 1000 {
@@ -112,7 +112,7 @@ func TestStressCRD(t *testing.T) {
 
 	nt.T.Logf("Verify that there are exactly 1000 ConfigMaps managed by Config Sync on the cluster")
 	cmList := &corev1.ConfigMapList{}
-	if err := nt.Client.List(nt.Context, cmList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
+	if err := nt.KubeClient.List(cmList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
 	if len(cmList.Items) != 1000 {
@@ -122,7 +122,7 @@ func TestStressCRD(t *testing.T) {
 	nt.T.Logf("Verify that there are exactly 1000 CronTab CRs managed by Config Sync on the cluster")
 	crList := &unstructured.UnstructuredList{}
 	crList.SetGroupVersionKind(crontabGVK)
-	if err := nt.Client.List(nt.Context, crList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}); err != nil {
+	if err := nt.KubeClient.List(crList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}); err != nil {
 		nt.T.Error(err)
 	}
 	if len(crList.Items) != 1000 {
@@ -162,7 +162,7 @@ func TestStressLargeNamespace(t *testing.T) {
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
 	cmList := &corev1.ConfigMapList{}
 
-	if err := nt.Client.List(nt.Context, cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
+	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
 	if len(cmList.Items) != 5000 {
@@ -200,7 +200,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
 	cmList := &corev1.ConfigMapList{}
-	if err := nt.Client.List(nt.Context, cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
+	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
 	if len(cmList.Items) != 100 {

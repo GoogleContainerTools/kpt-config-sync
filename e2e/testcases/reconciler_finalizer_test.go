@@ -92,12 +92,12 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 
 	nt.T.Log("Disabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	err := nt.Get(rootSync.GetName(), rootSync.GetNamespace(), rootSync)
+	err := nt.KubeClient.Get(rootSync.GetName(), rootSync.GetNamespace(), rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
-		err = nt.Update(rootSync)
+		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -113,7 +113,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	// avoid causing the reconciler Deployment to be deleted before the RootSync
 	// finishes finalizing.
 	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -180,12 +180,12 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	err := nt.Get(rootSync.Name, rootSync.Namespace, rootSync)
+	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
-		err = nt.Update(rootSync)
+		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -201,7 +201,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	// avoid causing the reconciler Deployment to be deleted before the RootSync
 	// finishes finalizing.
 	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -288,12 +288,12 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	err := nt.Get(rootSync.Name, rootSync.Namespace, rootSync)
+	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
-		err = nt.Update(rootSync)
+		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -324,7 +324,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	// avoid causing the reconciler Deployment to be deleted before the RootSync
 	// finishes finalizing.
 	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -414,12 +414,12 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
-	err := nt.Get(rootSync.Name, rootSync.Namespace, rootSync)
+	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
-		err = nt.Update(rootSync)
+		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -460,7 +460,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	// avoid causing the reconciler Deployment to be deleted before the RootSync
 	// finishes finalizing.
 	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func validateNotFoundFromObject(nt *nomostest.NT, obj client.Object) error {
 }
 
 func newEmptyTypedObject(nt *nomostest.NT, obj client.Object) (client.Object, schema.GroupVersionKind, error) {
-	scheme := nt.Client.Scheme()
+	scheme := nt.KubeClient.Client.Scheme()
 	gvk, err := kinds.Lookup(obj, scheme)
 	if err != nil {
 		return nil, gvk, err
@@ -594,7 +594,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 		return err
 	}
 
-	err = nt.Get(key.Name, key.Name, obj)
+	err = nt.KubeClient.Get(key.Name, key.Name, obj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -604,7 +604,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 
 	nt.T.Log("Removing deletion propagation annotation")
 	if nomostest.RemoveDeletionPropagationPolicy(obj) {
-		err = nt.Update(obj)
+		err = nt.KubeClient.Update(obj)
 		if err != nil {
 			return err
 		}
@@ -612,7 +612,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 
 	nt.T.Logf("Deleting %s %s", gvk.Kind, key)
 	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -623,13 +623,13 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 }
 
 func deleteObject(nt *nomostest.NT, obj client.Object) error {
-	gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
+	gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
 	if err != nil {
 		return err
 	}
 
 	nt.T.Logf("Deleting %s %s", gvk.Kind, client.ObjectKeyFromObject(obj))
-	err = nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground))
+	err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

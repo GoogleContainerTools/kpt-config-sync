@@ -50,11 +50,11 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "clusteranvil-crd.yaml")
-	_, err = nt.Kubectl("apply", "-f", crdFile)
+	_, err = nt.Shell.Kubectl("apply", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nt.Kubectl("apply", "-f", clusterFile)
+	_, err = nt.Shell.Kubectl("apply", "-f", clusterFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	// Remove CRD
 	// This will garbage collect the CR too and block until both are deleted.
-	_, err = nt.Kubectl("delete", "-f", crdFile)
+	_, err = nt.Shell.Kubectl("delete", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -117,7 +117,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -156,11 +158,11 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "clusteranvil-crd.yaml")
-	_, err := nt.Kubectl("apply", "-f", crdFile)
+	_, err := nt.Shell.Kubectl("apply", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = nt.Kubectl("apply", "-f", clusterFile)
+	_, err = nt.Shell.Kubectl("apply", "-f", clusterFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -213,7 +215,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	// Remove CRD
 	// This will garbage collect the CR too and block until both are deleted.
-	_, err = nt.Kubectl("delete", "-f", crdFile)
+	_, err = nt.Shell.Kubectl("delete", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -230,7 +232,9 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -283,7 +287,7 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 	}
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "anvil-crd-structural-v1.yaml")
-	_, err = nt.Kubectl("apply", "-f", crdFile)
+	_, err = nt.Shell.Kubectl("apply", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

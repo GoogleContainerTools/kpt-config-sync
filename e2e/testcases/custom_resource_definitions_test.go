@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -79,7 +78,9 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -255,7 +256,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	// Apply the CustomResource.
 	cr := anvilCR("v1", "e2e-test-anvil", 100)
 	cr.SetNamespace("prod")
-	err = nt.Client.Create(context.TODO(), cr)
+	err = nt.KubeClient.Create(cr)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

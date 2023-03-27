@@ -55,11 +55,11 @@ func installPrometheus(nt *NT) error {
 	tg := taskgroup.New()
 	for _, obj := range objs {
 		nn := client.ObjectKeyFromObject(obj)
-		gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
+		gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
 		if err != nil {
 			return err
 		}
-		if err := nt.Apply(obj); err != nil {
+		if err := nt.KubeClient.Apply(obj); err != nil {
 			return err
 		}
 		tg.Go(func() error {
@@ -80,11 +80,11 @@ func uninstallPrometheus(nt *NT) error {
 	tg := taskgroup.New()
 	for _, obj := range objs {
 		nn := client.ObjectKeyFromObject(obj)
-		gvk, err := kinds.Lookup(obj, nt.Client.Scheme())
+		gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
 		if err != nil {
 			return err
 		}
-		if err := nt.Delete(obj); err != nil {
+		if err := nt.KubeClient.Delete(obj); err != nil {
 			if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 				continue
 			}
@@ -120,7 +120,7 @@ func parsePrometheusManifests(nt *NT) ([]client.Object, error) {
 func portForwardPrometheus(ctx context.Context, nt *NT) (address string, err error) {
 	// Retry port-forwarding in case the Deployment is in the process of upgrade.
 	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
-		pod, err := nt.GetDeploymentPod(prometheusServerDeploymentName, prometheusNamespace)
+		pod, err := nt.KubeClient.GetDeploymentPod(prometheusServerDeploymentName, prometheusNamespace, nt.DefaultWaitTimeout)
 		if err != nil {
 			return err
 		}

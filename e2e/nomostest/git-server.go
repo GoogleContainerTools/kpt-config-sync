@@ -55,7 +55,7 @@ func installGitServer(nt *NT) func() error {
 	objs := gitServer()
 
 	for _, o := range objs {
-		err := nt.Create(o)
+		err := nt.KubeClient.Create(o)
 		if err != nil {
 			nt.T.Fatalf("installing %v %s: %v", o.GetObjectKind().GroupVersionKind(),
 				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, err)
@@ -235,7 +235,7 @@ func newTCPSocketProbe(port int, failureThreshold int32) *corev1.Probe {
 func InitGitRepos(nt *NT, repos ...types.NamespacedName) {
 	nt.T.Helper()
 
-	pod, err := nt.GetDeploymentPod(testGitServer, testGitNamespace)
+	pod, err := nt.KubeClient.GetDeploymentPod(testGitServer, testGitNamespace, nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -290,7 +290,7 @@ func TestPreserveLastApplied(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-cr-replace.yaml", nsViewer)
 	// Admission webhook denies change. We don't get a "LastApplied" annotation
 	// as we prevented the change outright.
-	_, err = nt.Kubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
+	_, err = nt.Shell.Kubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
 	if err == nil {
 		nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
 	}

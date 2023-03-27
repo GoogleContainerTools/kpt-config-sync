@@ -107,7 +107,7 @@ func WaitForNamespace(nt *NT, timeout time.Duration, namespace string) {
 			Kind:    "Namespace",
 		})
 		obj.SetName(namespace)
-		if err := nt.Get(namespace, "", obj); err != nil {
+		if err := nt.KubeClient.Get(namespace, "", obj); err != nil {
 			return fmt.Errorf("namespace %q GET failed: %w", namespace, err)
 		}
 		result, err := status.Compute(obj)

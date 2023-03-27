@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -160,7 +161,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		// Enable deletion propagation, if not enabled
 		if EnableDeletionPropagation(rs) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RootSync %s", rsNN)
-			if err := nt.Update(rs); err != nil {
+			if err := nt.KubeClient.Update(rs); err != nil {
 				return err
 			}
 			if err := WatchObject(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
@@ -182,7 +183,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		// can delete the managed resources.
 		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RootSync %s", rsNN)
-		if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 			return err
 		}
 	}
@@ -213,7 +214,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 
 	// Apply ClusterRole with the permissions specified by this test.
 	rsCR := nt.RepoSyncClusterRole()
-	if err := nt.Apply(rsCR); err != nil {
+	if err := nt.KubeClient.Apply(rsCR); err != nil {
 		return err
 	}
 
@@ -235,7 +236,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		// Enable deletion propagation, if not enabled
 		if EnableDeletionPropagation(rs) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RepoSync %s", rsNN)
-			if err := nt.Update(rs); err != nil {
+			if err := nt.KubeClient.Update(rs); err != nil {
 				return err
 			}
 			if err := WatchObject(nt, kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
@@ -247,7 +248,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 
 		// Grant the reconcile the permissions specified by this test.
 		rsCRB := RepoSyncRoleBinding(rsNN)
-		if err := nt.Apply(rsCRB); err != nil {
+		if err := nt.KubeClient.Apply(rsCRB); err != nil {
 			return err
 		}
 
@@ -263,7 +264,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		// can delete the managed resources.
 		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RepoSync %s", rsNN)
-		if err := nt.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 			return err
 		}
 	}
@@ -338,7 +339,7 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 		}
 
 		nt.T.Logf("[RESET] Deleting Namespace %s", nn)
-		if err := nt.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+		if err := nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
 			return err
 		}
 	}
@@ -364,7 +365,7 @@ func deleteRepoSyncClusterRole(nt *NT) error {
 func findUnmanaged(nt *NT, objs ...client.Object) ([]client.Object, error) {
 	var unmanaged []client.Object
 	for _, obj := range objs {
-		if err := nt.Get(obj.GetName(), obj.GetNamespace(), obj); err != nil {
+		if err := nt.KubeClient.Get(obj.GetName(), obj.GetNamespace(), obj); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return nil, err
 			}
@@ -377,7 +378,7 @@ func findUnmanaged(nt *NT, objs ...client.Object) ([]client.Object, error) {
 
 func batchDeleteAndWait(nt *NT, objs ...client.Object) error {
 	for _, obj := range objs {
-		if err := nt.Delete(obj); err != nil {
+		if err := nt.KubeClient.Delete(obj); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
@@ -399,8 +400,8 @@ func batchDeleteAndWait(nt *NT, objs ...client.Object) error {
 
 func listRootSyncs(nt *NT, opts ...client.ListOption) (*v1beta1.RootSyncList, error) {
 	rsList := &v1beta1.RootSyncList{}
-	opts = append(opts, withLabelListOption(TestLabel, TestLabelValue))
-	if err := nt.List(rsList, opts...); err != nil {
+	opts = append(opts, withLabelListOption(testkubeclient.TestLabel, testkubeclient.TestLabelValue))
+	if err := nt.KubeClient.List(rsList, opts...); err != nil {
 		return rsList, err
 	}
 	return rsList, nil
@@ -408,8 +409,8 @@ func listRootSyncs(nt *NT, opts ...client.ListOption) (*v1beta1.RootSyncList, er
 
 func listRepoSyncs(nt *NT, opts ...client.ListOption) (*v1beta1.RepoSyncList, error) {
 	rsList := &v1beta1.RepoSyncList{}
-	opts = append(opts, withLabelListOption(TestLabel, TestLabelValue))
-	if err := nt.List(rsList, opts...); err != nil {
+	opts = append(opts, withLabelListOption(testkubeclient.TestLabel, testkubeclient.TestLabelValue))
+	if err := nt.KubeClient.List(rsList, opts...); err != nil {
 		return rsList, err
 	}
 	return rsList, nil
@@ -417,8 +418,8 @@ func listRepoSyncs(nt *NT, opts ...client.ListOption) (*v1beta1.RepoSyncList, er
 
 func listNamespaces(nt *NT, opts ...client.ListOption) (*corev1.NamespaceList, error) {
 	nsList := &corev1.NamespaceList{}
-	opts = append(opts, withLabelListOption(TestLabel, TestLabelValue))
-	if err := nt.List(nsList, opts...); err != nil {
+	opts = append(opts, withLabelListOption(testkubeclient.TestLabel, testkubeclient.TestLabelValue))
+	if err := nt.KubeClient.List(nsList, opts...); err != nil {
 		return nsList, err
 	}
 	return nsList, nil
@@ -490,7 +491,7 @@ func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceF
 // The logs will only be printed if the test has failed when the command exits.
 // Run in an goroutine to capture logs in the background while deleting RSyncs.
 func TailReconcilerLogs(ctx context.Context, nt *NT, reconcilerNN types.NamespacedName) {
-	out, err := nt.KubectlContext(ctx, "logs",
+	out, err := nt.Shell.KubectlContext(ctx, "logs",
 		fmt.Sprintf("deployment/%s", reconcilerNN.Name),
 		"-n", reconcilerNN.Namespace,
 		"-c", reconcilermanager.Reconciler,

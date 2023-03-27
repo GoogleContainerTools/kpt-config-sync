@@ -37,7 +37,9 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
-	rootReconcilerPod, err := nt.GetDeploymentPod(nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace)
+	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -83,7 +85,9 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	}
 
 	nsReconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
-	nsReconcilerPod, err := nt.GetDeploymentPod(nsReconcilerName, configmanagement.ControllerNamespace)
+	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
+		nsReconcilerName, configmanagement.ControllerNamespace,
+		nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

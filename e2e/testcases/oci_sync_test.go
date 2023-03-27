@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -409,7 +408,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Verify the default sourceType is set when not specified.
 	nt.T.Log("Revert the RepoSync object to sync from Git")
-	if err := nt.Create(repoSyncGit); err != nil {
+	if err := nt.KubeClient.Create(repoSyncGit); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
@@ -460,7 +459,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 
 	// Stop the Config Sync webhook to delete the implicit namespace manually
 	nomostest.StopWebhook(nt)
-	if err := nt.Delete(implictNs); err != nil {
+	if err := nt.KubeClient.Delete(implictNs); err != nil {
 		{
 			nt.T.Error(err)
 		}
@@ -472,7 +471,7 @@ func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read file path: %s", absPath)
 	}
-	decoder := serializer.NewCodecFactory(nt.Client.Scheme()).UniversalDeserializer()
+	decoder := serializer.NewCodecFactory(nt.KubeClient.Client.Scheme()).UniversalDeserializer()
 	u := &unstructured.Unstructured{}
 	rObj, gvk, err := decoder.Decode(bytes, nil, u)
 	if err != nil {
@@ -561,9 +560,7 @@ func getImageDigest(nt *nomostest.NT, imageName string) (string, error) {
 		"--format", "value(image_summary.digest)",
 		"--verbosity", "error", // hide the warning about using "latest"
 	}
-	if *e2e.Debug {
-		nt.T.Log(strings.Join(args, " "))
-	}
+	nt.Logger.Debug(strings.Join(args, " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()

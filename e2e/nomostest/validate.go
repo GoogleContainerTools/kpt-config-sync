@@ -31,7 +31,7 @@ import (
 // Validates the object against each of the passed Predicates, returning error
 // if any Predicate fails.
 func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Predicate) error {
-	err := nt.Get(name, namespace, o)
+	err := nt.KubeClient.Get(name, namespace, o)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Pr
 // 1) a struct pointer to the type of the object to search for, or
 // 2) an unstructured.Unstructured with the type information filled in.
 func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
-	err := nt.Get(name, namespace, o)
+	err := nt.KubeClient.Get(name, namespace, o)
 	if err == nil {
 		gvk, err := kinds.Lookup(o, nt.scheme)
 		if err != nil {
@@ -71,7 +71,7 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 // Use this instead of ValidateNotFound when deleting a CRD or APIService at the
 // same time as a custom resource, to avoid the race between possible errors.
 func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object) error {
-	err := nt.Get(name, namespace, o)
+	err := nt.KubeClient.Get(name, namespace, o)
 	if err == nil {
 		gvk, err := kinds.Lookup(o, nt.scheme)
 		if err != nil {

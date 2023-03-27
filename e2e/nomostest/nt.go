@@ -23,17 +23,17 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
@@ -70,6 +70,14 @@ type NT struct {
 	// Used to exit tests early when setup fails, and for logging.
 	T testing.NTB
 
+	// Logger wraps testing.NTB and provides a simple logging interface for
+	// test utilities to use without needing access to the whole testing.NTB.
+	// Use if you want Debug and Log, but don't need to Error, Fatal, or Fail.
+	Logger *testlogger.TestLogger
+
+	// Shell is a test wrapper used to run shell commands.
+	Shell *testshell.TestShell
+
 	// ClusterName is the unique name of the test run.
 	ClusterName string
 
@@ -80,11 +88,8 @@ type NT struct {
 	// Config specifies how to create a new connection to the cluster.
 	Config *rest.Config
 
-	// Client is the underlying client used to talk to the Kubernetes cluster.
-	//
-	// Most tests shouldn't need to talk directly to this, unless simulating
-	// direct interactions with the API Server.
-	Client client.Client
+	// KubeClient is a test wrapper used to make Kubernetes calls.
+	KubeClient *testkubeclient.KubeClient
 
 	// WatchClient is the underlying client used to talk to the Kubernetes
 	// cluster, when performing watches.
@@ -333,97 +338,10 @@ func SharedNT(t testing.NTB) *NT {
 	return mySharedNTs.acquire(t)
 }
 
-// KubeconfigPath returns the path to the kubeconifg file.
-//
-// Deprecated: only the legacy bats tests should make use of this function.
-func (nt *NT) KubeconfigPath() string {
-	return nt.kubeconfigPath
-}
-
-func fmtObj(obj client.Object) string {
-	return fmt.Sprintf("%s/%s %T", obj.GetNamespace(), obj.GetName(), obj)
-}
-
-// Get is identical to Get defined for client.Client, except:
-//
-// 1) Context implicitly uses the one created for the test case.
-// 2) name and namespace are strings instead of requiring client.ObjectKey.
-//
-// Leave namespace as empty string for cluster-scoped resources.
-func (nt *NT) Get(name, namespace string, obj client.Object) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	if obj.GetResourceVersion() != "" {
-		// If obj is already populated, this can cause the final obj to be a
-		// composite of multiple states of the object on the cluster.
-		//
-		// If this is due to a retry loop, remember to create a new instance to
-		// populate for each loop.
-		return errors.Errorf("called .Get on already-populated object %v: %v", obj.GetObjectKind().GroupVersionKind(), obj)
-	}
-	return nt.Client.Get(nt.Context, client.ObjectKey{Name: name, Namespace: namespace}, obj)
-}
-
-// List is identical to List defined for client.Client, but without requiring Context.
-func (nt *NT) List(obj client.ObjectList, opts ...client.ListOption) error {
-	return nt.Client.List(nt.Context, obj, opts...)
-}
-
-// Create is identical to Create defined for client.Client, but without requiring Context.
-func (nt *NT) Create(obj client.Object, opts ...client.CreateOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("creating %s", fmtObj(obj))
-	AddTestLabel(obj)
-	opts = append(opts, client.FieldOwner(FieldManager))
-	return nt.Client.Create(nt.Context, obj, opts...)
-}
-
-// Update is identical to Update defined for client.Client, but without requiring Context.
-// All fields will be adopted by the nomostest field manager.
-func (nt *NT) Update(obj client.Object, opts ...client.UpdateOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("updating %s", fmtObj(obj))
-	opts = append(opts, client.FieldOwner(FieldManager))
-	return nt.Client.Update(nt.Context, obj, opts...)
-}
-
-// Apply wraps Patch to perform a server-side apply.
-// All non-nil fields will be adopted by the nomostest field manager.
-func (nt *NT) Apply(obj client.Object, opts ...client.PatchOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("applying %s", fmtObj(obj))
-	AddTestLabel(obj)
-	opts = append(opts, client.FieldOwner(FieldManager), client.ForceOwnership)
-	return nt.Client.Patch(nt.Context, obj, client.Apply, opts...)
-}
-
-// Delete is identical to Delete defined for client.Client, but without requiring Context.
-func (nt *NT) Delete(obj client.Object, opts ...client.DeleteOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("deleting %s", fmtObj(obj))
-	return nt.Client.Delete(nt.Context, obj, opts...)
-}
-
-// DeleteAllOf is identical to DeleteAllOf defined for client.Client, but without requiring Context.
-func (nt *NT) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("deleting all of %T", obj)
-	return nt.Client.DeleteAllOf(nt.Context, obj, opts...)
-}
-
-// MergePatch uses the object to construct a merge patch for the fields provided.
-// All specified fields will be adopted by the nomostest field manager.
-func (nt *NT) MergePatch(obj client.Object, patch string, opts ...client.PatchOption) error {
-	FailIfUnknown(nt.T, nt.scheme, obj)
-	nt.DebugLogf("Applying patch %s", patch)
-	AddTestLabel(obj)
-	opts = append(opts, client.FieldOwner(FieldManager))
-	return nt.Client.Patch(nt.Context, obj, client.RawPatch(types.MergePatchType, []byte(patch)), opts...)
-}
-
 // MustMergePatch is like MergePatch but will call t.Fatal if the patch fails.
 func (nt *NT) MustMergePatch(obj client.Object, patch string, opts ...client.PatchOption) {
 	nt.T.Helper()
-	if err := nt.MergePatch(obj, patch, opts...); err != nil {
+	if err := nt.KubeClient.MergePatch(obj, patch, opts...); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -463,103 +381,11 @@ func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 
 // RenewClient gets a new Client for talking to the cluster.
 //
-// Required whenever we expect the set of available types on the cluster
-// to change. Called automatically at the end of WaitForRootSync.
-//
-// The only reason to call this manually from within a test is if we expect a
-// controller to create a CRD dynamically, or if the test requires applying a
-// CRD directly to the API Server.
+// Call this manually from within a test if you expect a controller to create a
+// CRD dynamically, or if the test applies a CRD directly to the API Server.
 func (nt *NT) RenewClient() {
 	nt.T.Helper()
-	nt.Client = connect(nt.T, nt.Config, nt.scheme)
-}
-
-// Kubectl is a convenience method for calling kubectl against the
-// currently-connected cluster. Returns STDOUT, and an error if kubectl exited
-// abnormally.
-//
-// If you want to fail the test immediately on failure, use MustKubectl.
-func (nt *NT) Kubectl(args ...string) ([]byte, error) {
-	nt.T.Helper()
-	return nt.KubectlContext(nt.Context, args...)
-}
-
-// KubectlContext is similar to nt.Kubectl but allows using a context to cancel
-// (kill signal) the kubectl command.
-func (nt *NT) KubectlContext(ctx context.Context, args ...string) ([]byte, error) {
-	nt.T.Helper()
-
-	prefix := []string{"--kubeconfig", nt.kubeconfigPath}
-	args = append(prefix, args...)
-	// Ensure field manager is specified
-	if stringArrayContains(args, "apply") && !stringArrayContains(args, "--field-manager") {
-		args = append(args, "--field-manager", FieldManager)
-	}
-	nt.DebugLogf("kubectl %s", strings.Join(args, " "))
-	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
-	if err != nil {
-		// log output, if not deliberately cancelled
-		if isSignalExitError(err, syscall.SIGKILL) && ctx.Err() == context.Canceled {
-			nt.DebugLogf("command cancelled: kubectl %s", strings.Join(args, " "))
-		} else {
-			if !*e2e.Debug {
-				nt.T.Logf("kubectl %s", strings.Join(args, " "))
-			}
-			nt.T.Log(string(out))
-			nt.T.Logf("kubectl error: %v", err)
-		}
-		return out, err
-	}
-	return out, nil
-}
-
-// isSignalExitError returns true if the error is an ExitError caused by the
-// specified signal.
-func isSignalExitError(err error, sig syscall.Signal) bool {
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
-		return false
-	}
-	if exitErr.ProcessState == nil {
-		return false
-	}
-	status, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus) // unix/posix
-	if !ok {
-		return false
-	}
-	if !status.Signaled() {
-		return false
-	}
-	return status.Signal() == sig
-}
-
-// Git is a convenience method for calling git.
-// Returns STDOUT & STDERR combined, and an error if git exited abnormally.
-func (nt *NT) Git(args ...string) ([]byte, error) {
-	nt.T.Helper()
-
-	nt.DebugLogf("git %s", strings.Join(args, " "))
-	out, err := exec.Command("git", args...).CombinedOutput()
-	if err != nil {
-		if !*e2e.Debug {
-			nt.T.Logf("git %s", strings.Join(args, " "))
-		}
-		nt.T.Log(string(out))
-		return out, err
-	}
-	return out, nil
-}
-
-// Command is a convenience method for invoking a subprocess with the
-// KUBECONFIG environment variable set. Setting the environment variable
-// directly in the test process is not thread safe.
-func (nt *NT) Command(name string, args ...string) *exec.Cmd {
-	nt.T.Helper()
-
-	cmd := exec.CommandContext(nt.Context, name, args...)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, fmt.Sprintf("KUBECONFIG=%s", nt.KubeconfigPath()))
-	return cmd
+	nt.KubeClient = newTestClient(nt)
 }
 
 // MustKubectl fails the test immediately if the kubectl command fails. On
@@ -567,27 +393,11 @@ func (nt *NT) Command(name string, args ...string) *exec.Cmd {
 func (nt *NT) MustKubectl(args ...string) []byte {
 	nt.T.Helper()
 
-	out, err := nt.Kubectl(args...)
+	out, err := nt.Shell.Kubectl(args...)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	return out
-}
-
-// DebugLog is like nt.T.Log, but only prints the message if --debug is passed.
-// Use for fine-grained information that is unlikely to cause failures in CI.
-func (nt *NT) DebugLog(args ...interface{}) {
-	if *e2e.Debug {
-		nt.T.Log(args...)
-	}
-}
-
-// DebugLogf is like nt.T.Logf, but only prints the message if --debug is passed.
-// Use for fine-grained information that is unlikely to cause failures in CI.
-func (nt *NT) DebugLogf(format string, args ...interface{}) {
-	if *e2e.Debug {
-		nt.T.Logf(format, args...)
-	}
 }
 
 // PodLogs prints the logs from the specified deployment.
@@ -603,7 +413,7 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	if container != "" {
 		args = append(args, container)
 	}
-	out, err := nt.Kubectl(args...)
+	out, err := nt.Shell.Kubectl(args...)
 	// Print a standardized header before each printed log to make ctrl+F-ing the
 	// log you want easier.
 	cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
@@ -660,7 +470,7 @@ func (nt *NT) testLogs(previousPodLog bool) {
 //  1. kubectl get pods -n config-management-system -o yaml
 //  2. kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
 func (nt *NT) testPods(ns string) {
-	out, err := nt.Kubectl("get", "pods", "-n", ns)
+	out, err := nt.Shell.Kubectl("get", "pods", "-n", ns)
 	// Print a standardized header before each printed log to make ctrl+F-ing the
 	// log you want easier.
 	nt.T.Logf("kubectl get pods -n %s: \n%s", ns, string(out))
@@ -671,7 +481,7 @@ func (nt *NT) testPods(ns string) {
 
 func (nt *NT) describeNotRunningTestPods(namespace string) {
 	cmPods := &corev1.PodList{}
-	if err := nt.List(cmPods, client.InNamespace(namespace)); err != nil {
+	if err := nt.KubeClient.List(cmPods, client.InNamespace(namespace)); err != nil {
 		nt.T.Fatal(err)
 		return
 	}
@@ -688,7 +498,7 @@ func (nt *NT) describeNotRunningTestPods(namespace string) {
 		if !ready {
 			args := []string{"describe", "pod", pod.GetName(), "-n", pod.GetNamespace()}
 			cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
-			out, err := nt.Kubectl(args...)
+			out, err := nt.Shell.Kubectl(args...)
 			if err != nil {
 				nt.T.Logf("error running `%s`: %s\n%s", cmd, err, out)
 				continue
@@ -706,7 +516,7 @@ func (nt *NT) printNotReadyContainerLogs(pod corev1.Pod) {
 		if !cs.Ready && cs.Name != reconcilermanager.Reconciler {
 			args := []string{"logs", pod.GetName(), "-n", pod.GetNamespace(), "-c", cs.Name}
 			cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
-			out, err := nt.Kubectl(args...)
+			out, err := nt.Shell.Kubectl(args...)
 			if err != nil {
 				nt.T.Logf("error running `%s`: %s\n%s", cmd, err, out)
 				continue
@@ -744,7 +554,7 @@ func (nt *NT) ApplyGatekeeperCRD(file, crd string) error {
 // then resets the client RESTMapper.
 func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 	absPath := filepath.Join(baseDir, "e2e", "testdata", "gatekeeper", file)
-	out, err := nt.Kubectl("get", "-f", absPath)
+	out, err := nt.Shell.Kubectl("get", "-f", absPath)
 	if err != nil {
 		nt.T.Logf("Skipping cleanup of gatekeeper %s: %s", name, out)
 		return
@@ -756,8 +566,8 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 // PortForwardOtelCollector forwards the otel-collector pod.
 func (nt *NT) PortForwardOtelCollector() {
 	// Retry otel-collector port-forwarding in case it is in the process of upgrade.
-	took, err := retry.Retry(60*time.Second, func() error {
-		pod, err := nt.GetDeploymentPod(ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace)
+	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+		pod, err := nt.KubeClient.GetDeploymentPod(ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, nt.DefaultWaitTimeout)
 		if err != nil {
 			return err
 		}
@@ -787,7 +597,7 @@ func (nt *NT) PortForwardOtelCollector() {
 func (nt *NT) PortForwardGitServer() {
 	nt.T.Helper()
 
-	pod, err := nt.GetDeploymentPod(testGitServer, testGitNamespace)
+	pod, err := nt.KubeClient.GetDeploymentPod(testGitServer, testGitNamespace, nt.DefaultWaitTimeout)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -812,7 +622,7 @@ func (nt *NT) ForwardToFreePort(ctx context.Context, ns, pod string, port int) (
 	nt.T.Helper()
 
 	nt.T.Logf("starting port-forward to pod %s/%s", ns, pod)
-	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", nt.kubeconfigPath, "port-forward",
+	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", nt.Shell.KubeConfigPath, "port-forward",
 		"-n", ns, pod, fmt.Sprintf(":%d", port))
 
 	stdout := &strings.Builder{}
@@ -874,7 +684,7 @@ func (nt *NT) ForwardToFreePort(ctx context.Context, ns, pod string, port int) (
 
 func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 	if !nt.IsGKEAutopilot {
-		isGKEAutopilot, err := util.IsGKEAutopilotCluster(nt.Client)
+		isGKEAutopilot, err := util.IsGKEAutopilotCluster(nt.KubeClient.Client)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -904,63 +714,6 @@ func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 	return cmp < 0, nil
 }
 
-// GetDeploymentPod is a convenience method to look up the pod for a deployment.
-// It requires that exactly one pod exists, is running, and that the deployment
-// uses label selectors to uniquely identify its pods.
-// This is primarily useful for finding the current pod for a reconciler or
-// other single-replica controller deployments.
-func (nt *NT) GetDeploymentPod(deploymentName, namespace string) (*corev1.Pod, error) {
-	deploymentNN := types.NamespacedName{Name: deploymentName, Namespace: namespace}
-	var pod *corev1.Pod
-	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
-		deployment := &appsv1.Deployment{}
-		if err := nt.Get(deploymentNN.Name, deploymentNN.Namespace, deployment); err != nil {
-			return err
-		}
-		// Note: Waiting for updated & ready should be good enough.
-		// But if there's problems with flapping pods, we should wait for
-		// AvailableReplicas too, which respects MinReadySeconds.
-		// We're choosing to use ReadyReplicas here instead because it's faster.
-		if deployment.Status.UpdatedReplicas != 1 {
-			return errors.Errorf("deployment has %d updated pods, expected 1: %s",
-				deployment.Status.UpdatedReplicas, deploymentNN)
-		}
-		if deployment.Status.ReadyReplicas != 1 {
-			return errors.Errorf("deployment has %d ready pods, expected 1: %s",
-				deployment.Status.ReadyReplicas, deploymentNN)
-		}
-		selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
-		if err != nil {
-			return err
-		}
-		if selector.Empty() {
-			return errors.Errorf("deployment has no label selectors: %s", deploymentNN)
-		}
-		pods := &corev1.PodList{}
-		err = nt.List(pods, client.InNamespace(deploymentNN.Namespace),
-			client.MatchingLabelsSelector{Selector: selector})
-		if err != nil {
-			return err
-		}
-		if len(pods.Items) != 1 {
-			return errors.Errorf("deployment has %d pods, expected 1: %s",
-				len(pods.Items), deploymentNN)
-		}
-		pod = pods.Items[0].DeepCopy()
-		if pod.Status.Phase != corev1.PodRunning {
-			return errors.Errorf("pod has status %q, want %q: %s",
-				pod.Status.Phase, corev1.PodRunning, client.ObjectKeyFromObject(pod))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	nt.T.Logf("took %v to wait for deployment pod", took)
-	nt.DebugLogf("Found deployment pod: %s", client.ObjectKeyFromObject(pod))
-	return pod, nil
-}
-
 // RepoSyncClusterRole returns the NS reconciler ClusterRole
 func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
 	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
@@ -979,7 +732,7 @@ func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
 // RemoteRootRepoSha1Fn returns the latest commit from a RootSync Git spec.
 func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RootSync{}
-	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
+	if err := nt.KubeClient.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
 	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
@@ -992,7 +745,7 @@ func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 // RemoteNsRepoSha1Fn returns the latest commit from a RepoSync Git spec.
 func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RepoSync{}
-	if err := nt.Get(nn.Name, nn.Namespace, rs); err != nil {
+	if err := nt.KubeClient.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
 	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
@@ -1036,7 +789,7 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 	// List remote references (branches and tags).
 	// Expected Output: GIT_COMMIT\tREF_NAME
 	args = append(args, "ls-remote", gitSpec.Repo, pattern)
-	out, err := nt.Git(args...)
+	out, err := nt.Shell.Git(args...)
 	if err != nil {
 		return "", err
 	}
@@ -1068,18 +821,9 @@ func cloneCloudSourceRepo(nt *NT, repo string) (string, error) {
 	args := []string{
 		"source", "repos", "clone", "--project", nomostesting.GCPProjectIDFromEnv, repoName, cloneDir,
 	}
-	cmd := nt.Command("gcloud", args...)
+	cmd := nt.Shell.Command("gcloud", args...)
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
 	return cloneDir, nil
-}
-
-func stringArrayContains(list []string, value string) bool {
-	for _, item := range list {
-		if item == value {
-			return true
-		}
-	}
-	return false
 }

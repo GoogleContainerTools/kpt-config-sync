@@ -28,6 +28,8 @@ import (
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -155,11 +157,13 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	nt := &NT{
 		Context:                 sharedNt.Context,
 		T:                       t,
+		Logger:                  sharedNt.Logger,
+		Shell:                   sharedNt.Shell,
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
-		Client:                  sharedNt.Client,
+		KubeClient:              sharedNt.KubeClient,
 		WatchClient:             sharedNt.WatchClient,
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
@@ -235,11 +239,19 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	scheme := newScheme(t)
 	ctx := context.Background()
+	logger := testlogger.New(t, *e2e.Debug)
+	shell := &testshell.TestShell{
+		Context:        ctx,
+		KubeConfigPath: opts.KubeconfigPath,
+		Logger:         logger,
+	}
 
 	webhookDisabled := false
 	nt := &NT{
 		Context:                 ctx,
 		T:                       t,
+		Logger:                  logger,
+		Shell:                   shell,
 		ClusterName:             opts.Name,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
@@ -305,15 +317,15 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	})
 
 	// You can't add Secrets to Namespaces that don't exist, so create them now.
-	if err := nt.Create(fake.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
+	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
+	if err := nt.KubeClient.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	if nt.GitProvider.Type() == e2e.Local {
-		if err := nt.Create(gitNamespace()); err != nil {
+		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
 			nt.T.Fatal(err)
 		}
 		// Pods don't always restart if the secrets don't exist, so we have to

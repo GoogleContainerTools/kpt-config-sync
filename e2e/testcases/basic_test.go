@@ -171,13 +171,13 @@ func TestRolebindingsUpdated(t *testing.T) {
 func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Log("Add an unmanaged resource into the namespace as a control")
 	nt.T.Log("We should never modify this resource")
-	_, err := nt.Kubectl("apply", "-f", fmt.Sprintf("%s/reserved_namespaces/unmanaged-service.%s.yaml", yamlDir, namespace))
+	_, err := nt.Shell.Kubectl("apply", "-f", fmt.Sprintf("%s/reserved_namespaces/unmanaged-service.%s.yaml", yamlDir, namespace))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Cleanup(func() {
-		if err := nt.Delete(fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))); err != nil {
+		if err := nt.KubeClient.Delete(fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

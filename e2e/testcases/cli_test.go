@@ -215,7 +215,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err := nt.Command("nomos", args...).CombinedOutput()
+	out, err := nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -231,7 +231,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -245,7 +245,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -262,7 +262,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -285,7 +285,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat == filesystem.SourceFormatUnstructured {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -306,7 +306,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -347,7 +347,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -369,7 +369,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	if sourceFormat != "" {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
-	out, err = nt.Command("nomos", args...).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -382,38 +382,38 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	}
 
 	// Test `nomos vet --no-api-server-check --source-format=unstructured` on the hydrated configs
-	out, err = nt.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterDevCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterDevCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
-	out, err = nt.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterStagingCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterStagingCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
-	out, err = nt.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterProdCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", "--path", clusterProdCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
 	// Test `nomos vet --source-format=unstructured` on the hydrated configs
-	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterDevCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterDevCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
-	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterStagingCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterStagingCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
-	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterProdCompiledDir).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", "--path", clusterProdCompiledDir).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
@@ -542,14 +542,14 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	kubevirtPath := "../../examples/kubevirt"
 
 	// Test `nomos vet --no-api-server-check`
-	out, err := nt.Command("nomos", "vet", "--source-format=unstructured", "--no-api-server-check", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
+	out, err := nt.Shell.Command("nomos", "vet", "--source-format=unstructured", "--no-api-server-check", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
 	// Verify that `nomos vet` returns a KNV1021 error.
-	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects an error, got nil", kubevirtPath))
 	} else {
@@ -559,7 +559,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	}
 
 	// Verify that `nomos hydrate --no-api-server-check` generates no error, and the output dir includes all the objects no matter their scopes.
-	out, err = nt.Command("nomos", "hydrate", "--source-format=unstructured", "--no-api-server-check",
+	out, err = nt.Shell.Command("nomos", "hydrate", "--source-format=unstructured", "--no-api-server-check",
 		fmt.Sprintf("--path=%s", "../../examples/kubevirt"),
 		fmt.Sprintf("--output=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
 	if err != nil {
@@ -574,7 +574,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	}
 
 	// Verify that `nomos hydrate` generates a KNV1021 error, and the output dir includes all the objects no matter their scopes.
-	out, err = nt.Command("nomos", "hydrate", "--source-format=unstructured",
+	out, err = nt.Shell.Command("nomos", "hydrate", "--source-format=unstructured",
 		fmt.Sprintf("--path=%s", "../../examples/kubevirt"),
 		fmt.Sprintf("--output=%s", compiledDirWithAPIServerCheck)).CombinedOutput()
 	if err == nil {
@@ -592,14 +592,14 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	}
 
 	// Test `nomos vet --no-api-server-check` on the hydrated configs.
-	out, err = nt.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", fmt.Sprintf("--path=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--no-api-server-check", "--source-format=unstructured", fmt.Sprintf("--path=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Error(err)
 	}
 
 	// Verify that `nomos vet` on the hydrated configs returns a KNV1021 error.
-	out, err = nt.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
+	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", compiledDirWithoutAPIServerCheck)).CombinedOutput()
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects an error, got nil", compiledDirWithoutAPIServerCheck))
 	} else {
@@ -846,7 +846,7 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.NomosCLI)
 
 	// get bugreport
-	cmd := nt.Command("nomos", "bugreport")
+	cmd := nt.Shell.Command("nomos", "bugreport")
 	cmd.Dir = nt.TmpDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -869,7 +869,7 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	nt.T.Log(fmt.Sprintf("unzipped bugreport to %s", bugReportDirName))
 
 	// get current cluster context
-	out, err = nt.Command("kubectl", "config", "current-context").CombinedOutput()
+	out, err = nt.Shell.Command("kubectl", "config", "current-context").CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
 		nt.T.Fatal(err)
@@ -927,7 +927,7 @@ func TestNomosImage(t *testing.T) {
 
 	version := nomostest.VersionFromManifest(t)
 
-	cmd := nt.Command(
+	cmd := nt.Shell.Command(
 		"docker", "run", "-i", "--rm",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version),
 	)
@@ -1041,7 +1041,7 @@ func TestNomosStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.NomosCLI)
 
 	// get status
-	cmd := nt.Command("nomos", "status")
+	cmd := nt.Shell.Command("nomos", "status")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))
@@ -1057,7 +1057,7 @@ func TestNomosVersion(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.NomosCLI)
 
 	// get version
-	cmd := nt.Command("nomos", "version")
+	cmd := nt.Shell.Command("nomos", "version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))

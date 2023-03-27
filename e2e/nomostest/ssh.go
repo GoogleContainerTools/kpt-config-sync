@@ -168,7 +168,7 @@ func createSecret(nt *NT, namespace, name string, keyPaths ...string) {
 	for _, kp := range keyPaths {
 		args = append(args, "--from-file", kp)
 	}
-	if err := nt.Get(name, namespace, &corev1.Secret{}); apierrors.IsNotFound(err) {
+	if err := nt.KubeClient.Get(name, namespace, &corev1.Secret{}); apierrors.IsNotFound(err) {
 		nt.MustKubectl(args...)
 	}
 }

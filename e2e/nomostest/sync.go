@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/parse"
@@ -29,14 +30,14 @@ import (
 
 // RootSyncHasStatusSyncDirectory creates a Predicate that ensures that the
 // .status.sync.gitStatus.dir field on the passed RootSync matches the provided dir.
-func RootSyncHasStatusSyncDirectory(dir string) Predicate {
+func RootSyncHasStatusSyncDirectory(dir string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
-			return WrongTypeErr(o, &v1beta1.RootSync{})
+			return testpredicates.WrongTypeErr(o, &v1beta1.RootSync{})
 		}
 
 		// Ensure the reconciler is ready (no true or error condition).
@@ -60,14 +61,14 @@ func RootSyncHasStatusSyncDirectory(dir string) Predicate {
 
 // RepoSyncHasStatusSyncDirectory creates a Predicate that ensures that the
 // .status.sync.gitStatus.dir field on the passed RepoSync matches the provided dir.
-func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
+func RepoSyncHasStatusSyncDirectory(dir string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
-			return WrongTypeErr(o, &v1beta1.RepoSync{})
+			return testpredicates.WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
 
 		// Ensure the reconciler is ready (no true or error condition).
@@ -91,14 +92,14 @@ func RepoSyncHasStatusSyncDirectory(dir string) Predicate {
 
 // RootSyncHasStatusSyncCommit creates a Predicate that ensures that the
 // .status.sync.commit field on the passed RootSync matches sha1.
-func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
+func RootSyncHasStatusSyncCommit(sha1 string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
-			return WrongTypeErr(o, &v1beta1.RootSync{})
+			return testpredicates.WrongTypeErr(o, &v1beta1.RootSync{})
 		}
 
 		// Ensure the reconciler is ready (no true or error condition).
@@ -127,14 +128,14 @@ func RootSyncHasStatusSyncCommit(sha1 string) Predicate {
 
 // RepoSyncHasStatusSyncCommit creates a Predicate that ensures that the
 // .status.sync.commit field on the passed RepoSync matches sha1.
-func RepoSyncHasStatusSyncCommit(sha1 string) Predicate {
+func RepoSyncHasStatusSyncCommit(sha1 string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
-			return WrongTypeErr(o, &v1beta1.RepoSync{})
+			return testpredicates.WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
 
 		// Ensure the reconciler is ready (no true condition).

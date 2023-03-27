@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -216,14 +217,14 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, genera
 	})
 }
 
-func hasGeneration(generation int64) nomostest.Predicate {
+func hasGeneration(generation int64) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Generation != generation {
 			return fmt.Errorf("expected generation: %d, got: %d", generation, d.Generation)
@@ -231,14 +232,14 @@ func hasGeneration(generation int64) nomostest.Predicate {
 		return nil
 	}
 }
-func firstContainerTerminationMessagePathIs(terminationMessagePath string) nomostest.Predicate {
+func firstContainerTerminationMessagePathIs(terminationMessagePath string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].TerminationMessagePath != terminationMessagePath {
 			return fmt.Errorf("expected first container terminationMessagePath is: %s, got: %s", terminationMessagePath, d.Spec.Template.Spec.Containers[0].TerminationMessagePath)
@@ -246,14 +247,14 @@ func firstContainerTerminationMessagePathIs(terminationMessagePath string) nomos
 		return nil
 	}
 }
-func firstContainerStdinIs(stdin bool) nomostest.Predicate {
+func firstContainerStdinIs(stdin bool) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Stdin != stdin {
 			return fmt.Errorf("expected first container stdin is: %t, got: %t", stdin, d.Spec.Template.Spec.Containers[0].Stdin)
@@ -261,14 +262,14 @@ func firstContainerStdinIs(stdin bool) nomostest.Predicate {
 		return nil
 	}
 }
-func hasTolerations(tolerations []corev1.Toleration) nomostest.Predicate {
+func hasTolerations(tolerations []corev1.Toleration) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		for i, toleration := range d.Spec.Template.Spec.Tolerations {
 			if !equality.Semantic.DeepEqual(toleration, tolerations[i]) {
@@ -278,14 +279,14 @@ func hasTolerations(tolerations []corev1.Toleration) nomostest.Predicate {
 		return nil
 	}
 }
-func hasPriorityClassName(priorityClassName string) nomostest.Predicate {
+func hasPriorityClassName(priorityClassName string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.PriorityClassName != priorityClassName {
 			return fmt.Errorf("expected priorityClassName is: %s, got: %s", priorityClassName, d.Spec.Template.Spec.PriorityClassName)
@@ -293,14 +294,14 @@ func hasPriorityClassName(priorityClassName string) nomostest.Predicate {
 		return nil
 	}
 }
-func firstContainerImageIs(image string) nomostest.Predicate {
+func firstContainerImageIs(image string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Image != image {
 			return fmt.Errorf("expected first image: %s, got: %s", image, d.Spec.Template.Spec.Containers[0].Image)
@@ -309,14 +310,14 @@ func firstContainerImageIs(image string) nomostest.Predicate {
 	}
 }
 
-func firstContainerImageIsNot(image string) nomostest.Predicate {
+func firstContainerImageIsNot(image string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Image == image {
 			return fmt.Errorf("expected first image not to be: %s, got: %s", image, d.Spec.Template.Spec.Containers[0].Image)
@@ -325,14 +326,14 @@ func firstContainerImageIsNot(image string) nomostest.Predicate {
 	}
 }
 
-func hasReplicas(replicas int32) nomostest.Predicate {
+func hasReplicas(replicas int32) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if *d.Spec.Replicas != replicas {
 			return fmt.Errorf("expected replicas: %d, got: %d", replicas, *d.Spec.Replicas)
@@ -341,14 +342,14 @@ func hasReplicas(replicas int32) nomostest.Predicate {
 	}
 }
 
-func firstContainerMemoryLimitIs(memoryLimit string) nomostest.Predicate {
+func firstContainerMemoryLimitIs(memoryLimit string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String() != memoryLimit {
 			return fmt.Errorf("expected memory limit of the first container: %s, got: %s",
@@ -358,14 +359,14 @@ func firstContainerMemoryLimitIs(memoryLimit string) nomostest.Predicate {
 	}
 }
 
-func firstContainerCPULimitIs(cpuLimit string) nomostest.Predicate {
+func firstContainerCPULimitIs(cpuLimit string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String() != cpuLimit {
 			return fmt.Errorf("expected CPU limit of the first container: %s, got: %s",
@@ -375,14 +376,14 @@ func firstContainerCPULimitIs(cpuLimit string) nomostest.Predicate {
 	}
 }
 
-func gitCredsVolumeDeleted(volumesCount int) nomostest.Predicate {
+func gitCredsVolumeDeleted(volumesCount int) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if len(d.Spec.Template.Spec.Volumes) != volumesCount-1 {
 			return fmt.Errorf("expected volumes count: %d, got: %d",
@@ -397,14 +398,14 @@ func gitCredsVolumeDeleted(volumesCount int) nomostest.Predicate {
 	}
 }
 
-func templateForGcpServiceAccountAuthType() nomostest.Predicate {
+func templateForGcpServiceAccountAuthType() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		for _, volume := range d.Spec.Template.Spec.Volumes {
 			if volume.Name == controllers.GitCredentialVolume {
@@ -420,14 +421,14 @@ func templateForGcpServiceAccountAuthType() nomostest.Predicate {
 	}
 }
 
-func templateForSSHAuthType() nomostest.Predicate {
+func templateForSSHAuthType() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		for _, container := range d.Spec.Template.Spec.Containers {
 			if container.Name == controllers.GceNodeAskpassSidecarName {
@@ -443,14 +444,14 @@ func templateForSSHAuthType() nomostest.Predicate {
 	}
 }
 
-func totalContainerMemoryRequestIs(memoryRequest int64) nomostest.Predicate {
+func totalContainerMemoryRequestIs(memoryRequest int64) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		memoryTotal := getTotalContainerMemoryRequest(d)
 
@@ -472,14 +473,14 @@ func getTotalContainerMemoryRequest(d *appsv1.Deployment) int {
 	return memoryTotal
 }
 
-func totalContainerCPURequestIs(expectedCPURequest int64) nomostest.Predicate {
+func totalContainerCPURequestIs(expectedCPURequest int64) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		actualCPUTotal := getTotalContainerCPURequest(d)
 
@@ -501,14 +502,14 @@ func getTotalContainerCPURequest(d *appsv1.Deployment) int {
 	return cpuTotal
 }
 
-func firstContainerCPURequestIs(cpuRequest int64) nomostest.Predicate {
+func firstContainerCPURequestIs(cpuRequest int64) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Resources.Requests.Cpu().MilliValue() != cpuRequest {
 			return fmt.Errorf("expected CPU request of the first container: %d, got: %d",
@@ -518,15 +519,15 @@ func firstContainerCPURequestIs(cpuRequest int64) nomostest.Predicate {
 	}
 }
 
-func firstContainerMemoryRequestIs(memoryRequest int64) nomostest.Predicate {
+func firstContainerMemoryRequestIs(memoryRequest int64) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		memoryRequest *= memoryMB
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(d, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		if d.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().Value() != memoryRequest {
 			return fmt.Errorf("expected memory request of the first container: %d, got: %d",

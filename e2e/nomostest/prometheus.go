@@ -63,7 +63,7 @@ func installPrometheus(nt *NT) error {
 			return err
 		}
 		tg.Go(func() error {
-			return WatchForCurrentStatus(nt, gvk, nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForCurrentStatus(gvk, nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()
@@ -91,7 +91,7 @@ func uninstallPrometheus(nt *NT) error {
 			return err
 		}
 		tg.Go(func() error {
-			return WatchForNotFound(nt, gvk, nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(gvk, nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()

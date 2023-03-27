@@ -21,6 +21,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -50,7 +51,7 @@ func TestResourceGroupController(t *testing.T) {
 	_, err := retry.Retry(60*time.Second, func() error {
 		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
 		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
-			nomostest.AllResourcesAreCurrent())
+			testpredicates.AllResourcesAreCurrent())
 		if err != nil {
 			return err
 		}

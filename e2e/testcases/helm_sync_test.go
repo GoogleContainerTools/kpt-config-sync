@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -77,16 +78,16 @@ func TestPublicHelm(t *testing.T) {
 		expectedMemoryLimit = "300Mi"
 	}
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
-		nomostest.HasCorrectResourceRequestsLimits("wordpress",
+		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
 			resource.MustParse(expectedCPURequest),
 			resource.MustParse(expectedCPULimit),
 			resource.MustParse(expectedMemoryRequest),
 			resource.MustParse(expectedMemoryLimit)),
-		nomostest.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
-		nomostest.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user"),
-		nomostest.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-		nomostest.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
-		nomostest.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
+		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {
@@ -108,10 +109,10 @@ func TestPublicHelm(t *testing.T) {
 	// if err := nt.Validate("my-wordpress", configsync.DefaultHelmReleaseNamespace, &appsv1.Deployment{}); err != nil {
 	// 	nt.T.Error(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "my-wordpress", configsync.DefaultHelmReleaseNamespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "my-wordpress", configsync.DefaultHelmReleaseNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "my-wordpress", "wordpress"); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "wordpress"); err != nil {
 		nt.T.Fatal(err)
 	}
 }

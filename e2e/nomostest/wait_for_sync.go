@@ -24,6 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testutils"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -31,7 +34,6 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/util/repo"
 )
 
@@ -80,7 +82,7 @@ func RootSyncOnly() WatchForAllSyncsOptions {
 // SyncDirPredicatePair is a pair of the sync directory and the predicate.
 type SyncDirPredicatePair struct {
 	Dir       string
-	Predicate func(string) Predicate
+	Predicate func(string) testpredicates.Predicate
 }
 
 // WithSyncDirectoryMap provides a map of RootSync|RepoSync and the corresponding sync directory.
@@ -130,7 +132,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
 				waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
 				&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
-				WatchTimeout(waitForRepoSyncsOptions.timeout))
+				testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
 		})
 	}
 
@@ -142,7 +144,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nnPtr.Name, nnPtr.Namespace,
 					waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
 					&SyncDirPredicatePair{Dir: syncDir, Predicate: RepoSyncHasStatusSyncDirectory},
-					WatchTimeout(waitForRepoSyncsOptions.timeout))
+					testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
 			})
 		}
 	}
@@ -165,9 +167,9 @@ func (nt *NT) WatchForSync(
 	gvk schema.GroupVersionKind,
 	name, namespace string,
 	sha1Func Sha1Func,
-	syncSha1 func(string) Predicate,
+	syncSha1 func(string) testpredicates.Predicate,
 	syncDirPair *SyncDirPredicatePair,
-	opts ...WatchOption,
+	opts ...testwatcher.WatchOption,
 ) error {
 	if namespace == "" {
 		// If namespace is empty, use the default namespace
@@ -182,13 +184,13 @@ func (nt *NT) WatchForSync(
 		return errors.Wrap(err, "failed to retrieve sha1")
 	}
 
-	var predicates []Predicate
+	var predicates []testpredicates.Predicate
 	predicates = append(predicates, syncSha1(sha1))
 	if syncDirPair != nil {
 		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Dir))
 	}
 
-	err = WatchObject(nt, gvk, name, namespace, predicates, opts...)
+	err = nt.Watcher.WatchObject(gvk, name, namespace, predicates, opts...)
 	if err != nil {
 		return errors.Wrap(err, "waiting for sync")
 	}
@@ -207,7 +209,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return validateError(rs.Status.Source.Errors, code, message)
+			return testutils.ValidateError(rs.Status.Source.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},
@@ -227,7 +229,7 @@ func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string,
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Revert this hack once async sync status updates are fixed to include rendering errors
-			return validateError(rs.Status.Rendering.Errors, code, message)
+			return testutils.ValidateError(rs.Status.Rendering.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Rendering.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.RenderingError})
 		},
@@ -247,7 +249,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return validateError(rs.Status.Sync.Errors, code, message)
+			return testutils.ValidateError(rs.Status.Sync.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -267,7 +269,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return validateError(rs.Status.Sync.Errors, code, message)
+			return testutils.ValidateError(rs.Status.Sync.Errors, code, message)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -287,7 +289,7 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return validateError(rs.Status.Source.Errors, code, message)
+			return testutils.ValidateError(rs.Status.Source.Errors, code, message)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},
@@ -434,7 +436,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 
 // TODO: Uncomment when Syncing condition consistency is fixed
 // func validateRootSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RootSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := validateError(statusErrs, code, message); err != nil {
+// 	if err := testutils.ValidateError(statusErrs, code, message); err != nil {
 // 		return err
 // 	}
 // 	if syncingCondition == nil {
@@ -451,7 +453,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 
 // TODO: Uncomment when Syncing condition consistency is fixed
 // func validateRepoSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RepoSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := validateError(statusErrs, code, message); err != nil {
+// 	if err := testutils.ValidateError(statusErrs, code, message); err != nil {
 // 		return err
 // 	}
 // 	if syncingCondition == nil {
@@ -465,22 +467,3 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 // 	}
 // 	return nil
 // }
-
-// validateError returns true if the specified errors contain an error
-// with the specified error code and (partial) message.
-func validateError(errs []v1beta1.ConfigSyncError, code, message string) error {
-	if len(errs) == 0 {
-		return errors.Errorf("no errors present")
-	}
-	for _, e := range errs {
-		if e.Code == code {
-			if message == "" || strings.Contains(e.ErrorMessage, message) {
-				return nil
-			}
-		}
-	}
-	if message != "" {
-		return errors.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
-	}
-	return errors.Errorf("error %s not present: %s", code, log.AsJSON(errs))
-}

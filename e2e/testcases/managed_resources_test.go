@@ -23,6 +23,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 
 	"kpt.dev/configsync/e2e/nomostest"
@@ -90,8 +92,8 @@ metadata:
 
 	// Remediator should delete `test-ns1`, because it says it's managed by the
 	// root-reconciler, but it's not in the source declared resources.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), "test-ns1", "",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), "test-ns1", "",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -123,7 +125,7 @@ metadata:
 	// The `configsync.gke.io/manager` annotation of `test-ns2` suggests that its manager is ':abcdef'.
 	// The root reconciler does not manage `test-ns2`, therefore should not remove `test-ns2`.
 	err = nt.Validate("test-ns2", "", &corev1.Namespace{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
@@ -157,7 +159,7 @@ metadata:
 
 	// Config Sync should not modify the namespace, since it does not have a `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-ns3", "", &corev1.Namespace{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			// no manager
@@ -193,7 +195,7 @@ metadata:
 	// Config Sync should not modify the namespace, since its `configsync.gke.io/resource-id`
 	// annotation is incorrect.
 	err = nt.Validate("test-ns4", "", &corev1.Namespace{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
@@ -246,8 +248,8 @@ data:
 	}
 
 	// Config Sync should remove `test-ns`.
-	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "test-cm1", "bookstore",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "test-cm1", "bookstore",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -282,7 +284,7 @@ data:
 	// Config Sync should not modify the configmap, since its `configsync.gke.io/resource-id`
 	// annotation is incorrect.
 	err = nt.Validate("test-cm2", "bookstore", &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
@@ -321,7 +323,7 @@ data:
 	// The `configsync.gke.io/manager` annotation of `test-ns3` suggests that its manager is ':abcdef'.
 	// The root reconciler does not manage `test-ns3`, therefore should not remove `test-ns3`.
 	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
@@ -358,7 +360,7 @@ data:
 
 	// Config Sync should not modify the configmap, since it does not have a `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-cm4", "bookstore", &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			// no manager
@@ -395,7 +397,7 @@ metadata:
 	// Config Sync should not modify the secret, since the GVKs of the resources declared in the git repository
 	// do not include the GVK for Secret.
 	err = nt.Validate("test-secret", "bookstore", &corev1.Secret{},
-		nomostest.HasExactlyAnnotationKeys(
+		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
@@ -446,8 +448,8 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	err = nomostest.WatchForCurrentStatus(nt, kinds.ConfigMap(), "cm-1", "bookstore",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -459,8 +461,8 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	err = nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "bookstore", "",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -508,8 +510,8 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	err = nomostest.WatchForCurrentStatus(nt, kinds.ConfigMap(), "cm-1", "bookstore",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -521,8 +523,8 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	err = nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "bookstore", "",
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -547,11 +549,11 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync does not remove this field
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation("season", "summer"),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation("season", "summer"),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -576,11 +578,11 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync does not remove this field
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -606,11 +608,11 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 	}
 
 	// Verify Config Sync does not remove this field
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation("season", "summer"),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation("season", "summer"),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -651,11 +653,11 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 
 	// Verify Config Sync corrects it
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation("season", "summer"),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation("season", "summer"),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -667,11 +669,11 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 
 	// Verify Config Sync corrects it
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -700,7 +702,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	// Verify Config Sync does not correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation("season", "winter"))
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation("season", "winter"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -718,7 +720,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	// Verify Config Sync does not correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagementKey, "winter"))
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, "winter"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -758,11 +760,11 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
 
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation("season", "summer"),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation("season", "summer"),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -773,11 +775,11 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
-	err = nomostest.WatchObject(nt, kinds.Namespace(), "bookstore", "",
-		[]nomostest.Predicate{
-			nomostest.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -805,7 +807,7 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 	// Verify Config Sync does not correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.MissingAnnotation("season"))
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation("season"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -822,7 +824,7 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 	// Verify Config Sync does not correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, nomostest.MissingAnnotation(metadata.ResourceManagementKey))
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

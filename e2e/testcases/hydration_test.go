@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -160,7 +161,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.8.4"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -181,7 +182,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		containerImagePullPolicy("IfNotPresent"), firstContainerImageIs("coredns/coredns:1.8.4"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
@@ -201,7 +202,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.9.3"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
@@ -239,11 +240,11 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 	nt.T.Log("Validate resources are synced")
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		nomostest.HasAnnotation("hydration-tool", "kustomize"),
-		nomostest.HasLabel("team", "coredns"),
-		nomostest.HasAnnotation("client.lifecycle.config.k8s.io/mutation", "ignore"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, "configuredIn: base/kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"),
-		nomostest.HasLabel("test-case", "hydration")); err != nil {
+		testpredicates.HasAnnotation("hydration-tool", "kustomize"),
+		testpredicates.HasLabel("team", "coredns"),
+		testpredicates.HasAnnotation("client.lifecycle.config.k8s.io/mutation", "ignore"),
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, "configuredIn: base/kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"),
+		testpredicates.HasLabel("test-case", "hydration")); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -321,7 +322,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 
 	nt.T.Log("Check hydration controller default image name")
 	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -341,7 +342,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", ""))
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -388,7 +389,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		nomostest.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -422,16 +423,16 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	}
 
 	nt.T.Log("Validating resources are synced")
-	if err := nt.Validate("foo", "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/namespace.yaml\n")); err != nil {
+	if err := nt.Validate("foo", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/namespace.yaml\n")); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.Validate("pod-creators", "foo", &rbacv1.RoleBinding{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/pod-creator-rolebinding.yaml\n")); err != nil {
+	if err := nt.Validate("pod-creators", "foo", &rbacv1.RoleBinding{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/pod-creator-rolebinding.yaml\n")); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.Validate("foo-ksa-dev", "foo", &corev1.ServiceAccount{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/serviceaccount.yaml\n")); err != nil {
+	if err := nt.Validate("foo-ksa-dev", "foo", &corev1.ServiceAccount{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/serviceaccount.yaml\n")); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.Validate("pod-creator", "", &rbacv1.ClusterRole{}, nomostest.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/pod-creator-clusterrole.yaml\n")); err != nil {
+	if err := nt.Validate("pod-creator", "", &rbacv1.ClusterRole{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/pod-creator-clusterrole.yaml\n")); err != nil {
 		nt.T.Error(err)
 	}
 }
@@ -459,14 +460,14 @@ func validateNamespaces(nt *nomostest.NT, expectedNamespaces []string, expectedO
 	}
 }
 
-func containerImagePullPolicy(policy string) nomostest.Predicate {
+func containerImagePullPolicy(policy string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rq, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(rq, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(rq, &appsv1.Deployment{})
 		}
 
 		actual := rq.Spec.Template.Spec.Containers[0].ImagePullPolicy
@@ -514,22 +515,22 @@ func validateAllTenants(nt *nomostest.NT, reconcilerScope, baseRelPath string, t
 // validateTenant validates if the tenant resources are created and managed by the reconciler.
 func validateTenant(nt *nomostest.NT, reconcilerScope, tenant, baseRelPath string) {
 	nt.T.Logf("Validate %s resources are created and managed by %s", tenant, reconcilerScope)
-	if err := nt.Validate(tenant, "", &corev1.Namespace{}, nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+	if err := nt.Validate(tenant, "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("deny-all", tenant, &networkingv1.NetworkPolicy{},
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/networkpolicy.yaml\n", baseRelPath)),
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/networkpolicy.yaml\n", baseRelPath)),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("tenant-admin", tenant, &rbacv1.Role{},
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/role.yaml\n", baseRelPath)),
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/role.yaml\n", baseRelPath)),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("tenant-admin-rolebinding", tenant, &rbacv1.RoleBinding{},
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/rolebinding.yaml\n", baseRelPath)),
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/rolebinding.yaml\n", baseRelPath)),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 }
@@ -539,14 +540,14 @@ func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
 	nt.T.Log("Validate resources are synced")
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		containerImagePullPolicy("IfNotPresent"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("my-wordpress", "wordpress",
 		&appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"),
-		nomostest.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 }

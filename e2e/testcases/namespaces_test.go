@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -111,7 +112,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Test that the namespace exists with label and annotation.
-	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "test-label"), nomostest.HasAnnotation("annotation", "test-annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.HasLabel("label", "test-label"), testpredicates.HasAnnotation("annotation", "test-annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -135,7 +136,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Test that the namespace exists with the updated label and annotation.
-	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasLabel("label", "updated-test-label"), nomostest.HasAnnotation("annotation", "updated-test-annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.HasLabel("label", "updated-test-label"), testpredicates.HasAnnotation("annotation", "updated-test-annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -159,7 +160,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	}
 
 	// Test that the namespace exists without the label and annotation.
-	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.MissingLabel("label"), nomostest.MissingAnnotation("annotation"))
+	err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.MissingLabel("label"), testpredicates.MissingAnnotation("annotation"))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -254,13 +255,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the namespace exists with expected config management labels and annotations.
-		err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
+		err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.HasAllNomosMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 
 		// Test that the configmap exists with expected config management labels and annotations.
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
+		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -286,13 +287,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the now unmanaged namespace does not contain any config management labels or annotations
-		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 
 		// Test that the now unmanaged configmap does not contain any config management labels or annotations
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -315,13 +316,13 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}
 
 		// Test that the namespace still exists on the cluster, and does not contain any config management labels or annotations
-		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 
 		// Test that the configmap still exists on the cluster, and does not contain any config management labels or annotations
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
+		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -358,13 +359,13 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}))
 
 	// Test that the namespace exists with expected config management labels and annotations.
-	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, nomostest.HasAllNomosMetadata())
+	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
 
 	// Test that cm1 exists with expected config management labels and annotations.
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -376,7 +377,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Test that cm3 exists with expected config management labels and annotations.
-	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata())
+	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -405,7 +406,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Test that the now unmanaged configmap does not contain any config management labels or annotations
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -439,7 +440,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Test that the configmap still exists on the cluster, and does not contain any config management labels or annotations
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -484,8 +485,8 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 
 	// Test that the kube-system namespace exists with label and annotation.
 	err := nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
-		nomostest.HasLabel("test-corp.com/awesome-controller-flavour", "fuzzy"),
-		nomostest.HasAnnotation("test-corp.com/awesome-controller-mixin", "green"),
+		testpredicates.HasLabel("test-corp.com/awesome-controller-flavour", "fuzzy"),
+		testpredicates.HasAnnotation("test-corp.com/awesome-controller-mixin", "green"),
 	)
 	if err != nil {
 		nt.T.Error(err)
@@ -512,7 +513,7 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 
 	// Test that the kube-system namespace exists without the label and annotation.
 	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
-		nomostest.MissingLabel("test-corp.com/awesome-controller-flavour"), nomostest.MissingAnnotation("test-corp.com/awesome-controller-mixin"))
+		testpredicates.MissingLabel("test-corp.com/awesome-controller-flavour"), testpredicates.MissingAnnotation("test-corp.com/awesome-controller-mixin"))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -535,7 +536,7 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	}
 
 	// Test that the now unmanaged kube-system namespace does not contain any config management labels or annotations.
-	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{}, nomostest.NoConfigSyncMetadata())
+	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -566,7 +567,7 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 
 	// Test that the namespace exists with managed by helm label.
 	err := nt.Validate(helmManagedNamespace.Name, "", &corev1.Namespace{},
-		nomostest.HasLabel("app.kubernetes.io/managed-by", "helm"),
+		testpredicates.HasLabel("app.kubernetes.io/managed-by", "helm"),
 	)
 	if err != nil {
 		nt.T.Error(err)
@@ -602,7 +603,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
+	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
 	if err != nil {
 		// No need to continue test since Namespace was never created.
 		nt.T.Fatal(err)
@@ -630,7 +631,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
+	err = nt.Validate(implicitNamespace, "", &corev1.Namespace{}, testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -698,8 +699,8 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("undeclare all Namespaces")
 
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
-			nomostest.RootSyncHasSyncError(status.EmptySourceErrorCode, ""),
+		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+			testpredicates.RootSyncHasSyncError(status.EmptySourceErrorCode, ""),
 		}))
 
 	// Wait 10 seconds before checking the namespaces.
@@ -760,7 +761,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its  finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), barNS.Name, barNS.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), barNS.Name, barNS.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -788,7 +789,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its  finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), safetyNs, "")
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), safetyNs, "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}

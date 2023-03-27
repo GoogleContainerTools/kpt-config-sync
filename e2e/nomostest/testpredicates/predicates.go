@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nomostest
+package testpredicates
 
 import (
 	"fmt"
@@ -28,8 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -430,7 +432,7 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 // IsManagedBy checks that the object is managed by configsync, has the expected
 // resource manager, and has a valid resource-id.
 // Use diff.IsManager if you just need a boolean without errors.
-func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
+func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound
@@ -439,7 +441,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = apiutil.GVKForObject(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -477,7 +479,7 @@ func IsManagedBy(nt *NT, scope declared.Scope, syncName string) Predicate {
 
 // IsNotManaged checks that the object is NOT managed by configsync.
 // Use differ.ManagedByConfigSync if you just need a boolean without errors.
-func IsNotManaged(nt *NT) Predicate {
+func IsNotManaged(scheme *runtime.Scheme) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound
@@ -486,7 +488,7 @@ func IsNotManaged(nt *NT) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = apiutil.GVKForObject(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -514,7 +516,7 @@ func IsNotManaged(nt *NT) Predicate {
 
 // ResourceVersionEquals checks that the object's ResourceVersion matches the
 // specified value.
-func ResourceVersionEquals(nt *NT, expected string) Predicate {
+func ResourceVersionEquals(scheme *runtime.Scheme, expected string) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound
@@ -526,7 +528,7 @@ func ResourceVersionEquals(nt *NT, expected string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = apiutil.GVKForObject(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -539,7 +541,7 @@ func ResourceVersionEquals(nt *NT, expected string) Predicate {
 
 // ResourceVersionNotEquals checks that the object's ResourceVersion does NOT
 // match specified value.
-func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
+func ResourceVersionNotEquals(scheme *runtime.Scheme, unexpected string) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound
@@ -551,7 +553,7 @@ func ResourceVersionNotEquals(nt *NT, unexpected string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, nt.scheme)
+			gvk, err = apiutil.GVKForObject(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -579,12 +581,12 @@ func HasGenerationAtLeast(minGeneration int64) Predicate {
 
 // StatusEquals checks that the object's computed status matches the specified
 // status.
-func StatusEquals(nt *NT, expected status.Status) Predicate {
+func StatusEquals(scheme *runtime.Scheme, expected status.Status) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound
 		}
-		uObj, err := kinds.ToUnstructured(obj, nt.scheme)
+		uObj, err := kinds.ToUnstructured(obj, scheme)
 		if err != nil {
 			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
 				obj, core.ObjectNamespacedName(obj))
@@ -665,7 +667,7 @@ func RootSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return validateError(rs.Status.Source.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Source.Errors, errCode, errMessage)
 	}
 }
 
@@ -680,7 +682,7 @@ func RepoSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return validateError(rs.Status.Source.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Source.Errors, errCode, errMessage)
 	}
 }
 
@@ -695,7 +697,7 @@ func RootSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return validateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
 	}
 }
 
@@ -730,7 +732,7 @@ func RepoSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return validateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
 	}
 }
 
@@ -745,7 +747,7 @@ func RootSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return validateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }
 
@@ -760,7 +762,7 @@ func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return validateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return testutils.ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }
 
@@ -817,8 +819,7 @@ func MissingDeletionTimestamp(o client.Object) error {
 }
 
 // ObjectNotFoundPredicate returns an error unless the object is nil (not found).
-func ObjectNotFoundPredicate(nt *NT) Predicate {
-	ntPtr := nt
+func ObjectNotFoundPredicate(scheme *runtime.Scheme) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			// Success! Object Deleted.
@@ -826,7 +827,7 @@ func ObjectNotFoundPredicate(nt *NT) Predicate {
 		}
 		// If you see this error, the WatchObject timeout was probably reached.
 		return errors.Errorf("expected %T object %s to be not found:\n%s",
-			o, core.ObjectNamespacedName(o), log.AsYAMLWithScheme(o, ntPtr.scheme))
+			o, core.ObjectNamespacedName(o), log.AsYAMLWithScheme(o, scheme))
 	}
 }
 

@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
@@ -338,8 +339,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.T.Log("Verify an implicit namespace is created")
 	implictNs := &corev1.Namespace{}
 	if err := nt.Validate(namespace, "", implictNs,
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, managerScope),
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, managerScope),
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
@@ -352,7 +353,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
 	// Switch from Git to OCI
@@ -388,7 +389,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
@@ -421,7 +422,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.ValidateNotFound("bookinfo-admin", namespace, &rbacv1.Role{}); err != nil {
@@ -441,7 +442,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
-		nomostest.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
@@ -485,14 +486,14 @@ func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.
-func isSourceType(sourceType v1beta1.SourceType) nomostest.Predicate {
+func isSourceType(sourceType v1beta1.SourceType) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RepoSync)
 		if !ok {
-			return nomostest.WrongTypeErr(rs, &v1beta1.RepoSync{})
+			return testpredicates.WrongTypeErr(rs, &v1beta1.RepoSync{})
 		}
 		actual := rs.Spec.SourceType
 		if string(sourceType) != actual {

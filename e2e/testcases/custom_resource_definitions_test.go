@@ -28,6 +28,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
@@ -516,14 +518,14 @@ func TestLargeCRD(t *testing.T) {
 	}
 	nt.RenewClient()
 
-	err := nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "", nil,
-		nomostest.WatchTimeout(30*time.Second))
+	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "", nil,
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	err = nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), "solrclouds.solr.apache.org", "", nil,
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "solrclouds.solr.apache.org", "", nil,
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -551,22 +553,22 @@ func TestLargeCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
-		[]nomostest.Predicate{nomostest.HasLabel("random-key", "random-value")},
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
+		[]testpredicates.Predicate{testpredicates.HasLabel("random-key", "random-value")},
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-func hasRule(name string) nomostest.Predicate {
+func hasRule(name string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		vwc, ok := o.(*admissionv1.ValidatingWebhookConfiguration)
 		if !ok {
-			return nomostest.WrongTypeErr(o, &admissionv1.ValidatingWebhookConfiguration{})
+			return testpredicates.WrongTypeErr(o, &admissionv1.ValidatingWebhookConfiguration{})
 		}
 		for _, w := range vwc.Webhooks {
 			if w.Name == name {
@@ -579,7 +581,7 @@ func hasRule(name string) nomostest.Predicate {
 
 func hasTwoVersions(obj client.Object) error {
 	if obj == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	crd := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if len(crd.Spec.Versions) != 2 {

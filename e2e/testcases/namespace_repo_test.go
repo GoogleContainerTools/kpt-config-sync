@@ -29,6 +29,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -58,12 +60,12 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	// namespace reconciler deployment.
 	// Log error if the Reconciling condition does not progress to False before
 	// the timeout expires.
-	err := nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), "repo-sync", bsNamespace,
-		[]nomostest.Predicate{
+	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), "repo-sync", bsNamespace,
+		[]testpredicates.Predicate{
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
@@ -87,8 +89,8 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	}
 
 	// Validate service account 'store' is current.
-	err = nomostest.WatchForCurrentStatus(nt, kinds.ServiceAccount(), "store", bsNamespace,
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.ServiceAccount(), "store", bsNamespace,
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatalf("service account store not found: %v", err)
 	}
@@ -103,10 +105,10 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	}
 }
 
-func hasReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {
+func hasReconcilingStatus(r metav1.ConditionStatus) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs := o.(*v1beta1.RepoSync)
 		conditions := rs.Status.Conditions
@@ -119,10 +121,10 @@ func hasReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {
 	}
 }
 
-func hasStalledStatus(r metav1.ConditionStatus) nomostest.Predicate {
+func hasStalledStatus(r metav1.ConditionStatus) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs := o.(*v1beta1.RepoSync)
 		conditions := rs.Status.Conditions
@@ -312,30 +314,30 @@ func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {
 func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secretNames []string) {
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace)
+		return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.Deployment(), core.NsReconcilerName(namespace, configsync.RepoSyncName), v1.NSConfigManagementSystem)
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), core.NsReconcilerName(namespace, configsync.RepoSyncName), v1.NSConfigManagementSystem)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "ns-reconciler-bookstore-git-sync", configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "ns-reconciler-bookstore-git-sync", configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "ns-reconciler-bookstore-reconciler", configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "ns-reconciler-bookstore-reconciler", configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.ConfigMap(), "ns-reconciler-bookstore-hydration-controller", configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "ns-reconciler-bookstore-hydration-controller", configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.ServiceAccount(), core.NsReconcilerName(namespace, configsync.RepoSyncName), configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ServiceAccount(), core.NsReconcilerName(namespace, configsync.RepoSyncName), configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForNotFound(nt, kinds.ServiceAccount(), controllers.RepoSyncPermissionsName(), configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ServiceAccount(), controllers.RepoSyncPermissionsName(), configsync.ControllerNamespace)
 	})
 	for _, sName := range secretNames {
 		nn := types.NamespacedName{Name: sName, Namespace: configsync.ControllerNamespace}
 		tg.Go(func() error {
-			return nomostest.WatchForNotFound(nt, kinds.Secret(), nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(kinds.Secret(), nn.Name, nn.Namespace)
 		})
 	}
 	if err := tg.Wait(); err != nil {
@@ -365,8 +367,8 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	// conditions.
 	// Here we are checking for false condition which requires atleast 2 reconcile
 	// request to be processed by the controller.
-	err := nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, bsNamespace,
-		[]nomostest.Predicate{
+	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, bsNamespace,
+		[]testpredicates.Predicate{
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
 		})
@@ -382,8 +384,8 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 
 	// Verify that the deployment is re-created after deletion by checking the
 	// Reconciling and Stalled condition in RepoSync resource.
-	err = nomostest.WatchObject(nt, kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, bsNamespace,
-		[]nomostest.Predicate{
+	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, bsNamespace,
+		[]testpredicates.Predicate{
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
 		})

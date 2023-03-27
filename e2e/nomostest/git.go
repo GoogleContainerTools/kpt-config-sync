@@ -129,7 +129,7 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		SafetyNSPath:          fmt.Sprintf("acme/namespaces/%s/ns.yaml", safetyName),
 		SafetyClusterRoleName: safetyName,
 		SafetyClusterRolePath: fmt.Sprintf("acme/cluster/cluster-role-%s.yaml", safetyName),
-		Scheme:                nt.scheme,
+		Scheme:                nt.Scheme,
 		Logger:                nt.Logger,
 	}
 
@@ -321,10 +321,10 @@ func (g *Repository) Get(path string) client.Object {
 		g.T.Fatalf("missing GVK in file: %s", path)
 	}
 
-	// Lookup type by GVK of those registered with the scheme
+	// Lookup type by GVK of those registered with the Scheme
 	tObj, err := g.Scheme.New(gvk)
 	if err != nil {
-		// Return the unstructured object if the GVK is not registered with the scheme
+		// Return the unstructured object if the GVK is not registered with the Scheme
 		if runtime.IsNotRegisteredError(err) {
 			return uObj
 		}

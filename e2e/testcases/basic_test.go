@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -105,7 +106,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("check that the replicaset was created")
-	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world")); err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, testpredicates.HasLabel("app", "hello-world")); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -135,7 +136,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	if err := nt.ValidateNotFound("hello-world", "dir", &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, nomostest.HasLabel("app", "hello-world")); err != nil {
+	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, testpredicates.HasLabel("app", "hello-world")); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -149,7 +150,7 @@ func TestRolebindingsUpdated(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, nomostest.RoleBindingHasName("acme-admin")); err != nil {
+	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, testpredicates.RoleBindingHasName("acme-admin")); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 

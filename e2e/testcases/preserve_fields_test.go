@@ -28,6 +28,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -71,8 +73,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	}
 
 	// Ensure the Service has the target port we set.
-	err := nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
-		[]nomostest.Predicate{hasTargetPort(targetPort1)})
+	err := nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
+		[]testpredicates.Predicate{hasTargetPort(targetPort1)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -107,9 +109,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	// This can only return nil if the NodePort/ClusterIP was updated.
 	// Potentially flaky check since other things can cause NodePort/ClusterIP
 	// to change; copied from bats.
-	err = nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
-		[]nomostest.Predicate{hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP)},
-		nomostest.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
+		[]testpredicates.Predicate{hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP)},
+		testwatcher.WatchTimeout(30*time.Second))
 	if err == nil {
 		// We want non-nil error from the Retry above - if err is nil then at least
 		// one was incorrectly changed.
@@ -136,8 +138,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	}
 
 	// Ensure the Service has the new target port we set.
-	err = nomostest.WatchObject(nt, kinds.Service(), serviceName, ns,
-		[]nomostest.Predicate{hasTargetPort(targetPort2)})
+	err = nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
+		[]testpredicates.Predicate{hasTargetPort(targetPort2)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -196,13 +198,13 @@ aggregationRule:
 	}
 
 	// Ensure the aggregate rule is actually aggregated.
-	err := nomostest.WatchObject(nt, kinds.ClusterRole(), aggregateRoleName, "",
-		[]nomostest.Predicate{
+	err := nt.Watcher.WatchObject(kinds.ClusterRole(), aggregateRoleName, "",
+		[]testpredicates.Predicate{
 			clusterRoleHasRules([]rbacv1.PolicyRule{
 				nsViewer.Rules[0], rbacViewer.Rules[0],
 			}),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -295,9 +297,9 @@ func TestPreserveLastApplied(t *testing.T) {
 		nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
 	}
 
-	err = nomostest.WatchObject(nt, kinds.ClusterRole(), nsViewerName, "",
-		[]nomostest.Predicate{
-			nomostest.HasExactlyAnnotationKeys(annotationKeys...),
+	err = nt.Watcher.WatchObject(kinds.ClusterRole(), nsViewerName, "",
+		[]testpredicates.Predicate{
+			testpredicates.HasExactlyAnnotationKeys(annotationKeys...),
 		})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -336,7 +338,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	// Checking that the configmap with no labels appears on cluster, and
 	// that no user labels are specified
 	err := nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyLabelKeys(defaultLabels...))
+		testpredicates.HasExactlyLabelKeys(defaultLabels...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -350,7 +352,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 
 	// Checking that label is updated after syncing an update.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyLabelKeys(append(defaultLabels, "baz")...))
+		testpredicates.HasExactlyLabelKeys(append(defaultLabels, "baz")...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -364,7 +366,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 
 	// Check that the label is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyLabelKeys(metadata.ManagedByKey, metadata.DeclaredVersionLabel))
+		testpredicates.HasExactlyLabelKeys(metadata.ManagedByKey, metadata.DeclaredVersionLabel))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -403,7 +405,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	// Checking that the configmap with no annotations appears on cluster, and
 	// that no user annotations are specified
 	err := nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(annotationKeys...))
+		testpredicates.HasExactlyAnnotationKeys(annotationKeys...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -429,8 +431,8 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 
 	// Checking that annotation is updated after syncing an update.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(updatedKeys...),
-		nomostest.HasAnnotation("baz", "qux"))
+		testpredicates.HasExactlyAnnotationKeys(updatedKeys...),
+		testpredicates.HasAnnotation("baz", "qux"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -453,7 +455,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 
 	// Check that the annotation is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		nomostest.HasExactlyAnnotationKeys(annotationKeys...))
+		testpredicates.HasExactlyAnnotationKeys(annotationKeys...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -468,16 +470,16 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	}
 }
 
-func hasDifferentNodePortOrClusterIP(nodePort int32, clusterIP string) nomostest.Predicate {
+func hasDifferentNodePortOrClusterIP(nodePort int32, clusterIP string) testpredicates.Predicate {
 	// We have to check both in the same Predicate as predicates are AND-ed together.
 	// We want to return nil if EITHER nodePort or clusterIP changes.
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		service, ok := o.(*corev1.Service)
 		if !ok {
-			return nomostest.WrongTypeErr(o, &corev1.Service{})
+			return testpredicates.WrongTypeErr(o, &corev1.Service{})
 		}
 		gotNodePort := service.Spec.Ports[0].NodePort
 		gotClusterIP := service.Spec.ClusterIP
@@ -490,11 +492,11 @@ func hasDifferentNodePortOrClusterIP(nodePort int32, clusterIP string) nomostest
 
 func specifiesClusterIP(o client.Object) error {
 	if o == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	service, ok := o.(*corev1.Service)
 	if !ok {
-		return nomostest.WrongTypeErr(o, &corev1.Service{})
+		return testpredicates.WrongTypeErr(o, &corev1.Service{})
 	}
 	if service.Spec.ClusterIP == "" {
 		return errors.New("spec.clusterIP is not set")
@@ -504,11 +506,11 @@ func specifiesClusterIP(o client.Object) error {
 
 func specifiesNodePort(o client.Object) error {
 	if o == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	service, ok := o.(*corev1.Service)
 	if !ok {
-		return nomostest.WrongTypeErr(o, &corev1.Service{})
+		return testpredicates.WrongTypeErr(o, &corev1.Service{})
 	}
 	if service.Spec.Ports[0].NodePort == 0 {
 		return errors.New("spec.ports[0].nodePort is not set")
@@ -516,14 +518,14 @@ func specifiesNodePort(o client.Object) error {
 	return nil
 }
 
-func hasTargetPort(want int) nomostest.Predicate {
+func hasTargetPort(want int) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		service, ok := o.(*corev1.Service)
 		if !ok {
-			return nomostest.WrongTypeErr(o, &corev1.Service{})
+			return testpredicates.WrongTypeErr(o, &corev1.Service{})
 		}
 		got := service.Spec.Ports[0].TargetPort.IntValue()
 		if want != got {

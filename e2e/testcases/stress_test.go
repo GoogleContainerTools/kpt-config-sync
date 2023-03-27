@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -219,8 +220,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", oldCrdFilePath)
 
 	nt.T.Logf("Wait until the old CRD is established")
-	err := nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), crdName, "",
-		[]nomostest.Predicate{nomostest.IsEstablished})
+	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+		[]testpredicates.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -230,8 +231,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
 
 	nt.T.Logf("Verify that the source errors are truncated")
-	err = nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), "root-sync", configmanagement.ControllerNamespace,
-		[]nomostest.Predicate{truncateSourceErrors()})
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), "root-sync", configmanagement.ControllerNamespace,
+		[]testpredicates.Predicate{truncateSourceErrors()})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -241,8 +242,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", newCrdFilePath)
 
 	nt.T.Logf("Wait until the new CRD is established")
-	err = nomostest.WatchObject(nt, kinds.CustomResourceDefinitionV1(), crdName, "",
-		[]nomostest.Predicate{nomostest.IsEstablished})
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+		[]testpredicates.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -259,14 +260,14 @@ func TestStressLargeRequest(t *testing.T) {
 	}
 }
 
-func truncateSourceErrors() nomostest.Predicate {
+func truncateSourceErrors() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs, ok := o.(*v1beta1.RootSync)
 		if !ok {
-			return nomostest.WrongTypeErr(o, &v1beta1.RepoSync{})
+			return testpredicates.WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
 		for _, cond := range rs.Status.Conditions {
 			if cond.Type == v1beta1.RootSyncSyncing && cond.Status == metav1.ConditionFalse && cond.Reason == "Source" &&

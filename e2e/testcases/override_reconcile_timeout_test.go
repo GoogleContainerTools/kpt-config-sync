@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -44,8 +45,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
-			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
+		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -60,8 +61,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 			nt.MustKubectl("delete", "-f", "../testdata/low-priority-pause-deployment.yaml", "--ignore-not-found")
 		})
 		require.NoError(nt.T,
-			nomostest.WatchObject(nt, kinds.Deployment(), "pause-deployment", "default", []nomostest.Predicate{
-				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+			nt.Watcher.WatchObject(kinds.Deployment(), "pause-deployment", "default", []testpredicates.Predicate{
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			}))
 	}
 
@@ -111,8 +112,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []nomostest.Predicate{
-			nomostest.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
+		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -143,14 +144,14 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 }
 
 // resourceStatusEquals verifies that an object has actuation and reconcile status as expected
-func resourceStatusEquals(id core.ID, expectActuation, expectReconcile string) nomostest.Predicate {
+func resourceStatusEquals(id core.ID, expectActuation, expectReconcile string) testpredicates.Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
 		if !ok {
-			return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
+			return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 		}
 		resourceStatuses := rg.Status.ResourceStatuses
 		for _, resourceStatus := range resourceStatuses {

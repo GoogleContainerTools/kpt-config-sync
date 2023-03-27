@@ -27,6 +27,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -93,7 +95,7 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that cm2 has the dependsOn annotation")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")); err != nil {
+	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -170,7 +172,7 @@ func TestMultiDependencies(t *testing.T) {
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "cyclic dependency")
 
 	nt.T.Log("Verify that cm0 does not have the dependsOn annotation")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.MissingAnnotation(dependson.Annotation)); err != nil {
+	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.MissingAnnotation(dependson.Annotation)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -196,7 +198,7 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm3 is removed")
-	err := nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm3Name, namespaceName)
+	err := nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm3Name, namespaceName)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -221,13 +223,13 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm1 is removed")
-	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm1Name, namespaceName)
+	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm1Name, namespaceName)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Verify that cm2 is removed")
-	err = nomostest.WatchForNotFound(nt, kinds.ConfigMap(), cm2Name, namespaceName)
+	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm2Name, namespaceName)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -247,17 +249,17 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that cm1 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
+	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Verify that cm2 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
+	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Verify that cm3 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
+	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -278,12 +280,12 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm3 no longer has the CS metadata")
-	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata()); err != nil {
+	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Verify that cm0 still has the CS metadata")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.HasAllNomosMetadata()); err != nil {
+	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -301,7 +303,7 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm2 no longer has the dependsOn annotation")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, nomostest.MissingAnnotation(dependson.Annotation)); err != nil {
+	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.MissingAnnotation(dependson.Annotation)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -322,12 +324,12 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Verify that cm1 no longer has the CS metadata")
-	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata()); err != nil {
+	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Verify that cm0 no longer has the CS metadata")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, nomostest.NoConfigSyncMetadata()); err != nil {
+	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -477,28 +479,28 @@ func TestDependencyWithReconciliation(t *testing.T) {
 
 	pod1 := &corev1.Pod{}
 	pod2 := &corev1.Pod{}
-	pod1SyncPredicate, pod1SyncCh := nomostest.WatchSyncPredicate()
-	pod2SyncPredicate, pod2SyncCh := nomostest.WatchSyncPredicate()
+	pod1SyncPredicate, pod1SyncCh := testpredicates.WatchSyncPredicate()
+	pod2SyncPredicate, pod2SyncCh := testpredicates.WatchSyncPredicate()
 
 	nt.T.Logf("Wait for both pods to become ready (background)")
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.Pod(), pod1Name, namespaceName,
-			[]nomostest.Predicate{
+		return nt.Watcher.WatchObject(kinds.Pod(), pod1Name, namespaceName,
+			[]testpredicates.Predicate{
 				pod1SyncPredicate,
 				podCachePredicate(pod1),
-				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			},
-			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.Pod(), pod2Name, namespaceName,
-			[]nomostest.Predicate{
+		return nt.Watcher.WatchObject(kinds.Pod(), pod2Name, namespaceName,
+			[]testpredicates.Predicate{
 				pod2SyncPredicate,
 				podCachePredicate(pod2),
-				nomostest.StatusEquals(nt, kstatus.CurrentStatus),
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			},
-			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	// Watch in the background
 	errCh := make(chan error)
@@ -535,8 +537,8 @@ func TestDependencyWithReconciliation(t *testing.T) {
 
 	pod1 = &corev1.Pod{}
 	pod2 = &corev1.Pod{}
-	pod1SyncPredicate, pod1SyncCh = nomostest.WatchSyncPredicate()
-	pod2SyncPredicate, pod2SyncCh = nomostest.WatchSyncPredicate()
+	pod1SyncPredicate, pod1SyncCh = testpredicates.WatchSyncPredicate()
+	pod2SyncPredicate, pod2SyncCh = testpredicates.WatchSyncPredicate()
 
 	// Delete order: pod2 -> pod1 (pod2 depends on pod1)
 	// Unfortunately, there's no "not found timestamp" to compare with the
@@ -566,24 +568,24 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.T.Logf("Wait for both pods to become not found (background)")
 	tg = taskgroup.New()
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.Pod(), pod1Name, namespaceName,
-			[]nomostest.Predicate{
+		return nt.Watcher.WatchObject(kinds.Pod(), pod1Name, namespaceName,
+			[]testpredicates.Predicate{
 				pod1SyncPredicate,
 				podCachePredicate(pod1),
 				pod1DeletionPredicate,
-				nomostest.ObjectNotFoundPredicate(nt),
+				testpredicates.ObjectNotFoundPredicate(nt.Scheme),
 			},
-			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.Pod(), pod2Name, namespaceName,
-			[]nomostest.Predicate{
+		return nt.Watcher.WatchObject(kinds.Pod(), pod2Name, namespaceName,
+			[]testpredicates.Predicate{
 				pod2SyncPredicate,
 				podCachePredicate(pod2),
 				pod2LastUpdatedPredicate,
-				nomostest.ObjectNotFoundPredicate(nt),
+				testpredicates.ObjectNotFoundPredicate(nt.Scheme),
 			},
-			nomostest.WatchTimeout(nt.DefaultWaitTimeout*2))
+			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 
 	// Watch in the background
@@ -633,7 +635,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	// pod3 will never reconcile (image pull failure)
 	// TODO: kstatus should probably detect image pull failure and time out to Failure status, like it does for scheduling failure.
 	err = multierr.Append(err, nt.Validate("pod3", namespaceName, &corev1.Pod{},
-		nomostest.StatusEquals(nt, kstatus.InProgressStatus)))
+		testpredicates.StatusEquals(nt.Scheme, kstatus.InProgressStatus)))
 	err = multierr.Append(err, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -671,9 +673,9 @@ func TestDependencyWithReconciliation(t *testing.T) {
 
 	nt.T.Logf("Verify that pod5 and pod6 are ready")
 	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus)))
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)))
 	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
-		nomostest.StatusEquals(nt, kstatus.CurrentStatus)))
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -685,9 +687,9 @@ func TestDependencyWithReconciliation(t *testing.T) {
 
 	nt.T.Logf("Verify that pod5 and pod6 were not deleted")
 	err = multierr.Append(err, nt.Validate("pod5", namespaceName, &corev1.Pod{},
-		nomostest.MissingDeletionTimestamp))
+		testpredicates.MissingDeletionTimestamp))
 	err = multierr.Append(err, nt.Validate("pod6", namespaceName, &corev1.Pod{},
-		nomostest.MissingDeletionTimestamp))
+		testpredicates.MissingDeletionTimestamp))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -733,12 +735,12 @@ func getLastUpdateTimestamp(obj client.Object) *metav1.Time {
 // podCachePredicate returns a predicate which overwrites the specified pod with
 // the latest pod, every time the predicate is called with a non-nil object.
 // This can be used to export the last known pod state during a watch or wait.
-func podCachePredicate(pod *corev1.Pod) nomostest.Predicate {
+func podCachePredicate(pod *corev1.Pod) testpredicates.Predicate {
 	return func(obj client.Object) error {
 		if obj != nil {
 			latestPod, ok := obj.(*corev1.Pod)
 			if !ok {
-				return nomostest.WrongTypeErr(obj, &corev1.Pod{})
+				return testpredicates.WrongTypeErr(obj, &corev1.Pod{})
 			}
 			latestPod.DeepCopyInto(pod)
 		}

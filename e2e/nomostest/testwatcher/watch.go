@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nomostest
+package testwatcher
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -32,6 +33,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/util/log"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,22 +56,53 @@ func WatchTimeout(timeout time.Duration) WatchOption {
 	}
 }
 
+// Watcher is used for performing various Watch operations on k8s objects in the cluster
+// Uses the provided kubeClient/restConfig to set up the Watches
+type Watcher struct {
+	ctx                context.Context
+	defaultWaitTimeout *time.Duration
+	logger             *testlogger.TestLogger
+	restConfig         *rest.Config
+	kubeClient         *testkubeclient.KubeClient
+	scheme             *runtime.Scheme
+}
+
+// NewWatcher constructs a new Watcher
+func NewWatcher(
+	ctx context.Context,
+	logger *testlogger.TestLogger,
+	kubeClient *testkubeclient.KubeClient,
+	restConfig *rest.Config,
+	scheme *runtime.Scheme,
+	defaultWaitTimeout *time.Duration,
+) *Watcher {
+	w := &Watcher{
+		ctx:                ctx,
+		logger:             logger,
+		kubeClient:         kubeClient,
+		restConfig:         restConfig,
+		scheme:             scheme,
+		defaultWaitTimeout: defaultWaitTimeout,
+	}
+	return w
+}
+
 // WatchObject watches the specified object util all predicates return nil,
 // or the timeout is reached. Object does not need to exist yet, as long as the
 // resource type exists.
 // All Predicates need to handle nil objects (nil means Not Found).
 // If no Predicates are specified, WatchObject watches until the object exists.
-func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, predicates []Predicate, opts ...WatchOption) error {
+func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace string, predicates []testpredicates.Predicate, opts ...WatchOption) error {
 	errPrefix := fmt.Sprintf("WatchObject(%s %s/%s)", gvk.Kind, namespace, name)
 
 	startTime := time.Now()
 	defer func() {
 		took := time.Since(startTime)
-		nt.T.Logf("%s watched for %v", errPrefix, took)
+		w.logger.Infof("%s watched for %v", errPrefix, took)
 	}()
 
 	spec := watchSpec{
-		timeout: nt.DefaultWaitTimeout,
+		timeout: *w.defaultWaitTimeout,
 	}
 	for _, opt := range opts {
 		opt(&spec)
@@ -75,14 +110,14 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 
 	// Default to waiting until the object exists
 	if len(predicates) == 0 {
-		predicates = append(predicates, ObjectFoundPredicate)
+		predicates = append(predicates, testpredicates.ObjectFoundPredicate)
 	}
 
 	// Use the context to stop the List and/or Watch if they run too long.
-	ctx, cancel := context.WithTimeout(nt.Context, spec.timeout)
+	ctx, cancel := context.WithTimeout(w.ctx, spec.timeout)
 	defer cancel()
 
-	lw, err := newListWatchForObject(nt, gvk, name, namespace, spec.timeout)
+	lw, err := w.newListWatchForObject(gvk, name, namespace, spec.timeout)
 	if err != nil {
 		return errors.Wrap(err, errPrefix)
 	}
@@ -106,7 +141,7 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	cObjList, ok := rObjList.(client.ObjectList)
 	if !ok {
 		return errors.Wrapf(
-			WrongTypeErr(rObjList, client.ObjectList(nil)),
+			testpredicates.WrongTypeErr(rObjList, client.ObjectList(nil)),
 			"%s unexpected list type", errPrefix)
 	}
 	// Since items are typed, we have to use some reflection to extract them.
@@ -120,20 +155,20 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 	var prevObj client.Object
 
 	if cObj == nil {
-		nt.T.Logf("%s GET Not Found", errPrefix)
+		w.logger.Infof("%s GET Not Found", errPrefix)
 		// Predicates expect the object to be nil when Not Found.
 	} else {
-		nt.T.Logf("%s GET Found", errPrefix)
+		w.logger.Infof("%s GET Found", errPrefix)
 		// Log the initial/current state as a diff to make it easy to compare with update diffs.
 		// Use diff.Diff because it doesn't truncate like cmp.Diff does.
 		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
-		nt.Logger.Debugf("%s GET Diff (+ Current):\n%s",
-			errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
+		w.logger.Debugf("%s GET Diff (+ Current):\n%s",
+			errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
 	}
 
 	// Cache the predicate errors from the last evaluation and return them
 	// if the watch closes before the predicates all pass.
-	evalErrs := EvaluatePredicates(cObj, predicates)
+	evalErrs := testpredicates.EvaluatePredicates(cObj, predicates)
 	if len(evalErrs) == 0 {
 		// Success! All predicates passed!
 		return nil
@@ -169,7 +204,7 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 				// Added to watch cache for the first time, but not to k8s
 				eType = watch.Modified
 			}
-			nt.T.Logf("%s %s", errPrefix, eType)
+			w.logger.Infof("%s %s", errPrefix, eType)
 
 			// For Added/Modified/Deleted events, the object should be of the
 			// type being watched.
@@ -193,11 +228,11 @@ func WatchObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, pr
 				cObj = nil
 			}
 
-			nt.Logger.Debugf("%s %s Diff (- Removed, + Added):\n%s",
+			w.logger.Debugf("%s %s Diff (- Removed, + Added):\n%s",
 				errPrefix, eType,
-				log.AsYAMLDiffWithScheme(prevObj, cObj, nt.scheme))
+				log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
 
-			evalErrs = EvaluatePredicates(cObj, predicates)
+			evalErrs = testpredicates.EvaluatePredicates(cObj, predicates)
 			if len(evalErrs) == 0 {
 				// Success! All predicates returned without error.
 				return true, nil
@@ -250,8 +285,8 @@ func (ewt *ErrWatchTimeout) Unwrap() error { return ewt.cause }
 // newListWatchForObject returns a ListWatch that does server-side filtering
 // down to a single resource object.
 // Optionally specify the minimum timeout for the REST client.
-func newListWatchForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
-	restConfig := nt.Config
+func (w *Watcher) newListWatchForObject(gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
+	restConfig := w.restConfig
 	// Make sure the client-side watch timeout isn't too short.
 	// If not, duplicate the config and update the timeout.
 	// You can use the Context for timeout, so the rest.Config timeout just needs to be longer.
@@ -260,13 +295,13 @@ func newListWatchForObject(nt *NT, gvk schema.GroupVersionKind, name, namespace 
 		restConfig.Timeout = timeout * 2
 	}
 	// Use the custom client scheme to encode requests and decode responses
-	codecs := serializer.NewCodecFactory(nt.KubeClient.Client.Scheme())
+	codecs := serializer.NewCodecFactory(w.kubeClient.Client.Scheme())
 	restClient, err := apiutil.RESTClientForGVK(gvk, false, restConfig, codecs)
 	if err != nil {
 		return nil, err
 	}
 	// Lookup the resource name from the GVK using discovery (usually cached)
-	mapping, err := nt.KubeClient.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := w.kubeClient.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +332,7 @@ func getObjectFromList(objList client.ObjectList, name, namespace string) (clien
 		cObj, ok := rObj.(client.Object)
 		if !ok {
 			return nil, errors.Wrap(
-				WrongTypeErr(rObj, client.Object(nil)),
+				testpredicates.WrongTypeErr(rObj, client.Object(nil)),
 				"unexpected list item type")
 		}
 		if cObj.GetName() == name && cObj.GetNamespace() == namespace {
@@ -310,16 +345,16 @@ func getObjectFromList(objList client.ObjectList, name, namespace string) (clien
 }
 
 // WatchForCurrentStatus watches the object until it reconciles (Current).
-func WatchForCurrentStatus(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
-	return WatchObject(nt, gvk, name, namespace,
-		[]Predicate{StatusEquals(nt, kstatus.CurrentStatus)},
+func (w *Watcher) WatchForCurrentStatus(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
+	return w.WatchObject(gvk, name, namespace,
+		[]testpredicates.Predicate{testpredicates.StatusEquals(w.scheme, kstatus.CurrentStatus)},
 		opts...)
 }
 
 // WatchForNotFound waits for the passed object to be fully deleted or not found.
 // Returns an error if the object is not deleted before the timeout.
-func WatchForNotFound(nt *NT, gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
-	return WatchObject(nt, gvk, name, namespace,
-		[]Predicate{ObjectNotFoundPredicate(nt)},
+func (w *Watcher) WatchForNotFound(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
+	return w.WatchObject(gvk, name, namespace,
+		[]testpredicates.Predicate{testpredicates.ObjectNotFoundPredicate(w.scheme)},
 		opts...)
 }

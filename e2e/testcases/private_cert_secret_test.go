@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
@@ -67,11 +68,11 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	var err error
 
 	// verify the deployment doesn't have the key yet
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.MustMergePatch(rootSync, syncURLHTTPSPatch(rootSyncHTTPS))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncHTTPS))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS")
 	// RepoSync should fail without caCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.MustMergePatch(rootSync, caCertSecretPatch(""))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -143,7 +144,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncSSHURL))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync unset caCertSecret")
 	// RepoSync should fail without caCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -185,11 +186,11 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	var err error
 
 	// verify the deployment doesn't have the key yet
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -204,7 +205,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.MustMergePatch(rootSync, syncURLHTTPSPatch(rootSyncHTTPS))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncHTTPS))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -214,7 +215,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync use HTTPS")
 	// RepoSync should fail without caCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -240,7 +241,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -255,7 +256,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.MustMergePatch(rootSync, caCertSecretPatch(""))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -266,7 +267,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncSSHURL))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", rootSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -277,7 +278,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync unset caCertSecret")
 	// RepoSync should fail without caCertSecret
 	nt.WaitForRepoSyncSourceError(backendNamespace, configsync.RepoSyncName, status.SourceErrorCode, "server certificate verification failed")
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -292,7 +293,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -308,11 +309,11 @@ func TestCACertSecretWatch(t *testing.T) {
 	var err error
 
 	// verify the deployment doesn't have the key yet
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -332,7 +333,7 @@ func TestCACertSecretWatch(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -348,8 +349,8 @@ func TestCACertSecretWatch(t *testing.T) {
 	nt.MustMergePatch(cmsSecret, secretDataPatch("foo", "bar"))
 	// Check that watch triggered resync of the c-m-s secret
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []nomostest.Predicate{
-			nomostest.SecretMissingKey("foo"),
+		nt.Watcher.WatchObject(kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []testpredicates.Predicate{
+			testpredicates.SecretMissingKey("foo"),
 		}))
 	// Modify the secret in RepoSync namespace
 	rsSecret := &corev1.Secret{}
@@ -360,8 +361,8 @@ func TestCACertSecretWatch(t *testing.T) {
 	nt.MustMergePatch(rsSecret, secretDataPatch("baz", "bat"))
 	// Check that the watch triggered upsert to c-m-s secret
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []nomostest.Predicate{
-			nomostest.SecretHasKey("baz", "bat"),
+		nt.Watcher.WatchObject(kinds.Secret(), cmsSecretName, v1.NSConfigManagementSystem, []testpredicates.Predicate{
+			testpredicates.SecretHasKey("baz", "bat"),
 		}))
 	// Unset caCertSecret for repoSyncBackend and use SSH
 	repoSyncSSHURL := nt.GitProvider.SyncURL(nt.NonRootRepos[nn].RemoteRepoName)
@@ -374,7 +375,7 @@ func TestCACertSecretWatch(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, nomostest.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
+	err = nt.Validate(reconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, "GIT_SYNC_REPO", repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -475,14 +476,14 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 func hasV1Subjects(subjects ...string) func(o client.Object) error {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		r, ok := o.(*rbacv1.RoleBinding)
 		if !ok {
-			return nomostest.WrongTypeErr(o, r)
+			return testpredicates.WrongTypeErr(o, r)
 		}
 		if len(r.Subjects) != len(subjects) {
-			return errors.Wrapf(nomostest.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
+			return errors.Wrapf(testpredicates.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
 		}
 
 		found := make(map[string]bool)
@@ -491,7 +492,7 @@ func hasV1Subjects(subjects ...string) func(o client.Object) error {
 		}
 		for _, name := range subjects {
 			if !found[name] {
-				return errors.Wrapf(nomostest.ErrFailedPredicate, "missing subject %q", name)
+				return errors.Wrapf(testpredicates.ErrFailedPredicate, "missing subject %q", name)
 			}
 		}
 
@@ -502,14 +503,14 @@ func hasV1Subjects(subjects ...string) func(o client.Object) error {
 func hasV1Beta1Subjects(subjects ...string) func(o client.Object) error {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		r, ok := o.(*rbacv1beta1.RoleBinding)
 		if !ok {
-			return nomostest.WrongTypeErr(o, r)
+			return testpredicates.WrongTypeErr(o, r)
 		}
 		if len(r.Subjects) != len(subjects) {
-			return errors.Wrapf(nomostest.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
+			return errors.Wrapf(testpredicates.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
 		}
 
 		found := make(map[string]bool)
@@ -518,7 +519,7 @@ func hasV1Beta1Subjects(subjects ...string) func(o client.Object) error {
 		}
 		for _, name := range subjects {
 			if !found[name] {
-				return errors.Wrapf(nomostest.ErrFailedPredicate, "missing subject %q", name)
+				return errors.Wrapf(testpredicates.ErrFailedPredicate, "missing subject %q", name)
 			}
 		}
 

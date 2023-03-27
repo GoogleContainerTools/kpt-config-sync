@@ -21,6 +21,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +31,7 @@ import (
 //
 // Validates the object against each of the passed Predicates, returning error
 // if any Predicate fails.
-func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Predicate) error {
+func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...testpredicates.Predicate) error {
 	err := nt.KubeClient.Get(name, namespace, o)
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...Pr
 func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 	err := nt.KubeClient.Get(name, namespace, o)
 	if err == nil {
-		gvk, err := kinds.Lookup(o, nt.scheme)
+		gvk, err := kinds.Lookup(o, nt.Scheme)
 		if err != nil {
 			return errors.Wrapf(err, "failed to lookup kind of %T", o)
 		}
@@ -73,7 +74,7 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object) error {
 	err := nt.KubeClient.Get(name, namespace, o)
 	if err == nil {
-		gvk, err := kinds.Lookup(o, nt.scheme)
+		gvk, err := kinds.Lookup(o, nt.Scheme)
 		if err != nil {
 			return errors.Wrapf(err, "failed to lookup kind of %T", o)
 		}
@@ -95,17 +96,17 @@ func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object)
 //
 // predicates are functions that return an error if the object is invalid.
 func (nt *NT) ValidateSyncObject(gvk schema.GroupVersionKind, name, namespace string,
-	predicates ...Predicate) error {
-	rObj, err := nt.scheme.New(gvk)
+	predicates ...testpredicates.Predicate) error {
+	rObj, err := nt.Scheme.New(gvk)
 	if err != nil {
-		return fmt.Errorf("%w: got unrecognized GVK %v", ErrWrongType, gvk)
+		return fmt.Errorf("%w: got unrecognized GVK %v", testpredicates.ErrWrongType, gvk)
 	}
 	cObj, ok := rObj.(client.Object)
 	if !ok {
 		// This means the GVK corresponded to a type registered in the Scheme
 		// which is not a valid Kubernetes object. We expect the only way this
 		// can happen is if gvk is for a List type, like NamespaceList.
-		return errors.Wrapf(WrongTypeErr(rObj, client.Object(nil)),
+		return errors.Wrapf(testpredicates.WrongTypeErr(rObj, client.Object(nil)),
 			"trying to wait for List type to sync: %T", cObj)
 	}
 	return nt.Validate(name, namespace, cObj, predicates...)

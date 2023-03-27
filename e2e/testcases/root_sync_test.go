@@ -28,6 +28,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -58,7 +60,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	}
 
 	// Verify RootSync no longer present.
-	if err := nomostest.WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rs.GetName(), rs.GetNamespace()); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rs.GetName(), rs.GetNamespace()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -156,7 +158,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 
 	// Validate namespace 'shipping' created with the correct sourcePath annotation.
 	if err := nt.Validate(fooNS, "", fooNSObj,
-		nomostest.HasAnnotation(metadata.SourcePathAnnotationKey, fooNSPath)); err != nil {
+		testpredicates.HasAnnotation(metadata.SourcePathAnnotationKey, fooNSPath)); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -164,7 +166,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), auditNS, "")
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), auditNS, "")
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -357,12 +359,12 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 	// Deployment is successfully created.
 	// Log error if the Reconciling condition does not progress to False before the timeout
 	// expires.
-	err := nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, v1.NSConfigManagementSystem,
-		[]nomostest.Predicate{
+	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{
 			hasRootSyncReconcilingStatus(metav1.ConditionFalse),
 			hasRootSyncStalledStatus(metav1.ConditionFalse),
 		},
-		nomostest.WatchTimeout(15*time.Second))
+		testwatcher.WatchTimeout(15*time.Second))
 	if err != nil {
 		nt.T.Errorf("RootSync did not finish reconciling: %v", err)
 	}
@@ -385,10 +387,10 @@ func TestManageSelfRootSync(t *testing.T) {
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, validate.SelfReconcileErrorCode, "RootSync config-management-system/root-sync must not manage itself in its repo")
 }
 
-func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate {
+func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs := o.(*v1beta1.RootSync)
 		conditions := rs.Status.Conditions
@@ -401,10 +403,10 @@ func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) nomostest.Predicate 
 	}
 }
 
-func hasRootSyncStalledStatus(r metav1.ConditionStatus) nomostest.Predicate {
+func hasRootSyncStalledStatus(r metav1.ConditionStatus) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rs := o.(*v1beta1.RootSync)
 		conditions := rs.Status.Conditions

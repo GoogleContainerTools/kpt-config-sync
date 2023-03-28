@@ -65,7 +65,7 @@ func Clean(nt *NT) error {
 	}()
 
 	// Delete lingering APIService, as this will cause API discovery to fail
-	if err := deleteTestAPIServices(nt); err != nil {
+	if err := deleteAPIServices(nt); err != nil {
 		return err
 	}
 	// Delete remote repos that were created 24 hours ago on the Git provider.
@@ -601,8 +601,14 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 	return nil
 }
 
-func deleteTestAPIServices(nt *NT) error {
-	out, err := nt.Shell.Kubectl("delete", "apiservices", "-l", "testdata=true")
+func deleteAPIServices(nt *NT) error {
+	out, err := nt.Shell.Kubectl("delete", "apiservices", "-l", "testdata=true", "--ignore-not-found")
+	if err != nil {
+		nt.T.Logf("%v", out)
+		nt.T.Errorf("cleaning up apiservices: %v", err)
+	}
+
+	out, err = nt.Shell.Kubectl("delete", "apiservices", "v1.subresources.kubevirt.io", "v1alpha3.subresources.kubevirt.io", "--ignore-not-found")
 	if err != nil {
 		nt.T.Logf("%v", out)
 		nt.T.Errorf("cleaning up apiservices: %v", err)

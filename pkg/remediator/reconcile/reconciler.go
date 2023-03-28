@@ -88,16 +88,16 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 	err := r.remediate(ctx, id, objDiff)
 
 	// Record duration, even if there's an error
-	metrics.RecordRemediateDuration(ctx, metrics.StatusTagKey(err), id.WithVersion(""), start)
+	metrics.RecordRemediateDuration(ctx, metrics.StatusTagKey(err), id.Kind, start)
 
 	if err != nil {
 		switch err.Code() {
 		case syncerclient.ResourceConflictCode:
 			// Record conflict, if there was one
-			metrics.RecordResourceConflict(ctx, id.WithVersion(""), commit)
+			metrics.RecordResourceConflict(ctx, id.Kind, commit)
 		case status.FightErrorCode:
 			operation := objDiff.Operation(r.scope, r.syncName)
-			metrics.RecordResourceFight(ctx, string(operation), id.WithVersion(""))
+			metrics.RecordResourceFight(ctx, string(operation), id.Kind)
 			r.fightHandler.AddFightError(id, err)
 		}
 		return err

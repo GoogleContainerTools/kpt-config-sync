@@ -21,7 +21,6 @@ import (
 
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -38,10 +37,10 @@ func record(ctx context.Context, ms ...stats.Measurement) {
 }
 
 // RecordAPICallDuration produces a measurement for the APICallDuration view.
-func RecordAPICallDuration(ctx context.Context, operation, status string, gvk schema.GroupVersionKind, startTime time.Time) {
+func RecordAPICallDuration(ctx context.Context, operation, status, kind string, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyOperation, operation),
-		tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, kind),
 		tag.Upsert(KeyStatus, status))
 	measurement := APICallDuration.M(time.Since(startTime).Seconds())
 	record(tagCtx, measurement)
@@ -111,12 +110,12 @@ func RecordDeclaredResources(ctx context.Context, commit string, numResources in
 }
 
 // RecordApplyOperation produces a measurement for the ApplyOperations view.
-func RecordApplyOperation(ctx context.Context, controller, operation, status string, gvk schema.GroupVersionKind) {
+func RecordApplyOperation(ctx context.Context, controller, operation, status, kind string) {
 	tagCtx, _ := tag.New(ctx,
 		//tag.Upsert(KeyName, GetResourceLabels()),
 		tag.Upsert(KeyOperation, operation),
 		tag.Upsert(KeyController, controller),
-		tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, kind),
 		tag.Upsert(KeyStatus, status))
 	measurement := ApplyOperations.M(1)
 	record(tagCtx, measurement)
@@ -139,31 +138,31 @@ func RecordApplyDuration(ctx context.Context, status, commit string, startTime t
 }
 
 // RecordResourceFight produces measurements for the ResourceFights view.
-func RecordResourceFight(ctx context.Context, _ string, _ schema.GroupVersionKind) {
+func RecordResourceFight(ctx context.Context, _, _ string) {
 	//tagCtx, _ := tag.New(ctx,
 	//tag.Upsert(KeyName, GetResourceLabels()),
 	//tag.Upsert(KeyOperation, operation),
-	//tag.Upsert(KeyType, gvk.Kind),
+	//tag.Upsert(KeyType, kind),
 	//)
 	measurement := ResourceFights.M(1)
 	record(ctx, measurement)
 }
 
 // RecordRemediateDuration produces measurements for the RemediateDuration view.
-func RecordRemediateDuration(ctx context.Context, status string, gvk schema.GroupVersionKind, startTime time.Time) {
+func RecordRemediateDuration(ctx context.Context, status, kind string, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx,
 		tag.Upsert(KeyStatus, status),
-		tag.Upsert(KeyType, gvk.Kind),
+		tag.Upsert(KeyType, kind),
 	)
 	measurement := RemediateDuration.M(time.Since(startTime).Seconds())
 	record(tagCtx, measurement)
 }
 
 // RecordResourceConflict produces measurements for the ResourceConflicts view.
-func RecordResourceConflict(ctx context.Context, _ schema.GroupVersionKind, commit string) {
+func RecordResourceConflict(ctx context.Context, _, commit string) {
 	tagCtx, _ := tag.New(ctx,
 		// tag.Upsert(KeyName, GetResourceLabels()),
-		// tag.Upsert(KeyType, gvk.Kind),
+		// tag.Upsert(KeyType, kind),
 		tag.Upsert(KeyCommit, commit),
 	)
 	measurement := ResourceConflicts.M(1)

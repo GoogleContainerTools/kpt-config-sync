@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -143,7 +144,7 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// 	nt.T.Fatal(err)
 	// }
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace, []nomostest.Predicate{
+		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace, []testpredicates.Predicate{
 			resourceQuotaHasHardPods(nt, testPodsQuota),
 		}))
 
@@ -160,7 +161,7 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// 	nt.T.Fatal(err)
 	// }
 	require.NoError(nt.T,
-		nomostest.WatchObject(nt, kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace, []nomostest.Predicate{
+		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace, []testpredicates.Predicate{
 			resourceQuotaHasHardPods(nt, prodPodsQuota),
 		}))
 
@@ -226,7 +227,7 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -253,7 +254,7 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -319,7 +320,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForNotFound(nt, kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -350,10 +351,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	// if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForNotFound(nt, kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -399,7 +400,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForNotFound(nt, kinds.Namespace(), backendNamespace, ""); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.Namespace(), backendNamespace, ""); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -429,10 +430,10 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -738,7 +739,7 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
 	// 	nt.T.Fatal(err)
 	// }
-	if err := nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -905,7 +906,7 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -960,7 +961,7 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -1023,14 +1024,14 @@ func clusterNameConfigMapName(nt *nomostest.NT) string {
 }
 
 // configMapHasClusterName validates if the config map has the expected cluster name in `.data.CLUSTER_NAME`.
-func configMapHasClusterName(clusterName string) nomostest.Predicate {
+func configMapHasClusterName(clusterName string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		cm, ok := o.(*corev1.ConfigMap)
 		if !ok {
-			return nomostest.WrongTypeErr(cm, &corev1.ConfigMap{})
+			return testpredicates.WrongTypeErr(cm, &corev1.ConfigMap{})
 		}
 		actual := cm.Data[reconcilermanager.ClusterNameKey]
 		if clusterName != actual {
@@ -1041,10 +1042,10 @@ func configMapHasClusterName(clusterName string) nomostest.Predicate {
 }
 
 // resourceQuotaHasHardPods validates if the resource quota has the expected hard pods in `.spec.hard.pods`.
-func resourceQuotaHasHardPods(nt *nomostest.NT, pods string) nomostest.Predicate {
+func resourceQuotaHasHardPods(nt *nomostest.NT, pods string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		rObj, err := kinds.ToTypedObject(o, nt.KubeClient.Client.Scheme())
 		if err != nil {
@@ -1052,7 +1053,7 @@ func resourceQuotaHasHardPods(nt *nomostest.NT, pods string) nomostest.Predicate
 		}
 		rq, ok := rObj.(*corev1.ResourceQuota)
 		if !ok {
-			return nomostest.WrongTypeErr(rq, &corev1.ResourceQuota{})
+			return testpredicates.WrongTypeErr(rq, &corev1.ResourceQuota{})
 		}
 		actual := rq.Spec.Hard.Pods().String()
 		if pods != actual {

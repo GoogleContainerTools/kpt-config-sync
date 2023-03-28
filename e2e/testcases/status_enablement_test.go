@@ -23,6 +23,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -55,13 +57,13 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nomostest.WatchObject(nt, kinds.ResourceGroup(),
+	err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
-		[]nomostest.Predicate{
+		[]testpredicates.Predicate{
 			resourceGroupHasNoStatus,
-			nomostest.HasLabel(common.InventoryLabel, id),
+			testpredicates.HasLabel(common.InventoryLabel, id),
 		},
-		nomostest.WatchTimeout(120*time.Second))
+		testwatcher.WatchTimeout(120*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -72,13 +74,13 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nomostest.WatchObject(nt, kinds.ResourceGroup(),
+	err = nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
-		[]nomostest.Predicate{
+		[]testpredicates.Predicate{
 			resourceGroupHasStatus,
-			nomostest.HasLabel(common.InventoryLabel, id),
+			testpredicates.HasLabel(common.InventoryLabel, id),
 		},
-		nomostest.WatchTimeout(120*time.Second))
+		testwatcher.WatchTimeout(120*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -86,11 +88,11 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 
 func resourceGroupHasNoStatus(obj client.Object) error {
 	if obj == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
 	if !ok {
-		return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
+		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 	}
 	// We can't check that the status field is missing, because the
 	// ResourceGroup object doesn't use a pointer for status.
@@ -104,11 +106,11 @@ func resourceGroupHasNoStatus(obj client.Object) error {
 
 func resourceGroupHasStatus(obj client.Object) error {
 	if obj == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
 	if !ok {
-		return nomostest.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
+		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 	}
 	// When status is enabled, the resource statuses are computed and populated.
 	if len(rg.Status.ResourceStatuses) == 0 {

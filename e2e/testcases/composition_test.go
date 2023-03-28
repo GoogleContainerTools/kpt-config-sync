@@ -33,6 +33,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -265,14 +267,14 @@ func TestComposition(t *testing.T) {
 	synedObjs := make(map[gvknn]*unstructured.Unstructured, len(managedObjs))
 
 	for id, mgr := range managedObjs {
-		var predicates []nomostest.Predicate
-		predicates = append(predicates, nomostest.StatusEquals(nt, status.CurrentStatus))
+		var predicates []testpredicates.Predicate
+		predicates = append(predicates, testpredicates.StatusEquals(nt.Scheme, status.CurrentStatus))
 		if mgr == (manager{}) {
 			nt.T.Logf("Ensure %q exists, is reconciled, and is not managed", id)
-			predicates = append(predicates, nomostest.IsNotManaged(nt))
+			predicates = append(predicates, testpredicates.IsNotManaged(nt.Scheme))
 		} else {
 			nt.T.Logf("Ensure %q exists, is reconciled, and is managed by %q", id, mgr)
-			predicates = append(predicates, nomostest.IsManagedBy(nt, mgr.Scope, mgr.Name))
+			predicates = append(predicates, testpredicates.IsManagedBy(nt.Scheme, mgr.Scope, mgr.Name))
 		}
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(id.GroupVersionKind)
@@ -293,8 +295,8 @@ func TestComposition(t *testing.T) {
 		synedObj := synedObjs[id]
 		tg.Go(func() error {
 			// Stop early if the RV changes. Otherwise wait until timeout.
-			rvne := nomostest.ResourceVersionNotEquals(nt, synedObj.GetResourceVersion())
-			return nomostest.WatchObject(nt, idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace, []nomostest.Predicate{
+			rvne := testpredicates.ResourceVersionNotEquals(nt.Scheme, synedObj.GetResourceVersion())
+			return nt.Watcher.WatchObject(idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace, []testpredicates.Predicate{
 				func(obj client.Object) error {
 					if err := ctx.Err(); err != nil {
 						return err // cancelled
@@ -306,21 +308,21 @@ func TestComposition(t *testing.T) {
 					}
 					return nil
 				},
-			}, nomostest.WatchTimeout(1*time.Minute))
+			}, testwatcher.WatchTimeout(1*time.Minute))
 		})
 	}
 	if err := tg.Wait(); err != nil {
 		if me, ok := err.(multiErr); ok {
 			for _, err := range me.Errors() {
 				// Timeout or Cancel expected. Otherwise it probably means the RV changed.
-				var timeoutErr *nomostest.ErrWatchTimeout
+				var timeoutErr *testwatcher.ErrWatchTimeout
 				if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
 					nt.T.Fatal(err)
 				}
 			}
 		} else {
 			// Timeout or Cancel expected. Otherwise it probably means the RV changed.
-			var timeoutErr *nomostest.ErrWatchTimeout
+			var timeoutErr *testwatcher.ErrWatchTimeout
 			if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
 				nt.T.Fatal(err)
 			}
@@ -333,8 +335,8 @@ func TestComposition(t *testing.T) {
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(id.GroupVersionKind)
 		err := nt.Validate(id.Name, id.Namespace, obj,
-			nomostest.StatusEquals(nt, status.CurrentStatus),
-			nomostest.ResourceVersionEquals(nt, synedObj.GetResourceVersion()))
+			testpredicates.StatusEquals(nt.Scheme, status.CurrentStatus),
+			testpredicates.ResourceVersionEquals(nt.Scheme, synedObj.GetResourceVersion()))
 		if err != nil {
 			// Error, not Fatal, so we can see all the diffs when it fails.
 			nt.T.Error(err)
@@ -422,7 +424,7 @@ func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 		gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
 		require.NoError(nt.T, err)
 		tg.Go(func() error {
-			return nomostest.WatchForCurrentStatus(nt, gvk, nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForCurrentStatus(gvk, nn.Name, nn.Namespace)
 		})
 	}
 	err := tg.Wait()

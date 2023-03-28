@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -42,9 +43,9 @@ func WaitForCRDs(nt *NT, crds []string) error {
 	for _, crd := range crds {
 		nn := types.NamespacedName{Name: crd}
 		tg.Go(func() error {
-			return WatchObject(nt, kinds.CustomResourceDefinitionV1(),
+			return nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(),
 				nn.Name, nn.Namespace,
-				[]Predicate{IsEstablished})
+				[]testpredicates.Predicate{IsEstablished})
 		})
 	}
 	return tg.Wait()
@@ -56,7 +57,7 @@ func WaitForCRDsNotFound(nt *NT, crds []string) error {
 	for _, crd := range crds {
 		nn := types.NamespacedName{Name: crd}
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.CustomResourceDefinitionV1(),
+			return nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(),
 				nn.Name, nn.Namespace)
 		})
 	}
@@ -68,11 +69,11 @@ func WaitForCRDsNotFound(nt *NT, crds []string) error {
 // https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition
 func IsEstablished(o client.Object) error {
 	if o == nil {
-		return ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	crd, ok := o.(*v1.CustomResourceDefinition)
 	if !ok {
-		return WrongTypeErr(o, crd)
+		return testpredicates.WrongTypeErr(o, crd)
 	}
 
 	for _, condition := range crd.Status.Conditions {

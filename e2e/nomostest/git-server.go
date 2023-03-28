@@ -63,7 +63,7 @@ func installGitServer(nt *NT) func() error {
 	}
 
 	return func() error {
-		return WatchForCurrentStatus(nt, kinds.Deployment(), testGitServer, testGitNamespace)
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testGitServer, testGitNamespace)
 	}
 }
 

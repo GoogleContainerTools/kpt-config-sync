@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"time"
 
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -28,9 +30,9 @@ import (
 // WaitForWebhookReadiness waits up to 3 minutes for the wehbook becomes ready.
 // If the webhook still is not ready after 3 minutes, the test would fail.
 func WaitForWebhookReadiness(nt *NT) {
-	err := WatchForCurrentStatus(nt, kinds.Deployment(),
+	err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 		configuration.ShortName, configmanagement.ControllerNamespace,
-		WatchTimeout(3*time.Minute))
+		testwatcher.WatchTimeout(3*time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -47,12 +49,12 @@ func StopWebhook(nt *NT) {
 			webhookGK, webhookName, metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled, err, out)
 	}
 
-	err = WatchObject(nt, kinds.ValidatingWebhookConfiguration(),
+	err = nt.Watcher.WatchObject(kinds.ValidatingWebhookConfiguration(),
 		webhookName, "",
-		[]Predicate{
-			HasAnnotation(metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled),
+		[]testpredicates.Predicate{
+			testpredicates.HasAnnotation(metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled),
 		},
-		WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -62,9 +64,9 @@ func StopWebhook(nt *NT) {
 		nt.T.Fatalf("got `kubectl delete %s %s` error %v %s, want return nil", webhookGK, webhookName, err, out)
 	}
 
-	err = WatchForNotFound(nt, kinds.ValidatingWebhookConfiguration(),
+	err = nt.Watcher.WatchForNotFound(kinds.ValidatingWebhookConfiguration(),
 		webhookName, "",
-		WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -22,6 +22,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
@@ -230,9 +232,9 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 }
 
 func validateDeploymentContainerHasEnvVar(nt *nomostest.NT, nn types.NamespacedName, container, key, value string) error {
-	return nomostest.WatchObject(nt, kinds.Deployment(), nn.Name, nn.Namespace,
-		[]nomostest.Predicate{
-			nomostest.DeploymentHasEnvVar(container, key, value),
+	return nt.Watcher.WatchObject(kinds.Deployment(), nn.Name, nn.Namespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentHasEnvVar(container, key, value),
 		},
-		nomostest.WatchTimeout(30*time.Second))
+		testwatcher.WatchTimeout(30*time.Second))
 }

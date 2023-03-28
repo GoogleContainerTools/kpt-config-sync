@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -50,7 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Clean removes all objects of types registered in the scheme, with the above
+// Clean removes all objects of types registered in the Scheme, with the above
 // caveats. It should be run before and after a test is run against any
 // non-ephemeral cluster.
 //
@@ -131,7 +132,7 @@ func Clean(nt *NT) error {
 // - Is cluster-scoped (namespace-scoped objects deleted by garbage collector)
 // - Is not a resource managed by Autopilot
 // - Is Listable (excludes some internal objects)
-// - Is a resource type registered with nt.scheme.
+// - Is a resource type registered with nt.Scheme.
 //
 // After deletion, the deleted objects are watched until they are Not Found.
 //
@@ -232,7 +233,7 @@ func deleteNamespacesAndWait(nt *NT, nsList []corev1.Namespace) error {
 }
 
 func filterMutableListTypes(nt *NT) map[schema.GroupVersionKind]reflect.Type {
-	allTypes := nt.scheme.AllKnownTypes()
+	allTypes := nt.Scheme.AllKnownTypes()
 	if nt.IsGKEAutopilot {
 		for _, t := range util.AutopilotManagedKinds {
 			delete(allTypes, t)
@@ -286,14 +287,14 @@ func deleteConfigSyncAndTestAnnotationsAndLabels(nt *NT, ns *corev1.Namespace) e
 	return nt.KubeClient.Update(ns)
 }
 
-func namespaceHasNoConfigSyncAnnotationsAndLabels() Predicate {
+func namespaceHasNoConfigSyncAnnotationsAndLabels() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		ns, ok := o.(*corev1.Namespace)
 		if !ok {
-			return WrongTypeErr(ns, &corev1.Namespace{})
+			return testpredicates.WrongTypeErr(ns, &corev1.Namespace{})
 		}
 		for k := range ns.Annotations {
 			if isConfigSyncAnnotation(k) {
@@ -467,7 +468,7 @@ func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructur
 
 func deleteObject(nt *NT, obj client.Object) error {
 	nn := client.ObjectKeyFromObject(obj)
-	gvk, err := kinds.Lookup(obj, nt.scheme)
+	gvk, err := kinds.Lookup(obj, nt.Scheme)
 	if err != nil {
 		return err
 	}
@@ -490,7 +491,7 @@ func deleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 	tg := taskgroup.New()
 	for _, obj := range objs {
 		nn := client.ObjectKeyFromObject(obj)
-		gvk, err := kinds.Lookup(obj, nt.scheme)
+		gvk, err := kinds.Lookup(obj, nt.Scheme)
 		if err != nil {
 			return err
 		}
@@ -509,7 +510,7 @@ func deleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 		}
 		tg.Go(func() error {
 			nt.T.Logf("[CLEANUP] Waiting for deletion of %s object %s ...", gvk.Kind, nn)
-			return WatchForNotFound(nt, gvk, nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(gvk, nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()
@@ -525,7 +526,7 @@ func isListable(kind string) bool {
 }
 
 // FailIfUnknown fails the test if the passed type is not declared in the passed
-// scheme.
+// Scheme.
 func FailIfUnknown(t testing.NTB, scheme *runtime.Scheme, o client.Object) {
 	t.Helper()
 

@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,7 +107,7 @@ func validateKCCResourceReady(nt *nomostest.NT, gvk schema.GroupVersionKind, nam
 
 func kccResourceReady(o client.Object) error {
 	if o == nil {
-		return nomostest.ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	u := o.(*unstructured.Unstructured)
 	conditions, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")

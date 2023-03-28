@@ -39,6 +39,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
@@ -193,7 +195,7 @@ func isPSPCluster() bool {
 }
 
 // convertToTypedObjects converts objects to their literal types. We can do this as
-// we should have all required types in the scheme anyway. This keeps us from
+// we should have all required types in the Scheme anyway. This keeps us from
 // having to do ugly Unstructured operations.
 func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error) {
 	result := make([]client.Object, len(objs))
@@ -205,7 +207,7 @@ func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error
 			result[i] = obj
 			continue
 		}
-		rObj, err := kinds.ToTypedObject(uObj, nt.scheme)
+		rObj, err := kinds.ToTypedObject(uObj, nt.Scheme)
 		if err != nil {
 			return nil, err
 		}
@@ -339,43 +341,43 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return WatchForCurrentStatus(nt, kinds.Deployment(),
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 			configmanagement.RGControllerName, configmanagement.RGControllerNamespace)
 	})
 	tg.Go(func() error {
-		return WatchForCurrentStatus(nt, kinds.Deployment(),
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 			reconcilermanager.ManagerName, configmanagement.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		predicates := []Predicate{StatusEquals(nt, kstatus.CurrentStatus)}
+		predicates := []testpredicates.Predicate{testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)}
 		// If testing on GKE, ensure that the otel-collector deployment has
 		// picked up the `otel-collector-googlecloud` configmap.
 		// This bumps the deployment generation.
 		if *e2e.TestCluster == e2e.GKE {
-			predicates = append(predicates, HasGenerationAtLeast(2))
+			predicates = append(predicates, testpredicates.HasGenerationAtLeast(2))
 		}
-		return WatchObject(nt, kinds.Deployment(),
+		return nt.Watcher.WatchObject(kinds.Deployment(),
 			ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, predicates)
 	})
 	tg.Go(func() error {
 		// The root-reconciler is created after the reconciler-manager is ready.
 		// So wait longer for it to come up.
-		return WatchForCurrentStatus(nt, kinds.Deployment(),
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 			DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-			WatchTimeout(nt.DefaultWaitTimeout*2))
+			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	if !*nt.WebhookDisabled {
 		// If disabled, we don't need to wait for the webhook to be ready.
 		tg.Go(func() error {
-			return WatchForCurrentStatus(nt, kinds.ValidatingWebhookConfiguration(),
+			return nt.Watcher.WatchForCurrentStatus(kinds.ValidatingWebhookConfiguration(),
 				"admission-webhook.configsync.gke.io", "")
 		})
 		tg.Go(func() error {
 			// The webhook takes a long time to come up, because of SSL cert
 			// injection. So wait longer for it to come up.
-			return WatchForCurrentStatus(nt, kinds.Deployment(),
+			return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 				webhookconfig.ShortName, configmanagement.ControllerNamespace,
-				WatchTimeout(nt.DefaultWaitTimeout*2))
+				testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 		})
 	}
 	if err := tg.Wait(); err != nil {
@@ -422,14 +424,14 @@ func validateMultiRepoPods(nt *NT) error {
 //	I0826 07:54:47.435992       1 logr.go:249] setup "msg"="starting manager"
 //	E0826 07:55:17.436921       1 logr.go:265]  "msg"="Failed to get API Group-Resources" "error"="Get \"https://10.96.0.1:443/api?timeout=32s\": dial tcp 10.96.0.1:443: i/o timeout"
 //	E0826 07:55:17.436945       1 logr.go:265] setup "msg"="starting manager" "error"="Get \"https://10.96.0.1:443/api?timeout=32s\": dial tcp 10.96.0.1:443: i/o timeout"
-func noOOMKilledContainer(nt *NT) Predicate {
+func noOOMKilledContainer(nt *NT) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		pod, ok := o.(*corev1.Pod)
 		if !ok {
-			return WrongTypeErr(o, pod)
+			return testpredicates.WrongTypeErr(o, pod)
 		}
 
 		for _, cs := range pod.Status.ContainerStatuses {
@@ -450,7 +452,7 @@ func noOOMKilledContainer(nt *NT) Predicate {
 					nt.T.Logf("failed to run %q: %v\n%s", cmd, err, out)
 				}
 				return fmt.Errorf("%w for pod/%s in namespace %q, container %q terminated with exit code %d and reason %q\n\n%s\n\n%s",
-					ErrFailedPredicate, pod.Name, pod.Namespace, cs.Name, terminated.ExitCode, terminated.Reason, string(jsn), fmt.Sprintf("%s\n%s", cmd, out))
+					testpredicates.ErrFailedPredicate, pod.Name, pod.Namespace, cs.Name, terminated.ExitCode, terminated.Reason, string(jsn), fmt.Sprintf("%s\n%s", cmd, out))
 			}
 		}
 		return nil
@@ -533,7 +535,7 @@ func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
 // setReconcilerDebugMode ensures the Reconciler deployments are run in debug mode.
 func setReconcilerDebugMode(obj client.Object) error {
 	if obj == nil {
-		return ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	if !IsReconcilerManagerConfigMap(obj) {
 		return nil
@@ -584,7 +586,7 @@ func setReconcilerDebugMode(obj client.Object) error {
 // periods to override the default.
 func setPollingPeriods(obj client.Object) error {
 	if obj == nil {
-		return ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	if !IsReconcilerManagerConfigMap(obj) {
 		return nil
@@ -604,7 +606,7 @@ func setPollingPeriods(obj client.Object) error {
 // to add pod annotations to enable metrics scraping.
 func setOtelCollectorPrometheusAnnotations(obj client.Object) error {
 	if obj == nil {
-		return ErrObjectNotFound
+		return testpredicates.ErrObjectNotFound
 	}
 	if !isOtelCollectorDeployment(obj) {
 		return nil
@@ -988,7 +990,7 @@ func SetRepoSyncDependencies(nt *NT, rs client.Object) error {
 	if nt.Control != ntopts.CentralControl {
 		return nil
 	}
-	gvk, err := kinds.Lookup(rs, nt.scheme)
+	gvk, err := kinds.Lookup(rs, nt.Scheme)
 	if err != nil {
 		return err
 	}

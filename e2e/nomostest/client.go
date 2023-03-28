@@ -47,7 +47,7 @@ func newTestClient(nt *NT) *testkubeclient.KubeClient {
 	kubeClient, err := client.NewWithWatch(nt.Config, client.Options{
 		// The Scheme is client-side, but this automatically fetches the RestMapper
 		// from the cluster.
-		Scheme: nt.scheme,
+		Scheme: nt.Scheme,
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -60,7 +60,7 @@ func newTestClient(nt *NT) *testkubeclient.KubeClient {
 	}
 }
 
-// newScheme creates a new scheme to use to map Go types to types on a
+// newScheme creates a new Scheme to use to map Go types to types on a
 // Kubernetes cluster.
 func newScheme(t testing.NTB) *runtime.Scheme {
 	t.Helper()

@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -62,9 +63,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}
 
 	err = nt.Validate("shipping", "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -89,9 +90,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Ensure we kept the undeclared Namespace that had the "deletion: prevent" annotation.
 	err = nt.Validate("shipping", "", &corev1.Namespace{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.NoConfigSyncMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -157,9 +158,9 @@ func TestPreventDeletionRole(t *testing.T) {
 
 	// ensure that the Role is created with the preventDeletion annotation
 	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -183,9 +184,9 @@ func TestPreventDeletionRole(t *testing.T) {
 	}
 
 	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.NoConfigSyncMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -214,9 +215,9 @@ func TestPreventDeletionRole(t *testing.T) {
 	}
 
 	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
-		nomostest.NotPendingDeletion,
-		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -256,9 +257,9 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -271,9 +272,9 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
-		nomostest.NotPendingDeletion,
-		nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		nomostest.NoConfigSyncMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.NoConfigSyncMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -287,9 +288,9 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
-		nomostest.NotPendingDeletion,
-		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -336,18 +337,18 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// Verify that the special namespaces have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range specialNamespaces {
 		if err := nt.Validate(ns, "", &corev1.Namespace{},
-			nomostest.NotPendingDeletion,
-			nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-			nomostest.HasAllNomosMetadata()); err != nil {
+			testpredicates.NotPendingDeletion,
+			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+			testpredicates.HasAllNomosMetadata()); err != nil {
 			nt.T.Fatal(err)
 		}
 	}
 
 	// Verify that the bookstore namespace does not have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	err := nt.Validate(bookstoreNS.Name, bookstoreNS.Namespace, &corev1.Namespace{},
-		nomostest.NotPendingDeletion,
-		nomostest.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		nomostest.HasAllNomosMetadata())
+		testpredicates.NotPendingDeletion,
+		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
+		testpredicates.HasAllNomosMetadata())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -364,9 +365,9 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// Verify that the special namespaces still exist and have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range specialNamespaces {
 		if err := nt.Validate(ns, "", &corev1.Namespace{},
-			nomostest.NotPendingDeletion,
-			nomostest.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-			nomostest.NoConfigSyncMetadata()); err != nil {
+			testpredicates.NotPendingDeletion,
+			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+			testpredicates.NoConfigSyncMetadata()); err != nil {
 			nt.T.Fatal(err)
 		}
 	}
@@ -375,7 +376,7 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its  finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nomostest.WatchForNotFound(nt, kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

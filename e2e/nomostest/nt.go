@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
@@ -90,6 +91,9 @@ type NT struct {
 
 	// KubeClient is a test wrapper used to make Kubernetes calls.
 	KubeClient *testkubeclient.KubeClient
+
+	// Watcher is a test helper used to make Watch calls
+	Watcher *testwatcher.Watcher
 
 	// WatchClient is the underlying client used to talk to the Kubernetes
 	// cluster, when performing watches.
@@ -153,8 +157,8 @@ type NT struct {
 	// kubeconfigPath is the path to the kubeconfig file for the kind cluster
 	kubeconfigPath string
 
-	// scheme is the Scheme for the test suite that maps from structs to GVKs.
-	scheme *runtime.Scheme
+	// Scheme is the Scheme for the test suite that maps from structs to GVKs.
+	Scheme *runtime.Scheme
 
 	// otelCollectorPort is the local port that forwards to the otel-collector.
 	otelCollectorPort int
@@ -386,6 +390,7 @@ func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 func (nt *NT) RenewClient() {
 	nt.T.Helper()
 	nt.KubeClient = newTestClient(nt)
+	nt.Watcher = testwatcher.NewWatcher(nt.Context, nt.Logger, nt.KubeClient, nt.Config, nt.Scheme, &nt.DefaultWaitTimeout)
 }
 
 // MustKubectl fails the test immediately if the kubectl command fails. On

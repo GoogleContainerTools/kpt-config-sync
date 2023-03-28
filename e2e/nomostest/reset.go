@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -164,8 +165,8 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 			if err := nt.KubeClient.Update(rs); err != nil {
 				return err
 			}
-			if err := WatchObject(nt, kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
-				HasFinalizer(metadata.ReconcilerFinalizer),
+			if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{
+				testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
 			}); err != nil {
 				return err
 			}
@@ -193,7 +194,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		rsNN := client.ObjectKeyFromObject(rs)
 		nt.T.Logf("[RESET] Waiting for deletion of RootSync %s ...", rsNN)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RootSyncV1Beta1(), rsNN.Name, rsNN.Namespace)
+			return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rsNN.Name, rsNN.Namespace)
 		})
 	}
 	return tg.Wait()
@@ -239,8 +240,8 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 			if err := nt.KubeClient.Update(rs); err != nil {
 				return err
 			}
-			if err := WatchObject(nt, kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []Predicate{
-				HasFinalizer(metadata.ReconcilerFinalizer),
+			if err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{
+				testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
 			}); err != nil {
 				return err
 			}
@@ -274,7 +275,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		nn := client.ObjectKeyFromObject(obj)
 		nt.T.Logf("[RESET] Waiting for deletion of RepoSync %s ...", nn)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace)
 		})
 	}
 	if err := tg.Wait(); err != nil {
@@ -349,7 +350,7 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 		nn := client.ObjectKeyFromObject(obj)
 		nt.T.Logf("[RESET] Waiting for deletion of Namespace %s ...", nn)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, kinds.Namespace(), nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(kinds.Namespace(), nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()
@@ -386,13 +387,13 @@ func batchDeleteAndWait(nt *NT, objs ...client.Object) error {
 	}
 	tg := taskgroup.New()
 	for _, obj := range objs {
-		gvk, err := kinds.Lookup(obj, nt.scheme)
+		gvk, err := kinds.Lookup(obj, nt.Scheme)
 		if err != nil {
 			return err
 		}
 		nn := client.ObjectKeyFromObject(obj)
 		tg.Go(func() error {
-			return WatchForNotFound(nt, gvk, nn.Name, nn.Namespace)
+			return nt.Watcher.WatchForNotFound(gvk, nn.Name, nn.Namespace)
 		})
 	}
 	return tg.Wait()

@@ -36,6 +36,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -331,7 +333,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -346,7 +348,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.T.Logf("Ensure the Role is updated to the one in the Namespace repo %s", repoSyncNN)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(namespacePodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -391,7 +393,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	err := nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(nsRoleObj.Rules),
-		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -460,7 +462,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -475,7 +477,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -519,7 +521,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	role := &rbacv1.Role{}
 	err := nt.Validate("pods", testNs, role,
 		roleHasRules(rootPodRole().Rules),
-		nomostest.IsManagedBy(nt, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -539,15 +541,15 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// So there's no need to report the error to the first reconciler.
 	// So the first reconciler apply succeeds and no further error is expected.
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace)
+		return nt.Watcher.WatchForCurrentStatus(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace)
 	})
 	// The second reconciler's applier will report the conflict, when the update
 	// is rejected by the webhook.
 	// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(applier.ApplierErrorCode, "denied the request"),
+		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+			[]testpredicates.Predicate{
+				testpredicates.RootSyncHasSyncError(applier.ApplierErrorCode, "denied the request"),
 			})
 	})
 	if err := tg.Wait(); err != nil {
@@ -556,16 +558,16 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 
 	nt.T.Logf("The Role resource version should not be changed")
 	if err := nt.Validate("pods", testNs, &rbacv1.Role{},
-		nomostest.ResourceVersionEquals(nt, roleResourceVersion)); err != nil {
+		testpredicates.ResourceVersionEquals(nt.Scheme, roleResourceVersion)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Stop the admission webhook, the remediator should report the conflicts")
 	nomostest.StopWebhook(nt)
 	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
-	err = nomostest.WatchObject(nt, kinds.Role(), "pods", testNs,
-		[]nomostest.Predicate{nomostest.ResourceVersionNotEquals(nt, roleResourceVersion)},
-		nomostest.WatchTimeout(90*time.Second))
+	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
+		[]testpredicates.Predicate{testpredicates.ResourceVersionNotEquals(nt.Scheme, roleResourceVersion)},
+		testwatcher.WatchTimeout(90*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -580,16 +582,16 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	tg = taskgroup.New()
 	// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
+		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+			[]testpredicates.Predicate{
+				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
 			})
 	})
 	// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
 	tg.Go(func() error {
-		return nomostest.WatchObject(nt, kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
-			[]nomostest.Predicate{
-				nomostest.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
+		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
+			[]testpredicates.Predicate{
+				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
 			})
 	})
 	if err := tg.Wait(); err != nil {
@@ -606,12 +608,12 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role is managed by the other Root repo %s", rootSync2)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
 	// Therefore, we need to retry here to wait until the `root-test` Root repo recreates the pod role.
-	err = nomostest.WatchObject(nt, kinds.Role(), "pods", testNs,
-		[]nomostest.Predicate{
+	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
+		[]testpredicates.Predicate{
 			roleHasRules(rootPodRole().Rules),
-			nomostest.IsManagedBy(nt, declared.RootReconciler, rootSync2),
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rootSync2),
 		},
-		nomostest.WatchTimeout(90*time.Second))
+		testwatcher.WatchTimeout(90*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -639,7 +641,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.T.Logf("Ensure the Role is managed by Namespace Repo %s", repoSyncNN1)
 	err := nt.Validate("pods", testNs, role,
 		roleHasRules(roleObj.Rules),
-		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN1.Namespace), repoSyncNN1.Name))
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN1.Namespace), repoSyncNN1.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -685,7 +687,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	}
 	nt.T.Logf("The Role resource version should not be changed")
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		nomostest.ResourceVersionEquals(nt, roleResourceVersion))
+		testpredicates.ResourceVersionEquals(nt.Scheme, roleResourceVersion))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -727,7 +729,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.T.Logf("Ensure the Role is managed by the other Namespace repo %s", repoSyncNN2)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(roleObj.Rules),
-		nomostest.IsManagedBy(nt, declared.Scope(repoSyncNN2.Namespace), repoSyncNN2.Name))
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN2.Namespace), repoSyncNN2.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -871,14 +873,14 @@ func namespacePodRole() *rbacv1.Role {
 	return result
 }
 
-func roleHasRules(wantRules []rbacv1.PolicyRule) nomostest.Predicate {
+func roleHasRules(wantRules []rbacv1.PolicyRule) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		r, isRole := o.(*rbacv1.Role)
 		if !isRole {
-			return nomostest.WrongTypeErr(o, &rbacv1.Role{})
+			return testpredicates.WrongTypeErr(o, &rbacv1.Role{})
 		}
 
 		if diff := cmp.Diff(wantRules, r.Rules); diff != "" {

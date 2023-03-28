@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -37,13 +38,13 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/proxy")
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/proxy")
-		err := nomostest.WatchForNotFound(nt, kinds.Deployment(), "tinyproxy-deployment", "proxy-test")
+		err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "tinyproxy-deployment", "proxy-test")
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 	})
-	err := nomostest.WatchObject(nt, kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
-		[]nomostest.Predicate{hasReadyReplicas(1)})
+	err := nt.Watcher.WatchObject(kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
+		[]testpredicates.Predicate{hasReadyReplicas(1)})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -78,14 +79,14 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	}
 }
 
-func hasReadyReplicas(replicas int32) nomostest.Predicate {
+func hasReadyReplicas(replicas int32) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		deployment, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return nomostest.WrongTypeErr(deployment, &appsv1.Deployment{})
+			return testpredicates.WrongTypeErr(deployment, &appsv1.Deployment{})
 		}
 		actual := deployment.Status.ReadyReplicas
 		if replicas != actual {

@@ -103,7 +103,7 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "resilient", "")
+	err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "resilient", "")
 	if err != nil {
 		nt.T.Fatal("validate failed test resource to have status CURRENT")
 	}
@@ -126,22 +126,22 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 func validateStackdriverAdapterStatusCurrent(nt *nomostest.NT) error {
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.Service(), "custom-metrics-stackdriver-adapter", "custom-metrics")
+		return nt.Watcher.WatchForCurrentStatus(kinds.Service(), "custom-metrics-stackdriver-adapter", "custom-metrics")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.Deployment(), "custom-metrics-stackdriver-adapter", "custom-metrics")
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "custom-metrics-stackdriver-adapter", "custom-metrics")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.ClusterRole(), "external-metrics-reader", "")
+		return nt.Watcher.WatchForCurrentStatus(kinds.ClusterRole(), "external-metrics-reader", "")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.RoleBinding(), "custom-metrics-auth-reader", "custom-metrics")
+		return nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), "custom-metrics-auth-reader", "custom-metrics")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.ServiceAccount(), "custom-metrics-stackdriver-adapter", "custom-metrics")
+		return nt.Watcher.WatchForCurrentStatus(kinds.ServiceAccount(), "custom-metrics-stackdriver-adapter", "custom-metrics")
 	})
 	tg.Go(func() error {
-		return nomostest.WatchForCurrentStatus(nt, kinds.Namespace(), "custom-metrics", "")
+		return nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "custom-metrics", "")
 	})
 	return tg.Wait()
 }

@@ -67,7 +67,7 @@ spec:
 		nt.T.Fatal(err)
 	}
 
-	err = nomostest.WatchForNotFound(nt, kinds.Pod(), pod.GetName(), pod.GetNamespace())
+	err = nt.Watcher.WatchForNotFound(kinds.Pod(), pod.GetName(), pod.GetNamespace())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

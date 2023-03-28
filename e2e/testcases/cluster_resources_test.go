@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -39,14 +40,14 @@ func sortPolicyRules(l, r rbacv1.PolicyRule) bool {
 	return string(jsnL) < string(jsnR)
 }
 
-func clusterRoleHasRules(rules []rbacv1.PolicyRule) nomostest.Predicate {
+func clusterRoleHasRules(rules []rbacv1.PolicyRule) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		cr, ok := o.(*rbacv1.ClusterRole)
 		if !ok {
-			return nomostest.WrongTypeErr(cr, &rbacv1.ClusterRole{})
+			return testpredicates.WrongTypeErr(cr, &rbacv1.ClusterRole{})
 		}
 
 		// Ignore the order of the policy rules.
@@ -57,10 +58,10 @@ func clusterRoleHasRules(rules []rbacv1.PolicyRule) nomostest.Predicate {
 	}
 }
 
-func managerFieldsNonEmpty() nomostest.Predicate {
+func managerFieldsNonEmpty() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
-			return nomostest.ErrObjectNotFound
+			return testpredicates.ErrObjectNotFound
 		}
 		fields := o.GetManagedFields()
 		if len(fields) == 0 {
@@ -121,8 +122,8 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 
 	// Ensure the conflict is reverted.
-	err = nomostest.WatchObject(nt, kinds.ClusterRole(), crName, "",
-		[]nomostest.Predicate{clusterRoleHasRules(declaredRules)})
+	err = nt.Watcher.WatchObject(kinds.ClusterRole(), crName, "",
+		[]testpredicates.Predicate{clusterRoleHasRules(declaredRules)})
 	if err != nil {
 		nt.T.Error(err)
 	}

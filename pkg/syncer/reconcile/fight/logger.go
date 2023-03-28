@@ -58,7 +58,7 @@ func (l *logger) logFight(now time.Time, err status.ResourceError) bool {
 		return false
 	}
 
-	klog.Warning(err)
+	klog.Error(err)
 	l.lastLogged[id] = now
 	return true
 }

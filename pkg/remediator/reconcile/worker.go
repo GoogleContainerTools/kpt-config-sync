@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -40,10 +41,11 @@ type Worker struct {
 }
 
 // NewWorker returns a new Worker for the given queue and declared resources.
-func NewWorker(scope declared.Scope, syncName string, a syncerreconcile.Applier, q *queue.ObjectQueue, d *declared.Resources) *Worker {
+func NewWorker(scope declared.Scope, syncName string, a syncerreconcile.Applier,
+	q *queue.ObjectQueue, d *declared.Resources, fh fight.Handler) *Worker {
 	return &Worker{
 		objectQueue: q,
-		reconciler:  newReconciler(scope, syncName, a, d),
+		reconciler:  newReconciler(scope, syncName, a, d, fh),
 	}
 }
 

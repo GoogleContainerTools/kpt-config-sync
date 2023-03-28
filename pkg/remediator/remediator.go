@@ -22,12 +22,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/remediator/reconcile"
 	"kpt.dev/configsync/pkg/remediator/watch"
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 )
 
 // Remediator knows how to keep the state of a Kubernetes cluster in sync with
@@ -61,6 +63,8 @@ type Remediator struct {
 	// conflictErrs tracks all the management conflicts the remediator encounters,
 	// and report to RootSync|RepoSync status.
 	conflictErrs []status.ManagementConflictError
+
+	fightHandler fight.Handler
 }
 
 // Interface is a fake-able subset of the interface Remediator implements that
@@ -82,6 +86,8 @@ type Interface interface {
 	ManagementConflict() bool
 	// ConflictErrors returns the errors the remediator encounters.
 	ConflictErrors() []status.ManagementConflictError
+	// FightErrors returns the fight errors (KNV2005) the remediator encounters.
+	FightErrors() map[core.ID]status.Error
 }
 
 var _ Interface = &Remediator{}
@@ -94,13 +100,15 @@ var _ Interface = &Remediator{}
 func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncerreconcile.Applier, decls *declared.Resources, numWorkers int) (*Remediator, error) {
 	q := queue.New(string(scope))
 	workers := make([]*reconcile.Worker, numWorkers)
+	fightHandler := fight.NewHandler()
 	for i := 0; i < numWorkers; i++ {
-		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls)
+		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
 	}
 
 	remediator := &Remediator{
-		workers:     workers,
-		objectQueue: q,
+		workers:      workers,
+		objectQueue:  q,
+		fightHandler: fightHandler,
 	}
 
 	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil,
@@ -237,4 +245,9 @@ func (r *Remediator) removeConflictError(e status.ManagementConflictError) {
 		}
 	}
 	r.conflictErrs = newErrs[0:i]
+}
+
+// FightErrors implements Interface.
+func (r *Remediator) FightErrors() map[core.ID]status.Error {
+	return r.fightHandler.FightErrors()
 }

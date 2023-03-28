@@ -122,11 +122,14 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
 		return err
 	}
-	if c.fights.DetectFight(ctx, time.Now(), intendedState, "create") {
-		klog.Warningf("Fight detected on create of %s.", description(intendedState))
+	logErr, err := c.fights.DetectFight(time.Now(), intendedState)
+	if logErr {
+		klog.Error("Fight detected on create of %s.", description(intendedState))
 	}
-	klog.V(3).Infof("Created object %v", core.GKNN(intendedState))
-	return nil
+	if err == nil {
+		klog.V(3).Infof("Created object %v", core.GKNN(intendedState))
+	}
+	return err
 }
 
 // Update implements Applier.
@@ -146,14 +149,18 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 
 	updated := !isNoOpPatch(patch)
 	if updated {
-		if c.fights.DetectFight(ctx, time.Now(), intendedState, "update") {
+		logFight, err := c.fights.DetectFight(time.Now(), intendedState)
+		if logFight {
 			diff := cmp.Diff(currentState, intendedState)
-			klog.Warningf("Fight detected on update of %s with difference %s", description(intendedState), diff)
+			klog.Errorf("Fight detected on update of %s with difference %s", description(intendedState), diff)
 		}
-		klog.V(3).Infof("The object %v was updated with the patch %v", core.GKNN(currentState), string(patch))
-	} else {
-		klog.V(3).Infof("The object %v is up to date.", core.GKNN(currentState))
+		if err == nil {
+			klog.V(3).Infof("The object %v was updated with the patch %v", core.GKNN(currentState), string(patch))
+		}
+		return err
 	}
+
+	klog.V(3).Infof("The object %v is up to date.", core.GKNN(currentState))
 	return nil
 }
 
@@ -188,11 +195,14 @@ func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructur
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
 		return err
 	}
-	if c.fights.DetectFight(ctx, time.Now(), obj, "delete") {
-		klog.Warningf("Fight detected on delete of %s.", description(obj))
+	logFight, err := c.fights.DetectFight(time.Now(), obj)
+	if logFight {
+		klog.Errorf("Fight detected on delete of %s.", description(obj))
 	}
-	klog.V(3).Infof("Deleted object %v", core.GKNN(obj))
-	return nil
+	if err == nil {
+		klog.V(3).Infof("Deleted object %v", core.GKNN(obj))
+	}
+	return err
 }
 
 // create creates the resource with the declared-config annotation set.

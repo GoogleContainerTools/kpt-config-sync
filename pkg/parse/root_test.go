@@ -28,7 +28,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	discovery "k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -70,6 +70,10 @@ func (r *noOpRemediator) Pause() {}
 func (r *noOpRemediator) Resume() {}
 
 func (r *noOpRemediator) ConflictErrors() []status.ManagementConflictError {
+	return nil
+}
+
+func (r *noOpRemediator) FightErrors() map[core.ID]status.Error {
 	return nil
 }
 

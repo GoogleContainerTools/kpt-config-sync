@@ -24,6 +24,7 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/spyzhov/ajson v0.4.2
 	github.com/stretchr/testify v1.8.0
+	github.com/wk8/go-ordered-map v1.0.0
 	go.opencensus.io v0.23.0
 	go.uber.org/multierr v1.6.0
 	golang.org/x/net v0.4.0

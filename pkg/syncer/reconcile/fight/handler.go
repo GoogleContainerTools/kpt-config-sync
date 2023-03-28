@@ -17,6 +17,8 @@ package fight
 import (
 	"sync"
 
+	orderedmap "github.com/wk8/go-ordered-map"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -27,7 +29,7 @@ type Handler interface {
 	RemoveFightError(core.ID)
 
 	// FightErrors returns the fight errors (KNV2005) the remediator encounters.
-	FightErrors() map[core.ID]status.Error
+	FightErrors() []status.Error
 }
 
 // handler implements Handler.
@@ -36,7 +38,7 @@ type handler struct {
 	mux sync.Mutex
 	// fightErrs tracks all the controller fights (KNV2005) the remediator encounters,
 	// and report to RootSync|RepoSync status.
-	fightErrs map[core.ID]status.Error
+	fightErrs *orderedmap.OrderedMap
 }
 
 var _ Handler = &handler{}
@@ -44,7 +46,7 @@ var _ Handler = &handler{}
 // NewHandler instantiates a fight handler
 func NewHandler() Handler {
 	return &handler{
-		fightErrs: map[core.ID]status.Error{},
+		fightErrs: orderedmap.New(),
 	}
 }
 
@@ -52,24 +54,27 @@ func (h *handler) AddFightError(id core.ID, err status.Error) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	h.fightErrs[id] = err
+	h.fightErrs.Set(id, err)
 }
 
 func (h *handler) RemoveFightError(id core.ID) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	delete(h.fightErrs, id)
+	_, deleted := h.fightErrs.Delete(id)
+	if deleted {
+		klog.Infof("Fight error resolved for %s", id)
+	}
 }
 
-func (h *handler) FightErrors() map[core.ID]status.Error {
+func (h *handler) FightErrors() []status.Error {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
 	// Return a copy
-	fightErrs := map[core.ID]status.Error{}
-	for k, v := range h.fightErrs {
-		fightErrs[k] = v
+	var fightErrs []status.Error
+	for pair := h.fightErrs.Oldest(); pair != nil; pair = pair.Next() {
+		fightErrs = append(fightErrs, pair.Value.(status.Error))
 	}
 	return fightErrs
 }

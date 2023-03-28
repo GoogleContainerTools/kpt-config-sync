@@ -31,8 +31,8 @@ func (h *FightHandler) RemoveFightError(core.ID) {
 }
 
 // FightErrors is a fake implementation of the FightErrors of fight.Handler.
-func (h *FightHandler) FightErrors() map[core.ID]status.Error {
-	return map[core.ID]status.Error{}
+func (h *FightHandler) FightErrors() []status.Error {
+	return nil
 }
 
 var _ fight.Handler = &FightHandler{}

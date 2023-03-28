@@ -73,7 +73,7 @@ func (r *noOpRemediator) ConflictErrors() []status.ManagementConflictError {
 	return nil
 }
 
-func (r *noOpRemediator) FightErrors() map[core.ID]status.Error {
+func (r *noOpRemediator) FightErrors() []status.Error {
 	return nil
 }
 

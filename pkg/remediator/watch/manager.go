@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -52,11 +53,8 @@ type Manager struct {
 	// watcherMap maps GVKs to their associated watchers
 	watcherMap map[schema.GroupVersionKind]Runnable
 	// needsUpdate indicates if the Manager's watches need to be updated.
-	needsUpdate bool
-	// addConflictErrorFunc is a function that adds the conflict error detected by the remediator.
-	addConflictErrorFunc func(status.ManagementConflictError)
-	// removeConflictErrorFunc is a function that removes the conflict error detected by the remediator.
-	removeConflictErrorFunc func(status.ManagementConflictError)
+	needsUpdate     bool
+	conflictHandler conflict.Handler
 }
 
 // Options contains options for creating a watch manager.
@@ -79,9 +77,7 @@ func DefaultOptions(cfg *rest.Config) (*Options, error) {
 
 // NewManager starts a new watch manager
 func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
-	q *queue.ObjectQueue, decls *declared.Resources, options *Options,
-	addConflictErrorFunc func(status.ManagementConflictError),
-	removeConflictErrorFunc func(status.ManagementConflictError)) (*Manager, error) {
+	q *queue.ObjectQueue, decls *declared.Resources, options *Options, ch conflict.Handler) (*Manager, error) {
 	if options == nil {
 		var err error
 		options, err = DefaultOptions(cfg)
@@ -91,15 +87,14 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 	}
 
 	return &Manager{
-		scope:                   scope,
-		syncName:                syncName,
-		cfg:                     cfg,
-		resources:               decls,
-		watcherMap:              make(map[schema.GroupVersionKind]Runnable),
-		watcherFactory:          options.watcherFactory,
-		queue:                   q,
-		addConflictErrorFunc:    addConflictErrorFunc,
-		removeConflictErrorFunc: removeConflictErrorFunc,
+		scope:           scope,
+		syncName:        syncName,
+		cfg:             cfg,
+		resources:       decls,
+		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
+		watcherFactory:  options.watcherFactory,
+		queue:           q,
+		conflictHandler: ch,
 	}, nil
 }
 
@@ -193,14 +188,13 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		return nil
 	}
 	cfg := watcherConfig{
-		gvk:                     gvk,
-		config:                  m.cfg,
-		resources:               m.resources,
-		queue:                   m.queue,
-		scope:                   m.scope,
-		syncName:                m.syncName,
-		addConflictErrorFunc:    m.addConflictErrorFunc,
-		removeConflictErrorFunc: m.removeConflictErrorFunc,
+		gvk:             gvk,
+		config:          m.cfg,
+		resources:       m.resources,
+		queue:           m.queue,
+		scope:           m.scope,
+		syncName:        m.syncName,
+		conflictHandler: m.conflictHandler,
 	}
 	w, err := m.watcherFactory(cfg)
 	if err != nil {

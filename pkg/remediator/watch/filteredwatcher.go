@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/log"
@@ -65,7 +66,6 @@ type Runnable interface {
 	ManagementConflict() bool
 	SetManagementConflict(object client.Object, commit string)
 	ClearManagementConflict()
-	removeManagementConflictError(object client.Object)
 	removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind)
 }
 
@@ -94,13 +94,11 @@ type filteredWatcher struct {
 	errorTracker map[string]time.Time
 
 	// The following fields are guarded by the mutex.
-	mux                     sync.Mutex
-	base                    watch.Interface
-	stopped                 bool
-	managementConflict      bool
-	conflictErrMap          map[queue.GVKNN]status.ManagementConflictError
-	addConflictErrorFunc    func(status.ManagementConflictError)
-	removeConflictErrorFunc func(status.ManagementConflictError)
+	mux                sync.Mutex
+	base               watch.Interface
+	stopped            bool
+	managementConflict bool
+	conflictHandler    conflict.Handler
 }
 
 // filteredWatcher implements the Runnable interface.
@@ -109,17 +107,15 @@ var _ Runnable = &filteredWatcher{}
 // NewFiltered returns a new filtered watcher initialized with the given options.
 func NewFiltered(cfg watcherConfig) Runnable {
 	return &filteredWatcher{
-		gvk:                     cfg.gvk.String(),
-		startWatch:              cfg.startWatch,
-		resources:               cfg.resources,
-		queue:                   cfg.queue,
-		scope:                   cfg.scope,
-		syncName:                cfg.syncName,
-		base:                    watch.NewEmptyWatch(),
-		errorTracker:            make(map[string]time.Time),
-		conflictErrMap:          make(map[queue.GVKNN]status.ManagementConflictError),
-		addConflictErrorFunc:    cfg.addConflictErrorFunc,
-		removeConflictErrorFunc: cfg.removeConflictErrorFunc,
+		gvk:             cfg.gvk.String(),
+		startWatch:      cfg.startWatch,
+		resources:       cfg.resources,
+		queue:           cfg.queue,
+		scope:           cfg.scope,
+		syncName:        cfg.syncName,
+		base:            watch.NewEmptyWatch(),
+		errorTracker:    make(map[string]time.Time),
+		conflictHandler: cfg.conflictHandler,
 	}
 }
 
@@ -194,8 +190,7 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 	klog.Warningf("The remediator detects a management conflict for object %q between root reconcilers: %q and %q",
 		core.GKNN(object), newManager, manager)
 	gvknn := queue.GVKNNOf(object)
-	w.conflictErrMap[gvknn] = status.ManagementConflictErrorWrap(object, newManager)
-	w.addConflictErrorFunc(w.conflictErrMap[gvknn])
+	w.conflictHandler.AddConflictError(gvknn, status.ManagementConflictErrorWrap(object, newManager))
 	metrics.RecordResourceConflict(context.Background(), object.GetObjectKind().GroupVersionKind(), commit)
 }
 
@@ -205,25 +200,8 @@ func (w *filteredWatcher) ClearManagementConflict() {
 	w.mux.Unlock()
 }
 
-func (w *filteredWatcher) removeManagementConflictError(object client.Object) {
-	w.mux.Lock()
-	gvknn := queue.GVKNNOf(object)
-	if conflictError, found := w.conflictErrMap[gvknn]; found {
-		w.removeConflictErrorFunc(conflictError)
-		delete(w.conflictErrMap, gvknn)
-	}
-	w.mux.Unlock()
-}
-
 func (w *filteredWatcher) removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind) {
-	w.mux.Lock()
-	for gvknn, conflictError := range w.conflictErrMap {
-		if gvknn.GroupVersionKind() == gvk {
-			w.removeConflictErrorFunc(conflictError)
-			delete(w.conflictErrMap, gvknn)
-		}
-	}
-	w.mux.Unlock()
+	w.conflictHandler.RemoveAllConflictErrors(gvk)
 }
 
 // Stop fully stops the filteredWatcher in a threadsafe manner. This means that
@@ -439,9 +417,10 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 // shouldProcess returns true if the given object should be enqueued by the
 // watcher for processing.
 func (w *filteredWatcher) shouldProcess(object client.Object) bool {
+	gvknn := queue.GVKNNOf(object)
 	// Process the resource if we are the manager regardless if it is declared or not.
 	if diff.IsManager(w.scope, w.syncName, object) {
-		w.removeManagementConflictError(object)
+		w.conflictHandler.RemoveConflictError(gvknn)
 		return true
 	}
 	id := core.IDOf(object)
@@ -463,6 +442,6 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		w.SetManagementConflict(object, commit)
 		return false
 	}
-	w.removeManagementConflictError(object)
+	w.conflictHandler.RemoveConflictError(gvknn)
 	return true
 }

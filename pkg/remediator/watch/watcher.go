@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -29,15 +30,14 @@ import (
 // watcherConfig contains the options needed
 // to create a watcher.
 type watcherConfig struct {
-	gvk                     schema.GroupVersionKind
-	config                  *rest.Config
-	resources               *declared.Resources
-	queue                   *queue.ObjectQueue
-	scope                   declared.Scope
-	syncName                string
-	startWatch              WatchFunc
-	addConflictErrorFunc    func(status.ManagementConflictError)
-	removeConflictErrorFunc func(status.ManagementConflictError)
+	gvk             schema.GroupVersionKind
+	config          *rest.Config
+	resources       *declared.Resources
+	queue           *queue.ObjectQueue
+	scope           declared.Scope
+	syncName        string
+	startWatch      WatchFunc
+	conflictHandler conflict.Handler
 }
 
 // watcherFactory knows how to build watch.Runnables.

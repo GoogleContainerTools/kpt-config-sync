@@ -366,6 +366,9 @@ github.com/stretchr/testify/require
 # github.com/vbatts/tar-split v0.11.2
 ## explicit; go 1.15
 github.com/vbatts/tar-split/archive/tar
+# github.com/wk8/go-ordered-map v1.0.0
+## explicit; go 1.14
+github.com/wk8/go-ordered-map
 # github.com/xlab/treeprint v1.1.0
 ## explicit; go 1.13
 github.com/xlab/treeprint

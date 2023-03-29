@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
 
 func fakeRunnable() Runnable {
@@ -35,6 +36,7 @@ func fakeRunnable() Runnable {
 		startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return watch.NewFake(), nil
 		},
+		conflictHandler: fake.NewConflictHandler(),
 	}
 	return NewFiltered(cfg)
 }
@@ -51,8 +53,6 @@ func testRunnables(errOnType map[schema.GroupVersionKind]bool) watcherFactory {
 		return fakeRunnable(), nil
 	}
 }
-
-var fakeNoOpFnc = func(_ status.ManagementConflictError) {}
 
 func TestManager_Update(t *testing.T) {
 	testCases := []struct {
@@ -142,7 +142,7 @@ func TestManager_Update(t *testing.T) {
 			options := &Options{
 				watcherFactory: testRunnables(tc.failedWatchers),
 			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fakeNoOpFnc, fakeNoOpFnc)
+			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
 			if err != nil {
 				t.Fatal(err)
 			}

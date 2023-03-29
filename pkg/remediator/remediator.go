@@ -22,8 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/remediator/reconcile"
 	"kpt.dev/configsync/pkg/remediator/watch"
@@ -58,13 +58,8 @@ type Remediator struct {
 	// stopFn cancels the internal context, stopping the workers.
 	stopFn context.CancelFunc
 
-	// conflictMux guards the conflictErrs
-	conflictMux sync.Mutex
-	// conflictErrs tracks all the management conflicts the remediator encounters,
-	// and report to RootSync|RepoSync status.
-	conflictErrs []status.ManagementConflictError
-
-	fightHandler fight.Handler
+	conflictHandler conflict.Handler
+	fightHandler    fight.Handler
 }
 
 // Interface is a fake-able subset of the interface Remediator implements that
@@ -87,7 +82,7 @@ type Interface interface {
 	// ConflictErrors returns the errors the remediator encounters.
 	ConflictErrors() []status.ManagementConflictError
 	// FightErrors returns the fight errors (KNV2005) the remediator encounters.
-	FightErrors() map[core.ID]status.Error
+	FightErrors() []status.Error
 }
 
 var _ Interface = &Remediator{}
@@ -101,18 +96,19 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 	q := queue.New(string(scope))
 	workers := make([]*reconcile.Worker, numWorkers)
 	fightHandler := fight.NewHandler()
+	conflictHandler := conflict.NewHandler()
 	for i := 0; i < numWorkers; i++ {
 		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
 	}
 
 	remediator := &Remediator{
-		workers:      workers,
-		objectQueue:  q,
-		fightHandler: fightHandler,
+		workers:         workers,
+		objectQueue:     q,
+		fightHandler:    fightHandler,
+		conflictHandler: conflictHandler,
 	}
 
-	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil,
-		remediator.addConflictError, remediator.removeConflictError)
+	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating watch manager")
 	}
@@ -211,43 +207,10 @@ func (r *Remediator) ManagementConflict() bool {
 
 // ConflictErrors implements Interface.
 func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
-	r.conflictMux.Lock()
-	defer r.conflictMux.Unlock()
-
-	// Return a copy
-	return append([]status.ManagementConflictError(nil), r.conflictErrs...)
-}
-
-func (r *Remediator) addConflictError(e status.ManagementConflictError) {
-	r.conflictMux.Lock()
-	defer r.conflictMux.Unlock()
-
-	for _, existingErr := range r.conflictErrs {
-		if e.Error() == existingErr.Error() {
-			return
-		}
-	}
-	r.conflictErrs = append(r.conflictErrs, e)
-}
-
-func (r *Remediator) removeConflictError(e status.ManagementConflictError) {
-	r.conflictMux.Lock()
-	defer r.conflictMux.Unlock()
-
-	newErrs := make([]status.ManagementConflictError, len(r.conflictErrs))
-	i := 0
-	for _, existingErr := range r.conflictErrs {
-		if e.Error() != existingErr.Error() {
-			newErrs[i] = existingErr
-			i++
-		} else {
-			klog.Infof("Conflict error resolved: %v", e)
-		}
-	}
-	r.conflictErrs = newErrs[0:i]
+	return r.conflictHandler.ConflictErrors()
 }
 
 // FightErrors implements Interface.
-func (r *Remediator) FightErrors() map[core.ID]status.Error {
+func (r *Remediator) FightErrors() []status.Error {
 	return r.fightHandler.FightErrors()
 }

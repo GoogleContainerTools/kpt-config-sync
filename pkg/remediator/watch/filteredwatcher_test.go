@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
+	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -195,6 +196,7 @@ func TestFilteredWatcher(t *testing.T) {
 				startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
 					return base, nil
 				},
+				conflictHandler: testfake.NewConflictHandler(),
 			}
 			w := NewFiltered(cfg)
 

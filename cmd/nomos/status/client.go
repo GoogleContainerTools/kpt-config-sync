@@ -293,7 +293,7 @@ func (c *ClusterClient) rootRepoClusterStatus(ctx context.Context, cs *ClusterSt
 
 	if len(errs) > 0 {
 		cs.status = util.ErrorMsg
-		cs.Error = strings.Join(errs, ", ")
+		cs.Error += strings.Join(errs, ", ")
 	} else if len(cs.repos) == 0 {
 		cs.status = util.UnknownMsg
 		cs.Error = "No RootSync or RepoSync resources found"
@@ -337,7 +337,7 @@ func (c *ClusterClient) namespaceRepoClusterStatus(ctx context.Context, cs *Clus
 
 	if len(errs) > 0 {
 		cs.status = util.ErrorMsg
-		cs.Error = strings.Join(errs, ", ")
+		cs.Error += strings.Join(errs, ", ")
 	} else if len(cs.repos) == 0 {
 		cs.status = util.UnknownMsg
 		cs.Error = "No RepoSync resources found"

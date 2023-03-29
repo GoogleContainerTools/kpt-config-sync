@@ -65,7 +65,7 @@ func (c *Client) Create(ctx context.Context, obj client.Object, opts ...client.C
 	start := time.Now()
 	err := c.Client.Create(ctx, obj, opts...)
 	c.recordLatency(start, "Create", obj.GetObjectKind().GroupVersionKind().Kind, metrics.StatusLabel(err))
-	m.RecordAPICallDuration(ctx, "create", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), start)
+	m.RecordAPICallDuration(ctx, "create", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind().Kind, start)
 
 	switch {
 	case apierrors.IsAlreadyExists(err):
@@ -113,7 +113,7 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 	}
 
 	c.recordLatency(start, "delete", obj.GetObjectKind().GroupVersionKind().Kind, metrics.StatusLabel(err))
-	m.RecordAPICallDuration(ctx, "delete", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), start)
+	m.RecordAPICallDuration(ctx, "delete", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind().Kind, start)
 
 	if err != nil {
 		return status.ResourceWrap(err, "failed to delete", obj)
@@ -177,7 +177,7 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 		start := time.Now()
 		err = clientUpdateFn(ctx, newObj)
 		c.recordLatency(start, "update", obj.GetObjectKind().GroupVersionKind().Kind, metrics.StatusLabel(err))
-		m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), start)
+		m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind().Kind, start)
 
 		if err == nil {
 			newV := resourceVersion(newObj)
@@ -211,7 +211,7 @@ func (c *Client) Update(ctx context.Context, obj client.Object) status.Error {
 	start := time.Now()
 	err := c.Client.Update(ctx, obj)
 	c.recordLatency(start, "update", obj.GetObjectKind().GroupVersionKind().Kind, metrics.StatusLabel(err))
-	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind(), start)
+	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), obj.GetObjectKind().GroupVersionKind().Kind, start)
 	switch {
 	case apierrors.IsNotFound(err):
 		return ConflictUpdateDoesNotExist(err, obj)

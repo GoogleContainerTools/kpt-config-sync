@@ -116,7 +116,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		}
 	}
 	metrics.Operations.WithLabelValues("create", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "create", m.StatusTagKey(err), intendedState.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "create", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind)
 
 	if err != nil {
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
@@ -136,7 +136,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error {
 	patch, err := c.update(ctx, intendedState, currentState)
 	metrics.Operations.WithLabelValues("update", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err), intendedState.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind)
 
 	switch {
 	case apierrors.IsConflict(err):
@@ -175,7 +175,7 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 		return obj, nil
 	})
 	metrics.Operations.WithLabelValues("update", u.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, controller, "update", m.StatusTagKey(err), u.GroupVersionKind())
+	m.RecordApplyOperation(ctx, controller, "update", m.StatusTagKey(err), u.GroupVersionKind().Kind)
 
 	if changed {
 		klog.V(3).Infof("RemoveNomosMeta changed the object %v", core.GKNN(u))
@@ -189,7 +189,7 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	err := c.client.Delete(ctx, obj)
 	metrics.Operations.WithLabelValues("delete", obj.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err), obj.GroupVersionKind())
+	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err), obj.GroupVersionKind().Kind)
 
 	if err != nil {
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
@@ -250,7 +250,7 @@ func (c *clientApplier) update(ctx context.Context, intendedState, currentState 
 	err = c.client.Patch(ctx, intendedState, client.Apply, client.FieldOwner(configsync.FieldManager), client.ForceOwnership)
 	duration := time.Since(start).Seconds()
 	metrics.APICallDuration.WithLabelValues("update", intendedState.GroupVersionKind().String(), metrics.StatusLabel(err)).Observe(duration)
-	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), intendedState.GroupVersionKind(), start)
+	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind, start)
 	return []byte(cmp.Diff(currentState, intendedState)), err
 }
 
@@ -384,7 +384,7 @@ func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name
 	_, err := resClient.Patch(ctx, name, patchType, patch, metav1.PatchOptions{})
 	duration := time.Since(start).Seconds()
 	metrics.APICallDuration.WithLabelValues("update", gvk.String(), metrics.StatusLabel(err)).Observe(duration)
-	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), gvk, start)
+	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), gvk.Kind, start)
 	return err
 }
 

@@ -230,12 +230,12 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEv
 
 	case event.ApplySuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
+		handleMetrics(ctx, "update", e.Error, id.Kind)
 		return nil
 
 	case event.ApplyFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
-		handleMetrics(ctx, "update", e.Error, id.WithVersion(""))
+		handleMetrics(ctx, "update", e.Error, id.Kind)
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
@@ -324,12 +324,12 @@ func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 
 	case event.PruneSuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		handleMetrics(ctx, "delete", e.Error, id.Kind)
 		return nil
 
 	case event.PruneFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
-		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		handleMetrics(ctx, "delete", e.Error, id.Kind)
 		return PruneErrorForResource(e.Error, id)
 
 	case event.PruneSkipped:
@@ -361,7 +361,7 @@ func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent
 
 	case event.DeleteSuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "delete", e.Error, id.WithVersion(""))
+		handleMetrics(ctx, "delete", e.Error, id.Kind)
 		return nil
 
 	case event.DeleteFailed:
@@ -385,7 +385,7 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 		err := a.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
+		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (protected namespace): %v",
 				id, err)
@@ -433,7 +433,7 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
 		// The `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 		err := a.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, id.WithVersion(""))
+		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
 				id, abandonErr.Annotation, abandonErr.Value, err)
@@ -451,13 +451,13 @@ func isNamespace(obj *unstructured.Unstructured) bool {
 	return obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind()
 }
 
-func handleMetrics(ctx context.Context, operation string, err error, gvk schema.GroupVersionKind) {
+func handleMetrics(ctx context.Context, operation string, err error, kind string) {
 	// TODO capture the apply duration in the kpt apply library.
 	start := time.Now()
 
-	m.RecordAPICallDuration(ctx, operation, m.StatusTagKey(err), gvk, start)
-	metrics.Operations.WithLabelValues(operation, gvk.Kind, metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.ApplierController, operation, m.StatusTagKey(err), gvk)
+	m.RecordAPICallDuration(ctx, operation, m.StatusTagKey(err), kind, start)
+	metrics.Operations.WithLabelValues(operation, kind, metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, m.ApplierController, operation, m.StatusTagKey(err), kind)
 }
 
 // checkInventoryObjectSize checks the inventory object size limit.
@@ -770,7 +770,7 @@ func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 	for _, obj := range objs {
 		id := core.IDOf(obj)
 		err := a.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, obj.GetObjectKind().GroupVersionKind())
+		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
 				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled, err)

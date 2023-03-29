@@ -45,6 +45,7 @@ var (
 	pollingInterval time.Duration
 	namespace       string
 	resourceStatus  bool
+	name            string
 )
 
 func init() {
@@ -53,6 +54,7 @@ func init() {
 	Cmd.Flags().DurationVar(&pollingInterval, "poll", 0*time.Second, "Polling interval (leave unset to run once)")
 	Cmd.Flags().StringVar(&namespace, "namespace", "", "Namespace repo to get status for (multi-repo only, leave unset to get all repos)")
 	Cmd.Flags().BoolVar(&resourceStatus, "resources", true, "show resource level status for Namespace repo (multi-repo only)")
+	Cmd.Flags().StringVar(&name, "name", "", "name to filter root and repo sync name)")
 }
 
 // SaveToTempFile writes the `nomos status` output into a temporary file, and

@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -1066,5 +1067,101 @@ func TestNomosVersion(t *testing.T) {
 
 	if !strings.Contains(string(out), "config-sync") {
 		nt.T.Fatalf("Expected to find config-sync component in output:\n%s\n", string(out))
+	}
+}
+
+func TestNomosStatusNameFilter(t *testing.T) {
+	bookinfoNS := "bookinfo"
+	bookinfoRS := "bookinfo-repo-sync"
+	crontab := "crontab-sync"
+	bookRepo := nomostest.RepoSyncNN(bookinfoNS, bookinfoRS)
+	crontabRepo := nomostest.RepoSyncNN(bookinfoNS, crontab)
+	nt := nomostest.New(
+		t,
+		nomostesting.NomosCLI,
+		ntopts.Unstructured,
+		ntopts.RootRepo(crontab),
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
+		ntopts.NamespaceRepo(bookRepo.Namespace, bookRepo.Name),
+		ntopts.NamespaceRepo(crontabRepo.Namespace, crontabRepo.Name),
+	)
+
+	// get status with only name filter crontab-sync
+	// expect to find crontab-sync root-sync and crontab-sync repo-sync
+	cmd := nt.Shell.Command("nomos", "status", "--name", "crontab-sync")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), "<root>:crontab-sync") {
+		nt.T.Fatalf("Expected to find root-sync crontab-sync component in output:\n%s\n", string(out))
+	}
+
+	if !strings.Contains(string(out), "bookinfo:crontab-sync") {
+		nt.T.Fatalf("Expected to find repo-sync crontab-sync component in output:\n%s\n", string(out))
+	}
+
+	if strings.Contains(string(out), "<root>:root-sync") {
+		nt.T.Fatalf("Expected to not find root-sync component in output:\n%s\n", string(out))
+	}
+
+	// get status with namespace=c-m-s
+	// expect to find both root-sync
+	cmd2 := nt.Shell.Command("nomos", "status", "--namespace", "config-management-system")
+	out2, err := cmd2.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out2))
+		nt.T.Fatal(err)
+	}
+
+	if strings.Contains(string(out2), "bookinfo:bookinfo-repo-sync") {
+		nt.T.Fatalf("Expected to not find bookinfo-repo-sync component in output:\n%s\n", string(out2))
+	}
+
+	if !strings.Contains(string(out2), "<root>:root-sync") {
+		nt.T.Fatalf("Expected to find root-sync component in output:\n%s\n", string(out2))
+	}
+
+	if !strings.Contains(string(out2), "<root>:crontab-sync") {
+		nt.T.Fatalf("Expected to find crontab-sync component in output:\n%s\n", string(out2))
+	}
+
+	// get status with namespace bookinfo
+	// expect to find bookinfo-repo-sync and bookinf:crontab-sync
+	cmd3 := nt.Shell.Command("nomos", "status", "--namespace", "bookinfo")
+	out3, err := cmd3.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out3))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out3), "bookinfo:bookinfo-repo-sync") {
+		nt.T.Fatalf("Expected to find repo-sync component in output:\n%s\n", string(out3))
+	}
+
+	if !strings.Contains(string(out3), "bookinfo:crontab-sync") {
+		nt.T.Fatalf("Expected to find bookinfo:crontab-sync component in output:\n%s\n", string(out3))
+	}
+
+	if strings.Contains(string(out3), "<root>:root-sync") {
+		nt.T.Fatalf("Expected to not find root-sync component in output:\n%s\n", string(out3))
+	}
+
+	// get status with name and namespace
+	cmd4 := nt.Shell.Command("nomos", "status", "--namespace", "bookinfo", "--name", "bookinfo-repo-sync")
+	out4, err := cmd4.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out4))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out4), "bookinfo:bookinfo-repo-sync") {
+		nt.T.Fatalf("Expected to find bookinfo:bookinfo-repo-sync component in output:\n%s\n", string(out4))
+	}
+
+	if strings.Contains(string(out4), "bookinfo:crontab-sync") {
+		nt.T.Fatalf("Expected to not find bookinfo:crontab-sync component in output:\n%s\n", string(out4))
 	}
 }

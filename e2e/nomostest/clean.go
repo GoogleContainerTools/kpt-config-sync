@@ -408,6 +408,11 @@ func deleteKubevirt(nt *NT) error {
 		var crdNames []string
 		for _, item := range crdList.Items {
 			crdNames = append(crdNames, item.Name)
+			obj = &apiextensionsv1.CustomResourceDefinition{}
+			obj.SetName(item.Name)
+			if err := deleteObject(nt, obj); err != nil {
+				return err
+			}
 		}
 		if err := WaitForCRDsNotFound(nt, crdNames); err != nil {
 			return err

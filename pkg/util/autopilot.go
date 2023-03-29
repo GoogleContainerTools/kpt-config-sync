@@ -43,8 +43,12 @@ var AutopilotManagedKinds = []schema.GroupVersionKind{
 	admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingWebhookConfigurationList"),
 }
 
-// The mutating webhook to determine an Autopilot cluster.
-const autopilotWebhook = "workload-defaulter.config.common-webhooks.networking.gke.io"
+var autopilotWebhooks = []string{
+	// The mutating webhook to determine an Autopilot cluster before GKE 1.26.
+	"workload-defaulter.config.common-webhooks.networking.gke.io",
+	// The mutating webhook to determine an Autopilot cluster on GKE 1.26+.
+	"sasecret-redacter.config.common-webhooks.networking.gke.io",
+}
 
 // IsAutopilotManagedNamespace returns if the input object is a namespace managed by the Autopilot cluster.
 func IsAutopilotManagedNamespace(o client.Object) bool {
@@ -55,13 +59,20 @@ func IsAutopilotManagedNamespace(o client.Object) bool {
 }
 
 // IsGKEAutopilotCluster returns if the cluster is an autopilot cluster.
-// It leverages the existence of the workload-defaulter mutating webhook configuration, which exists and only exists on the Autopilot clusters.
+// It determines an Autopilot cluster by the presence of autopilot webhooks.
 func IsGKEAutopilotCluster(c client.Client) (bool, error) {
-	err := c.Get(context.Background(), client.ObjectKey{Name: autopilotWebhook}, &admissionregistrationv1.MutatingWebhookConfiguration{})
-	if err == nil {
-		return true, nil
+	var autopilotWebhookNotFoundCount int
+	var err error
+	for _, autopilotWebhook := range autopilotWebhooks {
+		err = c.Get(context.Background(), client.ObjectKey{Name: autopilotWebhook}, &admissionregistrationv1.MutatingWebhookConfiguration{})
+		if err == nil {
+			return true, nil
+		}
+		if apierrors.IsNotFound(err) {
+			autopilotWebhookNotFoundCount++
+		}
 	}
-	if apierrors.IsNotFound(err) {
+	if autopilotWebhookNotFoundCount == len(autopilotWebhooks) {
 		return false, nil
 	}
 	return false, err

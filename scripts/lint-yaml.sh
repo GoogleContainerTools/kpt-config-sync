@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 # KubeBuilder and various YAML writers add invalid fields that we have to
 # remember to remove. This linter makes sure we remember to remove the common
 # bad fields it adds.

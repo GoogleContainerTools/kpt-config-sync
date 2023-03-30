@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -euo pipefail
 
 # TODO: Don't directly install things in scripts - do it in the image.

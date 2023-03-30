@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 echo "+++ Building build/test-e2e-go/kind/Dockerfile prow-image"
 docker buildx build . -f build/test-e2e-go/kind/Dockerfile -t prow-image
 # The .sock volume allows you to connect to the Docker daemon of the host.

@@ -241,6 +241,11 @@ fmt-go: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) gofmt -s -w $(NOMOS_CODE_DIRS)
 	@docker run $(DOCKER_RUN_ARGS) goimports -w $(NOMOS_CODE_DIRS)
 
+# Runs shfmt.
+.PHONY: fmt-sh
+fmt-sh:
+	@./scripts/fmt-bash.sh
+
 .PHONY: tidy
 tidy:
 	go mod tidy -compat=1.17

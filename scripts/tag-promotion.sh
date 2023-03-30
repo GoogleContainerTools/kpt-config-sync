@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 # The purpose of this script is to promote a git commit, based on a vMAJOR.MINOR.PATCH-rc.N
 # release candidate passed in as an environment variable. The commit will be tagged
 # using vMAJOR.MINOR.PATCH
@@ -27,7 +26,7 @@ set +o history
 # It's crucial that error messages in these functions be sent to stderr with 1>&2.
 # Otherwise, they will not bubble up to the make target that calls this script.
 
-err () {
+err() {
   local msg="$1"
   echo "${msg}" 1>&2
   exit 1
@@ -45,12 +44,12 @@ read -rp "${RC_TAG} will be promoted to ${CS_VERSION} - Proceed (yes/no)? " choi
 case "${choice}" in
   yes) ;;
   no) exit 1 ;;
-  *) err "Unrecognized choice ${choice}"
+  *) err "Unrecognized choice ${choice}" ;;
 esac
 
 REMOTE="git@github.com:GoogleContainerTools/kpt-config-sync.git"
 # Fetch all existing tags
-git fetch "${REMOTE}" "${RC_TAG}" --tags > /dev/null
+git fetch "${REMOTE}" "${RC_TAG}" --tags >/dev/null
 echo "+++ Successfully fetched tags"
 
 echo "+++ Promoting ${RC_TAG} to ${CS_VERSION}"

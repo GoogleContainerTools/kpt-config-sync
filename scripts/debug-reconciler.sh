@@ -33,7 +33,7 @@ if [ -e ./debugger.defaults.bash ]; then
 fi
 
 function usage() {
-    cat <<EOF
+  cat <<EOF
 $(basname "$0")
 
 Flags:
@@ -63,32 +63,32 @@ EOF
 
 for arg in "${@}"; do
   case $arg in
-    -h|--help)
-    usage
-    ;;
+    -h | --help)
+      usage
+      ;;
   esac
 done
 
-while (( 0 < $# )); do
+while ((0 < $#)); do
   arg=${1:-}
   shift
   case $arg in
     --branch)
       branch=${1:-}
       shift
-    ;;
+      ;;
     --repodir)
       repodir=${1:-}
       shift
-    ;;
+      ;;
     --repo)
       repo=${1:-}
       shift
-    ;;
+      ;;
     *)
-    echo "Invalid arg $arg, --help for options."
-    exit 1
-    ;;
+      echo "Invalid arg $arg, --help for options."
+      exit 1
+      ;;
   esac
 done
 
@@ -113,7 +113,7 @@ function run() {
     args+=(-f "$f")
   done
   kubectl apply "${args[@]}"
-  if ! kubectl get clusterrolebinding "cluster-admin-$USER" &> /dev/null; then
+  if ! kubectl get clusterrolebinding "cluster-admin-$USER" &>/dev/null; then
     kubectl create clusterrolebinding "cluster-admin-$USER" \
       --clusterrole=cluster-admin --user="$USER@google.com"
   fi

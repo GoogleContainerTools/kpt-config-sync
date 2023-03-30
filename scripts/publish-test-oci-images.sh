@@ -38,7 +38,6 @@ KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE=gcr.io/${GCP_PROJECT}/config-sync-test/${K
 KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE=${LOCATION}-docker.pkg.dev/${GCP_PROJECT}/config-sync-test-private/${KUSTOMIZE_COMPONENTS_PACKAGE_NAME}:v1
 KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE=${LOCATION}.gcr.io/${GCP_PROJECT}/config-sync-test/${KUSTOMIZE_COMPONENTS_PACKAGE_NAME}:v1
 
-
 crane auth login ${LOCATION}-docker.pkg.dev -u oauth2accesstoken -p "$(gcloud auth print-access-token)"
 crane auth login ${LOCATION}.gcr.io -u oauth2accesstoken -p "$(gcloud auth print-access-token)"
 

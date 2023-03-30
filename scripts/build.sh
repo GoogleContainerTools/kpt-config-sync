@@ -30,26 +30,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       PLATFORMS+=("$ARG")
-    ;;
+      ;;
   esac
 done
 
 if [[ -z "${VERSION}" ]]; then
-    echo "VERSION must be set"
-    exit 1
+  echo "VERSION must be set"
+  exit 1
 fi
 
 for PLATFORM in "${PLATFORMS[@]}"; do
   # Example: "linux_amd64" -> ["linux" "amd64"]
-  IFS='_' read -r -a platform_split <<< "${PLATFORM}"
+  IFS='_' read -r -a platform_split <<<"${PLATFORM}"
   GOOS="${platform_split[0]}"
   GOARCH="${platform_split[1]}"
 
   echo "Building nomos for ${PLATFORM}"
   env GOOS="${GOOS}" GOARCH="${GOARCH}" CGO_ENABLED="0" go install \
-      -installsuffix "static" \
-      -ldflags "-X kpt.dev/configsync/pkg/version.VERSION=${VERSION}" \
-      ./cmd/nomos
+    -installsuffix "static" \
+    -ldflags "-X kpt.dev/configsync/pkg/version.VERSION=${VERSION}" \
+    ./cmd/nomos
 
   # When go builds for native architecture, it puts output in $GOPATH/bin
   # but when cross compiling, it puts it in the $GOPATH/bin/$GOOS_$GOARCH dir

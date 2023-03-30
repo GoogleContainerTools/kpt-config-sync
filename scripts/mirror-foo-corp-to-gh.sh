@@ -33,19 +33,19 @@ REPO=""
 
 # This remote branch needs to already exist.
 # Manually create it if necessary.
-while (( 0 < $# )); do
+while ((0 < $#)); do
   arg="${1:-}"
   shift
   case $arg in
-    -v|--version)
+    -v | --version)
       REPO_VERSION="${1:-}"
       shift
       ;;
-    -m|--message)
+    -m | --message)
       COMMIT_MESSAGE="${1:-}"
       shift
       ;;
-    -r|--repo)
+    -r | --repo)
       REPO="${1:-}"
       shift
       ;;
@@ -73,7 +73,7 @@ if [[ "$REPO" == "" ]]; then
   git clone "$REMOTE" "$REPO"
 fi
 
-if ! git -C "$REPO" checkout -t "origin/$REPO_VERSION" &> /dev/null; then
+if ! git -C "$REPO" checkout -t "origin/$REPO_VERSION" &>/dev/null; then
   git -C "$REPO" checkout -B "$REPO_VERSION"
 fi
 

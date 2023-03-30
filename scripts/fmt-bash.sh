@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,17 +26,10 @@ mapfile -t check_files < <(
     uniq -u
 )
 
-# Handle bats tests
-bats_tmp="$(mktemp -d lint-bash-XXXXXX)"
-function cleanup() {
-  rm -rf "${bats_tmp}"
-}
-trap cleanup EXIT
+readonly formater=mvdan/shfmt:v3.6.0-alpine
 
-readonly linter=koalaman/shellcheck:v0.6.0
-
-if ! docker image inspect "$linter" &>/dev/null; then
-  docker pull "$linter"
+if ! docker image inspect "$formater" &>/dev/null; then
+  docker pull "$formater"
 fi
 
 cmd=(docker run -v "$(pwd):/mnt")
@@ -45,9 +38,10 @@ if [ -t 1 ]; then
 fi
 cmd+=(
   --rm
-  "$linter" "${check_files[@]}"
+  --workdir /mnt
+  "$formater" -w -l "${check_files[@]}"
 )
 
-echo "Linting scripts..."
+echo "Formatting scripts..."
 "${cmd[@]}"
-echo "PASS"
+echo "DONE"

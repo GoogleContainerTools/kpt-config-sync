@@ -20,7 +20,7 @@ export CGO_ENABLED=0
 
 # TODO: It is best practice to install directly on the Docker image,
 #  but for now it's unclear how to do this sanely.
-wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/v1.52.0/install.sh | \
+wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/v1.52.0/install.sh |
   sh -sx -- -b .output/go/bin v1.52.0
 
 # golangci-lint uses $HOME to determine where to store .cache information.
@@ -42,10 +42,10 @@ if ! OUT="$(.output/go/bin/golangci-lint run --exclude-use-default=false)"; then
 
   # make fmt-go only resolves gofmt and goimports errors, since the other linters
   # don't have autoformatters.
-  if echo "${OUT}" | grep "(gofmt)" > /dev/null; then
+  if echo "${OUT}" | grep "(gofmt)" >/dev/null; then
     echo -e "${RED}ADVICE${NC}: running \"make fmt-go\" may fix the (gofmt) error"
   fi
-  if echo "${OUT}" | grep "(goimports)" > /dev/null; then
+  if echo "${OUT}" | grep "(goimports)" >/dev/null; then
     echo -e "${RED}ADVICE${NC}: running \"make fmt-go\" may fix the (goimports) error"
   fi
   exit 1

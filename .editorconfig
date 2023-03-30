@@ -1,0 +1,8 @@
+# Style config for editors and formatters.
+
+# Format shell with shfmt (https://github.com/mvdan/sh).
+[*.sh]
+# like -i=2
+indent_style = space
+indent_size = 2
+switch_case_indent = true # like -ci

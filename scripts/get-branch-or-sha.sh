@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -eou pipefail
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)

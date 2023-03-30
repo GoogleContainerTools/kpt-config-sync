@@ -47,7 +47,6 @@ if [ "${GCP_ZONE:-"unset"}" == "unset" ]; then
   exit 1
 fi
 
-
 KCC_PACKAGE_NAME=configsync-kcc
 KCC_DIR=${REPO_DIR}/e2e/testdata/${KCC_PACKAGE_NAME}
 
@@ -74,18 +73,18 @@ SERVICE_ACCOUNT_NAME=kcc-integration
 gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" --project="${KCC_MANAGED_PROJECT}" || true
 
 gcloud projects add-iam-policy-binding "${KCC_MANAGED_PROJECT}" \
- --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
- --role="roles/editor"
+  --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/editor"
 
 gcloud projects add-iam-policy-binding "${KCC_MANAGED_PROJECT}" \
- --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
- --role="roles/iam.securityAdmin"
+  --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/iam.securityAdmin"
 
 gcloud iam service-accounts add-iam-policy-binding \
- "${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
- --member="serviceAccount:${GCP_PROJECT}.svc.id.goog[cnrm-system/cnrm-controller-manager]" \
- --role="roles/iam.workloadIdentityUser" \
- --project="${KCC_MANAGED_PROJECT}"
+  "${SERVICE_ACCOUNT_NAME}@${KCC_MANAGED_PROJECT}.iam.gserviceaccount.com" \
+  --member="serviceAccount:${GCP_PROJECT}.svc.id.goog[cnrm-system/cnrm-controller-manager]" \
+  --role="roles/iam.workloadIdentityUser" \
+  --project="${KCC_MANAGED_PROJECT}"
 
 echo "Configuring Config Connector on the CI cluster"
 gcloud container clusters get-credentials "${GCP_CLUSTER}" --zone "${GCP_ZONE}" --project "${GCP_PROJECT}"

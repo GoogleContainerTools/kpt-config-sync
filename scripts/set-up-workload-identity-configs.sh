@@ -56,21 +56,21 @@ gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
 
 echo "Granting the e2e-test-csr-reader service account the 'roles/iam.workloadIdentityUser' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud iam service-accounts add-iam-policy-binding --project="${GCP_PROJECT}" \
-		--role roles/iam.workloadIdentityUser \
-		--member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-		"e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
+  --role roles/iam.workloadIdentityUser \
+  --member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+  "e2e-test-csr-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
 
 echo "Granting the e2e-test-ar-reader service account the 'roles/iam.workloadIdentityUser' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud iam service-accounts add-iam-policy-binding --project="${GCP_PROJECT}" \
-		--role roles/iam.workloadIdentityUser \
-		--member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-		"e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
+  --role roles/iam.workloadIdentityUser \
+  --member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+  "e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
 
 echo "Granting the e2e-test-gcr-reader service account the 'roles/iam.workloadIdentityUser' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud iam service-accounts add-iam-policy-binding --project="${GCP_PROJECT}" \
-		--role roles/iam.workloadIdentityUser \
-		--member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-		"e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
+  --role roles/iam.workloadIdentityUser \
+  --member="serviceAccount:${FLEET_HOST_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
+  "e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com"
 
 echo "Granting the e2e-test-runner service account of the {GCP_PROJECT} project the 'roles/gkehub.admin' role for the '${FLEET_HOST_PROJECT}' project"
 gcloud projects add-iam-policy-binding "${FLEET_HOST_PROJECT}" \

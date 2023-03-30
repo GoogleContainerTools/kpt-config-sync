@@ -44,10 +44,10 @@ REPO="kpt.dev/configsync"
 # Comma separted list of APIs to generate for clientset.
 INPUT_BASE="${REPO}/pkg/api"
 INPUT_APIS=$(
-  find "$NOMOS_ROOT/pkg/api" -mindepth 2 -maxdepth 2 -type d \
-  | sed -e "s|^$NOMOS_ROOT/pkg/api/||" \
-  | tr '\n' ',' \
-  | sed -e 's/,$//' \
+  find "$NOMOS_ROOT/pkg/api" -mindepth 2 -maxdepth 2 -type d |
+    sed -e "s|^$NOMOS_ROOT/pkg/api/||" |
+    tr '\n' ',' |
+    sed -e 's/,$//'
 )
 echo "Found input APIs: ${INPUT_APIS}"
 
@@ -68,11 +68,11 @@ done
 # This should match the k8s.io/code-generator version in go.mod.
 tag="v0.22.2"
 echo "Checking out k8s.io/code-generator at tag ${tag}"
-  # As of go 1.16, go install is the recommended way to build/install modules
-  # https://go.dev/doc/go1.16#go-command
-  for tool in "${tools[@]}"; do
-    go install "${tool}@${tag}"
-  done
+# As of go 1.16, go install is the recommended way to build/install modules
+# https://go.dev/doc/go1.16#go-command
+for tool in "${tools[@]}"; do
+  go install "${tool}@${tag}"
+done
 
 # If we run go mod tidy, it removes the empty code-generator declaration from
 # modules.txt which makes code generation fail silently. Forcing the empty

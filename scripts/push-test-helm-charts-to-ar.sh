@@ -40,7 +40,7 @@ COREDNS_CHART_VERSION=1.13.3
 COREDNS_CHART_TAR=${COREDNS_CHART}-${COREDNS_CHART_VERSION}.tgz
 
 gcloud auth application-default print-access-token | helm registry login -u oauth2accesstoken \
---password-stdin "https://${LOCATION}-docker.pkg.dev"
+  --password-stdin "https://${LOCATION}-docker.pkg.dev"
 
 pushd "${HELM_CHARTS_DIR}"
 

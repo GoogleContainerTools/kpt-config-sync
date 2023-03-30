@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -euxo pipefail
 
 # Starts a local docker registry and connects it to kind.
@@ -41,7 +40,7 @@ docker start "${reg_name}"
 # Dear future people: Feel free to upgrade this as new versions are released.
 # Note that upgrading the kind version will require updating the image versions:
 # https://github.com/kubernetes-sigs/kind/releases
-kind &> /dev/null || (
+kind &>/dev/null || (
   echo "Kind is not installed. Install v0.14.0."
   echo "https://kind.sigs.k8s.io/docs/user/quick-start/"
   exit 1
@@ -62,5 +61,5 @@ docker network inspect "kind" >/dev/null || (
 )
 
 # Connect the registry to the cluster network if it isn't already.
-docker network inspect kind | grep "${reg_name}" || \
+docker network inspect kind | grep "${reg_name}" ||
   docker network connect "kind" "${reg_name}"

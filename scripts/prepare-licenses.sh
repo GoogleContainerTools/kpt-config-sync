@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -euo pipefail
 
 tmp=$(mktemp -d)
@@ -27,7 +26,7 @@ licenseRegex="\(LICEN\(S\|C\)E\|COPYING\|README\|NOTICE\)"
 licenses="${tmp}"/LICENSES.txt
 
 # Ensure the vendor directory only includes the project's build dependencies.
-find vendor/ -regex ".*/${licenseRegex}" > "${licenses}"
+find vendor/ -regex ".*/${licenseRegex}" >"${licenses}"
 sort "${licenses}" -dufo "${licenses}"
 
 # Default to LICENSES.txt as the output file, but allow overriding it.
@@ -40,7 +39,7 @@ fi
 echo "THE FOLLOWING SETS FORTH ATTRIBUTION NOTICES FOR THIRD PARTY SOFTWARE THAT MAY BE CONTAINED IN PORTIONS OF THE ANTHOS CONFIG MANAGEMENT PRODUCT.
 
 -----
-" > "${out}"
+" >"${out}"
 
 # For each found license/notice, paste it into LICENSE.
 while IFS='' read -r LINE || [[ -n "${LINE}" ]]; do
@@ -52,7 +51,7 @@ while IFS='' read -r LINE || [[ -n "${LINE}" ]]; do
     echo "
 -----
 "
-  } >> "${out}"
-done < "${licenses}"
+  } >>"${out}"
+done <"${licenses}"
 
 rm -r "${tmp}"

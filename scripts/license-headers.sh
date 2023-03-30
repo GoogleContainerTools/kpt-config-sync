@@ -33,8 +33,8 @@ case "$1" in
     ;;
   add)
     "${GOBIN}/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE \
-     		"${ignores[@]}" \
-     		. 2>&1 | sed '/ skipping: / d'
+      "${ignores[@]}" \
+      . 2>&1 | sed '/ skipping: / d'
     ;;
   *)
     echo "Usage: $0 (lint|add)"

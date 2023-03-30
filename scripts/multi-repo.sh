@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -euo pipefail
 
 # Pre-requisite:
@@ -46,7 +45,7 @@ kubectl delete secret root-ssh-key -n=config-management-system --ignore-not-foun
 # Create root-ssh-key secret for Root Reconciler.
 # shellcheck disable=SC2086
 kubectl create secret generic root-ssh-key -n=config-management-system \
-      --from-file=ssh=${HOME}/.ssh/id_rsa.nomos
+  --from-file=ssh=${HOME}/.ssh/id_rsa.nomos
 
 # Verify reconciler-manager pod is running.
 

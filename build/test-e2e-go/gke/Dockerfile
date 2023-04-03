@@ -29,8 +29,8 @@ ENV CGO_ENABLED=0
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
-ARG HELM_VERSION=v3.6.3
-ARG KUSTOMIZE_VERSION=v4.5.2
+ARG HELM_VERSION=v3.11.2
+ARG KUSTOMIZE_VERSION=v5.0.1
 ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
 
 # Install the render-helm-chart function.

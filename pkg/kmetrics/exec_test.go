@@ -61,7 +61,7 @@ spec:
 		},
 		"invalid kustomization": {
 			inputDir:    "./testdata/invalidkustomization",
-			expectedErr: "Error: json: cannot unmarshal string into Go struct field Kustomization.resources of type []string",
+			expectedErr: "Error: invalid Kustomization: json: cannot unmarshal string into Go struct field Kustomization.resources of type []string",
 		},
 		"multiple kustomization files": {
 			inputDir:    "./testdata/multiplekustomizationfiles",

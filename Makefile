@@ -35,8 +35,8 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
-KUSTOMIZE_VERSION := v4.5.2
-HELM_VERSION := v3.6.3
+KUSTOMIZE_VERSION := v5.0.1
+HELM_VERSION := v3.11.2
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging
@@ -280,7 +280,7 @@ lint-license: pull-buildenv buildenv-dirs
 	go install github.com/google/addlicense@v1.0.0
 
 "$(GOBIN)/kustomize":
-	CGO_ENABLED=0 go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
+	CGO_ENABLED=0 go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
 
 # install kustomize binary for containerized testing
 "$(BIN_DIR)/kustomize": "$(GOBIN)/kustomize"

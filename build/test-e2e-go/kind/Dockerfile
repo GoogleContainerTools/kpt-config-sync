@@ -13,8 +13,8 @@
 # limitations under the License.
 
 # Build intermediate image for gcloud / kubectl
-FROM gcr.io/google.com/cloudsdktool/cloud-sdk:369.0.0-slim as gcloud-install
-RUN apt-get install -y kubectl
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:425.0.0-slim as gcloud-install
+RUN apt-get install -y kubectl google-cloud-sdk-gke-gcloud-auth-plugin
 
 # Build e2e image
 FROM golang:1.17.7-alpine as kpt-config-sync-e2e

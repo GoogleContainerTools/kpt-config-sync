@@ -99,7 +99,7 @@ for image in "${images[@]}"; do
   fixable=$(echo "${vulnerabilities}" |
     jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
   vuln_map[${image}]=${fixable}
-  ((fixable_total += fixable))
+  fixable_total=$((fixable_total + fixable))
 done
 
 echo # done scanning

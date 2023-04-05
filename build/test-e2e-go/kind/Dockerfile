@@ -31,11 +31,11 @@ RUN apk add --no-cache \
 
 ARG HELM_VERSION=v3.11.2
 ARG KUSTOMIZE_VERSION=v5.0.1
-ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
+ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 
 # Install the render-helm-chart function.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
-  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTIOPN_VERSION}
+  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTION_VERSION}
 
 # Install Helm
 RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \

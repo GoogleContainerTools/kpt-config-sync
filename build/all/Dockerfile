@@ -26,21 +26,29 @@ ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
 ARG HELM_VERSION=v3.11.2
 ARG KUSTOMIZE_VERSION=v5.0.1
 
-# Install Helm
-RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \
-  tar -zxvf /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz -C /tmp && \
+# Install Helm with license
+RUN URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" && \
+  URL_PREFIX="$(dirname "${URL}")" && FILENAME="$(basename "${URL}")" && \
+  wget "${URL}" -O "/tmp/${FILENAME}" && \
+  wget "${URL}.sha256" -O /tmp/helm_checksum.txt && \
+  echo "$(cat /tmp/helm_checksum.txt)  /tmp/${FILENAME}" | sha256sum --check && \
+  tar -zxvf "/tmp/${FILENAME}" -C /tmp && \
   mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
   mkdir -p ./vendor/helm.sh/helm/v3 && \
   mv /tmp/linux-amd64/LICENSE ./vendor/helm.sh/helm/v3/LICENSE && \
-  rm -rf /tmp/linux-amd64 /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz
+  rm -rf /tmp/linux-amd64 "/tmp/${FILENAME}" /tmp/helm_checksum.txt
 
-# Install Kustomize
-RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -O /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
-  tar -zxvf /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -C /tmp && \
+# Install Kustomize with license
+RUN URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" && \
+  URL_PREFIX="$(dirname "${URL}")" && FILENAME="$(basename "${URL}")" && \
+  wget "${URL}" -O "/tmp/${FILENAME}" && \
+  wget "${URL_PREFIX}/checksums.txt" -O /tmp/kustomize_checksums.txt && \
+  echo "$(grep "${FILENAME}" /tmp/kustomize_checksums.txt | cut -d ' ' -f 1)  /tmp/${FILENAME}" | sha256sum --check && \
+  tar -zxvf "/tmp/${FILENAME}" -C /tmp && \
   mv /tmp/kustomize /usr/local/bin/kustomize && \
-  rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
+  rm "/tmp/${FILENAME}" /tmp/kustomize_checksums.txt && \
   mkdir -p ./vendor/sigs.k8s.io/kustomize && \
-  wget https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/${KUSTOMIZE_VERSION}/LICENSE -O ./vendor/sigs.k8s.io/kustomize/LICENSE
+  wget "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/${KUSTOMIZE_VERSION}/LICENSE" -O ./vendor/sigs.k8s.io/kustomize/LICENSE
 
 # Install the render-helm-chart function.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \

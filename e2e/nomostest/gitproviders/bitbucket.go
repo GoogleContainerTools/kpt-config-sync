@@ -37,6 +37,7 @@ const (
 	PrivateSSHKey = "config-sync-ci-ssh-private-key"
 
 	repoNameMaxLength = 62
+	localNameLength   = 30
 )
 
 // BitbucketClient is the client that calls the Bitbucket REST APIs.
@@ -88,8 +89,17 @@ func (b *BitbucketClient) CreateRepository(localName string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "failed to generate a new UUID")
 	}
-	// Make the remote repoName unique in order to run multiple tests in parallel.
-	repoName := strings.ReplaceAll(localName, "/", "-") + "-" + u.String()
+
+	// strip all hyphens from localName and uuid before appending
+	localName = strings.ReplaceAll(localName, "/", "")
+	localName = strings.ReplaceAll(localName, "-", "")
+	if len(localName) > localNameLength {
+		localName = localName[:localNameLength]
+	}
+
+	uuid := strings.ReplaceAll(u.String(), "-", "")
+
+	repoName := localName + uuid
 	if len(repoName) > repoNameMaxLength {
 		repoName = repoName[:repoNameMaxLength]
 	}

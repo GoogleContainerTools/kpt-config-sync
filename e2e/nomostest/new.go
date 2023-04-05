@@ -179,7 +179,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		caCertPath:              sharedNt.caCertPath,
 		Scheme:                  sharedNt.Scheme,
-		GitProvider:             sharedNt.GitProvider,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
 	}
@@ -257,7 +256,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		NonRootRepos:            make(map[types.NamespacedName]*Repository),
 		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
 		Scheme:                  scheme,
-		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
 		WebhookDisabled:         &webhookDisabled,
 		DefaultMetricsTimeout:   30 * time.Second,
@@ -318,8 +316,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := nt.KubeClient.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	if nt.GitProvider.Type() == e2e.Local {
+	if *e2e.GitProvider == e2e.Local {
 		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -367,10 +364,12 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		allRepos = append(allRepos, repo)
 	}
 
-	if nt.GitProvider.Type() == e2e.Local {
+	var gitProviderOpts []gitproviders.GitProviderOpt
+	if *e2e.GitProvider == e2e.Local {
 		InitGitRepos(nt, allRepos...)
-		nt.portForwardGitServer()
+		gitProviderOpts = append(gitProviderOpts, gitproviders.WithPortForwarder(nt.portForwardGitServer()))
 	}
+	nt.GitProvider = gitproviders.NewGitProvider(nt.T, *e2e.GitProvider, gitProviderOpts...)
 
 	for name := range opts.RootRepos {
 		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)

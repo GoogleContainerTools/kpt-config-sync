@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
@@ -96,9 +97,8 @@ type Repository struct {
 	// For other git providers, it appends a UUID to Name for uniqueness.
 	RemoteRepoName string
 
-	// RemoteURL is the remote URL of the repository.
-	// It is used to set the url for the remote origin using `git remote add origin <REMOTE_URL>.
-	RemoteURL string
+	// GitProvider is the provider that hosts the Git repositories.
+	GitProvider gitproviders.GitProvider
 
 	// Scheme used for encoding and decoding objects.
 	Scheme *runtime.Scheme
@@ -130,6 +130,7 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		SafetyClusterRolePath: fmt.Sprintf("acme/cluster/cluster-role-%s.yaml", safetyName),
 		Scheme:                nt.Scheme,
 		Logger:                nt.Logger,
+		GitProvider:           nt.GitProvider,
 	}
 
 	repoName, err := nt.GitProvider.CreateRepository(namespacedName)
@@ -139,16 +140,6 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		nt.T.Fatal(err)
 	}
 	g.RemoteRepoName = repoName
-	var port int
-	// port argument is used for in-cluster git provider with the local port forward.
-	// the argument is ignored for other providers, e.g. Gitlab/Bitbucket
-	if nt.gitRepoPortForwarder != nil {
-		port, err = nt.gitRepoPortForwarder.LocalPort()
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-	g.RemoteURL = nt.GitProvider.RemoteURL(port, repoName)
 
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -162,18 +153,6 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 
 	// Update test environment
 	g.T = nt.T
-	var port int
-	// port argument is used for in-cluster git provider with the local port forward.
-	// the argument is ignored for other providers, e.g. Gitlab/Bitbucket
-	if nt.gitRepoPortForwarder != nil {
-		var err error
-		port, err = nt.gitRepoPortForwarder.LocalPort()
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	}
-	// Update URL to use latest port-forward port
-	g.RemoteURL = nt.GitProvider.RemoteURL(port, g.RemoteRepoName)
 	// Reset repo contents
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)
@@ -527,9 +506,12 @@ func (g *Repository) Push(refspec string, flags ...string) {
 	took, err := retry.Retry(1*time.Minute, func() error {
 		args := []string{"push"}
 		args = append(args, flags...)
-		args = append(args, g.RemoteURL, refspec)
+		remoteURL, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
+		if err != nil {
+			return err
+		}
+		args = append(args, remoteURL, refspec)
 		cmd := g.gitCmd(args...)
-		var err error
 		out, err = cmd.CombinedOutput()
 		return err
 	})
@@ -539,7 +521,11 @@ func (g *Repository) Push(refspec string, flags ...string) {
 	}
 }
 
-func (g *Repository) pushAllToRemote(remote string) {
+func (g *Repository) pushAllToRemote() {
+	remote, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
+	if err != nil {
+		g.T.Errorf("failed to get remote URL: %v", err)
+	}
 	cmd := g.gitCmd("push", remote, "--all")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

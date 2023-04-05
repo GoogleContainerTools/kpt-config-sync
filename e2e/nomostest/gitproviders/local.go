@@ -18,10 +18,23 @@ import (
 	"fmt"
 
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/portforwarder"
 )
 
 // LocalProvider refers to the test git-server running on the same test cluster.
-type LocalProvider struct{}
+type LocalProvider struct {
+	portForwarder *portforwarder.PortForwarder
+}
+
+func newLocalProvider(opts GitProviderOpts) (*LocalProvider, error) {
+	if opts.portForwarder == nil {
+		return nil, fmt.Errorf("must provide a PortForwarderFactory for LocalProvider")
+	}
+	provider := &LocalProvider{
+		portForwarder: opts.portForwarder,
+	}
+	return provider, nil
+}
 
 // Type returns the provider type.
 func (l *LocalProvider) Type() string {
@@ -30,8 +43,12 @@ func (l *LocalProvider) Type() string {
 
 // RemoteURL returns the Git URL for connecting to the test git-server.
 // name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (l *LocalProvider) RemoteURL(port int, name string) string {
-	return fmt.Sprintf("ssh://git@localhost:%d/git-server/repos/%s", port, name)
+func (l *LocalProvider) RemoteURL(name string) (string, error) {
+	port, err := l.portForwarder.LocalPort()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("ssh://git@localhost:%d/git-server/repos/%s", port, name), nil
 }
 
 // SyncURL returns a URL for Config Sync to sync from.

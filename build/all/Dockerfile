@@ -21,7 +21,7 @@ COPY . .
 
 # Version string to embed in built binary.
 ARG VERSION
-ARG HELM_INFLATOR_FUNCTIOPN_VERSION=v0.2.0
+ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 
 ARG HELM_VERSION=v3.11.2
 ARG KUSTOMIZE_VERSION=v5.0.1
@@ -52,7 +52,7 @@ RUN URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomiz
 
 # Install the render-helm-chart function.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
-  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTIOPN_VERSION}
+  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTION_VERSION}
 
 # Build all our stuff.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \

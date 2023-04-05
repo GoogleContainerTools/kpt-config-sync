@@ -30,13 +30,17 @@ ARG KUSTOMIZE_VERSION=v5.0.1
 RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \
   tar -zxvf /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz -C /tmp && \
   mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
+  mkdir -p ./vendor/helm.sh/helm/v3 && \
+  mv /tmp/linux-amd64/LICENSE ./vendor/helm.sh/helm/v3/LICENSE && \
   rm -rf /tmp/linux-amd64 /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz
 
 # Install Kustomize
 RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -O /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
   tar -zxvf /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -C /tmp && \
   mv /tmp/kustomize /usr/local/bin/kustomize && \
-  rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
+  rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
+  mkdir -p ./vendor/sigs.k8s.io/kustomize && \
+  wget https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/${KUSTOMIZE_VERSION}/LICENSE -O ./vendor/sigs.k8s.io/kustomize/LICENSE
 
 # Install the render-helm-chart function.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
@@ -54,6 +58,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/admission-webhook \
     ./cmd/oci-sync \
     ./cmd/helm-sync
+
+# Concatenate vendored licenses into LICENSES.txt
+# Built in the container to include binary licenses (helm & kustomize)
+RUN scripts/prepare-licenses.sh
 
 # Debian non-root base image
 # Uses the same nonroot UID as distroless
@@ -73,14 +81,9 @@ COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Switch to non-root user
-USER 1000
-
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
+USER nonroot:nonroot
 ENTRYPOINT ["/hydration-controller"]
 
 # OCI-sync image
@@ -89,14 +92,9 @@ FROM gcr.io/distroless/static:latest as oci-sync
 ENV HOME=/tmp
 WORKDIR /
 COPY --from=bins /go/bin/oci-sync .
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Switch to non-root user
-USER 1000
-
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
+USER nonroot:nonroot
 ENTRYPOINT ["/oci-sync"]
 
 # Helm-sync image
@@ -106,14 +104,9 @@ ENV HOME=/tmp
 WORKDIR /
 COPY --from=bins /go/bin/helm-sync .
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Switch to non-root user
-USER 1000
-
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
+USER nonroot:nonroot
 ENTRYPOINT ["/helm-sync"]
 
 # Hydration controller image with shell
@@ -124,53 +117,37 @@ COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 RUN apt-get update && apt-get install -y git
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Switch to non-root user
-USER 1000
-
+USER nonroot:nonroot
 ENTRYPOINT ["/hydration-controller"]
 
 # Reconciler image
 FROM gcr.io/distroless/static:nonroot as reconciler
 WORKDIR /
 COPY --from=bins /go/bin/reconciler .
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
-# Switch to non-root user
-USER 1000
-
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
+USER nonroot:nonroot
 ENTRYPOINT ["/reconciler"]
 
 # Reconciler Manager image
 FROM gcr.io/distroless/static:nonroot as reconciler-manager
 WORKDIR /
 COPY --from=bins /go/bin/reconciler-manager reconciler-manager
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
 ENTRYPOINT ["/reconciler-manager"]
 
 # Admission Webhook image
 FROM gcr.io/distroless/static:nonroot as admission-webhook
 WORKDIR /
 COPY --from=bins /go/bin/admission-webhook admission-webhook
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
-
 ENTRYPOINT ["/admission-webhook"]
 
 # Nomos image
@@ -186,10 +163,8 @@ RUN apt-get update && apt-get install -y bash git
 RUN mkdir -p /opt/nomos/bin
 WORKDIR /opt/nomos/bin
 COPY --from=bins /go/bin/nomos nomos
-
-# License file required for on-prem release.
-COPY LICENSE LICENSE
-COPY LICENSES.txt LICENSES.txt
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 
 # Set up a HOME directory for non-root user
 RUN mkdir -p /nomos && chown nonroot:nonroot /nomos

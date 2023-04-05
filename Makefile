@@ -268,10 +268,6 @@ lint-go: pull-buildenv buildenv-dirs
 lint-bash:
 	@./scripts/lint-bash.sh
 
-.PHONY: license
-license: deps
-	@./scripts/prepare-licenses.sh
-
 .PHONY: lint-license
 lint-license: pull-buildenv buildenv-dirs
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/lint-license.sh

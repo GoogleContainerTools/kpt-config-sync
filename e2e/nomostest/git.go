@@ -139,9 +139,14 @@ func NewRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFor
 		nt.T.Fatal(err)
 	}
 	g.RemoteRepoName = repoName
-	port, err := nt.gitRepoPortForwarder.LocalPort()
-	if err != nil {
-		nt.T.Fatal(err)
+	var port int
+	// port argument is used for in-cluster git provider with the local port forward.
+	// the argument is ignored for other providers, e.g. Gitlab/Bitbucket
+	if nt.gitRepoPortForwarder != nil {
+		port, err = nt.gitRepoPortForwarder.LocalPort()
+		if err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 	g.RemoteURL = nt.GitProvider.RemoteURL(port, repoName)
 
@@ -157,9 +162,15 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 
 	// Update test environment
 	g.T = nt.T
-	port, err := nt.gitRepoPortForwarder.LocalPort()
-	if err != nil {
-		nt.T.Fatal(err)
+	var port int
+	// port argument is used for in-cluster git provider with the local port forward.
+	// the argument is ignored for other providers, e.g. Gitlab/Bitbucket
+	if nt.gitRepoPortForwarder != nil {
+		var err error
+		port, err = nt.gitRepoPortForwarder.LocalPort()
+		if err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 	// Update URL to use latest port-forward port
 	g.RemoteURL = nt.GitProvider.RemoteURL(port, g.RemoteRepoName)

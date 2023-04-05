@@ -15,14 +15,11 @@
 package nomostest
 
 import (
-	"context"
-	"fmt"
 	"path/filepath"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -113,28 +110,4 @@ func parsePrometheusManifests(nt *NT) ([]client.Object, error) {
 		return nil, err
 	}
 	return objs, nil
-}
-
-// portForwardPrometheus forwards the prometheus-server pod.
-// Cancel the context to kill the port-forward process.
-func portForwardPrometheus(ctx context.Context, nt *NT) (address string, err error) {
-	// Retry port-forwarding in case the Deployment is in the process of upgrade.
-	took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
-		pod, err := nt.KubeClient.GetDeploymentPod(prometheusServerDeploymentName, prometheusNamespace, nt.DefaultWaitTimeout)
-		if err != nil {
-			return err
-		}
-		port, err := nt.ForwardToFreePort(ctx, prometheusServerPodName, pod.Name,
-			prometheusServerPort)
-		if err != nil {
-			return err
-		}
-		address = fmt.Sprintf("localhost:%d", port)
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	nt.T.Logf("took %v to wait for prometheus port-forward", took)
-	return address, nil
 }

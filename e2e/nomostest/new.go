@@ -182,12 +182,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             sharedNt.GitProvider,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
-		// Reset git-repo port-forward for each test
-		gitRepoPort:    0,
-		gitRepoPodName: "",
-		// Reset otel-collector port-forward for each test
-		otelCollectorPort:    0,
-		otelCollectorPodName: "",
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -375,7 +369,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 
 	if nt.GitProvider.Type() == e2e.Local {
 		InitGitRepos(nt, allRepos...)
-		nt.PortForwardGitServer()
+		nt.portForwardGitServer()
 	}
 
 	for name := range opts.RootRepos {
@@ -414,7 +408,8 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}
 
-	nt.PortForwardOtelCollector()
+	nt.portForwardOtelCollector()
+	nt.portForwardPrometheus()
 
 	nt.Control = opts.Control
 	switch opts.Control {

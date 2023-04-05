@@ -47,12 +47,20 @@ type WatchOption func(watch *watchSpec)
 
 type watchSpec struct {
 	timeout time.Duration
+	ctx     context.Context
 }
 
 // WatchTimeout provides the timeout option to Watch.
 func WatchTimeout(timeout time.Duration) WatchOption {
 	return func(watch *watchSpec) {
 		watch.timeout = timeout
+	}
+}
+
+// WatchContext provides the context option to Watch.
+func WatchContext(ctx context.Context) WatchOption {
+	return func(watch *watchSpec) {
+		watch.ctx = ctx
 	}
 }
 
@@ -103,6 +111,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 
 	spec := watchSpec{
 		timeout: *w.defaultWaitTimeout,
+		ctx:     w.ctx,
 	}
 	for _, opt := range opts {
 		opt(&spec)
@@ -114,7 +123,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	}
 
 	// Use the context to stop the List and/or Watch if they run too long.
-	ctx, cancel := context.WithTimeout(w.ctx, spec.timeout)
+	ctx, cancel := context.WithTimeout(spec.ctx, spec.timeout)
 	defer cancel()
 
 	lw, err := w.newListWatchForObject(gvk, name, namespace, spec.timeout)

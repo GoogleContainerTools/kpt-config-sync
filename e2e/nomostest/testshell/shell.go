@@ -111,6 +111,21 @@ func (tc *TestShell) Git(args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// Docker is a convenience method for calling docker.
+// Returns STDOUT & STDERR combined, and an error if docker exited abnormally.
+func (tc *TestShell) Docker(args ...string) ([]byte, error) {
+	tc.Logger.Debugf("docker %s", strings.Join(args, " "))
+	out, err := exec.Command("docker", args...).CombinedOutput()
+	if err != nil {
+		if !tc.Logger.IsDebugEnabled() {
+			tc.Logger.Infof("docker %s", strings.Join(args, " "))
+		}
+		tc.Logger.Info(string(out))
+		return out, err
+	}
+	return out, nil
+}
+
 // Command is a convenience method for invoking a subprocess with the
 // KUBECONFIG environment variable set. Setting the environment variable
 // directly in the test process is not thread safe.

@@ -928,11 +928,8 @@ func TestNomosImage(t *testing.T) {
 
 	version := nomostest.VersionFromManifest(t)
 
-	cmd := nt.Shell.Command(
-		"docker", "run", "-i", "--rm",
-		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version),
-	)
-	out, err := cmd.CombinedOutput()
+	out, err := nt.Shell.Docker("run", "-i", "--rm",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

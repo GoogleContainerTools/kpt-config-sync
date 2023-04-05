@@ -55,6 +55,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/oci-sync \
     ./cmd/helm-sync
 
+# Debian non-root base image
+# Uses the same nonroot UID as distroless
+FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.0 as debian-nonroot
+WORKDIR /
+ARG USERNAME=nonroot
+ARG USER_UID=65532
+ARG USER_GID=$USER_UID
+RUN groupadd --gid $USER_GID $USERNAME && \
+  useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+USER nonroot:nonroot
+
 # Hydration controller image
 FROM gcr.io/distroless/static:nonroot as hydration-controller
 WORKDIR /
@@ -106,8 +117,9 @@ USER 1000
 ENTRYPOINT ["/helm-sync"]
 
 # Hydration controller image with shell
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.0 as hydration-controller-with-shell
+FROM debian-nonroot as hydration-controller-with-shell
 WORKDIR /
+USER root
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
@@ -164,17 +176,15 @@ ENTRYPOINT ["/admission-webhook"]
 # Nomos image
 # Not used by Config Sync backend components. Intended for use cases with the
 # nomos CLI (e.g. containerized CI/CD)
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.0 as nomos
+FROM debian-nonroot as nomos
+USER root
 
 # https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
-RUN apt-get update && \
-  apt-get install -y bash git
+RUN apt-get update && apt-get install -y bash git
 
+# Install nomos CLI
 RUN mkdir -p /opt/nomos/bin
-ENV PATH="/opt/nomos/bin:${PATH}"
 WORKDIR /opt/nomos/bin
-
-# Nomos binary
 COPY --from=bins /go/bin/nomos nomos
 
 # License file required for on-prem release.
@@ -182,11 +192,8 @@ COPY LICENSE LICENSE
 COPY LICENSES.txt LICENSES.txt
 
 # Set up a HOME directory for non-root user
-RUN mkdir -p /nomos
-RUN chown 1000 /nomos
+RUN mkdir -p /nomos && chown nonroot:nonroot /nomos
+USER nonroot:nonroot
 ENV HOME="/nomos"
-
-# Switch to non-root user
-USER 1000
-
+ENV PATH="/opt/nomos/bin:${PATH}"
 ENTRYPOINT ["/opt/nomos/bin/nomos"]

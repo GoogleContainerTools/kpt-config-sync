@@ -65,7 +65,7 @@ find_manifest_images_by_name() {
   image_name="$1"
   grep -roh --color=never \
     "${image_name}:\S*" \
-    ./manifests/ | uniq -u
+    ./manifests/ | uniq
 }
 
 # Build a full list of images with tags

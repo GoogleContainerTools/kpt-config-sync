@@ -147,6 +147,9 @@ type NT struct {
 	// caCertPath is the path to the CA cert used for communicating with the Git server.
 	caCertPath string
 
+	// gitRepoPortForwarder is the local port forwarding for the git server deployment.
+	gitRepoPortForwarder *portforwarder.PortForwarder
+
 	// prometheusPortForwarder is the local port forwarding for the prometheus deployment.
 	prometheusPortForwarder *portforwarder.PortForwarder
 
@@ -589,8 +592,11 @@ func (nt *NT) portForwardOtelCollector() {
 }
 
 // portForwardGitServer forwards the git-server deployment to a port.
-func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
+func (nt *NT) portForwardGitServer() {
 	nt.T.Helper()
+	if nt.gitRepoPortForwarder != nil {
+		nt.T.Fatal("git server port forward already initialized")
+	}
 	prevPodName := ""
 	resetGitRepos := func(newPort int, podName string) {
 		// pod unchanged, don't reset
@@ -609,12 +615,14 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		// re-init all repos
 		InitGitRepos(nt, allRepos...)
 		// attempt to recover by re-pushing the local repo states
-		for _, remoteRepo := range nt.RemoteRepositories {
-			remoteRepo.pushAllToRemote()
+		for nn, remoteRepo := range nt.RemoteRepositories {
+			remoteURL := nt.GitProvider.RemoteURL(newPort, nn.String())
+			remoteRepo.pushAllToRemote(remoteURL)
+			remoteRepo.RemoteURL = remoteURL
 		}
 		prevPodName = podName
 	}
-	return nt.newPortForwarder(
+	nt.gitRepoPortForwarder = nt.newPortForwarder(
 		testGitNamespace,
 		testGitServer,
 		":22",

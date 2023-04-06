@@ -118,19 +118,17 @@ func (pf *PortForwarder) LocalPort() (int, error) {
 }
 
 func (pf *PortForwarder) setPort(cmd *exec.Cmd, port int, pod string, async bool) {
-	pf.logger.Infof("updating port-forward %s:%d -> %s:%d", pf.pod, pf.localPort, pod, port)
 	if async {
 		pf.mux.Lock()
+		defer pf.mux.Unlock()
+	}
+	pf.logger.Infof("updating port-forward %s:%d -> %s:%d", pf.pod, pf.localPort, pod, port)
+	if pf.setPortCallback != nil {
+		pf.setPortCallback(port, pod)
 	}
 	pf.cmd = cmd
 	pf.localPort = port
 	pf.pod = pod
-	if async {
-		pf.mux.Unlock()
-	}
-	if pf.setPortCallback != nil {
-		pf.setPortCallback(port, pod)
-	}
 }
 
 // portForwardToPod establishes a port forwarding to the provided pod name. This
@@ -190,7 +188,7 @@ func (pf *PortForwarder) portForwardToDeployment(async bool) error {
 	// subprocess will be killed with the context, and we get a random port every
 	// time. However, this cleans up subprocesses in the interim.
 	if pf.cmd != nil {
-		pf.logger.Infof("stopping port-forward process for %s/%s", pf.ns, pf.deployment)
+		pf.logger.Info("stopping port-forward process for %s/%s", pf.ns, pf.deployment)
 		if err := pf.cmd.Process.Kill(); err != nil && errors.Is(err, os.ErrProcessDone) {
 			return errors.Wrap(err, "failed to kill port forward process")
 		}

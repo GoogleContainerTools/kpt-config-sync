@@ -16,7 +16,6 @@ package gitproviders
 
 import (
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/portforwarder"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
@@ -34,7 +33,7 @@ type GitProvider interface {
 	// For the testing git-server, RemoteURL uses localhost and forwarded port, while SyncURL uses the DNS.
 	// For other git providers, RemoteURL should be the same as SyncURL.
 	// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-	RemoteURL(name string) (string, error)
+	RemoteURL(port int, name string) string
 
 	// SyncURL returns the git repository URL for Config Sync to sync from.
 	// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
@@ -44,29 +43,8 @@ type GitProvider interface {
 	DeleteObsoleteRepos() error
 }
 
-// GitProviderOpt is an optional parameter for instantiating a new GitProvider
-type GitProviderOpt func(opts *GitProviderOpts)
-
-// GitProviderOpts is the set of optional parameters for instantiating a new GitProvider
-type GitProviderOpts struct {
-	portForwarder *portforwarder.PortForwarder
-}
-
-// WithPortForwarder provides a PortForwarder for the GitProvider to use.
-// Required for LocalProvider in order to establish a PortForwarder to the in-cluster
-// git server.
-func WithPortForwarder(portForwarder *portforwarder.PortForwarder) GitProviderOpt {
-	return func(opts *GitProviderOpts) {
-		opts.portForwarder = portForwarder
-	}
-}
-
 // NewGitProvider creates a GitProvider for the specific provider type.
-func NewGitProvider(t testing.NTB, provider string, opts ...GitProviderOpt) GitProvider {
-	options := GitProviderOpts{}
-	for _, opt := range opts {
-		opt(&options)
-	}
+func NewGitProvider(t testing.NTB, provider string) GitProvider {
 	switch provider {
 	case e2e.Bitbucket:
 		client, err := newBitbucketClient()
@@ -81,10 +59,6 @@ func NewGitProvider(t testing.NTB, provider string, opts ...GitProviderOpt) GitP
 		}
 		return client
 	default:
-		client, err := newLocalProvider(options)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return client
+		return &LocalProvider{}
 	}
 }

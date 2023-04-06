@@ -579,5 +579,54 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 		}
 	}
 	return nil
+}
 
+func (r *reconcilerBase) upsertNotificationCR(ctx context.Context, rs client.Object) (*v1beta1.Notification, error) {
+	notificationCR := &v1beta1.Notification{}
+	notificationCR.Name = rs.GetName()
+	notificationCR.Namespace = rs.GetNamespace()
+
+	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, notificationCR, func() error {
+		// OwnerReferences, so that when the RSync CustomResource is deleted,
+		// the corresponding Notification is also deleted.
+		kind := rs.GetObjectKind().GroupVersionKind().Kind
+		if kind == configsync.RootSyncKind {
+			notificationCR.OwnerReferences = []metav1.OwnerReference{
+				ownerReference(
+					rs.GetObjectKind().GroupVersionKind().Kind,
+					rs.GetName(),
+					rs.GetUID(),
+				),
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return notificationCR, err
+	}
+	if op != controllerutil.OperationResultNone {
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, fmt.Sprintf("%s/%s", notificationCR.Name, notificationCR.Namespace),
+			logFieldObjectKind, "Notification",
+			logFieldOperation, op)
+	}
+	return notificationCR, nil
+}
+
+func (r *reconcilerBase) deleteNotificationCR(ctx context.Context, rSyncRef types.NamespacedName) error {
+	gvk := kinds.NotificationV1Beta1()
+	u := &unstructured.Unstructured{}
+	u.SetName(rSyncRef.Name)
+	u.SetNamespace(rSyncRef.Namespace)
+	u.SetGroupVersionKind(gvk)
+	if err := r.client.Delete(ctx, u); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	r.logger(ctx).Info("Managed object delete successful",
+		logFieldObjectRef, rSyncRef.String(),
+		logFieldObjectKind, gvk.Kind)
+	return nil
 }

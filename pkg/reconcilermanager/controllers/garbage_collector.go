@@ -67,6 +67,10 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, r
 	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
 		return err
 	}
+	// notification
+	if err := r.cleanup(ctx, rsKey, kinds.NotificationV1Beta1()); err != nil {
+		return err
+	}
 
 	delete(r.repoSyncs, rsKey)
 	return nil

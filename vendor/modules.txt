@@ -90,7 +90,7 @@ github.com/antonmedv/expr/optimizer
 github.com/antonmedv/expr/parser
 github.com/antonmedv/expr/parser/lexer
 github.com/antonmedv/expr/vm
-# github.com/argoproj/notifications-engine v0.4.1-0.20230228182525-f754726f03da
+# github.com/argoproj/notifications-engine v0.4.1-0.20230322151737-a2a20923be59
 ## explicit; go 1.17
 github.com/argoproj/notifications-engine/pkg/api
 github.com/argoproj/notifications-engine/pkg/controller

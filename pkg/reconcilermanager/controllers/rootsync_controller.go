@@ -252,6 +252,30 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, errors.Wrap(err, "Check notification configuration failed")
 	}
+	if notificationEnabled {
+		if _, err = r.upsertNotificationCR(ctx, rs); err != nil {
+			r.logger(ctx).Error(err, "Managed object upsert failed",
+				logFieldObjectRef, reconcilerRef.String(),
+				logFieldObjectKind, "Notification")
+			rootsync.SetStalled(rs, "Notification", err)
+			// Upsert errors should always trigger retry (return error),
+			// even if status update is successful.
+			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			if updateErr != nil {
+				r.logger(ctx).Error(updateErr, "Object status update failed",
+					logFieldObjectRef, rsRef.String(),
+					logFieldObjectKind, r.syncKind)
+			}
+			// Use the upsert error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+			return controllerruntime.Result{}, errors.Wrap(err, "Notification upsert failed")
+		}
+	} else {
+		// delete Notification CR, if it exists
+		if err := r.deleteNotificationCR(ctx, rsRef); err != nil {
+			return controllerruntime.Result{}, status.APIServerError(err, "failed to delete Notification")
+		}
+	}
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name, notificationEnabled)
 	mut := r.mutationsFor(ctx, rs, notificationEnabled, containerEnvs)
 

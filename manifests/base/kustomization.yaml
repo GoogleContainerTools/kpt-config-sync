@@ -25,3 +25,4 @@ resources:
 - ../templates/otel-collector.yaml
 - ../templates/reconciler-manager.yaml
 - ../templates/reconciler-manager-configmap.yaml
+- ../notification-crd.yaml

@@ -26,7 +26,12 @@ var SchemeGroupVersion = schema.GroupVersion{Group: configsync.GroupName, Versio
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource
 func Resource(resource string) schema.GroupResource {
-	return SchemeGroupVersion.WithResource(resource).GroupResource()
+	return GroupVersionResource(resource).GroupResource()
+}
+
+// GroupVersionResource takes an unqualified resource and returns a GroupVersion qualified GroupVersionResource
+func GroupVersionResource(resource string) schema.GroupVersionResource {
+	return SchemeGroupVersion.WithResource(resource)
 }
 
 var (
@@ -42,6 +47,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RepoSyncList{},
 		&RootSync{},
 		&RootSyncList{},
+		&Notification{},
+		&NotificationList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

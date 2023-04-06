@@ -864,6 +864,14 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	return rs
 }
 
+// NotificationObjectV1Beta1 returns a v1beta1 Notification object
+func NotificationObjectV1Beta1(nn types.NamespacedName) *v1beta1.Notification {
+	notification := &v1beta1.Notification{}
+	notification.Namespace = nn.Namespace
+	notification.Name = nn.Name
+	return notification
+}
+
 // setupCentralizedControl is a pure central-control mode.
 // A default root repo (root-sync) manages all other root repos and namespace repos.
 func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {

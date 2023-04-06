@@ -21,9 +21,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -111,4 +114,33 @@ func NotificationEnabled(ctx context.Context, client client.Client, rsNamespace 
 		}
 	}
 	return true, nil
+}
+
+// LastCommit returns the commit from the Syncing condition
+func LastCommit(obj *unstructured.Unstructured, apiKind string) (string, error) {
+	switch apiKind {
+	case kinds.RootSyncV1Beta1().Kind:
+		rs := &v1beta1.RootSync{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), rs); err != nil {
+			return "", err
+		}
+		for _, c := range rs.Status.Conditions {
+			if c.Type == v1beta1.RootSyncSyncing {
+				return c.Commit, nil
+			}
+		}
+	case kinds.RepoSyncV1Beta1().Kind:
+		rs := &v1beta1.RepoSync{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), rs); err != nil {
+			return "", err
+		}
+		for _, c := range rs.Status.Conditions {
+			if c.Type == v1beta1.RepoSyncSyncing {
+				return c.Commit, nil
+			}
+		}
+	default:
+		return "", fmt.Errorf("unrecognized kind: %s", apiKind)
+	}
+	return "", fmt.Errorf("syncing condition not found in %s/%s", obj.GetNamespace(), obj.GetName())
 }

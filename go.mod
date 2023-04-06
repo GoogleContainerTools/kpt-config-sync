@@ -70,8 +70,8 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.12.0 // indirect
 	github.com/docker/cli v20.10.17+incompatible // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
-	github.com/docker/docker v20.10.17+incompatible // indirect
-	github.com/docker/docker-credential-helpers v0.6.4 // indirect
+	github.com/docker/docker v23.0.3+incompatible // indirect
+	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/emicklei/go-restful v2.16.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect

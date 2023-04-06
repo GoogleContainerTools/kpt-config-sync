@@ -153,9 +153,6 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 
 	// Update test environment
 	g.T = nt.T
-	// GitProvider must be set to use the current NT's GitProvider.
-	// Using a stale GitProvider can lead to using a PortForwarder which has already been closed.
-	g.GitProvider = nt.GitProvider
 	// Reset repo contents
 	g.init(nt.gitPrivateKeyPath)
 	g.initialCommit(sourceFormat)

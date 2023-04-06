@@ -180,6 +180,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Scheme:                  sharedNt.Scheme,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
+		GitProvider:             sharedNt.GitProvider,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -187,11 +188,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	}
 
 	nt.detectGKEAutopilot(opts.SkipAutopilot)
-
-	// re-init the GitProvider.
-	// The setPortCallback must be registered for this NT so that it initializes
-	// the correct repositories.
-	nt.initGitProvider()
 
 	// Print container logs in its own cleanup block to catch fatal errors from
 	// tests and test setup (including resetSyncedRepos).

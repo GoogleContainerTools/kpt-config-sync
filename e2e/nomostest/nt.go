@@ -600,10 +600,7 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		}
 		// allRepos specifies the slice all repos for port forwarding.
 		var allRepos []types.NamespacedName
-		for repo := range nt.RootRepos {
-			allRepos = append(allRepos, RootSyncNN(repo))
-		}
-		for repo := range nt.NonRootRepos {
+		for repo := range nt.RemoteRepositories {
 			allRepos = append(allRepos, repo)
 		}
 		// re-init all repos

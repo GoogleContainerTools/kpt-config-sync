@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -189,6 +188,11 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	nt.detectGKEAutopilot(opts.SkipAutopilot)
 
+	// re-init the GitProvider.
+	// The setPortCallback must be registered for this NT so that it initializes
+	// the correct repositories.
+	nt.initGitProvider()
+
 	// Print container logs in its own cleanup block to catch fatal errors from
 	// tests and test setup (including resetSyncedRepos).
 	t.Cleanup(func() {
@@ -283,6 +287,9 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
 
+	// GitProvider is used by Clean, so this must be instantiated before the call to Clean
+	nt.initGitProvider()
+
 	if *e2e.TestCluster == e2e.Kind {
 		// We're using an ephemeral Kind cluster, so connect to the local Docker
 		// repository. No need to clean before/after as these tests only exist for
@@ -364,12 +371,9 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		allRepos = append(allRepos, repo)
 	}
 
-	var gitProviderOpts []gitproviders.GitProviderOpt
 	if *e2e.GitProvider == e2e.Local {
 		InitGitRepos(nt, allRepos...)
-		gitProviderOpts = append(gitProviderOpts, gitproviders.WithPortForwarder(nt.portForwardGitServer()))
 	}
-	nt.GitProvider = gitproviders.NewGitProvider(nt.T, *e2e.GitProvider, gitProviderOpts...)
 
 	for name := range opts.RootRepos {
 		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)

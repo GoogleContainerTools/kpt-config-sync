@@ -622,6 +622,14 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 	)
 }
 
+func (nt *NT) initGitProvider() {
+	var gitProviderOpts []gitproviders.GitProviderOpt
+	if *e2e.GitProvider == e2e.Local {
+		gitProviderOpts = append(gitProviderOpts, gitproviders.WithPortForwarder(nt.portForwardGitServer()))
+	}
+	nt.GitProvider = gitproviders.NewGitProvider(nt.T, *e2e.GitProvider, gitProviderOpts...)
+}
+
 // portForwardGitServer forwards the prometheus deployment to a port.
 func (nt *NT) portForwardPrometheus() {
 	nt.T.Helper()

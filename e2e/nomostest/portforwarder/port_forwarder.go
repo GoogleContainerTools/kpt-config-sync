@@ -207,7 +207,7 @@ func (pf *PortForwarder) portForwardToDeployment(async bool) error {
 	// time. However, this cleans up subprocesses in the interim.
 	if pf.cmd != nil {
 		pf.logger.Infof("stopping port-forward process for %s/%s", pf.ns, pf.deployment)
-		if err := pf.cmd.Process.Kill(); err != nil && errors.Is(err, os.ErrProcessDone) {
+		if err := pf.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			return errors.Wrap(err, "failed to kill port forward process")
 		}
 	}

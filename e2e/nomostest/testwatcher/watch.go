@@ -122,11 +122,19 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 		predicates = append(predicates, testpredicates.ObjectFoundPredicate)
 	}
 
-	// Use the context to stop the List and/or Watch if they run too long.
-	ctx, cancel := context.WithTimeout(spec.ctx, spec.timeout)
+	// If a timeout is specified (WatchTimeout(0) means no timeout),
+	// then cancel the context after the timeout to cancel the List/Watch.
+	// Otherwise, just cancel on early return.
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if spec.timeout > 0 {
+		ctx, cancel = context.WithTimeout(spec.ctx, spec.timeout)
+	} else {
+		ctx, cancel = context.WithCancel(spec.ctx)
+	}
 	defer cancel()
 
-	lw, err := w.newListWatchForObject(gvk, name, namespace, spec.timeout)
+	lw, err := w.newListWatchForObject(ctx, gvk, name, namespace, spec.timeout)
 	if err != nil {
 		return errors.Wrap(err, errPrefix)
 	}
@@ -294,12 +302,15 @@ func (ewt *ErrWatchTimeout) Unwrap() error { return ewt.cause }
 // newListWatchForObject returns a ListWatch that does server-side filtering
 // down to a single resource object.
 // Optionally specify the minimum timeout for the REST client.
-func (w *Watcher) newListWatchForObject(gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
+func (w *Watcher) newListWatchForObject(ctx context.Context, gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
 	restConfig := w.restConfig
 	// Make sure the client-side watch timeout isn't too short.
 	// If not, duplicate the config and update the timeout.
 	// You can use the Context for timeout, so the rest.Config timeout just needs to be longer.
-	if restConfig.Timeout < timeout*2 {
+	if timeout <= 0 {
+		// no timeout
+		restConfig.Timeout = 0
+	} else if restConfig.Timeout < timeout*2 {
 		restConfig = rest.CopyConfig(restConfig)
 		restConfig.Timeout = timeout * 2
 	}
@@ -322,7 +333,7 @@ func (w *Watcher) newListWatchForObject(gvk schema.GroupVersionKind, name, names
 	// Use a selector to filter the events down to just the object we care about.
 	nameSelector := fields.OneTermEqualSelector("metadata.name", name)
 	// Create a ListerWatcher for this resource and namespace
-	lw := cache.NewListWatchFromClient(restClient, resource, namespace, nameSelector)
+	lw := NewListWatchFromClient(ctx, restClient, resource, namespace, nameSelector)
 	return lw, nil
 }
 
@@ -366,4 +377,39 @@ func (w *Watcher) WatchForNotFound(gvk schema.GroupVersionKind, name, namespace 
 	return w.WatchObject(gvk, name, namespace,
 		[]testpredicates.Predicate{testpredicates.ObjectNotFoundPredicate(w.scheme)},
 		opts...)
+}
+
+// NewListWatchFromClient replaces cache.NewListWatchFromClient, but adds a
+// context, to allow the List and Watch to be cancelled or time out.
+// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/cache/listwatch.go#L70
+func NewListWatchFromClient(ctx context.Context, c cache.Getter, resource string, namespace string, fieldSelector fields.Selector) *cache.ListWatch {
+	optionsModifier := func(options *metav1.ListOptions) {
+		options.FieldSelector = fieldSelector.String()
+	}
+	return NewFilteredListWatchFromClient(ctx, c, resource, namespace, optionsModifier)
+}
+
+// NewFilteredListWatchFromClient replaces cache.NewFilteredListWatchFromClient,
+// but adds a context, to allow the List and Watch to be cancelled or time out.
+// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/cache/listwatch.go#L80
+func NewFilteredListWatchFromClient(ctx context.Context, c cache.Getter, resource string, namespace string, optionsModifier func(options *metav1.ListOptions)) *cache.ListWatch {
+	listFunc := func(options metav1.ListOptions) (runtime.Object, error) {
+		optionsModifier(&options)
+		return c.Get().
+			Namespace(namespace).
+			Resource(resource).
+			VersionedParams(&options, metav1.ParameterCodec).
+			Do(ctx).
+			Get()
+	}
+	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
+		options.Watch = true
+		optionsModifier(&options)
+		return c.Get().
+			Namespace(namespace).
+			Resource(resource).
+			VersionedParams(&options, metav1.ParameterCodec).
+			Watch(ctx)
+	}
+	return &cache.ListWatch{ListFunc: listFunc, WatchFunc: watchFunc}
 }

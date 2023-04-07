@@ -153,6 +153,16 @@ func (pf *PortForwarder) portForwardToPod(pod string, async bool) error {
 		return fmt.Errorf(stderr.String())
 	}
 
+	// Log command exit
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			pf.logger.Infof("command exited for port-forward to pod %s/%s: %v", pf.ns, pod, err)
+		} else {
+			pf.logger.Infof("command exited for port-forward to pod %s/%s: no error", pf.ns, pod)
+		}
+	}()
+
 	localPort := 0
 	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
 	// like a reasonable amount of time to wait.
@@ -186,6 +196,12 @@ func (pf *PortForwarder) portForwardToPod(pod string, async bool) error {
 }
 
 func (pf *PortForwarder) portForwardToDeployment(async bool) error {
+	select {
+	case <-pf.ctx.Done():
+		// Don't bother, subprocess already terminated/terminating
+		return errors.Wrap(pf.ctx.Err(), "failed to start port forward process")
+	default:
+	}
 	// Kill previous port forward process. This isn't strictly necessary since the
 	// subprocess will be killed with the context, and we get a random port every
 	// time. However, this cleans up subprocesses in the interim.
@@ -217,14 +233,14 @@ func (pf *PortForwarder) start() error {
 	// Restart the port forward if the process exits prematurely (e.g. due to pod eviction)
 	go func() {
 		for {
-			if err := pf.watcher.WatchForNotFound(kinds.Pod(), pf.pod, pf.ns, testwatcher.WatchTimeout(1*time.Hour), testwatcher.WatchContext(pf.ctx)); err != nil {
-				pf.logger.Debug(err)
-			}
-			select {
-			case <-pf.ctx.Done():
-				// simply return, the subprocess will be killed with the context.
-				return
-			default:
+			if err := pf.watcher.WatchForNotFound(kinds.Pod(), pf.pod, pf.ns, testwatcher.WatchTimeout(0), testwatcher.WatchContext(pf.ctx)); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					// stop retrying, the subprocess will be killed with the context.
+					return
+				}
+				// Watch automatically retries, so this shouldn't happen unless
+				// there's a terminal error.
+				pf.logger.Infof("Watch exited, restarting port-forward for %s/%s: %v", pf.ns, pf.deployment, err)
 			}
 			if err := pf.portForwardToDeployment(true); err != nil {
 				pf.logger.Info(err)

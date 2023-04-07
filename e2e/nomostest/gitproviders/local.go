@@ -23,17 +23,9 @@ import (
 
 // LocalProvider refers to the test git-server running on the same test cluster.
 type LocalProvider struct {
-	portForwarder *portforwarder.PortForwarder
-}
-
-func newLocalProvider(opts GitProviderOpts) (*LocalProvider, error) {
-	if opts.portForwarder == nil {
-		return nil, fmt.Errorf("must provide a PortForwarderFactory for LocalProvider")
-	}
-	provider := &LocalProvider{
-		portForwarder: opts.portForwarder,
-	}
-	return provider, nil
+	// PortForwarder is a port forwarder to the in-cluster git server.
+	// This is used to communicate from the tests to the in-cluster git server.
+	PortForwarder *portforwarder.PortForwarder
 }
 
 // Type returns the provider type.
@@ -44,11 +36,21 @@ func (l *LocalProvider) Type() string {
 // RemoteURL returns the Git URL for connecting to the test git-server.
 // name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
 func (l *LocalProvider) RemoteURL(name string) (string, error) {
-	port, err := l.portForwarder.LocalPort()
+	if l.PortForwarder == nil {
+		return "", fmt.Errorf("PortForwarder must be set for LocalProvider.RemoteURL()")
+	}
+	port, err := l.PortForwarder.LocalPort()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("ssh://git@localhost:%d/git-server/repos/%s", port, name), nil
+	return l.RemoteURLWithPort(port, name)
+}
+
+// RemoteURLWithPort returns the Git URL for connecting to the test git-server.
+// localPort refers to the local port the PortForwarder is listening on.
+// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
+func (l *LocalProvider) RemoteURLWithPort(localPort int, name string) (string, error) {
+	return fmt.Sprintf("ssh://git@localhost:%d/git-server/repos/%s", localPort, name), nil
 }
 
 // SyncURL returns a URL for Config Sync to sync from.

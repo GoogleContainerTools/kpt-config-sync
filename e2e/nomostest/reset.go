@@ -467,18 +467,36 @@ func stringSliceContains(list []string, value string) bool {
 
 // ResetRepository creates or re-initializes a remote repository.
 func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *gitproviders.Repository {
+	repo := initRepository(nt, repoType, nn, sourceFormat)
+	initialCommit(nt, repoType, nn, sourceFormat)
+	return repo
+}
+
+// initRepository inits a local repository and ensures its remote exists
+func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *gitproviders.Repository {
 	repo, found := nt.RemoteRepositories[nn]
-	if found {
-		if err := repo.Reformat(sourceFormat); err != nil {
-			nt.T.Fatal(err)
-		}
-	} else {
+	if !found {
 		repo = gitproviders.NewRepository(repoType, nn, sourceFormat, nt.Scheme,
 			nt.Logger, nt.GitProvider, nt.TmpDir, nt.gitPrivateKeyPath, nt.DefaultWaitTimeout)
 		if err := repo.Create(); err != nil {
 			nt.T.Fatal(err)
 		}
 		nt.RemoteRepositories[nn] = repo
+	}
+	if err := repo.Init(); err != nil {
+		nt.T.Fatal(err)
+	}
+	return repo
+}
+
+// initialCommit creates an initial commit and pushes it to the remote
+func initialCommit(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) {
+	repo, found := nt.RemoteRepositories[nn]
+	if !found {
+		nt.T.Fatal("repo %s not found", nn.String())
+	}
+	if err := repo.InitialCommit(sourceFormat); err != nil {
+		nt.T.Fatal(err)
 	}
 	// Reset expected objects.
 	// These are used to offset metrics expectations.
@@ -489,7 +507,6 @@ func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.Namespaced
 	} else {
 		nt.MetricsExpectations.ResetRepoSync(nn)
 	}
-	return repo
 }
 
 // TailReconcilerLogs starts tailing a reconciler's logs.

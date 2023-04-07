@@ -152,6 +152,14 @@ func (pf *PortForwarder) portForwardToPod(pod string, async bool) error {
 	if stderr.Len() != 0 {
 		return fmt.Errorf(stderr.String())
 	}
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			pf.logger.Infof("port forward process to pod %s exited with err %s", pod, err)
+		} else {
+			pf.logger.Infof("port forward process to pod %s exited with no error")
+		}
+	}()
 
 	localPort := 0
 	// In CI, 1% of the time this takes longer than 20 seconds, so 30 seconds seems
@@ -217,7 +225,8 @@ func (pf *PortForwarder) start() error {
 	// Restart the port forward if the process exits prematurely (e.g. due to pod eviction)
 	go func() {
 		for {
-			if err := pf.watcher.WatchForNotFound(kinds.Pod(), pf.pod, pf.ns, testwatcher.WatchTimeout(1*time.Hour), testwatcher.WatchContext(pf.ctx)); err != nil {
+			// Watch for a long time until pod is not found (cancelled with context)
+			if err := pf.watcher.WatchForNotFound(kinds.Pod(), pf.pod, pf.ns, testwatcher.WatchTimeout(24*time.Hour), testwatcher.WatchContext(pf.ctx)); err != nil {
 				pf.logger.Debug(err)
 			}
 			select {

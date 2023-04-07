@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -508,12 +509,12 @@ func (g *Repository) Push(refspec string, flags ...string) {
 		args = append(args, flags...)
 		remoteURL, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
 		if err != nil {
-			return err
+			return errors.Wrap(err, fmt.Sprintf("failed to get URL for remote to repo %s", g.RemoteRepoName))
 		}
 		args = append(args, remoteURL, refspec)
 		cmd := g.gitCmd(args...)
 		out, err = cmd.CombinedOutput()
-		return err
+		return errors.Wrap(err, fmt.Sprintf("failed to push to remote %s", remoteURL))
 	})
 	if err != nil {
 		g.T.Log(string(out))
@@ -526,6 +527,7 @@ func (g *Repository) pushAllToRemote() {
 	if err != nil {
 		g.T.Errorf("failed to get remote URL: %v", err)
 	}
+	g.Logger.Infof("push all refs to remote %s", remote)
 	cmd := g.gitCmd("push", remote, "--all")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

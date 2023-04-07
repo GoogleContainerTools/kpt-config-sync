@@ -242,6 +242,7 @@ func InitGitRepos(nt *NT, repos ...types.NamespacedName) {
 	podName := pod.Name
 
 	for _, repo := range repos {
+		nt.T.Logf("initializing repo %s", repo.String())
 		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "init", "--bare", "--shared", fmt.Sprintf("/git-server/repos/%s/%s", repo.Namespace, repo.Name))
 		// We set receive.denyNonFastforwards to allow force pushes for legacy test support (bats).  In the future we may

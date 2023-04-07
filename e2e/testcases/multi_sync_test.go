@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -111,17 +110,6 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 		}
 	})
 
-	var newRepos []types.NamespacedName
-	newRepos = append(newRepos, nomostest.RootSyncNN(rr2))
-	newRepos = append(newRepos, nomostest.RootSyncNN(rr3))
-	newRepos = append(newRepos, nn2)
-	newRepos = append(newRepos, nn3)
-	newRepos = append(newRepos, nn4)
-	newRepos = append(newRepos, nn5)
-
-	if nt.GitProvider.Type() == e2e.Local {
-		nomostest.InitGitRepos(nt, newRepos...)
-	}
 	rr2Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
 	rr3Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
 	nn2Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)

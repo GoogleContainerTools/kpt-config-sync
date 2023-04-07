@@ -54,9 +54,9 @@ type PortForwarder struct {
 	deployment string
 	// port is the port on the Pod to forward to
 	port string
-	// setPortCallback is a callback which will be invoked whenever the Pod changes and the
-	// port-forward is recreated.
-	setPortCallback func(int, string)
+	// updateCallback is a callback which will be invoked whenever the
+	// forwarding has been started or restarted.
+	updateCallback UpdateCallback
 	// mux is a mutex to synchronize getting/setting the port-forward value
 	mux sync.Mutex
 	// localPort is the local port which forwards to the Pod
@@ -67,14 +67,18 @@ type PortForwarder struct {
 	cmd *exec.Cmd
 }
 
+// UpdateCallback is a function called by the PortForwarder after the forwarding
+// has started or restarted.
+type UpdateCallback func(int, string) error
+
 // PortForwardOpt is an optional parameter for PortForwarder
 type PortForwardOpt func(pf *PortForwarder)
 
-// WithSetPortCallback registers a callback that will be invoked whenever the
-// deployment's underlying pod changes and the port-forward is recreated.
-func WithSetPortCallback(setFn func(int, string)) PortForwardOpt {
+// WithUpdateCallback registers a callback that will be invoked whenever the
+// forwarding is started or restarted.
+func WithUpdateCallback(setFn UpdateCallback) PortForwardOpt {
 	return func(pf *PortForwarder) {
-		pf.setPortCallback = setFn
+		pf.updateCallback = setFn
 	}
 }
 
@@ -117,7 +121,7 @@ func (pf *PortForwarder) LocalPort() (int, error) {
 	return pf.localPort, nil
 }
 
-func (pf *PortForwarder) setPort(cmd *exec.Cmd, port int, pod string, async bool) {
+func (pf *PortForwarder) update(cmd *exec.Cmd, port int, pod string, async bool) error {
 	pf.logger.Infof("updating port-forward %s:%d -> %s:%d", pf.pod, pf.localPort, pod, port)
 	if async {
 		pf.mux.Lock()
@@ -128,9 +132,12 @@ func (pf *PortForwarder) setPort(cmd *exec.Cmd, port int, pod string, async bool
 	if async {
 		pf.mux.Unlock()
 	}
-	if pf.setPortCallback != nil {
-		pf.setPortCallback(port, pod)
+	if pf.updateCallback != nil {
+		if err := pf.updateCallback(port, pod); err != nil {
+			return errors.Wrapf(err, "failed to execute port-forwarding callback")
+		}
 	}
+	return nil
 }
 
 // portForwardToPod establishes a port forwarding to the provided pod name. This
@@ -181,7 +188,9 @@ func (pf *PortForwarder) portForwardToPod(pod string, async bool) error {
 		return err
 	}
 	pf.logger.Infof("took %v to wait for port-forward to pod %s/%s (localhost:%d)", took, pf.ns, pod, localPort)
-	pf.setPort(cmd, localPort, pod, async)
+	if err := pf.update(cmd, localPort, pod, async); err != nil {
+		return err
+	}
 	return nil
 }
 

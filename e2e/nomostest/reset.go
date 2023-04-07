@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -50,7 +51,7 @@ var sharedTestNamespaces = []string{
 	configsync.ControllerNamespace,
 	configmanagement.RGControllerNamespace,
 	metrics.MonitoringNamespace,
-	testGitNamespace,
+	gitproviders.LocalGitNamespace,
 	prometheusNamespace,
 }
 

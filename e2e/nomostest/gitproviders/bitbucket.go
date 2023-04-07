@@ -42,26 +42,9 @@ const (
 
 // BitbucketClient is the client that calls the Bitbucket REST APIs.
 type BitbucketClient struct {
-	oauthKey     string
-	oauthSecret  string
-	refreshToken string
-}
-
-// newBitbucketClient instantiates a new Bitbucket client.
-func newBitbucketClient() (*BitbucketClient, error) {
-	client := &BitbucketClient{}
-
-	var err error
-	if client.oauthKey, err = FetchCloudSecret("bitbucket-oauth-key"); err != nil {
-		return client, err
-	}
-	if client.oauthSecret, err = FetchCloudSecret("bitbucket-oauth-secret"); err != nil {
-		return client, err
-	}
-	if client.refreshToken, err = FetchCloudSecret("bitbucket-refresh-token"); err != nil {
-		return client, err
-	}
-	return client, nil
+	OAuthKey     string
+	OAuthSecret  string
+	RefreshToken string
 }
 
 // Type returns the provider type.
@@ -173,10 +156,10 @@ func (b *BitbucketClient) DeleteObsoleteRepos() error {
 
 func (b *BitbucketClient) refreshAccessToken() (string, error) {
 	out, err := exec.Command("curl", "-sX", "POST", "-u",
-		fmt.Sprintf("%s:%s", b.oauthKey, b.oauthSecret),
+		fmt.Sprintf("%s:%s", b.OAuthKey, b.OAuthSecret),
 		"https://bitbucket.org/site/oauth2/access_token",
 		"-d", "grant_type=refresh_token",
-		"-d", "refresh_token="+b.refreshToken).CombinedOutput()
+		"-d", "refresh_token="+b.RefreshToken).CombinedOutput()
 
 	if err != nil {
 		return "", errors.Wrap(err, string(out))

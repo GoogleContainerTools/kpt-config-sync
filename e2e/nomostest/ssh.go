@@ -38,9 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 )
 
-const gitServerSecret = "ssh-pub"
 const namespaceSecret = "ssh-key"
-const gitServerCertSecret = "ssl-cert"
 const gitServerPublicCertSecret = "git-cert-pub"
 
 func sshDir(nt *NT) string {
@@ -187,7 +185,7 @@ func generateSSHKeys(nt *NT) string {
 	createSecret(nt, configmanagement.ControllerNamespace, controllers.GitCredentialVolume,
 		fmt.Sprintf("ssh=%s", privateKeyPath(nt)))
 
-	createSecret(nt, testGitNamespace, gitServerSecret,
+	createSecret(nt, gitproviders.LocalGitNamespace, gitproviders.LocalGitServerSecret,
 		filepath.Join(publicKeyPath(nt)))
 
 	return privateKeyPath(nt)
@@ -207,7 +205,7 @@ func generateSSLKeys(nt *NT) string {
 	createSecret(nt, configmanagement.ControllerNamespace, gitServerPublicCertSecret,
 		fmt.Sprintf("cert=%s", caCertPath(nt)))
 
-	createSecret(nt, testGitNamespace, gitServerCertSecret,
+	createSecret(nt, gitproviders.LocalGitNamespace, gitproviders.LocalGitServerCertSecret,
 		fmt.Sprintf("server.crt=%s", certPath(nt)),
 		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt)))
 

@@ -576,7 +576,7 @@ func (nt *NT) newPortForwarder(ns, deployment, port string, opts ...portforwarde
 	)
 }
 
-// portForwardOtelCollector forwards the otel-collector deployment to a port.
+// portForwardOtelCollector initializes a PortForwarder to the otel-collector
 func (nt *NT) portForwardOtelCollector() {
 	if nt.otelCollectorPortForwarder != nil {
 		nt.T.Fatal("otel collector port forward already initialized")
@@ -588,46 +588,90 @@ func (nt *NT) portForwardOtelCollector() {
 	)
 }
 
-// portForwardGitServer forwards the git-server deployment to a port.
+// portForwardGitServer initializes a PortForwarder to the Git server
 func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 	nt.T.Helper()
 	prevPodName := ""
-	resetGitRepos := func(newPort int, podName string) {
-		// pod unchanged, don't reset
+	resetGitRepos := func(newPort int, podName string) error {
+		// Pod unchanged, don't reset
 		if prevPodName == "" || prevPodName == podName {
 			prevPodName = podName
-			return
+			return nil
+		}
+		// portForwardGitServer should only ever be called for LocalProvider,
+		// but nt.GitProvider won't have been set when it's first called.
+		// So validate this at runtime.
+		lp, ok := nt.GitProvider.(*gitproviders.LocalProvider)
+		if !ok {
+			return errors.Errorf("expected *LocalProvider, but found %T", nt.GitProvider)
 		}
 		// allRepos specifies the slice all repos for port forwarding.
 		var allRepos []types.NamespacedName
 		for repo := range nt.RemoteRepositories {
 			allRepos = append(allRepos, repo)
 		}
-		// re-init all repos
-		InitGitRepos(nt, allRepos...)
-		// attempt to recover by re-pushing the local repo states
-		for _, remoteRepo := range nt.RemoteRepositories {
-			remoteRepo.pushAllToRemote()
+		// re-init all local repos
+		if err := lp.InitRepos(allRepos, nt.DefaultWaitTimeout); err != nil {
+			return errors.Wrap(err, "failed to init git repos")
 		}
+		// attempt to recover by re-pushing the local repo states
+		for _, repo := range nt.RemoteRepositories {
+			if err := repo.PushAllBranches(); err != nil {
+				return err
+			}
+		}
+		// Update the cached pod name
 		prevPodName = podName
+		return nil
 	}
 	return nt.newPortForwarder(
-		testGitNamespace,
-		testGitServer,
+		gitproviders.LocalGitNamespace,
+		gitproviders.LocalGitServer,
 		":22",
-		portforwarder.WithSetPortCallback(resetGitRepos),
+		portforwarder.WithUpdateCallback(resetGitRepos),
 	)
 }
 
 func (nt *NT) initGitProvider() {
-	var gitProviderOpts []gitproviders.GitProviderOpt
-	if *e2e.GitProvider == e2e.Local {
-		gitProviderOpts = append(gitProviderOpts, gitproviders.WithPortForwarder(nt.portForwardGitServer()))
+	switch *e2e.GitProvider {
+	case e2e.Bitbucket:
+		oauthKey, err := gitproviders.FetchCloudSecret("bitbucket-oauth-key")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		oauthSecret, err := gitproviders.FetchCloudSecret("bitbucket-oauth-secret")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		refreshToken, err := gitproviders.FetchCloudSecret("bitbucket-refresh-token")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		nt.GitProvider = &gitproviders.BitbucketClient{
+			OAuthKey:     oauthKey,
+			OAuthSecret:  oauthSecret,
+			RefreshToken: refreshToken,
+		}
+	case e2e.GitLab:
+		privateToken, err := gitproviders.FetchCloudSecret("gitlab-private-token")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		nt.GitProvider = &gitproviders.GitlabClient{
+			PrivateToken: privateToken,
+		}
+	default:
+		nt.GitProvider = &gitproviders.LocalProvider{
+			PortForwarder: nt.portForwardGitServer(),
+			Shell:         nt.Shell,
+			KubeClient:    nt.KubeClient,
+			KubeWatcher:   nt.Watcher,
+			PSPEnabled:    isPSPCluster(),
+		}
 	}
-	nt.GitProvider = gitproviders.NewGitProvider(nt.T, *e2e.GitProvider, gitProviderOpts...)
 }
 
-// portForwardGitServer forwards the prometheus deployment to a port.
+// portForwardPrometheus initializes a PortForwarder to the Prometheus server
 func (nt *NT) portForwardPrometheus() {
 	nt.T.Helper()
 	if nt.prometheusPortForwarder != nil {

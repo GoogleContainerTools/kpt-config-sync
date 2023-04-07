@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -158,24 +159,20 @@ func (g *Repository) ReInit(nt *NT, sourceFormat filesystem.SourceFormat) {
 	g.initialCommit(sourceFormat)
 }
 
-func (g *Repository) gitCmd(command ...string) *exec.Cmd {
+// Git wraps shelling out to git, ensuring we're running from the git repository
+func (g *Repository) Git(command ...string) ([]byte, error) {
 	// The -C flag executes git from repository root.
 	// https://git-scm.com/docs/git#Documentation/git.txt--Cltpathgt
 	args := []string{"git", "-C", g.Root}
 	args = append(args, command...)
 	g.Logger.Debugf("[repo %s] %s", path.Base(g.Root), strings.Join(args, " "))
-	return exec.Command(args[0], args[1:]...)
+	return exec.Command(args[0], args[1:]...).CombinedOutput()
 }
 
-// Git wraps shelling out to git, ensuring we're running from the git repository
-//
-// Fails immediately if any git command fails.
-func (g *Repository) Git(command ...string) {
+// MustGit calls Git. If it errors, the output is logged and the test fails.
+func (g *Repository) MustGit(command ...string) {
 	g.T.Helper()
-
-	cmd := g.gitCmd(command...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
+	if out, err := g.Git(command...); err != nil {
 		g.Logger.Info(string(out))
 		g.T.Fatal(err)
 	}
@@ -511,8 +508,7 @@ func (g *Repository) Push(refspec string, flags ...string) {
 			return err
 		}
 		args = append(args, remoteURL, refspec)
-		cmd := g.gitCmd(args...)
-		out, err = cmd.CombinedOutput()
+		out, err = g.Git(args...)
 		return err
 	})
 	if err != nil {
@@ -521,17 +517,18 @@ func (g *Repository) Push(refspec string, flags ...string) {
 	}
 }
 
-func (g *Repository) pushAllToRemote() {
-	remote, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
+// PushAllBranches pushes all the local branches to the remote repository
+func (g *Repository) PushAllBranches() error {
+	remoteURL, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
 	if err != nil {
-		g.T.Errorf("failed to get remote URL: %v", err)
+		return errors.Wrapf(err, "failed to get URL for repo: %s", g.RemoteRepoName)
 	}
-	cmd := g.gitCmd("push", remote, "--all")
-	out, err := cmd.CombinedOutput()
+	out, err := g.Git("push", remoteURL, "--all")
 	if err != nil {
 		g.T.Log(string(out))
-		g.T.Errorf("failed to push to remote %s: %v", remote, err)
+		return errors.Wrapf(err, "failed to push to remote URL: %s", remoteURL)
 	}
+	return nil
 }
 
 // CreateBranch creates and checkouts a new branch at once.
@@ -565,7 +562,7 @@ func (g *Repository) RenameBranch(current, new string) {
 func (g *Repository) Hash() string {
 	// Get the hash of the git repository.
 	// git rev-parse --verify HEAD
-	out, err := g.gitCmd("rev-parse", "--verify", "HEAD").CombinedOutput()
+	out, err := g.Git("rev-parse", "--verify", "HEAD")
 	if err != nil {
 		g.Logger.Info(string(out))
 		g.T.Fatal(err)

@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -319,19 +320,19 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := nt.KubeClient.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if *e2e.GitProvider == e2e.Local {
-		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
+	lp, ok := nt.GitProvider.(*gitproviders.LocalProvider)
+	if ok {
+		if err := lp.InstallNamespace(); err != nil {
 			nt.T.Fatal(err)
 		}
+
 		// Pods don't always restart if the secrets don't exist, so we have to
 		// create the Namespaces + Secrets before anything else.
 		nt.gitPrivateKeyPath = generateSSHKeys(nt)
-
 		nt.caCertPath = generateSSLKeys(nt)
 
-		waitForGit := installGitServer(nt)
-		if err := waitForGit(); err != nil {
-			nt.describeNotRunningTestPods(testGitNamespace)
+		if err := lp.Install(); err != nil {
+			nt.describeNotRunningTestPods(gitproviders.LocalGitNamespace)
 			t.Fatalf("waiting for git-server Deployment to become available: %v", err)
 		}
 	} else {
@@ -357,19 +358,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.T.Log("[SETUP] New test case")
-
-	// allRepos specifies the slice all repos for port forwarding.
-	var allRepos []types.NamespacedName
-	for repo := range opts.RootRepos {
-		allRepos = append(allRepos, RootSyncNN(repo))
-	}
-	for repo := range opts.NamespaceRepos {
-		allRepos = append(allRepos, repo)
-	}
-
-	if *e2e.GitProvider == e2e.Local {
-		InitGitRepos(nt, allRepos...)
-	}
 
 	for name := range opts.RootRepos {
 		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)

@@ -153,10 +153,10 @@ func (tc *KubeClient) MergePatch(obj client.Object, patch string, opts ...client
 // uses label selectors to uniquely identify its pods.
 // This is primarily useful for finding the current pod for a reconciler or
 // other single-replica controller deployments.
-func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytTimeout time.Duration) (*corev1.Pod, error) {
+func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retryTimeout time.Duration) (*corev1.Pod, error) {
 	deploymentNN := types.NamespacedName{Name: deploymentName, Namespace: namespace}
 	var pod *corev1.Pod
-	took, err := retry.Retry(retrytTimeout, func() error {
+	took, err := retry.Retry(retryTimeout, func() error {
 		deployment := &appsv1.Deployment{}
 		if err := tc.Get(deploymentNN.Name, deploymentNN.Namespace, deployment); err != nil {
 			return err

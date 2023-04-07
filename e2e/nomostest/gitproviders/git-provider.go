@@ -14,12 +14,6 @@
 
 package gitproviders
 
-import (
-	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/portforwarder"
-	"kpt.dev/configsync/e2e/nomostest/testing"
-)
-
 const (
 	// GitUser is the user for all Git providers.
 	GitUser = "config-sync-ci-bot"
@@ -42,49 +36,4 @@ type GitProvider interface {
 	CreateRepository(name string) (string, error)
 	DeleteRepositories(names ...string) error
 	DeleteObsoleteRepos() error
-}
-
-// GitProviderOpt is an optional parameter for instantiating a new GitProvider
-type GitProviderOpt func(opts *GitProviderOpts)
-
-// GitProviderOpts is the set of optional parameters for instantiating a new GitProvider
-type GitProviderOpts struct {
-	portForwarder *portforwarder.PortForwarder
-}
-
-// WithPortForwarder provides a PortForwarder for the GitProvider to use.
-// Required for LocalProvider in order to establish a PortForwarder to the in-cluster
-// git server.
-func WithPortForwarder(portForwarder *portforwarder.PortForwarder) GitProviderOpt {
-	return func(opts *GitProviderOpts) {
-		opts.portForwarder = portForwarder
-	}
-}
-
-// NewGitProvider creates a GitProvider for the specific provider type.
-func NewGitProvider(t testing.NTB, provider string, opts ...GitProviderOpt) GitProvider {
-	options := GitProviderOpts{}
-	for _, opt := range opts {
-		opt(&options)
-	}
-	switch provider {
-	case e2e.Bitbucket:
-		client, err := newBitbucketClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return client
-	case e2e.GitLab:
-		client, err := newGitlabClient()
-		if err != nil {
-			t.Fatal((err))
-		}
-		return client
-	default:
-		client, err := newLocalProvider(options)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return client
-	}
 }

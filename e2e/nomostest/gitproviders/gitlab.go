@@ -35,19 +35,7 @@ const (
 
 // GitlabClient is the client that will call Gitlab REST APIs.
 type GitlabClient struct {
-	privateToken string
-}
-
-// newGitlabClient instantiates a new GitlabClient.
-func newGitlabClient() (*GitlabClient, error) {
-	client := &GitlabClient{}
-
-	var err error
-
-	if client.privateToken, err = FetchCloudSecret("gitlab-private-token"); err != nil {
-		return client, err
-	}
-	return client, nil
+	PrivateToken string
 }
 
 // Type returns the git provider type
@@ -85,7 +73,7 @@ func (g *GitlabClient) CreateRepository(name string) (string, error) {
 	// no protected branch.
 	out, err := exec.Command("curl", "-s", "--request", "POST",
 		fmt.Sprintf("https://gitlab.com/api/v4/projects?name=%s&namespace_id=%d&initialize_with_readme=true", repoName, groupID),
-		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
+		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.PrivateToken)).CombinedOutput()
 
 	if err != nil {
 		return "", errors.Wrap(err, string(out))
@@ -102,7 +90,7 @@ func (g *GitlabClient) CreateRepository(name string) (string, error) {
 func GetProjectID(g *GitlabClient, name string) (string, error) {
 	out, err := exec.Command("curl", "-s", "--request", "GET",
 		fmt.Sprintf("https://gitlab.com/api/v4/projects?search=%s", name),
-		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
+		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.PrivateToken)).CombinedOutput()
 
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("Failure retrieving id for project %s", name))
@@ -149,7 +137,7 @@ func (g *GitlabClient) DeleteRepositories(names ...string) error {
 		} else {
 			out, err := exec.Command("curl", "-s", "--request", "DELETE",
 				fmt.Sprintf("https://gitlab.com/api/v4/projects/%s", id),
-				"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
+				"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.PrivateToken)).CombinedOutput()
 
 			if err != nil {
 				errs = multierr.Append(errs, errors.Wrap(err, string(out)))
@@ -178,7 +166,7 @@ func (g *GitlabClient) DeleteRepoByID(ids ...string) error {
 	for _, id := range ids {
 		out, err := exec.Command("curl", "-s", "--request", "DELETE",
 			fmt.Sprintf("https://gitlab.com/api/v4/projects/%s", id),
-			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
+			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.PrivateToken)).CombinedOutput()
 
 		if err != nil {
 			errs = multierr.Append(errs, errors.Wrap(err, string(out)))
@@ -203,7 +191,7 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 	for {
 		out, err := exec.Command("curl", "-s", "--request", "GET",
 			fmt.Sprintf("https://gitlab.com/api/v4/projects?last_activity_before=%s&owned=yes&simple=yes&page=%d", formattedDate, pageNum),
-			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
+			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.PrivateToken)).CombinedOutput()
 
 		if err != nil {
 			return result, errors.Wrap(err, "Failure retrieving obsolete repos")

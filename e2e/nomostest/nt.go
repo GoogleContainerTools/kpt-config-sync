@@ -591,8 +591,18 @@ func (nt *NT) portForwardOtelCollector() {
 // portForwardGitServer forwards the git-server deployment to a port.
 func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 	nt.T.Helper()
+	// Register a callback that will re-initialize and re-push all branches,
+	// whenever the port-forward is restarted and ready. This allows for
+	// recovery when the local git-server pod is replaced or rescheduled,
+	// which is relatively common on GKE Autopilot when there's a lot of cluster
+	// scheduling churn.
+	// Use a lock to ensure it only executes one at a time.
+	// TODO: refactor the GitProvider calls to return errors, instead of failing the test
+	var mux sync.Mutex
 	prevPodName := ""
 	resetGitRepos := func(newPort int, podName string) {
+		mux.Lock()
+		defer mux.Unlock()
 		// pod unchanged, don't reset
 		if prevPodName == "" || prevPodName == podName {
 			prevPodName = podName
@@ -607,7 +617,7 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		InitGitRepos(nt, allRepos...)
 		// attempt to recover by re-pushing the local repo states
 		for _, remoteRepo := range nt.RemoteRepositories {
-			remoteRepo.pushAllToRemote()
+			remoteRepo.PushAllBranches()
 		}
 		prevPodName = podName
 	}
@@ -615,7 +625,7 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		testGitNamespace,
 		testGitServer,
 		":22",
-		portforwarder.WithSetPortCallback(resetGitRepos),
+		portforwarder.WithOnReady(resetGitRepos),
 	)
 }
 

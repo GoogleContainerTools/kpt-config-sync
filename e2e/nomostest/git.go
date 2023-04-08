@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -500,38 +501,35 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) {
 }
 
 // Push pushes the provided refspec to the git server.
-// Performs a retry using RemoteURL, which may change if the port forwarding restarts.
-func (g *Repository) Push(refspec string, flags ...string) {
+// Waits until the GitProvider is ready and retries until successful.
+func (g *Repository) Push(args ...string) {
 	var out []byte
-	took, err := retry.Retry(1*time.Minute, func() error {
-		args := []string{"push"}
-		args = append(args, flags...)
+	timeout := 1 * time.Minute
+	if g.GitProvider.Type() == e2e.Local {
+		// Wait long enough for the local git-server pod to be rescheduled
+		// on GKE Autopilot, which may involve spinning up a new node.
+		timeout = 5 * time.Minute
+	}
+	took, err := retry.Retry(timeout, func() error {
 		remoteURL, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
 		if err != nil {
 			return err
 		}
-		args = append(args, remoteURL, refspec)
-		cmd := g.gitCmd(args...)
+		cmd := g.gitCmd(append([]string{"push", remoteURL}, args...)...)
 		out, err = cmd.CombinedOutput()
 		return err
 	})
 	if err != nil {
-		g.T.Log(string(out))
-		g.T.Fatalf("took %v, err %v", took, err)
+		if len(out) > 0 {
+			g.T.Logf("stdout: %s", string(out))
+		}
+		g.T.Fatalf("took %v to push, err %v", took, err)
 	}
 }
 
-func (g *Repository) pushAllToRemote() {
-	remote, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
-	if err != nil {
-		g.T.Errorf("failed to get remote URL: %v", err)
-	}
-	cmd := g.gitCmd("push", remote, "--all")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		g.T.Log(string(out))
-		g.T.Errorf("failed to push to remote %s: %v", remote, err)
-	}
+// PushAllBranches push all local branches to the git server.
+func (g *Repository) PushAllBranches() {
+	g.Push("--all")
 }
 
 // CreateBranch creates and checkouts a new branch at once.

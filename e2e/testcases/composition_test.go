@@ -315,15 +315,13 @@ func TestComposition(t *testing.T) {
 		if me, ok := err.(multiErr); ok {
 			for _, err := range me.Errors() {
 				// Timeout or Cancel expected. Otherwise it probably means the RV changed.
-				var timeoutErr *testwatcher.ErrWatchTimeout
-				if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
+				if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 					nt.T.Fatal(err)
 				}
 			}
 		} else {
 			// Timeout or Cancel expected. Otherwise it probably means the RV changed.
-			var timeoutErr *testwatcher.ErrWatchTimeout
-			if !errors.As(err, &timeoutErr) && !errors.Is(err, context.Canceled) {
+			if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 				nt.T.Fatal(err)
 			}
 		}

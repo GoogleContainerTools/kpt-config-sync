@@ -271,33 +271,35 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	_, err = watchtools.Until(ctx, initialResourceVersion, lw, condition)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
-			if len(evalErrs) > 0 {
-				return &ErrWatchTimeout{
-					cause:  multierr.Combine(evalErrs...),
-					prefix: errPrefix,
-				}
+			// Until returns ErrWaitTimeout for any ctx.Done
+			// https://github.com/kubernetes/apimachinery/blob/v0.26.3/pkg/util/wait/wait.go#L594
+			// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/watch/until.go#L89
+			// So use the context error instead, if done.
+			// Use errors.Is to detect DeadlineExceeded or Cancelled.
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+			default:
 			}
-			return errors.Errorf("%s timed out before any watch events were received", errPrefix)
+		}
+		if len(evalErrs) > 0 {
+			// errors.Is only works with a single parent error, and we want to
+			// detect DeadlineExceeded vs Cancelled.
+			// So use the context error as the cause and convert the
+			// predicate errors into a string.
+			// If we ever need to test for a specific predicate failure, this
+			// may need to change. But for now we don't.
+			err = errors.Wrapf(err, "predicates not satisfied: %v", multierr.Combine(evalErrs...))
+		} else {
+			// If we got no errors, it probably means the context was cancelled
+			// before the ConditionFunc was called.
+			err = errors.Wrap(err, "no watch events were received")
 		}
 		return errors.Wrap(err, errPrefix)
 	}
 	// Success! Condition returned true.
 	return nil
 }
-
-// ErrWatchTimeout is returned by Watch functions to indicate timeout.
-type ErrWatchTimeout struct {
-	cause  error
-	prefix string
-}
-
-// Error returns the error message.
-func (ewt *ErrWatchTimeout) Error() string {
-	return fmt.Sprintf("%s timed out waiting for predicates: %v", ewt.prefix, ewt.cause)
-}
-
-// Unwrap provides compatibility for Go 1.13 error chains.
-func (ewt *ErrWatchTimeout) Unwrap() error { return ewt.cause }
 
 // newListWatchForObject returns a ListWatch that does server-side filtering
 // down to a single resource object.

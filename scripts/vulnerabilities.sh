@@ -1,12 +1,11 @@
 #!/bin/bash
-#
-# Copyright 2023 The Kubernetes Authors.
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,6 +41,15 @@ configsync_image_tag="${1:-${configsync_latest_image_tag}}"
 
 GCP_PROJECT="${GCP_PROJECT:-config-management-release}"
 
+# find the tag for the gcenode-askpass-sidecar image by reading it from a Go constant.
+# This sidecar is injected at runtime. So it's not in any local manifest files.
+find_askpass_image_tag() {
+  grep -ohE --color=never 'gceNodeAskpassImageTag\s*=.*' pkg/reconcilermanager/controllers/gcenode_askpass_sidecar.go |
+    sed -E 's/gceNodeAskpassImageTag\s*=\s*"(\S+)"/\1/'
+}
+
+GCENODE_ASKPASS_TAG="${GCENODE_ASKPASS_TAG:-$(find_askpass_image_tag)}"
+
 # TODO: share with Makefile to keep in sync
 configsync_images=(
   "gcr.io/${GCP_PROJECT}/reconciler"
@@ -54,22 +62,16 @@ configsync_images=(
   "gcr.io/${GCP_PROJECT}/nomos"
 )
 
-dependency_images=(
-  "gcr.io/${GCP_PROJECT}/resource-group-controller"
-  "gcr.io/${GCP_PROJECT}/git-sync"
-  "gcr.io/${GCP_PROJECT}/otelcontribcol"
+# Build a full list of images with tags
+images=(
+  "gcr.io/${GCP_PROJECT}/gcenode-askpass-sidecar:${GCENODE_ASKPASS_TAG}"
 )
 
-# find the "name:tag" of images in the manifest directory by name
-find_manifest_images_by_name() {
-  image_name="$1"
-  grep -roh --color=never \
-    "${image_name}:\S*" \
-    ./manifests/ | uniq
+# find the "name:tag" of images in the manifests directory.
+find_manifest_images() {
+  grep -rohE --color=never "image:\s+\S+:\S+" manifests/**/*.yaml |
+    awk '{print $2}' | sort | uniq
 }
-
-# Build a full list of images with tags
-images=()
 
 # Add the specified tag to all configsync images
 for image_name in "${configsync_images[@]}"; do
@@ -77,14 +79,9 @@ for image_name in "${configsync_images[@]}"; do
 done
 
 # Add dependencies from the manifests
-for image_name in "${dependency_images[@]}"; do
-  more_images=$(find_manifest_images_by_name "${image_name}")
-  if [[ "${more_images}" != "" ]]; then
-    while IFS='' read -r image; do
-      images+=("${image}")
-    done <<<"${more_images}"
-  fi
-done
+while IFS='' read -r image; do
+  images+=("${image}")
+done <<<"$(find_manifest_images)"
 
 fixable_total=0
 declare -A vuln_map
@@ -94,12 +91,17 @@ echo -n "Scanning" >&2
 # Sum the fixable vulnerabilities with severity CRITICAL, HIGH, or MEDIUM
 for image in "${images[@]}"; do
   echo -n "."
-  vulnerabilities=$(gcloud beta container images describe --project "${GCP_PROJECT}" --show-package-vulnerability --format json --verbosity error "${image}" |
-    jq -r '.package_vulnerability_summary.vulnerabilities')
-  fixable=$(echo "${vulnerabilities}" |
-    jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
-  vuln_map[${image}]=${fixable}
-  fixable_total=$((fixable_total + fixable))
+  if [[ "${image}" == "gcr.io/${GCP_PROJECT}/"* ]]; then
+    vulnerabilities=$(gcloud beta container images describe --project "${GCP_PROJECT}" --show-package-vulnerability --format json --verbosity error "${image}" |
+      jq -r '.package_vulnerability_summary.vulnerabilities')
+    fixable=$(echo "${vulnerabilities}" |
+      jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
+    vuln_map[${image}]=${fixable}
+    fixable_total=$((fixable_total + fixable))
+  else
+    # Images from other repos are ignored, because we can't remotely scan them with GCR.
+    vuln_map[${image}]="UNKNOWN"
+  fi
 done
 
 echo # done scanning

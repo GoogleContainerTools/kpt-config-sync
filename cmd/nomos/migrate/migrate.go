@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -98,18 +99,23 @@ var Cmd = &cobra.Command{
 			return err
 		}
 
+		var migrationContexts []string
+		migrationError := false
 		for context, c := range clientMap {
+			migrationContexts = append(migrationContexts, context)
 			fmt.Println()
 			fmt.Println(util.Separator)
 			fmt.Printf("Enabling the multi-repo mode on cluster %q ...\n", context)
 			cs := &status.ClusterState{Ref: context}
 			if !c.IsInstalled(cmd.Context(), cs) || !c.IsConfigured(cmd.Context(), cs) {
 				printError(cs.Error)
+				migrationError = true
 				continue
 			}
 			isMulti, err := c.ConfigManagement.IsMultiRepo(cmd.Context())
 			if err != nil {
 				printError(err)
+				migrationError = true
 				continue
 			}
 			if isMulti != nil && *isMulti {
@@ -120,11 +126,13 @@ var Cmd = &cobra.Command{
 			rootSync, rsYamlFile, err := saveRootSyncYAML(cmd.Context(), c.ConfigManagement, context)
 			if err != nil {
 				printError(err)
+				migrationError = true
 				continue
 			}
 			cm, cmYamlFile, err := saveConfigManagementYAML(cmd.Context(), c.ConfigManagement, context)
 			if err != nil {
 				printError(err)
+				migrationError = true
 				continue
 			}
 
@@ -137,10 +145,15 @@ var Cmd = &cobra.Command{
 				dryrun()
 			} else if err := migrate(cmd.Context(), c, cm, rootSync); err != nil {
 				printError(err)
+				migrationError = true
 			}
 		}
 
-		fmt.Println("\nFinished migration on all the contexts. Please check the sync status with `nomos status`.")
+		if migrationError {
+			fmt.Println("\nFinished migration with errors. Please see above for errors and check the status with `nomos status`.")
+		} else {
+			fmt.Printf("\nFinished migration on the contexts: %s. Please check the sync status with `nomos status`.\n", strings.Join(migrationContexts, ", "))
+		}
 		return nil
 	},
 }

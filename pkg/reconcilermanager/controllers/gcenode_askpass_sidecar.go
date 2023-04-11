@@ -24,7 +24,7 @@ import (
 const (
 	// The GCENode* values are interpolated in the prepareGCENodeSnippet function
 	// Keep the image tag consistent with nomos-operator.
-	gceNodeAskpassImageTag = "20220326001639"
+	gceNodeAskpassImageTag = "20230410212312"
 	// GceNodeAskpassSidecarName is the container name of gcenode-askpass-sidecar.
 	GceNodeAskpassSidecarName = "gcenode-askpass-sidecar"
 	// gceNodeAskpassPort is the port number of the askpass-sidecar container.

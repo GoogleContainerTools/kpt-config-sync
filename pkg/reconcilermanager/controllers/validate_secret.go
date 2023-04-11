@@ -18,9 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,12 +32,7 @@ func validateSecretExist(ctx context.Context, secretRef, namespace string, c cli
 
 	secret := &corev1.Secret{}
 	if err := c.Get(ctx, sRef, secret); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, errors.Errorf(
-				"secret %s not found: create one to allow client authentication", sRef)
-		}
-		return nil, errors.Wrapf(err,
-			"secret %s get failed", sRef)
+		return nil, err
 	}
 	return secret, nil
 }

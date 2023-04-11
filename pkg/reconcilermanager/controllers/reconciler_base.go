@@ -556,3 +556,24 @@ func (r *reconcilerBase) isLastReconciled(nn types.NamespacedName, resourceVersi
 	}
 	return resourceVersion == lastReconciled
 }
+
+// validateCACertSecret verify that caCertSecretRef is well formed with a key named "cert"
+func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, caCertSecretRefName string) error {
+	if useCACert(caCertSecretRefName) {
+		secret, err := validateSecretExist(ctx,
+			caCertSecretRefName,
+			namespace,
+			r.client)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return errors.Errorf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
+			}
+			return errors.Wrapf(err, "Secret %s get failed", caCertSecretRefName)
+		}
+		if _, ok := secret.Data[CACertSecretKey]; !ok {
+			return fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
+		}
+	}
+	return nil
+
+}

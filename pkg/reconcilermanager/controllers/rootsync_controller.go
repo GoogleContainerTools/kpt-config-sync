@@ -514,6 +514,9 @@ func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.Ro
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
 		return err
 	}
+	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
+		return err
+	}
 	return r.validateRootSecret(ctx, rs)
 }
 
@@ -535,7 +538,10 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		rootSync.Namespace,
 		r.client)
 	if err != nil {
-		return err
+		if apierrors.IsNotFound(err) {
+			return errors.Errorf("Secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
+		}
+		return errors.Wrapf(err, "Secret %s get failed", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
 	}
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }

@@ -44,10 +44,10 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo"))
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a CRD and CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -73,9 +73,9 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding the CRD with new schema and a CR using the new schema")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding the CRD with new schema and a CR using the new schema"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

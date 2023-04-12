@@ -93,8 +93,8 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 	declaredCr := fake.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -161,8 +161,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 	declaredCr := fake.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -194,8 +194,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 	updatedCr := fake.ClusterRoleObject(core.Name(crName))
 	updatedCr.Rules = updatedRules
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", updatedCr)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update ClusterRole to get/list")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", updatedCr))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update ClusterRole to get/list"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -216,8 +216,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 
 	// Delete the ClusterRole from the SOT.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusterrole.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("deleting ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusterrole.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("deleting ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

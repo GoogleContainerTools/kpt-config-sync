@@ -45,7 +45,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	// Declare the Service's Namespace
 	ns := "autogen-fields"
 	nsObj := fake.NamespaceObject(ns)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns), nsObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns), nsObj))
 
 	// Declare the Service.
 	serviceName := "e2e-test-service"
@@ -65,9 +65,9 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 			TargetPort: intstr.FromInt(targetPort1),
 		}},
 	}
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), serviceObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), serviceObj))
 
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace and Service")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace and Service"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -131,8 +131,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 
 	updatedService := serviceObj.DeepCopy()
 	updatedService.Spec.Ports[0].TargetPort = intstr.FromInt(targetPort2)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), updatedService)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update declared Service")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), updatedService))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update declared Service"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get", "list"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
 
 	rbacViewerName := "rbac-viewer"
 	rbacViewer := fake.ClusterRoleObject(core.Name(rbacViewerName),
@@ -176,12 +176,12 @@ func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
 		Resources: []string{"roles", "rolebindings", "clusterroles", "clusterrolebindings"},
 		Verbs:     []string{"get", "list"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/rbac-viewer-cr.yaml", rbacViewer)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/rbac-viewer-cr.yaml", rbacViewer))
 
 	aggregateRoleName := "aggregate"
 	// We have to declare the YAML explicitly because otherwise the declaration
 	// explicitly declares "rules: []" due to how Go handles empty/unset fields.
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -189,10 +189,10 @@ metadata:
 aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
-      permissions: viewer`))
-	aggregateViewer := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/aggregate-viewer-cr.yaml")
+      permissions: viewer`)))
+	aggregateViewer := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/aggregate-viewer-cr.yaml")
 
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRoles")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRoles"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -222,7 +222,7 @@ aggregationRule:
 	}
 
 	// Update aggregateRole with a new label.
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -232,9 +232,9 @@ metadata:
 aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
-      permissions: viewer`))
-	aggregateViewer = nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/aggregate-viewer-cr.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add label to aggregate ClusterRole")
+      permissions: viewer`)))
+	aggregateViewer = nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/aggregate-viewer-cr.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add label to aggregate ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -275,8 +275,8 @@ func TestPreserveLastApplied(t *testing.T) {
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get", "list"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestPreserveLastApplied(t *testing.T) {
 	annotationKeys := metadata.GetNomosAnnotationKeys()
 
 	nsViewer.Annotations[corev1.LastAppliedConfigAnnotation] = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"annotations":{"configmanagement.gke.io/cluster-name":"e2e-test-cluster","configmanagement.gke.io/managed":"enabled","configmanagement.gke.io/source-path":"cluster/namespace-viewer-clusterrole.yaml"},"labels":{"app.kubernetes.io/managed-by":"configmanagement.gke.io","permissions":"viewer"},"name":"namespace-viewer"},"rules":[{"apiGroups":[""],"resources":["namespaces"],"verbs":["get","list"]}]}`
-	nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-cr-replace.yaml", nsViewer)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-cr-replace.yaml", nsViewer))
 	// Admission webhook denies change. We don't get a "LastApplied" annotation
 	// as we prevented the change outright.
 	_, err = nt.Shell.Kubectl("replace", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-cr-replace.yaml"))
@@ -322,13 +322,13 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 
 	ns := "crud-labels"
 	nsObj := fake.NamespaceObject(ns)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml", nsObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml", nsObj))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-labels/configmap.yaml"
 	cm := fake.ConfigMapObject(core.Name(cmName))
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no labels to repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no labels to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -344,8 +344,8 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	}
 
 	cm.Labels["baz"] = "qux"
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for ConfigMap in repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for ConfigMap in repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -358,8 +358,8 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	}
 
 	delete(cm.Labels, "baz")
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete label for configmap in repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete label for configmap in repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -389,13 +389,13 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 
 	ns := "crud-annotations"
 	nsObj := fake.NamespaceObject(ns)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml", nsObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml", nsObj))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-annotations/configmap.yaml"
 	cmObj := fake.ConfigMapObject(core.Name(cmName))
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -421,8 +421,8 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	}
 
 	cmObj.Annotations["baz"] = "qux"
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update annotation for ConfigMap in repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update annotation for ConfigMap in repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -447,8 +447,8 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	}
 
 	delete(cmObj.Annotations, "baz")
-	nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete annotation for configmap in repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Delete annotation for configmap in repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

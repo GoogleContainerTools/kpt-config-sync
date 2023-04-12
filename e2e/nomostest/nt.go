@@ -121,12 +121,12 @@ type NT struct {
 	// The key is the RootSync name and the value points to the corresponding Repository object.
 	// Each test case was set up with a default RootSync (`root-sync`) installed.
 	// After the test, all other RootSync or RepoSync objects are deleted, but the default one persists.
-	RootRepos map[string]*Repository
+	RootRepos map[string]*gitproviders.Repository
 
 	// NonRootRepos is the Namespace repositories the cluster is syncing to.
 	// Only used in multi-repo tests.
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
-	NonRootRepos map[types.NamespacedName]*Repository
+	NonRootRepos map[types.NamespacedName]*gitproviders.Repository
 
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
@@ -165,7 +165,7 @@ type NT struct {
 	// RemoteRepositories maintains a map between the repo local name and the remote repository.
 	// It includes both root repo and namespace repos and can be shared among test cases.
 	// It is used to reuse existing repositories instead of creating new ones.
-	RemoteRepositories map[types.NamespacedName]*Repository
+	RemoteRepositories map[types.NamespacedName]*gitproviders.Repository
 
 	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
 	WebhookDisabled *bool
@@ -175,6 +175,26 @@ type NT struct {
 
 	// repoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	repoSyncPermissions []rbacv1.PolicyRule
+}
+
+// Must not error.
+//
+// This is a test helper that immediately fails the test if any of the arguments
+// are a non-nil error. All nil and non-error argument are ignored.
+// Usage Example: nt.Must(DoSomething())
+//
+// Note: Because nil objects lose their type when passed through an interface{},
+// There's no way to validate that an error type was actually passed. Consider
+// using require.NoError instead, when the only return value is an error.
+func (nt *NT) Must(args ...interface{}) {
+	nt.T.Helper()
+	for _, arg := range args {
+		if err, ok := arg.(error); ok {
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+		}
+	}
 }
 
 // CSNamespaces is the namespaces of the Config Sync components.
@@ -362,7 +382,7 @@ func DefaultRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("nt.RootRepos doesn't include RootSync %q", nn.Name)
 	}
-	return repo.Hash(), nil
+	return repo.Hash()
 }
 
 // DefaultRepoSha1Fn is the default function to retrieve the commit hash of the namespace repo.
@@ -373,7 +393,7 @@ func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("checked if nonexistent repo is synced")
 	}
-	return repo.Hash(), nil
+	return repo.Hash()
 }
 
 // RenewClient gets a new Client for talking to the cluster.
@@ -607,7 +627,9 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		InitGitRepos(nt, allRepos...)
 		// attempt to recover by re-pushing the local repo states
 		for _, remoteRepo := range nt.RemoteRepositories {
-			remoteRepo.pushAllToRemote()
+			if err := remoteRepo.PushAllBranches(); err != nil {
+				nt.T.Fatal(err)
+			}
 		}
 		prevPodName = podName
 	}

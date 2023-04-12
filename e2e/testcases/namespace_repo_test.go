@@ -82,8 +82,8 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	}
 
 	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespace))
-	repo.Add("acme/sa.yaml", sa)
-	repo.CommitAndPush("Adding service account")
+	nt.Must(repo.Add("acme/sa.yaml", sa))
+	nt.Must(repo.CommitAndPush("Adding service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	}
 
 	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
-	nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa)
-	nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -226,11 +226,11 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
 	repoSyncPath := nomostest.StructuredNSPath(bsNamespace, configsync.RepoSyncName)
-	repoSyncObj := nt.RootRepos[configsync.RootSyncName].Get(repoSyncPath)
+	repoSyncObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, repoSyncPath)
 
 	// Remove RepoSync resource from Root Repository.
-	nt.RootRepos[configsync.RootSyncName].Remove(repoSyncPath)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RepoSync from the Root Repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(repoSyncPath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RepoSync from the Root Repository"))
 
 	// Remove from NamespaceRepos so we don't try to check that it is syncing,
 	// as we've just deleted it.
@@ -255,8 +255,8 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.T.Log("Test RepoSync v1alpha1 version in central control mode")
 	nt.NonRootRepos[nn] = nsRepo
 	rs := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(bsNamespace, rs.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add RepoSync v1alpha1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(bsNamespace, rs.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add RepoSync v1alpha1"))
 	// Add the bookstore namespace repo back to NamespaceRepos to verify that it is synced.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -292,8 +292,8 @@ func TestManageSelfRepoSync(t *testing.T) {
 	sanitizedRs := fake.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	sanitizedRs.Spec = rs.Spec
 	rsNN := nomostest.RepoSyncNN(rs.Namespace, rs.Name)
-	nt.NonRootRepos[rsNN].Add("acme/repo-sync.yaml", sanitizedRs)
-	nt.NonRootRepos[rsNN].CommitAndPush("add the repo-sync object that configures the reconciler")
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/repo-sync.yaml", sanitizedRs))
+	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("add the repo-sync object that configures the reconciler"))
 	nt.WaitForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, "RepoSync bookstore/repo-sync must not manage itself in its repo")
 }
 
@@ -406,8 +406,8 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootCommitHash := nt.RootRepos[configsync.RootSyncName].Hash()
-	nnCommitHash := nt.NonRootRepos[repoSyncNN].Hash()
+	rootCommitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
+	nnCommitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	// Skip sync & ops metrics and just validate reconciler-manager and reconciler errors.
 	err = nomostest.ValidateMetrics(nt,

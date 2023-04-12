@@ -50,9 +50,9 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	}
 
 	namespaceName := "status-test"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespaceObject(namespaceName, nil))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

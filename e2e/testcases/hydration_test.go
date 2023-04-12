@@ -54,8 +54,8 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	)
 
 	nt.T.Log("Add the kustomize components root directory")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -67,7 +67,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
@@ -76,21 +76,21 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
-	nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the Kustomize configuration to make the sync fail")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the Kustomize configuration to make the sync fail"))
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected error: Kustomization should be missing.\n", err)
 	}
 
 	nt.T.Log("Add kustomization.yaml back")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add kustomization.yml back")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add kustomization.yml back"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "kustomize-components"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -98,20 +98,20 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
 	nt.T.Log("Make kustomization.yaml invalid")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/invalid-kustomization.yaml", "./kustomize-components/kustomization.yml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("update kustomization.yaml to make it invalid")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/invalid-kustomization.yaml", "./kustomize-components/kustomization.yml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update kustomization.yaml to make it invalid"))
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected error: Should fail to run kustomize build.\n", err)
@@ -125,8 +125,8 @@ func TestHydrateHelmComponents(t *testing.T) {
 	)
 
 	nt.T.Log("Add the helm components root directory")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-components directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -144,7 +144,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
@@ -153,8 +153,8 @@ func TestHydrateHelmComponents(t *testing.T) {
 	validateHelmComponents(nt, string(declared.RootReconciler))
 
 	nt.T.Log("Use a remote values.yaml file from a public repo")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Render with a remote values.yaml file from a public repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Render with a remote values.yaml file from a public repo"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -167,15 +167,15 @@ func TestHydrateHelmComponents(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
 	nt.T.Log("Use the render-helm-chart function to render the charts")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-kustomization.yaml", "./helm-components/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-kustomization.yaml", "./helm-components/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -187,15 +187,15 @@ func TestHydrateHelmComponents(t *testing.T) {
 	}
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
 	nt.T.Log("Use the render-helm-chart function to render the charts with multiple remote values.yaml files")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function with multiple remote values.yaml files from a public repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function with multiple remote values.yaml files from a public repo"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -207,7 +207,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	}
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
@@ -221,8 +221,8 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	)
 
 	nt.T.Log("Add the helm-overlay root directory")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-overlay directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -250,43 +250,43 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
 	nt.T.Log("Make the hydration fail by checking in an invalid kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/kustomization.yaml", "./helm-overlay/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/namespace_tenant-a.yaml", "./helm-overlay/namespace_tenant-a.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml with duplicated resources")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/namespace_tenant-a.yaml", "./helm-overlay/namespace_tenant-a.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml with duplicated resources"))
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected errors: kustomization should be invalid.\n", err)
 	}
 
 	nt.T.Log("Make the parsing fail by checking in a deprecated group and kind")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 	}
 
 	nt.T.Log("Use the render-helm-chart function to render the charts")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay/kustomization.yaml", "./helm-overlay/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-overlay-kustomization.yaml", "./helm-overlay/base/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-overlay-kustomization.yaml", "./helm-overlay/base/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -294,20 +294,20 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
 
 	nt.T.Log("Make the parsing fail again by checking in a deprecated group and kind with the render-helm-chart function")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-deprecated-GK-kustomization.yaml", "./helm-overlay/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind with the render-helm-chart function")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-deprecated-GK-kustomization.yaml", "./helm-overlay/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind with the render-helm-chart function"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
@@ -328,8 +328,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 	}
 
 	nt.T.Log("Add the remote-base root directory")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory without enable shell in hydration controller")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
@@ -352,8 +352,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
 	nt.T.Log("Update kustomization.yaml to use a remote overlay")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-overlay-kustomization.yaml", "./remote-base/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use a remote overlay")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-overlay-kustomization.yaml", "./remote-base/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use a remote overlay"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -364,8 +364,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
 	// Update kustomization.yaml to use remote resources
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-resources-kustomization.yaml", "./remote-base/kustomization.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use remote resources")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-resources-kustomization.yaml", "./remote-base/kustomization.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use remote resources"))
 	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -376,15 +376,15 @@ func TestHydrateRemoteResources(t *testing.T) {
 	expectedOrigin = "path: notCloned/base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
 	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
-	nt.RootRepos[configsync.RootSyncName].Remove("./remote-base")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove remote-base repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./remote-base"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove remote-base repository"))
 	nt.T.Log("Disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": false}, "git": {"dir": "acme"}}}`)
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
@@ -402,8 +402,8 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	)
 
 	nt.T.Log("Add the root directory")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/relative-path", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/relative-path", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the relative-path directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -416,7 +416,7 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit := nt.RootRepos[configsync.RootSyncName].Hash()
+	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)

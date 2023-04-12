@@ -40,7 +40,7 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 		Verbs:     []string{"get", "list"},
 	}}
 
-	nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-client-side-applied.yaml", nsViewer)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-client-side-applied.yaml", nsViewer))
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-client-side-applied.yaml"))
 
 	// Validate the ClusterRole exist.
@@ -55,8 +55,8 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

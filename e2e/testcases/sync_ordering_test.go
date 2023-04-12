@@ -55,12 +55,12 @@ func TestMultiDependencies(t *testing.T) {
 	namespace := fake.NamespaceObject(namespaceName)
 	cm1Name := "cm1"
 	cm2Name := "cm2"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName))))
 	// cm2 depends on cm1
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add the namespace, cm1, and cm2 (cm2 depends on cm1)")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add the namespace, cm1, and cm2 (cm2 depends on cm1)"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -106,9 +106,9 @@ func TestMultiDependencies(t *testing.T) {
 	nt.T.Log("Add cm3, which depends on an existing object, cm1")
 	// cm3 depends on cm1
 	cm3Name := "cm3"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add cm3, which depends on an existing object, cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add cm3, which depends on an existing object, cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -136,10 +136,10 @@ func TestMultiDependencies(t *testing.T) {
 	nt.T.Log("add a new configmap, cm0; and add the dependsOn annotation to cm1")
 	// cm1 depends on cm0
 	cm0Name := "cm0"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a new configmap, cm0; and add the dependsOn annotation to cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a new configmap, cm0; and add the dependsOn annotation to cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -166,9 +166,9 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that Config Sync reports an error when a cyclic dependency is encountered (a cyclic dependency between cm0, cm1, and cm2. cm1 depends on cm0; cm2 depends on cm1; cm0 depends on cm2)")
 	nt.T.Log("Create a cyclic dependency between cm0, cm1, and cm2")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm2")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a cyclic dependency between cm0, cm1, and cm2")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm2"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a cyclic dependency between cm0, cm1, and cm2"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "cyclic dependency")
 
 	nt.T.Log("Verify that cm0 does not have the dependsOn annotation")
@@ -177,8 +177,8 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Log("Remove the cyclic dependency from the Git repo")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the cyclic dependency from the Git repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the cyclic dependency from the Git repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -191,8 +191,8 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that an object can be removed without affecting its dependency (cm3 depends on cm1, and both cm3 and cm1 exist in the Git repo and on the cluster.)")
 	nt.T.Log("Remove cm3")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm3.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cm3")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm3.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cm3"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -215,9 +215,9 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that an object and its dependency can be removed together (cm1 and cm2 both exist in the Git repo and on the cluster. cm2 depends on cm1.)")
 	nt.T.Log("Remove cm1 and cm2")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm2.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cm1 and cm2")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm2.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cm1 and cm2"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -237,13 +237,13 @@ func TestMultiDependencies(t *testing.T) {
 	// There are 1 configmap in the namespace at this point: cm0.
 
 	nt.T.Log("Add cm1, cm2, and cm3")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1, cm2, and cm3")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1, cm2, and cm3"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -271,10 +271,10 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that an object can be disabled without affecting its dependency")
 	nt.T.Log("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm3.yaml", fake.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation")
+		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -296,8 +296,8 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that the dependsOn annotation can be removed from an object without affecting its dependency")
 	nt.T.Log("Remove the dependsOn annotation from cm2")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the dependsOn annotation from cm2")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm2.yaml", fake.ConfigMapObject(core.Name(cm2Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the dependsOn annotation from cm2"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -313,12 +313,12 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("A new test: verify that an object and its dependency can be disabled together")
 	nt.T.Log("Disable both cm1 and cm0 by adding the `configmanagement.gke.io/managed: disabled` annotation")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
+		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable both cm1 and cm0 by adding the `configmanagement.gke.io/managed: disabled` annotation")
+		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable both cm1 and cm0 by adding the `configmanagement.gke.io/managed: disabled` annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -348,68 +348,68 @@ func TestExternalDependencyError(t *testing.T) {
 	// Both exist in the repo and in the cluster.
 	// Delete cm0 from the repo, expected a DependencyActuationMismatchError
 	nt.T.Log("A new test: verify that removing a dependant from the git repo cause a dependency error")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing cm0 from the git repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing cm0 from the git repo"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency")
 
 	// TestCase: cm1 depends on cm0; both are managed by ConfigSync.
 	// Both exist in the repo and in the cluster.
 	// Disable cm0,  expected an ExternalDependencyError
 	nt.T.Log("A new test: verify that disabling a dependant from the git repo cause an external dependency error")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disabling management for cm0 in the git repo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
+		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disabling management for cm0 in the git repo"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency")
 
 	// TestCase: cm1 depends on cm0; cm0 is disabled.
 	// Neither exists in the cluster.
 	// Expected an ExternalDependencyError
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm0 and cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm0 and cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing cm0 and cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing cm0 and cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("A new test: verify that disabling a dependant from the git repo cause an external dependency error")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0, cm0 is disabled")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
+		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0, cm0 is disabled"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency")
 
 	// TestCase: cm1 depends on object that is not in the repo or cluster.
 	// Expected an ExternalDependencyError
 	nt.T.Log("A new test: verify that a dependant not in the repo and not in the cluster cause an external dependency error")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("cleaning cm0 and adding cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm0.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("cleaning cm0 and adding cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm-not-exist")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1: cm1 depends on a resource that doesn't exist in either the repo or in cluster")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm-not-exist"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1: cm1 depends on a resource that doesn't exist in either the repo or in cluster"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency")
 
 	// TestCase: cm1 depends on an object that is not in the repo, but in the cluster
@@ -422,13 +422,14 @@ func TestExternalDependencyError(t *testing.T) {
 	if err := nt.Validate("cm4", namespaceName, &corev1.ConfigMap{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm4")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1: cm1 depends on a resource that only exists in the cluster")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml",
+		fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
+			core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm4"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding cm1: cm1 depends on a resource that only exists in the cluster"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency")
 	nt.T.Log("Cleaning up")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove cm1")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -472,10 +473,11 @@ func TestDependencyWithReconciliation(t *testing.T) {
 			PeriodSeconds:       10,
 		},
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod1.yaml", fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod2.yaml", fake.PodObject(pod2Name, []corev1.Container{container},
-		core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod1")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod1.yaml",
+		fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod2.yaml",
+		fake.PodObject(pod2Name, []corev1.Container{container}, core.Namespace(namespaceName),
+			core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod1"))))
 
 	pod1 := &corev1.Pod{}
 	pod2 := &corev1.Pod{}
@@ -514,7 +516,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	<-pod1SyncCh
 	<-pod2SyncCh
 
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod1 and pod2 (pod2 depends on pod1)")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod1 and pod2 (pod2 depends on pod1)"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -532,8 +534,8 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove Pod1 and Pod2")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod1.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod2.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod2.yaml"))
 
 	pod1 = &corev1.Pod{}
 	pod2 = &corev1.Pod{}
@@ -600,7 +602,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	<-pod1SyncCh
 	<-pod2SyncCh
 
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod1 and pod2")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod1 and pod2"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -622,11 +624,12 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt.T.Log("add pod3 and pod4, pod3's image is not valid, pod4 depends on pod3")
 	invalidImageContainer := container
 	invalidImageContainer.Image = "does-not-exist"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod3.yaml", fake.PodObject("pod3", []corev1.Container{invalidImageContainer}, core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod4.yaml", fake.PodObject("pod4", []corev1.Container{container},
-		core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod3")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod3 and pod4 (pod4 depends on pod3 and pod3 won't be reconciled)")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod3.yaml",
+		fake.PodObject("pod3", []corev1.Container{invalidImageContainer}, core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod4.yaml",
+		fake.PodObject("pod4", []corev1.Container{container}, core.Namespace(namespaceName),
+			core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod3"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod3 and pod4 (pod4 depends on pod3 and pod3 won't be reconciled)"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode,
 		"skipped apply of Pod, bookstore/pod4: dependency apply reconcile timeout: bookstore_pod3__Pod")
 
@@ -642,9 +645,9 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	}
 
 	nt.T.Log("cleanup")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod3.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod4.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod3 and pod4")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod3.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod4.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod3 and pod4"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -662,11 +665,12 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	// pod5 shouldn't be pruned in the cluster since pod6 depends on it.
 	nt.T.Log("add pod5 and pod6, pod6 depends on pod5. Delete pod5 from the repo. pruning pod5 should be skipped.")
 	nt.T.Logf("Add Pod5 and Pod6")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod5.yaml", fake.PodObject("pod5", []corev1.Container{container}, core.Namespace(namespaceName)))
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod6.yaml", fake.PodObject("pod6", []corev1.Container{container},
-		core.Namespace(namespaceName),
-		core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod5")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod5 and pod6")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod5.yaml",
+		fake.PodObject("pod5", []corev1.Container{container}, core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod6.yaml",
+		fake.PodObject("pod6", []corev1.Container{container}, core.Namespace(namespaceName),
+			core.Annotation(dependson.Annotation, "/namespaces/bookstore/Pod/pod5"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add pod5 and pod6"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -681,8 +685,8 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove pod5 from the repo")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod5.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod5")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod5.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod5"))
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "dependency")
 
 	nt.T.Logf("Verify that pod5 and pod6 were not deleted")
@@ -695,8 +699,8 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove Pod6")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod6.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod6")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod6.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove pod6"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

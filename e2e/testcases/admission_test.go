@@ -36,10 +36,9 @@ import (
 func TestAdmission(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
-		fake.NamespaceObject("hello",
-			core.Annotation("goodbye", "moon")))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
+		fake.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -156,8 +155,8 @@ metadata:
 
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello"))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -181,8 +180,8 @@ metadata:
 		nt.T.Fatalf("failed to remove the annotation in the admission webhook %v", err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/test/ns.yaml", fake.NamespaceObject("test"))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add another Namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/test/ns.yaml", fake.NamespaceObject("test")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add another Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

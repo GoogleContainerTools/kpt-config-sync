@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -252,11 +253,11 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		DefaultReconcileTimeout: 1 * time.Minute,
 		kubeconfigPath:          opts.KubeconfigPath,
-		RootRepos:               make(map[string]*Repository),
-		NonRootRepos:            make(map[types.NamespacedName]*Repository),
+		RootRepos:               make(map[string]*gitproviders.Repository),
+		NonRootRepos:            make(map[types.NamespacedName]*gitproviders.Repository),
 		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
 		Scheme:                  scheme,
-		RemoteRepositories:      make(map[types.NamespacedName]*Repository),
+		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		DefaultMetricsTimeout:   30 * time.Second,
 	}
@@ -372,23 +373,23 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	for name := range opts.RootRepos {
-		nt.RootRepos[name] = resetRepository(nt, RootRepo, RootSyncNN(name), opts.SourceFormat)
+		nt.RootRepos[name] = ResetRepository(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		nt.NonRootRepos[nsr] = resetRepository(nt, NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
+		nt.NonRootRepos[nsr] = ResetRepository(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
 	}
 
 	if opts.InitialCommit != nil {
 		rootSyncNN := RootSyncNN(configsync.RootSyncName)
 		for path, obj := range opts.InitialCommit.Files {
-			nt.RootRepos[configsync.RootSyncName].Add(path, obj)
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(path, obj))
 			// Some source objects are not included in the declared resources.
 			if testmetrics.IsObjectDeclarable(obj) {
 				// Some source objects are included in the declared resources, but not applied.
 				nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, obj)
 			}
 		}
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message))
 	}
 
 	// First wait for CRDs to be established.

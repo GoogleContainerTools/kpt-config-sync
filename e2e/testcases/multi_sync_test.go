@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -122,12 +123,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
-	rr2Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
-	rr3Repo := nomostest.NewRepository(nt, nomostest.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
-	nn2Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
-	nn3Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
-	nn4Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
-	nn5Repo := nomostest.NewRepository(nt, nomostest.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
+	rr2Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
+	rr3Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
+	nn2Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
+	nn3Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
+	nn4Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
+	nn5Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
 
 	nrb2 := nomostest.RepoSyncRoleBinding(nn2)
 	nrb3 := nomostest.RepoSyncRoleBinding(nn3)
@@ -135,17 +136,17 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nrb5 := nomostest.RepoSyncRoleBinding(nn5)
 
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/ns-%s.yaml", testNs), fake.NamespaceObject(testNs))
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn2.Name), nrb2)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn4.Name), nrb4)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/ns-%s.yaml", testNs), fake.NamespaceObject(testNs)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn2.Name), nrb2))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn4.Name), nrb4))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
 	nt.RootRepos[rr2] = rr2Repo
 	rs2 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr2)
 	rs2ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr2)
-	nt.RootRepos[configsync.RootSyncName].Add(rs2ConfigFile, rs2)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rr2)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(rs2ConfigFile, rs2))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rr2))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr2.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -155,8 +156,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.RootRepos[rr3] = rr3Repo
 	rs3 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr3)
 	rs3ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr3)
-	nt.RootRepos[rr2].Add(rs3ConfigFile, rs3)
-	nt.RootRepos[rr2].CommitAndPush("Adding RootSync: " + rr3)
+	nt.Must(nt.RootRepos[rr2].Add(rs3ConfigFile, rs3))
+	nt.Must(nt.RootRepos[rr2].CommitAndPush("Adding RootSync: " + rr3))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr3.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -182,9 +183,9 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name), nrs3)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn3.Name), nrb3)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSync: " + nn3.String())
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name), nrs3))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn3.Name), nrb3))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSync: " + nn3.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr3.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -193,10 +194,10 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", nn4, nn2)
 	nt.NonRootRepos[nn4] = nn4Repo
 	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn4)
-	nt.NonRootRepos[nn2].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name), nrs4)
+	nt.Must(nt.NonRootRepos[nn2].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name), nrs4))
 	// RoleBinding (nrb4) managed by RootSync root-sync, because RepoSync (nr2)
 	// does not have permission to manage RBAC.
-	nt.NonRootRepos[nn2].CommitAndPush("Adding RepoSync: " + nn4.String())
+	nt.Must(nt.NonRootRepos[nn2].CommitAndPush("Adding RepoSync: " + nn4.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr4.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -209,9 +210,9 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[rr1].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name), nrs5)
-	nt.RootRepos[rr1].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn5.Name), nrb5)
-	nt.RootRepos[rr1].CommitAndPush("Adding RepoSync: " + nn5.String())
+	nt.Must(nt.RootRepos[rr1].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name), nrs5))
+	nt.Must(nt.RootRepos[rr1].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn5.Name), nrb5))
+	nt.Must(nt.RootRepos[rr1].CommitAndPush("Adding RepoSync: " + nn5.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr5.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -270,8 +271,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
 	roleObj := rootPodRole()
-	nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, roleObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, roleObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -294,8 +295,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("Declare a conflicting Role in the Namespace repo: %s", repoSyncNN)
-	nt.NonRootRepos[repoSyncNN].Add(podRoleFilePath, namespacePodRole())
-	nt.NonRootRepos[repoSyncNN].CommitAndPush("add conflicting pod owner role")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add(podRoleFilePath, namespacePodRole()))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("add conflicting pod owner role"))
 
 	nt.T.Logf("The RootSync should report no problems")
 	err = nt.WatchForAllSyncs(nomostest.RootSyncOnly())
@@ -315,7 +316,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	commitHash := nt.NonRootRepos[repoSyncNN].Hash()
+	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		// ManagementConflictErrorWrap is recorded by the remediator, while
@@ -339,8 +340,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove the declaration from the Root repo %s", configsync.RootSyncName)
-	nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role from Root")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role from Root"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -385,8 +386,8 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace repo: %s", configsync.RootSyncName)
 	nsRoleObj := namespacePodRole()
-	nt.NonRootRepos[repoSyncNN].Add(podRoleFilePath, nsRoleObj)
-	nt.NonRootRepos[repoSyncNN].CommitAndPush("declare Role")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add(podRoleFilePath, nsRoleObj))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("declare Role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -419,8 +420,8 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 
 	nt.T.Logf("Declare a conflicting Role in the Root repo: %s", configsync.RootSyncName)
 	rootRoleObj := rootPodRole()
-	nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, rootRoleObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add conflicting pod role to Root")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, rootRoleObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add conflicting pod role to Root"))
 
 	nt.T.Logf("The RootSync should update the Role")
 	err = nt.WatchForAllSyncs(nomostest.RootSyncOnly())
@@ -448,7 +449,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	commitHash := nt.NonRootRepos[repoSyncNN].Hash()
+	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerSyncError(nt, nsReconcilerPod.Name, commitHash),
@@ -468,8 +469,8 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove the Role from the Namespace repo %s", repoSyncNN)
-	nt.NonRootRepos[repoSyncNN].Remove(podRoleFilePath)
-	nt.NonRootRepos[repoSyncNN].CommitAndPush("remove conflicting pod role from Namespace repo")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Remove(podRoleFilePath))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("remove conflicting pod role from Namespace repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -512,8 +513,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
-	nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, rootPodRole())
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, rootPodRole()))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -529,8 +530,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	roleResourceVersion := role.ResourceVersion
 
 	nt.T.Logf("Declare a conflicting Role in another Root repo: %s", rootSync2)
-	nt.RootRepos[rootSync2].Add(podRoleFilePath, rootPodRole())
-	nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role")
+	nt.Must(nt.RootRepos[rootSync2].Add(podRoleFilePath, rootPodRole()))
+	nt.Must(nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role"))
 
 	// When the webhook is enabled, it will block adoption of managed objects.
 	nt.T.Logf("Only the second RootSyncs should report a conflict with the webhook enabled")
@@ -599,8 +600,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove the declaration from one Root repo %s", configsync.RootSyncName)
-	nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role from Root")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role from Root"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -632,8 +633,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace: %s", repoSyncNN1)
 	roleObj := namespacePodRole()
-	nt.NonRootRepos[repoSyncNN1].Add(podRoleFilePath, roleObj)
-	nt.NonRootRepos[repoSyncNN1].CommitAndPush("add pod viewer role")
+	nt.Must(nt.NonRootRepos[repoSyncNN1].Add(podRoleFilePath, roleObj))
+	nt.Must(nt.NonRootRepos[repoSyncNN1].CommitAndPush("add pod viewer role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -675,8 +676,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("Declare a conflicting Role in another Namespace repo: %s", repoSyncNN2)
-	nt.NonRootRepos[repoSyncNN2].Add(podRoleFilePath, roleObj)
-	nt.NonRootRepos[repoSyncNN2].CommitAndPush("add conflicting pod owner role")
+	nt.Must(nt.NonRootRepos[repoSyncNN2].Add(podRoleFilePath, roleObj))
+	nt.Must(nt.NonRootRepos[repoSyncNN2].CommitAndPush("add conflicting pod owner role"))
 
 	nt.T.Logf("Only RepoSync %s reports the conflict error because kpt_applier won't update the resource", repoSyncNN2)
 	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "declared in another repository")
@@ -708,7 +709,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	commitHash := nt.NonRootRepos[repoSyncNN2].Hash()
+	commitHash := nt.NonRootRepos[repoSyncNN2].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerSyncError(nt, nsReconciler2Pod.Name, commitHash),
@@ -720,8 +721,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove the declaration from one Namespace repo %s", repoSyncNN1)
-	nt.NonRootRepos[repoSyncNN1].Remove(podRoleFilePath)
-	nt.NonRootRepos[repoSyncNN1].CommitAndPush("remove conflicting pod role from Namespace")
+	nt.Must(nt.NonRootRepos[repoSyncNN1].Remove(podRoleFilePath))
+	nt.Must(nt.NonRootRepos[repoSyncNN1].CommitAndPush("remove conflicting pod role from Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

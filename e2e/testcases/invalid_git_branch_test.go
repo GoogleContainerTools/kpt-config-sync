@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -44,7 +45,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
@@ -55,7 +56,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	}
 
 	// Update RootSync to valid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+	nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -71,8 +72,8 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Branch = "invalid-branch"
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to invalid branch name")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to invalid branch name"))
 
 	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
 
@@ -92,7 +93,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		// Source error prevents apply, so don't wait for a sync with the current commit.
@@ -103,12 +104,12 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rs.Spec.Branch = nomostest.MainBranch
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to valid branch name")
+	rs.Spec.Branch = gitproviders.MainBranch
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to valid branch name"))
 
 	// Ensure RepoSync's active branch is checked out, so the correct commit is used for validation.
-	nt.NonRootRepos[nn].CheckoutBranch(nomostest.MainBranch)
+	nt.Must(nt.NonRootRepos[nn].CheckoutBranch(gitproviders.MainBranch))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -135,8 +136,8 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
 	nt.T.Cleanup(func() {
 		nt.T.Log("Resetting all RootSync branches to main")
-		nt.RootRepos[configsync.RootSyncName].CheckoutBranch(nomostest.MainBranch)
-		nomostest.SetGitBranch(nt, configsync.RootSyncName, nomostest.MainBranch)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(gitproviders.MainBranch))
+		nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -147,11 +148,12 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	// The test will delete the branch later, but the main branch can't be deleted
 	// on some Git providers (e.g. Bitbucket), so using a develop branch.
 	devBranch := "develop"
-	nt.RootRepos[configsync.RootSyncName].CreateBranch(devBranch)
-	nt.RootRepos[configsync.RootSyncName].CheckoutBranch(devBranch)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", auditNS),
-		fake.NamespaceObject(auditNS))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add namespace to acme directory", devBranch)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CreateBranch(devBranch))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(devBranch))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		fmt.Sprintf("acme/namespaces/%s/ns.yaml", auditNS),
+		fake.NamespaceObject(auditNS)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add namespace to acme directory", devBranch))
 
 	// Update RootSync to sync from the dev branch
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, devBranch)
@@ -166,11 +168,11 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	}
 
 	// Make the sync fail by invalidating the source repo.
-	nt.RootRepos[configsync.RootSyncName].RenameBranch(devBranch, "invalid-branch")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].RenameBranch(devBranch, "invalid-branch"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
 	// Change the remote branch name back to the original name.
-	nt.RootRepos[configsync.RootSyncName].RenameBranch("invalid-branch", devBranch)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].RenameBranch("invalid-branch", devBranch))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

@@ -40,12 +40,12 @@ import (
 )
 
 func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object) {
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd))
 	nsObj := fake.NamespaceObject("foo")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	anvilObj := anvilCR("v1", "heavy", 10)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD and one Anvil CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD and one Anvil CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -75,8 +75,8 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 
 	// This should cause an error.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CRD but leaving Anvil CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CRD but leaving Anvil CR"))
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
 
@@ -87,7 +87,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		nt.T.Fatal(err)
 	}
 
-	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
@@ -98,8 +98,8 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	}
 
 	// This should fix the error.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -137,13 +137,13 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent)
-	crdObj := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/anvil-crd.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
+	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
 	nsObj := fake.NamespaceObject("prod")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
 	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD and one Anvil CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD and one Anvil CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -167,8 +167,8 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Remove the CustomResource.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CR but leaving Anvil CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CR but leaving Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -187,8 +187,8 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Remove the CustomResourceDefinition.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -229,11 +229,11 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent)
-	crdObj := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/anvil-crd.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
+	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
 	nsObj := fake.NamespaceObject("prod")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -264,8 +264,8 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	}
 
 	// Remove the CustomResourceDefinition.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -306,11 +306,11 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/clusteranvil-crd.yaml", crdContent)
-	crdObj := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/clusteranvil-crd.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/clusteranvil-crd.yaml", crdContent))
+	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/clusteranvil-crd.yaml")
 	clusteranvilObj := clusteranvilCR("v1", "e2e-test-clusteranvil", 10)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusteranvil.yaml", clusteranvilObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding clusterscoped Anvil CRD and CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusteranvil.yaml", clusteranvilObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding clusterscoped Anvil CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -338,8 +338,8 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/clusteranvil-crd.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updating the Anvil CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/clusteranvil-crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updating the Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -357,10 +357,10 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Remove the CR and CRD.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
-	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CRD as well"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -398,13 +398,13 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent)
-	crdObj := nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/anvil-crd.yaml")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
+	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
 	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj))
 	nsObj := fake.NamespaceObject("prod")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespacescoped Anvil CRD and CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespacescoped Anvil CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -433,8 +433,8 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updating the Anvil CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Updating the Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -454,9 +454,9 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilCR("v2", "e2e-test-anvil", 10))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update the Anvil CRD and CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilCR("v2", "e2e-test-anvil", 10)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update the Anvil CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -472,9 +472,9 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Remove CRD and CR
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the Anvil CRD and CR")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/prod/anvil.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the Anvil CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -510,9 +510,9 @@ func TestLargeCRD(t *testing.T) {
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-		nt.RootRepos[configsync.RootSyncName].AddFile(fmt.Sprintf("acme/cluster/%s", file), crdContent)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(fmt.Sprintf("acme/cluster/%s", file), crdContent))
 	}
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding two large CRDs")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding two large CRDs"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -531,8 +531,8 @@ func TestLargeCRD(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/challenges-acme-cert-manager-io.yaml"))
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].Get("acme/cluster/solrclouds-solr-apache-org.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/challenges-acme-cert-manager-io.yaml"))
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/solrclouds-solr-apache-org.yaml"))
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
@@ -547,8 +547,8 @@ func TestLargeCRD(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/challenges-acme-cert-manager-io.yaml", crdContent)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for one CRD")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/challenges-acme-cert-manager-io.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update label for one CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

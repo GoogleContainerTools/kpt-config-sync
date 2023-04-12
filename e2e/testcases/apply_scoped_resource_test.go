@@ -31,8 +31,8 @@ import (
 func TestApplyScopedResources(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.SkipAutopilotCluster)
 
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/kubevirt-compiled/.", "acme")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add kubevirt configs")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/kubevirt-compiled/.", "acme"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add kubevirt configs"))
 
 	nt.T.Cleanup(func() {
 		if nt.T.Failed() {
@@ -47,16 +47,16 @@ func TestApplyScopedResources(t *testing.T) {
 		// Avoids KNV2010 error since the bookstore namespace contains a VM custom resource
 		// KNV2010: unable to apply resource: the server could not find the requested resource (patch virtualmachines.kubevirt.io testvm)
 		// Error occurs semi-consistently (~50% of the time) with the CI mono-repo kind tests
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/namespace_bookstore1.yaml")
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/bookstore1")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove bookstore1 namespace")
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespace_bookstore1.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/bookstore1"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove bookstore1 namespace"))
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}
 
 		// kubevirt must be removed separately to allow the custom resource to be deleted
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/kubevirt/kubevirt_kubevirt.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove kubevirt custom resource")
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/kubevirt/kubevirt_kubevirt.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove kubevirt custom resource"))
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -76,11 +76,11 @@ func TestApplyScopedResources(t *testing.T) {
 
 		// Avoids KNV2006 since the repo contains a number of cluster scoped resources
 		// https://cloud.google.com/anthos-config-management/docs/reference/errors#knv2006
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt-operator.yaml")
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt.io:operator.yaml")
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrolebinding_kubevirt-operator.yaml")
-		nt.RootRepos[configsync.RootSyncName].Remove("acme/priorityclass_kubevirt-cluster-critical.yaml")
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cluster roles and priority class")
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt-operator.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt.io:operator.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrolebinding_kubevirt-operator.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/priorityclass_kubevirt-cluster-critical.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cluster roles and priority class"))
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}

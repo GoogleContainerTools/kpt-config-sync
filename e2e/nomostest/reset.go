@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -128,8 +129,8 @@ func Reset(nt *NT) error {
 	// unassigned to a specific RSync. All remote repos are cached in
 	// nt.RemoteRepositories and then reassigned in `resetRepository`.
 	// Repos are actually deleted by `Clean` in environment setup and teardown.
-	nt.NonRootRepos = make(map[types.NamespacedName]*Repository)
-	nt.RootRepos = make(map[string]*Repository)
+	nt.NonRootRepos = make(map[types.NamespacedName]*gitproviders.Repository)
+	nt.RootRepos = make(map[string]*gitproviders.Repository)
 
 	// Reset expected objects
 	nt.MetricsExpectations.Reset()
@@ -464,20 +465,27 @@ func stringSliceContains(list []string, value string) bool {
 	return false
 }
 
-// resetRepository creates or re-initializes a remote repository.
-func resetRepository(nt *NT, repoType RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *Repository {
+// ResetRepository creates or re-initializes a remote repository.
+func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *gitproviders.Repository {
 	repo, found := nt.RemoteRepositories[nn]
 	if found {
-		repo.ReInit(nt, sourceFormat)
+		if err := repo.Reformat(sourceFormat); err != nil {
+			nt.T.Fatal(err)
+		}
 	} else {
-		repo = NewRepository(nt, repoType, nn, sourceFormat)
+		repo = gitproviders.NewRepository(repoType, nn, sourceFormat, nt.Scheme,
+			nt.Logger, nt.GitProvider, nt.TmpDir, nt.gitPrivateKeyPath)
+		if err := repo.Create(); err != nil {
+			nt.T.Fatal(err)
+		}
+		nt.RemoteRepositories[nn] = repo
 	}
 	// Reset expected objects.
 	// These are used to offset metrics expectations.
-	if repoType == RootRepo {
+	if repoType == gitproviders.RootRepo {
 		nt.MetricsExpectations.ResetRootSync(nn.Name)
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.Get(repo.SafetyNSPath))
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.Get(repo.SafetyClusterRolePath))
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.MustGet(nt.T, repo.SafetyNSPath))
+		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.MustGet(nt.T, repo.SafetyClusterRolePath))
 	} else {
 		nt.MetricsExpectations.ResetRepoSync(nn)
 	}

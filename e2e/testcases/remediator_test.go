@@ -37,11 +37,11 @@ func TestSurfaceFightError(t *testing.T) {
 
 	ns := fake.NamespaceObject("test-ns", core.Annotation("foo", "bar"))
 	rb := roleBinding("test-rb", ns.Name, map[string]string{"foo": "bar"})
-	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns.Name), ns)
-	nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("acme/namespaces/%s/rb.yaml", ns.Name), rb)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespace and RoleBinding")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns.Name), ns))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		fmt.Sprintf("acme/namespaces/%s/rb.yaml", ns.Name), rb))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespace and RoleBinding"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestSurfaceFightError(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	commitHash := nt.RootRepos[configsync.RootSyncName].Hash()
+	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{

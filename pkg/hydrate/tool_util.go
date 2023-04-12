@@ -42,9 +42,9 @@ import (
 )
 
 const (
-	// HelmVersion is the minimum required version of Helm for hydration.
-	HelmVersion = "v3.11.2"
-	// KustomizeVersion is the minimum required version of Kustomize for hydration.
+	// HelmVersion is the recommended version of Helm for hydration.
+	HelmVersion = "v3.11.3"
+	// KustomizeVersion is the recommended version of Kustomize for hydration.
 	KustomizeVersion = "v5.0.1"
 	// Helm is the binary name of the installed Helm.
 	Helm = "helm"
@@ -160,7 +160,7 @@ func kustomizeBuild(input, output string, sendMetrics bool) HydrationError {
 func validateTool(tool, version, requiredVersion string) error {
 	matches := semverRegex.FindStringSubmatch(version)
 	if len(matches) == 0 {
-		return fmt.Errorf("unable to detect %s version from %q. The recommneded version is %s",
+		return fmt.Errorf("unable to detect %s version from %q. The recommended version is %s",
 			tool, version, requiredVersion)
 	}
 	detectedVersion, err := semver.NewVersion(matches[0])

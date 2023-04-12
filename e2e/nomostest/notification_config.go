@@ -77,3 +77,25 @@ func WithSyncSyncedTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncFailedTrigger adds the on-sync-failed trigger to the ConfigMap
+// the oncePer unique identifier is the commit concatenated with a hash of all errors
+func WithOnSyncFailedTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-failed"] = `- when: any(sync.status.conditions, {.type == 'Syncing' && .status == 'False' && (.errorSourceRefs != nil || .errors != nil)}) 
+  oncePer: utils.LastCommit() + '-' + strings.Hash(strings.Join(map(utils.ConfigSyncErrors(), {#.ErrorMessage}), ''))
+  send: [sync-failed]`
+}
+
+// WithSyncFailedTemplate adds the sync-failed template to the ConfigMap
+func WithSyncFailedTemplate(cmData map[string]string) {
+	cmData["template.sync-failed"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} failed to sync commit {{call .utils.LastCommit}} on branch {{.sync.spec.git.branch}}!\n\n{{range $index, $e := call .utils.ConfigSyncErrors}}{{js $e.ErrorMessage}}\n\n{{end}}"
+        }
+      }`
+}

@@ -52,8 +52,8 @@ func TestAcmeCorpRepo(t *testing.T) {
 		"new-prj":   "rnd",
 		"newer-prj": "rnd",
 		nt.RootRepos[configsync.RootSyncName].SafetyNSName: ""}
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the acme directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -170,10 +170,10 @@ func TestAcmeCorpRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
-	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -183,8 +183,8 @@ func TestAcmeCorpRepo(t *testing.T) {
 func TestObjectInCMSNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

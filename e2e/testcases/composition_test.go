@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -93,7 +94,7 @@ func TestComposition(t *testing.T) {
 	lvl0Repo := nt.RootRepos[lvl0NN.Name]
 
 	lvl0Sync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, lvl0NN.Name)
-	lvl0Sync.Spec.Git.Dir = nomostest.AcmeDir
+	lvl0Sync.Spec.Git.Dir = gitproviders.DefaultSyncDir
 	// Use a subdirectory under the root-sync repo to make cleanup easy
 	lvl0SubDir := filepath.Join(lvl0Sync.Spec.Git.Dir, "level-0")
 
@@ -121,47 +122,21 @@ func TestComposition(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// All R*Syncs in this test will use the same repository, with different directories.
-	// This function returns the latest sha1 of the shared root repo.
-	rootSha1Fn := func(nt *nomostest.NT, _ types.NamespacedName) (string, error) {
-		return lvl0Repo.Hash(), nil
-	}
-
 	// Remove files to prune objects before the R*Syncs are deleted.
-	// Use seperate functions to allow independent failure to be tollerated,
+	// Use separate functions to allow independent failure to be tolerated,
 	// which can happen if the previous test failed when partially complete.
 	// Cleanups execute in the reverse order they are added.
 	t.Cleanup(func() {
-		if lvl0Repo.Exists(lvl0SubDir) {
-			nt.T.Logf("Cleaning up %s %s...", lvl0Sync.Kind, lvl0NN)
-			removeDirContents(lvl0Repo, lvl0SubDir)
-			nt.T.Logf("Waiting for %s %s to be synced...", lvl0Sync.Kind, lvl0NN)
-			waitForSync(nt, rootSha1Fn, lvl0Sync)
-		}
+		cleanupManagedSync(nt, lvl0Repo, lvl0SubDir, lvl0Sync)
 	})
 	t.Cleanup(func() {
-		if lvl0Repo.Exists(lvl1Sync.Spec.Git.Dir) {
-			nt.T.Logf("Cleaning up %s %s...", lvl1Sync.Kind, lvl1NN)
-			removeDirContents(lvl0Repo, lvl1Sync.Spec.Git.Dir)
-			nt.T.Logf("Waiting for %s %s to be synced...", lvl1Sync.Kind, lvl1NN)
-			waitForSync(nt, rootSha1Fn, lvl1Sync)
-		}
+		cleanupManagedSync(nt, lvl0Repo, lvl1Sync.Spec.Git.Dir, lvl1Sync)
 	})
 	t.Cleanup(func() {
-		if lvl0Repo.Exists(lvl2Sync.Spec.Git.Dir) {
-			nt.T.Logf("Cleaning up %s %s...", lvl2Sync.Kind, lvl2NN)
-			removeDirContents(lvl0Repo, lvl2Sync.Spec.Git.Dir)
-			nt.T.Logf("Waiting for %s %s to be synced...", lvl2Sync.Kind, lvl2NN)
-			waitForSync(nt, rootSha1Fn, lvl2Sync)
-		}
+		cleanupManagedSync(nt, lvl0Repo, lvl2Sync.Spec.Git.Dir, lvl2Sync)
 	})
 	t.Cleanup(func() {
-		if lvl0Repo.Exists(lvl3Sync.Spec.Git.Dir) {
-			nt.T.Logf("Cleaning up %s %s...", lvl3Sync.Kind, lvl3NN)
-			removeDirContents(lvl0Repo, lvl3Sync.Spec.Git.Dir)
-			nt.T.Logf("Waiting for %s %s to be synced...", lvl3Sync.Kind, lvl3NN)
-			waitForSync(nt, rootSha1Fn, lvl3Sync)
-		}
+		cleanupManagedSync(nt, lvl0Repo, lvl3Sync.Spec.Git.Dir, lvl3Sync)
 	})
 	// Print reconciler logs for R*Syncs that aren't in nt.RootRepos or nt.NonRootRepos.
 	t.Cleanup(func() {
@@ -176,16 +151,16 @@ func TestComposition(t *testing.T) {
 	})
 
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs))
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), lvl2RB)
-	lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), lvl3RB)
-	lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs")
+	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs)))
+	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), lvl2RB))
+	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), lvl3RB))
+	nt.Must(lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, rootSha1Fn, lvl0Sync)
+	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync)
 
 	nt.T.Log("Validating synced objects are reconciled...")
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl0SubDir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
 
 	nt.T.Logf("Creating Secret for RepoSync: %s", lvl2NN)
 	nomostest.CreateNamespaceSecret(nt, lvl2NN.Namespace)
@@ -193,46 +168,46 @@ func TestComposition(t *testing.T) {
 	// lvl1 RootSync
 	lvl1Path := filepath.Join(lvl0SubDir, fmt.Sprintf("rootsync-%s.yaml", lvl1NN.Name))
 	nt.T.Logf("Adding RootSync %s to the shared repository: %s", lvl1NN.Name, lvl1Path)
-	lvl0Repo.Add(lvl1Path, lvl1Sync)
-	lvl0Repo.AddEmptyDir(lvl1Sync.Spec.Git.Dir)
-	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RootSync: %s", lvl1NN))
+	nt.Must(lvl0Repo.Add(lvl1Path, lvl1Sync))
+	nt.Must(lvl0Repo.AddEmptyDir(lvl1Sync.Spec.Git.Dir))
+	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RootSync: %s", lvl1NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, rootSha1Fn, lvl0Sync, lvl1Sync)
+	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync)
 
 	nt.T.Log("Validating synced objects are reconciled...")
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl0SubDir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
 	// lvl1Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl2 RepoSync
 	lvl2Path := filepath.Join(lvl1Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl2NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl2NN.Name, lvl2Path)
-	lvl0Repo.Add(lvl2Path, lvl2Sync)
-	lvl0Repo.AddEmptyDir(lvl2Sync.Spec.Git.Dir)
-	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl2NN))
+	nt.Must(lvl0Repo.Add(lvl2Path, lvl2Sync))
+	nt.Must(lvl0Repo.AddEmptyDir(lvl2Sync.Spec.Git.Dir))
+	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl2NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, rootSha1Fn, lvl0Sync, lvl1Sync, lvl2Sync)
+	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync)
 
 	nt.T.Log("Validating synced objects are reconciled...")
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl0SubDir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl1Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl1Sync.Spec.Git.Dir, true)...)
 	// lvl2Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl3 RepoSync
 	lvl3Path := filepath.Join(lvl2Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl3NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl3NN.Name, lvl3Path)
-	lvl0Repo.Add(lvl3Path, lvl3Sync)
-	lvl0Repo.AddEmptyDir(lvl3Sync.Spec.Git.Dir)
-	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl3NN))
+	nt.Must(lvl0Repo.Add(lvl3Path, lvl3Sync))
+	nt.Must(lvl0Repo.AddEmptyDir(lvl3Sync.Spec.Git.Dir))
+	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl3NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, rootSha1Fn, lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
+	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
 
 	nt.T.Log("Validating synced objects are reconciled...")
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl0SubDir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl1Sync.Spec.Git.Dir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl2Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl1Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl2Sync.Spec.Git.Dir, true)...)
 	// lvl2Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl4 ConfigMap
@@ -243,17 +218,17 @@ func TestComposition(t *testing.T) {
 	lvl4ConfigMap.Data = map[string]string{"key": "value"}
 	lvl4Path := filepath.Join(lvl3Sync.Spec.Git.Dir, fmt.Sprintf("configmap-%s.yaml", lvl4NN.Name))
 	nt.T.Logf("Adding ConfigMap %s to the shared repository: %s", lvl4NN.Name, lvl4Path)
-	lvl0Repo.Add(lvl4Path, lvl4ConfigMap)
-	lvl0Repo.CommitAndPush(fmt.Sprintf("Adding ConfigMap: %s", lvl4NN.Name))
+	nt.Must(lvl0Repo.Add(lvl4Path, lvl4ConfigMap))
+	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding ConfigMap: %s", lvl4NN.Name)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, rootSha1Fn, lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
+	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
 
 	nt.T.Log("Validating synced objects are reconciled...")
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl0SubDir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl1Sync.Spec.Git.Dir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl2Sync.Spec.Git.Dir, true)...)
-	validateStatusCurrent(nt, lvl0Repo.GetAll(lvl3Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl1Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl2Sync.Spec.Git.Dir, true)...)
+	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl3Sync.Spec.Git.Dir, true)...)
 
 	// Validate that the R*Syncs and ConfigMap exist, are reconciled, and have the right manager.
 	managedObjs := map[gvknn]manager{
@@ -431,10 +406,35 @@ func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	}
 }
 
-// removeDirContents deletes all the files in a directory (recursively), but
-// keeps the directory.
-func removeDirContents(repo *nomostest.Repository, dirPath string) {
-	repo.Remove(dirPath)
-	repo.AddEmptyDir(dirPath)
-	repo.CommitAndPush(fmt.Sprintf("Remove dir contents: %s ", dirPath))
+func commitForRepo(repo *gitproviders.Repository) nomostest.Sha1Func {
+	return func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
+		return repo.Hash()
+	}
+}
+
+// cleanupManagedSync deletes the specified dirPath from the specified repo and
+// then waits until the specified sync object is synced.
+// This assumes the specified syncObj is configured to watch the specified
+// dirPath in the specified repo.
+func cleanupManagedSync(nt *nomostest.NT, repo *gitproviders.Repository, dirPath string, syncObj client.Object) {
+	exists, err := repo.Exists(dirPath)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	if !exists {
+		return
+	}
+	syncGVK, err := kinds.Lookup(syncObj, nt.Scheme)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	syncNN := client.ObjectKeyFromObject(syncObj)
+
+	nt.T.Logf("Cleaning up %s %s...", syncGVK.Kind, syncNN)
+	nt.Must(repo.Remove(dirPath))
+	nt.Must(repo.AddEmptyDir(dirPath))
+	nt.Must(repo.CommitAndPush(fmt.Sprintf("Remove dir contents: %s ", dirPath)))
+
+	nt.T.Logf("Waiting for %s %s to be synced...", syncGVK.Kind, syncNN)
+	waitForSync(nt, commitForRepo(repo), syncObj)
 }

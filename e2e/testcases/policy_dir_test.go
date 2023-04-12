@@ -45,10 +45,10 @@ func TestPolicyDirUnset(t *testing.T) {
 	// and generates a KNV 2006 error (as shown in http://b/210525686#comment3 and http://b/210525686#comment5).
 	//
 	// Therefore, we only copy `../../examples/acme/cluster/admin-clusterrole.yaml` here.
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/cluster/admin-clusterrole.yaml", "./cluster")
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces", ".")
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/system", ".")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the root directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/cluster/admin-clusterrole.yaml", "./cluster"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/system", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the root directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

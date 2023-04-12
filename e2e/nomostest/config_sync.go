@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -63,9 +64,6 @@ import (
 )
 
 const (
-	// AcmeDir is the sync directory of the test source repository.
-	AcmeDir = "acme"
-
 	// configSyncManifests is the folder of the test manifests
 	configSyncManifests = "manifests"
 
@@ -676,8 +674,8 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
-		Branch: MainBranch,
-		Dir:    AcmeDir,
+		Branch: gitproviders.MainBranch,
+		Dir:    gitproviders.DefaultSyncDir,
 		Auth:   "ssh",
 		SecretRef: &v1alpha1.SecretReference{
 			Name: controllers.GitCredentialVolume,
@@ -712,8 +710,8 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
-		Branch: MainBranch,
-		Dir:    AcmeDir,
+		Branch: gitproviders.MainBranch,
+		Dir:    gitproviders.DefaultSyncDir,
 		Auth:   "ssh",
 		SecretRef: &v1beta1.SecretReference{
 			Name: controllers.GitCredentialVolume,
@@ -769,8 +767,8 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
-		Branch: MainBranch,
-		Dir:    AcmeDir,
+		Branch: gitproviders.MainBranch,
+		Dir:    gitproviders.DefaultSyncDir,
 		Auth:   "ssh",
 		SecretRef: &v1alpha1.SecretReference{
 			Name: "ssh-key",
@@ -813,8 +811,8 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
-		Branch: MainBranch,
-		Dir:    AcmeDir,
+		Branch: gitproviders.MainBranch,
+		Dir:    gitproviders.DefaultSyncDir,
 		Auth:   "ssh",
 		SecretRef: &v1beta1.SecretReference{
 			Name: "ssh-key",
@@ -885,9 +883,9 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 		if reconcileTimeout != nil {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName))
 	}
 
 	if len(nt.NonRootRepos) == 0 {
@@ -897,7 +895,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 	// Add ClusterRole for all RepoSync reconcilers to use.
 	// TODO: Test different permissions for different RepoSyncs.
 	cr := nt.RepoSyncClusterRole()
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr))
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cr)
 
 	// Use a map to record the number of RepoSync namespaces
@@ -913,12 +911,12 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 		// This may replace an existing Namespace, if there are multiple
 		// RepoSyncs in the same namespace.
 		nsObj := fake.NamespaceObject(ns)
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
 		// Add RoleBinding to bind the ClusterRole to the RepoSync reconciler ServiceAccount
 		rb := RepoSyncRoleBinding(rsNN)
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 		if isPSPCluster() {
@@ -929,7 +927,7 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 			// TODO: Remove the psp related change when Kubernetes 1.25 is
 			// available on GKE.
 			crb := repoSyncClusterRoleBinding(rsNN)
-			nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, rsNN.Name), crb)
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, rsNN.Name), crb))
 			nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crb)
 		}
 
@@ -938,10 +936,10 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 		if reconcileTimeout != nil {
 			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
 		}
-		nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync")
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace, clusterrole, rolebinding, clusterrolebinding and RepoSync"))
 	}
 
 	// Convert namespace set to list

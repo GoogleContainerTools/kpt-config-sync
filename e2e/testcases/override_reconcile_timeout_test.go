@@ -93,9 +93,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	pod1 := fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))
 	idToVerify := core.IDOf(pod1)
 
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -119,8 +119,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -129,8 +129,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	if err := nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s", pod1Name))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s", pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

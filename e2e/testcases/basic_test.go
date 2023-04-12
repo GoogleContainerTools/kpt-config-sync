@@ -37,8 +37,8 @@ const (
 func TestNamespaceGarbageCollection(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/accounting-namespace.yaml", yamlDir), "acme/namespaces/accounting/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add accounting namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/accounting-namespace.yaml", yamlDir), "acme/namespaces/accounting/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add accounting namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -47,8 +47,8 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/accounting/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove accounting namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/accounting/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove accounting namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -61,8 +61,8 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 func TestNamespacePolicyspaceConversion(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add dir namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add dir namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -71,9 +71,9 @@ func TestNamespacePolicyspaceConversion(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/subdir-namespace.yaml", yamlDir), "acme/namespaces/dir/subdir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove dir namespace, add subdir namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/dir/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/subdir-namespace.yaml", yamlDir), "acme/namespaces/dir/subdir/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove dir namespace, add subdir namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -95,9 +95,9 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	// One or both of the Deployment and ReplicaSet may become unhealthy.
 	// But regardless, the user should be able to correct the situation.
 	nt.T.Log("Add a replicaset")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/replicaset-helloworld.yaml", yamlDir), "acme/namespaces/dir/replicaset.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add replicaset")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/replicaset-helloworld.yaml", yamlDir), "acme/namespaces/dir/replicaset.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add replicaset"))
 
 	// This sync may block until reconcile timeout is reached,
 	// because ReplicaSet or Deployment may never reconcile.
@@ -111,8 +111,8 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	}
 
 	nt.T.Log("Add a corresponding deployment")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add corresponding deployment")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add corresponding deployment"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -123,8 +123,8 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	}
 
 	nt.T.Log("Remove the deployment")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/dir/deployment.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove deployment")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/dir/deployment.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove deployment"))
 	// This sync may block until reconcile timeout is reached,
 	// because the ReplicaSet is re-applied before deleting the Deployment.
 	// So this wait timeout must be longer than the reconcile timeout (5m).
@@ -144,9 +144,9 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 func TestRolebindingsUpdated(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/namespace.yaml", "acme/namespaces/eng/backend/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/namespace.yaml", "acme/namespaces/eng/backend/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add bob rolebinding"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -154,8 +154,8 @@ func TestRolebindingsUpdated(t *testing.T) {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/robert-rolebinding.yaml", yamlDir), "acme/namespaces/eng/backend/br.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Replace bob with robert rolebinding")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/robert-rolebinding.yaml", yamlDir), "acme/namespaces/eng/backend/br.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Replace bob with robert rolebinding"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -184,10 +184,10 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	})
 
 	nt.T.Log("Add resource to manage")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/service.yaml", yamlDir), fmt.Sprintf("acme/namespaces/%s/service.yaml", namespace))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/service.yaml", yamlDir), fmt.Sprintf("acme/namespaces/%s/service.yaml", namespace)))
 	nt.T.Log("Start managing the namespace")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Start managing the namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Start managing the namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -198,8 +198,8 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	}
 
 	nt.T.Log("Remove the namespace directory from the repo")
-	nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/namespaces/%s", namespace))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the namespace from the managed set of namespaces")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/namespaces/%s", namespace)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the namespace from the managed set of namespaces"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -217,8 +217,8 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 
 func unmanageNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Log("stop managing the system namespace")
-	nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/unmanaged-namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace))
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Stop managing the namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(fmt.Sprintf("%s/reserved_namespaces/unmanaged-namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Stop managing the namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

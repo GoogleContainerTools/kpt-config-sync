@@ -42,11 +42,11 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 		}
 	})
 	nt.T.Log("Creating commit with APIService and Deployment")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace.yaml", "acme/namespaces/custom-metrics/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-custom-metrics.yaml", "acme/namespaces/custom-metrics/namespace-custom-metrics.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding apiservice resources")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/rbac.yaml", "acme/cluster/rbac.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace.yaml", "acme/namespaces/custom-metrics/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-custom-metrics.yaml", "acme/namespaces/custom-metrics/namespace-custom-metrics.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding apiservice resources"))
 	nt.T.Log("Waiting for nomos to sync new APIService")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -59,16 +59,16 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 
 	// Test done, removing the test APIService first to prevent Discovery failure blocking
 	// the test repo from cleaning up
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/apiservice.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter API service")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/apiservice.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter API service"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Remove the backend Deployment of test APIService
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace-custom-metrics.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace-custom-metrics.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/custom-metrics/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove custom metric stackdriver adapter namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -95,8 +95,8 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/apiservice.yaml")
 
 	nt.T.Log("Creating commit with test resources")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-resilient.yaml", "acme/namespaces/resilient/namespace.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("add testing resources")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/apiservice/namespace-resilient.yaml", "acme/namespaces/resilient/namespace.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add testing resources"))
 
 	nt.T.Log("Wait for test resource to have status CURRENT")
 	if err := nt.WatchForAllSyncs(); err != nil {

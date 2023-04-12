@@ -136,8 +136,8 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		Auth:    configsync.AuthNone,
 		Version: publicHelmChartVersion,
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type"))
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 	nt.T.Log("Fetch password from Secret Manager")
 	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
@@ -158,8 +158,8 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		ReleaseName: "test",
 		SecretRef:   &v1beta1.SecretReference{Name: "foo"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
 	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChart+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: privateNSHelmChart}))
 	if err != nil {
 		nt.T.Fatal(err)

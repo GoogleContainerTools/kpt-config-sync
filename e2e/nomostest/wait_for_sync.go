@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -99,7 +100,7 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 	if syncDir, found := syncDirectoryMap[nn]; found {
 		return syncDir
 	}
-	return AcmeDir
+	return gitproviders.DefaultSyncDir
 }
 
 // WatchForAllSyncs calls WatchForSync on all Syncs in nt.RootRepos & nt.NonRootRepos.

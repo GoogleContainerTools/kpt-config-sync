@@ -62,18 +62,18 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	}
 
 	nt.T.Log("Adding ConstraintTemplate & Constraint in one commit")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint-template.yaml", "acme/cluster/constraint-template.yaml")
-	nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint.yaml", "acme/cluster/constraint.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add ConstraintTemplate & Constraint")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint-template.yaml", "acme/cluster/constraint-template.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint.yaml", "acme/cluster/constraint.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add ConstraintTemplate & Constraint"))
 
 	// Cleanup if waiting for sync error fails.
 	nt.T.Cleanup(func() {
 		if nt.T.Failed() {
 			// Cleanup before deleting the ConstraintTemplate CRDs to avoid resource conflict errors from the webhook.
-			nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
 			// Add back the safety ClusterRole to pass the safety check (KNV2006).
-			nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
-			nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
+			nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
+			nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
 			if err := nt.WatchForAllSyncs(); err != nil {
 				nt.T.Fatal(err)
 			}
@@ -98,10 +98,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	}
 
 	// Cleanup before deleting the ConstraintTemplate and Constraint CRDs to avoid resource conflict errors from the webhook.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
-	nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole()
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

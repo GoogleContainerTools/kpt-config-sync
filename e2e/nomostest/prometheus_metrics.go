@@ -114,7 +114,10 @@ func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) err
 		return errors.Errorf("RootRepo %q not found", summary.Sync)
 	}
 	reconcilerName := core.RootReconcilerName(summary.Sync.Name)
-	commitHash := nt.RootRepos[summary.Sync.Name].Hash()
+	commitHash, err := nt.RootRepos[summary.Sync.Name].Hash()
+	if err != nil {
+		return errors.Wrapf(err, "hashing RootRepo for RootSync: %s", summary.Sync)
+	}
 	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, reconcilerName, commitHash, summary)
 }
 
@@ -125,7 +128,10 @@ func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) err
 		return errors.Errorf("NonRootRepo %q not found", summary.Sync)
 	}
 	reconcilerName := core.NsReconcilerName(summary.Sync.Namespace, summary.Sync.Name)
-	commitHash := nt.NonRootRepos[summary.Sync].Hash()
+	commitHash, err := nt.NonRootRepos[summary.Sync].Hash()
+	if err != nil {
+		return errors.Wrapf(err, "hashing NonRootRepo for RepoSync: %s", summary.Sync)
+	}
 	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, reconcilerName, commitHash, summary)
 }
 

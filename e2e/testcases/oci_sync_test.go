@@ -328,10 +328,10 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
-	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncGit)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", rsCR)
-	nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name), rsRB)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncGit))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", rsCR))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name), rsRB))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository"))
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -374,8 +374,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncOCI)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncOCI))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -398,8 +398,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 
 	// Verify the manual configuration: switch from Git to OCI
 	nt.T.Log("Remove RepoSync from the root repository")
-	nt.RootRepos[configsync.RootSyncName].Remove(repoResourcePath)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(repoResourcePath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -608,7 +608,7 @@ func archiveAndPushOCIImage(imageName string, dir string, options ...remote.Opti
 		return "", err
 	}
 	defer func() {
-		_ = os.Remove(tarFile.Name())
+		nt.Must(_ = os.Remove(tarFile.Name()))
 	}()
 
 	if err := func() error {
@@ -664,11 +664,11 @@ func archiveAndPushOCIImage(imageName string, dir string, options ...remote.Opti
 					return err
 				}
 				if buf != nil {
-					if _, err := io.Copy(tw, buf); err != nil {
+					nt.Must(if _, err := io.Copy(tw, buf)); err != nil {
 						return err
 					}
 				} else {
-					if _, err := io.Copy(tw, data); err != nil {
+					nt.Must(if _, err := io.Copy(tw, data)); err != nil {
 						return err
 					}
 				}

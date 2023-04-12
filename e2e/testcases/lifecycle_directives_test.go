@@ -55,9 +55,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Declare the Namespace with the lifecycle annotation, and ensure it is created.
 	nsObj := fake.NamespaceObject("shipping", preventDeletion)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -81,9 +81,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/ns.yaml")
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Namespace shipping declaration")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/ns.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Namespace shipping declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -114,8 +114,8 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
 	nsObj = fake.NamespaceObject("shipping")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -149,9 +149,9 @@ func TestPreventDeletionRole(t *testing.T) {
 		Verbs:     []string{"get"},
 	}}
 	nsObj := fake.NamespaceObject("shipping")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -177,8 +177,8 @@ func TestPreventDeletionRole(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role declaration")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -208,8 +208,8 @@ func TestPreventDeletionRole(t *testing.T) {
 
 	// Remove the lifecycle annotation from the role so that the role can be deleted after the test case.
 	delete(role.Annotations, common.LifecycleDeleteAnnotation)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Role")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -250,8 +250,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 		Resources: []string{"configmaps"},
 		Verbs:     []string{"get"},
 	}}
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -265,8 +265,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the ClusterRole isn't deleted.
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/cr.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove ClusterRole bar declaration")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/cr.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove ClusterRole bar declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -281,8 +281,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 
 	// Remove the lifecycle annotation from the cluster-role so that it can be deleted after the test case.
 	delete(clusterRole.Annotations, common.LifecycleDeleteAnnotation)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from ClusterRole")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -325,11 +325,11 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 
 	for ns := range specialNamespaces {
 		checkpointProtectedNamespace(nt, ns)
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns)))
 	}
 	bookstoreNS := fake.NamespaceObject("bookstore")
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", bookstoreNS)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", bookstoreNS))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -354,10 +354,10 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	}
 
 	for ns := range specialNamespaces {
-		nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/ns-%s.yaml", ns))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/ns-%s.yaml", ns)))
 	}
-	nt.RootRepos[configsync.RootSyncName].Remove("acme/ns-bookstore.yaml")
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove namespaces")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/ns-bookstore.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove namespaces"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

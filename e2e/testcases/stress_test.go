@@ -75,23 +75,23 @@ func TestStressCRD(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.RootRepos[configsync.RootSyncName].AddFile("acme/crontab-crd.yaml", crdContent)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/crontab-crd.yaml", crdContent))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressCRD"
 	for i := 1; i <= 1000; i++ {
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%d.yaml", i), fake.NamespaceObject(
-			fmt.Sprintf("foo%d", i), core.Label(labelKey, labelValue)))
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
-			core.Name("cm1"), core.Namespace(fmt.Sprintf("foo%d", i)), core.Label(labelKey, labelValue)))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%d.yaml", i), fake.NamespaceObject(
+			fmt.Sprintf("foo%d", i), core.Label(labelKey, labelValue))))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
+			core.Name("cm1"), core.Namespace(fmt.Sprintf("foo%d", i)), core.Label(labelKey, labelValue))))
 
 		cr, err := crontabCR(fmt.Sprintf("foo%d", i), "cr1")
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/crontab-cr-%d.yaml", i), cr)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/crontab-cr-%d.yaml", i), cr))
 	}
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)"))
 	err = nt.WatchForAllSyncs(nomostest.WithTimeout(30 * time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -146,15 +146,15 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 
 	ns := "my-ns-1"
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(ns))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(ns)))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressLargeNamespace"
 	for i := 1; i <= 5000; i++ {
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
-			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue)))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
+			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
 	}
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -180,8 +180,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 
 	ns := "bookstore"
 	namespace := fake.NamespaceObject(ns)
-	nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace)
-	nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add a namespace: %s", ns))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -191,8 +191,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	labelValue := "TestStressFrequentGitCommits"
 	for i := 0; i < 100; i++ {
 		cmName := fmt.Sprintf("cm-%v", i)
-		nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/%s.yaml", cmName), fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue)))
-		nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add %s", cmName))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/%s.yaml", cmName), fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add %s", cmName)))
 	}
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
 	if err != nil {

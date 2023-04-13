@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	jserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
@@ -115,6 +116,8 @@ type Repository struct {
 	Logger *testlogger.TestLogger
 
 	yamlSerializer *jserializer.Serializer
+
+	defaultWaitTimeout time.Duration
 }
 
 // NewRepository creates a remote repo on the git provider.
@@ -129,6 +132,7 @@ func NewRepository(
 	provider GitProvider,
 	tmpDir string,
 	privateKeyPath string,
+	defaultWaitTimeout time.Duration,
 ) *Repository {
 	namespacedName := syncNN.String()
 	safetyName := fmt.Sprintf("safety-%s", strings.ReplaceAll(namespacedName, "/", "-"))
@@ -146,6 +150,7 @@ func NewRepository(
 		GitProvider:           provider,
 		PrivateKeyPath:        privateKeyPath,
 		yamlSerializer:        jserializer.NewYAMLSerializer(jserializer.DefaultMetaFactory, scheme, scheme),
+		defaultWaitTimeout:    defaultWaitTimeout,
 	}
 }
 
@@ -555,7 +560,13 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) error {
 // Push pushes the provided refspec to the git server.
 // Performs a retry using RemoteURL, which may change if the port forwarding restarts.
 func (g *Repository) Push(args ...string) error {
-	took, err := retry.Retry(1*time.Minute, func() error {
+	timeout := 1 * time.Minute
+	if g.GitProvider.Type() == e2e.Local {
+		// Wait long enough for the local git-server pod to be rescheduled
+		// on GKE Autopilot, which may involve spinning up a new node.
+		timeout = g.defaultWaitTimeout
+	}
+	took, err := retry.Retry(timeout, func() error {
 		remoteURL, err := g.GitProvider.RemoteURL(g.RemoteRepoName)
 		if err != nil {
 			return err
@@ -570,7 +581,7 @@ func (g *Repository) Push(args ...string) error {
 	return nil
 }
 
-// PushAllBranches pushes
+// PushAllBranches push all local branches to the git server.
 func (g *Repository) PushAllBranches() error {
 	return g.Push("--all")
 }

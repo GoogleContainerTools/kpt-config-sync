@@ -474,7 +474,7 @@ func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.Namespaced
 		}
 	} else {
 		repo = gitproviders.NewRepository(repoType, nn, sourceFormat, nt.Scheme,
-			nt.Logger, nt.GitProvider, nt.TmpDir, nt.gitPrivateKeyPath)
+			nt.Logger, nt.GitProvider, nt.TmpDir, nt.gitPrivateKeyPath, nt.DefaultWaitTimeout)
 		if err := repo.Create(); err != nil {
 			nt.T.Fatal(err)
 		}

@@ -736,7 +736,9 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret)
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret.Data[CACertSecretKey] = []byte("test-data")
+	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -767,11 +769,14 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
+	caCertSecret := "foo-secret"
 	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret)
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret.Data[CACertSecretKey] = []byte("test-data")
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -819,7 +824,6 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.CACertSecretRef
-	caCertSecret := "foo-secret"
 	rs.Spec.CACertSecretRef.Name = caCertSecret
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -864,6 +868,67 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
+	// rootsync setup for testing
+	caCertSecret := "foo-secret"
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
+		rootsyncCACert(caCertSecret))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	fakeClient, _, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+
+	// reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	// rootsync should be in stalled status
+	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	rootsync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
+	validateRootSyncStatus(t, wantRs, fakeClient)
+}
+
+func TestRootSyncWithInvalidCACertSecret(t *testing.T) {
+	// rootsync setup for testing
+	caCertSecret := "foo-secret"
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
+		rootsyncCACert(caCertSecret))
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	_, _, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+	ctx := context.Background()
+
+	// validation should return an error
+	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
+	require.Error(t, err, "Function call should return an error")
+	require.Equal(t, fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret), err.Error(), "unexpected function error")
+}
+
+func TestRootSyncWithoutCACertSecret(t *testing.T) {
+	// rootsync setup for testing
+	caCertSecret := "foo-secret"
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
+		rootsyncCACert(caCertSecret))
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+
+	// no cert secret is setup to trigger not found error
+	_, _, testReconciler := setupRootReconciler(t, rs, gitSecret)
+	ctx := context.Background()
+
+	// validation should return a not found error
+	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
+	require.Error(t, err, "Function call should return an error")
+	require.Equal(t, fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret), err.Error(), "unexpected function error")
 }
 
 func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {

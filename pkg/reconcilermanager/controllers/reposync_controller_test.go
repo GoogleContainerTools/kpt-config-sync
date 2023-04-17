@@ -1128,6 +1128,67 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	t.Log("Deployment successfully updated")
 }
 
+func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
+	// reposync setup for testing
+	caCertSecret := "foo-secret"
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
+		reposyncCACert(caCertSecret))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	fakeClient, _, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
+
+	// reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	// reposync should be in stalled status
+	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	reposync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+}
+
+func TestRepoSyncWithInvalidCACertSecret(t *testing.T) {
+	// reposync setup for testing
+	caCertSecret := "foo-secret"
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
+		reposyncCACert(caCertSecret))
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	_, _, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
+	ctx := context.Background()
+
+	// validation should return an error
+	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
+	require.Error(t, err, "Function call should return an error")
+	require.Equal(t, fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret), err.Error(), "unexpected function error")
+}
+
+func TestRepoSyncWithoutCACertSecret(t *testing.T) {
+	// reposync setup for testing
+	caCertSecret := "foo-secret"
+	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
+		reposyncCACert(caCertSecret))
+	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+
+	// no cert secret is setup to trigger not found error
+	_, _, testReconciler := setupNSReconciler(t, rs, gitSecret)
+	ctx := context.Background()
+
+	// validation should return a not found error
+	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
+	require.Error(t, err, "Function call should return an error")
+	require.Equal(t, fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret), err.Error(), "unexpected function error")
+}
+
 func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment

@@ -707,6 +707,9 @@ func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.Re
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
 		return err
 	}
+	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
+		return err
+	}
 	return r.validateNamespaceSecret(ctx, rs, reconcilerName)
 }
 
@@ -736,7 +739,10 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 		repoSync.Namespace,
 		r.client)
 	if err != nil {
-		return err
+		if apierrors.IsNotFound(err) {
+			return errors.Errorf("Secret %s not found: create one to allow client authentication", namespaceSecretName)
+		}
+		return errors.Wrapf(err, "Secret %s get failed", namespaceSecretName)
 	}
 	return validateSecretData(authType, secret)
 }

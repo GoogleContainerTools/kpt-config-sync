@@ -260,6 +260,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		DefaultMetricsTimeout:   30 * time.Second,
+		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 	}
 
 	// Speed up the delay between sync attempts to speed up testing
@@ -283,9 +284,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	} else {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
-
-	// GitProvider is used by Clean, so this must be instantiated before the call to Clean
-	nt.initGitProvider()
 
 	if *e2e.TestCluster == e2e.Kind {
 		// We're using an ephemeral Kind cluster, so connect to the local Docker
@@ -358,25 +356,28 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.T.Log("[SETUP] New test case")
-
-	// allRepos specifies the slice all repos for port forwarding.
-	var allRepos []types.NamespacedName
-	for repo := range opts.RootRepos {
-		allRepos = append(allRepos, RootSyncNN(repo))
-	}
-	for repo := range opts.NamespaceRepos {
-		allRepos = append(allRepos, repo)
-	}
-
-	if *e2e.GitProvider == e2e.Local {
-		InitGitRepos(nt, allRepos...)
-	}
-
+	// init all repositories. This ensures that:
+	// - local repo is initialized and empty
+	// - remote repo exists (except for LocalProvider, which is done in portForwardGitServer)
 	for name := range opts.RootRepos {
-		nt.RootRepos[name] = ResetRepository(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
+		nt.RootRepos[name] = initRepository(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		nt.NonRootRepos[nsr] = ResetRepository(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
+		nt.NonRootRepos[nsr] = initRepository(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
+	}
+	// set up port forward if using in-cluster git server
+	if *e2e.GitProvider == e2e.Local {
+		nt.portForwardGitServer()
+	}
+	// The following prerequisites have been met, so we can now push commits
+	// - local repo initialized
+	// - remote repo exists
+	// - port forward started (only applicable to in-cluster git server)
+	for name := range opts.RootRepos {
+		initialCommit(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
+	}
+	for nsr := range opts.NamespaceRepos {
+		initialCommit(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
 	}
 
 	if opts.InitialCommit != nil {

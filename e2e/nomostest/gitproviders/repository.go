@@ -118,6 +118,8 @@ type Repository struct {
 	yamlSerializer *jserializer.Serializer
 
 	defaultWaitTimeout time.Duration
+	// isEmpty indicates whether the local repo has any commits
+	isEmpty bool
 }
 
 // NewRepository creates a remote repo on the git provider.
@@ -151,6 +153,7 @@ func NewRepository(
 		PrivateKeyPath:        privateKeyPath,
 		yamlSerializer:        jserializer.NewYAMLSerializer(jserializer.DefaultMetaFactory, scheme, scheme),
 		defaultWaitTimeout:    defaultWaitTimeout,
+		isEmpty:               true,
 	}
 }
 
@@ -162,16 +165,7 @@ func (g *Repository) Create() error {
 		return errors.Wrapf(err, "creating repo: %s", g.Name)
 	}
 	g.RemoteRepoName = repoName
-	return g.Reformat(g.Format)
-}
-
-// Reformat the repo using the specified source format.
-// Use Repository.Format to keep the format the same.
-func (g *Repository) Reformat(format filesystem.SourceFormat) error {
-	if err := g.init(); err != nil {
-		return err
-	}
-	return g.initialCommit(format)
+	return nil
 }
 
 // Git executes the command from the repo root.
@@ -205,8 +199,8 @@ func (g *Repository) BulkGit(cmds ...[]string) error {
 	return nil
 }
 
-// initialCommit initializes the Nomos repo with the Repo object.
-func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) error {
+// InitialCommit initializes the Nomos repo with the Repo object.
+func (g *Repository) InitialCommit(sourceFormat filesystem.SourceFormat) error {
 	// Add .gitkeep to retain dir when empty, otherwise configsync will error.
 	if err := g.AddEmptyDir(DefaultSyncDir); err != nil {
 		return err
@@ -238,12 +232,13 @@ func (g *Repository) initialCommit(sourceFormat filesystem.SourceFormat) error {
 	return g.CommitAndPush("initial commit")
 }
 
-// init initializes this git repository and configures it to talk to the cluster
+// Init initializes this git repository and configures it to talk to the cluster
 // under test.
-func (g *Repository) init() error {
+func (g *Repository) Init() error {
 	if err := os.RemoveAll(g.Root); err != nil {
 		return errors.Wrapf(err, "deleting root directory: %s", g.Root)
 	}
+	g.isEmpty = true
 
 	err := os.MkdirAll(g.Root, fileMode)
 	if err != nil {
@@ -554,7 +549,11 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) error {
 		return err
 	}
 	g.Logger.Infof("[repo %s] pushing commit: %s", path.Base(g.Root), commit)
-	return g.Push(branch, "-f")
+	if err := g.Push(branch, "-f"); err != nil {
+		return err
+	}
+	g.isEmpty = false
+	return nil
 }
 
 // Push pushes the provided refspec to the git server.
@@ -571,8 +570,7 @@ func (g *Repository) Push(args ...string) error {
 		if err != nil {
 			return err
 		}
-		_, err = g.Git(append([]string{"push", remoteURL}, args...)...)
-		return err
+		return g.push(remoteURL, args...)
 	})
 	if err != nil {
 		return errors.Wrapf(err, "failed to push after retrying for %v", took)
@@ -581,9 +579,21 @@ func (g *Repository) Push(args ...string) error {
 	return nil
 }
 
+func (g *Repository) push(remoteURL string, args ...string) error {
+	_, err := g.Git(append([]string{"push", remoteURL}, args...)...)
+	return err
+}
+
 // PushAllBranches push all local branches to the git server.
-func (g *Repository) PushAllBranches() error {
-	return g.Push("--all")
+// This is currently intended to only be called from the OnReadyCallback for the
+// in-cluster git server. Accepts a remoteURL to avoid calls to LocalPort, as this
+// would lead to a deadlock
+func (g *Repository) PushAllBranches(remoteURL string) error {
+	if g.isEmpty {
+		// empty repository, nothing to push
+		return nil
+	}
+	return g.push(remoteURL, "--all")
 }
 
 // CreateBranch creates and checkouts a new branch at once.

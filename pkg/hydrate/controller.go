@@ -15,6 +15,7 @@
 package hydrate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/log"
 )
 
 const (
@@ -322,6 +324,27 @@ func deleteErrorFile(file string) error {
 	return nil
 }
 
+// filterArgsFromErrorPayload removes the Args parameter from ErrorPayload.
+// The Args parameter sometimes contains fields which are not stable across
+// iterations, such as failCount. This causes the error message to flap, which
+// makes it impossible to use errors as a unique key for notification deliveries.
+func filterArgsFromErrorPayload(content []byte) []byte {
+	errorPayload := &log.ErrorPayload{}
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(errorPayload); err != nil {
+		klog.Warningf("error unmarshalling error payload: %v", err)
+		return content
+	}
+	errorPayload.Args = nil
+	newContent, err := json.Marshal(errorPayload)
+	if err != nil {
+		klog.Warningf("error marshalling error payload: %v", err)
+		return content
+	}
+	return newContent
+}
+
 // SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest or a helm chart version), the absolute path of the sync directory, and source errors.
 func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
 	// Check if the source root directory is mounted
@@ -355,7 +378,8 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 			errFilePath, containerName, configsync.ControllerNamespace,
 			metadata.ReconcilerLabel, reconcilerName).Build()
 	} else if err == nil {
-		return "", "", status.SourceError.Sprintf("error in the %s container: %s", containerName, string(content)).Build()
+		filteredContent := filterArgsFromErrorPayload(content)
+		return "", "", status.SourceError.Sprintf("error in the %s container: %s", containerName, string(filteredContent)).Build()
 	}
 
 	gitDir, err := sourceRevDir.EvalSymlinks()

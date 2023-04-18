@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
@@ -170,6 +171,46 @@ func TestComputeCommit(t *testing.T) {
 			} else if err != nil {
 				t.Errorf("error computing commit from %s: %v ", absSourceDir, err)
 			}
+		})
+	}
+}
+
+func TestFilterArgsFromErrorPayload(t *testing.T) {
+	testCases := []struct {
+		description    string
+		input          string
+		expectedOutput string
+	}{
+		{
+			description:    "non-json input should be unchanged",
+			input:          "foo bar baz",
+			expectedOutput: "foo bar baz",
+		},
+		{
+			description:    "empty json input should be unchanged",
+			input:          "{}",
+			expectedOutput: "{}",
+		},
+		{
+			description:    "json of different schema should be unchanged",
+			input:          `{"foo":"bar"}`,
+			expectedOutput: `{"foo":"bar"}`,
+		},
+		{
+			description:    "ErrorPayload input without Args should be unchanged",
+			input:          `{"Msg":"hello","Err":"some error"}`,
+			expectedOutput: `{"Msg":"hello","Err":"some error"}`,
+		},
+		{
+			description:    "ErrorPayload input with Args should remove Args",
+			input:          `{"Msg":"hello","Err":"some error","Args":{"failCount":42,"waitTime":15000000000}}`,
+			expectedOutput: `{"Msg":"hello","Err":"some error"}`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			output := filterArgsFromErrorPayload([]byte(tc.input))
+			require.Equal(t, tc.expectedOutput, string(output))
 		})
 	}
 }

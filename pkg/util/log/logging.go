@@ -24,6 +24,17 @@ import (
 	"github.com/go-logr/logr"
 )
 
+// ErrorPayload represents the JSON schema used for errors in side car containers
+// such as git-sync, helm-sync, oci-sync, etc.
+type ErrorPayload struct {
+	// Msg is a message describing the error
+	Msg string `json:"Msg,omitempty"`
+	// Err is the error
+	Err string `json:"Err,omitempty"`
+	// Args is a set of parameters which describe the conditions of the error
+	Args map[string]interface{} `json:"Args,omitempty"`
+}
+
 // Logger embeds logr.Logger
 type Logger struct {
 	logr.Logger
@@ -42,11 +53,7 @@ func (l *Logger) Error(err error, msg string, kvList ...interface{}) {
 	if l.errorFile == "" {
 		return
 	}
-	payload := struct {
-		Msg  string
-		Err  string
-		Args map[string]interface{}
-	}{
+	payload := ErrorPayload{
 		Msg:  msg,
 		Err:  err.Error(),
 		Args: map[string]interface{}{},

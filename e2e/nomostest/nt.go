@@ -582,10 +582,7 @@ func (nt *NT) MustDeleteGatekeeperTestData(file, name string) {
 }
 
 func (nt *NT) newPortForwarder(ns, deployment, port string, opts ...portforwarder.PortForwardOpt) *portforwarder.PortForwarder {
-	ctx, cancel := context.WithCancel(nt.Context)
-	nt.T.Cleanup(cancel)
 	return portforwarder.NewPortForwarder(
-		ctx,
 		nt.KubeClient,
 		nt.Watcher,
 		nt.Logger,
@@ -594,6 +591,42 @@ func (nt *NT) newPortForwarder(ns, deployment, port string, opts ...portforwarde
 		ns, deployment, port,
 		opts...,
 	)
+}
+
+func (nt *NT) startPortForwarder(ns, deployment string, pf *portforwarder.PortForwarder) {
+	ctx, cancel := context.WithCancel(nt.Context)
+	eventCh := pf.Start(ctx)
+	doneCh := make(chan struct{})
+	readyCh := make(chan struct{})
+	nt.T.Cleanup(func() {
+		nt.T.Logf("killing port-forward %s/%s", ns, deployment)
+		cancel()
+		<-doneCh
+		nt.T.Logf("finished waiting for port-forward %s/%s to exit", ns, deployment)
+	})
+	go func() {
+		defer close(doneCh)
+		// first event should be Init. signal if it's ready
+		event := <-eventCh
+		if event.Type == portforwarder.InitEvent {
+			close(readyCh)
+		}
+		for event := range eventCh {
+			if event.Type == portforwarder.ErrorEvent {
+				nt.T.Error(event.Message)
+			}
+		}
+	}()
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, nt.DefaultWaitTimeout)
+	defer timeoutCancel()
+	now := time.Now()
+	select {
+	case <-timeoutCtx.Done():
+		since := time.Since(now)
+		nt.T.Fatalf("Waited %v for PortForwarder %s/%s to become ready: %v", since, ns, deployment, timeoutCtx.Err())
+	case <-readyCh:
+		nt.T.Logf("PortForwarder for %s/%s is ready", ns, deployment)
+	}
 }
 
 // portForwardOtelCollector forwards the otel-collector deployment to a port.
@@ -606,16 +639,21 @@ func (nt *NT) portForwardOtelCollector() {
 		ocmetrics.OtelCollectorName,
 		fmt.Sprintf(":%d", testmetrics.OtelCollectorMetricsPort),
 	)
+	nt.startPortForwarder(
+		ocmetrics.MonitoringNamespace,
+		ocmetrics.OtelCollectorName,
+		nt.otelCollectorPortForwarder,
+	)
 }
 
 // portForwardGitServer forwards the git-server deployment to a port.
-func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
+func (nt *NT) portForwardGitServer() {
 	nt.T.Helper()
+	provider := nt.GitProvider.(*gitproviders.LocalProvider)
 	prevPodName := ""
 	resetGitRepos := func(newPort int, podName string) {
 		// pod unchanged, don't reset
-		if prevPodName == "" || prevPodName == podName {
-			prevPodName = podName
+		if prevPodName == podName {
 			return
 		}
 		// allRepos specifies the slice all repos for port forwarding.
@@ -625,28 +663,34 @@ func (nt *NT) portForwardGitServer() *portforwarder.PortForwarder {
 		}
 		// re-init all repos
 		InitGitRepos(nt, allRepos...)
-		// attempt to recover by re-pushing the local repo states
-		for _, remoteRepo := range nt.RemoteRepositories {
-			if err := remoteRepo.PushAllBranches(); err != nil {
+		for _, repo := range allRepos {
+			// construct remoteURL with provided port. Calling LocalPort would lead to deadlock
+			remoteURL, err := provider.RemoteURLWithPort(newPort, repo.String())
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+			if err := nt.RemoteRepositories[repo].PushAllBranches(remoteURL); err != nil {
 				nt.T.Fatal(err)
 			}
 		}
 		prevPodName = podName
 	}
-	return nt.newPortForwarder(
+	nt.T.Cleanup(func() {
+		// clear PortForwarder after each test. at this point it has been stopped
+		// a new PortForwarder is created for each test.
+		provider.PortForwarder = nil
+	})
+	provider.PortForwarder = nt.newPortForwarder(
 		testGitNamespace,
 		testGitServer,
 		":22",
-		portforwarder.WithSetPortCallback(resetGitRepos),
+		portforwarder.WithOnReadyCallback(resetGitRepos),
 	)
-}
-
-func (nt *NT) initGitProvider() {
-	var gitProviderOpts []gitproviders.GitProviderOpt
-	if *e2e.GitProvider == e2e.Local {
-		gitProviderOpts = append(gitProviderOpts, gitproviders.WithPortForwarder(nt.portForwardGitServer()))
-	}
-	nt.GitProvider = gitproviders.NewGitProvider(nt.T, *e2e.GitProvider, gitProviderOpts...)
+	nt.startPortForwarder(
+		testGitNamespace,
+		testGitServer,
+		provider.PortForwarder,
+	)
 }
 
 // portForwardGitServer forwards the prometheus deployment to a port.
@@ -659,6 +703,11 @@ func (nt *NT) portForwardPrometheus() {
 		prometheusNamespace,
 		prometheusServerDeploymentName,
 		fmt.Sprintf(":%d", prometheusServerPort),
+	)
+	nt.startPortForwarder(
+		prometheusNamespace,
+		prometheusServerDeploymentName,
+		nt.prometheusPortForwarder,
 	)
 }
 

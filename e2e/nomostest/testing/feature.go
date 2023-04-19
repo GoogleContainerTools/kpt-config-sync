@@ -42,6 +42,8 @@ const (
 	SyncSource = "sync-source"
 	// WorkloadIdentity verifies authenticating with workload identity (GKE and Fleet).
 	WorkloadIdentity = "workload-identity"
+	// Notification verifies the notification feature
+	Notification = "notification"
 )
 
 // KnownFeature indicates whether the test verifies a known feature
@@ -49,7 +51,7 @@ func KnownFeature(f Feature) bool {
 	switch f {
 	case ACMController, NomosCLI, ClusterSelector, DriftControl, Hydration,
 		Lifecycle, MultiRepos, OverrideAPI, Reconciliation1, Reconciliation2,
-		SyncSource, WorkloadIdentity:
+		SyncSource, WorkloadIdentity, Notification:
 		return true
 	}
 	return false

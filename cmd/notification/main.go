@@ -33,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/notifications"
+	stringexpressions "kpt.dev/configsync/pkg/notifications/expressions/strings"
+	utilexpressions "kpt.dev/configsync/pkg/notifications/expressions/utils"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -102,6 +104,16 @@ func toUnstructured(obj metav1.Object) (*unstructured.Unstructured, error) {
 	return nil, fmt.Errorf("unknown object type %T", obj)
 }
 
+func initGetVars(obj map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		objectKey: obj,
+		// strings contains string-related helper functions
+		"strings": stringexpressions.New(),
+		// utils contains helper functions for RootSync/RepoSync
+		"utils": utilexpressions.New(&unstructured.Unstructured{Object: obj}, *apiKind),
+	}
+}
+
 func main() {
 	log.Setup()
 	ctrl.SetLogger(klogr.New())
@@ -125,7 +137,7 @@ func main() {
 		SecretName:    *secretName,
 		InitGetVars: func(cfg *api.Config, configMap *v1.ConfigMap, secret *v1.Secret) (api.GetVars, error) {
 			return func(obj map[string]interface{}, dest services.Destination) map[string]interface{} {
-				return map[string]interface{}{objectKey: obj}
+				return initGetVars(obj)
 			}, nil
 		},
 	}, *resourceNamespace, secrets, configMaps)

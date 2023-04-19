@@ -260,7 +260,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		DefaultMetricsTimeout:   30 * time.Second,
-		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
+		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
 	}
 
 	// Speed up the delay between sync attempts to speed up testing

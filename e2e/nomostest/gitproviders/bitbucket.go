@@ -28,6 +28,7 @@ import (
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
 )
 
 const (
@@ -45,11 +46,14 @@ type BitbucketClient struct {
 	oauthKey     string
 	oauthSecret  string
 	refreshToken string
+	logger       *testlogger.TestLogger
 }
 
 // newBitbucketClient instantiates a new Bitbucket client.
-func newBitbucketClient() (*BitbucketClient, error) {
-	client := &BitbucketClient{}
+func newBitbucketClient(logger *testlogger.TestLogger) (*BitbucketClient, error) {
+	client := &BitbucketClient{
+		logger: logger,
+	}
 
 	var err error
 	if client.oauthKey, err = FetchCloudSecret("bitbucket-oauth-key"); err != nil {
@@ -163,7 +167,7 @@ func (b *BitbucketClient) DeleteObsoleteRepos() error {
 
 	page := 1
 	for page != -1 {
-		page, err = deleteObsoleteReposByPage(accessToken, page)
+		page, err = b.deleteObsoleteReposByPage(accessToken, page)
 		if err != nil {
 			return err
 		}
@@ -185,7 +189,7 @@ func (b *BitbucketClient) refreshAccessToken() (string, error) {
 	var output map[string]interface{}
 	err = json.Unmarshal(out, &output)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "unmarshalling refresh token response")
 	}
 
 	accessToken, ok := output["access_token"]
@@ -206,7 +210,7 @@ func FetchCloudSecret(name string) (string, error) {
 	return string(out), nil
 }
 
-func deleteObsoleteReposByPage(accessToken string, page int) (int, error) {
+func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int) (int, error) {
 	out, err := exec.Command("curl", "-sX", "GET",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s?page=%d",
@@ -214,21 +218,22 @@ func deleteObsoleteReposByPage(accessToken string, page int) (int, error) {
 	if err != nil {
 		return -1, errors.Wrap(err, string(out))
 	}
-	repos, page, err := filterObsoleteRepos(out)
+	repos, page, err := b.filterObsoleteRepos(out)
 	if err != nil {
 		return -1, err
 	}
 
-	fmt.Println("Deleting the following repos: ", strings.Join(repos, ", "))
+	b.logger.Infof("Deleting the following repos: %s", strings.Join(repos, ", "))
 	err = deleteRepos(accessToken, repos...)
 	return page, err
 }
 
 // filterObsoleteRepos extracts the names of the repos that were created more than 24 hours ago.
-func filterObsoleteRepos(bytes []byte) ([]string, int, error) {
+func (b *BitbucketClient) filterObsoleteRepos(bytes []byte) ([]string, int, error) {
 	nextPage := -1
 	var response interface{}
 	if err := json.Unmarshal(bytes, &response); err != nil {
+		b.logger.Infof("error unmarshalling json in filterObsoleteRepos:\n%s\n", string(bytes))
 		return nil, nextPage, err
 	}
 

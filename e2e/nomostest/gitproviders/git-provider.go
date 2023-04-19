@@ -17,6 +17,7 @@ package gitproviders
 import (
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
 )
 
 const (
@@ -44,10 +45,10 @@ type GitProvider interface {
 }
 
 // NewGitProvider creates a GitProvider for the specific provider type.
-func NewGitProvider(t testing.NTB, provider string) GitProvider {
+func NewGitProvider(t testing.NTB, provider string, logger *testlogger.TestLogger) GitProvider {
 	switch provider {
 	case e2e.Bitbucket:
-		client, err := newBitbucketClient()
+		client, err := newBitbucketClient(logger)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -7,9 +7,9 @@ Monarch (Google's internal metrics aggregator).
 ## Background
 
 When Config Sync is installed on a GKE cluster where a
-[default service account](http://cloud/kubernetes-engine/docs/tutorials/authenticating-to-cloud-platform)
+[default service account](https://cloud.google.com/kubernetes-engine/docs/tutorials/authenticating-to-cloud-platform)
 is available, or on a GKE cluster that has
-[Workload Identity](http://cloud/kubernetes-engine/docs/how-to/workload-identity)
+[Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
 enabled and
 [IAM is correctly setup](https://cloud.google.com/anthos-config-management/docs/how-to/monitoring-config-sync#custom-monitoring),
 Config Sync will try to apply the Open Telemetry Collector ConfigMap that contains
@@ -32,7 +32,7 @@ when configuring pipelines:
     Users can apply this ConfigMap and configure their own metric pipelines.
     Use this ConfigMap instead of modifying the others in-place, to ensure modifications don't get reverted by Config Sync.
 
-For more details on the ConfigMaps and instructions, please refer to the [monitoring doc](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync).
+For more details on the ConfigMaps and instructions, please refer to the [monitoring doc](https://cloud.google.com/anthos-config-management/docs/how-to/monitoring-config-sync).
 
 This guide includes instructions for how to adjust filters, modify exporters, 
 or opt out of exporting metrics all together.
@@ -65,7 +65,7 @@ Monitoring backend.
 - `googlecloud/kubernetes` stands for the configuration that exports to the
 Cloud Monarch backend
 - `prometheus` stands for the configuration that exports metrics in Prometheus
-format and later can be scraped by a prometheus server following [this guide](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#prometheus)
+format and later can be scraped by a prometheus server following [this guide](https://cloud.google.com/anthos-config-management/docs/how-to/monitoring-config-sync#prometheus)
 
 Here is [the current configuration](https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/pkg/metrics/otel.go#L38) of Open Telemetry Collector
 in Config Sync.
@@ -85,12 +85,12 @@ in Config Sync.
     ```
 1. Change the `.metadata.name` to `otel-collector-custom`
 
-    This step spawns a new ConfigMap with name `otel-collector-custom` that is recognized by Config Sync, which overrides the `otel-collector-googlecloud` ConfigMap. Documents of the custom collector can be found [here](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#custom-exporter). 
+    This step spawns a new ConfigMap with name `otel-collector-custom` that is recognized by Config Sync, which overrides the `otel-collector-googlecloud` ConfigMap. Documents of the custom collector can be found [here](https://cloud.google.com/anthos-config-management/docs/how-to/monitoring-config-sync#custom-exporter). 
 
 1. **Modify the otel-collector-config.yaml file**
 
     - To **add or drop metrics** from the
-       [available metrics](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#metrics),
+       [available metrics](https://cloud.google.com/anthos-config-management/docs/how-to/monitoring-config-sync#metrics),
        modify the `include` section under the
        [filter processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor)
        configuration

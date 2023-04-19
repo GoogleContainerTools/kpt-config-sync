@@ -658,18 +658,26 @@ func (nt *NT) portForwardGitServer() {
 		}
 		// allRepos specifies the slice all repos for port forwarding.
 		var allRepos []types.NamespacedName
-		for repo := range nt.RemoteRepositories {
-			allRepos = append(allRepos, repo)
+		// allRepoMap is a map of repoNN->Repository for port forwarding.
+		allRepoMap := make(map[types.NamespacedName]*gitproviders.Repository)
+		for repoName, repo := range nt.RootRepos {
+			repoNN := RootSyncNN(repoName)
+			allRepos = append(allRepos, repoNN)
+			allRepoMap[repoNN] = repo
+		}
+		for repoNN, repo := range nt.NonRootRepos {
+			allRepos = append(allRepos, repoNN)
+			allRepoMap[repoNN] = repo
 		}
 		// re-init all repos
 		InitGitRepos(nt, allRepos...)
-		for _, repo := range allRepos {
+		for repoNN, repo := range allRepoMap {
 			// construct remoteURL with provided port. Calling LocalPort would lead to deadlock
-			remoteURL, err := provider.RemoteURLWithPort(newPort, repo.String())
+			remoteURL, err := provider.RemoteURLWithPort(newPort, repoNN.String())
 			if err != nil {
 				nt.T.Fatal(err)
 			}
-			if err := nt.RemoteRepositories[repo].PushAllBranches(remoteURL); err != nil {
+			if err := repo.PushAllBranches(remoteURL); err != nil {
 				nt.T.Fatal(err)
 			}
 		}

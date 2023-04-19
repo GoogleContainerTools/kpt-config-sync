@@ -92,5 +92,5 @@ test-e2e-gke-multi-repo-test-group7:
 
 # The CI target that runs the eighth group of tests with the multi-repo mode on GKE cluster.
 test-e2e-gke-multi-repo-test-group8:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --test-features=workload-identity" \
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --test-features=workload-identity,notification" \
 		test-e2e-go-gke-ci

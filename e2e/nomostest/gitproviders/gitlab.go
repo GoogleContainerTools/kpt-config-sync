@@ -185,7 +185,7 @@ func (g *GitlabClient) DeleteRepoByID(ids ...string) error {
 		}
 
 		if !strings.Contains(string(out), "\"message\":\"202 Accepted\"") {
-			return errors.New(string(out))
+			return errors.Errorf("unexpected response in DeleteRepoByID: %s", string(out))
 		}
 	}
 	return errs

@@ -59,6 +59,5 @@ func hash(input string) string {
 	h := sha1.New()
 	_, _ = h.Write([]byte(input))
 	hash := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	klog.Infof("hash: %s\n%s", hash, input)
 	return hash
 }

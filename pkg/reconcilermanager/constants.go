@@ -130,6 +130,9 @@ const (
 	//HelmReleaseNamespace is the OS env variable key for the Helm release namespace.
 	HelmReleaseNamespace = "HELM_RELEASE_NAMESPACE"
 
+	//HelmDeployNamespace is the OS env variable key for the Helm deploy namespace.
+	HelmDeployNamespace = "HELM_DEPLOY_NAMESPACE"
+
 	// HelmValues is the OS env variable key for the Helm chart values.
 	HelmValues = "HELM_VALUES"
 

@@ -19,7 +19,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/yaml"
 )
@@ -46,7 +45,7 @@ func RootSync(obj ast.FileObject) status.Error {
 	if rs.Spec.SourceType == "" {
 		rs.Spec.SourceType = string(v1beta1.GitSource)
 	}
-	return SourceSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), rs)
+	return RootSyncSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, rs)
 }
 
 func toRootSyncV1Beta1(rs *v1alpha1.RootSync) (*v1beta1.RootSync, status.Error) {

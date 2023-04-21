@@ -23,11 +23,16 @@ import (
 	"strconv"
 	"strings"
 
+	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
+	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"sigs.k8s.io/kustomize/kyaml/kio"
+	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 const (
@@ -37,18 +42,19 @@ const (
 
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
-	Chart       string
-	Repo        string
-	Version     string
-	ReleaseName string
-	Namespace   string
-	Values      string
-	IncludeCRDs string
-	HydrateRoot string
-	Dest        string
-	Auth        configsync.AuthType
-	UserName    string
-	Password    string
+	Chart           string
+	Repo            string
+	Version         string
+	ReleaseName     string
+	Namespace       string
+	DeployNamespace string
+	Values          string
+	IncludeCRDs     string
+	HydrateRoot     string
+	Dest            string
+	Auth            configsync.AuthType
+	UserName        string
+	Password        string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -122,6 +128,52 @@ func fetchNewToken(ctx context.Context) (*oauth2.Token, error) {
 	return t, nil
 }
 
+func (h *Hydrator) setDeployNamespace(destDir string) error {
+	if h.DeployNamespace == "" {
+		// do nothing
+		return nil
+	}
+
+	pkgReadWriter := kio.LocalPackageReadWriter{
+		PackagePath: destDir,
+		FileSystem:  filesys.FileSystemOrOnDisk{FileSystem: filesys.MakeFsOnDisk()},
+	}
+
+	// read the directory using kyaml and convert to kpt fn sdk KubeObjects
+	var rl fn.ResourceList
+	nodes, err := pkgReadWriter.Read()
+	for _, node := range nodes {
+		kubeObject, _ := fn.ParseKubeObject([]byte(node.MustString()))
+		rl.Items = append(rl.Items, kubeObject)
+	}
+	if err != nil {
+		return err
+	}
+
+	// run the kpt set-namespace fn as a library
+	rl.FunctionConfig, err = fn.ParseKubeObject([]byte(`
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kptfile.kpt.dev
+data:
+  name: ` + h.DeployNamespace))
+	if err != nil {
+		return err
+	}
+	if _, err := setnamespace.Run(&rl); err != nil {
+		return err
+	}
+
+	// convert transformed objects back to kyaml RNodes before writing the output
+	var newNodes []*yaml.RNode
+	for _, obj := range rl.Items {
+		newNodes = append(newNodes, yaml.MustParse(obj.String()))
+	}
+
+	return pkgReadWriter.Write(newNodes)
+}
+
 // HelmTemplate runs helm template with args
 func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	//TODO: add logic to handle "latest" version
@@ -152,6 +204,9 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
+	}
+	if err := h.setDeployNamespace(destDir); err != nil {
+		return fmt.Errorf("failed to set the deploy namespace: %w", err)
 	}
 	klog.Infof("successfully rendered the helm chart : %s", string(out))
 	return util.UpdateSymlink(h.HydrateRoot, linkPath, destDir, oldDir)

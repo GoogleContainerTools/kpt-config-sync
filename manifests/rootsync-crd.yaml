@@ -1154,6 +1154,11 @@ spec:
                   chart:
                     description: chart is a Helm chart name. Required.
                     type: string
+                  deployNamespace:
+                    description: deployNamespace specifies the namespace in which
+                      to deploy the chart. This is a mutually exclusive setting with
+                      "namespace".
+                    type: string
                   gcpServiceAccountEmail:
                     description: 'gcpServiceAccountEmail specifies the GCP service
                       account used to annotate the RootSync/RepoSync controller Kubernetes
@@ -1167,8 +1172,9 @@ spec:
                       false.'
                     type: boolean
                   namespace:
-                    description: 'namespace sets the target namespace for a release.
-                      Default: "default".'
+                    description: 'namespace sets the value of {{Release.Namespace}}
+                      defined in the chart templates. This is a mutually exclusive
+                      setting with "deployNamespace". Default: default.'
                     type: string
                   period:
                     description: 'period is the time duration between consecutive

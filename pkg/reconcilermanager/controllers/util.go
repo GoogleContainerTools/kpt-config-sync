@@ -211,7 +211,7 @@ const (
 )
 
 // helmSyncEnvs returns the environment variables for the helm-sync container.
-func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace string) []corev1.EnvVar {
+func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace, deployNamespace string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	helmValues := ""
 	if helmBase.Values != nil {
@@ -232,6 +232,9 @@ func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace string) []corev1.
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseNamespace,
 		Value: releaseNamespace,
+	}, corev1.EnvVar{
+		Name:  reconcilermanager.HelmDeployNamespace,
+		Value: deployNamespace,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmValues,
 		Value: helmValues,

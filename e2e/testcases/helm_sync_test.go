@@ -94,8 +94,23 @@ func TestPublicHelm(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace")
-	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": ""}}}`)
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with deploy namespace")
+	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": "deploy-ns"}}}`)
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "my-wordpress", "deploy-ns"); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "wordpress"); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace or deploy namespace")
+	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": ""}}}`)
 	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
@@ -113,6 +128,9 @@ func TestPublicHelm(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "wordpress"); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "deploy-ns"); err != nil {
 		nt.T.Fatal(err)
 	}
 }

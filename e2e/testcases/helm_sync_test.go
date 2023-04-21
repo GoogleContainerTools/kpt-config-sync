@@ -36,13 +36,15 @@ import (
 )
 
 const (
-	privateHelmChartVersion   = "1.13.3"
-	privateHelmChart          = "coredns"
-	privateNSHelmChart        = "ns-chart"
-	privateNSHelmChartVersion = "0.1.0"
-	publicHelmRepo            = "https://kubernetes-sigs.github.io/metrics-server"
-	publicHelmChart           = "metrics-server"
-	publicHelmChartVersion    = "3.8.3"
+	privateCoreDNSHelmChartVersion = "1.13.3"
+	privateCoreDNSHelmChart        = "coredns"
+	privateNSHelmChart             = "ns-chart"
+	privateNSHelmChartVersion      = "0.1.0"
+	privateSimpleHelmChartVersion  = "v1.0.0"
+	privateSimpleHelmChart         = "simple"
+	publicHelmRepo                 = "https://kubernetes-sigs.github.io/metrics-server"
+	publicHelmChart                = "metrics-server"
+	publicHelmChartVersion         = "3.8.3"
 )
 
 var privateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", nomostesting.GCPProjectIDFromEnv)
@@ -135,6 +137,47 @@ func TestPublicHelm(t *testing.T) {
 	}
 }
 
+// TestHelmDefaultNamespace verifies the Config Sync behavior for helm charts when neither namespace nor deployNamespace
+// are set. Namespace-scoped resources with their namespace field set should be deployed to their set namespace; namespace-scoped
+// resources with their namespace field not set should be deployed to the default namespace.
+func TestHelmDefaultNamespace(t *testing.T) {
+	nt := nomostest.New(t,
+		nomostesting.SyncSource,
+		ntopts.Unstructured,
+		ntopts.RequireGKE(t),
+	)
+
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.T.Log("Fetch password from Secret Manager")
+	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Create secret for authentication")
+	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", v1.NSConfigManagementSystem), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	if err != nil {
+		nt.T.Fatalf("failed to create secret, err: %v", err)
+	}
+	nt.T.Cleanup(func() {
+		nt.MustKubectl("delete", "secret", "foo", "-n", v1.NSConfigManagementSystem, "--ignore-not-found")
+	})
+	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "namespace": "", "deployNamespace": "", "secretRef": {"name" : "foo"}}}}`,
+		v1beta1.HelmSource, privateARHelmRegistry, privateSimpleHelmChart, privateSimpleHelmChartVersion))
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateSimpleHelmChart+":"+privateSimpleHelmChartVersion)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateSimpleHelmChart}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := nt.Validate("deploy-default", "default", &appsv1.Deployment{}); err != nil {
+		nt.T.Error(err)
+	}
+	if err := nt.Validate("deploy-ns", "ns", &appsv1.Deployment{}); err != nil {
+		nt.T.Error(err)
+	}
+}
+
 // TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully
 // sync the namespace scoped resources, and assign the RepoSync namespace to these resources.
 // This test will work only with following pre-requisites:
@@ -206,11 +249,11 @@ func TestHelmARFleetWISameProject(t *testing.T) {
 		fleetWITest:   true,
 		crossProject:  false,
 		sourceRepo:    privateARHelmRegistry,
-		sourceVersion: privateHelmChartVersion,
-		sourceChart:   privateHelmChart,
+		sourceVersion: privateCoreDNSHelmChartVersion,
+		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail,
-		rootCommitFn:  helmChartVersion(privateHelmChart + ":" + privateHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -234,11 +277,11 @@ func TestHelmARFleetWIDifferentProject(t *testing.T) {
 		fleetWITest:   true,
 		crossProject:  true,
 		sourceRepo:    privateARHelmRegistry,
-		sourceVersion: privateHelmChartVersion,
-		sourceChart:   privateHelmChart,
+		sourceVersion: privateCoreDNSHelmChartVersion,
+		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail,
-		rootCommitFn:  helmChartVersion(privateHelmChart + ":" + privateHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -261,11 +304,11 @@ func TestHelmARGKEWorkloadIdentity(t *testing.T) {
 		fleetWITest:   false,
 		crossProject:  false,
 		sourceRepo:    privateARHelmRegistry,
-		sourceVersion: privateHelmChartVersion,
-		sourceChart:   privateHelmChart,
+		sourceVersion: privateCoreDNSHelmChartVersion,
+		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail,
-		rootCommitFn:  helmChartVersion(privateHelmChart + ":" + privateHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -281,10 +324,10 @@ func TestHelmGCENode(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
+		v1beta1.HelmSource, privateARHelmRegistry, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion))
 
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateCoreDNSHelmChart+":"+privateCoreDNSHelmChartVersion)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateCoreDNSHelmChart}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -321,9 +364,9 @@ func TestHelmARTokenAuth(t *testing.T) {
 	})
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, privateARHelmRegistry, privateHelmChart, privateHelmChartVersion))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateHelmChart+":"+privateHelmChartVersion)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateHelmChart}))
+		v1beta1.HelmSource, privateARHelmRegistry, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion))
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateCoreDNSHelmChart+":"+privateCoreDNSHelmChartVersion)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: privateCoreDNSHelmChart}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

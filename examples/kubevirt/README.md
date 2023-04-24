@@ -25,9 +25,13 @@ Here are the steps for updating kubevirt-operator:
   ```
   wget https://github.com/kubevirt/kubevirt/releases/download/v0.58.0/kubevirt-operator.yaml -O kubevirt-operator.yaml
   ```
-* Add the license header into kubevirt-oprator.yaml
+* Add the license header into kubevirt-operator.yaml
   ```
   addlicense -v -c "Google LLC" -f ../../LICENSE_TEMPLATE -ignore=vendor/** kubevirt-operator.yaml 2>&1 | sed '/ skipping: / d'
+  ```
+* Remove colons from resource names. This prevents colons in file names (which break Go import).
+  ```shell
+  sed -i -e 's/kubevirt.io:operator/kubevirt.io-operator/g' kubevirt-operator.yaml
   ```
 * Update the `../kubevirt-compiled` directory
   ```

@@ -77,7 +77,7 @@ func TestApplyScopedResources(t *testing.T) {
 		// Avoids KNV2006 since the repo contains a number of cluster scoped resources
 		// https://cloud.google.com/anthos-config-management/docs/reference/errors#knv2006
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt-operator.yaml"))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt.io:operator.yaml"))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrole_kubevirt.io-operator.yaml"))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/clusterrolebinding_kubevirt-operator.yaml"))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/priorityclass_kubevirt-cluster-critical.yaml"))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove cluster roles and priority class"))

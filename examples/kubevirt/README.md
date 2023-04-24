@@ -35,4 +35,5 @@ Here are the steps for updating kubevirt-operator:
   rm -rf kubevirt-compiled
   nomos hydrate --path=kubevirt --source-format=unstructured --output kubevirt-compiled
   addlicense -v -c "Google LLC" -f ../LICENSE_TEMPLATE -ignore=vendor/** kubevirt-compiled 2>&1 | sed '/ skipping: / d'
+  mv kubevirt-compiled/clusterrole_kubevirt.io:operator.yaml kubevirt-compiled/clusterrole_kubevirt.io-operator.yaml
   ```

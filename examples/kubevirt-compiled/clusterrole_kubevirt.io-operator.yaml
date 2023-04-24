@@ -1,4 +1,4 @@
-# Copyright 2022 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ metadata:
   labels:
     operator.kubevirt.io: ""
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
-  name: kubevirt.io:operator
+  name: kubevirt.io-operator
 rules:
 - apiGroups:
   - kubevirt.io

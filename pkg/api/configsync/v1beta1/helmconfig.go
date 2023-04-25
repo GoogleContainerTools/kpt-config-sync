@@ -30,6 +30,8 @@ type HelmRootSync struct {
 	Namespace string `json:"namespace,omitempty"`
 	// deployNamespace specifies the namespace in which to deploy the chart.
 	// This is a mutually exclusive setting with "namespace".
+	// If neither namespace nor deployNamespace are set, the chart will be
+	// deployed into the default namespace.
 	// +optional
 	DeployNamespace string `json:"deployNamespace,omitempty"`
 }

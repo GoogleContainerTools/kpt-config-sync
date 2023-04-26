@@ -492,7 +492,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace)
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace, rs.Spec.Helm.DeployNamespace)
 	}
 	return result
 }
@@ -504,7 +504,13 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		return validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs)
+		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
+			return err
+		}
+		if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
+			return validate.HelmNSAndDeployNS(rs)
+		}
+		return nil
 	default:
 		return validate.InvalidSourceType(rs)
 	}

@@ -685,7 +685,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace)
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace, "")
 	}
 	return result
 }

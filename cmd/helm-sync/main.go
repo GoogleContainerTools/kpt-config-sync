@@ -46,7 +46,9 @@ var (
 	flReleaseName = flag.String("release-name", os.Getenv(reconcilermanager.HelmReleaseName),
 		"the name of helm release")
 	flNamespace = flag.String("namespace", os.Getenv(reconcilermanager.HelmReleaseNamespace),
-		"the targe namespace of helm release")
+		"the target namespace of helm release; sets {{.Release.Namespace}})")
+	flDeployNamespace = flag.String("deployNamespace", os.Getenv(reconcilermanager.HelmDeployNamespace),
+		"the namespace in which to deploy the helm chart")
 	flRoot = flag.String("root", util.EnvString("HELM_SYNC_ROOT", util.EnvString("HOME", "")+"/helm"),
 		"the root directory for helm-sync operations, under which --dest will be created")
 	flDest = flag.String("dest", util.EnvString("HELM_SYNC_DEST", ""),
@@ -103,18 +105,19 @@ func main() {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 		hydrator := &helm.Hydrator{
-			Chart:       *flChart,
-			Repo:        *flRepo,
-			Version:     *flVersion,
-			ReleaseName: *flReleaseName,
-			Namespace:   *flNamespace,
-			Values:      *flValues,
-			IncludeCRDs: *flIncludeCRDs,
-			Auth:        configsync.AuthType(*flAuth),
-			HydrateRoot: *flRoot,
-			Dest:        *flDest,
-			UserName:    *flUsername,
-			Password:    *flPassword,
+			Chart:           *flChart,
+			Repo:            *flRepo,
+			Version:         *flVersion,
+			ReleaseName:     *flReleaseName,
+			Namespace:       *flNamespace,
+			DeployNamespace: *flDeployNamespace,
+			Values:          *flValues,
+			IncludeCRDs:     *flIncludeCRDs,
+			Auth:            configsync.AuthType(*flAuth),
+			HydrateRoot:     *flRoot,
+			Dest:            *flDest,
+			UserName:        *flUsername,
+			Password:        *flPassword,
 		}
 		if err := hydrator.HelmTemplate(ctx); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {

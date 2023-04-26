@@ -40,7 +40,7 @@ const (
 	privateCoreDNSHelmChart        = "coredns"
 	privateNSHelmChart             = "ns-chart"
 	privateNSHelmChartVersion      = "0.1.0"
-	privateSimpleHelmChartVersion  = "v1.0.0"
+	privateSimpleHelmChartVersion  = "1.0.0"
 	privateSimpleHelmChart         = "simple"
 	publicHelmRepo                 = "https://kubernetes-sigs.github.io/metrics-server"
 	publicHelmChart                = "metrics-server"

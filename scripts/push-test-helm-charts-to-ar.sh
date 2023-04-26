@@ -57,4 +57,12 @@ tar -cvzf "${NS_CHART_TAR}" "${NS_CHART}"
 helm push "${NS_CHART_TAR}" "oci://${AR_HELM_REPO}"
 rm -rf "${NS_CHART_TAR}"
 
+SIMPLE=simple
+SIMPLE_VERSION=1.0.0
+SIMPLE_TAR=${SIMPLE}-${SIMPLE_VERSION}.tgz
+echo "Pushing the '${SIMPLE}' chart to the '${AR_HELM_REPO}' repository"
+tar -cvzf "${SIMPLE_TAR}" "${SIMPLE}"
+helm push "${SIMPLE_TAR}" "oci://${AR_HELM_REPO}"
+rm -rf "${SIMPLE_TAR}"
+
 popd

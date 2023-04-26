@@ -20,7 +20,6 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -108,6 +107,7 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	}
 	return rs
 }
+
 func repoSyncWithHelm(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
@@ -139,7 +139,27 @@ func withHelm() func(*v1beta1.RepoSync) {
 	}
 }
 
-func TestValidateSourceSpec(t *testing.T) {
+func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
+		Repo:  "fake repo",
+		Chart: "fake chart",
+	}}
+	for _, opt := range opts {
+		opt(rs)
+	}
+	return rs
+}
+
+func helmNsAndDeployNS() func(*v1beta1.RootSync) {
+	return func(sync *v1beta1.RootSync) {
+		sync.Spec.Helm.Namespace = "test-ns"
+		sync.Spec.Helm.DeployNamespace = "test-ns"
+	}
+}
+
+func TestValidateRepoSyncSpec(t *testing.T) {
 	testCases := []struct {
 		name    string
 		obj     *v1beta1.RepoSync
@@ -280,9 +300,33 @@ func TestValidateSourceSpec(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := SourceSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, reposync.GetHelmBase(tc.obj.Spec.Helm), tc.obj)
+			err := RepoSyncSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj.Spec.Helm, tc.obj)
 			if !errors.Is(err, tc.wantErr) {
-				t.Errorf("Got SourceSpec() error %v, want %v", err, tc.wantErr)
+				t.Errorf("Got RepoSyncSpec() error %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateRootSyncSpec(t *testing.T) {
+	testCases := []struct {
+		name    string
+		obj     *v1beta1.RootSync
+		wantErr status.Error
+	}{
+		// spec.helm.namespace and spec.helm.deployNamespace are mutually exclusive
+		{
+			name:    "valid git",
+			obj:     rootSyncWithHelm(helmNsAndDeployNS()),
+			wantErr: fake.Error(InvalidSyncCode),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := RootSyncSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj.Spec.Helm, tc.obj)
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("Got RootSyncSpec() error %v, want %v", err, tc.wantErr)
 			}
 		})
 	}

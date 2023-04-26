@@ -19,6 +19,8 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/reposync"
+	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -27,15 +29,35 @@ import (
 // https://cloud.google.com/iam/docs/service-accounts#user-managed
 const gcpSASuffix = ".iam.gserviceaccount.com"
 
-// SourceSpec validates the Root Sync source specification for any obvious problems.
-func SourceSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmBase, rs client.Object) status.Error {
+// RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
+func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
 	switch v1beta1.SourceType(sourceType) {
 	case v1beta1.GitSource:
 		return GitSpec(git, rs)
 	case v1beta1.OciSource:
 		return OciSpec(oci, rs)
 	case v1beta1.HelmSource:
-		return HelmSpec(helm, rs)
+		return HelmSpec(reposync.GetHelmBase(helm), rs)
+	default:
+		return InvalidSourceType(rs)
+	}
+}
+
+// RootSyncSpec validates the Root Sync source specification for any obvious problems.
+func RootSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRootSync, rs client.Object) status.Error {
+	switch v1beta1.SourceType(sourceType) {
+	case v1beta1.GitSource:
+		return GitSpec(git, rs)
+	case v1beta1.OciSource:
+		return OciSpec(oci, rs)
+	case v1beta1.HelmSource:
+		if err := HelmSpec(rootsync.GetHelmBase(helm), rs); err != nil {
+			return err
+		}
+		if helm.Namespace != "" && helm.DeployNamespace != "" {
+			return HelmNSAndDeployNS(rs)
+		}
+		return nil
 	default:
 		return InvalidSourceType(rs)
 	}
@@ -158,6 +180,7 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	default:
 		return InvalidHelmAuthType(rs)
 	}
+
 	return nil
 }
 
@@ -336,5 +359,14 @@ func InvalidHelmAuthType(o client.Object) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.helm.auth to be one of %s", kind,
 			strings.Join(types, ",")).
+		BuildWithResources(o)
+}
+
+// HelmNSAndDeployNS reports that a RootSync has both spec.helm.namespace and spec.helm.deployNamespace
+// set, even though they are mutually exclusive
+func HelmNSAndDeployNS(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify only one of 'spec.helm.namespace' or 'spec.helm.deployNamespace'", kind).
 		BuildWithResources(o)
 }

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/emicklei/go-restful/log"
+	"github.com/emicklei/go-restful/v3/log"
 )
 
 // Copyright 2013 Ernest Micklei. All rights reserved.
@@ -165,18 +165,6 @@ func FormParameter(name, description string) *Parameter {
 	return p
 }
 
-// MultiPartFormParameter creates a new Parameter of kind Form (using multipart/form-data) for documentation purposes.
-// It is initialized as required with string as its DataType.
-func (w *WebService) MultiPartFormParameter(name, description string) *Parameter {
-	return MultiPartFormParameter(name, description)
-}
-
-func MultiPartFormParameter(name, description string) *Parameter {
-	p := &Parameter{&ParameterData{Name: name, Description: description, Required: false, DataType: "string"}}
-	p.beMultiPartForm()
-	return p
-}
-
 // Route creates a new Route using the RouteBuilder and add to the ordered list of Routes.
 func (w *WebService) Route(builder *RouteBuilder) *WebService {
 	w.routesLock.Lock()
@@ -188,22 +176,20 @@ func (w *WebService) Route(builder *RouteBuilder) *WebService {
 
 // RemoveRoute removes the specified route, looks for something that matches 'path' and 'method'
 func (w *WebService) RemoveRoute(path, method string) error {
-	if !w.dynamicRoutes {
-		return errors.New("dynamic routes are not enabled.")
-	}
-	w.routesLock.Lock()
-	defer w.routesLock.Unlock()
-	newRoutes := make([]Route, (len(w.routes) - 1))
-	current := 0
-	for ix := range w.routes {
-		if w.routes[ix].Method == method && w.routes[ix].Path == path {
-			continue
-		}
-		newRoutes[current] = w.routes[ix]
-		current++
-	}
-	w.routes = newRoutes
-	return nil
+    if !w.dynamicRoutes {
+        return errors.New("dynamic routes are not enabled.")
+    }
+    w.routesLock.Lock()
+    defer w.routesLock.Unlock()
+    newRoutes := []Route{}
+    for _, route := range w.routes {
+        if route.Method == method && route.Path == path {
+            continue
+        }
+        newRoutes = append(newRoutes, route)
+    }
+    w.routes = newRoutes
+    return nil
 }
 
 // Method creates a new RouteBuilder and initialize its http method

@@ -19,7 +19,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/yaml"
 )
@@ -46,7 +45,7 @@ func RepoSync(obj ast.FileObject) status.Error {
 	if rs.Spec.SourceType == "" {
 		rs.Spec.SourceType = string(v1beta1.GitSource)
 	}
-	return SourceSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), rs)
+	return RepoSyncSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, rs)
 }
 
 func toRepoSyncV1Beta1(rs *v1alpha1.RepoSync) (*v1beta1.RepoSync, status.Error) {

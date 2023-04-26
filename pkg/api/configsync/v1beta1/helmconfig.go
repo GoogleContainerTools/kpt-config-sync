@@ -23,10 +23,17 @@ import (
 // HelmRootSync contains the configuration specific to locate, download and template a Helm chart for RootSync.
 type HelmRootSync struct {
 	HelmBase `json:",inline"`
-	// namespace sets the target namespace for a release.
-	// Default: "default".
+	// namespace sets the value of {{Release.Namespace}} defined in the chart templates.
+	// This is a mutually exclusive setting with "deployNamespace".
+	// Default: default.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+	// deployNamespace specifies the namespace in which to deploy the chart.
+	// This is a mutually exclusive setting with "namespace".
+	// If neither namespace nor deployNamespace are set, the chart will be
+	// deployed into the default namespace.
+	// +optional
+	DeployNamespace string `json:"deployNamespace,omitempty"`
 }
 
 // HelmRepoSync contains the configuration specific to locate, download and template a Helm chart for RepoSync.

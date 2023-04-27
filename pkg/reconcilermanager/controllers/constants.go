@@ -15,10 +15,16 @@
 package controllers
 
 const (
-	// GCPSAAnnotationKey is used to annotate RepoSync/RootSync controller SA when
+	// GCPSAAnnotationKey is used to annotate the following service accounts:
+	// 1) the RepoSync/RootSync controller SA when
 	// spec.git.auth: gcpserviceaccount is used with Workload Identity enabled on a
 	// GKE cluster.
 	// https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+	// 2) the `default` SA in the `config-management-monitoring` namespace, which
+	// is used by the `otel-collector` Deployment. Adding this annotation allows
+	// the `otel-collector` Deployment to impersonate GCP service accounts to
+	// export metrics to Cloud Monitoring and Cloud Monarch on a GKE cluster with
+	// Workload Identity eanbled.
 	GCPSAAnnotationKey = "iam.gke.io/gcp-service-account"
 )
 

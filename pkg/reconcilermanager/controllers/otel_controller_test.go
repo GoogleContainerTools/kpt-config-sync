@@ -222,3 +222,88 @@ func TestOtelReconcilerCustom(t *testing.T) {
 
 	t.Log("Deployment successfully updated")
 }
+
+func setupOtelSAReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelSAReconciler) {
+	t.Helper()
+
+	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
+	testReconciler := NewOtelSAReconciler("",
+		fakeClient,
+		controllerruntime.Log.WithName("controllers").WithName(OtelSALoggerName),
+		fakeClient.Scheme(),
+	)
+	return fakeClient, testReconciler
+}
+
+const test1GSAEmail = "metric-writer@test1.iam.gserviceaccount.com"
+const test2GSAEmail = "metric-writer@test2.iam.gserviceaccount.com"
+
+func TestOtelSAReconciler(t *testing.T) {
+	sa := fake.ServiceAccountObject(
+		defaultSAName,
+		core.Namespace(metrics.MonitoringNamespace),
+		core.Annotation(GCPSAAnnotationKey, test1GSAEmail),
+	)
+	reqNamespacedName := namespacedName(defaultSAName, metrics.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelSAReconciler(t, sa, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+
+	// Verify that the otel-collector Deployment does not have the GCPSAAnnotationKey annotation.
+	wantDeployment := fake.DeploymentObject(
+		core.Namespace(metrics.MonitoringNamespace),
+		core.Name(metrics.OtelCollectorName),
+	)
+	ctx := context.Background()
+	deployKey := client.ObjectKey{Namespace: metrics.MonitoringNamespace, Name: metrics.OtelCollectorName}
+	gotDeployment := &appsv1.Deployment{}
+	err := fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
+	// Reconcile the default service account under the config-management-monitoring namespace.
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	// Verify that the otel-collector Deployment has the GCPSAAnnotationKey annotation.
+	wantDeployment = fake.DeploymentObject(
+		core.Namespace(metrics.MonitoringNamespace),
+		core.Name(metrics.OtelCollectorName),
+	)
+	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: test1GSAEmail}
+	gotDeployment = &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
+	// Change the GCPSAAnnotationKey annotation
+	core.SetAnnotation(sa, GCPSAAnnotationKey, test2GSAEmail)
+	if err := fakeClient.Update(ctx, sa); err != nil {
+		t.Fatalf("failed to update the default service account: %v", err)
+	}
+	// Reconcile the default service account under the config-management-monitoring namespace.
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: test2GSAEmail}
+	gotDeployment = &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
+	// Resets the annotations of the default SA
+	sa.SetAnnotations(map[string]string{})
+	if err := fakeClient.Update(ctx, sa); err != nil {
+		t.Fatalf("failed to update the default service account: %v", err)
+	}
+	// Reconcile the default service account under the config-management-monitoring namespace.
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: ""}
+	gotDeployment = &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+}

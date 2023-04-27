@@ -107,6 +107,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
+		ctrl.Log.WithName("controllers").WithName(controllers.OtelSALoggerName),
+		mgr.GetScheme())
+	if err := otelSA.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OtelSA")
+		os.Exit(1)
+	}
+
 	// Register the OpenCensus views
 	if err := metrics.RegisterReconcilerManagerMetricsViews(); err != nil {
 		setupLog.Error(err, "failed to register OpenCensus views")

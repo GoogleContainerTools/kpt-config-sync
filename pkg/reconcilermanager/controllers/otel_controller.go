@@ -71,11 +71,17 @@ func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 		log.Error(err, "Failed to create/update ConfigMap")
 		return controllerruntime.Result{}, err
 	}
-	err = r.updateDeploymentAnnotation(ctx, configMapDataHash)
+
+	if configMapDataHash == nil {
+		return controllerruntime.Result{}, nil
+	}
+	err = updateDeploymentAnnotation(ctx, r.client, metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
 	if err != nil {
 		log.Error(err, "Failed to update Deployment")
 		return controllerruntime.Result{}, err
 	}
+	r.log.Info("Deployment annotation patch successful", logFieldObject, fmt.Sprintf("%s/%s", metrics.MonitoringNamespace,
+		metrics.OtelCollectorName), metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
 	return controllerruntime.Result{}, nil
 }
 
@@ -143,40 +149,28 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 	return nil, nil
 }
 
-// updateDeploymentAnnotation updates the otel deployment's spec.template.annotation
-// with the otel ConfigMap hash. This triggers the deployment to restart in the
-// event of a ConfigMap update.
-func (r *OtelReconciler) updateDeploymentAnnotation(ctx context.Context, hash []byte) error {
-	if hash == nil {
-		return nil
-	}
-
+// updateDeploymentAnnotation updates the otel deployment's spec.template.annotation.
+// This triggers the deployment to restart in the event of an annotation update.
+func updateDeploymentAnnotation(ctx context.Context, c client.Client, annotationKey, annotationValue string) error {
 	dep := &appsv1.Deployment{}
 	dep.Name = metrics.OtelCollectorName
 	dep.Namespace = metrics.MonitoringNamespace
 	key := client.ObjectKeyFromObject(dep)
 
-	if err := r.client.Get(ctx, key, dep); err != nil {
+	if err := c.Get(ctx, key, dep); err != nil {
 		return status.APIServerError(err, "failed to get otel Deployment")
 	}
 
 	existing := dep.DeepCopy()
 	patch := client.MergeFrom(existing)
 
-	// Mutate Annotation with the hash of configmap.data from the otel ConfigMap
-	// creates/updates.
-	core.SetAnnotation(&dep.Spec.Template, metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", hash))
+	core.SetAnnotation(&dep.Spec.Template, annotationKey, annotationValue)
 
 	if equality.Semantic.DeepEqual(existing, dep) {
 		return nil
 	}
 
-	if err := r.client.Patch(ctx, dep, patch); err != nil {
-		return err
-	}
-	r.log.Info("Deployment annotation patch successful",
-		logFieldObject, key.String())
-	return nil
+	return c.Patch(ctx, dep, patch)
 }
 
 // SetupWithManager registers otel controller with reconciler-manager.

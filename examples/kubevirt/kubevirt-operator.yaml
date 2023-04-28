@@ -5469,7 +5469,7 @@ description: "This priority class should be used for core kubevirt components on
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kubevirt.io:operator
+  name: kubevirt.io-operator
   labels:
     operator.kubevirt.io: ""
     rbac.authorization.k8s.io/aggregate-to-admin: "true"

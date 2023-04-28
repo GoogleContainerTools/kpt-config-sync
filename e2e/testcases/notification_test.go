@@ -458,6 +458,115 @@ func TestNotificationOnSyncFailed(t *testing.T) {
 }`, commit), records.Records[5].Message)
 }
 
+func TestNotificationOnSyncCreated(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN("root-sync-2")
+	rootReconcilerName := core.RootReconcilerName(rootSyncNN.Name)
+	nt := nomostest.New(t, nomostesting.Notification,
+		ntopts.Unstructured,
+		ntopts.InstallNotificationServer,
+		ntopts.RootRepo(rootSyncNN.Name),
+	)
+	var err error
+	credentialMap := map[string]string{
+		rootSyncNN.Namespace: rootSyncNotificationPassword,
+	}
+	for ns, pass := range credentialMap {
+		_, err = nomostest.NotificationSecret(nt, ns,
+			nomostest.WithNotificationUsername("user"),
+			nomostest.WithNotificationPassword(pass),
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		_, err = nomostest.NotificationConfigMap(nt, ns,
+			nomostest.WithOnSyncCreatedTrigger,
+			nomostest.WithSyncCreatedTemplate,
+			nomostest.WithLocalWebhookService,
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+	// Enable notifications on RootSync
+	rootSync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
+	nomostest.SubscribeRootSyncNotification(rootSync, "on-sync-created", "local")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RootSync"))
+	err = nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
+		[]testpredicates.Predicate{testpredicates.DeploymentHasContainer(reconcilermanager.Notification)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
+			[]testpredicates.Predicate{testpredicates.DeploymentHasContainer(reconcilermanager.Notification)})
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace,
+			[]testpredicates.Predicate{testpredicates.ObjectHasAnnotation("notified.notifications.configsync.gke.io")})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// query RootSync to get the generation
+	rootSyncObj := &v1beta1.RootSync{}
+	if err := nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSyncObj); err != nil {
+		nt.T.Fatal(err)
+	}
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		hash, err := nt.RootRepos[rootSyncNN.Name].Hash()
+		if err != nil {
+			return err
+		}
+		return nt.Watcher.WatchObject(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace,
+			[]testpredicates.Predicate{testpredicates.NotificationHasStatus(v1beta1.NotificationStatus{
+				ObservedGeneration: rootSyncObj.Generation,
+				Commit:             hash,
+				Deliveries: []v1beta1.NotificationDelivery{
+					{
+						Trigger:         "on-sync-created",
+						Service:         "local",
+						Recipient:       "",
+						AlreadyNotified: true,
+					},
+				},
+			})},
+		)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+	records, err := waitForNotifications(nt, 1)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// validate notification
+	require.Equal(nt.T, nomostest.NotificationRecords{
+		Records: []nomostest.NotificationRecord{
+			{
+				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-2 created\"\n  }\n}",
+				Auth:    rootSyncNotificationCredentialHash, // base64 encoded username/pass
+			},
+		},
+	}, *records)
+
+	// deleting root-sync-2
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove root-sync-2"))
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
 func waitForNotifications(nt *nomostest.NT, expectedNum int) (*nomostest.NotificationRecords, error) {
 	var records *nomostest.NotificationRecords
 	var err error

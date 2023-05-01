@@ -101,8 +101,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	}
 	expectActuationStatus := "Succeeded"
 	expectReconcileStatus := "Timeout"
-	if err := nt.Validate("root-sync", "config-management-system", &resourcegroupv1alpha1.ResourceGroup{},
-		resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)); err != nil {
+	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
+		[]testpredicates.Predicate{resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -137,8 +137,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 
 	expectActuationStatus = "Succeeded"
 	expectReconcileStatus = "Succeeded"
-	if err := nt.Validate("root-sync", "config-management-system", &resourcegroupv1alpha1.ResourceGroup{},
-		resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)); err != nil {
+	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
+		[]testpredicates.Predicate{resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)}); err != nil {
 		nt.T.Fatal(err)
 	}
 }

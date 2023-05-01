@@ -567,6 +567,73 @@ func TestNotificationOnSyncCreated(t *testing.T) {
 	}
 }
 
+func TestNotificationOnSyncDeleted(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN("root-sync-3")
+	rootReconcilerName := core.RootReconcilerName(rootSyncNN.Name)
+	nt := nomostest.New(t, nomostesting.Notification,
+		ntopts.Unstructured,
+		ntopts.InstallNotificationServer,
+		ntopts.RootRepo(rootSyncNN.Name),
+	)
+	var err error
+	credentialMap := map[string]string{
+		rootSyncNN.Namespace: rootSyncNotificationPassword,
+	}
+	for ns, pass := range credentialMap {
+		_, err = nomostest.NotificationSecret(nt, ns,
+			nomostest.WithNotificationUsername("user"),
+			nomostest.WithNotificationPassword(pass),
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		_, err = nomostest.NotificationConfigMap(nt, ns,
+			nomostest.WithOnSyncDeletedTrigger,
+			nomostest.WithSyncDeletedTemplate,
+			nomostest.WithLocalWebhookService,
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+	// Enable notifications on RootSync
+	rootSync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
+	nomostest.SubscribeRootSyncNotification(rootSync, "on-sync-deleted", "local")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RootSync"))
+	err = nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
+		[]testpredicates.Predicate{testpredicates.DeploymentHasContainer(reconcilermanager.Notification)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// deleting root-sync-3
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove root-sync-3"))
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	records, err := waitForNotifications(nt, 1)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// validate notification
+	require.Equal(nt.T, nomostest.NotificationRecords{
+		Records: []nomostest.NotificationRecord{
+			{
+				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-3 has been deleted\"\n  }\n}",
+				Auth:    rootSyncNotificationCredentialHash,
+			},
+		},
+	}, *records)
+}
+
 func waitForNotifications(nt *nomostest.NT, expectedNum int) (*nomostest.NotificationRecords, error) {
 	var records *nomostest.NotificationRecords
 	var err error

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -63,7 +62,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 			resourceGroupHasNoStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		},
-		testwatcher.WatchTimeout(120*time.Second))
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -80,7 +79,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 			resourceGroupHasStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		},
-		testwatcher.WatchTimeout(120*time.Second))
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

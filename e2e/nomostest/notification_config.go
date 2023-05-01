@@ -99,3 +99,24 @@ func WithSyncFailedTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncCreatedTrigger adds the on-sync-created trigger to the ConfigMap
+func WithOnSyncCreatedTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-created"] = `- when: true
+  oncePer: sync.metadata.name
+  send: [sync-created]`
+}
+
+// WithSyncCreatedTemplate adds the sync-createed template to the ConfigMap
+func WithSyncCreatedTemplate(cmData map[string]string) {
+	cmData["template.sync-created"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} created"
+        }
+      }`
+}

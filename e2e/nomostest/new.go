@@ -169,7 +169,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
 		DefaultReconcileTimeout: sharedNt.DefaultReconcileTimeout,
-		DefaultMetricsTimeout:   sharedNt.DefaultMetricsTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
 		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
@@ -259,7 +258,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Scheme:                  scheme,
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
-		DefaultMetricsTimeout:   30 * time.Second,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider),
 	}
 

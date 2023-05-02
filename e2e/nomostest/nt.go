@@ -111,12 +111,6 @@ type NT struct {
 	// for object reconcilition.
 	DefaultReconcileTimeout time.Duration
 
-	// DefaultMetricsTimeout is the default timeout for tests to wait for
-	// metrics to match expectations. This needs to be long enough to account
-	// for batched metrics in the agent and collector, but short enough that
-	// the metrics don't expire in the collector.
-	DefaultMetricsTimeout time.Duration
-
 	// RootRepos is the root repositories the cluster is syncing to.
 	// The key is the RootSync name and the value points to the corresponding Repository object.
 	// Each test case was set up with a default RootSync (`root-sync`) installed.

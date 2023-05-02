@@ -51,7 +51,7 @@ func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 
 	nt.T.Log("[METRICS] validating prometheus metrics...")
 	for i, predicate := range predicates {
-		duration, err := retry.Retry(nt.DefaultMetricsTimeout, func() error {
+		duration, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
 			port, err := nt.prometheusPortForwarder.LocalPort()
 			if err != nil {
 				return err

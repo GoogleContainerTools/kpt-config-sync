@@ -120,3 +120,24 @@ func WithSyncCreatedTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncDeletedTrigger adds the on-sync-deleted trigger to the ConfigMap
+func WithOnSyncDeletedTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-deleted"] = `- when: sync.metadata.deletionTimestamp != nil
+  oncePer: sync.metadata.name
+  send: [sync-deleted]`
+}
+
+// WithSyncDeletedTemplate adds the sync-deleted template to the ConfigMap
+func WithSyncDeletedTemplate(cmData map[string]string) {
+	cmData["template.sync-deleted"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} has been deleted"
+        }
+      }`
+}

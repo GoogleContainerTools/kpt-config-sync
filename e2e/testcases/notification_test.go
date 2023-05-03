@@ -610,11 +610,7 @@ func TestNotificationOnSyncDeleted(t *testing.T) {
 	// deleting root-sync-3
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove root-sync-3"))
-	tg := taskgroup.New()
-	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace)
-	})
-	if err := tg.Wait(); err != nil {
+	if err := nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
 

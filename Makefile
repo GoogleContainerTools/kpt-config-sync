@@ -35,7 +35,7 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
-KUSTOMIZE_VERSION := v5.0.1
+KUSTOMIZE_VERSION := v5.0.2
 HELM_VERSION := v3.11.3
 
 # Directory used for staging Docker contexts.

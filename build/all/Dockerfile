@@ -24,7 +24,7 @@ ARG VERSION
 ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 
 ARG HELM_VERSION=v3.11.3
-ARG KUSTOMIZE_VERSION=v5.0.1
+ARG KUSTOMIZE_VERSION=v5.0.2
 
 # Install Helm with license
 RUN URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" && \

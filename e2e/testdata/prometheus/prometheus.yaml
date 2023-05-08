@@ -168,6 +168,7 @@ spec:
             - --storage.tsdb.max-block-duration=10m
             - --web.listen-address=:9090
             - --web.enable-lifecycle
+            - --web.enable-admin-api
             - --web.route-prefix=/
           ports:
             - containerPort: 9090

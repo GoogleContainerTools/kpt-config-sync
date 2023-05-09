@@ -24,11 +24,14 @@ import (
 	"sync"
 	"time"
 
+	prometheusapi "github.com/prometheus/client_golang/api"
+	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -711,6 +714,45 @@ func (nt *NT) portForwardPrometheus() {
 		prometheusServerDeploymentName,
 		nt.prometheusPortForwarder,
 	)
+
+	if err := nt.emptyPrometheusCache(); err != nil {
+		nt.T.Fatalf("failed to empty prometheus cache: %v", err)
+	}
+}
+
+// emptyPrometheusCache empty the cache in Prometheus.
+func (nt *NT) emptyPrometheusCache() error {
+	nt.T.Helper()
+	ctx, cancel := context.WithCancel(nt.Context)
+	defer cancel()
+
+	duration, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+		port, err := nt.prometheusPortForwarder.LocalPort()
+		if err != nil {
+			return err
+		}
+		c, err := prometheusapi.NewClient(prometheusapi.Config{
+			Address: fmt.Sprintf("http://localhost:%d", port),
+		})
+		if err != nil {
+			return err
+		}
+		v1api := prometheusv1.NewAPI(c)
+		// DeleteSeries only marks the time series for deletion
+		if err = v1api.DeleteSeries(ctx, []string{`{__name__=~".+"}`}, time.Time{}, time.Now()); err != nil {
+			return fmt.Errorf("failed to mark Prometheus data for deletion: %v", err)
+		}
+		// CleanTombstones remove them from the disk to clear the space instantly
+		if err = v1api.CleanTombstones(ctx); err != nil {
+			return fmt.Errorf("failed to remove tombstones from the disk: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "timed out waiting for deleting Prometheus cache")
+	}
+	nt.T.Logf("waited %v for Prometheus cache to be cleared", duration)
+	return nil
 }
 
 func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {

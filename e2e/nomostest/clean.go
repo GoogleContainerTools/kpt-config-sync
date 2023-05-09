@@ -160,7 +160,7 @@ func deleteTestObjectsAndWait(nt *NT) error {
 		}
 	}
 	// Delete all objects in serial and wait for not found in parallel.
-	return deleteObjectsAndWait(nt, objs...)
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 // deleteManagedNamespacesAndWait deletes all the namespaces managed by Config Sync.
@@ -229,7 +229,7 @@ func deleteNamespacesAndWait(nt *NT, nsList []corev1.Namespace) error {
 	for i := range nsList {
 		objs = append(objs, &nsList[i])
 	}
-	return deleteObjectsAndWait(nt, objs...)
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 func filterMutableListTypes(nt *NT) map[schema.GroupVersionKind]reflect.Type {
@@ -395,7 +395,7 @@ func deleteKubevirt(nt *NT) error {
 	objs = append(objs, obj)
 
 	// Delete specified KubeVirt objects in parallel and wait for NotFound
-	if err := deleteObjectsAndWait(nt, objs...); err != nil {
+	if err := DeleteObjectsAndWait(nt, objs...); err != nil {
 		return err
 	}
 
@@ -490,9 +490,9 @@ func deleteObject(nt *NT, obj client.Object) error {
 	return nil
 }
 
-// deleteObjectsAndWait deletes zero or more objects in serial and waits for not found in parallel.
+// DeleteObjectsAndWait deletes zero or more objects in serial and waits for not found in parallel.
 // NOTE: Deleting in parallel might be faster, but the log would be harder to debug.
-func deleteObjectsAndWait(nt *NT, objs ...client.Object) error {
+func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 	tg := taskgroup.New()
 	for _, obj := range objs {
 		nn := client.ObjectKeyFromObject(obj)

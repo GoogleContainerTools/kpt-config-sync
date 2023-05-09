@@ -106,7 +106,7 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 // WatchForAllSyncs calls WatchForSync on all Syncs in nt.RootRepos & nt.NonRootRepos.
 //
 // If you want to validate specific fields of a Sync object, use
-// nomostest.WatchObject() instead.
+// nt.Watcher.WatchObject() instead.
 func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	waitForRepoSyncsOptions := watchForAllSyncsOptions{
 		timeout:            nt.DefaultWaitTimeout,

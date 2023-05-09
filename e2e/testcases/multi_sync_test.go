@@ -773,7 +773,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := nt.KubeClient.Delete(testNamespace); err != nil {
+		if err := nomostest.DeleteObjectsAndWait(nt, testNamespace); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -794,7 +794,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	}
 	nt.WaitForRootSyncStalledError(rootSync.Namespace, rootSync.Name, "Validation", "RootSync objects are only allowed in the config-management-system namespace, not in test-ns")
 	t.Cleanup(func() {
-		if err := nt.KubeClient.Delete(rootSync); err != nil {
+		if err := nomostest.DeleteObjectsAndWait(nt, rootSync); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -805,7 +805,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "RepoSync objects are not allowed in the config-management-system namespace")
-	if err := nt.KubeClient.Delete(rs); err != nil {
+	if err := nomostest.DeleteObjectsAndWait(nt, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -823,7 +823,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		fmt.Sprintf(`Invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters.`,
 			testNs, veryLongName, len(veryLongName), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
-		if err := nt.KubeClient.Delete(rs); err != nil {
+		if err := nomostest.DeleteObjectsAndWait(nt, rs); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -838,7 +838,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
 			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretName(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
 	t.Cleanup(func() {
-		if err := nt.KubeClient.Delete(rsInvalidSecretRef); err != nil {
+		if err := nomostest.DeleteObjectsAndWait(nt, rsInvalidSecretRef); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

@@ -178,7 +178,8 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	}
 
 	nt.T.Cleanup(func() {
-		if err := nt.KubeClient.Delete(fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))); err != nil {
+		svcObj := fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))
+		if err := nomostest.DeleteObjectsAndWait(nt, svcObj); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

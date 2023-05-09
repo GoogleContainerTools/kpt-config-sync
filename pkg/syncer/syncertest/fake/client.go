@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -58,14 +60,31 @@ type statusWriter struct {
 var _ client.StatusWriter = &statusWriter{}
 
 // Client is a fake implementation of client.Client.
+//
+// Known Unimplemented features (update as discovered/added):
+// - DeletePropagationBackground (performs foreground instead)
+// - DeletePropagationOrphan (returns error if used)
+// - ListOptions.Limit & Continue (ignored - all objects are returned)
+// - Status().Patch
 type Client struct {
+	test    *testing.T
 	scheme  *runtime.Scheme
 	codecs  serializer.CodecFactory
 	mapper  meta.RESTMapper
 	Objects map[core.ID]client.Object
+	eventCh chan watch.Event
+	Now     func() metav1.Time
+
+	lock     sync.RWMutex
+	watchers map[chan watch.Event]struct{}
 }
 
 var _ client.Client = &Client{}
+
+// RealNow is the default Now function used by NewClient.
+func RealNow() metav1.Time {
+	return metav1.Now()
+}
 
 // NewClient instantiates a new fake.Client pre-populated with the specified
 // objects.
@@ -75,9 +94,13 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	t.Helper()
 
 	result := Client{
-		scheme:  scheme,
-		codecs:  serializer.NewCodecFactory(scheme),
-		Objects: make(map[core.ID]client.Object),
+		test:     t,
+		scheme:   scheme,
+		codecs:   serializer.NewCodecFactory(scheme),
+		Objects:  make(map[core.ID]client.Object),
+		eventCh:  make(chan watch.Event),
+		watchers: make(map[chan watch.Event]struct{}),
+		Now:      RealNow,
 	}
 
 	err := v1.AddToScheme(result.scheme)
@@ -98,6 +121,12 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	// Build mapper using known GVKs from the scheme
 	result.mapper = testutil.NewFakeRESTMapper(allKnownGVKs(result.scheme)...)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// Start event fan-out
+	go result.handleEvents(ctx)
+
 	for _, o := range objs {
 		err = result.Create(context.Background(), o)
 		if err != nil {
@@ -116,6 +145,60 @@ func allKnownGVKs(scheme *runtime.Scheme) []schema.GroupVersionKind {
 		gvkList = append(gvkList, gvk)
 	}
 	return gvkList
+}
+
+func (c *Client) handleEvents(ctx context.Context) {
+	doneCh := ctx.Done()
+	defer close(c.eventCh)
+	for {
+		select {
+		case <-doneCh:
+			// Context is cancelled or timed out.
+			return
+		case event, ok := <-c.eventCh:
+			if !ok {
+				// Input channel is closed.
+				return
+			}
+			// Input event recieved.
+			c.sendEventToWatchers(ctx, event)
+		}
+	}
+}
+
+func (c *Client) addWatcher(eventCh chan watch.Event) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.watchers[eventCh] = struct{}{}
+}
+
+func (c *Client) removeWatcher(eventCh chan watch.Event) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	delete(c.watchers, eventCh)
+}
+
+func (c *Client) sendEventToWatchers(ctx context.Context, event watch.Event) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	klog.V(5).Infof("Broadcasting %s event for %T", event.Type, event.Object)
+
+	doneCh := ctx.Done()
+	for watcher := range c.watchers {
+		klog.V(5).Infof("Narrowcasting %s event for %T", event.Type, event.Object)
+		watcher := watcher
+		go func() {
+			select {
+			case <-doneCh:
+				// Context is cancelled or timed out.
+			case watcher <- event:
+				// Event recieved or channel closed
+			}
+		}()
+	}
 }
 
 func toGR(gk schema.GroupKind) schema.GroupResource {
@@ -176,14 +259,19 @@ func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object)
 	return nil
 }
 
-func validateListOptions(opts client.ListOptions) error {
+func (c *Client) validateListOptions(opts client.ListOptions) error {
 	if opts.Continue != "" {
 		return errors.Errorf("fake.Client.List does not yet support the Continue option, but got: %+v", opts)
 	}
 	if opts.Limit != 0 {
-		return errors.Errorf("fake.Client.List does not yet support the Limit option, but got: %+v", opts)
+		// TODO: Implement limit for List & Watch calls.
+		// Our tests don't need it yet, but watchtools.UntilWithSync passes it,
+		// so just return the whole set of objects for now.
+		// Since we don't return a Continue token, it won't retry, and should
+		// just handle all the return values, even if there's more than the
+		// requested limit.
+		c.test.Logf("WARNING: fake.Client.List does not yet support the Limit option, but got: %+v", opts)
 	}
-
 	return nil
 }
 
@@ -191,9 +279,9 @@ func validateListOptions(opts client.ListOptions) error {
 //
 // Does not paginate results.
 func (c *Client) List(_ context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	options := client.ListOptions{}
+	options := &client.ListOptions{}
 	options.ApplyOptions(opts)
-	err := validateListOptions(options)
+	err := c.validateListOptions(*options)
 	if err != nil {
 		return err
 	}
@@ -242,7 +330,7 @@ func (c *Client) List(_ context.Context, list client.ObjectList, opts ...client.
 		// TODO: Is GVK set for unversioned List items? typed List items?
 		uObj.SetGroupVersionKind(gvk)
 		// Skip objects that don't match the ListOptions filters
-		ok, err := c.matchesListFilters(uObj, &options)
+		ok, err := c.matchesListFilters(uObj, options)
 		if err != nil {
 			return err
 		}
@@ -259,8 +347,9 @@ func (c *Client) List(_ context.Context, list client.ObjectList, opts ...client.
 	if err != nil {
 		return err
 	}
-	// Conversion sometimes drops the GVK, so add it back in.
-	list.GetObjectKind().SetGroupVersionKind(gvk)
+	// TODO: Does the normal client.List always populate GVK on typed objects?
+	// Some of the code seems to require this...
+	list.GetObjectKind().SetGroupVersionKind(listGVK)
 
 	klog.V(5).Infof("Listing %T %s (ResourceVersion: %q, Items: %d): %s",
 		list, gvk.Kind, list.GetResourceVersion(), len(uList.Items), log.AsJSON(list))
@@ -329,6 +418,10 @@ func (c *Client) Create(_ context.Context, obj client.Object, opts ...client.Cre
 	obj.SetGeneration(tObj.GetGeneration())
 
 	c.Objects[id] = tObj
+	c.eventCh <- watch.Event{
+		Type:   watch.Added,
+		Object: tObj,
+	}
 	return nil
 }
 
@@ -342,16 +435,20 @@ func validateDeleteOptions(opts client.DeleteOptions) error {
 	if opts.Preconditions != nil {
 		return errors.Errorf("fake.Client.Delete does not yet support Preconditions, but got: %+v", opts)
 	}
-	if opts.PropagationPolicy != nil &&
-		*opts.PropagationPolicy != metav1.DeletePropagationBackground {
-		return errors.Errorf("fake.Client.Delete does not yet support PropagationPolicy %q",
-			*opts.PropagationPolicy)
+	if opts.PropagationPolicy != nil {
+		switch *opts.PropagationPolicy {
+		case metav1.DeletePropagationForeground:
+		case metav1.DeletePropagationBackground:
+		default:
+			return errors.Errorf("fake.Client.Delete does not yet support PropagationPolicy %q",
+				*opts.PropagationPolicy)
+		}
 	}
 	return nil
 }
 
 // Delete implements client.Client.
-func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.DeleteOption) error {
+func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	options := client.DeleteOptions{}
 	options.ApplyOptions(opts)
 	err := validateDeleteOptions(options)
@@ -364,6 +461,8 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 	if err != nil {
 		return err
 	}
+	// Copy obj to avoid mutation
+	obj = obj.DeepCopyObject().(client.Object)
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
 	id := c.idFromObject(obj)
@@ -380,6 +479,20 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 		return newConflictingResourceVersion(id, obj.GetResourceVersion(), cachedObj.GetResourceVersion())
 	}
 
+	// Simulate apiserver delayed deletion for finalizers
+	if cachedObj.GetDeletionTimestamp() == nil && len(cachedObj.GetFinalizers()) > 0 {
+		klog.V(5).Infof("Found %d finalizers: Adding deleteTimestamp to %T %s (ResourceVersion: %q)",
+			len(cachedObj.GetFinalizers()), cachedObj, client.ObjectKeyFromObject(cachedObj), cachedObj.GetResourceVersion())
+		newObj := cachedObj.DeepCopyObject().(client.Object)
+		now := c.Now()
+		newObj.SetDeletionTimestamp(&now)
+		err := c.Update(ctx, newObj)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// Delete method in real typed client(https://github.com/kubernetes-sigs/controller-runtime/blob/v0.14.1/pkg/client/typed_client.go#L84)
 	// does not copy the latest values back to input object which is different from other methods.
 
@@ -388,8 +501,30 @@ func (c *Client) Delete(_ context.Context, obj client.Object, opts ...client.Del
 		cachedObj.GetGeneration(), cachedObj.GetResourceVersion(),
 		log.AsJSON(cachedObj))
 
-	c.deleteManagedObjects(id)
-	delete(c.Objects, id)
+	// Default to background deletion propagation, if unspecified
+	if options.PropagationPolicy == nil {
+		pp := metav1.DeletePropagationBackground
+		options.PropagationPolicy = &pp
+	}
+
+	switch *options.PropagationPolicy {
+	case metav1.DeletePropagationForeground:
+		c.deleteManagedObjects(id)
+		delete(c.Objects, id)
+	case metav1.DeletePropagationBackground:
+		// TODO: implement thread-safe background deletion propagation.
+		// For now, just emulate foreground deletion propagation instead.
+		c.deleteManagedObjects(id)
+		delete(c.Objects, id)
+	default:
+		return errors.Errorf("unsupported PropagationPolicy: %v", *options.PropagationPolicy)
+	}
+
+	c.eventCh <- watch.Event{
+		Type:   watch.Deleted,
+		Object: cachedObj,
+	}
+
 	return nil
 }
 
@@ -451,7 +586,7 @@ func validatePatchOptions(opts *client.PatchOptions, patch client.Patch) error {
 }
 
 // Update implements client.Client. It does not update the status field.
-func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.UpdateOption) error {
+func (c *Client) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	updateOpts := &client.UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
 	err := validateUpdateOptions(updateOpts)
@@ -473,7 +608,7 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		return newNotFound(id)
 	}
 
-	oldStatus, hasStatus, err := c.getStatusFromObject(c.Objects[id])
+	oldStatus, hasStatus, err := c.getStatusFromObject(cachedObj)
 	if err != nil {
 		return err
 	}
@@ -518,6 +653,20 @@ func (c *Client) Update(_ context.Context, obj client.Object, opts ...client.Upd
 		log.AsJSON(tObj), cmp.Diff(cachedObj, tObj))
 
 	c.Objects[id] = tObj
+	c.eventCh <- watch.Event{
+		Type:   watch.Modified,
+		Object: tObj,
+	}
+
+	// Simulate apiserver garbage collection
+	if tObj.GetDeletionTimestamp() != nil && len(tObj.GetFinalizers()) == 0 {
+		klog.V(5).Infof("Found deleteTimestamp and 0 finalizers: Deleting %T %s (ResourceVersion: %q)",
+			tObj, client.ObjectKeyFromObject(tObj), tObj.GetResourceVersion())
+		err := c.Delete(ctx, tObj)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -797,6 +946,119 @@ func (c *Client) list(gk schema.GroupKind) []client.Object {
 	return result
 }
 
+// Watch implements client.WithWatch.
+func (c *Client) Watch(ctx context.Context, objList client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
+	options := &client.ListOptions{}
+	options.ApplyOptions(opts)
+	err := c.validateListOptions(*options)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	fw := &fakeWatcher{
+		inCh:        make(chan watch.Event),
+		outCh:       make(chan watch.Event),
+		cancel:      cancel,
+		objList:     objList,
+		options:     options,
+		convertFunc: c.convertToListItemType,
+		matchFunc:   c.matchesListFilters,
+	}
+	c.addWatcher(fw.inCh)
+
+	go func() {
+		defer func() {
+			cancel()
+			c.removeWatcher(fw.inCh)
+		}()
+		fw.handleEvents(ctx)
+	}()
+
+	return fw, nil
+}
+
+type fakeWatcher struct {
+	inCh        chan watch.Event
+	outCh       chan watch.Event
+	cancel      context.CancelFunc
+	objList     client.ObjectList
+	options     *client.ListOptions
+	convertFunc func(runtime.Object, client.ObjectList) (obj runtime.Object, matchesGK bool, err error)
+	matchFunc   func(runtime.Object, *client.ListOptions) (matches bool, err error)
+}
+
+func (fw *fakeWatcher) handleEvents(ctx context.Context) {
+	doneCh := ctx.Done()
+	defer close(fw.outCh)
+	for {
+		select {
+		case <-doneCh:
+			// Context is cancelled or timed out.
+			return
+		case event, ok := <-fw.inCh:
+			if !ok {
+				// Input channel is closed.
+				return
+			}
+			// Input event received.
+			fw.sendEvent(ctx, event)
+		}
+	}
+}
+
+func (fw *fakeWatcher) sendEvent(ctx context.Context, event watch.Event) {
+	klog.V(5).Infof("Filtering %s event for %T", event.Type, event.Object)
+
+	// Convert input object type to desired object type and version, if possible
+	obj, matches, err := fw.convertFunc(event.Object, fw.objList)
+	if err != nil {
+		fw.sendEvent(ctx, watch.Event{
+			Type:   watch.Error,
+			Object: &apierrors.NewInternalError(err).ErrStatus,
+		})
+		return
+	}
+	if !matches {
+		// No match
+		return
+	}
+	event.Object = obj
+
+	// Check if input object matches list option filters
+	matches, err = fw.matchFunc(event.Object, fw.options)
+	if err != nil {
+		fw.sendEvent(ctx, watch.Event{
+			Type:   watch.Error,
+			Object: &apierrors.NewInternalError(err).ErrStatus,
+		})
+		return
+	}
+	if !matches {
+		// No match
+		return
+	}
+
+	klog.V(5).Infof("Sending %s event for %T", event.Type, event.Object)
+
+	doneCh := ctx.Done()
+	select {
+	case <-doneCh:
+		// Context is cancelled or timed out.
+		return
+	case fw.outCh <- event:
+		// Event received or channel closed
+	}
+}
+
+func (fw *fakeWatcher) Stop() {
+	fw.cancel()
+}
+
+func (fw *fakeWatcher) ResultChan() <-chan watch.Event {
+	return fw.outCh
+}
+
 // Applier returns a fake.Applier wrapping this fake.Client. Callers using the
 // resulting Applier will read from/write to the original fake.Client.
 func (c *Client) Applier() reconcile.Applier {
@@ -859,6 +1121,42 @@ func (c *Client) convertToVersion(obj runtime.Object, targetGVK schema.GroupVers
 	err = c.scheme.Convert(obj, tObj, nil)
 	if err != nil {
 		return nil, false, err
+	}
+	return tObj, true, nil
+}
+
+// convertToListItemType converts the object to the type of an item in the
+// specified collection. Does both object type conversion and version conversion.
+func (c *Client) convertToListItemType(obj runtime.Object, objListType client.ObjectList) (runtime.Object, bool, error) {
+	// Lookup the List type from the scheme
+	listGVK, err := kinds.Lookup(objListType, c.scheme)
+	if err != nil {
+		return nil, false, err
+	}
+	// Convert the List type to the Item type
+	targetKind := strings.TrimSuffix(listGVK.Kind, "List")
+	if targetKind == listGVK.Kind {
+		return nil, false, fmt.Errorf("collection kind does not have required List suffix: %s", listGVK.Kind)
+	}
+	targetGVK := listGVK.GroupVersion().WithKind(targetKind)
+	// Convert to a typed object, optionally convert between versions
+	tObj, matches, err := c.convertToVersion(obj, targetGVK)
+	if err != nil {
+		return nil, false, err
+	}
+	if !matches {
+		return nil, false, nil
+	}
+	// Convert to unstructured, if needed
+	if _, ok := objListType.(*unstructured.UnstructuredList); ok {
+		if uObj, ok := tObj.(*unstructured.Unstructured); ok {
+			return uObj, true, nil
+		}
+		uObj, err := kinds.ToUnstructured(tObj, c.scheme)
+		if err != nil {
+			return nil, false, err
+		}
+		return uObj, true, nil
 	}
 	return tObj, true, nil
 }

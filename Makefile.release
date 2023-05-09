@@ -5,7 +5,6 @@
 __tag-release-candidate:
 	@echo "+++ Tagging release candidate"
 	@./scripts/fail-if-dirty-repo.sh # Fail if the repo is dirty
-	@echo "+++ Tagging commit $(shell git rev-parse HEAD) with CS_VERSION=$(CS_VERSION)"
 	CS_VERSION="$(CS_VERSION)" ./scripts/tag-release-candidate.sh
 
 .PHONY: __promote-rc-tag

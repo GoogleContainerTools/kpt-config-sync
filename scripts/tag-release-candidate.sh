@@ -102,6 +102,15 @@ echo "+++ Most recent RC of version $CS_VERSION: $RC"
 NEXT_RC=$(increment_rc_of_semver "$RC")
 echo "+++ Incremented RC.  NEXT_RC: $NEXT_RC"
 
+# Log main/release branch for more context
+if [[ "${branch}" == "main" ]]; then
+  git log --oneline --graph -30 "${remote_sha}"
+else
+  git fetch "${REMOTE}" main > /dev/null
+  main_sha=$(git rev-parse FETCH_HEAD)
+  git log --oneline --graph -30 "${main_sha}" "${remote_sha}"
+fi
+
 read -rp "This will tag commit ${remote_sha} from branch ${branch} as ${NEXT_RC} - Proceed (yes/no)? " choice
 case "${choice}" in
   yes) ;;

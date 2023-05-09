@@ -40,7 +40,6 @@ import (
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Predicate evaluates a client.Object, returning an error if it fails validation.
@@ -441,7 +440,7 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, scheme)
+			gvk, err = kinds.Lookup(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -488,7 +487,7 @@ func IsNotManaged(scheme *runtime.Scheme) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, scheme)
+			gvk, err = kinds.Lookup(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -528,7 +527,7 @@ func ResourceVersionEquals(scheme *runtime.Scheme, expected string) Predicate {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, scheme)
+			gvk, err = kinds.Lookup(obj, scheme)
 			if err != nil {
 				return err
 			}
@@ -553,7 +552,7 @@ func ResourceVersionNotEquals(scheme *runtime.Scheme, unexpected string) Predica
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if gvk.Empty() {
 			var err error
-			gvk, err = apiutil.GVKForObject(obj, scheme)
+			gvk, err = kinds.Lookup(obj, scheme)
 			if err != nil {
 				return err
 			}

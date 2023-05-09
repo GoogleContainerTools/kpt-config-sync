@@ -175,10 +175,10 @@ spec:
           resources:
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 1.5Gi
             limits:
               cpu: 1
-              memory: 1Gi
+              memory: 1.5Gi
           volumeMounts:
             - name: prometheus-config-volume
               mountPath: /etc/prometheus/

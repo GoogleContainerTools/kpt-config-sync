@@ -141,3 +141,24 @@ func WithSyncDeletedTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncStalledTrigger adds the on-sync-stalled trigger to the ConfigMap
+func WithOnSyncStalledTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-stalled"] = `- when: any(sync.status.conditions, {.type == 'Stalled' && .status == 'True'})
+  oncePer: sync.metadata.name
+  send: [sync-stalled]`
+}
+
+// WithSyncStalledTemplate adds the sync-stalled template to the ConfigMap
+func WithSyncStalledTemplate(cmData map[string]string) {
+	cmData["template.sync-stalled"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is stalled"
+        }
+      }`
+}

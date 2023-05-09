@@ -30,7 +30,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -178,14 +177,7 @@ func uninstallConfigSync(nt *NT) error {
 	if err != nil {
 		return err
 	}
-	for _, o := range objs {
-		if err := nt.KubeClient.Delete(o); err != nil {
-			if !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
-				return err
-			}
-		}
-	}
-	return nil
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 func isPSPCluster() bool {

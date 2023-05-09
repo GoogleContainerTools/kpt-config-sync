@@ -325,6 +325,19 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	// To facilitate cleanup, add the implicit namespace explicitly.
+	// Otherwise, the reconciler finalizer will skip deleting the implicit
+	// namespace, because it has the PreventDeletion annotation.
+	t.Cleanup(func() {
+		implictNs := &corev1.Namespace{}
+		implictNs.Name = namespace
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, implictNs))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add implicit namespace explicitly"))
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
@@ -457,14 +470,6 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
-
-	// Stop the Config Sync webhook to delete the implicit namespace manually
-	nomostest.StopWebhook(nt)
-	if err := nt.KubeClient.Delete(implictNs); err != nil {
-		{
-			nt.T.Error(err)
-		}
-	}
 }
 
 func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error) {

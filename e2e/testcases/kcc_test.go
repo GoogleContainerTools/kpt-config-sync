@@ -18,16 +18,14 @@ import (
 	"fmt"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // This file includes tests for KCC resources from a cloud source repository.
@@ -72,10 +70,24 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 		Version: "v1beta1",
 		Kind:    "IAMPolicyMember",
 	}
-	validateKCCResourceReady(nt, gvkPubSubTopic, "test-cs", "foo")
-	validateKCCResourceReady(nt, gvkPubSubSubscription, "test-cs-read", "foo")
-	validateKCCResourceReady(nt, gvkServiceAccount, "pubsub-app", "foo")
-	validateKCCResourceReady(nt, gvkPolicyMember, "policy-member-binding", "foo")
+
+	// Wait until all objects are reconciled
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(gvkPubSubTopic, "test-cs", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(gvkPubSubSubscription, "test-cs-read", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(gvkServiceAccount, "pubsub-app", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(gvkPolicyMember, "policy-member-binding", "foo")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Remove the kcc resources
 	nt.T.Log("sync to an empty directory from a CSR repo")
@@ -89,43 +101,21 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Verify that the GCP resources are removed.
-	validateKCCResourceNotFound(nt, gvkPubSubTopic, "test-cs", "foo")
-	validateKCCResourceNotFound(nt, gvkPubSubSubscription, "test-cs-read", "foo")
-	validateKCCResourceNotFound(nt, gvkServiceAccount, "pubsub-app", "foo")
-	validateKCCResourceNotFound(nt, gvkPolicyMember, "policy-member-binding", "foo")
-}
-
-func validateKCCResourceReady(nt *nomostest.NT, gvk schema.GroupVersionKind, name, namespace string) {
-	nomostest.Wait(nt.T, fmt.Sprintf("wait for kcc resources %q %v to be ready", name, gvk),
-		nt.DefaultWaitTimeout, func() error {
-			u := &unstructured.Unstructured{}
-			u.SetGroupVersionKind(gvk)
-			return nt.Validate(name, namespace, u, kccResourceReady)
-		})
-}
-
-func kccResourceReady(o client.Object) error {
-	if o == nil {
-		return testpredicates.ErrObjectNotFound
+	// Wait until all objects are not found
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(gvkPubSubTopic, "test-cs", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(gvkPubSubSubscription, "test-cs-read", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(gvkServiceAccount, "pubsub-app", "foo")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(gvkPolicyMember, "policy-member-binding", "foo")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
 	}
-	u := o.(*unstructured.Unstructured)
-	conditions, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
-	if err != nil || !found || len(conditions) == 0 {
-		return fmt.Errorf(".status.conditions not found %v", err)
-	}
-	condition := (conditions[0]).(map[string]interface{})
-	if condition["type"] != "Ready" || condition["status"] != "True" {
-		return fmt.Errorf("resource is not ready %v", condition)
-	}
-	return nil
-}
-
-func validateKCCResourceNotFound(nt *nomostest.NT, gvk schema.GroupVersionKind, name, namespace string) {
-	nomostest.Wait(nt.T, fmt.Sprintf("wait for %q %v to terminate", name, gvk),
-		nt.DefaultWaitTimeout, func() error {
-			u := &unstructured.Unstructured{}
-			u.SetGroupVersionKind(gvk)
-			return nt.ValidateNotFound(name, namespace, u)
-		})
 }

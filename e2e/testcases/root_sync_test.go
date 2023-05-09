@@ -48,20 +48,13 @@ import (
 func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
 
-	var rs v1beta1.RootSync
-	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &rs)
+	rs := &v1beta1.RootSync{}
+	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, rs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	// Delete RootSync custom resource from the cluster.
-	err = nt.KubeClient.Delete(&rs)
-	if err != nil {
-		nt.T.Fatalf("deleting RootSync: %v", err)
-	}
-
-	// Verify RootSync no longer present.
-	if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rs.GetName(), rs.GetNamespace()); err != nil {
+	if err := nomostest.DeleteObjectsAndWait(nt, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 

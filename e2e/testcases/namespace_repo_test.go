@@ -193,10 +193,8 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	}
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
 
-	// Delete RepoSync custom resource from the cluster.
-	err := nt.KubeClient.Delete(&rs)
-	if err != nil {
-		nt.T.Fatalf("RepoSync delete failed: %v", err)
+	if err := nomostest.DeleteObjectsAndWait(nt, &rs); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	checkRepoSyncResourcesNotPresent(nt, bsNamespace, secretNames)

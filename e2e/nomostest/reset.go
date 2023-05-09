@@ -298,7 +298,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	if err != nil {
 		return err
 	}
-	if err := batchDeleteAndWait(nt, rbs...); err != nil {
+	if err := DeleteObjectsAndWait(nt, rbs...); err != nil {
 		return err
 	}
 
@@ -316,7 +316,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 	if err != nil {
 		return err
 	}
-	if err := batchDeleteAndWait(nt, crbs...); err != nil {
+	if err := DeleteObjectsAndWait(nt, crbs...); err != nil {
 		return err
 	}
 
@@ -361,7 +361,7 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 // reconcilers, if it exists.
 func deleteRepoSyncClusterRole(nt *NT) error {
 	nt.T.Log("[RESET] Deleting RepoSync ClusterRole")
-	return batchDeleteAndWait(nt, nt.RepoSyncClusterRole())
+	return DeleteObjectsAndWait(nt, nt.RepoSyncClusterRole())
 }
 
 func findUnmanaged(nt *NT, objs ...client.Object) ([]client.Object, error) {
@@ -376,28 +376,6 @@ func findUnmanaged(nt *NT, objs ...client.Object) ([]client.Object, error) {
 		} // else managed
 	}
 	return unmanaged, nil
-}
-
-func batchDeleteAndWait(nt *NT, objs ...client.Object) error {
-	for _, obj := range objs {
-		if err := nt.KubeClient.Delete(obj); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return err
-			}
-		}
-	}
-	tg := taskgroup.New()
-	for _, obj := range objs {
-		gvk, err := kinds.Lookup(obj, nt.Scheme)
-		if err != nil {
-			return err
-		}
-		nn := client.ObjectKeyFromObject(obj)
-		tg.Go(func() error {
-			return nt.Watcher.WatchForNotFound(gvk, nn.Name, nn.Namespace)
-		})
-	}
-	return tg.Wait()
 }
 
 func listRootSyncs(nt *NT, opts ...client.ListOption) (*v1beta1.RootSyncList, error) {

@@ -820,10 +820,8 @@ func checkpointProtectedNamespace(nt *nomostest.NT, namespace string) {
 		if apierrors.IsNotFound(err) {
 			nt.T.Cleanup(func() {
 				// Revert to initial state (not found).
-				if err := nt.KubeClient.Delete(nsObj); err != nil {
-					if !apierrors.IsNotFound(err) {
-						nt.T.Errorf("Failed to revert %q namespace: %v", namespace, err)
-					}
+				if err := nomostest.DeleteObjectsAndWait(nt, nsObj); err != nil {
+					nt.T.Fatal(err)
 				}
 			})
 			return

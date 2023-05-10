@@ -63,12 +63,10 @@ func TestRepoSyncFinalize(t *testing.T) {
 		cmpopts.IgnoreFields(metav1.Time{}, "Time"),
 	)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name                       string
 		rsync                      client.Object
-		setup                      func() error
+		setup                      func(*fake.Client) error
 		destroyErrs                status.MultiError
 		expectedRsyncBeforeDestroy client.Object
 		expectedError              error
@@ -239,9 +237,17 @@ func TestRepoSyncFinalize(t *testing.T) {
 		{
 			name:  "rsync not found",
 			rsync: repoSync1.DeepCopy(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RepoSync{}
+				rs.Name = repoSync1.Name
+				rs.Namespace = repoSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(context.Background(), repoSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				errors.Wrapf(
@@ -260,7 +266,7 @@ func TestRepoSyncFinalize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			stopped := false
@@ -288,15 +294,15 @@ func TestRepoSyncFinalize(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 
 			err := finalizer.Finalize(ctx, tc.rsync)
 			if tc.expectedError != nil && err != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
+				// AssertEqual is too lenient on APIServerError, because
+				// baseErrorImpl.Is only checks the error code.
+				// So check the error message and type, instead.
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 				assert.IsType(t, tc.expectedError, err)
 			} else {
@@ -316,12 +322,10 @@ func TestRepoSyncFinalize(t *testing.T) {
 func TestRepoSyncAddFinalizer(t *testing.T) {
 	repoSync1 := yamlToTypedObject(t, repoSync1Yaml).(*v1beta1.RepoSync)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name            string
 		rsync           client.Object
-		setup           func() error
+		setup           func(*fake.Client) error
 		expectedError   error
 		expectedUpdated bool
 		expectedRsync   client.Object
@@ -389,9 +393,17 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 		{
 			name:  "rsync not found",
 			rsync: repoSync1.DeepCopy(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RepoSync{}
+				rs.Name = repoSync1.Name
+				rs.Namespace = repoSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(context.Background(), repoSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerError(
@@ -408,7 +420,7 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
@@ -416,7 +428,7 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 
@@ -444,12 +456,10 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 func TestRepoSyncRemoveFinalizer(t *testing.T) {
 	repoSync1 := yamlToTypedObject(t, repoSync1Yaml).(*v1beta1.RepoSync)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name            string
 		rsync           client.Object
-		setup           func() error
+		setup           func(*fake.Client) error
 		expectedError   error
 		expectedUpdated bool
 		expectedRsync   client.Object
@@ -525,9 +535,17 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 				})
 				return obj
 			}(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RepoSync{}
+				rs.Name = repoSync1.Name
+				rs.Namespace = repoSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(context.Background(), repoSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerError(
@@ -544,7 +562,7 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
@@ -552,7 +570,7 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 

@@ -72,12 +72,10 @@ func TestRootSyncFinalize(t *testing.T) {
 		cmpopts.IgnoreFields(metav1.Time{}, "Time"),
 	)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name                       string
 		rsync                      client.Object
-		setup                      func() error
+		setup                      func(*fake.Client) error
 		destroyErrs                status.MultiError
 		expectedRsyncBeforeDestroy client.Object
 		expectedError              error
@@ -248,9 +246,17 @@ func TestRootSyncFinalize(t *testing.T) {
 		{
 			name:  "rsync not found",
 			rsync: rootSync1.DeepCopy(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RootSync{}
+				rs.Name = rootSync1.Name
+				rs.Namespace = rootSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RootSync to cause update error
-				return fakeClient.Delete(context.Background(), rootSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				errors.Wrapf(
@@ -269,7 +275,7 @@ func TestRootSyncFinalize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			stopped := false
@@ -297,15 +303,15 @@ func TestRootSyncFinalize(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 
 			err := finalizer.Finalize(ctx, tc.rsync)
 			if tc.expectedError != nil && err != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
+				// AssertEqual is too lenient on APIServerError, because
+				// baseErrorImpl.Is only checks the error code.
+				// So check the error message and type, instead.
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 				assert.IsType(t, tc.expectedError, err)
 			} else {
@@ -325,12 +331,10 @@ func TestRootSyncFinalize(t *testing.T) {
 func TestRootSyncAddFinalizer(t *testing.T) {
 	rootSync1 := yamlToTypedObject(t, rootSync1Yaml).(*v1beta1.RootSync)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name            string
 		rsync           client.Object
-		setup           func() error
+		setup           func(*fake.Client) error
 		expectedError   error
 		expectedUpdated bool
 		expectedRsync   client.Object
@@ -398,9 +402,17 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 		{
 			name:  "rsync not found",
 			rsync: rootSync1.DeepCopy(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RootSync{}
+				rs.Name = rootSync1.Name
+				rs.Namespace = rootSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RootSync to cause update error
-				return fakeClient.Delete(context.Background(), rootSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerError(
@@ -417,7 +429,7 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			finalizer := &RootSyncFinalizer{
@@ -425,7 +437,7 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 
@@ -453,12 +465,10 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 func TestRootSyncRemoveFinalizer(t *testing.T) {
 	rootSync1 := yamlToTypedObject(t, rootSync1Yaml).(*v1beta1.RootSync)
 
-	var fakeClient *fake.Client
-
 	testCases := []struct {
 		name            string
 		rsync           client.Object
-		setup           func() error
+		setup           func(*fake.Client) error
 		expectedError   error
 		expectedUpdated bool
 		expectedRsync   client.Object
@@ -534,9 +544,17 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 				})
 				return obj
 			}(),
-			setup: func() error {
+			setup: func(fakeClient *fake.Client) error {
+				// remove the finalizer that blocks deletion
+				ctx := context.Background()
+				rs := &v1beta1.RootSync{}
+				rs.Name = rootSync1.Name
+				rs.Namespace = rootSync1.Namespace
+				if err := updateToRemoveFinalizers(ctx, fakeClient, rs); err != nil {
+					return err
+				}
 				// delete RootSync to cause update error
-				return fakeClient.Delete(context.Background(), rootSync1.DeepCopy())
+				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerError(
@@ -553,7 +571,7 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient = fake.NewClient(t, scheme, tc.rsync)
+			fakeClient := fake.NewClient(t, scheme, tc.rsync)
 			ctx := context.Background()
 
 			finalizer := &RootSyncFinalizer{
@@ -561,7 +579,7 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 			}
 
 			if tc.setup != nil {
-				err := tc.setup()
+				err := tc.setup(fakeClient)
 				require.NoError(t, err)
 			}
 
@@ -601,6 +619,15 @@ func yamlToTypedObject(t *testing.T, yml string) client.Object {
 		t.Fatalf("error casting object (%T): %v", rObj, err)
 	}
 	return cObj
+}
+
+func updateToRemoveFinalizers(ctx context.Context, fakeClient *fake.Client, obj client.Object) error {
+	key := client.ObjectKeyFromObject(obj)
+	if err := fakeClient.Get(ctx, key, obj); err != nil {
+		return err
+	}
+	obj.SetFinalizers(nil)
+	return fakeClient.Update(ctx, obj)
 }
 
 type fakeDestroyer struct {

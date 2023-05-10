@@ -147,7 +147,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 	}
 	if op != controllerutil.OperationResultNone {
 		r.logger(ctx).Info("Managed object upsert successful",
-			logFieldObjectRef, childSA.String(),
+			logFieldObjectRef, childSARef.String(),
 			logFieldObjectKind, "ServiceAccount",
 			logFieldOperation, op)
 	}
@@ -416,7 +416,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 			return nil, errors.Errorf(
 				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
 		}
-		return nil, errors.Wrapf(err, "error while retrieving deployment")
+		return nil, errors.Wrapf(err, "Deployment get failed")
 	}
 	return deployObj, nil
 }
@@ -536,7 +536,6 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 		}
 	}
 	return nil
-
 }
 
 // addTypeInformationToObject looks up and adds GVK to a runtime.Object based upon the loaded Scheme

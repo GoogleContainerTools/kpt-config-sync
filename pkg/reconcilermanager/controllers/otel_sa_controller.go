@@ -89,7 +89,9 @@ func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// On a cluster without Workload Identity, the annotation does not have any effects.
 	// Therefore, we don't check whether the cluster has Workload Identity enabled before updating the Deployment annotation.
 	if err := updateDeploymentAnnotation(ctx, r.client, GCPSAAnnotationKey, v); err != nil {
-		r.logger(ctx).Error(err, "Failed to update Deployment")
+		r.logger(ctx).Error(err, "Failed to update Deployment",
+			logFieldObjectRef, otelCollectorDeploymentRef(),
+			logFieldObjectKind, "Deployment")
 		return controllerruntime.Result{}, err
 	}
 	r.logger(ctx).Info("Deployment annotation patch successful",

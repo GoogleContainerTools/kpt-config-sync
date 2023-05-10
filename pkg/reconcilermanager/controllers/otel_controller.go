@@ -71,22 +71,27 @@ func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 
 	configMapDataHash, err := r.reconcileConfigMap(ctx, req)
 	if err != nil {
-		r.logger(ctx).Error(err, "Failed to create/update ConfigMap")
+		r.logger(ctx).Error(err, "Failed to create/update ConfigMap",
+			logFieldObjectKind, "ConfigMap",
+			logFieldObjectRef, req.NamespacedName.String())
 		return controllerruntime.Result{}, err
 	}
 
 	if configMapDataHash == nil {
 		return controllerruntime.Result{}, nil
 	}
-	err = updateDeploymentAnnotation(ctx, r.client, metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
+	base16Hash := fmt.Sprintf("%x", configMapDataHash)
+	err = updateDeploymentAnnotation(ctx, r.client, metadata.ConfigMapAnnotationKey, base16Hash)
 	if err != nil {
-		r.logger(ctx).Error(err, "Failed to update Deployment")
+		r.logger(ctx).Error(err, "Failed to update Deployment",
+			logFieldObjectRef, otelCollectorDeploymentRef(),
+			logFieldObjectKind, "Deployment")
 		return controllerruntime.Result{}, err
 	}
 	r.logger(ctx).Info("Deployment annotation patch successful",
 		logFieldObjectRef, otelCollectorDeploymentRef(),
 		logFieldObjectKind, "Deployment",
-		metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
+		metadata.ConfigMapAnnotationKey, base16Hash)
 	return controllerruntime.Result{}, nil
 }
 

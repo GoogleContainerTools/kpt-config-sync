@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -116,11 +115,21 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	rs := &v1beta1.RootSync{}
 
 	if err := r.client.Get(ctx, rsRef, rs); err != nil {
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.logger(ctx).Info("Deleting managed objects")
-			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef)
+			// Cleanup after already deleted RootSync.
+			if err := r.deleteManagedObjects(ctx, reconcilerRef); err != nil {
+				r.logger(ctx).Error(err, "Failed to delete managed objects")
+				// Failed to delete a managed object.
+				// Return an error to trigger retry.
+				metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+				// requeue for retry
+				return controllerruntime.Result{}, errors.Wrap(err, "failed to delete managed objects")
+			}
+			// cleanup successful
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
+			return controllerruntime.Result{}, nil
 		}
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
 
@@ -143,12 +152,6 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	owRefs := ownerReference(
-		rs.GroupVersionKind().Kind,
-		rs.Name,
-		rs.UID,
-	)
-
 	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
 		err := errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
 		r.logger(ctx).Error(err, "Sync name or namespace invalid")
@@ -161,7 +164,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err := r.validateSpec(ctx, rs); err != nil {
+	if err := r.validateSpec(ctx, rs, reconcilerRef.Name); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		rootsync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
@@ -171,6 +174,22 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, updateErr
 	}
+
+	if err := r.upsertManagedObjects(ctx, reconcilerRef, currentRS, rs); err != nil {
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, err
+	}
+
+	metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
+	return controllerruntime.Result{}, nil
+}
+
+func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName, currentRS, rs *v1beta1.RootSync) error {
+	r.logger(ctx).V(3).Info("Reconciling managed objects")
+
+	// Note: RootSync Secret is managed by the user, not the ReconcilerManager.
+	// This is because it's in the same namespace as the Deployment, so we don't
+	// need to copy it to the config-management-system namespace.
 
 	labelMap := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
@@ -191,8 +210,11 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	case v1beta1.HelmSource:
 		auth = rs.Spec.Helm.Auth
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
+	default:
+		// Should have been caught by validation
+		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
-	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap, owRefs); err != nil {
+	if saRef, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
 		r.logger(ctx).Error(err, "Managed object upsert failed",
 			logFieldObjectRef, saRef.String(),
 			logFieldObjectKind, "ServiceAccount",
@@ -205,9 +227,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// Use the upsert error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, errors.Wrap(err, "ServiceAccount reconcile failed")
+		// Return the upsertServiceAccount error, not the updateStatus error.
+		return errors.Wrap(err, "ServiceAccount upsert failed")
 	}
 
 	// Overwrite reconciler clusterrolebinding.
@@ -222,9 +243,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// Use the upsert error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, errors.Wrap(err, "ClusterRoleBinding reconcile failed")
+		// Return the upsertClusterRoleBinding error, not the updateStatus error.
+		return errors.Wrap(err, "ClusterRoleBinding upsert failed")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -243,9 +263,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// Use the upsert error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, errors.Wrap(err, "Deployment reconcile failed")
+		// Return the upsertDeployment error, not the updateStatus error.
+		return errors.Wrap(err, "Deployment upsert failed")
 	}
 	rs.Status.Reconciler = reconcilerRef.Name
 
@@ -264,9 +283,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			if updateErr != nil {
 				r.logger(ctx).Error(updateErr, "Sync status update failed")
 			}
-			// Use the deployment get error for metric tagging.
-			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-			return controllerruntime.Result{}, err
+			// Return the deployment get error, not the updateStatus error.
+			return err
 		}
 	}
 
@@ -282,9 +300,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// Use the compute error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, err
+		// Return the Compute error, not the updateStatus error.
+		return errors.Wrap(err, "computing reconciler Deployment status failed")
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -325,22 +342,52 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// Use the status error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, err
+		// Return the type error, not the updateStatus error.
+		return err
 	}
 
 	updated, err := r.updateStatus(ctx, currentRS, rs)
-	// Use the status update error for metric tagging, if no other errors.
-	metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 	if err != nil {
-		return controllerruntime.Result{}, err
+		return err
 	}
 
 	if updated && result.Status == kstatus.CurrentStatus {
 		r.logger(ctx).Info("Sync object reconcile successful")
 	}
-	return controllerruntime.Result{}, nil
+	return nil
+}
+
+// deleteManagedObjects deletes objects managed by the reconciler-manager for
+// this RootSync. If updateStatus is true, the RootSync status will be updated
+// to reflect the teardown progress.
+func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName) error {
+	r.logger(ctx).Info("Deleting managed objects")
+
+	err := r.deleteDeployment(ctx, reconcilerRef)
+	if err != nil {
+		return errors.Wrap(err, "RootSync Deployment delete failed")
+	}
+
+	// Note: ConfigMaps have been replaced by Deployment env vars.
+	// Using env vars auto-updates the Deployment when they change.
+	// This deletion remains to clean up after users upgrade.
+
+	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "RootSync ConfigMap delete failed")
+	}
+
+	// Note: ReconcilerManager doesn't manage the RootSync Secret.
+	// So we don't need to delete it here.
+
+	if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "RootSync RoleBinding delete failed")
+	}
+
+	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "RootSync ServiceAccount delete failed")
+	}
+
+	return nil
 }
 
 // SetupWithManager registers RootSync controller with reconciler-manager.
@@ -398,7 +445,7 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 		// Clear the membership if the cluster is unregistered
 		if err := r.client.Get(context.Background(), types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
 			if apierrors.IsNotFound(err) {
-				klog.Infof("Fleet Membership not found, clearing membership cache")
+				klog.Info("Fleet Membership not found, clearing membership cache")
 				r.membership = nil
 				return r.requeueAllRootSyncs()
 			}
@@ -576,10 +623,10 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result
 }
 
-func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		return r.validateGitSpec(ctx, rs)
+		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
@@ -595,14 +642,14 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	}
 }
 
-func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
 		return err
 	}
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
-	return r.validateRootSecret(ctx, rs)
+	return r.validateRootSecret(ctx, rs, reconcilerName)
 }
 
 func (r *RootSyncReconciler) validateNamespaceName(namespaceName string) error {
@@ -613,11 +660,17 @@ func (r *RootSyncReconciler) validateNamespaceName(namespaceName string) error {
 }
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
-func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync, reconcilerName string) error {
 	if SkipForAuth(rootSync.Spec.Auth) {
 		// There is no Secret to check for the Config object.
 		return nil
 	}
+
+	secretName := ReconcilerResourceName(reconcilerName, rootSync.Spec.SecretRef.Name)
+	if errs := validation.IsDNS1123Label(secretName); errs != nil {
+		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
+	}
+
 	secret, err := validateSecretExist(ctx,
 		v1beta1.GetSecretName(rootSync.Spec.SecretRef),
 		rootSync.Namespace,
@@ -640,6 +693,8 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, recon
 		childCRB.OwnerReferences = nil
 		childCRB.RoleRef = rolereference("cluster-admin", "ClusterRole")
 		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		// Remove existing OwnerReferences, now that we're using finalizers.
+		childCRB.OwnerReferences = nil
 		return nil
 	})
 	if err != nil {
@@ -683,15 +738,8 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		if !ok {
 			return errors.Errorf("expected appsv1 Deployment, got: %T", obj)
 		}
-		// OwnerReferences, so that when the RootSync CustomResource is deleted,
-		// the corresponding Deployment is also deleted.
-		d.OwnerReferences = []metav1.OwnerReference{
-			ownerReference(
-				rs.GroupVersionKind().Kind,
-				rs.Name,
-				rs.UID,
-			),
-		}
+		// Remove existing OwnerReferences, now that we're using finalizers.
+		d.OwnerReferences = nil
 		reconcilerName := core.RootReconcilerName(rs.Name)
 
 		// Only inject the FWI credentials when the auth type is gcpserviceaccount and the membership info is available.

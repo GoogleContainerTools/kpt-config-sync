@@ -20,8 +20,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -31,7 +29,6 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // hydrationEnvs returns environment variables for the hydration controller.
@@ -280,17 +277,6 @@ func helmSyncTokenAuthEnv(secretRef string) []corev1.EnvVar {
 			Name:      helmSyncPassword,
 			ValueFrom: helmSyncPswd,
 		},
-	}
-}
-
-func ownerReference(kind, name string, uid types.UID) metav1.OwnerReference {
-	return metav1.OwnerReference{
-		APIVersion:         v1beta1.SchemeGroupVersion.String(),
-		Kind:               kind,
-		Name:               name,
-		Controller:         pointer.BoolPtr(true),
-		BlockOwnerDeletion: pointer.BoolPtr(true),
-		UID:                uid,
 	}
 }
 

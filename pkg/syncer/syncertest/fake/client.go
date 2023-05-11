@@ -209,7 +209,11 @@ func toGR(gk schema.GroupKind) schema.GroupResource {
 }
 
 // Get implements client.Client.
-func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object) error {
+func (c *Client) Get(_ context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if len(opts) > 0 {
+		return errors.Errorf("fake.Client.Get does not yet support GetOptions, but got: %+v", opts)
+	}
+
 	obj.SetName(key.Name)
 	obj.SetNamespace(key.Namespace)
 

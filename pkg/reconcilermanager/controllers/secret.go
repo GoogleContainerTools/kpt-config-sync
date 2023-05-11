@@ -17,7 +17,6 @@ package controllers
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,40 +62,40 @@ func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
 // upsertAuthSecret creates or updates the auth secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func upsertAuthSecret(ctx context.Context, log logr.Logger, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	switch {
 	case shouldUpsertGitSecret(rs):
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.SecretRef))
-		userSecret, err := getUserSecret(ctx, c, nsSecretRef)
+		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
 		}
-		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
 		}
 		if op != controllerutil.OperationResultNone {
-			log.Info("Managed object upsert successful",
-				logFieldObject, cmsSecretRef.String(),
-				logFieldKind, "Secret",
+			r.logger(ctx).Info("Managed object upsert successful",
+				logFieldObjectRef, cmsSecretRef.String(),
+				logFieldObjectKind, "Secret",
 				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil
 	case shouldUpsertHelmSecret(rs):
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef))
-		userSecret, err := getUserSecret(ctx, c, nsSecretRef)
+		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
 		}
-		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
 		}
 		if op != controllerutil.OperationResultNone {
-			log.Info("Managed object upsert successful",
-				logFieldObject, cmsSecretRef.String(),
-				logFieldKind, "Secret",
+			r.logger(ctx).Info("Managed object upsert successful",
+				logFieldObjectRef, cmsSecretRef.String(),
+				logFieldObjectKind, "Secret",
 				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil
@@ -109,22 +108,22 @@ func upsertAuthSecret(ctx context.Context, log logr.Logger, rs *v1beta1.RepoSync
 // upsertCACertSecret creates or updates the CA cert secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func upsertCACertSecret(ctx context.Context, log logr.Logger, rs *v1beta1.RepoSync, c client.Client, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	if shouldUpsertCACertSecret(rs) {
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef))
-		userSecret, err := getUserSecret(ctx, c, nsSecretRef)
+		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")
 		}
-		op, err := upsertSecret(ctx, c, cmsSecretRef, rsRef, userSecret)
+		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
 		if err != nil {
 			return cmsSecretRef, err
 		}
 		if op != controllerutil.OperationResultNone {
-			log.Info("Managed object upsert successful",
-				logFieldObject, cmsSecretRef.String(),
-				logFieldKind, "Secret",
+			r.logger(ctx).Info("Managed object upsert successful",
+				logFieldObjectRef, cmsSecretRef.String(),
+				logFieldObjectKind, "Secret",
 				logFieldOperation, op)
 		}
 		return cmsSecretRef, nil

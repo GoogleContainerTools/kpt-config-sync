@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -42,9 +41,10 @@ const (
 
 // OtelSAReconciler reconciles the default service account under the config-management-monitoring namespace.
 type OtelSAReconciler struct {
+	loggingController
+
 	clusterName string
 	client      client.Client
-	log         logr.Logger
 	scheme      *runtime.Scheme
 }
 
@@ -54,9 +54,11 @@ func NewOtelSAReconciler(clusterName string, client client.Client, log logr.Logg
 		clusterName = "unknown_cluster"
 	}
 	return &OtelSAReconciler{
+		loggingController: loggingController{
+			log: log,
+		},
 		clusterName: clusterName,
 		client:      client,
-		log:         log,
 		scheme:      scheme,
 	}
 }
@@ -64,7 +66,7 @@ func NewOtelSAReconciler(clusterName string, client client.Client, log logr.Logg
 // Reconcile reconciles the default service account under the config-management-monitoring namespace and updates the Deployment annotation.
 // This triggers the `otel-collector` Deployment to restart in the event of an annotation update.
 func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	log := r.log.WithValues(OtelSALoggerName, req.NamespacedName.String())
+	ctx = r.setLoggerValues(ctx, OtelSALoggerName, req.NamespacedName.String())
 
 	if req.Name != defaultSAName {
 		return controllerruntime.Result{}, nil
@@ -87,11 +89,13 @@ func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// On a cluster without Workload Identity, the annotation does not have any effects.
 	// Therefore, we don't check whether the cluster has Workload Identity enabled before updating the Deployment annotation.
 	if err := updateDeploymentAnnotation(ctx, r.client, GCPSAAnnotationKey, v); err != nil {
-		log.Error(err, "Failed to update Deployment")
+		r.logger(ctx).Error(err, "Failed to update Deployment")
 		return controllerruntime.Result{}, err
 	}
-	r.log.Info("Deployment annotation patch successful", logFieldObject, fmt.Sprintf("%s/%s", metrics.MonitoringNamespace,
-		metrics.OtelCollectorName), GCPSAAnnotationKey, v)
+	r.logger(ctx).Info("Deployment annotation patch successful",
+		logFieldObjectRef, otelCollectorDeploymentRef(),
+		logFieldObjectKind, "Deployment",
+		GCPSAAnnotationKey, v)
 	return controllerruntime.Result{}, nil
 }
 

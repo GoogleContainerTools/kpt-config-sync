@@ -37,9 +37,7 @@ import (
 //
 // NOTE: Update this method when resources created by namespace controller changes.
 func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, rsKey, reconcilerRef types.NamespacedName) error {
-	r.log.Info("Deleting managed objects",
-		logFieldObject, rsKey.String(),
-		logFieldKind, r.syncKind)
+	r.logger(ctx).Info("Deleting managed objects")
 
 	rsList := &v1beta1.RepoSyncList{}
 	if err := r.client.List(ctx, rsList, client.InNamespace(rsKey.Namespace)); err != nil {
@@ -74,23 +72,26 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, r
 	return nil
 }
 
-func (r *reconcilerBase) cleanup(ctx context.Context, key types.NamespacedName, gvk schema.GroupVersionKind) error {
+func (r *reconcilerBase) cleanup(ctx context.Context, objRef types.NamespacedName, gvk schema.GroupVersionKind) error {
 	u := &unstructured.Unstructured{}
-	u.SetName(key.Name)
-	u.SetNamespace(key.Namespace)
+	u.SetName(objRef.Name)
+	u.SetNamespace(objRef.Namespace)
 	u.SetGroupVersionKind(gvk)
+	r.logger(ctx).Info("Deleting managed object",
+		logFieldObjectRef, objRef.String(),
+		logFieldObjectKind, gvk.Kind)
 	if err := r.client.Delete(ctx, u); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.log.Info("Managed object already deleted",
-				logFieldObject, key.String(),
-				logFieldKind, gvk.Kind)
+			r.logger(ctx).Info("Managed object already deleted",
+				logFieldObjectRef, objRef.String(),
+				logFieldObjectKind, gvk.Kind)
 			return nil
 		}
 		return err
 	}
-	r.log.Info("Managed object delete successful",
-		logFieldObject, key.String(),
-		logFieldKind, gvk.Kind)
+	r.logger(ctx).Info("Managed object delete successful",
+		logFieldObjectRef, objRef.String(),
+		logFieldObjectKind, gvk.Kind)
 	return nil
 }
 
@@ -157,29 +158,10 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 	crb.Subjects = removeSubject(crb.Subjects, r.serviceAccountSubject(reconcilerRef))
 	if len(crb.Subjects) == 0 {
 		// Delete the whole CRB
-		return r.cleanup(ctx, crbKey.Name, kinds.ClusterRoleBinding())
+		return r.cleanup(ctx, crbKey, kinds.ClusterRoleBinding())
 	}
 	if err := r.client.Update(ctx, crb); err != nil {
 		return errors.Wrapf(err, "failed to update the ClusterRoleBinding object %s", crbKey)
 	}
 	return nil
-}
-
-// cleanup cleans up cluster-scoped resources that are created for RootSync.
-// Other namespace-scoped resources are garbage collected via OwnerReferences.
-// Cluster-scoped resources cannot be handled via OwnerReferences because
-// RootSync is namespace-scoped, and cluster-scoped dependents can only specify
-// cluster-scoped owners.
-func (r *RootSyncReconciler) cleanup(ctx context.Context, name string, gvk schema.GroupVersionKind) error {
-	u := &unstructured.Unstructured{}
-	u.SetName(name)
-	u.SetGroupVersionKind(gvk)
-	err := r.client.Delete(ctx, u)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			r.log.V(4).Info("cluster-scoped resource not present", "resource", name)
-			return nil
-		}
-	}
-	return err
 }

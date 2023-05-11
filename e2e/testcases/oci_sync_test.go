@@ -25,7 +25,6 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -308,15 +307,17 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
 	rsGitYAMLFile := "../testdata/reconciler-manager/reposync-sample.yaml"
 	// file path to the RepoSync config in the root repository.
-	repoResourcePath := "acme/reposync-bookinfo.yaml"
+	repoSyncPath := "acme/reposync-bookinfo.yaml"
 	rsNN := types.NamespacedName{
 		Name:      configsync.RepoSyncName,
 		Namespace: namespace,
 	}
+	repoSyncCRPath := "acme/cluster/cr.yaml"
+	repoSyncRBPath := fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name)
 
 	rsCR := nt.RepoSyncClusterRole()
 	rsRB := nomostest.RepoSyncRoleBinding(rsNN)
-	repoSyncGit, err := parseObjectFromFile(nt, rsGitYAMLFile)
+	repoSyncGit, err := parseRepoSyncFromFile(nt, rsGitYAMLFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -326,12 +327,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 
 	// To facilitate cleanup, add the implicit namespace explicitly.
-	// Otherwise, the reconciler finalizer will skip deleting the implicit
-	// namespace, because it has the PreventDeletion annotation.
+	// This ensures the implicit namespace is deleted in the right order.
 	t.Cleanup(func() {
-		implictNs := &corev1.Namespace{}
-		implictNs.Name = namespace
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, implictNs))
+		implicitNs := &corev1.Namespace{}
+		implicitNs.Name = namespace
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, implicitNs))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add implicit namespace explicitly"))
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
@@ -341,17 +341,17 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	// Verify the central controlled configuration: switch from Git to OCI
 	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
 	nt.T.Log("Add the RepoSync object to the Root Repo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncGit))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", rsCR))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name), rsRB))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncGit))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncCRPath, rsCR))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncRBPath, rsRB))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository"))
 	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify an implicit namespace is created")
-	implictNs := &corev1.Namespace{}
-	if err := nt.Validate(namespace, "", implictNs,
+	implicitNs := &corev1.Namespace{}
+	if err := nt.Validate(namespace, "", implicitNs,
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, managerScope),
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
 		nt.T.Error(err)
@@ -369,6 +369,20 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
+
+	// To facilitate cleanup, revert the RepoSync to this known good state.
+	// This way, the RootSync finalizer will delete the RepoSync cleanly and in
+	// the right order.
+	t.Cleanup(func() {
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncGit))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncCRPath, rsCR))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncRBPath, rsRB))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("revert RepoSync"))
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
 	repoSyncOCI := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
@@ -384,10 +398,10 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		Auth:  configsync.AuthNone,
 	}
 	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
-	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
+	if err := nomostest.SetDependencies(repoSyncOCI, rsRB, rsCR); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoResourcePath, repoSyncOCI))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -411,7 +425,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 
 	// Verify the manual configuration: switch from Git to OCI
 	nt.T.Log("Remove RepoSync from the root repository")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(repoResourcePath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(repoSyncPath))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -422,7 +436,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Verify the default sourceType is set when not specified.
 	nt.T.Log("Revert the RepoSync object to sync from Git")
-	if err := nt.KubeClient.Create(repoSyncGit); err != nil {
+	if err := nt.KubeClient.Create(repoSyncGit.DeepCopy()); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
@@ -472,22 +486,18 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
 }
 
-func parseObjectFromFile(nt *nomostest.NT, absPath string) (client.Object, error) {
+func parseRepoSyncFromFile(nt *nomostest.NT, absPath string) (*v1beta1.RepoSync, error) {
 	bytes, err := ioutil.ReadFile(absPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read file path: %s", absPath)
 	}
+	rs := &v1beta1.RepoSync{}
 	decoder := serializer.NewCodecFactory(nt.KubeClient.Client.Scheme()).UniversalDeserializer()
-	u := &unstructured.Unstructured{}
-	rObj, gvk, err := decoder.Decode(bytes, nil, u)
+	_, _, err = decoder.Decode(bytes, nil, rs)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to decode object from file path: %s", absPath)
 	}
-	cObj, ok := rObj.(client.Object)
-	if !ok {
-		return nil, errors.Errorf("failed to cast %s %T to client.Object", gvk.Kind, rObj)
-	}
-	return cObj, nil
+	return rs, nil
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -65,9 +64,13 @@ const (
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
 
-	logFieldKind      = "kind"
-	logFieldObject    = "object"
-	logFieldOperation = "operation"
+	logFieldSyncKind        = "syncKind"
+	logFieldSyncRef         = "sync"
+	logFieldObjectKind      = "objectKind"
+	logFieldObjectRef       = "object"
+	logFieldOperation       = "operation"
+	logFieldReconciler      = "reconciler"
+	logFieldResourceVersion = "resourceVersion"
 )
 
 // The fields in reconcilerManagerAllowList are the fields that reconciler manager allow
@@ -91,10 +94,11 @@ var reconcilerManagerAllowList = []string{
 
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
+	loggingController
+
 	clusterName             string
 	client                  client.Client
 	dynamicClient           dynamic.Interface
-	log                     logr.Logger
 	scheme                  *runtime.Scheme
 	isAutopilotCluster      *bool
 	reconcilerPollingPeriod time.Duration
@@ -151,9 +155,9 @@ func (r *reconcilerBase) upsertServiceAccount(
 		return childSARef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("Managed object upsert successful",
-			logFieldObject, childSA.String(),
-			logFieldKind, "ServiceAccount",
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, childSA.String(),
+			logFieldObjectKind, "ServiceAccount",
 			logFieldOperation, op)
 	}
 	return childSARef, nil
@@ -196,9 +200,9 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	appliedObj, op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
 
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("Managed object upsert successful",
-			logFieldObject, reconcilerRef.String(),
-			logFieldKind, "Deployment",
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, reconcilerRef.String(),
+			logFieldObjectKind, "Deployment",
 			logFieldOperation, op)
 	}
 	return appliedObj, op, err
@@ -217,9 +221,9 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		if !apierrors.IsNotFound(err) {
 			return nil, controllerutil.OperationResultNone, err
 		}
-		r.log.V(3).Info("Managed object not found, creating",
-			logFieldObject, dRef.String(),
-			logFieldKind, kind)
+		r.logger(ctx).V(3).Info("Managed object not found, creating",
+			logFieldObjectRef, dRef.String(),
+			logFieldObjectKind, kind)
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
@@ -246,17 +250,17 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	}
 	if dep.adjusted {
 		mutator := "Autopilot"
-		r.log.V(3).Info("Managed object container resources updated",
-			logFieldObject, dRef.String(),
-			logFieldKind, kind,
+		r.logger(ctx).V(3).Info("Managed object container resources updated",
+			logFieldObjectRef, dRef.String(),
+			logFieldObjectKind, kind,
 			"mutator", mutator)
 	}
 	if dep.same {
 		return nil, controllerutil.OperationResultNone, nil
 	}
-	r.log.V(3).Info("Managed object found, patching",
-		logFieldObject, dRef.String(),
-		logFieldKind, kind)
+	r.logger(ctx).V(3).Info("Managed object found, patching",
+		logFieldObjectRef, dRef.String(),
+		logFieldObjectKind, kind)
 	appliedObj, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 	if err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
@@ -265,9 +269,9 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		}
 		// The provided data is invalid (e.g. http://b/196922619), so delete and re-create the resource.
 		// This handles changes to immutable fields, like labels.
-		r.log.Error(err, "Managed object update failed, deleting and re-creating",
-			logFieldObject, dRef.String(),
-			logFieldKind, kind)
+		r.logger(ctx).Error(err, "Managed object update failed, deleting and re-creating",
+			logFieldObjectRef, dRef.String(),
+			logFieldObjectKind, kind)
 		if err := deploymentClient.Delete(ctx, dRef.Name, metav1.DeleteOptions{}); err != nil {
 			return nil, controllerutil.OperationResultNone, err
 		}

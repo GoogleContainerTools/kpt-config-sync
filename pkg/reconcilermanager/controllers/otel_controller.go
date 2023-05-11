@@ -43,9 +43,10 @@ var _ reconcile.Reconciler = &OtelReconciler{}
 
 // OtelReconciler reconciles OpenTelemetry ConfigMaps.
 type OtelReconciler struct {
+	loggingController
+
 	clusterName string
 	client      client.Client
-	log         logr.Logger
 	scheme      *runtime.Scheme
 }
 
@@ -55,20 +56,22 @@ func NewOtelReconciler(clusterName string, client client.Client, log logr.Logger
 		clusterName = "unknown_cluster"
 	}
 	return &OtelReconciler{
+		loggingController: loggingController{
+			log: log,
+		},
 		clusterName: clusterName,
 		client:      client,
-		log:         log,
 		scheme:      scheme,
 	}
 }
 
 // Reconcile the otel ConfigMap and update the Deployment annotation.
 func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	log := r.log.WithValues("otel", req.NamespacedName.String())
+	ctx = r.setLoggerValues(ctx, "otel", req.NamespacedName.String())
 
 	configMapDataHash, err := r.reconcileConfigMap(ctx, req)
 	if err != nil {
-		log.Error(err, "Failed to create/update ConfigMap")
+		r.logger(ctx).Error(err, "Failed to create/update ConfigMap")
 		return controllerruntime.Result{}, err
 	}
 
@@ -77,12 +80,21 @@ func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	}
 	err = updateDeploymentAnnotation(ctx, r.client, metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
 	if err != nil {
-		log.Error(err, "Failed to update Deployment")
+		r.logger(ctx).Error(err, "Failed to update Deployment")
 		return controllerruntime.Result{}, err
 	}
-	r.log.Info("Deployment annotation patch successful", logFieldObject, fmt.Sprintf("%s/%s", metrics.MonitoringNamespace,
-		metrics.OtelCollectorName), metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
+	r.logger(ctx).Info("Deployment annotation patch successful",
+		logFieldObjectRef, otelCollectorDeploymentRef(),
+		logFieldObjectKind, "Deployment",
+		metadata.ConfigMapAnnotationKey, fmt.Sprintf("%x", configMapDataHash))
 	return controllerruntime.Result{}, nil
+}
+
+func otelCollectorDeploymentRef() client.ObjectKey {
+	return client.ObjectKey{
+		Name:      metrics.OtelCollectorName,
+		Namespace: metrics.MonitoringNamespace,
+	}
 }
 
 // reconcileConfigMap reconciles ConfigMaps declared in the `config-management-monitoring`
@@ -140,9 +152,9 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 		return nil, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.log.Info("Managed object upsert successful",
-			logFieldObject, client.ObjectKeyFromObject(cm).String(),
-			logFieldKind, "ConfigMap",
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, client.ObjectKeyFromObject(cm).String(),
+			logFieldObjectKind, "ConfigMap",
 			logFieldOperation, op)
 		return hash(cm)
 	}
@@ -152,10 +164,10 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 // updateDeploymentAnnotation updates the otel deployment's spec.template.annotation.
 // This triggers the deployment to restart in the event of an annotation update.
 func updateDeploymentAnnotation(ctx context.Context, c client.Client, annotationKey, annotationValue string) error {
+	key := otelCollectorDeploymentRef()
 	dep := &appsv1.Deployment{}
-	dep.Name = metrics.OtelCollectorName
-	dep.Namespace = metrics.MonitoringNamespace
-	key := client.ObjectKeyFromObject(dep)
+	dep.Name = key.Name
+	dep.Namespace = key.Namespace
 
 	if err := c.Get(ctx, key, dep); err != nil {
 		return status.APIServerError(err, "failed to get otel Deployment")

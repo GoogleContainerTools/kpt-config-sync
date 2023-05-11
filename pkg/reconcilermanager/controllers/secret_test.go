@@ -190,8 +190,15 @@ func TestUpsertAuthSecret(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
 			log := logr.Discard()
-			sKey, err := upsertAuthSecret(context.Background(), log, tc.reposync, tc.client, nsReconcilerKey)
+			r := reconcilerBase{
+				loggingController: loggingController{
+					log: log,
+				},
+				client: tc.client,
+			}
+			sKey, err := r.upsertAuthSecret(ctx, tc.reposync, nsReconcilerKey)
 			assert.Equal(t, tc.wantKey, sKey, "unexpected secret key returned")
 			if tc.wantError {
 				assert.Error(t, err, "expected upsertAuthSecret to error")
@@ -201,7 +208,6 @@ func TestUpsertAuthSecret(t *testing.T) {
 
 			key := client.ObjectKeyFromObject(tc.wantSecret)
 			got := &corev1.Secret{}
-			ctx := context.Background()
 			err = tc.client.Get(ctx, key, got)
 			assert.NoError(t, err, "expected Secret to exist")
 			testutil.AssertEqual(t, got, tc.wantSecret, "unexpected secret contents")

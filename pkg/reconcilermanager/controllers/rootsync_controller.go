@@ -264,6 +264,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			if updateErr != nil {
 				r.logger(ctx).Error(updateErr, "Sync status update failed")
 			}
+			// Use the deployment get error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 			return controllerruntime.Result{}, err
 		}
 	}
@@ -280,6 +282,8 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
+		// Use the compute error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, err
 	}
 
@@ -298,7 +302,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		rootsync.SetReconciling(rs, "Deployment", result.Message)
 		// Clear Stalled condition.
 		rootsync.ClearCondition(rs, v1beta1.RootSyncStalled)
-	case kstatus.FailedStatus:
+	case kstatus.FailedStatus, kstatus.TerminatingStatus:
 		// statusFailed indicates that the deployment failed to reconcile. Update
 		// Reconciling status condition with appropriate message specifying the
 		// reason for failure.
@@ -311,6 +315,19 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		rootsync.ClearCondition(rs, v1beta1.RootSyncReconciling)
 		// Since there were no errors, we can clear any previous Stalled condition.
 		rootsync.ClearCondition(rs, v1beta1.RootSyncStalled)
+	default:
+		// Shouldn't happen, unless kstatus.Compute impl changes
+		err := errors.Errorf("invalid deployment status: %v: %s", result.Status, result.Message)
+		rootsync.SetStalled(rs, "Deployment", err)
+		// Get errors should always trigger retry (return error),
+		// even if status update is successful.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
+		}
+		// Use the status error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, err
 	}
 
 	updated, err := r.updateStatus(ctx, currentRS, rs)

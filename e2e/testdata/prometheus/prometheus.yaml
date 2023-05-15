@@ -162,6 +162,9 @@ spec:
             # this will count towards the containers memory usage.
             - --storage.tsdb.retention.time=30m
             - --storage.tsdb.wal-compression
+            # Limit the maximum number of bytes of storage blocks to retain.
+            # The oldest data will be removed first.
+            - --storage.tsdb.retention.size=1GB
             # Effectively disable compaction and make blocks short enough so
             # that our retention window can be kept in practice.
             - --storage.tsdb.min-block-duration=10m

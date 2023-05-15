@@ -16,16 +16,13 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -35,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -302,10 +300,9 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
+	var err error
 	namespace := "bookinfo"
 	managerScope := string(declared.RootReconciler)
-	// file path to the local RepoSync YAML file which syncs from a public Git repo that contains a service account object.
-	rsGitYAMLFile := "../testdata/reconciler-manager/reposync-sample.yaml"
 	// file path to the RepoSync config in the root repository.
 	repoSyncPath := "acme/reposync-bookinfo.yaml"
 	rsNN := types.NamespacedName{
@@ -317,9 +314,11 @@ func TestSwitchFromGitToOci(t *testing.T) {
 
 	rsCR := nt.RepoSyncClusterRole()
 	rsRB := nomostest.RepoSyncRoleBinding(rsNN)
-	repoSyncGit, err := parseRepoSyncFromFile(nt, rsGitYAMLFile)
-	if err != nil {
-		nt.T.Fatal(err)
+	repoSyncGit := nomostest.RepoSyncObjectV1Beta1(rsNN, "", filesystem.SourceFormatUnstructured)
+	repoSyncGit.Spec.Git = &v1beta1.Git{
+		Repo:   "https://github.com/config-sync-examples/namespace-repo-bookinfo",
+		Branch: "main",
+		Auth:   configsync.AuthNone,
 	}
 	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
 	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
@@ -385,7 +384,8 @@ func TestSwitchFromGitToOci(t *testing.T) {
 
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	repoSyncOCI := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	repoSyncOCI := repoSyncGit.DeepCopy()
+	repoSyncOCI.Spec.Git = nil
 	repoSyncOCI.Spec.SourceType = string(v1beta1.OciSource)
 	imageURL := fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", nomostesting.GCPProjectIDFromEnv)
 	// TODO: remove the overwrite once the OSS project has public access
@@ -457,7 +457,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	// Switch from Git to OCI
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
-	nt.MustMergePatch(repoSyncOCI, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
+	nt.MustMergePatch(repoSyncOCI.DeepCopy(), fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
 		v1beta1.OciSource, imageURL, configsync.AuthNone))
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
@@ -475,6 +475,14 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
 		nt.T.Error(err)
 	}
+	nt.T.Cleanup(func() {
+		// Reset RepoSync OCI config to be valid and managed by RootSync
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("re-configure RepoSync to sync from OCI in the root repository"))
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
 
 	// Invalid cases
 	rs := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
@@ -484,20 +492,6 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
-}
-
-func parseRepoSyncFromFile(nt *nomostest.NT, absPath string) (*v1beta1.RepoSync, error) {
-	bytes, err := ioutil.ReadFile(absPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read file path: %s", absPath)
-	}
-	rs := &v1beta1.RepoSync{}
-	decoder := serializer.NewCodecFactory(nt.KubeClient.Client.Scheme()).UniversalDeserializer()
-	_, _, err = decoder.Decode(bytes, nil, rs)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to decode object from file path: %s", absPath)
-	}
-	return rs, nil
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

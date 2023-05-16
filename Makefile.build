@@ -280,3 +280,7 @@ build-http-git-server:
 		-t $(E2E_TEST_IMAGE_HTTP_GIT_SERVER) \
 		test/docker/http-git-server/
 	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)
+
+.PHONY: deploy
+deploy:
+	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml

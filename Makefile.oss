@@ -13,5 +13,5 @@
 # limitations under the License.
 
 .PHONY: run-oss
-run-oss: config-sync-manifest
-	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
+run-oss: config-sync-manifest deploy
+

@@ -74,6 +74,9 @@ endif
 BUILD_ID ?= $(USER)
 GCR_PREFIX ?= $(GCP_PROJECT)/$(BUILD_ID)
 
+GCS_PREFIX ?= gs://$(GCP_PROJECT)/config-sync
+GCS_BUCKET ?= $(GCS_PREFIX)/$(shell git rev-parse HEAD)
+
 # Allow arbitrary registry name, but default to GCR with prefix if not provided
 REGISTRY ?= gcr.io/$(GCR_PREFIX)
 

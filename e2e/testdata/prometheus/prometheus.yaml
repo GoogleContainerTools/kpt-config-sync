@@ -77,6 +77,10 @@ data:
       - job_name: 'kubernetes-pods'
         kubernetes_sd_configs:
         - role: pod
+        metric_relabel_configs:
+        - source_labels: [__name__]
+          regex: 'cilium_k8s_client_api_latency_time_seconds.*'
+          action: drop
         relabel_configs:
         - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
           action: keep
@@ -103,6 +107,10 @@ data:
       - job_name: 'kubernetes-service-endpoints'
         kubernetes_sd_configs:
         - role: endpoints
+        metric_relabel_configs:
+        - source_labels: [__name__]
+          regex: 'cilium_k8s_client_api_latency_time_seconds.*'
+          action: drop
         relabel_configs:
         - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
           action: keep

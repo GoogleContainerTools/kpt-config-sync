@@ -94,3 +94,34 @@ test-e2e-gke-multi-repo-test-group7:
 test-e2e-gke-multi-repo-test-group8:
 	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --test-features=workload-identity" \
 		test-e2e-go-gke-ci
+
+POSTSUBMIT_GCS_PREFIX ?= gs://kpt-config-sync-ci-postsubmit
+POSTSUBMIT_REGISTRY ?= us-docker.pkg.dev/kpt-config-sync-ci-artifacts/postsubmit
+
+.PHONY: postsubmit
+postsubmit: build-cli
+	$(MAKE) config-sync-manifest REGISTRY=$(POSTSUBMIT_REGISTRY)
+	$(MAKE) publish-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
+
+.PHONY: publish-gcs
+publish-gcs:
+	gsutil cp $(OSS_MANIFEST_STAGING_DIR)/* $(GCS_BUCKET)
+	gsutil cp $(BIN_DIR)/darwin_amd64/nomos $(GCS_BUCKET)/darwin_amd64/nomos
+	gsutil cp $(BIN_DIR)/darwin_arm64/nomos $(GCS_BUCKET)/darwin_arm64/nomos
+	gsutil cp $(BIN_DIR)/linux_amd64/nomos $(GCS_BUCKET)/linux_amd64/nomos
+	gsutil cp $(BIN_DIR)/linux_arm64/nomos $(GCS_BUCKET)/linux_arm64/nomos
+
+.PHONY: pull-gcs
+pull-gcs:
+	gsutil cp $(GCS_BUCKET)/*.yaml $(OSS_MANIFEST_STAGING_DIR)
+	gsutil cp $(GCS_BUCKET)/darwin_amd64/nomos $(BIN_DIR)/darwin_amd64/nomos
+	gsutil cp $(GCS_BUCKET)/darwin_arm64/nomos $(BIN_DIR)/darwin_arm64/nomos
+	gsutil cp $(GCS_BUCKET)/linux_amd64/nomos $(BIN_DIR)/linux_amd64/nomos
+	gsutil cp $(GCS_BUCKET)/linux_arm64/nomos $(BIN_DIR)/linux_arm64/nomos
+
+.PHONY: pull-gcs-postsubmit
+pull-gcs-postsubmit: clean $(OUTPUT_DIR)
+	$(MAKE) pull-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
+
+.PHONY: deploy-postsubmit
+deploy-postsubmit: pull-gcs-postsubmit deploy

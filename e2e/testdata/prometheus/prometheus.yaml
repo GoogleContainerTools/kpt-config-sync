@@ -79,6 +79,10 @@ data:
         - role: pod
         metric_relabel_configs:
         - source_labels: [__name__]
+          # The metric stores 220k+ data series on AutoGKE 1.26 causing Prometheus OOMKilled.
+          # Drop the expensive metric after the scrape has happened, but before
+          # the data is ingested by the storage system.
+          # For more details, please check b/283001264.
           regex: 'cilium_k8s_client_api_latency_time_seconds.*'
           action: drop
         relabel_configs:
@@ -109,6 +113,10 @@ data:
         - role: endpoints
         metric_relabel_configs:
         - source_labels: [__name__]
+          # The metric stores 220k+ data series on AutoGKE 1.26 causing Prometheus OOMKilled.
+          # Drop the expensive metric after the scrape has happened, but before
+          # the data is ingested by the storage system.
+          # For more details, please check b/283001264.
           regex: 'cilium_k8s_client_api_latency_time_seconds.*'
           action: drop
         relabel_configs:

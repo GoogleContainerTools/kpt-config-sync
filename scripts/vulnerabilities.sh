@@ -16,30 +16,19 @@
 # This script prints a table of fixable vulnerabilities of medium severity or
 # higher, based on the latest or specified git tag.
 #
-# USAGE: $ scripts/vulnerabilities.sh [IMAGE_TAG]
+# USAGE: $ scripts/vulnerabilities.sh
 #
-# The IMAGE_TAG is optional. If not specified, it defaults to the latest tag of
-# the current local environment.
-#
-# The GCP_PROJECT environment variable is used to configure the project that
-# hosts the container images in Google Container Registry.
-# Default: config-management-release
+# The script will look for the rendered manifests at .output/staging to parse
+# image tags.
 #
 # Requires gcloud authn/authz to read the results of vulnerability scans from
-# Google Container Registry in the specified project.
+# GCR/GAR in the specified project.
 # Required access:
-# - Storage Object Viewer on "artifacts.${GCP_PROJECT}.appspot.com"
-# - Container Registry Service Agent on Container Registry API
-#   (containerregistry.googleapis.com)
-# - Container Analysis Service Agent on Container Analysis API
-#   (containerscanning.googleapis.com)
+# - Storage Object Viewer on "artifacts.${GCP_PROJECT}.appspot.com" (GCR - if applicable)
+# - Artifact Registry Reader (GAR - if applicable)
+# - Container Analysis Occurrences Viewer
 
 set -euo pipefail
-
-configsync_latest_image_tag="$(git describe --tags --abbrev=0)"
-configsync_image_tag="${1:-${configsync_latest_image_tag}}"
-
-GCP_PROJECT="${GCP_PROJECT:-config-management-release}"
 
 # find the tag for the gcenode-askpass-sidecar image by reading it from a Go constant.
 # This sidecar is injected at runtime. So it's not in any local manifest files.
@@ -50,38 +39,42 @@ find_askpass_image_tag() {
 
 GCENODE_ASKPASS_TAG="${GCENODE_ASKPASS_TAG:-$(find_askpass_image_tag)}"
 
-# TODO: share with Makefile to keep in sync
-configsync_images=(
-  "gcr.io/${GCP_PROJECT}/reconciler"
-  "gcr.io/${GCP_PROJECT}/reconciler-manager"
-  "gcr.io/${GCP_PROJECT}/admission-webhook"
-  "gcr.io/${GCP_PROJECT}/hydration-controller"
-  "gcr.io/${GCP_PROJECT}/hydration-controller-with-shell"
-  "gcr.io/${GCP_PROJECT}/oci-sync"
-  "gcr.io/${GCP_PROJECT}/helm-sync"
-  "gcr.io/${GCP_PROJECT}/nomos"
-)
-
 # Build a full list of images with tags
 images=(
-  "gcr.io/${GCP_PROJECT}/gcenode-askpass-sidecar:${GCENODE_ASKPASS_TAG}"
+  "gcr.io/config-management-release/gcenode-askpass-sidecar:${GCENODE_ASKPASS_TAG}"
 )
 
 # find the "name:tag" of images in the manifests directory.
 find_manifest_images() {
-  grep -rohE --color=never "image:\s+\S+:\S+" manifests/**/*.yaml |
+  grep -rohE --color=never "image:\s+\S+:\S+" .output/staging/**/*.yaml |
     awk '{print $2}' | sort | uniq
 }
 
-# Add the specified tag to all configsync images
-for image_name in "${configsync_images[@]}"; do
-  images+=("${image_name}:${configsync_image_tag}")
-done
+registry=""
+cs_tag=""
+
+echo "++++ Parsing image tags from rendered manifests at: .output/staging"
+
+manifest_images="$(find_manifest_images || echo -n "")"
+if [[ "${manifest_images}" == "" ]]; then
+  echo "++++ No images found in rendered manifests at: .output/staging"
+  echo "++++ For instructions on how to build or pull manifests, see https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/docs/development.md#build"
+  exit 1
+fi
 
 # Add dependencies from the manifests
 while IFS='' read -r image; do
   images+=("${image}")
-done <<<"$(find_manifest_images)"
+  # use reconciler-manager image as an representative of the CS registry/tag
+  if [[ "${image}" == *"/reconciler-manager:"* ]]; then
+    registry="${image%/reconciler-manager:*}"
+    cs_tag="${image#*:}"
+  fi
+done <<<"${manifest_images}"
+
+# add CS images not included in manifest
+images+=("${registry}/nomos:${cs_tag}")
+images+=("${registry}/hydration-controller-with-shell:${cs_tag}")
 
 fixable_total=0
 declare -A vuln_map
@@ -91,17 +84,12 @@ echo -n "Scanning" >&2
 # Sum the fixable vulnerabilities with severity CRITICAL, HIGH, or MEDIUM
 for image in "${images[@]}"; do
   echo -n "."
-  if [[ "${image}" == "gcr.io/${GCP_PROJECT}/"* ]]; then
-    vulnerabilities=$(gcloud beta container images describe --project "${GCP_PROJECT}" --show-package-vulnerability --format json --verbosity error "${image}" |
-      jq -r '.package_vulnerability_summary.vulnerabilities')
-    fixable=$(echo "${vulnerabilities}" |
-      jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
-    vuln_map[${image}]=${fixable}
-    fixable_total=$((fixable_total + fixable))
-  else
-    # Images from other repos are ignored, because we can't remotely scan them with GCR.
-    vuln_map[${image}]="UNKNOWN"
-  fi
+  vulnerabilities=$(gcloud beta container images describe --show-package-vulnerability --format json --verbosity error "${image}" |
+    jq -r '.package_vulnerability_summary.vulnerabilities')
+  fixable=$(echo "${vulnerabilities}" |
+    jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
+  vuln_map[${image}]=${fixable}
+  fixable_total=$((fixable_total + fixable))
 done
 
 echo # done scanning

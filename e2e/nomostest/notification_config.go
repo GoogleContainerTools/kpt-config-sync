@@ -179,7 +179,7 @@ func WithSyncReconcilingTemplate(cmData map[string]string) {
     body: |
       {
         "content": {
-          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is reconciling"
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is currently reconciling. Message: {{ (index .sync.status.conditions 0).message}}, reason: {{ (index .sync.status.conditions 0).reason}}"
         }
       }`
 }

@@ -162,3 +162,24 @@ func WithSyncStalledTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncReconcilingTrigger adds the on-sync-reconciling trigger to the ConfigMap
+func WithOnSyncReconcilingTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-reconciling"] = `- when: any(sync.status.conditions, {.type == 'Reconciling' && .status == 'True'})
+  oncePer: sync.metadata.name
+  send: [sync-reconciling]`
+}
+
+// WithSyncReconcilingTemplate adds the sync-stalled template to the ConfigMap
+func WithSyncReconcilingTemplate(cmData map[string]string) {
+	cmData["template.sync-reconciling"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is currently reconciling. Message: {{ (index .sync.status.conditions 0).message}}, reason: {{ (index .sync.status.conditions 0).reason}}"
+        }
+      }`
+}

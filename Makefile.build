@@ -117,7 +117,7 @@ push-images:
 	@echo "+++ Pushing Config Sync images to $(REGISTRY)"
 	@echo "+++ Using account:"
 	gcloud config get-value account
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(REGISTRY)))
 	docker push $(RECONCILER_TAG)
 	docker push $(RECONCILER_MANAGER_TAG)
 	docker push $(ADMISSION_WEBHOOK_TAG)

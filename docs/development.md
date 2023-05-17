@@ -134,11 +134,32 @@ Here is an example for how these can be provided at runtime:
 make build-images IMAGE_TAG=latest
 ```
 
+### Use postsubmit artifacts
+
+After a change is submitted to one of the official branches (e.g. `main`, `v1.15`, etc.),
+a postsubmit job is triggered which publishes build artifacts. If you have checked
+out a commit from the history of such a branch, you can pull the manifests and
+use them directly.
+
+```shell
+make pull-gcs-postsubmit
+```
+
+This will pull the manifests from GCS and store them in `.output/staging/oss`
+(the same location as `make config-sync-manifest`). These can then be used for
+running e2e tests or deploying directly to a cluster.
+
+To pull and deploy the checked out commit:
+
+```shell
+make deploy-postsubmit
+```
+
 ### Build from source
 
 Config Sync can be built from source with a single command:
 
-```
+```shell
 make config-sync-manifest
 ```
 

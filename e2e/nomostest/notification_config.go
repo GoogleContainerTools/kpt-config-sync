@@ -183,3 +183,24 @@ func WithSyncReconcilingTemplate(cmData map[string]string) {
         }
       }`
 }
+
+// WithOnSyncPendingTrigger adds the on-sync-pending trigger to the ConfigMap
+func WithOnSyncPendingTrigger(cmData map[string]string) {
+	cmData["trigger.on-sync-pending"] = `- when: any(sync.status.conditions, {.type == 'Syncing' && .status == 'True'})
+  oncePer: sync.metadata.name
+  send: [sync-pending]`
+}
+
+// WithSyncPendingTemplate adds the sync-pending template to the ConfigMap
+func WithSyncPendingTemplate(cmData map[string]string) {
+	cmData["template.sync-pending"] = `webhook:
+  local:
+    method: POST
+    path: /
+    body: |
+      {
+        "content": {
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is currently pending. Status: {{ (index .sync.status.conditions 1).status}}, type: {{ (index .sync.status.conditions 1).type}}"
+        }
+      }`
+}

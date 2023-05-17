@@ -766,6 +766,70 @@ func TestNotificationOnSyncReconciling(t *testing.T) {
 	}
 }
 
+func TestNotificationOnSyncPending(t *testing.T) {
+	rsName := "root-sync-5"
+	rootSyncNN := nomostest.RootSyncNN(rsName)
+	rootReconcilerName := core.RootReconcilerName(rootSyncNN.Name)
+	nt := nomostest.New(t, nomostesting.Notification,
+		ntopts.Unstructured,
+		ntopts.InstallNotificationServer,
+		ntopts.RootRepo(rootSyncNN.Name),
+	)
+	var err error
+	credentialMap := map[string]string{
+		rootSyncNN.Namespace: rootSyncNotificationPassword,
+	}
+	for ns, pass := range credentialMap {
+		_, err = nomostest.NotificationSecret(nt, ns,
+			nomostest.WithNotificationUsername("user"),
+			nomostest.WithNotificationPassword(pass),
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		_, err = nomostest.NotificationConfigMap(nt, ns,
+			nomostest.WithOnSyncPendingTrigger,
+			nomostest.WithSyncPendingTemplate,
+			nomostest.WithLocalWebhookService,
+		)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+	// Enable notifications on RootSync
+	rootSync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
+	nomostest.SubscribeRootSyncNotification(rootSync, "on-sync-pending", "local")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name), rootSync))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Enable notifications on RootSync"))
+	err = nt.Watcher.WatchObject(kinds.Deployment(), rootReconcilerName, rootSyncNN.Namespace,
+		[]testpredicates.Predicate{testpredicates.DeploymentHasContainer(reconcilermanager.Notification)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	records, err := waitForNotifications(nt, 1)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// validate notification
+	require.Equal(nt.T, nomostest.NotificationRecords{
+		Records: []nomostest.NotificationRecord{
+			{
+				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-5 is currently pending. Status: True, type: Syncing\"\n  }\n}",
+				Auth:    rootSyncNotificationCredentialHash,
+			},
+		},
+	}, *records)
+
+	// deleting root-sync
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(nomostest.StructuredNSPath(rootSyncNN.Namespace, rootSyncNN.Name)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove root-sync"))
+	if err := nt.Watcher.WatchForNotFound(kinds.NotificationV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
 func waitForNotifications(nt *nomostest.NT, expectedNum int) (*nomostest.NotificationRecords, error) {
 	var records *nomostest.NotificationRecords
 	var err error

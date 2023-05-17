@@ -748,8 +748,6 @@ func TestNotificationOnSyncReconciling(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync = nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncNN.Name)
-
 	// validate notification
 	require.Equal(nt.T, nomostest.NotificationRecords{
 		Records: []nomostest.NotificationRecord{

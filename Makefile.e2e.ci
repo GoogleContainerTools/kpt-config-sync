@@ -123,5 +123,16 @@ pull-gcs:
 pull-gcs-postsubmit: clean $(OUTPUT_DIR)
 	$(MAKE) pull-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
 
+.PHONY: pull-postsubmit-retry
+pull-postsubmit-retry:
+	./scripts/pull-postsubmit-retry.sh
+
 .PHONY: deploy-postsubmit
 deploy-postsubmit: pull-gcs-postsubmit deploy
+
+.PHONY: vulnerability-scan-postsubmit
+vulnerability-scan-postsubmit: pull-postsubmit-retry vulnerability-scan
+
+.PHONY: vulnerability-scan
+vulnerability-scan:
+	./scripts/vulnerabilities.sh

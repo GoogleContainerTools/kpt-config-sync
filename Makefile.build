@@ -281,6 +281,22 @@ build-http-git-server:
 		test/docker/http-git-server/
 	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)
 
+# Used by the vulnerability scanning periodic prow job.
+VULNERABILITY_SCANNER_VERSION := v1.0.0-$(shell git rev-parse --short HEAD)
+VULNERABILITY_SCANNER_IMAGE_TAG := us-docker.pkg.dev/kpt-config-sync-ci-artifacts/test-infra/vulnerability-scanner:$(VULNERABILITY_SCANNER_VERSION)
+.PHONY: build-vulnerability-scanner
+build-vulnerability-scanner:
+	@echo "+++ Building $(VULNERABILITY_SCANNER_IMAGE_TAG)"
+	docker buildx build \
+		-t $(VULNERABILITY_SCANNER_IMAGE_TAG) \
+		build/prow/vulnerability-scanner/
+
+# Push vulnerability-scanner image to registry. For now this is done manually.
+.PHONY: push-vulnerability-scanner
+push-vulnerability-scanner:
+	@echo "+++ Pushing $(VULNERABILITY_SCANNER_IMAGE_TAG)"
+	docker push $(VULNERABILITY_SCANNER_IMAGE_TAG)
+
 .PHONY: deploy
 deploy:
 	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml

@@ -97,21 +97,6 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		t.Skip("Test skipped for non-local GitProvider types")
 	}
 
-	if *e2e.TestCluster == e2e.GKE { // required env vars for GKE
-		if *e2e.GCPProject == "" {
-			t.Fatal("Environment variable GCP_PROJECT is required for GKE clusters")
-		}
-		if *e2e.GCPCluster == "" {
-			t.Fatal("Environment variable GCP_CLUSTER is required for GKE clusters")
-		}
-		if *e2e.GCPRegion == "" && *e2e.GCPZone == "" {
-			t.Fatal("One of GCP_REGION or GCP_ZONE is required for GKE clusters")
-		}
-		if *e2e.GCPRegion != "" && *e2e.GCPZone != "" {
-			t.Fatal("At most one of GCP_ZONE or GCP_REGION may be specified")
-		}
-	}
-
 	if optsStruct.RESTConfig == nil {
 		RestConfig(t, optsStruct)
 		// Increase the QPS for the clients used by the e2e tests.
@@ -289,9 +274,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		// a single test.
 		connectToLocalRegistry(nt)
 		checkImages(nt.T)
-	} else {
-		// We aren't using an ephemeral Kind cluster, so make sure the cluster is
-		// clean before and after running the test.
+	}
+	if !opts.IsEphemeralCluster {
+		// We aren't using an ephemeral cluster, so make sure the cluster is
+		// cleaned before and after running the test.
 		nt.T.Log("[CLEANUP] FreshTestEnv before test")
 		if err := Clean(nt); err != nil {
 			nt.T.Fatalf("[CLEANUP] Failed to clean test environment: %v", err)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ntopts
+package clusters
 
 import (
 	"fmt"
@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -58,9 +58,10 @@ const (
 // with the information needed to establish a Client with it.
 //
 // version is one of the KindVersion constants above.
-func Kind(t testing.NTB, version string) Opt {
+func Kind(t testing.NTB, version string) ntopts.Opt {
 	v := asKindVersion(t, version)
-	return func(opt *New) {
+	return func(opt *ntopts.New) {
+		opt.IsEphemeralCluster = true
 		newKind(t, opt.Name, opt.TmpDir, opt.KubeconfigPath, v)
 	}
 }
@@ -105,17 +106,19 @@ func newKind(t testing.NTB, name, tmpDir, kcfgPath string, version KindVersion) 
 	p := cluster.NewProvider()
 
 	start := time.Now()
-	t.Logf("started creating cluster %s at %s", name, start.Format(time.RFC3339))
+	t.Logf("started creating kind cluster %s at %s", name, start.Format(time.RFC3339))
+	defer func() {
+		t.Logf("took %s to create kind cluster %s", time.Since(start), name)
+	}()
 
 	err := createKindCluster(p, name, kcfgPath, version)
 	creationSuccessful := err == nil
-	finish := time.Now()
 
 	// Register the cluster to be deleted at the end of the test, even if cluster
 	// creation failed.
 	t.Cleanup(func() {
-		if t.Failed() && *e2e.Debug {
-			t.Errorf(`Conect to kind cluster:
+		if skipClusterCleanup(t) {
+			t.Errorf(`Connect to kind cluster:
 kind export kubeconfig --name=%s`, name)
 			t.Errorf(`Delete kind cluster:
 kind delete cluster --name=%s`, name)
@@ -145,11 +148,8 @@ kind delete cluster --name=%s`, name)
 	})
 
 	if err != nil {
-		t.Logf("failed creating cluster at %s", finish.Format(time.RFC3339))
-		t.Logf("command took %v to fail", finish.Sub(start))
-		t.Fatalf("creating Kind cluster: %v", err)
+		t.Fatalf("creating Kind cluster %s: %v", name, err)
 	}
-	t.Logf("finished creating cluster at %s", finish.Format(time.RFC3339))
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

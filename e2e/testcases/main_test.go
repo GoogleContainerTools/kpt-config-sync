@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 )
@@ -34,6 +35,33 @@ import (
 func setParallelFlag() error {
 	err := flag.Set("test.parallel", strconv.Itoa(e2e.NumParallel()))
 	return err
+}
+
+func validateArgs() error {
+	if *e2e.TestCluster == e2e.GKE { // required vars for GKE
+		if *e2e.GCPProject == "" {
+			return errors.Errorf("Environment variable GCP_PROJECT is required for GKE clusters")
+		}
+		if *e2e.GCPCluster == "" && !*e2e.CreateClusters {
+			return errors.Errorf("One of GCP_CLUSTER or CREATE_CLUSTERS is required for GKE clusters")
+		}
+		if *e2e.GCPCluster != "" && *e2e.CreateClusters {
+			return errors.Errorf("At most one of GCP_CLUSTER or CREATE_CLUSTERS may be specified")
+		}
+		if e2e.RunInParallel() && !*e2e.CreateClusters {
+			return errors.Errorf("Must provide CREATE_CLUSTERS to run in parallel on GKE")
+		}
+		if *e2e.GCPRegion == "" && *e2e.GCPZone == "" {
+			return errors.Errorf("One of GCP_REGION or GCP_ZONE is required for GKE clusters")
+		}
+		if *e2e.GCPRegion != "" && *e2e.GCPZone != "" {
+			return errors.Errorf("At most one of GCP_ZONE or GCP_REGION may be specified")
+		}
+		if *e2e.GKEAutopilot && *e2e.GCPRegion == "" {
+			return errors.Errorf("Autopilot clusters must be created with a region")
+		}
+	}
+	return nil
 }
 
 func TestMain(m *testing.M) {
@@ -58,11 +86,12 @@ func main(m *testing.M) int {
 	}
 	rand.Seed(time.Now().UnixNano())
 
+	if err := validateArgs(); err != nil {
+		fmt.Printf("error validating e2e test args: %v\n", err)
+		return 1
+	}
+
 	if *e2e.ShareTestEnv {
-		if *e2e.TestCluster == e2e.GKE && e2e.RunInParallel() {
-			fmt.Println("The test cannot use a shared test environment if it is running in parallel on GKE")
-			return 1
-		}
 		defer nomostest.CleanSharedNTs()
 		if err := nomostest.InitSharedEnvironments(); err != nil {
 			fmt.Printf("Error in InitSharedEnvironments: %v\n", err)

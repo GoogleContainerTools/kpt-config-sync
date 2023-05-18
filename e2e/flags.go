@@ -113,6 +113,38 @@ var GCPRegion = flag.String("gcp-region", util.EnvString("GCP_REGION", ""),
 var GCPZone = flag.String("gcp-zone", util.EnvString("GCP_ZONE", ""),
 	"GCP Zone to use when running tests. Only one of gcp-region and gcp-zone must be set. Defaults to GCP_ZONE env var.")
 
+// GCPNetwork is the GCP network to use when creating GKE clusters.
+var GCPNetwork = flag.String("gcp-network", util.EnvString("GCP_NETWORK", ""),
+	"GCP Network to use when creating GKE clusters. Defaults to GCP_SUBNETWORK env var,")
+
+// GCPSubNetwork is the GCP subnetwork to use when creating GKE clusters.
+var GCPSubNetwork = flag.String("gcp-subnetwork", util.EnvString("GCP_SUBNETWORK", ""),
+	"GCP Subnetwork to use when creating clusters. Defaults to GCP_SUBNETWORK env var.")
+
+// GKEReleaseChannel is the GKE release channel to use when creating GKE clusters.
+var GKEReleaseChannel = flag.String("gke-release-channel", util.EnvString("GKE_RELEASE_CHANNEL", DefaultGKEChannel),
+	"GKE release channel to use when creating GKE clusters. Defaults to GKE_RELEASE_CHANNEL env var.")
+
+// GKEClusterVersion is the GKE cluster version to use when creating GKE clusters.
+var GKEClusterVersion = flag.String("gke-cluster-version", util.EnvString("GKE_CLUSTER_VERSION", ""),
+	"GKE cluster version to use when creating GKE clusters. Defaults to GKE_CLUSTER_VERSION env var.")
+
+// GKEMachineType is the GKE machine type to use when creating GKE clusters.
+var GKEMachineType = flag.String("gke-machine-type", util.EnvString("GKE_MACHINE_TYPE", DefaultGKEMachineType),
+	"GKE machine type to use when creating GKE clusters. Defaults to GKE_MACHINE_TYPE env var.")
+
+// GKENumNodes is the number of nodes to use when creating GKE clusters.
+var GKENumNodes = flag.Int("gke-num-nodes", util.EnvInt("GKE_NUM_NODES", DefaultGKENumNodes),
+	"Number of node to use when creating GKE clusters. Defaults to GKE_NUM_NODES env var.")
+
+// GKEAutopilot indicates whether to enable autopilot when creating GKE clusters.
+var GKEAutopilot = flag.Bool("gke-autopilot", util.EnvBool("GKE_AUTOPILOT", false),
+	"Whether to create GKE clusters with autopilot enabled.")
+
+// CreateClusters indicates the test framework should create GKE clusters.
+var CreateClusters = flag.Bool("create-clusters", util.EnvBool("CREATE_CLUSTERS", false),
+	"Whether to create GKE clusters, otherwise will assume pre-provisioned GKE clusters.")
+
 const (
 	// Kind indicates creating a Kind cluster for testing.
 	Kind = "kind"
@@ -120,6 +152,12 @@ const (
 	GKE = "gke"
 	// Kubeconfig provides the context via KUBECONFIG for testing.
 	Kubeconfig = "kube-config"
+	// DefaultGKEChannel is the default GKE release channel to use when creating a cluster
+	DefaultGKEChannel = "regular"
+	// DefaultGKEMachineType is the default GKE machine type to use when creating a cluster
+	DefaultGKEMachineType = "e2-standard-4"
+	// DefaultGKENumNodes is the default number of nodes to use when creating a GKE cluster
+	DefaultGKENumNodes = 3
 )
 
 const (

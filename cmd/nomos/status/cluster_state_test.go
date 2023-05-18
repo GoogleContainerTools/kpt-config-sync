@@ -3016,6 +3016,72 @@ gke_sample-project_europe-west1-b_cluster-2
 	}
 }
 
+func TestClusterState_PrintRowsWithNameFilter(t *testing.T) {
+	testCases := []struct {
+		name    string
+		cluster *ClusterState
+		want    string
+	}{
+		{
+			"cluster with multiple root sync",
+			&ClusterState{
+				Ref: "gke_sample-project_europe-west1-b_cluster-2",
+				repos: []*RepoState{
+					{
+						scope:      "<root>",
+						syncName:   "root-sync",
+						sourceType: v1beta1.GitSource,
+						git: &v1beta1.Git{
+							Repo: "git@github.com:tester/sample",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+					{
+						scope:      "<root>",
+						syncName:   "root-sync-2",
+						sourceType: v1beta1.GitSource,
+						git: &v1beta1.Git{
+							Repo:   "git@github.com:tester/sample",
+							Branch: "feature",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+					{
+						scope:      "<root>",
+						syncName:   "root-sync-3",
+						sourceType: v1beta1.GitSource,
+						git: &v1beta1.Git{
+							Repo:   "git@github.com:tester/sample",
+							Branch: "dev",
+						},
+						status: "SYNCED",
+						commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync-2	git@github.com:tester/sample@feature	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buffer bytes.Buffer
+			name = "root-sync-2"
+			tc.cluster.printRows(&buffer)
+			got := buffer.String()
+			if got != tc.want {
+				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
 func withResources() core.MetaMutator {
 	status := map[string]interface{}{
 		"resourceStatuses": []interface{}{

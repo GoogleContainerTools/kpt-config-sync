@@ -200,7 +200,7 @@ func WithSyncPendingTemplate(cmData map[string]string) {
     body: |
       {
         "content": {
-          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is currently pending. Status: {{ (index .sync.status.conditions 1).status}}, type: {{ (index .sync.status.conditions 1).type}}"
+          "raw": "{{.sync.kind}} {{.sync.metadata.name}} is currently pending. Reason: {{ (index .sync.status.conditions 1).reason}}, message: {{ (index .sync.status.conditions 1).message}}, commit: {{ (index .sync.status.conditions 1).commit}}"
         }
       }`
 }

@@ -813,10 +813,11 @@ func TestNotificationOnSyncPending(t *testing.T) {
 	}
 
 	// validate notification
+	commit := nt.RootRepos[rootSyncNN.Name].MustHash(nt.T)
 	require.Equal(nt.T, nomostest.NotificationRecords{
 		Records: []nomostest.NotificationRecord{
 			{
-				Message: "{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-5 is currently pending. Status: True, type: Syncing\"\n  }\n}",
+				Message: fmt.Sprintf("{\n  \"content\": {\n    \"raw\": \"RootSync root-sync-5 is currently pending. Reason: Rendering, message: Rendering skipped, commit: %s\"\n  }\n}", commit),
 				Auth:    rootSyncNotificationCredentialHash,
 			},
 		},

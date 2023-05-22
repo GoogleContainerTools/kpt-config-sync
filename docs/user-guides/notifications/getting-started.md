@@ -10,6 +10,31 @@ and [template](./catalog/templates.md) configurations for common use cases.
 Setting up the notification feature requires creating a `ConfigMap` with [services],
 [triggers], and [templates] defined.
 
+## Installation
+
+To use the Config Sync notifications feature, you will need to install a version
+of Config Sync on your cluster which includes the notification feature. At the
+time of writing, this is limited to the [feature/notification branch].
+
+### Using postsubmit artifacts
+
+After a commit is submitted to `feature/notification`, a postsubmit job is triggered
+which publishes build artifacts. These artifacts can be used to install Config
+Sync.
+
+```shell
+mkdir config_sync
+gsutil cp gs://kpt-config-sync-ci-postsubmit/d857aad2659189ffaa17fc73651433dd4c778e63/*.yaml config_sync/
+kubectl apply -f config_sync/config-sync-manifest.yaml
+```
+Note: This example includes a valid commit SHA, but other commit SHAs from the
+feature branch can be used as well.
+
+### Building from source
+
+Alternatively, you can checkout the `feature/notification` branch locally and
+follow the instructions to [build from source](../../installation.md).
+
 ## Concepts
 
 ### Services
@@ -183,3 +208,4 @@ and `ns-reconciler-${REPO_SYNC_NAME}-*` for `RepoSync`.
 [services]: https://github.com/argoproj/notifications-engine/tree/a2a20923be59e954476c4f051fba0c85ff29e414/docs/services
 [triggers]: https://github.com/argoproj/notifications-engine/blob/a2a20923be59e954476c4f051fba0c85ff29e414/docs/triggers.md
 [templates]: https://github.com/argoproj/notifications-engine/blob/a2a20923be59e954476c4f051fba0c85ff29e414/docs/templates.md
+[feature/notification branch]: https://github.com/GoogleContainerTools/kpt-config-sync/tree/feature/notification

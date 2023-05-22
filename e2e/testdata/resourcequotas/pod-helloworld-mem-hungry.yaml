@@ -19,9 +19,11 @@ metadata:
 spec:
   containers:
   - name: hello-world-test
-    image: gcr.io/google-samples/hello-app:2.0
+    image: "us-docker.pkg.dev/google-samples/containers/gke/hello-app:2.0"
+    ports:
+    - containerPort: 8080
     resources:
-            limits:
-                    cpu: "0.2"
-                    memory: "60m"
+      limits:
+        cpu: "0.2"
+        memory: "60m"
 

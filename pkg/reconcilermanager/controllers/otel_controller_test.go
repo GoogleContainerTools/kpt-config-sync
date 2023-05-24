@@ -223,6 +223,66 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	t.Log("Deployment successfully updated")
 }
 
+func TestOtelReconcilerRemoveCustom(t *testing.T) {
+	cm := configMapWithData(
+		metrics.MonitoringNamespace,
+		metrics.OtelCollectorName,
+		map[string]string{"otel-collector-config.yaml": ""},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	cmCustom := configMapWithData(
+		metrics.MonitoringNamespace,
+		metrics.OtelCollectorCustomCM,
+		map[string]string{"otel-collector-config.yaml": "custom"},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, metrics.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+
+	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+		return nil, nil
+	}
+
+	// Test updating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	err := fakeClient.Delete(ctx, cmCustom)
+	if err != nil {
+		t.Fatalf("error deleteing custom config map, got error: %q, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantDeployment := fake.DeploymentObject(
+		core.Namespace(metrics.MonitoringNamespace),
+		core.Name(metrics.OtelCollectorName),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+
+	// compare ConfigMap
+	cmKey := client.ObjectKeyFromObject(cm)
+	gotConfigMap := &corev1.ConfigMap{}
+	err = fakeClient.Get(ctx, cmKey, gotConfigMap)
+	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
+	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
+
+	// compare Deployment annotation
+	deployKey := client.ObjectKeyFromObject(wantDeployment)
+	gotDeployment := &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
+	t.Log("Deployment successfully updated")
+}
+
 func setupOtelSAReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelSAReconciler) {
 	t.Helper()
 
@@ -301,7 +361,7 @@ func TestOtelSAReconciler(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: ""}
+	wantDeployment.Spec.Template.Annotations = map[string]string{}
 	gotDeployment = &appsv1.Deployment{}
 	err = fakeClient.Get(ctx, deployKey, gotDeployment)
 	require.NoError(t, err, "Deployment[%s] not found", deployKey)

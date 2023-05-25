@@ -112,7 +112,7 @@ publish-gcs:
 	gsutil cp $(BIN_DIR)/linux_arm64/nomos $(GCS_BUCKET)/linux_arm64/nomos
 
 .PHONY: pull-gcs
-pull-gcs:
+pull-gcs: clean $(OUTPUT_DIR)
 	gsutil cp $(GCS_BUCKET)/*.yaml $(OSS_MANIFEST_STAGING_DIR)
 	gsutil cp $(GCS_BUCKET)/darwin_amd64/nomos $(BIN_DIR)/darwin_amd64/nomos
 	gsutil cp $(GCS_BUCKET)/darwin_arm64/nomos $(BIN_DIR)/darwin_arm64/nomos
@@ -120,7 +120,7 @@ pull-gcs:
 	gsutil cp $(GCS_BUCKET)/linux_arm64/nomos $(BIN_DIR)/linux_arm64/nomos
 
 .PHONY: pull-gcs-postsubmit
-pull-gcs-postsubmit: clean $(OUTPUT_DIR)
+pull-gcs-postsubmit:
 	$(MAKE) pull-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
 
 .PHONY: pull-postsubmit-retry

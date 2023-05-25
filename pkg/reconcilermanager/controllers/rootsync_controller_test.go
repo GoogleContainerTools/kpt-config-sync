@@ -2872,7 +2872,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.Contains(t, reconcilingCondition.Message, "KNV1061: RootSyncs must specify spec.sourceType", "unexpected Stalled condition message")
 
 	// Simulate stale cache (rollback to previous resource version)
-	fakeClient.Objects[core.IDOf(rs)] = oldRS
+	fakeClient.Storage().TestPut(oldRS)
 
 	// Expect next Reconcile to error since the ResourceVersion hasn't been updated.
 	// This means the client cache hasn't been updated and isn't returning the latest version.
@@ -2881,7 +2881,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.Equal(t, err.Error(), "ResourceVersion already reconciled: 1", "unexpected Reconcile error")
 
 	// Simulate cache update from watch event (roll forward to the latest resource version)
-	fakeClient.Objects[core.IDOf(rs)] = rs
+	fakeClient.Storage().TestPut(rs)
 
 	// Reconcile should succeed and NOT update the RootSync
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)

@@ -198,6 +198,7 @@ func TestStatus(t *testing.T) {
 			obj := newObjectWithSameType(t, scheme, tc.expectedObj)
 			err = fakeClient.Get(ctx, key, obj)
 			require.NoError(t, err)
+			scheme.Default(tc.expectedObj)
 			testutil.AssertEqual(t, tc.expectedObj, obj)
 		})
 	}
@@ -409,6 +410,7 @@ func TestWithRetry(t *testing.T) {
 			obj := newObjectWithSameType(t, scheme, tc.expectedObj)
 			err = fakeClient.Get(ctx, key, obj)
 			require.NoError(t, err)
+			scheme.Default(tc.expectedObj)
 			testutil.AssertEqual(t, tc.expectedObj, obj)
 		})
 	}

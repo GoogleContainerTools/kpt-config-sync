@@ -64,6 +64,7 @@ func TestValidateSecretExist(t *testing.T) {
 				t.Errorf("validateSecretExist() got error: %q, want error: nil", err)
 			}
 			if !tc.wantError {
+				fakeClient.Scheme().Default(tc.wantSecret)
 				if diff := cmp.Diff(secret, tc.wantSecret); diff != "" {
 					t.Errorf("mutateRepoSyncDeployment() got diff: %v\nwant: nil", diff)
 				}

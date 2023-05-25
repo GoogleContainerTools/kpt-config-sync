@@ -77,14 +77,20 @@ GCR_PREFIX ?= $(GCP_PROJECT)/$(BUILD_ID)
 GCS_PREFIX ?= gs://$(GCP_PROJECT)/config-sync
 GCS_BUCKET ?= $(GCS_PREFIX)/$(shell git rev-parse HEAD)
 
+LOCATION ?= us
+
 # Allow arbitrary registry name, but default to GCR with prefix if not provided
 REGISTRY ?= gcr.io/$(GCR_PREFIX)
 
 # Registry used for retagging previously built images
 OLD_REGISTRY ?= $(REGISTRY)
 
+# Registry which hosts images related to test infrastructure
+TEST_INFRA_PROJECT ?= kpt-config-sync-ci-artifacts
+TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-infra
+
 # Docker image used for build and test. This image does not support CGO.
-BUILDENV_IMAGE ?= gcr.io/stolos-dev/buildenv:v0.2.12
+BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.2.12
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler

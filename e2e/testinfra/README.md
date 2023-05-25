@@ -28,9 +28,10 @@ value is `cs-dev-hub`.
 
 ## Usage
 
-1. Push test OCI images, for example,
+
+1. Push test OCI images to private registry, for example,
     ```bash
-    GCP_PROJECT=your-gcp-project-name make push-test-oci-images
+    GCP_PROJECT=your-gcp-project-name make push-test-oci-images-private
     ```
 
 1. Push test Helm charts, for example,

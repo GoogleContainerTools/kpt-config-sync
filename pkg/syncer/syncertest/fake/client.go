@@ -891,6 +891,7 @@ func (c *Client) Check(t *testing.T, wants ...client.Object) {
 			// messages will be garbage.
 			t.Fatal(err)
 		}
+		c.scheme.Default(obj)
 		wantMap[c.idFromObject(obj)] = obj
 	}
 

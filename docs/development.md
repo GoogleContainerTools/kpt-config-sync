@@ -134,6 +134,16 @@ Here is an example for how these can be provided at runtime:
 make build-images IMAGE_TAG=latest
 ```
 
+### Check build status
+
+The following command provides information on the current build status. It
+parses the local manifests and checks for the build status of docker images
+referenced in the manifest.
+
+```shell
+make build-status
+```
+
 ### Use postsubmit artifacts
 
 After a change is submitted to one of the official branches (e.g. `main`, `v1.15`, etc.),

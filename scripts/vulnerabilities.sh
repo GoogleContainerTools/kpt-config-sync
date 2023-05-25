@@ -30,52 +30,12 @@
 
 set -euo pipefail
 
-# find the tag for the gcenode-askpass-sidecar image by reading it from a Go constant.
-# This sidecar is injected at runtime. So it's not in any local manifest files.
-find_askpass_image_tag() {
-  grep -ohE --color=never 'gceNodeAskpassImageTag\s*=.*' pkg/reconcilermanager/controllers/gcenode_askpass_sidecar.go |
-    sed -E 's/gceNodeAskpassImageTag\s*=\s*"(\S+)"/\1/'
-}
+scripts_dir="$(dirname "$(realpath "$0")")"
+# shellcheck source=scripts/lib/manifests.sh
+source "${scripts_dir}/lib/manifests.sh"
 
-GCENODE_ASKPASS_TAG="${GCENODE_ASKPASS_TAG:-$(find_askpass_image_tag)}"
-
-# Build a full list of images with tags
-images=(
-  "gcr.io/config-management-release/gcenode-askpass-sidecar:${GCENODE_ASKPASS_TAG}"
-)
-
-# find the "name:tag" of images in the manifests directory.
-find_manifest_images() {
-  grep -rohE --color=never "image:\s+\S+:\S+" .output/staging/**/*.yaml |
-    awk '{print $2}' | sort | uniq
-}
-
-registry=""
-cs_tag=""
-
-echo "++++ Parsing image tags from rendered manifests at: .output/staging"
-
-manifest_images="$(find_manifest_images || echo -n "")"
-if [[ "${manifest_images}" == "" ]]; then
-  echo "++++ No images found in rendered manifests at: .output/staging"
-  echo "++++ For instructions on how to build or pull manifests, see https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/docs/development.md#build"
-  exit 1
-fi
-
-# Add dependencies from the manifests
-while IFS='' read -r image; do
-  images+=("${image}")
-  # use reconciler-manager image as an representative of the CS registry/tag
-  if [[ "${image}" == *"/reconciler-manager:"* ]]; then
-    registry="${image%/reconciler-manager:*}"
-    cs_tag="${image#*:}"
-  fi
-done <<<"${manifest_images}"
-
-# add CS images not included in manifest
-images+=("${registry}/nomos:${cs_tag}")
-images+=("${registry}/hydration-controller-with-shell:${cs_tag}")
-
+read -r -a images <<< "$(config_sync_images)"
+[[ ${#images[@]} -eq 0 ]] && exit 1
 fixable_total=0
 declare -A vuln_map
 

@@ -215,6 +215,10 @@ clean:
 	@echo "+++ Cleaning $(OUTPUT_DIR)"
 	@rm -rf $(OUTPUT_DIR)
 
+.PHONY: build-status
+build-status:
+	@./scripts/build-status.sh
+
 .PHONY: test-unit
 test-unit: pull-buildenv buildenv-dirs "$(BIN_DIR)/kustomize"
 	@echo "+++ Running unit tests in a docker container"

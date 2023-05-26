@@ -40,7 +40,7 @@ func ToUnstructured(obj runtime.Object, scheme *runtime.Scheme) (*unstructured.U
 	// Convert to Unstructured
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
-	klog.V(3).Infof("Converting from %T to %T", obj, uObj)
+	klog.V(6).Infof("Converting from %T to %T", obj, uObj)
 	err = scheme.Convert(obj, uObj, nil)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func ToTypedObject(obj runtime.Object, scheme *runtime.Scheme) (runtime.Object, 
 		return nil, fmt.Errorf("type not registered with scheme: %s", gvk)
 	}
 
-	klog.V(3).Infof("Converting from %T to %T", obj, tObj)
+	klog.V(6).Infof("Converting from %T to %T", obj, tObj)
 	err = scheme.Convert(obj, tObj, nil)
 	if err != nil {
 		return nil, err
@@ -99,14 +99,14 @@ func ToTypedWithVersion(obj runtime.Object, targetGVK schema.GroupVersionKind, s
 	if gvk != internalGVK && targetGVK != internalGVK && scheme.Recognizes(internalGVK) {
 		// Neither input nor output is internal, but internal is registered.
 		// So assume internal is the hub version, and convert to that first.
-		klog.V(3).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(internalGVK))
+		klog.V(6).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(internalGVK))
 		obj, err = scheme.ConvertToVersion(obj, internalGVK.GroupVersion())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	klog.V(3).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(targetGVK))
+	klog.V(6).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(targetGVK))
 	versionedObj, err := scheme.ConvertToVersion(obj, targetGVK.GroupVersion())
 	if err != nil {
 		return nil, err

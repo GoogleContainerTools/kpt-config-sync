@@ -33,16 +33,6 @@ func SetAnnotation(obj Annotated, annotation, value string) {
 	obj.SetAnnotations(as)
 }
 
-// RemoveAnnotation removes the annotation on the passed annotated object.
-func RemoveAnnotation(obj Annotated, annotation string) {
-	as := obj.GetAnnotations()
-	if as == nil {
-		as = make(map[string]string)
-	}
-	delete(as, annotation)
-	obj.SetAnnotations(as)
-}
-
 // GetAnnotation gets the annotation value on the passed annotated object for a given key.
 func GetAnnotation(obj client.Object, annotation string) string {
 	as := obj.GetAnnotations()

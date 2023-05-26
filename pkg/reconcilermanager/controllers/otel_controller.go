@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -111,50 +110,27 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 		return nil, nil
 	}
 
-	if req.Name == metrics.OtelCollectorName {
-		// Configure the google cloud config map anytime the otel-collector is reconciled.
-		if err := r.configureGoogleCloudConfigMap(ctx); err != nil {
-			return nil, err
+	cm := &corev1.ConfigMap{}
+	if err := r.client.Get(ctx, req.NamespacedName, cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return hash(req.String())
 		}
+		return nil, status.APIServerErrorf(err, "failed to get otel ConfigMap %s", req.NamespacedName.String())
 	}
-
-	// Always use the otel-collector-custom config map if present, then fallback to
-	// otel-collector-googlecloud, and finally otel-collector. No hash is sent for
-	// otel-collector.
-	configMapPrecedence := []string{metrics.OtelCollectorCustomCM, metrics.OtelCollectorGooglecloud}
-
-	for _, configMapName := range configMapPrecedence {
-		configMap := &corev1.ConfigMap{}
-
-		namespacedName := types.NamespacedName{Name: configMapName, Namespace: req.Namespace}
-		if err := r.client.Get(ctx, namespacedName, configMap); err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-
-			return nil, status.APIServerErrorf(err, "failed to get otel ConfigMap %s", req.NamespacedName.String())
-		}
-
-		if configMapName == metrics.OtelCollectorGooglecloud {
-			// For backwards compatability. Removing the UID from Google Cloud config map generates
-			// the same hash for the config map as previuosly, requiring no updates to e2e tests.
-			configMap.UID = ""
-		}
-
-		return hash(configMap)
+	if cm.Name == metrics.OtelCollectorName {
+		return r.configureGooglecloudConfigMap(ctx)
 	}
-
-	return []byte{}, nil
+	return hash(cm)
 }
 
-// configureGoogleCloudConfigMap creates or updates a map with a config that
+// configureGooglecloudConfigMap creates or updates a map with a config that
 // enables Googlecloud exporter if Application Default Credentials are present.
-func (r *OtelReconciler) configureGoogleCloudConfigMap(ctx context.Context) error {
+func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]byte, error) {
 	// Check that GCP credentials are injected
 	creds, _ := getDefaultCredentials(ctx)
 	if creds == nil || creds.ProjectID == "" {
 		// No injected credentials
-		return nil
+		return nil, nil
 	}
 
 	cm := &corev1.ConfigMap{}
@@ -173,15 +149,16 @@ func (r *OtelReconciler) configureGoogleCloudConfigMap(ctx context.Context) erro
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if op != controllerutil.OperationResultNone {
 		r.logger(ctx).Info("Managed object upsert successful",
 			logFieldObjectRef, client.ObjectKeyFromObject(cm).String(),
 			logFieldObjectKind, "ConfigMap",
 			logFieldOperation, op)
+		return hash(cm)
 	}
-	return nil
+	return nil, nil
 }
 
 // updateDeploymentAnnotation updates the otel deployment's spec.template.annotation.
@@ -199,11 +176,7 @@ func updateDeploymentAnnotation(ctx context.Context, c client.Client, annotation
 	existing := dep.DeepCopy()
 	patch := client.MergeFrom(existing)
 
-	if annotationValue != "" {
-		core.SetAnnotation(&dep.Spec.Template, annotationKey, annotationValue)
-	} else {
-		core.RemoveAnnotation(&dep.Spec.Template, annotationKey)
-	}
+	core.SetAnnotation(&dep.Spec.Template, annotationKey, annotationValue)
 
 	if equality.Semantic.DeepEqual(existing, dep) {
 		return nil
@@ -221,6 +194,9 @@ func (r *OtelReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			return e.ObjectNew.GetNamespace() == metrics.MonitoringNamespace
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return e.Object.GetNamespace() == metrics.MonitoringNamespace
 		},
 	}
 	return controllerruntime.NewControllerManagedBy(mgr).

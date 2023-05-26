@@ -47,10 +47,14 @@ const (
 	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
 	// Used by TestOtelReconcilerGooglecloud.
 	depAnnotationGooglecloud = "1b5bbf35c839a3675b0642bbedbb2e61"
-	// depAnnotationGooglecloud is the expected hash of the custom
+	// depAnnotationCustom is the expected hash of the custom
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerCustom.
 	depAnnotationCustom = "d166bfb4bea41bdc98b5b718e6c34b44"
+	// depAnnotationCustomDeleted is the expected hash of the deleted custom
+	// otel-collector ConfigMap test artifact.
+	// Used by TestOtelReconcilerDeleteCustom.
+	depAnnotationCustomDeleted = "271a8db08c5b57017546587f9b78864d"
 )
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
@@ -223,7 +227,7 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	t.Log("Deployment successfully updated")
 }
 
-func TestOtelReconcilerRemoveCustom(t *testing.T) {
+func TestOtelReconcilerDeleteCustom(t *testing.T) {
 	cm := configMapWithData(
 		metrics.MonitoringNamespace,
 		metrics.OtelCollectorName,
@@ -263,6 +267,7 @@ func TestOtelReconcilerRemoveCustom(t *testing.T) {
 		core.Name(metrics.OtelCollectorName),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
+	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationCustomDeleted)
 
 	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
 
@@ -361,7 +366,7 @@ func TestOtelSAReconciler(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantDeployment.Spec.Template.Annotations = map[string]string{}
+	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: ""}
 	gotDeployment = &appsv1.Deployment{}
 	err = fakeClient.Get(ctx, deployKey, gotDeployment)
 	require.NoError(t, err, "Deployment[%s] not found", deployKey)

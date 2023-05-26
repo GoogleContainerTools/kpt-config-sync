@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,6 +28,9 @@
 # Note that there are a bunch of other generators in
 # k8s.io/code-generator/tree/master/cmd that we might have to use in the future.
 #
+# This script requires the repo to be in the GOPATH.
+# Alternatively, make a symlink from the GOPATH package source directory to the
+# repo directory.
 
 set -euox pipefail
 
@@ -39,7 +42,7 @@ NOMOS_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 # the first and last values from GOPATH.
 GOBASE="${GOPATH//:.*/}"
 GOWORK="${GOPATH//.*:/}"
-REPO="kpt.dev/configsync"
+REPO="$(grep "^module" "${NOMOS_ROOT}/go.mod" | cut -d' ' -f2)"
 
 # Comma separted list of APIs to generate for clientset.
 INPUT_BASE="${REPO}/pkg/api"
@@ -61,7 +64,7 @@ if ${SILENT:-false}; then
 fi
 
 tools=()
-for tool in client-gen deepcopy-gen informer-gen lister-gen; do
+for tool in client-gen deepcopy-gen informer-gen lister-gen conversion-gen; do
   tools+=("k8s.io/code-generator/cmd/${tool}")
 done
 
@@ -120,7 +123,7 @@ echo "deepcopy"
 "${GOBASE}/bin/deepcopy-gen" \
   ${LOGGING_FLAGS} \
   --input-dirs="${informer_inputs}" \
-  --output-file-base="types.generated" \
+  --output-file-base zz_generated.deepcopy \
   --output-base="${OUTPUT_BASE}" \
   --go-header-file="hack/boilerplate.txt"
 
@@ -129,6 +132,15 @@ echo "lister"
   ${LOGGING_FLAGS} \
   --input-dirs="${informer_inputs}" \
   --output-base="$GOWORK/src" \
+  --output-package="${OUTPUT_CLIENT}/listers" \
+  --go-header-file="hack/boilerplate.txt"
+
+echo "conversion"
+"${GOBASE}/bin/conversion-gen" \
+  ${LOGGING_FLAGS} \
+  --input-dirs="${informer_inputs}" \
+  --output-base="$GOWORK/src" \
+  --output-file-base zz_generated.conversion \
   --output-package="${OUTPUT_CLIENT}/listers" \
   --go-header-file="hack/boilerplate.txt"
 

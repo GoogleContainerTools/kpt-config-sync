@@ -34,6 +34,8 @@ var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	// AddToScheme adds the types in this package ot a scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
+	// localSchemeBuilder is used by auto-generated conversion-gen code to register the conversions
+	localSchemeBuilder = SchemeBuilder
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {

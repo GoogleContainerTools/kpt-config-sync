@@ -210,6 +210,7 @@ func TestUpsertAuthSecret(t *testing.T) {
 			got := &corev1.Secret{}
 			err = tc.client.Get(ctx, key, got)
 			assert.NoError(t, err, "expected Secret to exist")
+			tc.client.Scheme().Default(tc.wantSecret)
 			testutil.AssertEqual(t, got, tc.wantSecret, "unexpected secret contents")
 		})
 	}

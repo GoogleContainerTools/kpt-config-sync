@@ -53,9 +53,6 @@ func fakeCondition(condType v1beta1.RepoSyncConditionType, status metav1.Conditi
 		LastUpdateTime:     lastUpdateTime,
 		LastTransitionTime: lastTransitionTime,
 	}
-	if condType == v1beta1.RepoSyncReconciling && status == metav1.ConditionTrue {
-		rsc.ErrorSummary = &v1beta1.ErrorSummary{}
-	}
 	if condType == v1beta1.RepoSyncStalled && status == metav1.ConditionTrue {
 		rsc.ErrorSummary = singleErrorSummary
 	}

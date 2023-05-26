@@ -90,7 +90,7 @@ var singleErrorSummary = &v1beta1.ErrorSummary{
 // (status change).
 // Removes the Syncing condition if the Reconciling condition transitioned.
 func SetReconciling(rs *v1beta1.RepoSync, reason, message string) (updated, transitioned bool) {
-	updated, transitioned = setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, nil, &v1beta1.ErrorSummary{}, now())
+	updated, transitioned = setCondition(rs, v1beta1.RepoSyncReconciling, metav1.ConditionTrue, reason, message, "", nil, nil, nil, now())
 	if transitioned {
 		RemoveCondition(rs, v1beta1.RepoSyncSyncing)
 	}

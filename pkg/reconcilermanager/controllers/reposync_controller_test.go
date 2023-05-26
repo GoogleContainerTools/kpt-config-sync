@@ -1060,7 +1060,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{}
+	rs.Spec.CACertSecretRef = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1078,7 +1078,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.CACertSecretRef.Name = caCertSecret
+	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1108,7 +1108,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.CACertSecretRef.Name = ""
+	rs.Spec.CACertSecretRef = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -3368,7 +3368,8 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.Contains(t, reconcilingCondition.Message, "KNV1061: RepoSyncs must specify spec.sourceType", "unexpected Stalled condition message")
 
 	// Simulate stale cache (rollback to previous resource version)
-	fakeClient.Storage().TestPut(oldRS)
+	err = fakeClient.Storage().TestPut(oldRS)
+	require.NoError(t, err)
 
 	// Expect next Reconcile to error since the ResourceVersion hasn't been updated.
 	// This means the client cache hasn't been updated and isn't returning the latest version.
@@ -3377,7 +3378,8 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.Equal(t, err.Error(), "ResourceVersion already reconciled: 1", "unexpected Reconcile error")
 
 	// Simulate cache update from watch event (roll forward to the latest resource version)
-	fakeClient.Storage().TestPut(rs)
+	err = fakeClient.Storage().TestPut(rs)
+	require.NoError(t, err)
 
 	// Reconcile should succeed and NOT update the RepoSync
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)

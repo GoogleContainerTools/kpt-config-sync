@@ -179,29 +179,23 @@ func (ms *MemoryStorage) prepareObject(obj client.Object) (*unstructured.Unstruc
 // Note: This may not match upstream Kubernetes, because k8s.io/api does not
 // include all conversion code or all internal versions.
 // As long as this is consistent, and not lossy, it should be fine for testing.
-// TODO: Verify this matches what's specified for CRD spec.
 func (ms *MemoryStorage) storageGVK(obj client.Object) (schema.GroupVersionKind, error) {
 	gvk, err := kinds.Lookup(obj, ms.scheme)
 	if err != nil {
 		return schema.GroupVersionKind{}, err
 	}
 
-	storageGVK := gvk
-	internalGVK := gvk.GroupKind().WithVersion(runtime.APIVersionInternal)
-	if ms.scheme.Recognizes(internalGVK) {
-		// Store as internal version, if registered
-		storageGVK = internalGVK
-	} else {
-		// Store as highest-priority version with the kind registered
-		for _, gv := range ms.scheme.PrioritizedVersionsForGroup(gvk.Group) {
-			priorityGVK := gv.WithKind(gvk.Kind)
-			if ms.scheme.Recognizes(gv.WithKind(gvk.Kind)) {
-				storageGVK = priorityGVK
-				break
-			}
+	// Store as highest-priority version with the kind registered
+	for _, gv := range ms.scheme.PrioritizedVersionsForGroup(gvk.Group) {
+		priorityGVK := gv.WithKind(gvk.Kind)
+		if ms.scheme.Recognizes(gv.WithKind(gvk.Kind)) {
+			return priorityGVK, nil
 		}
 	}
-	return storageGVK, nil
+	// Kind not found in any of the prioritized versions for this group.
+	// Probably means SetVersionPriority wasn't called with this GVK.
+	// This is true for most groups with only one version.
+	return gvk, nil
 }
 
 // sendPutEvent sends added/modified events and triggers (foreground) garbage collection.
@@ -993,11 +987,17 @@ func (ms *MemoryStorage) Check(t *testing.T, wants ...client.Object) {
 	wantMap := make(map[core.ID]client.Object)
 
 	for _, obj := range wants {
-		uObj, err := ms.prepareObject(obj)
+		// Convert to typed first, so we can set the defaults on the specified
+		// version. Then prep for storage & minimize before comparison.
+		tObj, err := toTypedClientObject(obj, ms.scheme)
+		if err != nil {
+			t.Fatalf("failed to convert expected object: %v", err)
+		}
+		ms.scheme.Default(tObj)
+		uObj, err := ms.prepareObject(tObj)
 		if err != nil {
 			t.Fatalf("failed to prepare expected object for comparison with objects in storage: %v", err)
 		}
-		ms.scheme.Default(obj)
 		wantMap[core.IDOf(obj)] = uObj
 	}
 

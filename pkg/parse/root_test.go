@@ -26,7 +26,6 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/utils/pointer"
@@ -682,7 +681,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					parser:             &fakeParser{parse: tc.parsed},
 					syncName:           rootSyncName,
 					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, runtime.NewScheme(), fake.RootSyncObjectV1Beta1(rootSyncName)),
+					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					discoveryInterface: tc.discoveryClient,
 					converter:          converter,
 					updater: updater{

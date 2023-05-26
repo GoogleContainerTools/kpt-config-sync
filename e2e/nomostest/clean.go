@@ -364,38 +364,49 @@ func deleteKubevirt(nt *NT) error {
 		}
 	}
 
-	var objs []client.Object
+	var apiservices []client.Object
+	var webhooks []client.Object
 	var obj client.Object
 
-	obj = &corev1.Namespace{}
-	obj.SetName("kubevirt")
-	objs = append(objs, obj)
-
+	// Find and delete kubevirt related APIServices first
 	obj = &apiregistrationv1.APIService{}
 	obj.SetName("v1.subresources.kubevirt.io")
-	objs = append(objs, obj)
+	apiservices = append(apiservices, obj)
 
 	obj = &apiregistrationv1.APIService{}
 	obj.SetName("v1alpha3.subresources.kubevirt.io")
-	objs = append(objs, obj)
+	apiservices = append(apiservices, obj)
 
+	// Delete specified KubeVirt objects in parallel and wait for NotFound
+	if err := DeleteObjectsAndWait(nt, apiservices...); err != nil {
+		return err
+	}
+
+	// Next find and delete kubevirt related webhooks
 	// Mutating webhook objects are managed by Autopilot, so skip the cleanup if running on Autopilot clusters
 	if !nt.IsGKEAutopilot {
 		obj = &admissionregistrationv1.MutatingWebhookConfiguration{}
 		obj.SetName("virt-api-mutator")
-		objs = append(objs, obj)
+		webhooks = append(webhooks, obj)
 	}
 
 	obj = &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	obj.SetName("virt-api-mutator")
-	objs = append(objs, obj)
+	webhooks = append(webhooks, obj)
 
 	obj = &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	obj.SetName("virt-operator-validator")
-	objs = append(objs, obj)
+	webhooks = append(webhooks, obj)
 
 	// Delete specified KubeVirt objects in parallel and wait for NotFound
-	if err := DeleteObjectsAndWait(nt, objs...); err != nil {
+	if err := DeleteObjectsAndWait(nt, webhooks...); err != nil {
+		return err
+	}
+
+	// Then remove namespace and resource underneath
+	namespace := &corev1.Namespace{}
+	namespace.SetName("kubevirt")
+	if err := DeleteObjectsAndWait(nt, namespace); err != nil {
 		return err
 	}
 

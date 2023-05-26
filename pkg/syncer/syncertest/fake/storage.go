@@ -207,7 +207,8 @@ func (ms *MemoryStorage) sendPutEvent(ctx context.Context, id core.ID, eventType
 	uObj := ms.objects[id]
 
 	// Send event to watchers
-	ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+	// TODO: send the event asynchronously, even if the caller cancelled the context.
+	ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 		Type:   eventType,
 		Object: uObj,
 	})
@@ -514,14 +515,16 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 			return err
 		}
 		delete(ms.objects, id)
-		ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+		// TODO: send the event asynchronously, even if the caller cancelled the context.
+		ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 			Type:   watch.Deleted,
 			Object: cachedObj,
 		})
 	case metav1.DeletePropagationBackground:
 		// Delete managed objects afterwards
 		delete(ms.objects, id)
-		ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+		// TODO: send the event asynchronously, even if the caller cancelled the context.
+		ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 			Type:   watch.Deleted,
 			Object: cachedObj,
 		})

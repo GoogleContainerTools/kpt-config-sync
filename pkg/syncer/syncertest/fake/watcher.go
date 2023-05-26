@@ -80,17 +80,20 @@ func NewWatchSupervisor(scheme *runtime.Scheme) *WatchSupervisor {
 // Run propagates events to watchers until the context is done.
 func (ws *WatchSupervisor) Run(ctx context.Context) {
 	doneCh := ctx.Done()
+	// Signal Send to ignore subsequent events when done.
+	defer close(ws.doneCh)
 	for {
 		select {
 		case <-doneCh:
 			// Context is cancelled or timed out.
-			close(ws.eventCh)
 			return
 		case event, ok := <-ws.eventCh:
 			if !ok {
-				// Input channel is closed.
-				close(ws.doneCh)
-				return
+				// The event input channel should never be closed.
+				// This prevents sending on a closed channel.
+				// Go will garbage collect it when the WatchSupervisor is
+				// garbage collected, after Run has exited.
+				panic("WatchSupervisor eventCh was closed prematurely")
 			}
 			// Input event received.
 			ws.sendEventToWatchers(ctx, event.GroupKind, event.Event)
@@ -98,10 +101,26 @@ func (ws *WatchSupervisor) Run(ctx context.Context) {
 	}
 }
 
+// Done returns a channel that will be closed when Run has exited.
+func (ws *WatchSupervisor) Done() <-chan struct{} {
+	return ws.doneCh
+}
+
 // Send an event to all watchers of the specified GroupKind.
-func (ws *WatchSupervisor) Send(gk schema.GroupKind, event watch.Event) {
+// Send will block until consumed by Run for async propagation to all watchers.
+// Event will be ignored if Run is done.
+func (ws *WatchSupervisor) Send(ctx context.Context, gk schema.GroupKind, event watch.Event) {
 	select {
-	case <-ws.doneCh: // skip sending event if no longer running
+	case <-ctx.Done():
+		// Ignore event if supplied context is done.
+		// This can happen if the event producer used a timeout/deadline or
+		// otherwise decided not to send the event before it was consumed.
+		return
+	case <-ws.Done():
+		// Ignore event if Run is no longer listening.
+		// This can happen if WatchSupervisor.Run handled the context being done
+		// before the event producer did.
+		return
 	case ws.eventCh <- eventWithKind{Event: event, GroupKind: gk}:
 	}
 }

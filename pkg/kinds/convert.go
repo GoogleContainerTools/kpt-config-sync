@@ -91,34 +91,26 @@ func ToTypedWithVersion(obj runtime.Object, targetGVK schema.GroupVersionKind, s
 		return nil, err
 	}
 
-	if gvk != targetGVK {
-		internalGVK := targetGVK.GroupKind().WithVersion(runtime.APIVersionInternal)
-		if gvk != internalGVK && targetGVK != internalGVK && scheme.Recognizes(internalGVK) {
-			// Neither input nor output is internal, but internal is registered.
-			// So assume internal is the hub version, and convert to that first.
-			klog.V(3).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(internalGVK))
-			internalObj, err := scheme.ConvertToVersion(obj, internalGVK.GroupVersion())
-			if err != nil {
-				return nil, err
-			}
-			// Then convert to the desired type.
-			klog.V(3).Infof("Converting from %s to %s", ObjectSummary(internalObj), GVKToString(targetGVK))
-			versionedObj, err := scheme.ConvertToVersion(internalObj, targetGVK.GroupVersion())
-			if err != nil {
-				return nil, err
-			}
-			return versionedObj, nil
+	if gvk == targetGVK {
+		return ToTypedObject(obj, scheme)
+	}
+
+	internalGVK := targetGVK.GroupKind().WithVersion(runtime.APIVersionInternal)
+	if gvk != internalGVK && targetGVK != internalGVK && scheme.Recognizes(internalGVK) {
+		// Neither input nor output is internal, but internal is registered.
+		// So assume internal is the hub version, and convert to that first.
+		klog.V(3).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(internalGVK))
+		obj, err = scheme.ConvertToVersion(obj, internalGVK.GroupVersion())
+		if err != nil {
+			return nil, err
 		}
-		// Either input or output is the internal type
 	}
 
 	klog.V(3).Infof("Converting from %s to %s", ObjectSummary(obj), GVKToString(targetGVK))
-
 	versionedObj, err := scheme.ConvertToVersion(obj, targetGVK.GroupVersion())
 	if err != nil {
 		return nil, err
 	}
-
 	return versionedObj, nil
 }
 

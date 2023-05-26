@@ -33,6 +33,7 @@ import (
 	k8scorev1 "k8s.io/kubernetes/pkg/apis/core/v1"
 	k8snetworkingv1 "k8s.io/kubernetes/pkg/apis/networking/v1"
 	k8spolicyv1beta1 "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
+	"k8s.io/kubernetes/pkg/apis/rbac"
 	k8srbacv1 "k8s.io/kubernetes/pkg/apis/rbac/v1"
 	k8srbacv1beta1 "k8s.io/kubernetes/pkg/apis/rbac/v1beta1"
 	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -94,6 +95,8 @@ func mustRegisterKubernetesResources() {
 	utilruntime.Must(networkingv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(k8snetworkingv1.RegisterDefaults(scheme.Scheme))
 	utilruntime.Must(k8snetworkingv1.RegisterConversions(scheme.Scheme))
+
+	utilruntime.Must(rbac.AddToScheme(scheme.Scheme))
 
 	utilruntime.Must(rbacv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(k8srbacv1.RegisterDefaults(scheme.Scheme))

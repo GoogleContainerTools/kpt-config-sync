@@ -22,16 +22,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -182,7 +178,6 @@ func TestStatus(t *testing.T) {
 			scheme := core.Scheme
 			fakeClient := fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
-			key := client.ObjectKeyFromObject(tc.obj)
 			updated, err := Status(ctx, fakeClient, tc.obj, tc.mutateFunc)
 			if tc.expectedError != nil {
 				// AssertEqual doesn't work well on APIServerError, because the
@@ -194,12 +189,7 @@ func TestStatus(t *testing.T) {
 				testutil.AssertEqual(t, tc.expectedError, err)
 			}
 			assert.Equal(t, tc.expectedUpdated, updated)
-
-			obj := newObjectWithSameType(t, scheme, tc.expectedObj)
-			err = fakeClient.Get(ctx, key, obj)
-			require.NoError(t, err)
-			scheme.Default(tc.expectedObj)
-			testutil.AssertEqual(t, tc.expectedObj, obj)
+			fakeClient.Check(t, tc.expectedObj)
 		})
 	}
 }
@@ -291,7 +281,9 @@ func TestWithRetry(t *testing.T) {
 			}(),
 		},
 		{
-			name: "ignore status change",
+			// The expected behavior mostly depends on how the fake.Client is
+			// implemented. mutate.WithRetry does not filter status changes.
+			name: "status change",
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
@@ -305,8 +297,9 @@ func TestWithRetry(t *testing.T) {
 			expectedError:   nil,
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
-				// status change not persisted
-				obj.SetResourceVersion("2") // ResourceVersion updated, even tho nothing changed // TODO: does this match apiserver behavior?
+				obj.Status.Replicas = 1
+				// status change persisted
+				obj.SetResourceVersion("2")
 				// generation unchanged (no spec changes)
 				return obj
 			}(),
@@ -394,7 +387,6 @@ func TestWithRetry(t *testing.T) {
 			scheme := core.Scheme
 			fakeClient = fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
-			key := client.ObjectKeyFromObject(tc.obj)
 			updated, err := WithRetry(ctx, fakeClient, tc.obj, tc.mutateFunc)
 			if tc.expectedError != nil && err != nil {
 				// AssertEqual doesn't work well on APIServerError, because the
@@ -406,28 +398,9 @@ func TestWithRetry(t *testing.T) {
 				testutil.AssertEqual(t, tc.expectedError, err)
 			}
 			assert.Equal(t, tc.expectedUpdated, updated)
-
-			obj := newObjectWithSameType(t, scheme, tc.expectedObj)
-			err = fakeClient.Get(ctx, key, obj)
-			require.NoError(t, err)
-			scheme.Default(tc.expectedObj)
-			testutil.AssertEqual(t, tc.expectedObj, obj)
+			fakeClient.Check(t, tc.expectedObj)
 		})
 	}
-}
-
-func newObjectWithSameType(t *testing.T, scheme *runtime.Scheme, in client.Object) client.Object {
-	var obj client.Object
-	if _, ok := in.(*unstructured.Unstructured); ok {
-		obj = &unstructured.Unstructured{}
-	} else {
-		gvk, err := kinds.Lookup(in, scheme)
-		require.NoError(t, err)
-		rObj, err := scheme.New(gvk)
-		require.NoError(t, err)
-		obj = rObj.(client.Object)
-	}
-	return obj
 }
 
 func yamlToTypedObject(t *testing.T, yml string) client.Object {

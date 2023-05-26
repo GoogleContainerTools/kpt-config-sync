@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -316,9 +315,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 	if err != nil {
 		return err
 	}
-	// Get the item GVK
-	gvk := listGVK.GroupVersion().WithKind(strings.TrimSuffix(listGVK.Kind, "List"))
-	// Validate the list is a list
+	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
 		return errors.Errorf("fake.MemoryStorage.List called with non-List GVK %q", listGVK.String())
 	}
@@ -925,9 +922,7 @@ func (ms *MemoryStorage) Watch(_ context.Context, exampleList client.ObjectList,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to lookup GVK from scheme")
 	}
-	// Get the item GVK
-	gvk := listGVK.GroupVersion().WithKind(strings.TrimSuffix(listGVK.Kind, "List"))
-	// Validate the list is a list
+	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
 		return nil, errors.Errorf("fake.MemoryStorage.Watch called with non-List GVK: %v", listGVK)
 	}

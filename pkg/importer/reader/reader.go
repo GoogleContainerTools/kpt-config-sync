@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/syntax"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/id"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -188,7 +189,7 @@ func isList(uList runtime.Unstructured) bool {
 	// This isn't true in the case where the type defines ListInterface, so we can safely
 	// use this for nested Lists even though IsList returns false, assuming it meets the below criteria.
 
-	if !strings.HasSuffix(uList.GetObjectKind().GroupVersionKind().Kind, "List") {
+	if !kinds.IsListGVK(uList.GetObjectKind().GroupVersionKind()) {
 		// The name of a List kind MUST end in List, per the Kubernetes API conventions.
 		// Thus, if the suffix is missing we know this cannot be a List.
 		return false

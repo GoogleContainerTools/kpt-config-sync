@@ -25,7 +25,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -247,11 +246,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 }
 
 func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, labels map[string]string, expectedCount int) {
-	list := &unstructured.UnstructuredList{}
-	listGVK := gvk
-	listGVK.Kind += "List"
-	list.SetGroupVersionKind(listGVK)
-
+	list := kinds.NewUnstructuredListForItemGVK(gvk)
 	if err := nt.KubeClient.List(list, client.MatchingLabels(labels)); err != nil {
 		nt.T.Fatal(err)
 	}

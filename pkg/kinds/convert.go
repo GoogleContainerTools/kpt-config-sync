@@ -15,8 +15,7 @@
 package kinds
 
 import (
-	"fmt"
-
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -60,7 +59,7 @@ func ToTypedObject(obj runtime.Object, scheme *runtime.Scheme) (runtime.Object, 
 
 	tObj, err := scheme.New(gvk)
 	if err != nil {
-		return nil, fmt.Errorf("type not registered with scheme: %s", gvk)
+		return nil, errors.Wrap(err, "scheme.New")
 	}
 
 	klog.V(6).Infof("Converting from %T to %T", obj, tObj)

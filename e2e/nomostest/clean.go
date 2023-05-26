@@ -144,7 +144,7 @@ func deleteTestObjectsAndWait(nt *NT) error {
 	var objs []client.Object
 	types := filterMutableListTypes(nt)
 	for gvk := range types {
-		if !isListable(gvk.Kind) {
+		if !isListable(gvk) {
 			continue
 		}
 		list, err := listObjectsWithTestLabel(nt, gvk)
@@ -521,13 +521,13 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 	return tg.Wait()
 }
 
-func isListable(kind string) bool {
+func isListable(listGVK schema.GroupVersionKind) bool {
 	// Only try to list types that have *List types associated with them, as they
 	// are guaranteed to be listable.
 	//
 	// StatusList types are vestigial, have odd semantics, and are deprecated in 1.19.
 	// Also we don't care about them for tests.
-	return strings.HasSuffix(kind, "List") && !strings.HasSuffix(kind, "StatusList")
+	return kinds.IsListGVK(listGVK) && !strings.HasSuffix(listGVK.Kind, "StatusList")
 }
 
 // FailIfUnknown fails the test if the passed type is not declared in the passed

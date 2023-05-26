@@ -52,9 +52,6 @@ func fakeCondition(condType v1beta1.RootSyncConditionType, status metav1.Conditi
 		LastUpdateTime:     lastUpdateTime,
 		LastTransitionTime: lastTransitionTime,
 	}
-	if condType == v1beta1.RootSyncReconciling && status == metav1.ConditionTrue {
-		rsc.ErrorSummary = &v1beta1.ErrorSummary{}
-	}
 	if condType == v1beta1.RootSyncStalled && status == metav1.ConditionTrue {
 		rsc.ErrorSummary = singleErrorSummary
 	}

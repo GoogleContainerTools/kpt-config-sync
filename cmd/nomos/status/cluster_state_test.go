@@ -1528,7 +1528,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 			syncingConditionSupported: true,
 			conditions: []v1beta1.RepoSyncCondition{
 				reconciledCondition,
-				syncingFalseCondition("abc123", nil, &v1beta1.ErrorSummary{}),
+				syncingFalseCondition("abc123", nil, nil),
 			},
 			renderingStatus: v1beta1.RenderingStatus{
 				Git:     toGitStatus(git),
@@ -2814,7 +2814,7 @@ func TestRepoState_RootRepoStatus(t *testing.T) {
 			syncingConditionSupported: true,
 			conditions: []v1beta1.RootSyncCondition{
 				reconciledCondition,
-				syncingFalseCondition("abc123", nil, &v1beta1.ErrorSummary{}),
+				syncingFalseCondition("abc123", nil, nil),
 			},
 			renderingStatus: v1beta1.RenderingStatus{
 				Git:     toGitStatus(git),

@@ -62,9 +62,13 @@ func init() {
 
 	// Config Sync types
 	utilruntime.Must(clusterregistry.AddToScheme(scheme.Scheme))
+
 	utilruntime.Must(configmanagementv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(configsyncv1alpha1.AddToScheme(scheme.Scheme))
+
 	utilruntime.Must(configsyncv1beta1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(configsyncv1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(configsyncv1alpha1.RegisterConversions(scheme.Scheme))
+	utilruntime.Must(scheme.Scheme.SetVersionPriority(configsyncv1beta1.SchemeGroupVersion, configsyncv1alpha1.SchemeGroupVersion))
 
 	// Hub/Fleet types
 	utilruntime.Must(hubv1.AddToScheme(scheme.Scheme))

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -33,9 +34,9 @@ import (
 
 const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
-const testGitServerImage = "gcr.io/stolos-dev/git-server:v1.0.0"
+const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0"
 const testGitHTTPServer = "http-git-server"
-const testGitHTTPServerImage = "gcr.io/stolos-dev/http-git-server:v1.0.0"
+const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0"
 
 func testGitServerSelector() map[string]string {
 	// Note that maps are copied by reference into objects.

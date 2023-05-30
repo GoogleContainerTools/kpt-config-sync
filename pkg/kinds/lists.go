@@ -17,7 +17,6 @@ package kinds
 import (
 	"strings"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -50,15 +49,11 @@ func ItemGVKForListGVK(gvk schema.GroupVersionKind) schema.GroupVersionKind {
 // registered to the scheme for the specified item GroupVersionKind with "List"
 // appended to the kind.
 func NewTypedListForItemGVK(itemGVK schema.GroupVersionKind, scheme *runtime.Scheme) (client.ObjectList, error) {
-	rObj, err := scheme.New(ListGVKForItemGVK(itemGVK))
+	rObj, err := NewObjectForGVK(ListGVKForItemGVK(itemGVK), scheme)
 	if err != nil {
-		return nil, errors.Wrap(err, "scheme.New")
+		return nil, err
 	}
-	listObj, ok := rObj.(client.ObjectList)
-	if !ok {
-		return nil, errors.Errorf("failed to convert %T to client.ObjectList", rObj)
-	}
-	return listObj, nil
+	return ObjectAsClientObjectList(rObj)
 }
 
 // NewUnstructuredListForItemGVK creates a new UnstructuredList using the

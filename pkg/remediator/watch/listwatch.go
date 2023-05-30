@@ -24,13 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/core"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -228,7 +227,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 		for e := range uWatch.ResultChan() {
 			switch e.Type {
 			case watch.Added:
-				cObj, err := toClientObject(e.Object)
+				cObj, err := kinds.ObjectAsClientObject(e.Object)
 				if err != nil {
 					event := watch.Event{
 						Type:   watch.Error,
@@ -245,7 +244,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 					e.Type = watch.Modified
 				}
 			case watch.Deleted:
-				cObj, err := toClientObject(e.Object)
+				cObj, err := kinds.ObjectAsClientObject(e.Object)
 				if err != nil {
 					event := watch.Event{
 						Type:   watch.Error,
@@ -269,14 +268,6 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 	}()
 
 	return wrapper, nil
-}
-
-func toClientObject(rObj runtime.Object) (client.Object, error) {
-	cObj, ok := rObj.(client.Object)
-	if !ok {
-		return nil, fmt.Errorf("unsupported object type: failed to cast %T to client.Object", rObj)
-	}
-	return cObj, nil
 }
 
 // StatusClientError is a "fake" HTTP status code used to indicate a client-side

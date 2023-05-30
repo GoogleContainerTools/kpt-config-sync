@@ -201,11 +201,9 @@ func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error
 		if err != nil {
 			return nil, err
 		}
-		cObj, ok := rObj.(client.Object)
-		if !ok {
-			return nil, errors.Errorf(
-				"failed to cast object %T of kind %s to client.Object",
-				rObj, uObj.GroupVersionKind().Kind)
+		cObj, err := kinds.ObjectAsClientObject(rObj)
+		if err != nil {
+			return nil, err
 		}
 		result[i] = cObj
 	}

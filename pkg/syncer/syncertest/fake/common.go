@@ -54,9 +54,9 @@ func toTypedClientObject(obj client.Object, scheme *runtime.Scheme) (client.Obje
 	if err != nil {
 		return nil, err
 	}
-	cObj, ok := tObj.(client.Object)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert %T to client.Object", tObj)
+	cObj, err := kinds.ObjectAsClientObject(tObj)
+	if err != nil {
+		return nil, err
 	}
 	return cObj, nil
 }

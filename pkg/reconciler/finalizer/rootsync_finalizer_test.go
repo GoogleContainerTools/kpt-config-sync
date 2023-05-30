@@ -614,9 +614,9 @@ func yamlToTypedObject(t *testing.T, yml string) client.Object {
 	if err != nil {
 		t.Fatalf("error converting object: %v", err)
 	}
-	cObj, ok := rObj.(client.Object)
-	if !ok {
-		t.Fatalf("error casting object (%T): %v", rObj, err)
+	cObj, err := kinds.ObjectAsClientObject(rObj)
+	if err != nil {
+		t.Fatalf("error casting object: %v", err)
 	}
 	return cObj
 }

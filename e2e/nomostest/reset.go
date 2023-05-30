@@ -186,7 +186,9 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RootSync %s", rsNN)
 		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
 		}
 	}
 	tg := taskgroup.New()
@@ -267,7 +269,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RepoSync %s", rsNN)
 		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
 		}
 	}
 	tg := taskgroup.New()
@@ -330,6 +334,7 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 	if len(nsList) == 0 {
 		return nil
 	}
+	var objList []client.Object
 	for _, item := range nsList {
 		obj := &item
 		nn := client.ObjectKeyFromObject(obj)
@@ -340,21 +345,9 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 			continue
 		}
 
-		nt.T.Logf("[RESET] Deleting Namespace %s", nn)
-		if err := nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-			return err
-		}
+		objList = append(objList, obj)
 	}
-	tg := taskgroup.New()
-	for _, item := range nsList {
-		obj := &item
-		nn := client.ObjectKeyFromObject(obj)
-		nt.T.Logf("[RESET] Waiting for deletion of Namespace %s ...", nn)
-		tg.Go(func() error {
-			return nt.Watcher.WatchForNotFound(kinds.Namespace(), nn.Name, nn.Namespace)
-		})
-	}
-	return tg.Wait()
+	return DeleteObjectsAndWait(nt, objList...)
 }
 
 // deleteRepoSyncClusterRole deletes the ClusterRole used by RepoSync

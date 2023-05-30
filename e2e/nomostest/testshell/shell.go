@@ -126,6 +126,21 @@ func (tc *TestShell) Docker(args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// Helm is a convenience method for calling helm.
+// Returns STDOUT & STDERR combined, and an error if helm exited abnormally.
+func (tc *TestShell) Helm(args ...string) ([]byte, error) {
+	tc.Logger.Debugf("helm %s", strings.Join(args, " "))
+	out, err := exec.Command("helm", args...).CombinedOutput()
+	if err != nil {
+		if !tc.Logger.IsDebugEnabled() {
+			tc.Logger.Infof("helm %s", strings.Join(args, " "))
+		}
+		tc.Logger.Info(string(out))
+		return out, err
+	}
+	return out, nil
+}
+
 // Command is a convenience method for invoking a subprocess with the
 // KUBECONFIG environment variable set. Setting the environment variable
 // directly in the test process is not thread safe.

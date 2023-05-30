@@ -20,13 +20,12 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -71,34 +70,16 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
 		}
-		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
-		if err != nil {
-			return cmsSecretRef, err
-		}
-		if op != controllerutil.OperationResultNone {
-			r.logger(ctx).Info("Managed object upsert successful",
-				logFieldObjectRef, cmsSecretRef.String(),
-				logFieldObjectKind, "Secret",
-				logFieldOperation, op)
-		}
-		return cmsSecretRef, nil
+		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		return cmsSecretRef, err
 	case shouldUpsertHelmSecret(rs):
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef))
 		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
 		}
-		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
-		if err != nil {
-			return cmsSecretRef, err
-		}
-		if op != controllerutil.OperationResultNone {
-			r.logger(ctx).Info("Managed object upsert successful",
-				logFieldObjectRef, cmsSecretRef.String(),
-				logFieldObjectKind, "Secret",
-				logFieldOperation, op)
-		}
-		return cmsSecretRef, nil
+		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		return cmsSecretRef, err
 	default:
 		// No secret required
 		return client.ObjectKey{}, nil
@@ -116,17 +97,8 @@ func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.Rep
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")
 		}
-		op, err := upsertSecret(ctx, r.client, cmsSecretRef, rsRef, userSecret)
-		if err != nil {
-			return cmsSecretRef, err
-		}
-		if op != controllerutil.OperationResultNone {
-			r.logger(ctx).Info("Managed object upsert successful",
-				logFieldObjectRef, cmsSecretRef.String(),
-				logFieldObjectKind, "Secret",
-				logFieldOperation, op)
-		}
-		return cmsSecretRef, nil
+		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		return cmsSecretRef, err
 	}
 	// No secret required
 	return client.ObjectKey{}, nil
@@ -162,27 +134,31 @@ func getUserSecret(ctx context.Context, c client.Client, nsSecretRef client.Obje
 
 // upsertSecret creates or updates a secret in config-management-system
 // namespace using an existing user secret.
-func upsertSecret(ctx context.Context, c client.Client, cmsSecretRef, rsRef types.NamespacedName, userSecret *corev1.Secret) (controllerutil.OperationResult, error) {
+func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef, rsRef types.NamespacedName, userSecret *corev1.Secret) (controllerutil.OperationResult, error) {
 	cmsSecret := &corev1.Secret{}
-	if err := getSecret(ctx, c, cmsSecretRef, cmsSecret); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return controllerutil.OperationResultNone,
-				errors.Wrapf(err, "secret %s get failed", cmsSecretRef)
-		}
-		// Secret not present in config-management-system namespace.
-		// Create one using secret in the RepoSync namespace.
-		if err := createSecret(ctx, c, cmsSecretRef, rsRef, userSecret); err != nil {
-			return controllerutil.OperationResultNone,
-				errors.Wrapf(err, "secret %s create failed", cmsSecretRef)
-		}
-		return controllerutil.OperationResultCreated, nil
+	cmsSecret.Name = cmsSecretRef.Name
+	cmsSecret.Namespace = cmsSecretRef.Namespace
+
+	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
+		r.addLabels(cmsSecret, map[string]string{
+			metadata.SyncNamespaceLabel: rsRef.Namespace,
+			metadata.SyncNameLabel:      rsRef.Name,
+		})
+		// Copy user secret data & type to managed secret
+		cmsSecret.Data = userSecret.Data
+		cmsSecret.Type = userSecret.Type
+		return nil
+	})
+	if err != nil {
+		return op, err
 	}
-	// Update the existing secret in config-management-system.
-	if err := updateSecret(ctx, c, cmsSecret, userSecret); err != nil {
-		return controllerutil.OperationResultNone,
-			errors.Wrapf(err, "secret %s update failed", cmsSecretRef)
+	if op != controllerutil.OperationResultNone {
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, cmsSecretRef.String(),
+			logFieldObjectKind, "Secret",
+			logFieldOperation, op)
 	}
-	return controllerutil.OperationResultUpdated, nil
+	return op, nil
 }
 
 // GetSecretKeys returns the keys that are contained in the Secret.
@@ -202,40 +178,6 @@ func GetSecretKeys(ctx context.Context, c client.Client, sRef types.NamespacedNa
 // getSecret secret using provided namespace and name.
 func getSecret(ctx context.Context, c client.Client, sRef types.NamespacedName, secret *corev1.Secret) error {
 	return c.Get(ctx, sRef, secret)
-}
-
-// createSecret secret get the existing secret in reposync.namespace and use secret.data and
-// secret.type to createSecret a new secret in config-management-system namespace.
-func createSecret(ctx context.Context, c client.Client, sRef, rsRef types.NamespacedName, namespaceSecret *corev1.Secret) error {
-	newSecret := &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       kinds.Secret().Kind,
-			APIVersion: kinds.Secret().Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: sRef.Namespace,
-			Name:      sRef.Name,
-			Labels: map[string]string{
-				metadata.SyncNamespaceLabel: rsRef.Namespace,
-				metadata.SyncNameLabel:      rsRef.Name,
-			},
-		},
-		Type: namespaceSecret.Type,
-		Data: namespaceSecret.Data,
-	}
-
-	return c.Create(ctx, newSecret)
-}
-
-// updateSecret secret fetch the existing secret from the cluster and use secret.data and
-// secret.type to create a new secret in config-management-system namespace.
-func updateSecret(ctx context.Context, c client.Client, existingsecret *corev1.Secret, namespaceSecret *corev1.Secret) error {
-	// Update data and type for the existing secret with values from the secret in
-	// reposync.namespace
-	existingsecret.Data = namespaceSecret.Data
-	existingsecret.Type = namespaceSecret.Type
-
-	return c.Update(ctx, existingsecret)
 }
 
 // SkipForAuth returns true if the passed auth is either 'none' or 'gcenode' or

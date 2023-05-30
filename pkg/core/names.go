@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"kpt.dev/configsync/pkg/api/configsync"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -44,4 +45,22 @@ func NsReconcilerName(namespace, name string) string {
 		return fmt.Sprintf("%s-%s", NsReconcilerPrefix, namespace)
 	}
 	return fmt.Sprintf("%s-%s-%s-%d", NsReconcilerPrefix, namespace, name, len(name))
+}
+
+// RootReconcilerObjectKey returns an ObjectKey for interacting with the
+// RootReconciler for the specified RootSync.
+func RootReconcilerObjectKey(syncName string) client.ObjectKey {
+	return client.ObjectKey{
+		Name:      RootReconcilerName(syncName),
+		Namespace: configsync.ControllerNamespace,
+	}
+}
+
+// NsReconcilerObjectKey returns an ObjectKey for interracting with the
+// NsReconciler for the specified RepoSync.
+func NsReconcilerObjectKey(namespace, syncName string) client.ObjectKey {
+	return client.ObjectKey{
+		Name:      NsReconcilerName(namespace, syncName),
+		Namespace: configsync.ControllerNamespace,
+	}
 }

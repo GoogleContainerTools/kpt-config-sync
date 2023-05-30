@@ -381,7 +381,11 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error {
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, gitSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.SecretRef) == "" {
 			return nil
 		}
@@ -391,7 +395,11 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}
 	// Index the `caCertSecretRefField` field, so that we will be able to lookup RepoSync be a referenced `caCertSecretRefField` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, caCertSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef) == "" {
 			return nil
 		}
@@ -401,7 +409,11 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}
 	// Index the `helmSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, helmSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Helm == nil || v1beta1.GetSecretName(rs.Spec.Helm.SecretRef) == "" {
 			return nil
 		}

@@ -68,7 +68,7 @@ func TestToTypedObject(t *testing.T) {
 			expectedError: testutil.EqualError(
 				errors.Wrap(
 					runtime.NewNotRegisteredErrForKind(emptyScheme.Name(), Service()),
-					"scheme.New")),
+					"unsupported resource type (v1.Service)")),
 		},
 		{
 			name: "unstructured pre-populated GVK in scheme",

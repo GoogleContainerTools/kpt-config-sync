@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff"
+	"kpt.dev/configsync/pkg/kinds"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -195,16 +196,16 @@ func convertObjects(req admission.Request) (client.Object, client.Object, error)
 	switch {
 	case req.OldObject.Object != nil:
 		// We got an already-parsed object.
-		var ok bool
-		oldObj, ok = req.OldObject.Object.(client.Object)
-		if !ok {
-			return nil, nil, fmt.Errorf("failed to convert to client.Object: %v", req.OldObject.Object)
+		var err error
+		oldObj, err = kinds.ObjectAsClientObject(req.OldObject.Object)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to convert old object")
 		}
 	case req.OldObject.Raw != nil:
 		// We got raw JSON bytes instead of an object.
 		oldU := &unstructured.Unstructured{}
 		if err := oldU.UnmarshalJSON(req.OldObject.Raw); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to convert to client.Object: %v", req.OldObject.Raw)
+			return nil, nil, errors.Wrap(err, "failed to decode old object from JSON")
 		}
 		oldObj = oldU
 	}
@@ -213,16 +214,16 @@ func convertObjects(req admission.Request) (client.Object, client.Object, error)
 	switch {
 	case req.Object.Object != nil:
 		// We got an already-parsed object.
-		var ok bool
-		newObj, ok = req.Object.Object.(client.Object)
-		if !ok {
-			return nil, nil, fmt.Errorf("failed to convert to client.Object: %v", req.Object.Object)
+		var err error
+		newObj, err = kinds.ObjectAsClientObject(req.Object.Object)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to convert new object")
 		}
 	case req.Object.Raw != nil:
 		// We got raw JSON bytes instead of an object.
 		newU := &unstructured.Unstructured{}
 		if err := newU.UnmarshalJSON(req.Object.Raw); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to convert to client.Object: %v", req.Object.Raw)
+			return nil, nil, errors.Wrap(err, "failed to decode new object from JSON")
 		}
 		newObj = newU
 	}

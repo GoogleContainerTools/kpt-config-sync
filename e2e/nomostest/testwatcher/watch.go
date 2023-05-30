@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -225,13 +226,9 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 
 			// For Added/Modified/Deleted events, the object should be of the
 			// type being watched.
-			// This cast should almost always work, except on some rarely used
-			// internal types.
-			cObj, ok := event.Object.(client.Object)
-			if !ok {
-				return false, errors.Errorf(
-					"expected event object of type client.Object but got %T",
-					event.Object)
+			cObj, err := kinds.ObjectAsClientObject(event.Object)
+			if err != nil {
+				return false, err
 			}
 			if cObj.GetName() != name {
 				// Ignore events for other objects, if any.

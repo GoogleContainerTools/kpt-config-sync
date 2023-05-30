@@ -20,7 +20,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -577,13 +576,9 @@ func newEmptyTypedObject(nt *nomostest.NT, obj client.Object) (client.Object, sc
 	if err != nil {
 		return nil, gvk, err
 	}
-	rObj, err := scheme.New(gvk)
+	cObj, err := kinds.NewClientObjectForGVK(gvk, scheme)
 	if err != nil {
 		return nil, gvk, err
-	}
-	cObj, ok := rObj.(client.Object)
-	if !ok {
-		return nil, gvk, errors.Errorf("failed to cast %s %T to client.Object", gvk.Kind, rObj)
 	}
 	return cObj, gvk, nil
 }

@@ -797,7 +797,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		}
 	case types.StrategicMergePatchType:
 		if found {
-			rObj, err := ms.scheme.New(gvk)
+			rObj, err := kinds.NewClientObjectForGVK(gvk, ms.scheme)
 			if err != nil {
 				return err
 			}

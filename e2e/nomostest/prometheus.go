@@ -18,8 +18,6 @@ import (
 	"path/filepath"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -74,24 +72,7 @@ func uninstallPrometheus(nt *NT) error {
 	if err != nil {
 		return err
 	}
-	tg := taskgroup.New()
-	for _, obj := range objs {
-		nn := client.ObjectKeyFromObject(obj)
-		gvk, err := kinds.Lookup(obj, nt.KubeClient.Client.Scheme())
-		if err != nil {
-			return err
-		}
-		if err := nt.KubeClient.Delete(obj); err != nil {
-			if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-				continue
-			}
-			return err
-		}
-		tg.Go(func() error {
-			return nt.Watcher.WatchForNotFound(gvk, nn.Name, nn.Namespace)
-		})
-	}
-	return tg.Wait()
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 // parsePrometheusManifests reads and parses YAML from

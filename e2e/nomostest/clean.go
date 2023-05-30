@@ -404,42 +404,32 @@ func deleteKubevirt(nt *NT) error {
 	if err := nt.KubeClient.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
 		return err
 	}
-	if len(crdList.Items) > 0 {
-		var crdNames []string
-		for _, item := range crdList.Items {
-			crdNames = append(crdNames, item.Name)
-			obj = &apiextensionsv1.CustomResourceDefinition{}
-			obj.SetName(item.Name)
-			if err := deleteObject(nt, obj); err != nil {
-				return err
-			}
-		}
-		if err := WaitForCRDsNotFound(nt, crdNames); err != nil {
-			return err
-		}
+	var objList []client.Object
+	for _, item := range crdList.Items {
+		objList = append(objList, &item)
 	}
-	return nil
+	return DeleteObjectsAndWait(nt, objList...)
 }
 
 // deleteAdmissionWebhook deletes the `admission-webhook.configsync.gke.io` ValidatingWebhookConfiguration.
 func deleteAdmissionWebhook(nt *NT) error {
 	obj := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	obj.SetName(configuration.Name)
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 // deleteResourceGroupController deletes namespace `resource-group-system`.
 func deleteResourceGroupController(nt *NT) error {
 	obj := &corev1.Namespace{}
 	obj.SetName(configmanagement.RGControllerNamespace)
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 func deleteReconcilerManager(nt *NT) error {
 	obj := &appsv1.Deployment{}
 	obj.Namespace = configmanagement.ControllerNamespace
 	obj.Name = reconcilermanager.ManagerName
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 func deleteReconcilersBySyncKind(nt *NT, kind string) error {
@@ -450,12 +440,11 @@ func deleteReconcilersBySyncKind(nt *NT, kind string) error {
 	if err := nt.KubeClient.List(dList, opts...); err != nil {
 		return err
 	}
+	var objList []client.Object
 	for _, item := range dList.Items {
-		if err := deleteObject(nt, &item); err != nil {
-			return err
-		}
+		objList = append(objList, &item)
 	}
-	return nil
+	return DeleteObjectsAndWait(nt, objList...)
 }
 
 func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructured.Unstructured, error) {
@@ -469,25 +458,6 @@ func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructur
 		return nil, err
 	}
 	return list.Items, nil
-}
-
-func deleteObject(nt *NT, obj client.Object) error {
-	nn := client.ObjectKeyFromObject(obj)
-	gvk, err := kinds.Lookup(obj, nt.Scheme)
-	if err != nil {
-		return err
-	}
-	if !obj.GetDeletionTimestamp().IsZero() {
-		// already terminating. skip deleting
-		return nil
-	}
-	if err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return errors.Wrapf(err, "unable to delete %s object %s",
-				gvk.Kind, nn)
-		}
-	}
-	return nil
 }
 
 // DeleteObjectsAndWait deletes zero or more objects in serial and waits for not found in parallel.

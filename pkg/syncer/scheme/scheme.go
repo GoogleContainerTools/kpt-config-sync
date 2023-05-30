@@ -32,12 +32,7 @@ func AddToSchemeAsUnstructured(scheme *runtime.Scheme, gvks map[schema.GroupVers
 	for gvk := range gvks {
 		if !scheme.Recognizes(gvk) {
 			scheme.AddKnownTypeWithName(gvk, &unstructured.Unstructured{})
-			gvkList := schema.GroupVersionKind{
-				Group:   gvk.Group,
-				Version: gvk.Version,
-				Kind:    gvk.Kind + "List",
-			}
-			scheme.AddKnownTypeWithName(gvkList, &unstructured.UnstructuredList{})
+			scheme.AddKnownTypeWithName(kinds.ListGVKForItemGVK(gvk), &unstructured.UnstructuredList{})
 			metav1.AddToGroupVersion(scheme, gvk.GroupVersion())
 		}
 	}

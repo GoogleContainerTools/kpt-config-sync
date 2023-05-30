@@ -15,7 +15,6 @@
 package kinds
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -67,7 +66,9 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				fmt.Errorf("type not registered with scheme: %v", Service())),
+				errors.Wrap(
+					runtime.NewNotRegisteredErrForKind(emptyScheme.Name(), Service()),
+					"scheme.New")),
 		},
 		{
 			name: "unstructured pre-populated GVK in scheme",

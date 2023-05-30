@@ -45,6 +45,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -115,10 +116,7 @@ func (c *ClusterClient) repoSyncs(ctx context.Context, ns string) ([]*v1beta1.Re
 }
 
 func (c *ClusterClient) resourceGroups(ctx context.Context, ns string, nsAndNames []types.NamespacedName) ([]*unstructured.Unstructured, error) {
-	rgl := &unstructured.UnstructuredList{}
-	rgGVK := live.ResourceGroupGVK
-	rgGVK.Kind += "List"
-	rgl.SetGroupVersionKind(rgGVK)
+	rgl := kinds.NewUnstructuredListForItemGVK(live.ResourceGroupGVK)
 	if ns == "" {
 		if err := c.Client.List(ctx, rgl); err != nil {
 			return nil, err

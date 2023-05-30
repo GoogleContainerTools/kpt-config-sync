@@ -301,6 +301,10 @@ lint-license-headers: "$(GOBIN)/addlicense"
 lint-yaml:
 	@./scripts/lint-yaml.sh
 
+.PHONY: test-loggers
+test-loggers:
+	GOBIN=$(GOBIN) ./scripts/generate-test-loggers.sh
+
 # Print the value of a variable
 print-%:
 	@echo $($*)

@@ -134,6 +134,10 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, reconcilerRe
 	rbKey := client.ObjectKey{Namespace: rsRef.Namespace, Name: RepoSyncPermissionsName()}
 	rb := &rbacv1.RoleBinding{}
 	if err := r.client.Get(ctx, rbKey, rb); err != nil {
+		if apierrors.IsNotFound(err) {
+			// already deleted
+			return nil
+		}
 		return errors.Wrapf(err, "failed to get the RoleBinding object %s", rbKey)
 	}
 	rb.Subjects = removeSubject(rb.Subjects, r.serviceAccountSubject(reconcilerRef))
@@ -153,6 +157,10 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 	// Update the CRB to delete the subject for the deleted RootSync's reconciler
 	crb := &rbacv1.ClusterRoleBinding{}
 	if err := r.client.Get(ctx, crbKey, crb); err != nil {
+		if apierrors.IsNotFound(err) {
+			// already deleted
+			return nil
+		}
 		return errors.Wrapf(err, "failed to get the ClusterRoleBinding object %s", crbKey)
 	}
 	crb.Subjects = removeSubject(crb.Subjects, r.serviceAccountSubject(reconcilerRef))

@@ -338,7 +338,11 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error {
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RootSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RootSync)
+		rs, ok := rawObj.(*v1beta1.RootSync)
+		if !ok {
+			// Only add index for RootSync
+			return nil
+		}
 		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.SecretRef) == "" {
 			return nil
 		}

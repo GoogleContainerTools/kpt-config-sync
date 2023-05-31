@@ -21,17 +21,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -45,9 +51,11 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -112,18 +120,29 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RootSyncReconciler) {
 	t.Helper()
 
-	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
-	fakeDynamicClient := syncerFake.NewDynamicClient(t, core.Scheme)
+	// Configure controller-manager to log to the test logger
+	controllerruntime.SetLogger(testr.New(t))
+
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+
+	ctx := context.Background()
+	for _, obj := range objs {
+		err := cs.Client.Create(ctx, obj)
+		if err != nil {
+			t.Fatalf("Failed to create object: %v", err)
+		}
+	}
+
 	testReconciler := NewRootSyncReconciler(
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
-		fakeClient,
-		fakeDynamicClient,
-		controllerruntime.Log.WithName("controllers").WithName("RootSync"),
-		fakeClient.Scheme(),
+		cs.Client,
+		cs.DynamicClient,
+		controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
+		cs.Client.Scheme(),
 	)
-	return fakeClient, fakeDynamicClient, testReconciler
+	return cs.Client, cs.DynamicClient, testReconciler
 }
 
 func rootsyncRef(rev string) func(*v1beta1.RootSync) {
@@ -3014,6 +3033,311 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRootSyncReconcilerDeploymentLifecycle validates that the
+// RootSyncReconciler works with the ControllerManager.
+// - Create a root-reconciler Deployment when a RootSync is created
+// - Delete the root-reconciler Deployment when the RootSync is deleted
+func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	t.Log("building root-reconciler-controller")
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+
+	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+
+	defer logObjectYAMLIfFailed(t, fakeClient, rs)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+
+	// Wait for manager to exit before returning
+	defer func() {
+		cancel()
+		t.Log("waiting for controller-manager to stop")
+		for err := range errCh {
+			require.NoError(t, err)
+		}
+	}()
+
+	reconcilerKey := core.RootReconcilerObjectKey(rs.Name)
+
+	t.Log("watching for reconciler deployment creation")
+	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel()
+
+	watcher, err := watchReconcilerDeployment(watchCtx, fakeClient, reconcilerKey)
+	require.NoError(t, err)
+
+	// Create RootSync
+	err = fakeClient.Create(ctx, rs)
+	require.NoError(t, err)
+
+	var reconcilerObj *appsv1.Deployment
+	err = watchDeploymentUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			// success! deployment was applied.
+			// Since there's no deployment controller,
+			// don't wait for availability.
+			return nil
+		}
+		// keep watching
+		return errors.Errorf("reconciler deployment %s", event.Type)
+	})
+	require.NoError(t, err)
+	if reconcilerObj == nil {
+		t.Fatal("timed out waiting for reconciler deployment to be applied")
+	}
+
+	t.Log("watching for reconciler deployment delete")
+	watchCtx2, watchCancel2 := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel2()
+
+	watcher, err = watchReconcilerDeployment(watchCtx2, fakeClient, reconcilerKey)
+	require.NoError(t, err)
+
+	// Delete RootSync
+	rs.ResourceVersion = "" // we don't care what the RV is when deleting
+	err = fakeClient.Delete(ctx, rs)
+	require.NoError(t, err)
+
+	err = watchDeploymentUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		if event.Type == watch.Deleted {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			// success! deployment was deleted.
+			return nil
+		}
+		// keep watching
+		return errors.Errorf("reconciler deployment %s", event.Type)
+	})
+	require.NoError(t, err)
+}
+
+// TestRootSyncReconcilerDeploymentDriftProtection validates that changes to
+// specific managed fields of the reconciler deployment are reverted if changed
+// by another client.
+func TestRootSyncReconcilerDeploymentDriftProtection(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	t.Log("building RootSyncReconciler")
+	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+
+	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+
+	defer logObjectYAMLIfFailed(t, fakeClient, rs)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+
+	// Wait for manager to exit before returning
+	defer func() {
+		cancel()
+		t.Log("waiting for controller-manager to stop")
+		for err := range errCh {
+			require.NoError(t, err)
+		}
+	}()
+
+	reconcilerKey := core.RootReconcilerObjectKey(rs.Name)
+
+	t.Log("watching reconciler deployment until created")
+	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel()
+
+	// Start watching
+	watcher, err := watchReconcilerDeployment(watchCtx, fakeClient, reconcilerKey)
+	require.NoError(t, err)
+
+	// Create RootSync
+	err = fakeClient.Create(ctx, rs)
+	require.NoError(t, err)
+
+	// Consume watch events until success or timeout
+	var reconcilerObj *appsv1.Deployment
+	err = watchDeploymentUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			// success! deployment was applied.
+			// Since there's no deployment controller,
+			// don't wait for availability.
+			return nil
+		}
+		// keep watching
+		return errors.Errorf("reconciler deployment %s", event.Type)
+	})
+	require.NoError(t, err)
+	if reconcilerObj == nil {
+		t.Fatal("timed out waiting for reconciler deployment to be applied")
+	}
+
+	initialName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
+	observedNames := []string{initialName}
+	driftName := "seanboswell"
+	expectedNames := []string{initialName, driftName, initialName}
+
+	t.Log("watching reconciler deployment until drift revert")
+	watchCtx2, watchCancel2 := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel2()
+
+	// Start watching
+	watcher, err = watchReconcilerDeployment(watchCtx2, fakeClient, reconcilerKey)
+	require.NoError(t, err)
+
+	// Update reconciler Deployment to apply unwanted drift
+	reconcilerObj.Spec.Template.Spec.ServiceAccountName = driftName
+	err = fakeClient.Update(ctx, reconcilerObj)
+	require.NoError(t, err)
+
+	// Consume watch events until success or timeout
+	err = watchDeploymentUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			saName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
+			// Record new ServiceAccountName, if different from last known value
+			if saName != observedNames[len(observedNames)-1] {
+				t.Logf("observed ServiceAccountName change: %s", saName)
+				observedNames = append(observedNames, saName)
+			}
+			if cmp.Equal(expectedNames, observedNames) {
+				// success - deployment change observed and reverted
+				return nil
+			}
+		}
+		// keep watching
+		return errors.Errorf("reconciler deployment %s", event.Type)
+	})
+	require.NoError(t, err)
+}
+
+func startControllerManager(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, testReconciler Controller) <-chan error {
+	t.Helper()
+
+	// start sub-context so we can cancel & stop the manager in case of pre-return error
+	ctx, cancel := context.WithCancel(ctx)
+
+	fakeCache := syncerFake.NewCache(fakeClient, syncerFake.CacheOptions{})
+
+	t.Log("building controller-manager")
+	mgr, err := controllerruntime.NewManager(&rest.Config{}, controllerruntime.Options{
+		Scheme: core.Scheme,
+		Logger: testr.New(t),
+		BaseContext: func() context.Context {
+			return ctx
+		},
+		NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+			return fakeCache, nil
+		},
+		NewClient: func(_ cache.Cache, _ *rest.Config, _ client.Options, _ ...client.Object) (client.Client, error) {
+			return fakeClient, nil
+		},
+		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
+			return fakeClient.RESTMapper(), nil
+		},
+	})
+	require.NoError(t, err)
+
+	err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
+	require.NoError(t, err)
+
+	t.Log("registering root-reconciler-controller")
+	err = testReconciler.SetupWithManager(mgr, false)
+	require.NoError(t, err)
+
+	errCh := make(chan error)
+
+	// Start manager in the background
+	go func() {
+		t.Log("starting controller-manager")
+		errCh <- mgr.Start(ctx)
+		close(errCh)
+		cancel()
+	}()
+
+	if !fakeCache.WaitForCacheSync(ctx) {
+		// stop manager & drain error channel
+		cancel()
+		defer func() {
+			//nolint:revive // empty-block is fine for draining a channel to unblock the producer
+			for range errCh {
+			}
+		}()
+		t.Fatal("Failed to sync informer cache")
+	}
+
+	return errCh
+}
+
+func logObjectYAMLIfFailed(t *testing.T, fakeClient *syncerFake.Client, obj client.Object) {
+	if t.Failed() {
+		err := fakeClient.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)
+		require.NoError(t, err)
+		t.Logf("%s YAML:\n%s", kinds.ObjectSummary(obj),
+			log.AsYAMLWithScheme(obj, fakeClient.Scheme()))
+	}
+}
+
+func watchReconcilerDeployment(ctx context.Context, fakeClient *syncerFake.Client, reconcilerKey client.ObjectKey) (watch.Interface, error) {
+	exampleList := &appsv1.DeploymentList{}
+	watcher, err := fakeClient.Watch(ctx, exampleList,
+		client.InNamespace(reconcilerKey.Namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		<-ctx.Done()
+		watcher.Stop()
+	}()
+	return watcher, nil
+}
+
+func watchDeploymentUntil(ctx context.Context, watcher watch.Interface, deploymentKey client.ObjectKey, condition func(watch.Event) error) error {
+	// Wait until added or modified
+	var conditionErr error
+	doneCh := ctx.Done()
+	resultCh := watcher.ResultChan()
+	for {
+		select {
+		case <-doneCh:
+			return errors.Wrap(ctx.Err(), "context done before condition was met")
+		case event, open := <-resultCh:
+			if !open {
+				if conditionErr != nil {
+					return errors.Wrap(conditionErr, "watch stopped before condition was met")
+				}
+				return errors.New("watch stopped before any events were received")
+			}
+			if event.Type == watch.Error {
+				statusErr := apierrors.FromObject(event.Object)
+				return errors.Wrap(statusErr, "watch event error")
+			}
+			key := client.ObjectKeyFromObject(event.Object.(client.Object))
+			if key != deploymentKey {
+				// not the right deployment
+				continue
+			}
+			conditionErr = condition(event)
+			if conditionErr == nil {
+				// success - condition met
+				return nil
+			}
+			// wait for next event - condition not met
+		}
 	}
 }
 

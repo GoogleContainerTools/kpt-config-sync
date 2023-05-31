@@ -404,11 +404,7 @@ func deleteKubevirt(nt *NT) error {
 	if err := nt.KubeClient.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
 		return err
 	}
-	var objList []client.Object
-	for _, item := range crdList.Items {
-		objList = append(objList, &item)
-	}
-	return DeleteObjectsAndWait(nt, objList...)
+	return DeleteObjectListItemsAndWait(nt, crdList)
 }
 
 // deleteAdmissionWebhook deletes the `admission-webhook.configsync.gke.io` ValidatingWebhookConfiguration.
@@ -440,11 +436,7 @@ func deleteReconcilersBySyncKind(nt *NT, kind string) error {
 	if err := nt.KubeClient.List(dList, opts...); err != nil {
 		return err
 	}
-	var objList []client.Object
-	for _, item := range dList.Items {
-		objList = append(objList, &item)
-	}
-	return DeleteObjectsAndWait(nt, objList...)
+	return DeleteObjectListItemsAndWait(nt, dList)
 }
 
 func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructured.Unstructured, error) {
@@ -489,6 +481,16 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 		})
 	}
 	return tg.Wait()
+}
+
+// DeleteObjectListItemsAndWait deletes all the list items in serial and waits
+// for not found in parallel.
+func DeleteObjectListItemsAndWait(nt *NT, objList client.ObjectList) error {
+	objs, err := kinds.ExtractClientObjectList(objList)
+	if err != nil {
+		return err
+	}
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 func isListable(listGVK schema.GroupVersionKind) bool {
@@ -578,10 +580,9 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 }
 
 func deleteTestAPIServices(nt *NT) error {
-	out, err := nt.Shell.Kubectl("delete", "apiservices", "-l", "testdata=true")
-	if err != nil {
-		nt.T.Logf("%v", out)
-		nt.T.Errorf("cleaning up apiservices: %v", err)
+	list := &apiregistrationv1.APIServiceList{}
+	if err := nt.KubeClient.List(list, withLabelListOption("testdata", "true")); err != nil {
+		return err
 	}
-	return err
+	return DeleteObjectListItemsAndWait(nt, list)
 }

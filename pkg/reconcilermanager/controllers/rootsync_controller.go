@@ -118,7 +118,6 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err := r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(rsRef)
 			r.logger(ctx).Info("Deleting managed objects")
 			return controllerruntime.Result{}, r.deleteClusterRoleBinding(ctx, reconcilerRef)
 		}
@@ -129,13 +128,6 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// Deletion requested.
 		// Cleanup is handled above, after the RootSync is NotFound.
 		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
-	}
-
-	// The caching client sometimes returns an old R*Sync, because the watch
-	// hasn't received the update event yet. If so, error and retry.
-	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
-		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
 	}
 
 	currentRS := rs.DeepCopy()
@@ -661,15 +653,10 @@ func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 			"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s", cmp.Diff(currentRS.Status, rs.Status)))
 	}
 
-	resourceVersion := rs.ResourceVersion
-
 	err := r.client.Status().Update(ctx, rs)
 	if err != nil {
 		return false, err
 	}
-
-	// Register the latest ResourceVersion as reconciled.
-	r.setLastReconciled(core.ObjectNamespacedName(rs), resourceVersion)
 	return true, nil
 }
 

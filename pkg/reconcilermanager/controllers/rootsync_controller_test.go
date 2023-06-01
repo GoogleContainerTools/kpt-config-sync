@@ -2887,17 +2887,16 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	err = fakeClient.Storage().TestPut(oldRS)
 	require.NoError(t, err)
 
-	// Expect next Reconcile to error since the ResourceVersion hasn't been updated.
+	// Expect next Reconcile to succeed but NOT update the RootSync
 	// This means the client cache hasn't been updated and isn't returning the latest version.
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
-	require.Error(t, err, "expected Reconcile to error")
-	require.Equal(t, err.Error(), "ResourceVersion already reconciled: 1", "unexpected Reconcile error")
+	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Simulate cache update from watch event (roll forward to the latest resource version)
 	err = fakeClient.Storage().TestPut(rs)
 	require.NoError(t, err)
 
-	// Reconcile should succeed and NOT update the RootSync
+	// Reconcile should succeed but NOT update the RootSync
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
 	require.NoError(t, err, "unexpected Reconcile error")
 

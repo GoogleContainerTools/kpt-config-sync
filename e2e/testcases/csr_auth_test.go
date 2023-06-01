@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/helm"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -295,10 +296,10 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 
 	// For helm charts, we need to push the chart to the AR before configuring the RootSync
 	if testSpec.sourceType == v1beta1.HelmSource {
-		chartName := pushHelmChart(nt, t, testSpec.sourceChart, testSpec.sourceVersion)
-		defer func() {
-			cleanHelmImages(nt, chartName)
-		}()
+		chartName, err := helm.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
+		if err != nil {
+			nt.T.Fatalf("failed to push helm chart: %v", err)
+		}
 
 		testSpec.sourceChart = chartName
 		testSpec.rootCommitFn = helmChartVersion(chartName + ":" + testSpec.sourceVersion)

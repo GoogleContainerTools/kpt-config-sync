@@ -356,6 +356,9 @@ github.com/prometheus/procfs/internal/util
 # github.com/russross/blackfriday v1.6.0
 ## explicit; go 1.13
 github.com/russross/blackfriday
+# github.com/sergi/go-diff v1.2.0
+## explicit; go 1.12
+github.com/sergi/go-diff/diffmatchpatch
 # github.com/sirupsen/logrus v1.9.0
 ## explicit; go 1.13
 github.com/sirupsen/logrus
@@ -1215,6 +1218,7 @@ sigs.k8s.io/kustomize/api/types
 # sigs.k8s.io/kustomize/kyaml v0.13.9
 ## explicit; go 1.18
 sigs.k8s.io/kustomize/kyaml/comments
+sigs.k8s.io/kustomize/kyaml/copyutil
 sigs.k8s.io/kustomize/kyaml/errors
 sigs.k8s.io/kustomize/kyaml/ext
 sigs.k8s.io/kustomize/kyaml/fieldmeta

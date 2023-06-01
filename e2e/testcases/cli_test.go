@@ -922,6 +922,8 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	nt.T.Log("Found all expected files in bugreport zip")
 }
 
+// TestNomosImage makes sure that the nomos image is produced and it contains
+// the nomos binary and basic dependencies.
 func TestNomosImage(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.NomosCLI,
 		ntopts.SkipConfigSyncInstall, ntopts.RequireKind(t))
@@ -936,6 +938,23 @@ func TestNomosImage(t *testing.T) {
 
 	if !strings.Contains(string(out), version) {
 		nt.T.Fatalf("expected to find version string in output:\n%s\n", string(out))
+	}
+
+	// we are testing the presence of kustomize and helm executables by
+	// just launching those binaries.  It's possible that we might want to
+	// check whether the versioms included are indeed the versions we want
+	// but that would probably mean re-factorig some of the Makefiles.
+	// For right now this is a basic check.
+	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

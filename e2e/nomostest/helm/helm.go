@@ -30,6 +30,7 @@ import (
 )
 
 var PrivateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", *e2e.GCPProject)
+
 var PrivateARHelmHost = "https://us-docker.pkg.dev"
 
 // RemoteHelmChart represents a remote OCI-based helm chart
@@ -53,6 +54,7 @@ type RemoteHelmChart struct {
 	Dir string
 }
 
+// NewRemoteHelmChart creates a RemoteHelmChart
 func NewRemoteHelmChart(shell *testshell.TestShell, host, registry, dir, chartName, version string) *RemoteHelmChart {
 	return &RemoteHelmChart{
 		Shell:        shell,
@@ -109,11 +111,11 @@ func (r *RemoteHelmChart) Push() error {
 	return nil
 }
 
-// Pushes a new helm chart for use during an e2e test. Returns the name of the chart that gets pushed and any errors that are encountered.
+// PushHelmChart pushes a new helm chart for use during an e2e test. Returns the name of the chart that gets pushed and any errors that are encountered.
 func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) {
 	nt.T.Log("Push helm chart to the artifact registry")
 
-	chartName := generateChartName(nt, helmchart)
+	chartName := generateChartName(helmchart)
 	nt.T.Cleanup(func() {
 		cleanHelmImages(nt, chartName)
 	})
@@ -133,8 +135,13 @@ func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) 
 	return chartName, nil
 }
 
+<<<<<<< HEAD
 func generateChartName(nt *nomostest.NT, helmchart string) string {
 	chartName := fmt.Sprintf("%s-%s-%s", helmchart, *e2e.GCPCluster, generateRandomString())
+=======
+func generateChartName(helmchart string) string {
+	chartName := fmt.Sprintf("%s-%s-%s-%s", helmchart, nomostesting.GCPProjectIDFromEnv, nomostesting.GCPClusterFromEnv, generateRandomString())
+>>>>>>> 8536ef3a (lint errors)
 	if len(chartName) > 50 {
 		// the chartName + releaseName is used as the metadata.name of resources in the coredns helm chart, so we must trim this down
 		// to keep it under the k8s length limit

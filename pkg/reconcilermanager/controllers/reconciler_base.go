@@ -134,9 +134,9 @@ func (r *reconcilerBase) upsertServiceAccount(
 	childSA := &corev1.ServiceAccount{}
 	childSA.Name = childSARef.Name
 	childSA.Namespace = childSARef.Namespace
-	r.addLabels(childSA, labelMap)
 
 	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childSA, func() error {
+		r.addLabels(childSA, labelMap)
 		// Update ownerRefs for RootSync ServiceAccount.
 		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
 		// performs garbage collection for Reposync controller resources.
@@ -580,4 +580,14 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 	}
 	return nil
 
+}
+
+// addTypeInformationToObject looks up and adds GVK to a runtime.Object based upon the loaded Scheme
+func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
+	gvk, err := kinds.Lookup(obj, r.scheme)
+	if err != nil {
+		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
+	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	return nil
 }

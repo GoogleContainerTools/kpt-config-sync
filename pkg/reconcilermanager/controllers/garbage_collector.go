@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,11 +37,6 @@ import (
 // NOTE: Update this method when resources created by namespace controller changes.
 func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, rsKey, reconcilerRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
-
-	rsList := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, rsList, client.InNamespace(rsKey.Namespace)); err != nil {
-		return errors.Wrapf(err, "failed to list RepoSync managed objects in namespace %q", rsKey.Namespace)
-	}
 
 	// Delete namespace controller resources and return to reconcile loop in case
 	// of errors to try cleaning up resources again.
@@ -64,12 +58,7 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, r
 		return err
 	}
 	// secret
-	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
-		return err
-	}
-
-	delete(r.repoSyncs, rsKey)
-	return nil
+	return r.deleteSecrets(ctx, reconcilerRef)
 }
 
 func (r *reconcilerBase) cleanup(ctx context.Context, objRef types.NamespacedName, gvk schema.GroupVersionKind) error {

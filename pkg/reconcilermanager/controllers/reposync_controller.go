@@ -62,8 +62,6 @@ import (
 // RepoSyncReconciler reconciles a RepoSync object.
 type RepoSyncReconciler struct {
 	reconcilerBase
-	// repoSyncs is a cache of the reconciled RepoSync objects.
-	repoSyncs map[types.NamespacedName]struct{}
 
 	lock sync.Mutex
 }
@@ -83,7 +81,6 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 			syncKind:                configsync.RepoSyncKind,
 		},
-		repoSyncs: make(map[types.NamespacedName]struct{}),
 	}
 }
 
@@ -110,11 +107,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err := r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			if _, ok := r.repoSyncs[rsRef]; !ok {
-				r.logger(ctx).Error(err, "Sync object not managed by this reconciler-manager")
-				// return `controllerruntime.Result{}, nil` here to make sure the request will not be requeued.
-				return controllerruntime.Result{}, nil
-			}
 			// Namespace controller resources are cleaned up when reposync no longer present.
 			//
 			// Note: Update cleanup resources in cleanupNSControllerResources(...) when
@@ -145,7 +137,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	r.repoSyncs[rsRef] = struct{}{}
 	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
 		err := errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
 		r.logger(ctx).Error(err, "Sync name or namespace invalid")

@@ -1656,14 +1656,6 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRepoSyncs := map[types.NamespacedName]struct{}{
-		{Namespace: rs.Namespace, Name: rs.Name}: {},
-	}
-	// compare repoSyncs.
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
-	}
-
 	label := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
@@ -1885,14 +1877,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRepoSyncs := map[types.NamespacedName]struct{}{
-		{Namespace: rs1.Namespace, Name: rs1.Name}: {},
-	}
-	// compare repoSyncs.
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
-	}
-
 	wantRs1 := fake.RepoSyncObjectV1Beta1(rs1.Namespace, rs1.Name)
 	wantRs1.Spec = rs1.Spec
 	wantRs1.Status.Reconciler = nsReconcilerName
@@ -1951,12 +1935,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRepoSyncs[types.NamespacedName{Namespace: rs2.Namespace, Name: rs2.Name}] = struct{}{}
-	// compare repoSyncs.
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
-	}
-
 	wantRs2 := fake.RepoSyncObjectV1Beta1(rs2.Namespace, rs2.Name)
 	wantRs2.Spec = rs2.Spec
 	wantRs2.Status.Reconciler = nsReconcilerName2
@@ -2012,11 +1990,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
-	}
-	// compare repoSyncs.
-	wantRepoSyncs[types.NamespacedName{Namespace: rs3.Namespace, Name: rs3.Name}] = struct{}{}
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
 	}
 
 	wantRs3 := fake.RepoSyncObjectV1Beta1(rs3.Namespace, rs3.Name)
@@ -2075,12 +2048,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	// compare repoSyncs.
-	wantRepoSyncs[types.NamespacedName{Namespace: rs4.Namespace, Name: rs4.Name}] = struct{}{}
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
-	}
-
 	wantRs4 := fake.RepoSyncObjectV1Beta1(rs4.Namespace, rs4.Name)
 	wantRs4.Spec = rs4.Spec
 	wantRs4.Status.Reconciler = nsReconcilerName4
@@ -2135,12 +2102,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
-	}
-
-	// compare repoSyncs.
-	wantRepoSyncs[types.NamespacedName{Namespace: rs5.Namespace, Name: rs5.Name}] = struct{}{}
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
 	}
 
 	wantRs5 := fake.RepoSyncObjectV1Beta1(rs5.Namespace, rs5.Name)
@@ -2297,12 +2258,6 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
-	}
-
-	// compare syncs.
-	delete(wantRepoSyncs, types.NamespacedName{Namespace: rs1.Namespace, Name: rs1.Name})
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("syncs diff %s", diff)
 	}
 
 	if err := validateResourceDeleted(core.IDOf(rs1), fakeClient); err != nil {
@@ -2958,15 +2913,6 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
-	}
-
-	wantRepoSyncs := map[types.NamespacedName]struct{}{
-		{Namespace: rs.Namespace, Name: rs.Name}: {},
-	}
-
-	// compare repoSyncs.
-	if diff := cmp.Diff(wantRepoSyncs, testReconciler.repoSyncs, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("repoSyncs diff %s", diff)
 	}
 
 	label := map[string]string{

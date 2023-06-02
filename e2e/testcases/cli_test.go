@@ -945,13 +945,13 @@ func TestNomosImage(t *testing.T) {
 	// check whether the versioms included are indeed the versions we want
 	// but that would probably mean re-factorig some of the Makefiles.
 	// For right now this is a basic check.
-	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
+	_, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
+	_, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
 	if err != nil {
 		nt.T.Fatal(err)

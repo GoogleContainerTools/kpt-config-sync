@@ -16,21 +16,22 @@ package helm
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
 )
 
+// PrivateARHelmRegistry is the registry URL to the private AR used for testing
 var PrivateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", *e2e.GCPProject)
 
+// PrivateARHelmHost is the host name of the private AR used for testing
 var PrivateARHelmHost = "https://us-docker.pkg.dev"
 
 // RemoteHelmChart represents a remote OCI-based helm chart
@@ -50,7 +51,7 @@ type RemoteHelmChart struct {
 	// ChartVersion is the version of the helm chart
 	ChartVersion string
 
-	// Dir is a local directory from which HelmRegistry will read, package, and push the chart from
+	// Dir is a local directory from which RemoteHelmChart will read, package, and push the chart from
 	Dir string
 }
 
@@ -117,7 +118,9 @@ func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) 
 
 	chartName := generateChartName(helmchart)
 	nt.T.Cleanup(func() {
-		cleanHelmImages(nt, chartName)
+		if err := cleanHelmImages(nt, chartName); err != nil {
+			nt.T.Errorf(err.Error())
+		}
 	})
 
 	remoteHelmChart := NewRemoteHelmChart(nt.Shell, PrivateARHelmHost, PrivateARHelmRegistry, nt.TmpDir, chartName, version)
@@ -135,13 +138,9 @@ func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) 
 	return chartName, nil
 }
 
-<<<<<<< HEAD
-func generateChartName(nt *nomostest.NT, helmchart string) string {
-	chartName := fmt.Sprintf("%s-%s-%s", helmchart, *e2e.GCPCluster, generateRandomString())
-=======
+// creates a chart name from current project id, cluster name, and timestamp
 func generateChartName(helmchart string) string {
-	chartName := fmt.Sprintf("%s-%s-%s-%s", helmchart, nomostesting.GCPProjectIDFromEnv, nomostesting.GCPClusterFromEnv, generateRandomString())
->>>>>>> 8536ef3a (lint errors)
+	chartName := fmt.Sprintf("%s-%s-%s", helmchart, *e2e.GCPCluster, timestampAsString())
 	if len(chartName) > 50 {
 		// the chartName + releaseName is used as the metadata.name of resources in the coredns helm chart, so we must trim this down
 		// to keep it under the k8s length limit
@@ -152,10 +151,11 @@ func generateChartName(helmchart string) string {
 }
 
 // removes helm charts created during e2e testing
-func cleanHelmImages(nt *nomostest.NT, chartName string) {
-	if _, err := nt.Shell.Command("gcloud", "artifacts", "docker", "images", "delete", fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-ar-helm/%s", nomostesting.GCPProjectIDFromEnv, chartName), "--delete-tags").CombinedOutput(); err != nil {
-		nt.T.Errorf("failed to cleanup helm chart image from registry: %v", err)
+func cleanHelmImages(nt *nomostest.NT, chartName string) error {
+	if out, err := nt.Shell.Command("gcloud", "artifacts", "docker", "images", "delete", fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-ar-helm/%s", *e2e.GCPProject, chartName), "--delete-tags").CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to cleanup helm chart image from registry: %s; %v", string(out), err)
 	}
+	return nil
 }
 
 // finds and replaces particular text string in a file
@@ -171,14 +171,7 @@ func findAndReplaceInFile(path, old, new string) error {
 	return nil
 }
 
-// generates a 5 character long random string to reduce chance of name conflict if multiple tests are running in the
-// same cluster
-func generateRandomString() string {
-	rand.Seed(time.Now().UnixNano())
-	letters := []rune("abcdefghijklmnopqrstuvwxyz")
-	a := make([]rune, 5)
-	for i := range a {
-		a[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(a)
+// returns the current unix timestamp as a string
+func timestampAsString() string {
+	return strconv.FormatInt(time.Now().Unix(), 10)
 }

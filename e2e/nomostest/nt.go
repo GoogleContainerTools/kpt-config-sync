@@ -32,7 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
 	"kpt.dev/configsync/e2e/nomostest/retry"
-	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
@@ -306,36 +306,38 @@ func (snt *sharedNTs) destroy() {
 // It should be run at the beginning of the test suite if the --share-test-env
 // flag is provided. It will produce a number of test environment equal to the
 // go test parallelism.
-func InitSharedEnvironments() {
+func InitSharedEnvironments() error {
 	mySharedNTs = &sharedNTs{
 		testMap: map[string]*sharedNT{},
 	}
 	timeStamp := time.Now().Unix()
-	var wg sync.WaitGroup
+	tg := taskgroup.New()
 	for x := 0; x < e2e.NumParallel(); x++ {
 		name := fmt.Sprintf("cs-e2e-%v-%v", timeStamp, x)
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			newSharedNT(name)
-		}(name)
+		tg.Go(func() (err error) {
+			defer func() {
+				if recoverErr := recover(); recoverErr != nil {
+					err = errors.Errorf("recovered from panic in InitSharedEnvironments (%s): %v", name, recoverErr)
+				}
+			}()
+			return newSharedNT(name)
+		})
 	}
-	wg.Wait()
+	return tg.Wait()
 }
 
 // newSharedNT sets up the shared config sync testing environment globally.
-func newSharedNT(name string) *NT {
+func newSharedNT(name string) error {
 	tmpDir := filepath.Join(os.TempDir(), NomosE2E, name)
 	if err := os.RemoveAll(tmpDir); err != nil {
-		fmt.Printf("failed to remove the shared test directory: %v\n", err)
-		os.Exit(1)
+		return errors.Wrap(err, "failed to remove the shared test directory")
 	}
 	fakeNTB := &testing.FakeNTB{}
 	wrapper := testing.NewShared(fakeNTB)
 	opts := newOptStruct(name, tmpDir, wrapper)
 	nt := FreshTestEnv(wrapper, opts)
 	mySharedNTs.newNT(nt, fakeNTB)
-	return nt
+	return nil
 }
 
 // CleanSharedNTs tears down the shared test environments.
@@ -346,8 +348,7 @@ func CleanSharedNTs() {
 // SharedNT returns the shared test environment.
 func SharedNT(t testing.NTB) *NT {
 	if !*e2e.ShareTestEnv {
-		fmt.Println("Error: the shared test environment is only available when --share-test-env is set")
-		os.Exit(1)
+		t.Fatal("Error: the shared test environment is only available when --share-test-env is set")
 	}
 	return mySharedNTs.acquire(t)
 }
@@ -892,7 +893,7 @@ func cloneCloudSourceRepo(nt *NT, repo string) (string, error) {
 		return cloneDir, nil
 	}
 	args := []string{
-		"source", "repos", "clone", "--project", nomostesting.GCPProjectIDFromEnv, repoName, cloneDir,
+		"source", "repos", "clone", "--project", *e2e.GCPProject, repoName, cloneDir,
 	}
 	cmd := nt.Shell.Command("gcloud", args...)
 	if err := cmd.Run(); err != nil {

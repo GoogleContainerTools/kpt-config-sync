@@ -12,7 +12,7 @@ GCP_CLUSTER ?= $(USER)-cluster-1
 GCP_ZONE ?= us-central1-a
 GKE_E2E_TIMEOUT ?= 6h
 
-# Run the golang e2e tests sequentially (--parallel 1) on a GKE cluster.
+# Run the golang e2e tests sequentially (--num-clusters 1) on a GKE cluster.
 # It requires a GKE cluster to be installed in `$(GCP_PROJECT)` and `$(GCP_ZONE)`/`$(GCP_REGION)`.
 # The cluster name should follow the pattern `$(USER)-cluster-1`.
 __docker-run-e2e-go-gke: config-sync-manifest __build-e2e-go-container
@@ -36,7 +36,7 @@ __docker-run-e2e-go-gke: config-sync-manifest __build-e2e-go-container
 		./build/test-e2e-go/e2e.sh \
 			--timeout $(GKE_E2E_TIMEOUT) \
 			--test.v -v \
-			--parallel 1 \
+			--num-clusters 1 \
 			--p 1 \
 			--test-cluster=gke \
 			$(E2E_ARGS)

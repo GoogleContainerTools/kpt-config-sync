@@ -27,7 +27,6 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 )
 
@@ -203,7 +202,7 @@ func (b *BitbucketClient) refreshAccessToken() (string, error) {
 // FetchCloudSecret fetches secret from Google Cloud Secret Manager.
 func FetchCloudSecret(name string) (string, error) {
 	out, err := exec.Command("gcloud", "secrets", "versions",
-		"access", "latest", "--project", testing.GCPProjectIDFromEnv, "--secret", name).CombinedOutput()
+		"access", "latest", "--project", *e2e.GCPProject, "--secret", name).CombinedOutput()
 	if err != nil {
 		return "", errors.Wrap(err, string(out))
 	}

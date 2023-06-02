@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -46,8 +47,8 @@ var (
 	// which includes a kustomization.yaml file in the root directory that
 	// references resources for tenant-a, tenant-b, and tenant-c.
 	// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
-	csrRepo           = fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", nomostesting.GCPProjectIDFromEnv)
-	gsaCSRReaderEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
+	csrRepo           = fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", *e2e.GCPProject)
+	gsaCSRReaderEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 )
 
 // TestGCENode tests the `gcenode` auth type.
@@ -244,20 +245,20 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 
 	// Truncate the fleetMembership length to be at most 63 characters.
-	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(nomostesting.GCPProjectIDFromEnv, 20), nomostesting.GCPClusterFromEnv), 63)
-	gkeURI := "https://container.googleapis.com/v1/projects/" + nomostesting.GCPProjectIDFromEnv
-	if nomostesting.GCPRegionFromEnv != "" {
-		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", nomostesting.GCPRegionFromEnv, nomostesting.GCPClusterFromEnv)
+	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), *e2e.GCPCluster), 63)
+	gkeURI := "https://container.googleapis.com/v1/projects/" + *e2e.GCPProject
+	if *e2e.GCPRegion != "" {
+		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", *e2e.GCPRegion, *e2e.GCPCluster)
 	} else {
-		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", nomostesting.GCPZoneFromEnv, nomostesting.GCPClusterFromEnv)
+		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", *e2e.GCPZone, *e2e.GCPCluster)
 	}
 
-	cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
+	cleanMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 	cleanMembershipInfo(nt, fleetMembership, crossProjectFleetProjectID, gkeURI)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Cleanup(func() {
-		cleanMembershipInfo(nt, fleetMembership, nomostesting.GCPProjectIDFromEnv, gkeURI)
+		cleanMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 		cleanMembershipInfo(nt, fleetMembership, crossProjectFleetProjectID, gkeURI)
 	})
 
@@ -265,7 +266,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 
 	// Register the cluster for fleet workload identity test
 	if testSpec.fleetWITest {
-		fleetProject := nomostesting.GCPProjectIDFromEnv
+		fleetProject := *e2e.GCPProject
 		if testSpec.crossProject {
 			fleetProject = crossProjectFleetProjectID
 		}

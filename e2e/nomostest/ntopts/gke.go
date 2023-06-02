@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
@@ -41,13 +42,13 @@ func withKubeConfig(cmd *exec.Cmd, kubeconfig string) *exec.Cmd {
 func getGKECredentials(t testing.NTB, kubeconfig string) {
 	args := []string{
 		"container", "clusters", "get-credentials",
-		testing.GCPClusterFromEnv, "--project", testing.GCPProjectIDFromEnv,
+		*e2e.GCPCluster, "--project", *e2e.GCPProject,
 	}
-	if testing.GCPZoneFromEnv != "" {
-		args = append(args, "--zone", testing.GCPZoneFromEnv)
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
 	}
-	if testing.GCPRegionFromEnv != "" {
-		args = append(args, "--region", testing.GCPRegionFromEnv)
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
 	}
 	cmd := withKubeConfig( // gcloud container clusters get-credentials <args>
 		exec.Command("gcloud", args...),

@@ -38,7 +38,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
-	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -181,7 +180,7 @@ func uninstallConfigSync(nt *NT) error {
 }
 
 func isPSPCluster() bool {
-	return strings.Contains(testing.GCPClusterFromEnv, "psp")
+	return strings.Contains(*e2e.GCPCluster, "psp")
 }
 
 // convertToTypedObjects converts objects to their literal types. We can do this as

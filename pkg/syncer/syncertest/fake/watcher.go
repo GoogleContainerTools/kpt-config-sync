@@ -16,16 +16,20 @@ package fake
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kind/pkg/errors"
 )
 
 type eventWithKind struct {
@@ -164,7 +168,7 @@ func (ws *WatchSupervisor) sendEventToWatchers(ctx context.Context, gk schema.Gr
 			case <-doneCh:
 				// Context is cancelled or timed out.
 			case watcher <- event:
-				// Event recieved or channel closed
+				// Event received or channel closed
 			}
 		}()
 	}
@@ -234,6 +238,8 @@ func (fw *Watcher) Run(ctx context.Context) {
 }
 
 func (fw *Watcher) handleEvents(ctx context.Context) {
+	lastSeenVersions := make(map[types.UID]int)
+
 	doneCh := ctx.Done()
 	defer close(fw.outCh)
 	for {
@@ -246,6 +252,39 @@ func (fw *Watcher) handleEvents(ctx context.Context) {
 				// Input channel is closed.
 				return
 			}
+
+			// Filter out-of-order MODIFIED events.
+			// This can happen if the watcher has multiple events pending,
+			// since those events are being sent on parallel goroutines.
+			if event.Type != watch.Error {
+				obj := event.Object.(client.Object)
+				// parse ResourceVersion as int
+				newRV, err := strconv.Atoi(obj.GetResourceVersion())
+				if err != nil {
+					err = errors.Wrapf(err, "invalid ResourceVersion %q for object %s",
+						obj.GetResourceVersion(), kinds.ObjectSummary(obj))
+					fw.sendEvent(ctx, watch.Event{
+						Type:   watch.Error,
+						Object: &apierrors.NewInternalError(err).ErrStatus,
+					})
+					continue
+				}
+				uid := obj.GetUID()
+				if event.Type == watch.Modified {
+					oldRV := lastSeenVersions[uid]
+					if newRV <= oldRV {
+						// drop event - newer ResourceVersion already sent
+						klog.Warningf("Watcher.handleEvents: dropping event (old ResourceVersion): %s",
+							log.AsJSON(event))
+						continue
+					}
+				}
+				// Store the last known ResourceVersion for future comparison.
+				// Store even if deleted, in case a modified event is received afterwards.
+				// TODO: Garbage collect uid entries after deletion (probably not necessary for unit tests)
+				lastSeenVersions[uid] = newRV
+			}
+
 			// Input event received.
 			fw.sendEvent(ctx, event)
 		}

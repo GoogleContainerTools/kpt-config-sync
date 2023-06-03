@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -77,7 +76,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -106,7 +105,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	err = fakeClient.Delete(ctx, rs)
 	require.NoError(t, err)
 
-	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Deleted {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -128,31 +127,37 @@ func TestRepoSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 		// reconciler-manager managed reconciler deployment
 		return core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
 	}
-	var observedNames, expectedNames []string
+	var oldObj *appsv1.Deployment
+	var oldValue string
 	modify := func(obj client.Object) error {
-		reconcilerObj := obj.(*appsv1.Deployment)
-		initialName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
-		observedNames = []string{initialName}
-		driftName := "seanboswell"
-		expectedNames = []string{initialName, driftName, initialName}
-		reconcilerObj.Spec.Template.Spec.ServiceAccountName = driftName
+		oldObj = obj.(*appsv1.Deployment)
+		oldValue = oldObj.Spec.Template.Spec.ServiceAccountName
+		oldObj.Spec.Template.Spec.ServiceAccountName = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		reconcilerObj := obj.(*appsv1.Deployment)
-		saName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
-		// Record new value, if different from last known value
-		if saName != observedNames[len(observedNames)-1] {
-			t.Logf("observed ServiceAccountName change: %s", saName)
-			observedNames = append(observedNames, saName)
+		newObj := obj.(*appsv1.Deployment)
+		newValue := newObj.Spec.Template.Spec.ServiceAccountName
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
+				oldValue, newValue)
 		}
-		if cmp.Equal(expectedNames, observedNames) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("spec.template.spec.serviceAccountName changes expected %+v, but found %+v",
-			expectedNames, observedNames)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRepoSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -166,31 +171,37 @@ func TestRepoSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 		// reconciler-manager managed service account
 		return core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
 	}
-	var observedValues, expectedValues []string
+	var oldObj *corev1.ServiceAccount
+	var oldValue string
 	modify := func(obj client.Object) error {
-		saObj := obj.(*corev1.ServiceAccount)
-		initialValue := saObj.Labels[metadata.SyncKindLabel]
-		observedValues = []string{initialValue}
-		driftValue := "seanboswell"
-		expectedValues = []string{initialValue, driftValue, initialValue}
-		saObj.Labels[metadata.SyncKindLabel] = driftValue
+		oldObj = obj.(*corev1.ServiceAccount)
+		oldValue = oldObj.Labels[metadata.SyncKindLabel]
+		oldObj.Labels[metadata.SyncKindLabel] = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		saObj := obj.(*corev1.ServiceAccount)
-		observedValue := saObj.Labels[metadata.SyncKindLabel]
-		// Record new value, if different from last known value
-		if observedValue != observedValues[len(observedValues)-1] {
-			t.Logf("observed label change: %s", observedValue)
-			observedValues = append(observedValues, observedValue)
+		newObj := obj.(*corev1.ServiceAccount)
+		newValue := newObj.Labels[metadata.SyncKindLabel]
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
+				metadata.SyncKindLabel, oldValue, newValue)
 		}
-		if cmp.Equal(expectedValues, observedValues) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("spec.metadata.labels[%q] changes expected %+v, but found %+v",
-			metadata.SyncKindLabel, expectedValues, observedValues)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRepoSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -207,31 +218,37 @@ func TestRepoSyncReconcilerRoleBindingDriftProtection(t *testing.T) {
 			Name:      RepoSyncPermissionsName(),
 		}
 	}
-	var observedValues, expectedValues []string
+	var oldObj *rbacv1.RoleBinding
+	var oldValue string
 	modify := func(obj client.Object) error {
-		crbObj := obj.(*rbacv1.RoleBinding)
-		initialValue := crbObj.RoleRef.Name
-		observedValues = []string{initialValue}
-		driftValue := "seanboswell"
-		expectedValues = []string{initialValue, driftValue, initialValue}
-		crbObj.RoleRef.Name = driftValue
+		oldObj = obj.(*rbacv1.RoleBinding)
+		oldValue = oldObj.RoleRef.Name
+		oldObj.RoleRef.Name = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		crbObj := obj.(*rbacv1.RoleBinding)
-		observedValue := crbObj.RoleRef.Name
-		// Record new value, if different from last known value
-		if observedValue != observedValues[len(observedValues)-1] {
-			t.Logf("observed roleRef.name change: %s", observedValue)
-			observedValues = append(observedValues, observedValue)
+		newObj := obj.(*rbacv1.RoleBinding)
+		newValue := newObj.RoleRef.Name
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("roleRef.name expected to be %q, but found %q",
+				oldValue, newValue)
 		}
-		if cmp.Equal(expectedValues, observedValues) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("roleRef.name changes expected %+v, but found %+v",
-			expectedValues, observedValues)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRepoSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -249,31 +266,37 @@ func TestRepoSyncReconcilerAuthSecretDriftProtection(t *testing.T) {
 			Name:      ReconcilerResourceName(reconcilerRef.Name, reposyncSSHKey),
 		}
 	}
-	var observedValues, expectedValues []string
+	var oldObj *corev1.Secret
+	var oldValue string
 	modify := func(obj client.Object) error {
-		crbObj := obj.(*corev1.Secret)
-		initialValue := string(crbObj.Data[string(configsync.AuthSSH)])
-		observedValues = []string{initialValue}
-		driftValue := "seanboswell"
-		expectedValues = []string{initialValue, driftValue, initialValue}
-		crbObj.Data[string(configsync.AuthSSH)] = []byte(driftValue)
+		oldObj = obj.(*corev1.Secret)
+		oldValue = string(oldObj.Data[string(configsync.AuthSSH)])
+		oldObj.Data[string(configsync.AuthSSH)] = []byte("seanboswell")
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		crbObj := obj.(*corev1.Secret)
-		observedValue := string(crbObj.Data[string(configsync.AuthSSH)])
-		// Record new value, if different from last known value
-		if observedValue != observedValues[len(observedValues)-1] {
-			t.Logf("observed roleRef.name change: %s", observedValue)
-			observedValues = append(observedValues, observedValue)
+		newObj := obj.(*corev1.Secret)
+		newValue := string(newObj.Data[string(configsync.AuthSSH)])
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("data[%q] expected to be %q, but found %q",
+				configsync.AuthSSH, oldValue, newValue)
 		}
-		if cmp.Equal(expectedValues, observedValues) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("data[%q] changes expected %+v, but found %+v",
-			configsync.AuthSSH, expectedValues, observedValues)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRepoSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }

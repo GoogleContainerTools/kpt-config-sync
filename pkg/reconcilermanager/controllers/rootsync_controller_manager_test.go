@@ -16,11 +16,11 @@ package controllers
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr/testr"
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -28,8 +28,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -86,7 +88,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -115,7 +117,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	err = fakeClient.Delete(ctx, rs)
 	require.NoError(t, err)
 
-	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Deleted {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -137,31 +139,37 @@ func TestRootSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 		// reconciler-manager managed reconciler deployment
 		return core.RootReconcilerObjectKey(rs.Name)
 	}
-	var observedNames, expectedNames []string
+	var oldObj *appsv1.Deployment
+	var oldValue string
 	modify := func(obj client.Object) error {
-		reconcilerObj := obj.(*appsv1.Deployment)
-		initialName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
-		observedNames = []string{initialName}
-		driftName := "seanboswell"
-		expectedNames = []string{initialName, driftName, initialName}
-		reconcilerObj.Spec.Template.Spec.ServiceAccountName = driftName
+		oldObj = obj.(*appsv1.Deployment)
+		oldValue = oldObj.Spec.Template.Spec.ServiceAccountName
+		oldObj.Spec.Template.Spec.ServiceAccountName = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		reconcilerObj := obj.(*appsv1.Deployment)
-		saName := reconcilerObj.Spec.Template.Spec.ServiceAccountName
-		// Record new value, if different from last known value
-		if saName != observedNames[len(observedNames)-1] {
-			t.Logf("observed ServiceAccountName change: %s", saName)
-			observedNames = append(observedNames, saName)
+		newObj := obj.(*appsv1.Deployment)
+		newValue := newObj.Spec.Template.Spec.ServiceAccountName
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
+				oldValue, newValue)
 		}
-		if cmp.Equal(expectedNames, observedNames) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("spec.template.spec.serviceAccountName changes expected %+v, but found %+v",
-			expectedNames, observedNames)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRootSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -175,31 +183,37 @@ func TestRootSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 		// reconciler-manager managed service account
 		return core.RootReconcilerObjectKey(rs.Name)
 	}
-	var observedValues, expectedValues []string
+	var oldObj *corev1.ServiceAccount
+	var oldValue string
 	modify := func(obj client.Object) error {
-		saObj := obj.(*corev1.ServiceAccount)
-		initialValue := saObj.Labels[metadata.SyncKindLabel]
-		observedValues = []string{initialValue}
-		driftValue := "seanboswell"
-		expectedValues = []string{initialValue, driftValue, initialValue}
-		saObj.Labels[metadata.SyncKindLabel] = driftValue
+		oldObj = obj.(*corev1.ServiceAccount)
+		oldValue = oldObj.Labels[metadata.SyncKindLabel]
+		oldObj.Labels[metadata.SyncKindLabel] = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		saObj := obj.(*corev1.ServiceAccount)
-		observedValue := saObj.Labels[metadata.SyncKindLabel]
-		// Record new value, if different from last known value
-		if observedValue != observedValues[len(observedValues)-1] {
-			t.Logf("observed label change: %s", observedValue)
-			observedValues = append(observedValues, observedValue)
+		newObj := obj.(*corev1.ServiceAccount)
+		newValue := newObj.Labels[metadata.SyncKindLabel]
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
+				metadata.SyncKindLabel, oldValue, newValue)
 		}
-		if cmp.Equal(expectedValues, observedValues) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("spec.metadata.labels[%q] changes expected %+v, but found %+v",
-			metadata.SyncKindLabel, expectedValues, observedValues)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRootSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -213,31 +227,37 @@ func TestRootSyncReconcilerClusterRoleBindingDriftProtection(t *testing.T) {
 		// reconciler-manager managed cluster role binding
 		return client.ObjectKey{Name: RootSyncPermissionsName()}
 	}
-	var observedValues, expectedValues []string
+	var oldObj *rbacv1.ClusterRoleBinding
+	var oldValue string
 	modify := func(obj client.Object) error {
-		crbObj := obj.(*rbacv1.ClusterRoleBinding)
-		initialValue := crbObj.RoleRef.Name
-		observedValues = []string{initialValue}
-		driftValue := "seanboswell"
-		expectedValues = []string{initialValue, driftValue, initialValue}
-		crbObj.RoleRef.Name = driftValue
+		oldObj = obj.(*rbacv1.ClusterRoleBinding)
+		oldValue = oldObj.RoleRef.Name
+		oldObj.RoleRef.Name = "seanboswell"
 		return nil
 	}
 	validate := func(obj client.Object) error {
-		crbObj := obj.(*rbacv1.ClusterRoleBinding)
-		observedValue := crbObj.RoleRef.Name
-		// Record new value, if different from last known value
-		if observedValue != observedValues[len(observedValues)-1] {
-			t.Logf("observed roleRef.name change: %s", observedValue)
-			observedValues = append(observedValues, observedValue)
+		newObj := obj.(*rbacv1.ClusterRoleBinding)
+		newValue := newObj.RoleRef.Name
+		if newValue != oldValue {
+			// keep watching
+			return errors.Errorf("roleRef.name expected to be %q, but found %q",
+				oldValue, newValue)
 		}
-		if cmp.Equal(expectedValues, observedValues) {
-			// success - change observed and reverted
-			return nil
+		newRV, err := parseResourceVersion(newObj)
+		if err != nil {
+			return err
 		}
-		// keep watching
-		return errors.Errorf("roleRef.name changes expected %+v, but found %+v",
-			expectedValues, observedValues)
+		// ResourceVersion should be updated on the oldObj by the client.Update AFTER the modify func was called.
+		oldRV, err := parseResourceVersion(oldObj)
+		if err != nil {
+			return err
+		}
+		if newRV <= oldRV {
+			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+				newRV, oldRV)
+		}
+		// success - change reverted
+		return nil
 	}
 	testRootSyncDriftProtection(t, exampleObj, objKeyFunc, modify, validate)
 }
@@ -290,7 +310,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 
 	// Consume watch events until success or timeout
 	var obj client.Object
-	err = watchObjectUntil(ctx, watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			obj = event.Object.(client.Object)
@@ -321,7 +341,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
-	err = watchObjectUntil(ctx, watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			return validate(event.Object.(client.Object))
@@ -412,11 +432,12 @@ func watchObjects(ctx context.Context, fakeClient *syncerFake.Client, exampleLis
 	return watcher, nil
 }
 
-func watchObjectUntil(ctx context.Context, watcher watch.Interface, key client.ObjectKey, condition func(watch.Event) error) error {
+func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch.Interface, key client.ObjectKey, condition func(watch.Event) error) error {
 	// Wait until added or modified
 	var conditionErr error
 	doneCh := ctx.Done()
 	resultCh := watcher.ResultChan()
+	var lastKnown client.Object
 	for {
 		select {
 		case <-doneCh:
@@ -432,10 +453,15 @@ func watchObjectUntil(ctx context.Context, watcher watch.Interface, key client.O
 				statusErr := apierrors.FromObject(event.Object)
 				return errors.Wrap(statusErr, "watch event error")
 			}
-			if key != client.ObjectKeyFromObject(event.Object.(client.Object)) {
+			obj := event.Object.(client.Object)
+			if key != client.ObjectKeyFromObject(obj) {
 				// not the right object
 				continue
 			}
+			klog.V(5).Infof("Watch Event %s Diff (- Removed, + Added):\n%s",
+				kinds.ObjectSummary(obj),
+				log.AsYAMLDiffWithScheme(lastKnown, obj, scheme))
+			lastKnown = obj
 			conditionErr = condition(event)
 			if conditionErr == nil {
 				// success - condition met
@@ -444,4 +470,13 @@ func watchObjectUntil(ctx context.Context, watcher watch.Interface, key client.O
 			// wait for next event - condition not met
 		}
 	}
+}
+
+func parseResourceVersion(obj client.Object) (int, error) {
+	rv, err := strconv.Atoi(obj.GetResourceVersion())
+	if err != nil {
+		return -1, errors.Wrapf(err, "invalid ResourceVersion %q for object %s",
+			obj.GetResourceVersion(), kinds.ObjectSummary(obj))
+	}
+	return rv, nil
 }

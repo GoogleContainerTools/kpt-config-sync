@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/helm"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -293,6 +294,17 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
 	}
 
+	// For helm charts, we need to push the chart to the AR before configuring the RootSync
+	if testSpec.sourceType == v1beta1.HelmSource {
+		chartName, err := helm.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
+		if err != nil {
+			nt.T.Fatalf("failed to push helm chart: %v", err)
+		}
+
+		testSpec.sourceChart = chartName
+		testSpec.rootCommitFn = helmChartVersion(chartName + ":" + testSpec.sourceVersion)
+	}
+
 	// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
 	nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, testSpec.sourceRepo)
 	switch testSpec.sourceType {
@@ -318,7 +330,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-		if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{}); err != nil {
+		if err := nt.Validate(fmt.Sprintf("my-coredns-%s", testSpec.sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
 			nt.T.Error(err)
 		}
 	} else {

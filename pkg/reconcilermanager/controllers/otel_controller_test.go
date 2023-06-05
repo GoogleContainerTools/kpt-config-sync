@@ -47,10 +47,14 @@ const (
 	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
 	// Used by TestOtelReconcilerGooglecloud.
 	depAnnotationGooglecloud = "1e0717923a4b449bfebd2e4c67f63206"
-	// depAnnotationGooglecloud is the expected hash of the custom
+	// depAnnotationCustom is the expected hash of the custom
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerCustom.
 	depAnnotationCustom = "d166bfb4bea41bdc98b5b718e6c34b44"
+	// depAnnotationCustomDeleted is the expected hash of the deleted custom
+	// otel-collector ConfigMap test artifact.
+	// Used by TestOtelReconcilerDeleteCustom.
+	depAnnotationCustomDeleted = "271a8db08c5b57017546587f9b78864d"
 )
 
 func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
@@ -210,6 +214,67 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	cmKey := client.ObjectKeyFromObject(cm)
 	gotConfigMap := &corev1.ConfigMap{}
 	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
+	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
+	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
+
+	// compare Deployment annotation
+	deployKey := client.ObjectKeyFromObject(wantDeployment)
+	gotDeployment := &appsv1.Deployment{}
+	err = fakeClient.Get(ctx, deployKey, gotDeployment)
+	require.NoError(t, err, "Deployment[%s] not found", deployKey)
+	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
+
+	t.Log("Deployment successfully updated")
+}
+
+func TestOtelReconcilerDeleteCustom(t *testing.T) {
+	cm := configMapWithData(
+		metrics.MonitoringNamespace,
+		metrics.OtelCollectorName,
+		map[string]string{"otel-collector-config.yaml": ""},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	cmCustom := configMapWithData(
+		metrics.MonitoringNamespace,
+		metrics.OtelCollectorCustomCM,
+		map[string]string{"otel-collector-config.yaml": "custom"},
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, metrics.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+
+	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+		return nil, nil
+	}
+
+	// Test updating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	err := fakeClient.Delete(ctx, cmCustom)
+	if err != nil {
+		t.Fatalf("error deleteing custom config map, got error: %q, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantDeployment := fake.DeploymentObject(
+		core.Namespace(metrics.MonitoringNamespace),
+		core.Name(metrics.OtelCollectorName),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationCustomDeleted)
+
+	asserter := testutil.NewAsserter(cmpopts.EquateEmpty())
+
+	// compare ConfigMap
+	cmKey := client.ObjectKeyFromObject(cm)
+	gotConfigMap := &corev1.ConfigMap{}
+	err = fakeClient.Get(ctx, cmKey, gotConfigMap)
 	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
 	asserter.Equal(t, cm, gotConfigMap, "ConfigMap")
 

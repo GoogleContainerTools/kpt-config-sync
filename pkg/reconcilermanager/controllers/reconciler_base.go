@@ -107,15 +107,6 @@ type reconcilerBase struct {
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string
-
-	// lastReconciledResourceVersions is a cache of the last reconciled
-	// ResourceVersion for each R*Sync objects.
-	//
-	// This is used for an optimization to avoid re-reconciling.
-	// However, since ResourceVersion must be treated as opaque, we can't know
-	// if it's the latest or not. So this is just an optimization, not a guarantee.
-	// https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
-	lastReconciledResourceVersions map[types.NamespacedName]string
 }
 
 func (r *reconcilerBase) serviceAccountSubject(reconcilerRef types.NamespacedName) rbacv1.Subject {
@@ -134,9 +125,9 @@ func (r *reconcilerBase) upsertServiceAccount(
 	childSA := &corev1.ServiceAccount{}
 	childSA.Name = childSARef.Name
 	childSA.Namespace = childSARef.Namespace
-	r.addLabels(childSA, labelMap)
 
 	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childSA, func() error {
+		r.addLabels(childSA, labelMap)
 		// Update ownerRefs for RootSync ServiceAccount.
 		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
 		// performs garbage collection for Reposync controller resources.
@@ -527,40 +518,6 @@ func (r *reconcilerBase) addTemplateLabels(deployment *appsv1.Deployment, labelM
 	deployment.Spec.Template.Labels = currentLabels
 }
 
-// setLastReconciled sets the last resourceVersion that was fully reconciled for
-// a specific R*Sync object. This should only be set if the reconciler
-// successfully performed an update of the R*Sync in this reconcile attempt.
-func (r *reconcilerBase) setLastReconciled(nn types.NamespacedName, resourceVersion string) {
-	if r.lastReconciledResourceVersions == nil {
-		r.lastReconciledResourceVersions = make(map[types.NamespacedName]string)
-	}
-	r.lastReconciledResourceVersions[nn] = resourceVersion
-}
-
-// clearLastReconciled clears the last reconciled resourceVersion for a specific
-// R*Sync object. This should be called after a R*Sync is deleted.
-func (r *reconcilerBase) clearLastReconciled(nn types.NamespacedName) {
-	if r.lastReconciledResourceVersions == nil {
-		return
-	}
-	delete(r.lastReconciledResourceVersions, nn)
-}
-
-// isLastReconciled checks if a resourceVersion for a specific R*Sync object is
-// the same as last one that was reconciled. If true, reconciliation can safely
-// be skipped, because that resourceVersion is no longer the latest, and a new
-// reconcile should be queued to handle the latest.
-func (r *reconcilerBase) isLastReconciled(nn types.NamespacedName, resourceVersion string) bool {
-	if r.lastReconciledResourceVersions == nil {
-		return false
-	}
-	lastReconciled := r.lastReconciledResourceVersions[nn]
-	if lastReconciled == "" {
-		return false
-	}
-	return resourceVersion == lastReconciled
-}
-
 // validateCACertSecret verify that caCertSecretRef is well formed with a key named "cert"
 func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, caCertSecretRefName string) error {
 	if useCACert(caCertSecretRefName) {
@@ -580,4 +537,14 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 	}
 	return nil
 
+}
+
+// addTypeInformationToObject looks up and adds GVK to a runtime.Object based upon the loaded Scheme
+func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
+	gvk, err := kinds.Lookup(obj, r.scheme)
+	if err != nil {
+		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
+	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	return nil
 }

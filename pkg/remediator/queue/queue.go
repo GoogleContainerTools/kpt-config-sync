@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -221,7 +222,7 @@ func (q *ObjectQueue) Get(ctx context.Context) (client.Object, error) {
 	delete(q.dirty, gvknn)
 	klog.V(2).Infof("ObjectQueue.Get: returning object: %v (generation: %d)",
 		gvknn, obj.GetGeneration())
-	return obj.DeepCopyObject().(client.Object), nil
+	return kinds.ObjectAsClientObject(obj.DeepCopyObject())
 }
 
 // Done marks item as done processing, and if it has been marked as dirty again

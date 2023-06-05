@@ -40,7 +40,6 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -63,8 +62,6 @@ import (
 // RepoSyncReconciler reconciles a RepoSync object.
 type RepoSyncReconciler struct {
 	reconcilerBase
-	// repoSyncs is a cache of the reconciled RepoSync objects.
-	repoSyncs map[types.NamespacedName]struct{}
 
 	lock sync.Mutex
 }
@@ -84,7 +81,6 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 			syncKind:                configsync.RepoSyncKind,
 		},
-		repoSyncs: make(map[types.NamespacedName]struct{}),
 	}
 }
 
@@ -111,12 +107,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	if err := r.client.Get(ctx, rsRef, rs); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		if apierrors.IsNotFound(err) {
-			r.clearLastReconciled(rsRef)
-			if _, ok := r.repoSyncs[rsRef]; !ok {
-				r.logger(ctx).Error(err, "Sync object not managed by this reconciler-manager")
-				// return `controllerruntime.Result{}, nil` here to make sure the request will not be requeued.
-				return controllerruntime.Result{}, nil
-			}
 			// Namespace controller resources are cleaned up when reposync no longer present.
 			//
 			// Note: Update cleanup resources in cleanupNSControllerResources(...) when
@@ -134,13 +124,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
 
-	// The caching client sometimes returns an old R*Sync, because the watch
-	// hasn't received the update event yet. If so, error and retry.
-	// This is an optimization to avoid unnecessary API calls.
-	if r.isLastReconciled(rsRef, rs.ResourceVersion) {
-		return controllerruntime.Result{}, fmt.Errorf("ResourceVersion already reconciled: %s", rs.ResourceVersion)
-	}
-
 	currentRS := rs.DeepCopy()
 
 	if err := r.validateNamespaceName(rsRef.Namespace); err != nil {
@@ -154,7 +137,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	r.repoSyncs[rsRef] = struct{}{}
 	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
 		err := errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
 		r.logger(ctx).Error(err, "Sync name or namespace invalid")
@@ -315,6 +297,8 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			if updateErr != nil {
 				r.logger(ctx).Error(updateErr, "Sync status update failed")
 			}
+			// Use the deployment get error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 			return controllerruntime.Result{}, err
 		}
 	}
@@ -331,6 +315,8 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
+		// Use the compute error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, err
 	}
 
@@ -349,7 +335,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		reposync.SetReconciling(rs, "Deployment", result.Message)
 		// Clear Stalled condition.
 		reposync.ClearCondition(rs, v1beta1.RepoSyncStalled)
-	case kstatus.FailedStatus:
+	case kstatus.FailedStatus, kstatus.TerminatingStatus:
 		// statusFailed indicates that the deployment failed to reconcile. Update
 		// Reconciling status condition with appropriate message specifying the
 		// reason for failure.
@@ -362,6 +348,19 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		reposync.ClearCondition(rs, v1beta1.RepoSyncReconciling)
 		// Since there were no errors, we can clear any previous Stalled condition.
 		reposync.ClearCondition(rs, v1beta1.RepoSyncStalled)
+	default:
+		// Shouldn't happen, unless kstatus.Compute impl changes
+		err := errors.Errorf("invalid deployment status: %v: %s", result.Status, result.Message)
+		reposync.SetStalled(rs, "Deployment", err)
+		// Get errors should always trigger retry (return error),
+		// even if status update is successful.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
+		}
+		// Use the status error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, err
 	}
 
 	updated, err := r.updateStatus(ctx, currentRS, rs)
@@ -381,7 +380,11 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error {
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, gitSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.SecretRef) == "" {
 			return nil
 		}
@@ -391,7 +394,11 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}
 	// Index the `caCertSecretRefField` field, so that we will be able to lookup RepoSync be a referenced `caCertSecretRefField` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, caCertSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef) == "" {
 			return nil
 		}
@@ -401,7 +408,11 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 	}
 	// Index the `helmSecretRefName` field, so that we will be able to lookup RepoSync be a referenced `SecretRef` name.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RepoSync{}, helmSecretRefField, func(rawObj client.Object) []string {
-		rs := rawObj.(*v1beta1.RepoSync)
+		rs, ok := rawObj.(*v1beta1.RepoSync)
+		if !ok {
+			// Only add index for RepoSync
+			return nil
+		}
 		if rs.Spec.Helm == nil || v1beta1.GetSecretName(rs.Spec.Helm.SecretRef) == "" {
 			return nil
 		}
@@ -419,13 +430,13 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		Watches(&source.Kind{Type: &corev1.Secret{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRepoSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &appsv1.Deployment{}},
+		Watches(&source.Kind{Type: withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &corev1.ServiceAccount{}},
+		Watches(&source.Kind{Type: withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
+		Watches(&source.Kind{Type: withNamespace(&rbacv1.RoleBinding{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
@@ -621,16 +632,6 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 	return requests
 }
 
-// addTypeInformationToObject looks up and adds GVK to a runtime.Object based upon the loaded Scheme
-func (r *RepoSyncReconciler) addTypeInformationToObject(obj runtime.Object) error {
-	gvk, err := kinds.Lookup(obj, r.scheme)
-	if err != nil {
-		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
-	}
-	obj.GetObjectKind().SetGroupVersionKind(gvk)
-	return nil
-}
-
 func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile.Request {
 	rsRef := client.ObjectKeyFromObject(rs)
 	klog.Infof("Changes to %s (%s) triggers a reconciliation for the RepoSync (%s).",
@@ -774,15 +775,10 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 			"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s", cmp.Diff(currentRS.Status, rs.Status)))
 	}
 
-	resourceVersion := rs.ResourceVersion
-
 	err := r.client.Status().Update(ctx, rs)
 	if err != nil {
 		return false, err
 	}
-
-	// Register the latest ResourceVersion as reconciled.
-	r.setLastReconciled(core.ObjectNamespacedName(rs), resourceVersion)
 	return true, nil
 }
 

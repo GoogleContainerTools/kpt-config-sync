@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,11 +37,6 @@ import (
 // NOTE: Update this method when resources created by namespace controller changes.
 func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, rsKey, reconcilerRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
-
-	rsList := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, rsList, client.InNamespace(rsKey.Namespace)); err != nil {
-		return errors.Wrapf(err, "failed to list RepoSync managed objects in namespace %q", rsKey.Namespace)
-	}
 
 	// Delete namespace controller resources and return to reconcile loop in case
 	// of errors to try cleaning up resources again.
@@ -64,12 +58,7 @@ func (r *RepoSyncReconciler) cleanupNSControllerResources(ctx context.Context, r
 		return err
 	}
 	// secret
-	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
-		return err
-	}
-
-	delete(r.repoSyncs, rsKey)
-	return nil
+	return r.deleteSecrets(ctx, reconcilerRef)
 }
 
 func (r *reconcilerBase) cleanup(ctx context.Context, objRef types.NamespacedName, gvk schema.GroupVersionKind) error {
@@ -134,6 +123,10 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, reconcilerRe
 	rbKey := client.ObjectKey{Namespace: rsRef.Namespace, Name: RepoSyncPermissionsName()}
 	rb := &rbacv1.RoleBinding{}
 	if err := r.client.Get(ctx, rbKey, rb); err != nil {
+		if apierrors.IsNotFound(err) {
+			// already deleted
+			return nil
+		}
 		return errors.Wrapf(err, "failed to get the RoleBinding object %s", rbKey)
 	}
 	rb.Subjects = removeSubject(rb.Subjects, r.serviceAccountSubject(reconcilerRef))
@@ -153,6 +146,10 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 	// Update the CRB to delete the subject for the deleted RootSync's reconciler
 	crb := &rbacv1.ClusterRoleBinding{}
 	if err := r.client.Get(ctx, crbKey, crb); err != nil {
+		if apierrors.IsNotFound(err) {
+			// already deleted
+			return nil
+		}
 		return errors.Wrapf(err, "failed to get the ClusterRoleBinding object %s", crbKey)
 	}
 	crb.Subjects = removeSubject(crb.Subjects, r.serviceAccountSubject(reconcilerRef))

@@ -47,10 +47,13 @@ import (
 
 var (
 	// publicGCRImage pulls the public OCI image by the default `latest` tag
-	publicGCRImage = fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components", nomostesting.GCPProjectIDFromEnv)
+	publicGCRImage = fmt.Sprintf("%s/kustomize-components", nomostesting.TestInfraContainerRegistry)
 
 	// publicARImage pulls the public OCI image by the default `latest` tag
-	publicARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/kustomize-components", nomostesting.GCPProjectIDFromEnv)
+	publicARImage = fmt.Sprintf("%s/kustomize-components", nomostesting.ConfigSyncTestPublicRegistry)
+
+	// bookinfoARImage pulls the public OCI image by the default `latest` tag
+	bookinfoARImage = fmt.Sprintf("%s/namespace-repo-bookinfo", nomostesting.ConfigSyncTestPublicRegistry)
 
 	// privateGCRImage pulls the private OCI image by tag
 	privateGCRImage = fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", nomostesting.GCPProjectIDFromEnv)
@@ -66,12 +69,6 @@ var (
 // TestPublicOCI can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public OCI images without any authentication.
 func TestPublicOCI(t *testing.T) {
-	// TODO: remove the overwrite once the OSS project has public access
-	publicProject := "stolos-dev"
-	if nomostesting.GCPProjectIDFromEnv != publicProject {
-		publicGCRImage = fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components", publicProject)
-		publicARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/kustomize-components", publicProject)
-	}
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -387,12 +384,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	repoSyncOCI := repoSyncGit.DeepCopy()
 	repoSyncOCI.Spec.Git = nil
 	repoSyncOCI.Spec.SourceType = string(v1beta1.OciSource)
-	imageURL := fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", nomostesting.GCPProjectIDFromEnv)
-	// TODO: remove the overwrite once the OSS project has public access
-	publicProject := "stolos-dev"
-	if nomostesting.GCPProjectIDFromEnv != publicProject {
-		imageURL = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-public/namespace-repo-bookinfo", publicProject)
-	}
+	imageURL := bookinfoARImage
 	repoSyncOCI.Spec.Oci = &v1beta1.Oci{
 		Image: imageURL,
 		Auth:  configsync.AuthNone,

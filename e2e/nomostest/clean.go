@@ -144,7 +144,7 @@ func deleteTestObjectsAndWait(nt *NT) error {
 	var objs []client.Object
 	types := filterMutableListTypes(nt)
 	for gvk := range types {
-		if !isListable(gvk.Kind) {
+		if !isListable(gvk) {
 			continue
 		}
 		list, err := listObjectsWithTestLabel(nt, gvk)
@@ -404,42 +404,28 @@ func deleteKubevirt(nt *NT) error {
 	if err := nt.KubeClient.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
 		return err
 	}
-	if len(crdList.Items) > 0 {
-		var crdNames []string
-		for _, item := range crdList.Items {
-			crdNames = append(crdNames, item.Name)
-			obj = &apiextensionsv1.CustomResourceDefinition{}
-			obj.SetName(item.Name)
-			if err := deleteObject(nt, obj); err != nil {
-				return err
-			}
-		}
-		if err := WaitForCRDsNotFound(nt, crdNames); err != nil {
-			return err
-		}
-	}
-	return nil
+	return DeleteObjectListItemsAndWait(nt, crdList)
 }
 
 // deleteAdmissionWebhook deletes the `admission-webhook.configsync.gke.io` ValidatingWebhookConfiguration.
 func deleteAdmissionWebhook(nt *NT) error {
 	obj := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	obj.SetName(configuration.Name)
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 // deleteResourceGroupController deletes namespace `resource-group-system`.
 func deleteResourceGroupController(nt *NT) error {
 	obj := &corev1.Namespace{}
 	obj.SetName(configmanagement.RGControllerNamespace)
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 func deleteReconcilerManager(nt *NT) error {
 	obj := &appsv1.Deployment{}
 	obj.Namespace = configmanagement.ControllerNamespace
 	obj.Name = reconcilermanager.ManagerName
-	return deleteObject(nt, obj)
+	return DeleteObjectsAndWait(nt, obj)
 }
 
 func deleteReconcilersBySyncKind(nt *NT, kind string) error {
@@ -450,12 +436,7 @@ func deleteReconcilersBySyncKind(nt *NT, kind string) error {
 	if err := nt.KubeClient.List(dList, opts...); err != nil {
 		return err
 	}
-	for _, item := range dList.Items {
-		if err := deleteObject(nt, &item); err != nil {
-			return err
-		}
-	}
-	return nil
+	return DeleteObjectListItemsAndWait(nt, dList)
 }
 
 func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructured.Unstructured, error) {
@@ -469,25 +450,6 @@ func listObjectsWithTestLabel(nt *NT, gvk schema.GroupVersionKind) ([]unstructur
 		return nil, err
 	}
 	return list.Items, nil
-}
-
-func deleteObject(nt *NT, obj client.Object) error {
-	nn := client.ObjectKeyFromObject(obj)
-	gvk, err := kinds.Lookup(obj, nt.Scheme)
-	if err != nil {
-		return err
-	}
-	if !obj.GetDeletionTimestamp().IsZero() {
-		// already terminating. skip deleting
-		return nil
-	}
-	if err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return errors.Wrapf(err, "unable to delete %s object %s",
-				gvk.Kind, nn)
-		}
-	}
-	return nil
 }
 
 // DeleteObjectsAndWait deletes zero or more objects in serial and waits for not found in parallel.
@@ -521,13 +483,23 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 	return tg.Wait()
 }
 
-func isListable(kind string) bool {
+// DeleteObjectListItemsAndWait deletes all the list items in serial and waits
+// for not found in parallel.
+func DeleteObjectListItemsAndWait(nt *NT, objList client.ObjectList) error {
+	objs, err := kinds.ExtractClientObjectList(objList)
+	if err != nil {
+		return err
+	}
+	return DeleteObjectsAndWait(nt, objs...)
+}
+
+func isListable(listGVK schema.GroupVersionKind) bool {
 	// Only try to list types that have *List types associated with them, as they
 	// are guaranteed to be listable.
 	//
 	// StatusList types are vestigial, have odd semantics, and are deprecated in 1.19.
 	// Also we don't care about them for tests.
-	return strings.HasSuffix(kind, "List") && !strings.HasSuffix(kind, "StatusList")
+	return kinds.IsListGVK(listGVK) && !strings.HasSuffix(listGVK.Kind, "StatusList")
 }
 
 // FailIfUnknown fails the test if the passed type is not declared in the passed
@@ -608,10 +580,9 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 }
 
 func deleteTestAPIServices(nt *NT) error {
-	out, err := nt.Shell.Kubectl("delete", "apiservices", "-l", "testdata=true")
-	if err != nil {
-		nt.T.Logf("%v", out)
-		nt.T.Errorf("cleaning up apiservices: %v", err)
+	list := &apiregistrationv1.APIServiceList{}
+	if err := nt.KubeClient.List(list, withLabelListOption("testdata", "true")); err != nil {
+		return err
 	}
-	return err
+	return DeleteObjectListItemsAndWait(nt, list)
 }

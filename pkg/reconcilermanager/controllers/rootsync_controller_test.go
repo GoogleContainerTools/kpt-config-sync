@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -112,18 +113,29 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RootSyncReconciler) {
 	t.Helper()
 
-	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
-	fakeDynamicClient := syncerFake.NewDynamicClient(t, core.Scheme)
+	// Configure controller-manager to log to the test logger
+	controllerruntime.SetLogger(testr.New(t))
+
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+
+	ctx := context.Background()
+	for _, obj := range objs {
+		err := cs.Client.Create(ctx, obj)
+		if err != nil {
+			t.Fatalf("Failed to create object: %v", err)
+		}
+	}
+
 	testReconciler := NewRootSyncReconciler(
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
-		fakeClient,
-		fakeDynamicClient,
-		controllerruntime.Log.WithName("controllers").WithName("RootSync"),
-		fakeClient.Scheme(),
+		cs.Client,
+		cs.DynamicClient,
+		controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
+		cs.Client.Scheme(),
 	)
-	return fakeClient, fakeDynamicClient, testReconciler
+	return cs.Client, cs.DynamicClient, testReconciler
 }
 
 func rootsyncRef(rev string) func(*v1beta1.RootSync) {
@@ -2875,17 +2887,16 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	err = fakeClient.Storage().TestPut(oldRS)
 	require.NoError(t, err)
 
-	// Expect next Reconcile to error since the ResourceVersion hasn't been updated.
+	// Expect next Reconcile to succeed but NOT update the RootSync
 	// This means the client cache hasn't been updated and isn't returning the latest version.
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
-	require.Error(t, err, "expected Reconcile to error")
-	require.Equal(t, err.Error(), "ResourceVersion already reconciled: 1", "unexpected Reconcile error")
+	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Simulate cache update from watch event (roll forward to the latest resource version)
 	err = fakeClient.Storage().TestPut(rs)
 	require.NoError(t, err)
 
-	// Reconcile should succeed and NOT update the RootSync
+	// Reconcile should succeed but NOT update the RootSync
 	_, err = testReconciler.Reconcile(ctx, reqNamespacedName)
 	require.NoError(t, err, "unexpected Reconcile error")
 

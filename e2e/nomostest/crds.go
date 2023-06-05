@@ -51,19 +51,6 @@ func WaitForCRDs(nt *NT, crds []string) error {
 	return tg.Wait()
 }
 
-// WaitForCRDsNotFound waits until the specified CRDs are removed from the cluster.
-func WaitForCRDsNotFound(nt *NT, crds []string) error {
-	tg := taskgroup.New()
-	for _, crd := range crds {
-		nn := types.NamespacedName{Name: crd}
-		tg.Go(func() error {
-			return nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(),
-				nn.Name, nn.Namespace)
-		})
-	}
-	return tg.Wait()
-}
-
 // IsEstablished returns true if the given CRD is established on the cluster,
 // which indicates if discovery knows about it yet. For more info see
 // https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition

@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
       - name: tinyproxy
-        image: gcr.io/stolos-dev/tinyproxy:latest
+        image: us-docker.pkg.dev/kpt-config-sync-ci-artifacts/test-infra/tinyproxy:latest
         ports:
         - containerPort: 8888
       serviceAccount: tinyproxy

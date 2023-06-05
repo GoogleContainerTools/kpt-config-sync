@@ -16,6 +16,15 @@ package testing
 
 import "os"
 
+const (
+	// TestInfraContainerRegistry is the Config Sync test-infra registry hosted on GCR
+	TestInfraContainerRegistry = "gcr.io/kpt-config-sync-ci-artifacts"
+	// TestInfraArtifactRegistry is the Config Sync test-infra registry hosted on GAR
+	TestInfraArtifactRegistry = "us-docker.pkg.dev/kpt-config-sync-ci-artifacts/test-infra"
+	// ConfigSyncTestPublicRegistry is the Config Sync config-sync-test-public registry hosted on GAR
+	ConfigSyncTestPublicRegistry = "us-docker.pkg.dev/kpt-config-sync-ci-artifacts/config-sync-test-public"
+)
+
 // GCPProjectIDFromEnv is the GCP_PROJECT value from the environment variable
 var GCPProjectIDFromEnv = os.Getenv("GCP_PROJECT")
 

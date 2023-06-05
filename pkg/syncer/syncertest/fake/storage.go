@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -207,7 +206,8 @@ func (ms *MemoryStorage) sendPutEvent(ctx context.Context, id core.ID, eventType
 	uObj := ms.objects[id]
 
 	// Send event to watchers
-	ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+	// TODO: send the event asynchronously, even if the caller cancelled the context.
+	ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 		Type:   eventType,
 		Object: uObj,
 	})
@@ -315,9 +315,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 	if err != nil {
 		return err
 	}
-	// Get the item GVK
-	gvk := listGVK.GroupVersion().WithKind(strings.TrimSuffix(listGVK.Kind, "List"))
-	// Validate the list is a list
+	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
 		return errors.Errorf("fake.MemoryStorage.List called with non-List GVK %q", listGVK.String())
 	}
@@ -514,14 +512,16 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 			return err
 		}
 		delete(ms.objects, id)
-		ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+		// TODO: send the event asynchronously, even if the caller cancelled the context.
+		ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 			Type:   watch.Deleted,
 			Object: cachedObj,
 		})
 	case metav1.DeletePropagationBackground:
 		// Delete managed objects afterwards
 		delete(ms.objects, id)
-		ms.watchSupervisor.Send(id.GroupKind, watch.Event{
+		// TODO: send the event asynchronously, even if the caller cancelled the context.
+		ms.watchSupervisor.Send(ctx, id.GroupKind, watch.Event{
 			Type:   watch.Deleted,
 			Object: cachedObj,
 		})
@@ -797,7 +797,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		}
 	case types.StrategicMergePatchType:
 		if found {
-			rObj, err := ms.scheme.New(gvk)
+			rObj, err := kinds.NewClientObjectForGVK(gvk, ms.scheme)
 			if err != nil {
 				return err
 			}
@@ -922,9 +922,7 @@ func (ms *MemoryStorage) Watch(_ context.Context, exampleList client.ObjectList,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to lookup GVK from scheme")
 	}
-	// Get the item GVK
-	gvk := listGVK.GroupVersion().WithKind(strings.TrimSuffix(listGVK.Kind, "List"))
-	// Validate the list is a list
+	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
 		return nil, errors.Errorf("fake.MemoryStorage.Watch called with non-List GVK: %v", listGVK)
 	}

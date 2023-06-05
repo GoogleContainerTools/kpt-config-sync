@@ -16,16 +16,20 @@ package fake
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kind/pkg/errors"
 )
 
 type eventWithKind struct {
@@ -80,17 +84,20 @@ func NewWatchSupervisor(scheme *runtime.Scheme) *WatchSupervisor {
 // Run propagates events to watchers until the context is done.
 func (ws *WatchSupervisor) Run(ctx context.Context) {
 	doneCh := ctx.Done()
+	// Signal Send to ignore subsequent events when done.
+	defer close(ws.doneCh)
 	for {
 		select {
 		case <-doneCh:
 			// Context is cancelled or timed out.
-			close(ws.eventCh)
 			return
 		case event, ok := <-ws.eventCh:
 			if !ok {
-				// Input channel is closed.
-				close(ws.doneCh)
-				return
+				// The event input channel should never be closed.
+				// This prevents sending on a closed channel.
+				// Go will garbage collect it when the WatchSupervisor is
+				// garbage collected, after Run has exited.
+				panic("WatchSupervisor eventCh was closed prematurely")
 			}
 			// Input event received.
 			ws.sendEventToWatchers(ctx, event.GroupKind, event.Event)
@@ -98,10 +105,26 @@ func (ws *WatchSupervisor) Run(ctx context.Context) {
 	}
 }
 
+// Done returns a channel that will be closed when Run has exited.
+func (ws *WatchSupervisor) Done() <-chan struct{} {
+	return ws.doneCh
+}
+
 // Send an event to all watchers of the specified GroupKind.
-func (ws *WatchSupervisor) Send(gk schema.GroupKind, event watch.Event) {
+// Send will block until consumed by Run for async propagation to all watchers.
+// Event will be ignored if Run is done.
+func (ws *WatchSupervisor) Send(ctx context.Context, gk schema.GroupKind, event watch.Event) {
 	select {
-	case <-ws.doneCh: // skip sending event if no longer running
+	case <-ctx.Done():
+		// Ignore event if supplied context is done.
+		// This can happen if the event producer used a timeout/deadline or
+		// otherwise decided not to send the event before it was consumed.
+		return
+	case <-ws.Done():
+		// Ignore event if Run is no longer listening.
+		// This can happen if WatchSupervisor.Run handled the context being done
+		// before the event producer did.
+		return
 	case ws.eventCh <- eventWithKind{Event: event, GroupKind: gk}:
 	}
 }
@@ -145,7 +168,7 @@ func (ws *WatchSupervisor) sendEventToWatchers(ctx context.Context, gk schema.Gr
 			case <-doneCh:
 				// Context is cancelled or timed out.
 			case watcher <- event:
-				// Event recieved or channel closed
+				// Event received or channel closed
 			}
 		}()
 	}
@@ -215,6 +238,8 @@ func (fw *Watcher) Run(ctx context.Context) {
 }
 
 func (fw *Watcher) handleEvents(ctx context.Context) {
+	lastSeenVersions := make(map[types.UID]int)
+
 	doneCh := ctx.Done()
 	defer close(fw.outCh)
 	for {
@@ -227,6 +252,39 @@ func (fw *Watcher) handleEvents(ctx context.Context) {
 				// Input channel is closed.
 				return
 			}
+
+			// Filter out-of-order MODIFIED events.
+			// This can happen if the watcher has multiple events pending,
+			// since those events are being sent on parallel goroutines.
+			if event.Type != watch.Error {
+				obj := event.Object.(client.Object)
+				// parse ResourceVersion as int
+				newRV, err := strconv.Atoi(obj.GetResourceVersion())
+				if err != nil {
+					err = errors.Wrapf(err, "invalid ResourceVersion %q for object %s",
+						obj.GetResourceVersion(), kinds.ObjectSummary(obj))
+					fw.sendEvent(ctx, watch.Event{
+						Type:   watch.Error,
+						Object: &apierrors.NewInternalError(err).ErrStatus,
+					})
+					continue
+				}
+				uid := obj.GetUID()
+				if event.Type == watch.Modified {
+					oldRV := lastSeenVersions[uid]
+					if newRV <= oldRV {
+						// drop event - newer ResourceVersion already sent
+						klog.Warningf("Watcher.handleEvents: dropping event (old ResourceVersion): %s",
+							log.AsJSON(event))
+						continue
+					}
+				}
+				// Store the last known ResourceVersion for future comparison.
+				// Store even if deleted, in case a modified event is received afterwards.
+				// TODO: Garbage collect uid entries after deletion (probably not necessary for unit tests)
+				lastSeenVersions[uid] = newRV
+			}
+
 			// Input event received.
 			fw.sendEvent(ctx, event)
 		}

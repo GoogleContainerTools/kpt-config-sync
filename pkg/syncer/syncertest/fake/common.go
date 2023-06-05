@@ -16,7 +16,6 @@ package fake
 
 import (
 	"fmt"
-	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -55,9 +54,9 @@ func toTypedClientObject(obj client.Object, scheme *runtime.Scheme) (client.Obje
 	if err != nil {
 		return nil, err
 	}
-	cObj, ok := tObj.(client.Object)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert %T to client.Object", tObj)
+	cObj, err := kinds.ObjectAsClientObject(tObj)
+	if err != nil {
+		return nil, err
 	}
 	return cObj, nil
 }
@@ -127,15 +126,14 @@ func convertToListItemType(obj runtime.Object, objListType client.ObjectList, sc
 		return nil, false, err
 	}
 	// Convert the List type to the Item type
-	targetKind := strings.TrimSuffix(listGVK.Kind, "List")
-	if targetKind == listGVK.Kind {
+	itemGVK := kinds.ItemGVKForListGVK(listGVK)
+	if itemGVK == listGVK {
 		return nil, false, fmt.Errorf("list kind does not have required List suffix: %s", listGVK.Kind)
 	}
-	targetGVK := listGVK.GroupVersion().WithKind(targetKind)
 
 	if _, ok := objListType.(*unstructured.UnstructuredList); ok {
 		// Convert to a unstructured object, optionally convert between versions
-		uObj, err := kinds.ToUnstructuredWithVersion(obj, targetGVK, scheme)
+		uObj, err := kinds.ToUnstructuredWithVersion(obj, itemGVK, scheme)
 		if err != nil {
 			return nil, false, err
 		}
@@ -143,7 +141,7 @@ func convertToListItemType(obj runtime.Object, objListType client.ObjectList, sc
 	}
 
 	// Convert to a typed object, optionally convert between versions
-	tObj, err := kinds.ToTypedWithVersion(obj, targetGVK, scheme)
+	tObj, err := kinds.ToTypedWithVersion(obj, itemGVK, scheme)
 	if err != nil {
 		return nil, false, err
 	}

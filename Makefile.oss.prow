@@ -57,12 +57,39 @@ install-helm:
 ###################################
 # Prow environment provisioning
 ###################################
+
+KUSTOMIZE_COMPONENTS_PACKAGE_NAME := kustomize-components
+KUSTOMIZE_COMPONENTS_DIR := e2e/testdata/hydration/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME)
+# kustomize-components public images (singleton test-infra registry)
+KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/config-sync-test-public/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME)
+KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE := gcr.io/$(TEST_INFRA_PROJECT)/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME)
+
+BOOKINFO_REPO_PACKAGE_NAME := namespace-repo-bookinfo
+BOOKINFO_REPO_DIR := e2e/testdata/$(BOOKINFO_REPO_PACKAGE_NAME)
+# namespace-repo-bookinfo images (singleton test-infra registry)
+BOOKINFO_REPO_PUBLIC_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/config-sync-test-public/$(BOOKINFO_REPO_PACKAGE_NAME)
+
+# This target is run as a singleton against the ci-artifacts project, since
+# these require for the registries to be public.
+.PHONY: push-test-oci-images-public
+push-test-oci-images-public: install-crane
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE)
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE)
+	cd $(BOOKINFO_REPO_DIR) && crane append -f <(tar -f - -c .) -t $(BOOKINFO_REPO_PUBLIC_AR_IMAGE)
+
 # The following targets are used to provision test resources in a prow environment
 
-.PHONY: push-test-oci-images
-# push-test-oci-images pushes the test images to the Artifact Registry and Container Registry repositories.
-push-test-oci-images: install-crane
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/publish-test-oci-images.sh
+# kustomize-components private images (per dev/prow env registry)
+KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(GCP_PROJECT)/config-sync-test-private/${KUSTOMIZE_COMPONENTS_PACKAGE_NAME}:v1
+KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME):v1
+
+.PHONY: push-test-oci-images-private
+# push-test-oci-images-private pushes the test images to the Artifact Registry and Container Registry repositories.
+push-test-oci-images-private: install-crane
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE)
 
 .PHONY: push-to-test-csr-repos
 push-to-test-csr-repos:

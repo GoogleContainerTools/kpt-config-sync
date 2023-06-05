@@ -16,7 +16,6 @@ package fake
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -211,11 +210,7 @@ func (dc *DynamicClient) list(action clienttesting.Action) (bool, runtime.Object
 	if err != nil {
 		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
 	}
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		gvk = gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	}
-	uObjList := &unstructured.UnstructuredList{}
-	uObjList.SetGroupVersionKind(gvk)
+	uObjList := kinds.NewUnstructuredListForItemGVK(gvk)
 	err = dc.storage.List(context.Background(), uObjList, opts)
 	return true, uObjList, err
 }
@@ -307,11 +302,7 @@ func (dc *DynamicClient) deleteAllOf(action clienttesting.Action) (bool, runtime
 	if err != nil {
 		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
 	}
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		gvk = gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	}
-	uObjList := &unstructured.UnstructuredList{}
-	uObjList.SetGroupVersionKind(gvk)
+	uObjList := kinds.NewUnstructuredListForItemGVK(gvk)
 	err = dc.storage.DeleteAllOf(context.Background(), uObjList, opts)
 	return true, uObjList, err
 }

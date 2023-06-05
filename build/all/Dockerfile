@@ -171,6 +171,8 @@ RUN apt-get update && apt-get install -y bash git
 RUN mkdir -p /opt/nomos/bin
 WORKDIR /opt/nomos/bin
 COPY --from=bins /go/bin/nomos nomos
+COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 

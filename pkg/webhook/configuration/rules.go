@@ -99,13 +99,13 @@ func toWebhook(gv schema.GroupVersion) admissionv1.ValidatingWebhook {
 			Service: &admissionv1.ServiceReference{
 				Namespace: configsync.ControllerNamespace,
 				Name:      ShortName,
-				Path:      pointer.StringPtr(ServingPath),
-				Port:      pointer.Int32Ptr(ServicePort),
+				Path:      pointer.String(ServingPath),
+				Port:      pointer.Int32(ServicePort),
 			},
 		},
 		// Several essential k8s checks require creating sequences of objects and
 		// time out after 10 seconds, so 3 seconds is a reasonable upper bound.
-		TimeoutSeconds: pointer.Int32Ptr(3),
+		TimeoutSeconds: pointer.Int32(3),
 		FailurePolicy:  &ignore,
 	}
 }

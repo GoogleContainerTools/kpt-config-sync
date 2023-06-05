@@ -251,7 +251,7 @@ func ServiceAccount() schema.GroupVersionKind {
 
 // KptFile returns the canonical Kptfile GroupVersionKind.
 func KptFile() schema.GroupVersionKind {
-	return schema.GroupVersionKind{Group: kptfilev1.KptFileGroup, Version: kptfilev1.KptFileVersion, Kind: kptfilev1.KptFileKind}
+	return kptfilev1.KptFileGVK()
 }
 
 // APIService returns the APIService kind.

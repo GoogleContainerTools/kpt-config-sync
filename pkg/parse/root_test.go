@@ -489,8 +489,8 @@ func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64Ptr(1.0),
-									Maximum: pointer.Float64Ptr(9000.0),
+									Minimum: pointer.Float64(1.0),
+									Maximum: pointer.Float64(9000.0),
 								},
 							},
 						},

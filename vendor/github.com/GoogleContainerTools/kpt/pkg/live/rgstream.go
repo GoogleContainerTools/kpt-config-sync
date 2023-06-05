@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2020 The kpt Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,14 +31,8 @@ import (
 
 var (
 	excludedGKs = []schema.GroupKind{
-		{
-			Group: kptfilev1.KptFileGroup,
-			Kind:  kptfilev1.KptFileKind,
-		},
-		{
-			Group: rgfilev1alpha1.RGFileGroup,
-			Kind:  rgfilev1alpha1.RGFileKind,
-		},
+		kptfilev1.KptFileGVK().GroupKind(),
+		rgfilev1alpha1.ResourceGroupGVK().GroupKind(),
 	}
 )
 

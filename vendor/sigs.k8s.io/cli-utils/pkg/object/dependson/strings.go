@@ -72,8 +72,9 @@ func ParseDependencySet(depsStr string) (DependencySet, error) {
 // Fields are separated by '/'.
 //
 // Examples:
-//   Cluster-Scoped: <group>/<kind>/<name> (3 fields)
-//   Namespaced: <group>/namespaces/<namespace>/<kind>/<name> (5 fields)
+//
+//	Cluster-Scoped: <group>/<kind>/<name> (3 fields)
+//	Namespaced: <group>/namespaces/<namespace>/<kind>/<name> (5 fields)
 //
 // Group and namespace may be empty, but name and kind may not.
 //
@@ -101,8 +102,9 @@ func FormatObjMetadata(obj object.ObjMetadata) (string, error) {
 // Fields are separated by '/'.
 //
 // Examples:
-//   Cluster-Scoped: <group>/<kind>/<name> (3 fields)
-//   Namespaced: <group>/namespaces/<namespace>/<kind>/<name> (5 fields)
+//
+//	Cluster-Scoped: <group>/<kind>/<name> (3 fields)
+//	Namespaced: <group>/namespaces/<namespace>/<kind>/<name> (5 fields)
 //
 // Group and namespace may be empty, but name and kind may not.
 //

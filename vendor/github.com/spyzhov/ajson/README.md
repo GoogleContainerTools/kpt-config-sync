@@ -53,7 +53,7 @@ func main() {
 You can download `ajson` cli from the [release page](https://github.com/spyzhov/ajson/releases), or install from the source:
 
 ```shell script
-go get github.com/spyzhov/ajson/cmd/ajson@v0.4.2
+go get github.com/spyzhov/ajson/cmd/ajson@v0.7.1
 ```
 
 Usage:
@@ -323,6 +323,8 @@ Package has several predefined functions.
     logb         math.Logb         integers, floats
     not          not               any
     pow10        math.Pow10        integer
+    rand         N*rand.Float64    float
+    randint      rand.Intn         integer
     round        math.Round        integers, floats
     roundtoeven  math.RoundToEven  integers, floats
     sin          math.Sin          integers, floats

@@ -2,7 +2,9 @@ package ajson
 
 import (
 	"math"
+	"math/rand"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -286,6 +288,9 @@ var (
 		},
 	}
 
+	randFunc    = rand.Float64
+	randIntFunc = rand.Intn
+
 	functions = map[string]Function{
 		"abs":         numericFunction("Abs", math.Abs),
 		"acos":        numericFunction("Acos", math.Acos),
@@ -398,6 +403,20 @@ var (
 				return valueNode(nil, "not", Bool, !value), nil
 			}
 		},
+		"rand": func(node *Node) (result *Node, err error) {
+			num, err := node.GetNumeric()
+			if err != nil {
+				return
+			}
+			return valueNode(nil, "Rand", Numeric, randFunc()*num), nil
+		},
+		"randint": func(node *Node) (result *Node, err error) {
+			num, err := node.getInteger()
+			if err != nil {
+				return
+			}
+			return valueNode(nil, "RandInt", Numeric, float64(randIntFunc(num))), nil
+		},
 	}
 
 	constants = map[string]*Node{
@@ -460,4 +479,16 @@ func mathFactorial(x uint) uint {
 		return 1
 	}
 	return x * mathFactorial(x-1)
+}
+
+func comparisonOperationsOrder() []string {
+	result := make([]string, 0, len(operations))
+	for operation := range operations {
+		result = append(result, operation)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return len(result[i]) > len(result[j])
+	})
+	return result
 }

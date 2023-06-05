@@ -6,7 +6,6 @@ package common
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -94,11 +93,11 @@ func ExpandPackageDir(f genericclioptions.FileNameFlags) (genericclioptions.File
 // an error if one occurs.
 func FilterInputFile(in io.Reader, tmpDir string) error {
 	// Copy the config from "in" into a local temp file.
-	dir, err := ioutil.TempDir("", tmpDirPrefix)
+	dir, err := os.MkdirTemp("", tmpDirPrefix)
 	if err != nil {
 		return err
 	}
-	tmpFile, err := ioutil.TempFile(dir, fileRegexp)
+	tmpFile, err := os.CreateTemp(dir, fileRegexp)
 	if err != nil {
 		return err
 	}

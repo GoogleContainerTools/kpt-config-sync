@@ -5,7 +5,7 @@ package inventory
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 
@@ -65,7 +65,7 @@ func fakeClient(objs object.ObjMetadataSet) resource.FakeClientFunc {
 			NegotiatedSerializer: resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer,
 			Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
 				if req.Method == "POST" && cmPathRegex.Match([]byte(req.URL.Path)) {
-					b, err := ioutil.ReadAll(req.Body)
+					b, err := io.ReadAll(req.Body)
 					if err != nil {
 						return nil, err
 					}
@@ -74,7 +74,7 @@ func fakeClient(objs object.ObjMetadataSet) resource.FakeClientFunc {
 					if err != nil {
 						return nil, err
 					}
-					bodyRC := ioutil.NopCloser(bytes.NewReader(b))
+					bodyRC := io.NopCloser(bytes.NewReader(b))
 					return &http.Response{StatusCode: http.StatusCreated, Header: cmdtesting.DefaultHeader(), Body: bodyRC}, nil
 				}
 				if req.Method == "GET" && cmPathRegex.Match([]byte(req.URL.Path)) {
@@ -97,7 +97,7 @@ func fakeClient(objs object.ObjMetadataSet) resource.FakeClientFunc {
 						Data: objs.ToStringMap(),
 					}
 					cmList.Items = append(cmList.Items, cm)
-					bodyRC := ioutil.NopCloser(bytes.NewReader(toJSONBytes(&cmList)))
+					bodyRC := io.NopCloser(bytes.NewReader(toJSONBytes(&cmList)))
 					return &http.Response{StatusCode: http.StatusOK, Header: cmdtesting.DefaultHeader(), Body: bodyRC}, nil
 				}
 				return nil, nil

@@ -1395,9 +1395,6 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	wantServiceAccount := fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rootsyncName, "1"),
-		}),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.GCPServiceAccountEmail),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
@@ -1615,9 +1612,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	serviceAccount1 := fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rs1.Name, "1"),
-		}),
 		core.Labels(label1),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -1684,9 +1678,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	serviceAccount2 := fake.ServiceAccountObject(
 		rootReconcilerName2,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rs2.Name, "1"),
-		}),
 		core.Labels(label2),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -1740,9 +1731,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	serviceAccount3 := fake.ServiceAccountObject(
 		rootReconcilerName3,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rs3.Name, "1"),
-		}),
 		core.Annotation(GCPSAAnnotationKey, rs3.Spec.GCPServiceAccountEmail),
 		core.Labels(label3),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
@@ -1801,9 +1789,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	serviceAccount4 := fake.ServiceAccountObject(
 		rootReconcilerName4,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rs4.Name, "1"),
-		}),
 		core.Labels(label4),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -1862,9 +1847,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	serviceAccount5 := fake.ServiceAccountObject(
 		rootReconcilerName5,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rs5.Name, "1"),
-		}),
 		core.Labels(label5),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2477,9 +2459,6 @@ func TestRootSyncWithOCI(t *testing.T) {
 	wantServiceAccount := fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rootsyncName, "1"),
-		}),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2558,9 +2537,6 @@ func TestRootSyncWithOCI(t *testing.T) {
 	wantServiceAccount = fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(v1.NSConfigManagementSystem),
-		core.OwnerReference([]metav1.OwnerReference{
-			ownerReference(kinds.RootSyncV1Beta1().Kind, rootsyncName, "1"),
-		}),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("2"), core.Generation(1),

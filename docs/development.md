@@ -36,19 +36,25 @@ which are written to the `.output/staging` directory. These are created
 when running `make` targets such as `build-manifests` and `config-sync-manifest`.
 See [building from source](#build-from-source) for more information.
 
-For the complete list of arguments accepted by the e2e tests, see [flags.go](../e2e/flags.go).
+For the complete list of arguments accepted by the e2e tests, see [flags.go](../e2e/flags.go)
+or invoke the e2e tests with the `--usage` flag.
+```shell
+go test ./e2e/... --usage
+```
+
 Below is a non-exhaustive list of some useful arguments for running the e2e tests.
 These can be provided on the command line with `go test` or with program arguments in your IDE.
 
-- `--e2e` - If true, run end-to-end tests. (required to run the e2e tests)
+- `--usage` - If true, print usage and exit.
+- `--e2e` - If true, run end-to-end tests. (required to run the e2e tests).
 - `--debug` - If true, do not destroy cluster and clean up temporary directory after test.
 - `--share-test-env` - Specify that the test is using a shared test environment instead of fresh installation per test case.
 - `--test-cluster` - The cluster config used for testing. Allowed values are: `kind` and `gke`.
+- `--num-clusters` -- Number of clusters to run tests on in parallel (only available for [kind]). Overrides the `--test.parallel` flag.
 
 Here are some useful flags from [go test](https://pkg.go.dev/cmd/go#hdr-Testing_flags):
-- `--test.v` - More verbose output
-- `--test.parallel` -- Allow parallel execution of tests (only available for [kind])
-- `--test.run` -- Run only tests matching the provided regular expression
+- `--test.v` - More verbose output.
+- `--test.run` -- Run only tests matching the provided regular expression.
 
 ### E2E tests (kind)
 
@@ -113,7 +119,7 @@ export GCP_CLUSTER=<CLUSTER_NAME>
 export GCP_REGION=<REGION>
 export GCP_ZONE=<ZONE>
 # Run the tests with image prefix/tag from previous step and desired test regex
-go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test.parallel=1 --test-cluster=gke --test.run (test name regexp)
+go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test-cluster=gke --test.run (test name regexp)
 ```
 
 ## Build

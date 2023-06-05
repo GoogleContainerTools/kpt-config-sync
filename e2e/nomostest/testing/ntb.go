@@ -16,7 +16,6 @@ package testing
 
 import (
 	"fmt"
-	"os"
 	"sync"
 )
 
@@ -73,7 +72,7 @@ func (t *FakeNTB) Fail() {
 // current goroutine).
 func (t *FakeNTB) FailNow() {
 	t.Fail()
-	os.Exit(1)
+	panic("FailNow called on FakeNTB")
 }
 
 // Failed reports whether the function has failed.

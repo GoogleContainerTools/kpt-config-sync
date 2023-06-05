@@ -98,16 +98,16 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 	}
 
 	if *e2e.TestCluster == e2e.GKE { // required env vars for GKE
-		if nomostesting.GCPProjectIDFromEnv == "" {
+		if *e2e.GCPProject == "" {
 			t.Fatal("Environment variable GCP_PROJECT is required for GKE clusters")
 		}
-		if nomostesting.GCPClusterFromEnv == "" {
+		if *e2e.GCPCluster == "" {
 			t.Fatal("Environment variable GCP_CLUSTER is required for GKE clusters")
 		}
-		if nomostesting.GCPRegionFromEnv == "" && nomostesting.GCPZoneFromEnv == "" {
+		if *e2e.GCPRegion == "" && *e2e.GCPZone == "" {
 			t.Fatal("One of GCP_REGION or GCP_ZONE is required for GKE clusters")
 		}
-		if nomostesting.GCPRegionFromEnv != "" && nomostesting.GCPZoneFromEnv != "" {
+		if *e2e.GCPRegion != "" && *e2e.GCPZone != "" {
 			t.Fatal("At most one of GCP_ZONE or GCP_REGION may be specified")
 		}
 	}

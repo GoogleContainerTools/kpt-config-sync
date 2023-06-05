@@ -14,8 +14,6 @@
 
 package testing
 
-import "os"
-
 const (
 	// TestInfraContainerRegistry is the Config Sync test-infra registry hosted on GCR
 	TestInfraContainerRegistry = "gcr.io/kpt-config-sync-ci-artifacts"
@@ -24,15 +22,3 @@ const (
 	// ConfigSyncTestPublicRegistry is the Config Sync config-sync-test-public registry hosted on GAR
 	ConfigSyncTestPublicRegistry = "us-docker.pkg.dev/kpt-config-sync-ci-artifacts/config-sync-test-public"
 )
-
-// GCPProjectIDFromEnv is the GCP_PROJECT value from the environment variable
-var GCPProjectIDFromEnv = os.Getenv("GCP_PROJECT")
-
-// GCPClusterFromEnv is the GCP_CLUSTER value from the environment variable
-var GCPClusterFromEnv = os.Getenv("GCP_CLUSTER")
-
-// GCPRegionFromEnv is the GCP_REGION value from the environment variable
-var GCPRegionFromEnv = os.Getenv("GCP_REGION")
-
-// GCPZoneFromEnv is the GCP_ZONE value from the environment variable
-var GCPZoneFromEnv = os.Getenv("GCP_ZONE")

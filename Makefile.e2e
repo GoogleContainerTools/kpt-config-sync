@@ -43,7 +43,7 @@ test-e2e-kind-multi-repo: config-sync-manifest-local
 	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh \
 		--timeout 60m \
 		--test.v -v \
-		--parallel 15 \
+		--num-clusters 15 \
 		--p 1 \
 		$(E2E_ARGS)
 

@@ -23,6 +23,7 @@ import (
 
 	// kubectl auth provider plugins
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"kpt.dev/configsync/pkg/util"
 )
 
 // E2E enables running end-to-end tests.
@@ -86,6 +87,32 @@ var GitProvider = flag.String("git-provider", Local,
 var TestFeatures = flag.String("test-features", "",
 	"A list of features to run, separated by comma. Defaults to empty, which should run all tests.")
 
+// NumClusters is the number of clusters to run tests on. Each cluster only has
+// a single test running on it at a given time. The number of clusters equals the
+// number of test threads which can run concurrently.
+var NumClusters = flag.Int("num-clusters", 1,
+	"Number of parallel test threads to run. Also dictates the number of clusters which will be created in parallel. Overrides the -test.parallel flag.")
+
+// Usage indicates to print usage and exit. This is a workaround for the builtin
+// help command of `go test`
+var Usage = flag.Bool("usage", false, "Print usage and exit.")
+
+// GCPProject is the GCP project to use when running tests.
+var GCPProject = flag.String("gcp-project", util.EnvString("GCP_PROJECT", ""),
+	"GCP Project to use when running tests. Defaults to GCP_PROJECT env var.")
+
+// GCPCluster is the GCP Cluster (GKE) to use when running tests.
+var GCPCluster = flag.String("gcp-cluster", util.EnvString("GCP_CLUSTER", ""),
+	"GCP Cluster (GKE) to use when running tests. Defaults to GCP_CLUSTER env var.")
+
+// GCPRegion is the GCP Region to use when running tests.
+var GCPRegion = flag.String("gcp-region", util.EnvString("GCP_REGION", ""),
+	"GCP Region to use when running tests. Only one of gcp-region and gcp-zone must be set. Defaults to GCP_REGION env var.")
+
+// GCPZone is the GCP Zone to use when running tests.
+var GCPZone = flag.String("gcp-zone", util.EnvString("GCP_ZONE", ""),
+	"GCP Zone to use when running tests. Only one of gcp-region and gcp-zone must be set. Defaults to GCP_ZONE env var.")
+
 const (
 	// Kind indicates creating a Kind cluster for testing.
 	Kind = "kind"
@@ -110,7 +137,7 @@ const (
 
 // NumParallel returns the number of parallel test threads
 func NumParallel() int {
-	return flag.Lookup("test.parallel").Value.(flag.Getter).Get().(int)
+	return *NumClusters
 }
 
 // RunInParallel indicates whether the test is running in parallel.

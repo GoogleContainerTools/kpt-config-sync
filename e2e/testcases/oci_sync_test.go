@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -56,14 +57,14 @@ var (
 	bookinfoARImage = fmt.Sprintf("%s/namespace-repo-bookinfo", nomostesting.ConfigSyncTestPublicRegistry)
 
 	// privateGCRImage pulls the private OCI image by tag
-	privateGCRImage = fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", nomostesting.GCPProjectIDFromEnv)
+	privateGCRImage = fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
 
 	// privateARImage pulls the private OCI image by tag
-	privateARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", nomostesting.GCPProjectIDFromEnv)
+	privateARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", *e2e.GCPProject)
 
-	gsaARReaderEmail = fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
+	gsaARReaderEmail = fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 
-	gsaGCRReaderEmail = fmt.Sprintf("e2e-test-gcr-reader@%s.iam.gserviceaccount.com", nomostesting.GCPProjectIDFromEnv)
+	gsaGCRReaderEmail = fmt.Sprintf("e2e-test-gcr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 )
 
 // TestPublicOCI can run on both Kind and GKE clusters.

@@ -113,6 +113,9 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 	cm := &corev1.ConfigMap{}
 	if err := r.client.Get(ctx, req.NamespacedName, cm); err != nil {
 		if apierrors.IsNotFound(err) {
+			// Returning a hash to ensure the otel-collector deployment is restarted anytime
+			// a otel config map is removed. This protects us around a scenario where the user
+			// adds a custom otel config map and later removes the config map.
 			return hash(req.String())
 		}
 		return nil, status.APIServerErrorf(err, "failed to get otel ConfigMap %s", req.NamespacedName.String())

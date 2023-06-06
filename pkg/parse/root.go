@@ -17,6 +17,7 @@ package parse
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,7 +238,7 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 		source.Helm = &v1beta1.HelmStatus{
 			Repo:    p.options().SourceRepo,
 			Chart:   p.options().SyncDir.SlashPath(),
-			Version: p.options().SourceRev,
+			Version: getChartVersionFromCommit(p.options().SourceRev, source.Commit),
 		}
 		source.Git = nil
 		source.Oci = nil
@@ -338,7 +339,7 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 		rendering.Helm = &v1beta1.HelmStatus{
 			Repo:    p.options().SourceRepo,
 			Chart:   p.options().SyncDir.SlashPath(),
-			Version: p.options().SourceRev,
+			Version: getChartVersionFromCommit(p.options().SourceRev, rendering.Commit),
 		}
 		rendering.Git = nil
 		rendering.Oci = nil
@@ -589,4 +590,18 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 		return status.APIServerError(err, "failed to update RootSync sync status")
 	}
 	return nil
+}
+
+// sourceRev will display the source version,
+// but that could potentially be provided to use as a range of
+// versions from which we pick the latest. We should display the
+// version that was actually pulled down if we can.
+// commit is expected to be of the format `chart:version`,
+// so we parse it to grab the version.
+func getChartVersionFromCommit(sourceRev, commit string) string {
+	split := strings.Split(commit, ":")
+	if len(split) == 2 {
+		return split[1]
+	}
+	return sourceRev
 }

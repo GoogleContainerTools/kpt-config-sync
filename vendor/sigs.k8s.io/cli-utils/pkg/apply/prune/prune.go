@@ -80,11 +80,12 @@ type Options struct {
 // automatically prune/delete).
 //
 // Parameters:
-//   objs - objects to prune (delete)
-//   pruneFilters - list of filters for deletion permission
-//   taskContext - task for apply/prune
-//   taskName - name of the parent task group, for events
-//   opts - options for dry-run
+//
+//	objs - objects to prune (delete)
+//	pruneFilters - list of filters for deletion permission
+//	taskContext - task for apply/prune
+//	taskName - name of the parent task group, for events
+//	opts - options for dry-run
 func (p *Pruner) Prune(
 	objs object.UnstructuredSet,
 	pruneFilters []filter.ValidationFilter,

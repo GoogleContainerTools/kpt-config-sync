@@ -12,30 +12,29 @@
 // are several interfaces that can be implemented to support custom
 // behavior.
 //
-//
-// Polling Resources
+// # Polling Resources
 //
 // In order to poll a set of resources, create a StatusPoller
 // and pass in the list of ResourceIdentifiers to the Poll function.
 //
-//   import (
-//     "sigs.k8s.io/cli-utils/pkg/kstatus/polling"
-//   )
+//	import (
+//	  "sigs.k8s.io/cli-utils/pkg/kstatus/polling"
+//	)
 //
-//   identifiers := []prune.ObjMetadata{
-//     {
-//       GroupKind: schema.GroupKind{
-//         Group: "apps",
-//         Kind: "Deployment",
-//       },
-//       Name: "dep",
-//       Namespace: "default",
-//     }
-//   }
+//	identifiers := []prune.ObjMetadata{
+//	  {
+//	    GroupKind: schema.GroupKind{
+//	      Group: "apps",
+//	      Kind: "Deployment",
+//	    },
+//	    Name: "dep",
+//	    Namespace: "default",
+//	  }
+//	}
 //
-//   poller := polling.NewStatusPoller(reader, mapper, true)
-//   eventsChan := poller.Poll(context.Background(), identifiers, polling.PollOptions{})
-//   for e := range eventsChan {
-//      // Handle event
-//   }
+//	poller := polling.NewStatusPoller(reader, mapper, true)
+//	eventsChan := poller.Poll(context.Background(), identifiers, polling.PollOptions{})
+//	for e := range eventsChan {
+//	   // Handle event
+//	}
 package polling

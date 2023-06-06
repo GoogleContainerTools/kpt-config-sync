@@ -33,6 +33,7 @@ func CreateEventFactory(isDelete bool, groupName string) EventFactory {
 
 // PruneEventFactory implements EventFactory interface as a concrete
 // representation of for prune events.
+//
 //nolint:revive // stuttering ok because Prune is a type of PruneEvent
 type PruneEventFactory struct {
 	groupName string

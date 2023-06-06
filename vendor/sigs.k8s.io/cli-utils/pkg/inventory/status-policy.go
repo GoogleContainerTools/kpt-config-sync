@@ -6,6 +6,7 @@ package inventory
 // StatusPolicy specifies whether the inventory client should apply status to
 // the inventory object. The status contains the actuation and reconcile stauts
 // of each object in the inventory.
+//
 //go:generate stringer -type=StatusPolicy -linecomment
 type StatusPolicy int
 

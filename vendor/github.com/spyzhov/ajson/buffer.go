@@ -1,9 +1,10 @@
 package ajson
 
 import (
-	. "github.com/spyzhov/ajson/internal"
 	"io"
 	"strings"
+
+	. "github.com/spyzhov/ajson/internal"
 )
 
 type buffer struct {
@@ -40,15 +41,15 @@ const (
 	asterisk     byte = '*'
 	plus         byte = '+'
 	minus        byte = '-'
-	division     byte = '/'
-	exclamation  byte = '!'
-	caret        byte = '^'
-	signL        byte = '<'
-	signG        byte = '>'
-	signE        byte = '='
-	ampersand    byte = '&'
-	pipe         byte = '|'
-	question     byte = '?'
+	//division     byte = '/'
+	//exclamation  byte = '!'
+	//caret        byte = '^'
+	//signL        byte = '<'
+	//signG        byte = '>'
+	//signE        byte = '='
+	//ampersand    byte = '&'
+	//pipe         byte = '|'
+	question byte = '?'
 )
 
 type (
@@ -85,6 +86,23 @@ func (b *buffer) next() (c byte, err error) {
 		return 0, err
 	}
 	return b.data[b.index], nil
+}
+
+func (b *buffer) slice(delta uint) ([]byte, error) {
+	if b.index+int(delta) > b.length {
+		return nil, io.EOF
+	}
+	return b.data[b.index : b.index+int(delta)], nil
+}
+
+func (b *buffer) move(delta int) error {
+	if b.index+delta >= b.length {
+		return io.EOF
+	}
+	if b.index+delta >= 0 {
+		b.index += delta
+	}
+	return nil
 }
 
 func (b *buffer) reset() {
@@ -351,21 +369,13 @@ func (b *buffer) rpn() (result rpn, err error) {
 			break
 		}
 		switch true {
-		case c == asterisk || c == division || c == minus || c == plus || c == caret || c == ampersand || c == pipe || c == signL || c == signG || c == signE || c == exclamation: // operations
+		case priorityChar[c]: // operations
 			if variable {
 				variable = false
-				current = string(c)
+				current = b.operation()
 
-				c, err = b.next()
-				if err == nil {
-					temp = current + string(c)
-					if priority[temp] != 0 {
-						current = temp
-					} else {
-						b.index--
-					}
-				} else {
-					err = nil
+				if current == "" {
+					return nil, b.errorSymbol()
 				}
 
 				for len(stack) > 0 {
@@ -510,7 +520,6 @@ func (b *buffer) tokenize() (result tokens, err error) {
 	var (
 		c        byte
 		start    int
-		temp     string
 		current  string
 		variable bool
 	)
@@ -524,18 +533,10 @@ func (b *buffer) tokenize() (result tokens, err error) {
 		case priorityChar[c]: // operations
 			if variable || (c != minus && c != plus) {
 				variable = false
-				current = string(c)
+				current = b.operation()
 
-				c, err = b.next()
-				if err == nil {
-					temp = current + string(c)
-					if priority[temp] != 0 {
-						current = temp
-					} else {
-						b.index--
-					}
-				} else {
-					err = nil
+				if current == "" {
+					return nil, b.errorSymbol()
 				}
 
 				result = append(result, current)
@@ -634,6 +635,24 @@ func (b *buffer) tokenize() (result tokens, err error) {
 	}
 
 	return
+}
+
+func (b *buffer) operation() string {
+	current := ""
+
+	// Read the complete operation into the variable `current`: `+`, `!=`, `<=>`
+	// fixme: add additional order for comparison
+
+	for _, operation := range comparisonOperationsOrder() {
+		if bytes, ok := b.slice(uint(len(operation))); ok == nil {
+			if string(bytes) == operation {
+				current = operation
+				_ = b.move(len(operation) - 1) // error can't occupy here because of b.slice result
+				break
+			}
+		}
+	}
+	return current
 }
 
 func (b *buffer) errorEOF() error {
@@ -772,4 +791,36 @@ func str(key string) (string, bool) {
 	// 	bString = append(bString, quotes)
 	// }
 	// return unquote(bString, quotes)
+}
+
+func numeric2float64(value interface{}) (result float64, err error) {
+	switch typed := value.(type) {
+	case float64:
+		result = typed
+	case float32:
+		result = float64(typed)
+	case int:
+		result = float64(typed)
+	case int8:
+		result = float64(typed)
+	case int16:
+		result = float64(typed)
+	case int32:
+		result = float64(typed)
+	case int64:
+		result = float64(typed)
+	case uint:
+		result = float64(typed)
+	case uint8:
+		result = float64(typed)
+	case uint16:
+		result = float64(typed)
+	case uint32:
+		result = float64(typed)
+	case uint64:
+		result = float64(typed)
+	default:
+		err = unsupportedType(value)
+	}
+	return
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2020 The kpt Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -689,7 +689,7 @@ spec:
                             last transition
                           type: string
                         reason:
-                          description: one-word CamelCase reason for the condition’s
+                          description: one-word CamelCase reason for the condition's
                             last transition
                           type: string
                         status:
@@ -864,7 +864,7 @@ spec:
                         last transition
                       type: string
                     reason:
-                      description: one-word CamelCase reason for the condition’s last
+                      description: one-word CamelCase reason for the condition's last
                         transition
                       type: string
                     status:
@@ -909,7 +909,7 @@ spec:
                               about last transition
                             type: string
                           reason:
-                            description: one-word CamelCase reason for the condition’s
+                            description: one-word CamelCase reason for the condition's
                               last transition
                             type: string
                           status:

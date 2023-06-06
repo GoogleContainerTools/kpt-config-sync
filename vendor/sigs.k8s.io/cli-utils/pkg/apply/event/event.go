@@ -13,6 +13,7 @@ import (
 )
 
 // Type determines the type of events that are available.
+//
 //go:generate stringer -type=Type
 type Type int
 

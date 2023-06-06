@@ -1545,7 +1545,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 
 	rootDeployment.ResourceVersion = "3"
 	// Verify the Reconciler Deployment is updated to 1 replicas.
-	rootDeployment.Spec.Replicas = pointer.Int32Ptr(1)
+	rootDeployment.Spec.Replicas = pointer.Int32(1)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)

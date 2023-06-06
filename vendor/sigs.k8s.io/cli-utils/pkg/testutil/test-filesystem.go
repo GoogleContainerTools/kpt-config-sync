@@ -4,7 +4,6 @@
 package testutil
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +21,7 @@ type TestFilesystem struct {
 // the TestFilesystem.
 func Setup(t *testing.T, dirs ...string) TestFilesystem {
 	tempDir := "" // Use the default temp directory
-	d, err := ioutil.TempDir(tempDir, "test-filesystem")
+	d, err := os.MkdirTemp(tempDir, "test-filesystem")
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, err.Error())
 	}
@@ -52,7 +51,7 @@ func (tf TestFilesystem) WriteFile(t *testing.T, path string, value []byte) {
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, err.Error())
 	}
-	err = ioutil.WriteFile(filepath.Join(tf.root, path), value, 0600)
+	err = os.WriteFile(filepath.Join(tf.root, path), value, 0600)
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, err.Error())
 	}

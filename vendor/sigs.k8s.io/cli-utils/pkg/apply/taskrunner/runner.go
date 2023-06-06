@@ -42,11 +42,11 @@ type Options struct {
 //
 // The tasks run in a loop where a single goroutine will process events from
 // three different channels.
-// - taskQueue is read to allow updating the task queue at runtime.
-// - statusChannel is read to allow updates to the resource cache and triggering
-//   validation of wait conditions.
-// - eventChannel is written to with events based on status updates, if
-//   emitStatusEvents is true.
+//   - taskQueue is read to allow updating the task queue at runtime.
+//   - statusChannel is read to allow updates to the resource cache and triggering
+//     validation of wait conditions.
+//   - eventChannel is written to with events based on status updates, if
+//     emitStatusEvents is true.
 func (tsr *TaskStatusRunner) Run(
 	ctx context.Context,
 	taskContext *TaskContext,

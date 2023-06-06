@@ -61,7 +61,7 @@ type ObjMetadata struct {
 // and returns an ObjMetadata struct storing the four fields.
 // Example inventory string:
 //
-//   test-namespace_test-name_apps_ReplicaSet
+//	test-namespace_test-name_apps_ReplicaSet
 //
 // Returns an error if unable to parse and create the ObjMetadata struct.
 //

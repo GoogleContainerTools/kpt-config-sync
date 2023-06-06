@@ -6,34 +6,34 @@
 // until it is cancelled through the provided context. Updates on the status of
 // objects are streamed back to the caller through a channel.
 //
-// Watching Resources
+// # Watching Resources
 //
 // In order to watch a set of resources objects, create a StatusWatcher
 // and pass in the list of object identifiers to the Watch function.
 //
-//   import (
-//     "sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
-//   )
+//	import (
+//	  "sigs.k8s.io/cli-utils/pkg/kstatus/watcher"
+//	)
 //
-//   ids := []prune.ObjMetadata{
-//     {
-//       GroupKind: schema.GroupKind{
-//         Group: "apps",
-//         Kind: "Deployment",
-//       },
-//       Name: "dep",
-//       Namespace: "default",
-//     }
-//   }
+//	ids := []prune.ObjMetadata{
+//	  {
+//	    GroupKind: schema.GroupKind{
+//	      Group: "apps",
+//	      Kind: "Deployment",
+//	    },
+//	    Name: "dep",
+//	    Namespace: "default",
+//	  }
+//	}
 //
-//   statusWatcher := watcher.NewDefaultStatusWatcher(dynamicClient, mapper)
-//   ctx, cancelFunc := context.WithCancel(context.Background())
-//   eventCh := statusWatcher.Watch(ctx, ids, watcher.Options{})
-//   for e := range eventCh {
-//      // Handle event
-//      if e.Type == event.ErrorEvent {
-//        cancelFunc()
-//        return e.Err
-//      }
-//   }
+//	statusWatcher := watcher.NewDefaultStatusWatcher(dynamicClient, mapper)
+//	ctx, cancelFunc := context.WithCancel(context.Background())
+//	eventCh := statusWatcher.Watch(ctx, ids, watcher.Options{})
+//	for e := range eventCh {
+//	   // Handle event
+//	   if e.Type == event.ErrorEvent {
+//	     cancelFunc()
+//	     return e.Err
+//	   }
+//	}
 package watcher

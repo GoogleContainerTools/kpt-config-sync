@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2020 The kpt Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func (r *ResourceGroupPathManifestReader) Read() ([]*unstructured.Unstructured, 
 		// Skip if current file is a ResourceGroup resource. We do not want to apply/delete any ResourceGroup CRs when we
 		// run any `kpt live` commands on a package. Instead, we have specific logic in place for handling ResourceGroups in
 		// the live cluster.
-		if u.GetKind() == rgfilev1alpha1.RGFileKind && u.GetAPIVersion() == rgfilev1alpha1.DefaultMeta.APIVersion {
+		if u.GroupVersionKind() == rgfilev1alpha1.ResourceGroupGVK() {
 			continue
 		}
 		objs = append(objs, u)
@@ -90,6 +90,7 @@ func removeAnnotations(n *yaml.RNode, annotations ...kioutil.AnnotationKey) erro
 
 // kyamlNodeToUnstructured take a resource represented as a kyaml RNode and
 // turns it into an Unstructured object.
+//
 //nolint:interfacer
 func kyamlNodeToUnstructured(n *yaml.RNode) (*unstructured.Unstructured, error) {
 	b, err := n.MarshalJSON()

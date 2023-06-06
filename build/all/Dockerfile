@@ -73,7 +73,7 @@ RUN scripts/prepare-licenses.sh
 
 # Debian non-root base image
 # Uses the same nonroot UID as distroless
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.2 as debian-nonroot
+FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.5 as debian-nonroot
 WORKDIR /
 ARG USERNAME=nonroot
 ARG USER_UID=65532

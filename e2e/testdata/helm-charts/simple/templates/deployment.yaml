@@ -4,6 +4,7 @@ kind: Deployment
 metadata:
   labels:
     app: foo
+    version: {{ .Chart.Version }}
   name: deploy-default
 spec:
   selector:

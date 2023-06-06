@@ -116,6 +116,40 @@ func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
 	return args, nil
 }
 
+func (h *Hydrator) showChartArgs(ctx context.Context) ([]string, error) {
+	if h.isOCI() {
+		return []string{"show", "chart", h.Repo + "/" + h.Chart, "--version", h.Version}, nil
+	}
+	return h.appendAuthArgs(ctx, []string{"show", "chart", h.Chart, "--repo", h.Repo, "--version", h.Version})
+}
+
+// figure out which version we are going to pull as it can be provided to us as a range (e.g. 1.0.0 - 1.6.5)
+func (h *Hydrator) getChartVersion(ctx context.Context) error {
+	// Use `helm show chart` to get chart info and parse the output to get the version number.
+	// This is not super convenient but seems to be the only option that will work with OCI.
+	// See available subcommands for OCI registries at https://helm.sh/docs/topics/registries/.
+	args, err := h.showChartArgs(ctx)
+	if err != nil {
+		return err
+	}
+	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run `helm show chart`: %w, stdout: %s", err, string(out))
+	}
+	var parsedOut map[string]interface{}
+	if err := yaml.Unmarshal(out, &parsedOut); err != nil {
+		return fmt.Errorf("failed to parse output of `helm show chart`: %w, stdout: %s", err, string(out))
+	}
+
+	version, ok := parsedOut["version"].(string)
+	if ok {
+		h.Version = version
+	} else {
+		return fmt.Errorf("failed to get version from output of `helm show chart`, stdout: %s", string(out))
+	}
+	return nil
+}
+
 func fetchNewToken(ctx context.Context) (*oauth2.Token, error) {
 	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
@@ -176,17 +210,6 @@ data:
 
 // HelmTemplate runs helm template with args
 func (h *Hydrator) HelmTemplate(ctx context.Context) error {
-	//TODO: add logic to handle "latest" version
-	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
-	linkPath := filepath.Join(h.HydrateRoot, h.Dest)
-	oldDir, err := filepath.EvalSymlinks(linkPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to evaluate the symbolic path %q to the Helm chart: %w", linkPath, err)
-	}
-	if oldDir == destDir {
-		klog.Infof("no update required with the same helm chart version %q", h.Version)
-		return nil
-	}
 	if h.Auth != configsync.AuthNone && h.isOCI() {
 		args, err := h.registryLoginArgs(ctx)
 		if err != nil {
@@ -197,10 +220,28 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))
 		}
 	}
+
+	if err := h.getChartVersion(ctx); err != nil {
+		return err
+	}
+
+	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
+	linkPath := filepath.Join(h.HydrateRoot, h.Dest)
+	oldDir, err := filepath.EvalSymlinks(linkPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to evaluate the symbolic path %q to the Helm chart: %w", linkPath, err)
+	}
+
+	if oldDir == destDir {
+		klog.Infof("no update required with the same helm chart version %q", h.Version)
+		return nil
+	}
+
 	args, err := h.templateArgs(ctx, destDir)
 	if err != nil {
 		return err
 	}
+
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))

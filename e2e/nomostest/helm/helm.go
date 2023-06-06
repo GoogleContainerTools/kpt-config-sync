@@ -100,6 +100,15 @@ func (r *RemoteHelmChart) CopyChartFromLocal(chartPath, originalChartName string
 	return nil
 }
 
+// UpdateVersion updates the local version of the helm chart to version
+func (r *RemoteHelmChart) UpdateVersion(version string) error {
+	if err := findAndReplaceInFile(filepath.Join(r.Dir, "Chart.yaml"), fmt.Sprintf("version: %s", r.ChartVersion), fmt.Sprintf("version: %s", version)); err != nil {
+		return fmt.Errorf("failed to update helm chart version: %v", err)
+	}
+	r.ChartVersion = version
+	return nil
+}
+
 // Push will package and push the helm chart located at r.Dir to the remote registry.
 func (r *RemoteHelmChart) Push() error {
 	if _, err := r.Shell.Helm("package", r.Dir, "--destination", r.Dir); err != nil {
@@ -112,8 +121,9 @@ func (r *RemoteHelmChart) Push() error {
 	return nil
 }
 
-// PushHelmChart pushes a new helm chart for use during an e2e test. Returns the name of the chart that gets pushed and any errors that are encountered.
-func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) {
+// PushHelmChart pushes a new helm chart for use during an e2e test. Returns a reference to the RemoteHelmChart object
+// and any errors that are encountered.
+func PushHelmChart(nt *nomostest.NT, helmchart, version string) (*RemoteHelmChart, error) {
 	nt.T.Log("Push helm chart to the artifact registry")
 
 	chartName := generateChartName(helmchart)
@@ -126,16 +136,16 @@ func PushHelmChart(nt *nomostest.NT, helmchart, version string) (string, error) 
 	remoteHelmChart := NewRemoteHelmChart(nt.Shell, PrivateARHelmHost, PrivateARHelmRegistry, nt.TmpDir, chartName, version)
 	err := remoteHelmChart.CopyChartFromLocal(fmt.Sprintf("../testdata/helm-charts/%s", helmchart), helmchart)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := remoteHelmChart.RegistryLogin(); err != nil {
-		return "", fmt.Errorf("failed to login to the helm registry: %v", err)
+		return nil, fmt.Errorf("failed to login to the helm registry: %v", err)
 	}
 	if err := remoteHelmChart.Push(); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return chartName, nil
+	return remoteHelmChart, nil
 }
 
 // creates a chart name from current project id, cluster name, and timestamp

@@ -296,13 +296,13 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 
 	// For helm charts, we need to push the chart to the AR before configuring the RootSync
 	if testSpec.sourceType == v1beta1.HelmSource {
-		chartName, err := helm.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
+		remoteHelmChart, err := helm.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
 		if err != nil {
 			nt.T.Fatalf("failed to push helm chart: %v", err)
 		}
 
-		testSpec.sourceChart = chartName
-		testSpec.rootCommitFn = helmChartVersion(chartName + ":" + testSpec.sourceVersion)
+		testSpec.sourceChart = remoteHelmChart.ChartName
+		testSpec.rootCommitFn = helmChartVersion(remoteHelmChart.ChartName + ":" + testSpec.sourceVersion)
 	}
 
 	// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.

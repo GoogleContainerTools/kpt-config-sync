@@ -1298,11 +1298,15 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
 		containerEnvMutator(rootContainerEnv),
+		setResourceVersion("1"),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
@@ -1324,6 +1328,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
 		containerEnvMutator(rootContainerEnv),
+		setResourceVersion("2"),
 	)
 
 	updatedRootDeployment.ResourceVersion = "2"
@@ -1331,6 +1336,9 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("Deployment successfully updated")
 
@@ -1352,6 +1360,9 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
+	if t.Failed() {
+		t.FailNow()
+	}
 	t.Log("Deployment successfully updated")
 
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
@@ -1368,6 +1379,9 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("No need to update Deployment.")
 }
@@ -1600,7 +1614,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs1 := fake.RootSyncObjectV1Beta1(rs1.Name)
 	wantRs1.Spec = rs1.Spec
 	wantRs1.Status.Reconciler = rootReconcilerName
-	rootsync.SetReconciling(wantRs1, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs1, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	validateRootSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
@@ -1655,7 +1670,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs2 := fake.RootSyncObjectV1Beta1(rs2.Name)
 	wantRs2.Spec = rs2.Spec
 	wantRs2.Status.Reconciler = rootReconcilerName2
-	rootsync.SetReconciling(wantRs2, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs2, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
 	validateRootSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
@@ -1708,7 +1724,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs3 := fake.RootSyncObjectV1Beta1(rs3.Name)
 	wantRs3.Spec = rs3.Spec
 	wantRs3.Status.Reconciler = rootReconcilerName3
-	rootsync.SetReconciling(wantRs3, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs3, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
 	validateRootSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
@@ -1765,7 +1782,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs4 := fake.RootSyncObjectV1Beta1(rs4.Name)
 	wantRs4.Spec = rs4.Spec
 	wantRs4.Status.Reconciler = rootReconcilerName4
-	rootsync.SetReconciling(wantRs4, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs4, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName4))
 	validateRootSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
@@ -1822,7 +1840,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs5 := fake.RootSyncObjectV1Beta1(rs5.Name)
 	wantRs5.Spec = rs5.Spec
 	wantRs5.Status.Reconciler = rootReconcilerName5
-	rootsync.SetReconciling(wantRs5, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs5, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName5))
 	validateRootSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{
@@ -1884,7 +1903,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	rootsync.SetReconciling(wantRs1, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs1, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	validateRootSyncStatus(t, wantRs1, fakeClient)
 
 	rootContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
@@ -1920,7 +1940,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	rootsync.SetReconciling(wantRs2, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs2, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
 	validateRootSyncStatus(t, wantRs2, fakeClient)
 
 	rootContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
@@ -1957,7 +1978,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	rootsync.SetReconciling(wantRs3, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs3, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
 	validateRootSyncStatus(t, wantRs3, fakeClient)
 
 	rootContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
@@ -2805,7 +2827,8 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = rootReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
-	rootsync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid Helm spec
@@ -2830,7 +2853,8 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = rootReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
-	rootsync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	rootsync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 }
 

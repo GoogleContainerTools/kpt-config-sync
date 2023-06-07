@@ -17,6 +17,7 @@ package nomostest
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -99,20 +100,80 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 	return s
 }
 
+// Cluster is an interface for a target k8s cluster used by the e2e tests
+type Cluster interface {
+	// Create the k8s cluster
+	Create() error
+	// Delete the k8s cluster
+	Delete() error
+	// Connect to the k8s cluster (generate kubeconfig)
+	Connect() error
+}
+
 // RestConfig sets up the config for creating a Client connection to a K8s cluster.
 // If --test-cluster=kind, it creates a Kind cluster.
 // If --test-cluster=kubeconfig, it uses the context specified in kubeconfig.
 func RestConfig(t testing.NTB, opts *ntopts.New) {
 	opts.KubeconfigPath = filepath.Join(opts.TmpDir, clusters.Kubeconfig)
 	t.Logf("kubeconfig will be created at %s", opts.KubeconfigPath)
-	t.Logf("Connect to cluster using:\nexport KUBECONFIG=%s", opts.KubeconfigPath)
+	t.Logf("Connect to %s cluster using:\nexport KUBECONFIG=%s", *e2e.TestCluster, opts.KubeconfigPath)
+	createCluster := true
+	opts.ClusterName = opts.Name
+	opts.IsEphemeralCluster = true
+	var cluster Cluster
 	switch strings.ToLower(*e2e.TestCluster) {
 	case e2e.Kind:
-		clusters.Kind(t, *e2e.KubernetesVersion)(opts)
+		cluster = &clusters.KindCluster{
+			T:                 t,
+			Name:              opts.ClusterName,
+			KubeConfigPath:    opts.KubeconfigPath,
+			TmpDir:            opts.TmpDir,
+			KubernetesVersion: *e2e.KubernetesVersion,
+		}
 	case e2e.GKE:
-		clusters.GKECluster(t)(opts)
+		if !*e2e.CreateClusters {
+			createCluster = false
+			opts.ClusterName = *e2e.GCPCluster
+			opts.IsEphemeralCluster = false
+		}
+		cluster = &clusters.GKECluster{
+			T:              t,
+			Name:           opts.ClusterName,
+			KubeConfigPath: opts.KubeconfigPath,
+		}
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
+	}
+	if createCluster {
+		t.Cleanup(func() {
+			if t.Failed() && *e2e.Debug {
+				t.Logf("[WARNING] Skipping deletion of %s cluster %s", *e2e.TestCluster, opts.ClusterName)
+				return
+			}
+			deleteStart := time.Now()
+			t.Logf("Deleting %s cluster %s at %s",
+				*e2e.TestCluster, opts.ClusterName, deleteStart.Format(time.RFC3339))
+			defer func() {
+				t.Logf("took %s to delete %s cluster %s",
+					time.Since(deleteStart), *e2e.TestCluster, opts.ClusterName)
+			}()
+			if err := cluster.Delete(); err != nil {
+				t.Error(err)
+			}
+		})
+		createStart := time.Now()
+		t.Logf("Creating %s cluster %s at %s",
+			*e2e.TestCluster, opts.ClusterName, createStart.Format(time.RFC3339))
+		if err := cluster.Create(); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("took %s to create %s cluster %s",
+			time.Since(createStart), *e2e.TestCluster, opts.ClusterName)
+	}
+	t.Logf("Connecting to %s cluster %s",
+		*e2e.TestCluster, opts.ClusterName)
+	if err := cluster.Connect(); err != nil {
+		t.Fatal(err)
 	}
 
 	restConfig, err := restconfig.NewFromConfigFile(opts.KubeconfigPath)

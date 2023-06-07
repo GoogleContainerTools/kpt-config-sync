@@ -28,8 +28,12 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
 )
 
-// PrivateARHelmRegistry is the registry URL to the private AR used for testing
-var PrivateARHelmRegistry = fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", *e2e.GCPProject)
+// PrivateARHelmRegistry is the registry URL to the private AR used for testing.
+// Cannot be assigned as a global variable due to GCPProject pointer, which gets
+// evaluated after initialization.
+func PrivateARHelmRegistry() string {
+	return fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", *e2e.GCPProject)
+}
 
 // PrivateARHelmHost is the host name of the private AR used for testing
 var PrivateARHelmHost = "https://us-docker.pkg.dev"
@@ -126,14 +130,14 @@ func (r *RemoteHelmChart) Push() error {
 func PushHelmChart(nt *nomostest.NT, helmchart, version string) (*RemoteHelmChart, error) {
 	nt.T.Log("Push helm chart to the artifact registry")
 
-	chartName := generateChartName(helmchart)
+	chartName := generateChartName(helmchart, nt.ClusterName)
 	nt.T.Cleanup(func() {
 		if err := cleanHelmImages(nt, chartName); err != nil {
 			nt.T.Errorf(err.Error())
 		}
 	})
 
-	remoteHelmChart := NewRemoteHelmChart(nt.Shell, PrivateARHelmHost, PrivateARHelmRegistry, nt.TmpDir, chartName, version)
+	remoteHelmChart := NewRemoteHelmChart(nt.Shell, PrivateARHelmHost, PrivateARHelmRegistry(), nt.TmpDir, chartName, version)
 	err := remoteHelmChart.CopyChartFromLocal(fmt.Sprintf("../testdata/helm-charts/%s", helmchart), helmchart)
 	if err != nil {
 		return nil, err
@@ -149,8 +153,8 @@ func PushHelmChart(nt *nomostest.NT, helmchart, version string) (*RemoteHelmChar
 }
 
 // creates a chart name from current project id, cluster name, and timestamp
-func generateChartName(helmchart string) string {
-	chartName := fmt.Sprintf("%s-%s-%s", helmchart, *e2e.GCPCluster, timestampAsString())
+func generateChartName(helmchart, clusterName string) string {
+	chartName := fmt.Sprintf("%s-%s-%s", helmchart, clusterName, timestampAsString())
 	if len(chartName) > 50 {
 		// the chartName + releaseName is used as the metadata.name of resources in the coredns helm chart, so we must trim this down
 		// to keep it under the k8s length limit

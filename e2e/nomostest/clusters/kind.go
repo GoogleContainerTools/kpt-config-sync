@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e/nomostest/docker"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -54,102 +54,97 @@ const (
 	maxKindTries = 6
 )
 
-// Kind creates a Kind cluster for the test and fills in the RESTConfig option
-// with the information needed to establish a Client with it.
-//
-// version is one of the KindVersion constants above.
-func Kind(t testing.NTB, version string) ntopts.Opt {
-	v := asKindVersion(t, version)
-	return func(opt *ntopts.New) {
-		opt.IsEphemeralCluster = true
-		newKind(t, opt.Name, opt.TmpDir, opt.KubeconfigPath, v)
+// KindCluster is a kind cluster for use in the e2e tests
+type KindCluster struct {
+	// T is a testing interface
+	T testing.NTB
+	// Name is the name of the cluster
+	Name string
+	// KubeConfigPath is the path to save the kube config
+	KubeConfigPath string
+	// TmpDir is the temporary directory for this test
+	TmpDir string
+	// KubernetesVersion is the version to use when creating the kind cluster
+	KubernetesVersion  string
+	creationSuccessful bool
+	provider           *cluster.Provider
+}
+
+// Create the kind cluster
+func (c *KindCluster) Create() error {
+	c.provider = cluster.NewProvider()
+
+	version, err := asKindVersion(c.KubernetesVersion)
+	if err != nil {
+		return err
 	}
+	err = createKindCluster(c.provider, c.Name, c.KubeConfigPath, version)
+	if err == nil {
+		c.creationSuccessful = true
+	} else {
+		c.creationSuccessful = false
+	}
+	return err
+}
+
+// Delete the kind cluster
+func (c *KindCluster) Delete() error {
+	if !c.creationSuccessful {
+		// Since we have set retain=true, the cluster is still available even
+		// though creation did not execute successfully.
+		artifactsDir := os.Getenv("ARTIFACTS")
+		if artifactsDir == "" {
+			artifactsDir = filepath.Join(c.TmpDir, "artifacts")
+		}
+		c.T.Logf("exporting failed cluster logs to %s", artifactsDir)
+		err := exec.Command("kind", "export", "logs", "--name", c.Name, artifactsDir).Run()
+		if err != nil {
+			c.T.Errorf("exporting kind logs: %v", err)
+		}
+	}
+
+	// If the test runner stops testing with a command like ^C, cleanup
+	// callbacks such as this are not executed.
+	err := c.provider.Delete(c.Name, c.KubeConfigPath)
+	if err != nil {
+		return errors.Errorf("deleting Kind cluster %q: %v", c.Name, err)
+	}
+	return nil
+}
+
+// Connect to the kind cluster
+func (c *KindCluster) Connect() error {
+	return c.provider.ExportKubeConfig(c.Name, c.KubeConfigPath, false)
 }
 
 // asKindVersion returns the latest Kind version associated with a given
 // Kubernetes minor version.
-func asKindVersion(t testing.NTB, version string) KindVersion {
-	t.Helper()
-
+func asKindVersion(version string) (KindVersion, error) {
 	switch version {
 	case "1.14":
-		return Kind1_14
+		return Kind1_14, nil
 	case "1.15":
-		return Kind1_15
+		return Kind1_15, nil
 	case "1.16":
-		return Kind1_16
+		return Kind1_16, nil
 	case "1.17":
-		return Kind1_17
+		return Kind1_17, nil
 	case "1.18":
-		return Kind1_18
+		return Kind1_18, nil
 	case "1.19":
-		return Kind1_19
+		return Kind1_19, nil
 	case "1.20":
-		return Kind1_20
+		return Kind1_20, nil
 	case "1.21":
-		return Kind1_21
+		return Kind1_21, nil
 	case "1.22":
-		return Kind1_22
+		return Kind1_22, nil
 	case "1.23":
-		return Kind1_23
+		return Kind1_23, nil
 	case "1.24":
-		return Kind1_24
+		return Kind1_24, nil
 	}
-	t.Fatalf("Unrecognized Kind version: %q", version)
-	return ""
-}
-
-// newKind creates a new Kind cluster for use in testing with the specified name.
-//
-// Automatically registers the cluster to be deleted at the end of the test.
-func newKind(t testing.NTB, name, tmpDir, kcfgPath string, version KindVersion) {
-	p := cluster.NewProvider()
-
-	start := time.Now()
-	t.Logf("started creating kind cluster %s at %s", name, start.Format(time.RFC3339))
-	defer func() {
-		t.Logf("took %s to create kind cluster %s", time.Since(start), name)
-	}()
-
-	err := createKindCluster(p, name, kcfgPath, version)
-	creationSuccessful := err == nil
-
-	// Register the cluster to be deleted at the end of the test, even if cluster
-	// creation failed.
-	t.Cleanup(func() {
-		if skipClusterCleanup(t) {
-			t.Errorf(`Connect to kind cluster:
-kind export kubeconfig --name=%s`, name)
-			t.Errorf(`Delete kind cluster:
-kind delete cluster --name=%s`, name)
-			return
-		}
-
-		if !creationSuccessful {
-			// Since we have set retain=true, the cluster is still available even
-			// though creation did not execute successfully.
-			artifactsDir := os.Getenv("ARTIFACTS")
-			if artifactsDir == "" {
-				artifactsDir = filepath.Join(tmpDir, "artifacts")
-			}
-			t.Logf("exporting failed cluster logs to %s", artifactsDir)
-			err := exec.Command("kind", "export", "logs", "--name", name, artifactsDir).Run()
-			if err != nil {
-				t.Errorf("exporting kind logs: %v", err)
-			}
-		}
-
-		// If the test runner stops testing with a command like ^C, cleanup
-		// callbacks such as this are not executed.
-		err := p.Delete(name, kcfgPath)
-		if err != nil {
-			t.Errorf("deleting Kind cluster %q: %v", name, err)
-		}
-	})
-
-	if err != nil {
-		t.Fatalf("creating Kind cluster %s: %v", name, err)
-	}
+	return "", errors.Errorf("Unrecognized Kind version: %q", version)
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

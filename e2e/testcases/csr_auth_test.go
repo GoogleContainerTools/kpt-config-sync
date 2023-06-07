@@ -246,12 +246,12 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 
 	// Truncate the fleetMembership length to be at most 63 characters.
-	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), *e2e.GCPCluster), 63)
+	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), nt.ClusterName), 63)
 	gkeURI := "https://container.googleapis.com/v1/projects/" + *e2e.GCPProject
 	if *e2e.GCPRegion != "" {
-		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", *e2e.GCPRegion, *e2e.GCPCluster)
+		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", *e2e.GCPRegion, nt.ClusterName)
 	} else {
-		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", *e2e.GCPZone, *e2e.GCPCluster)
+		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", *e2e.GCPZone, nt.ClusterName)
 	}
 
 	cleanMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)

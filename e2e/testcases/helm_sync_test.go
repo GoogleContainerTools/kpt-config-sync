@@ -157,7 +157,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "namespace": "", "deployNamespace": ""}}}`,
-		v1beta1.HelmSource, helm.PrivateARHelmRegistry, remoteHelmChart.ChartName, privateSimpleHelmChartVersion, gsaARReaderEmail))
+		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateSimpleHelmChartVersion, gsaARReaderEmail))
 	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateSimpleHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
@@ -202,7 +202,7 @@ func TestHelmLatestVersion(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "deployNamespace": "simple"}, "git": null}}`,
-		v1beta1.HelmSource, remoteHelmChart.ChartName, helm.PrivateARHelmRegistry, gsaARReaderEmail))
+		v1beta1.HelmSource, remoteHelmChart.ChartName, helm.PrivateARHelmRegistry(), gsaARReaderEmail))
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
 		[]testpredicates.Predicate{testpredicates.HasLabel("version", privateSimpleHelmChartVersion)}); err != nil {
 		nt.T.Error(err)
@@ -271,7 +271,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:                   helm.PrivateARHelmRegistry,
+		Repo:                   helm.PrivateARHelmRegistry(),
 		Chart:                  remoteHelmChart.ChartName,
 		Auth:                   configsync.AuthGCPServiceAccount,
 		GCPServiceAccountEmail: gsaARReaderEmail,
@@ -307,7 +307,7 @@ func TestHelmARFleetWISameProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:   true,
 		crossProject:  false,
-		sourceRepo:    helm.PrivateARHelmRegistry,
+		sourceRepo:    helm.PrivateARHelmRegistry(),
 		sourceVersion: privateCoreDNSHelmChartVersion,
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
@@ -335,7 +335,7 @@ func TestHelmARFleetWIDifferentProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:   true,
 		crossProject:  true,
-		sourceRepo:    helm.PrivateARHelmRegistry,
+		sourceRepo:    helm.PrivateARHelmRegistry(),
 		sourceVersion: privateCoreDNSHelmChartVersion,
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
@@ -362,7 +362,7 @@ func TestHelmARGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:   false,
 		crossProject:  false,
-		sourceRepo:    helm.PrivateARHelmRegistry,
+		sourceRepo:    helm.PrivateARHelmRegistry(),
 		sourceVersion: privateCoreDNSHelmChartVersion,
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
@@ -388,7 +388,7 @@ func TestHelmGCENode(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, helm.PrivateARHelmRegistry, remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
+		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
 	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateCoreDNSHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
@@ -434,7 +434,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, helm.PrivateARHelmRegistry, remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
+		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
 	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateCoreDNSHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {

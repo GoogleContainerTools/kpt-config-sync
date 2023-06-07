@@ -40,6 +40,11 @@ const (
 	valuesFile = "chart-values.yaml"
 )
 
+var (
+	// helmCacheHome is the local filepath where helm writes local cache data
+	helmCacheHome = os.Getenv("HOME") + "/.cache/helm"
+)
+
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
 	Chart           string
@@ -147,6 +152,16 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	} else {
 		return fmt.Errorf("failed to get version from output of `helm show chart`, stdout: %s", string(out))
 	}
+
+	// we need to clear the local helm cache after running `helm show chart`,
+	// otherwise we can get an OOM error on autopilot clusters later during
+	// the rendering step
+	if err := os.RemoveAll(helmCacheHome); err != nil {
+		// we don't necessarily need to exit on error here, as it is possible that the later rendering
+		// step could still succeed, so we just log the error and continue
+		klog.Infoln("failed to clear helm cache: %w", err)
+	}
+
 	return nil
 }
 
@@ -241,14 +256,15 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
 	}
+
 	if err := h.setDeployNamespace(destDir); err != nil {
 		return fmt.Errorf("failed to set the deploy namespace: %w", err)
 	}
+
 	klog.Infof("successfully rendered the helm chart : %s", string(out))
 	return util.UpdateSymlink(h.HydrateRoot, linkPath, destDir, oldDir)
 }

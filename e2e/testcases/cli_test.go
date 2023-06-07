@@ -940,21 +940,24 @@ func TestNomosImage(t *testing.T) {
 		nt.T.Fatalf("expected to find version string in output:\n%s\n", string(out))
 	}
 
-	// we are testing the presence of kustomize and helm executables by
-	// just launching those binaries.  It's possible that we might want to
-	// check whether the versioms included are indeed the versions we want
-	// but that would probably mean re-factorig some of the Makefiles.
-	// For right now this is a basic check.
-	_, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
-		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
+	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version), "version")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	if !strings.Contains(string(out), hydrate.KustomizeVersion) {
+		nt.T.Fatalf("expected to find kustomize version string %s in output:\n%s\n",
+			hydrate.KustomizeVersion, string(out))
+	}
 
-	_, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
-		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
+	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
+		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version), "version")
 	if err != nil {
 		nt.T.Fatal(err)
+	}
+	if !strings.Contains(string(out), hydrate.HelmVersion) {
+		nt.T.Fatalf("expected to find helm version string %s in output:\n%s\n",
+			hydrate.HelmVersion, string(out))
 	}
 }
 

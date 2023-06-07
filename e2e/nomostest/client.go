@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/clusters"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
@@ -102,13 +103,14 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 // If --test-cluster=kind, it creates a Kind cluster.
 // If --test-cluster=kubeconfig, it uses the context specified in kubeconfig.
 func RestConfig(t testing.NTB, opts *ntopts.New) {
-	opts.KubeconfigPath = filepath.Join(opts.TmpDir, ntopts.Kubeconfig)
+	opts.KubeconfigPath = filepath.Join(opts.TmpDir, clusters.Kubeconfig)
 	t.Logf("kubeconfig will be created at %s", opts.KubeconfigPath)
+	t.Logf("Connect to cluster using:\nexport KUBECONFIG=%s", opts.KubeconfigPath)
 	switch strings.ToLower(*e2e.TestCluster) {
 	case e2e.Kind:
-		ntopts.Kind(t, *e2e.KubernetesVersion)(opts)
+		clusters.Kind(t, *e2e.KubernetesVersion)(opts)
 	case e2e.GKE:
-		ntopts.GKECluster(t)(opts)
+		clusters.GKECluster(t)(opts)
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}

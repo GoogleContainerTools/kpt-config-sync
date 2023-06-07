@@ -237,14 +237,15 @@ type sharedNTs struct {
 	sharedNTs []*sharedNT
 }
 
-func (snt *sharedNTs) newNT(nt *NT, fake *testing.FakeNTB) {
+func (snt *sharedNTs) newNT(fake *testing.FakeNTB) *sharedNT {
 	snt.lock.Lock()
 	defer snt.lock.Unlock()
-	snt.sharedNTs = append(snt.sharedNTs, &sharedNT{
-		inUse:    false,
-		sharedNT: nt,
-		fakeNTB:  fake,
-	})
+	newSNT := &sharedNT{
+		inUse:   false,
+		fakeNTB: fake,
+	}
+	snt.sharedNTs = append(snt.sharedNTs, newSNT)
+	return newSNT
 }
 
 func (snt *sharedNTs) acquire(t testing.NTB) *NT {
@@ -288,15 +289,11 @@ func (snt *sharedNTs) destroy() {
 		wg.Add(1)
 		go func(nt *sharedNT) {
 			defer wg.Done()
-			if *e2e.TestCluster == e2e.Kind {
-				// Run Cleanup to destroy kind clusters
-				nt.fakeNTB.RunCleanup()
-			} else {
-				nt.sharedNT.T.Log("[CLEANUP] CleanSharedNTs after all tests")
-				if err := Clean(nt.sharedNT); err != nil {
-					nt.sharedNT.T.Errorf("[CLEANUP] Failed to clean shared test environment: %v", err)
-				}
-			}
+			// Run cleanup on shared test environment. This will run all registered
+			// cleanups on the fake NTB, e.g.
+			// - destroy clusters created at the beginning
+			// - run `Clean` from FreshTestEnv
+			nt.fakeNTB.RunCleanup()
 		}(nt)
 	}
 	wg.Wait()
@@ -333,15 +330,19 @@ func newSharedNT(name string) error {
 		return errors.Wrap(err, "failed to remove the shared test directory")
 	}
 	fakeNTB := &testing.FakeNTB{}
+	// Register a new SharedNT immediately with the fakeNTB. This way in the case
+	// of an error (e.g. during cluster creation) the cleanup can still run.
+	newSNT := mySharedNTs.newNT(fakeNTB)
+	// Create the actual test environment that will be reused by tests.
 	wrapper := testing.NewShared(fakeNTB)
 	opts := newOptStruct(name, tmpDir, wrapper)
-	nt := FreshTestEnv(wrapper, opts)
-	mySharedNTs.newNT(nt, fakeNTB)
+	newSNT.sharedNT = FreshTestEnv(wrapper, opts)
 	return nil
 }
 
 // CleanSharedNTs tears down the shared test environments.
 func CleanSharedNTs() {
+	fmt.Println("Cleaning up shared environments")
 	mySharedNTs.destroy()
 }
 

@@ -101,18 +101,41 @@ This section provides instructions on how to run the e2e tests on GKE.
 
 Follow the [instructions to provision a dev environment].
 
-#### Running E2E tests on GKE
-
 To execute e2e multi-repo tests with a GKE cluster, build and push the Config Sync
 images to GCR and then use go test. The images will be pushed to the GCP project
-from you current gcloud context and the tests will execute on the cluster set as the
-current context in your kubeconfig.
+from you current gcloud context.
+
 ```shell
 # Ensure gcloud context is set to correct project
 gcloud config set project <PROJECT_ID>
 # Build images/manifests and push images
 make config-sync-manifest
-# Set env vars for GKE cluster
+```
+
+#### Running E2E tests on GKE (test-generated GKE clusters)
+
+The e2e test scaffolding supports creating N clusters before test execution and
+reusing them between tests. This enables running the tests in parallel, where the
+number of clusters equals the number of test threads. The clusters will be
+deleted after the test execution.
+
+```shell
+# GKE cluster options can be provided as command line flags
+go test ./e2e/... --e2e --test.v --share-test-env --gcp-project=<PROJECT_ID> --test-cluster=gke \
+  --create-clusters --num-clusters=5 --gcp-zone=us-central1-a \
+  --test.run (test name regexp)
+```
+
+
+#### Running E2E tests on GKE (pre-provisioned GKE clusters)
+
+The e2e test scaffolding also supports accepting the name of a pre-provisioned
+cluster. It will generate the kubeconfig based on the inputs provided. This mode
+only supports running a single test thread against a single cluster. The cluster
+will not be deleted at the end of the test execution.
+
+```shell
+# GKE cluster options can also be provided as env vars
 export GCP_PROJECT=<PROJECT_ID>
 export GCP_CLUSTER=<CLUSTER_NAME>
 # One of GCP_REGION and GCP_ZONE must be set (but not both)

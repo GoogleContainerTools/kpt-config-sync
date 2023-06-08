@@ -171,6 +171,9 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# Add binary directories to PATH (prioritize .output/go/bin -> $GOPATH/bin -> $PATH)
+PATH := $(BIN_DIR):$(GOBIN):$(PATH)
+
 ##### SETUP #####
 
 .DEFAULT_GOAL := all

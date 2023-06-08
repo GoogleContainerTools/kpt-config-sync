@@ -18,52 +18,55 @@ import (
 	"context"
 	"strings"
 
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
-	objRef := client.ObjectKeyFromObject(obj)
 	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
 		return err
 	}
+	id := core.ID{
+		ObjectKey: client.ObjectKeyFromObject(obj),
+		GroupKind: gvk.GroupKind(),
+	}
 	// Convert Object to Unstructured to avoid checking UID, ResourceVersion, or
 	// modifying input object.
 	u := &unstructured.Unstructured{}
-	u.SetName(objRef.Name)
-	u.SetNamespace(objRef.Namespace)
+	u.SetName(id.Name)
+	u.SetNamespace(id.Namespace)
 	u.SetGroupVersionKind(gvk)
 	r.logger(ctx).Info("Deleting managed object",
-		logFieldObjectRef, objRef.String(),
-		logFieldObjectKind, gvk.Kind)
+		logFieldObjectRef, id.ObjectKey.String(),
+		logFieldObjectKind, id.Kind)
 	if err := r.client.Delete(ctx, u); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.logger(ctx).Info("Managed object already deleted",
-				logFieldObjectRef, objRef.String(),
-				logFieldObjectKind, gvk.Kind)
+				logFieldObjectRef, id.ObjectKey.String(),
+				logFieldObjectKind, id.Kind)
 			return nil
 		}
-		return err
+		return NewObjectOperationErrorWithID(err, id, OperationDelete)
 	}
 	r.logger(ctx).Info("Managed object delete successful",
-		logFieldObjectRef, objRef.String(),
-		logFieldObjectKind, gvk.Kind)
+		logFieldObjectRef, id.ObjectKey.String(),
+		logFieldObjectKind, id.Kind)
 	return nil
 }
 
 func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerRef types.NamespacedName) error {
 	secretList := &corev1.SecretList{}
 	if err := r.client.List(ctx, secretList, client.InNamespace(reconcilerRef.Namespace)); err != nil {
-		return err
+		return NewObjectOperationErrorForListWithNamespace(err, secretList, OperationList, reconcilerRef.Namespace)
 	}
 
 	for _, s := range secretList.Items {
@@ -111,14 +114,22 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, reconcilerRe
 				logFieldObjectKind, "RoleBinding")
 			return nil
 		}
-		return errors.Wrapf(err, "failed to get the RoleBinding object %s", rbKey)
+		return NewObjectOperationErrorWithKey(err, rb, OperationGet, rbKey)
 	}
+	count := len(rb.Subjects)
 	rb.Subjects = removeSubject(rb.Subjects, r.serviceAccountSubject(reconcilerRef))
+	if count == len(rb.Subjects) {
+		// No change
+		return nil
+	}
 	if len(rb.Subjects) == 0 {
 		// Delete the whole RB
 		return r.cleanup(ctx, rb)
 	}
-	return r.client.Update(ctx, rb)
+	if err := r.client.Update(ctx, rb); err != nil {
+		return NewObjectOperationError(err, rb, OperationUpdate)
+	}
+	return nil
 }
 
 func (r *reconcilerBase) deleteDeployment(ctx context.Context, reconcilerRef types.NamespacedName) error {
@@ -140,15 +151,20 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 				logFieldObjectKind, "ClusterRoleBinding")
 			return nil
 		}
-		return errors.Wrapf(err, "failed to get the ClusterRoleBinding object %s", crbKey)
+		return NewObjectOperationErrorWithKey(err, crb, OperationGet, crbKey)
 	}
+	count := len(crb.Subjects)
 	crb.Subjects = removeSubject(crb.Subjects, r.serviceAccountSubject(reconcilerRef))
+	if count == len(crb.Subjects) {
+		// No change
+		return nil
+	}
 	if len(crb.Subjects) == 0 {
 		// Delete the whole CRB
 		return r.cleanup(ctx, crb)
 	}
 	if err := r.client.Update(ctx, crb); err != nil {
-		return errors.Wrapf(err, "failed to update the ClusterRoleBinding object %s", crbKey)
+		return NewObjectOperationError(err, crb, OperationUpdate)
 	}
 	return nil
 }

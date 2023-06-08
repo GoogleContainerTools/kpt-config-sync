@@ -144,7 +144,7 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 	cm := &corev1.ConfigMap{}
 	cm.Name = metrics.OtelCollectorGooglecloud
 	cm.Namespace = metrics.MonitoringNamespace
-	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, cm, func() error {
+	op, err := CreateOrUpdate(ctx, r.client, cm, func() error {
 		cm.Labels = map[string]string{
 			"app":                metrics.OpenTelemetry,
 			"component":          metrics.OtelCollectorName,

@@ -40,7 +40,6 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -69,6 +68,7 @@ const (
 	logFieldObjectKind      = "objectKind"
 	logFieldObjectRef       = "object"
 	logFieldOperation       = "operation"
+	logFieldObjectStatus    = "objectStatus"
 	logFieldReconciler      = "reconciler"
 	logFieldResourceVersion = "resourceVersion"
 )
@@ -126,7 +126,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 	childSA.Name = childSARef.Name
 	childSA.Namespace = childSARef.Namespace
 
-	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, childSA, func() error {
+	op, err := CreateOrUpdate(ctx, r.client, childSA, func() error {
 		r.addLabels(childSA, labelMap)
 		// Update ownerRefs for RootSync ServiceAccount.
 		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
@@ -203,25 +203,27 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 // object does not exist, Create() will be called. If it does exist, Patch()
 // will be called.
 func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
-	dRef := client.ObjectKeyFromObject(declared)
-	kind := "Deployment"
+	id := core.ID{
+		ObjectKey: client.ObjectKeyFromObject(declared),
+		GroupKind: kinds.Deployment().GroupKind(),
+	}
 	forcePatch := true
-	deploymentClient := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace)
-	currentDeploymentUnstructured, err := deploymentClient.Get(ctx, dRef.Name, metav1.GetOptions{})
+	deploymentClient := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(id.Namespace)
+	currentDeploymentUnstructured, err := deploymentClient.Get(ctx, id.Name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return nil, controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationGet)
 		}
 		r.logger(ctx).V(3).Info("Managed object not found, creating",
-			logFieldObjectRef, dRef.String(),
-			logFieldObjectKind, kind)
+			logFieldObjectRef, id.ObjectKey.String(),
+			logFieldObjectKind, id.Kind)
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		appliedObj, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 		if err != nil {
-			return nil, controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
 		return appliedObj, controllerutil.OperationResultCreated, nil
 	}
@@ -242,37 +244,37 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	if dep.adjusted {
 		mutator := "Autopilot"
 		r.logger(ctx).V(3).Info("Managed object container resources updated",
-			logFieldObjectRef, dRef.String(),
-			logFieldObjectKind, kind,
+			logFieldObjectRef, id.ObjectKey.String(),
+			logFieldObjectKind, id.Kind,
 			"mutator", mutator)
 	}
 	if dep.same {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 	r.logger(ctx).V(3).Info("Managed object found, patching",
-		logFieldObjectRef, dRef.String(),
-		logFieldObjectKind, kind)
-	appliedObj, err := deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		logFieldObjectRef, id.ObjectKey.String(),
+		logFieldObjectKind, id.Kind)
+	appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 	if err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
-			return nil, controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
 		// The provided data is invalid (e.g. http://b/196922619), so delete and re-create the resource.
 		// This handles changes to immutable fields, like labels.
 		r.logger(ctx).Error(err, "Managed object update failed, deleting and re-creating",
-			logFieldObjectRef, dRef.String(),
-			logFieldObjectKind, kind)
-		if err := deploymentClient.Delete(ctx, dRef.Name, metav1.DeleteOptions{}); err != nil {
-			return nil, controllerutil.OperationResultNone, err
+			logFieldObjectRef, id.ObjectKey.String(),
+			logFieldObjectKind, id.Kind)
+		if err := deploymentClient.Delete(ctx, id.Name, metav1.DeleteOptions{}); err != nil {
+			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationDelete)
 		}
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		appliedObj, err = deploymentClient.Patch(ctx, dRef.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err = deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
 		if err != nil {
-			return nil, controllerutil.OperationResultNone, err
+			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
 	}
 	if appliedObj.GetGeneration() == currentGeneration && appliedObj.GetUID() == currentUID {
@@ -410,13 +412,9 @@ func keepCurrentContainerResources(declared, current *appsv1.Deployment) bool {
 // deployment returns the deployment from the server
 func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) (*unstructured.Unstructured, error) {
 	deployObj, err := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(dRef.Namespace).Get(ctx, dRef.Name, metav1.GetOptions{})
-
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, errors.Errorf(
-				"Deployment %s not found in namespace: %s.", dRef.Name, dRef.Namespace)
-		}
-		return nil, errors.Wrapf(err, "Deployment get failed")
+		id := core.ID{ObjectKey: dRef, GroupKind: kinds.Deployment().GroupKind()}
+		return nil, NewObjectOperationErrorWithID(err, id, OperationGet)
 	}
 	return deployObj, nil
 }

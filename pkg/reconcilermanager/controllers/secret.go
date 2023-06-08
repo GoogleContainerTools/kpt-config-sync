@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -139,7 +138,7 @@ func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef, rsRef t
 	cmsSecret.Name = cmsSecretRef.Name
 	cmsSecret.Namespace = cmsSecretRef.Namespace
 
-	op, err := controllerruntime.CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
+	op, err := CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
 		r.addLabels(cmsSecret, map[string]string{
 			metadata.SyncNamespaceLabel: rsRef.Namespace,
 			metadata.SyncNameLabel:      rsRef.Name,

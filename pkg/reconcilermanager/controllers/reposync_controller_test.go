@@ -338,7 +338,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -393,7 +394,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -428,7 +430,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -465,7 +468,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -525,7 +529,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -578,7 +583,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -623,7 +629,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -657,7 +664,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	}
 
 	wantRs.Spec = rs.Spec
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment = repoSyncDeployment(
@@ -694,7 +702,8 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -732,7 +741,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -786,7 +796,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 
 	// RepoSync should still be reconciling because the Deployment is not yet available
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// Simulate Deployment becoming Available
@@ -868,7 +879,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -923,7 +935,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 
 	// RepoSync should still be reconciling because the Deployment is not yet available
-	reposync.SetReconciling(wantRs, "Deployment", "Updated: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Updated: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// Simulate Deployment becoming Available
@@ -978,7 +991,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 
 	// RepoSync should still be reconciling because the Deployment is not yet available
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment.ResourceVersion = "7"
@@ -1565,12 +1579,16 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setResourceVersion("1"),
 	)
 	repoDeployment.ResourceVersion = "1"
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("Deployment successfully created")
 
@@ -1594,12 +1612,16 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setResourceVersion("2"),
 	)
 	updatedRepoDeployment.ResourceVersion = "2"
 	wantDeployments[core.IDOf(repoDeployment)] = updatedRepoDeployment
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("Deployment successfully updated")
 
@@ -1621,6 +1643,9 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
+	if t.Failed() {
+		t.FailNow()
+	}
 	t.Log("Deployment successfully updated")
 
 	// Clear rs.Spec.Override
@@ -1638,6 +1663,9 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 	t.Log("No need to update Deployment.")
 }
@@ -1776,7 +1804,8 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -1821,7 +1850,8 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment.ResourceVersion = "3"
@@ -1880,7 +1910,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs1 := fake.RepoSyncObjectV1Beta1(rs1.Namespace, rs1.Name)
 	wantRs1.Spec = rs1.Spec
 	wantRs1.Status.Reconciler = nsReconcilerName
-	reposync.SetReconciling(wantRs1, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs1, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
@@ -1938,7 +1969,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs2 := fake.RepoSyncObjectV1Beta1(rs2.Namespace, rs2.Name)
 	wantRs2.Spec = rs2.Spec
 	wantRs2.Status.Reconciler = nsReconcilerName2
-	reposync.SetReconciling(wantRs2, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs2, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName2))
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
@@ -1995,7 +2027,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs3 := fake.RepoSyncObjectV1Beta1(rs3.Namespace, rs3.Name)
 	wantRs3.Spec = rs3.Spec
 	wantRs3.Status.Reconciler = nsReconcilerName3
-	reposync.SetReconciling(wantRs3, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs3, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName3))
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
@@ -2051,7 +2084,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs4 := fake.RepoSyncObjectV1Beta1(rs4.Namespace, rs4.Name)
 	wantRs4.Spec = rs4.Spec
 	wantRs4.Status.Reconciler = nsReconcilerName4
-	reposync.SetReconciling(wantRs4, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs4, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName4))
 	validateRepoSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
@@ -2107,7 +2141,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs5 := fake.RepoSyncObjectV1Beta1(rs5.Namespace, rs5.Name)
 	wantRs5.Spec = rs5.Spec
 	wantRs5.Status.Reconciler = nsReconcilerName5
-	reposync.SetReconciling(wantRs5, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs5, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName5))
 	validateRepoSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{
@@ -2163,7 +2198,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs1, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs1, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
 	repoContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
@@ -2197,7 +2233,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs2, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs2, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName2))
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
 	repoContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
@@ -2231,7 +2268,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs3, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs3, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName3))
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
 	repoContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
@@ -3272,7 +3310,8 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid Helm spec
@@ -3297,7 +3336,8 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	wantRs.Status.Conditions = nil // clear the stalled condition
-	reposync.SetReconciling(wantRs, "Deployment", "Replicas: 0/1")
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 }
 
@@ -3558,6 +3598,11 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 			return errors.Errorf("Deployment[%s] conversion failed", id.ObjectKey)
 		}
 		got := gotCoreObject.(*appsv1.Deployment)
+
+		// Compare Deployment ResourceVersion
+		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
+			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff: %v", id, diff)
+		}
 
 		// Compare Deployment Annotations
 		if diff := cmp.Diff(want.Annotations, got.Annotations); diff != "" {

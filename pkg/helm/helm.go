@@ -159,7 +159,7 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	if err := os.RemoveAll(helmCacheHome); err != nil {
 		// we don't necessarily need to exit on error here, as it is possible that the later rendering
 		// step could still succeed, so we just log the error and continue
-		klog.Infoln("failed to clear helm cache: %w", err)
+		klog.Infof("failed to clear helm cache: %w\n", err)
 	}
 
 	return nil

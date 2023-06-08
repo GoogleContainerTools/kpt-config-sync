@@ -45,12 +45,17 @@ image-oss-prow: build/prow/kubekins-kind/Dockerfile
 install-crane:
 	go install github.com/google/go-containerregistry/cmd/crane@latest
 
+.PHONY: clean-helm
+# remove any existing helm directory/binary. The install-helm target was previously
+# creating a directory at this path rather than the binary/file.
+clean-helm:
+	rm -rf $(HELM)
+
 .PHONY: install-helm
 # install helm binary to publish the image
-install-helm:
+install-helm: clean-helm buildenv-dirs
 	wget https://get.helm.sh/helm-$(HELM_VERSION)-linux-amd64.tar.gz -O /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 	tar -zxvf /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz -C /tmp
-	mkdir -p $(HELM) || true
 	mv /tmp/linux-amd64/helm $(HELM)
 	rm /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 

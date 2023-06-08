@@ -298,6 +298,9 @@ lint-license: pull-buildenv buildenv-dirs
 "$(BIN_DIR)/kustomize": "$(GOBIN)/kustomize"
 	cp $(GOBIN)/kustomize $(BIN_DIR)/kustomize
 
+.PHONY: install-kustomize
+install-kustomize: "$(BIN_DIR)/kustomize"
+
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"
 	GOBIN=$(GOBIN) ./scripts/license-headers.sh add

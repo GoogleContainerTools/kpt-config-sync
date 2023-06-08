@@ -27,6 +27,7 @@ __docker-run-e2e-go-gke: config-sync-manifest __build-e2e-go-container
 	@docker run \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
+		--env ARTIFACTS="/logs/artifacts" \
 		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--env GCP_CLUSTER=$(GCP_CLUSTER) \
 		--env GCP_ZONE=$(GCP_ZONE) \
@@ -37,7 +38,6 @@ __docker-run-e2e-go-gke: config-sync-manifest __build-e2e-go-container
 			--timeout $(GKE_E2E_TIMEOUT) \
 			--test.v -v \
 			--num-clusters 1 \
-			--p 1 \
 			--test-cluster=gke \
 			$(E2E_ARGS)
 
@@ -94,6 +94,13 @@ test-e2e-gke-multi-repo-test-group7:
 test-e2e-gke-multi-repo-test-group8:
 	$(MAKE) E2E_ARGS="$(E2E_ARGS) --share-test-env --test-features=workload-identity" \
 		test-e2e-go-gke-ci
+
+# New CI target for running the entire e2e test suite on GKE.
+# - Reuses build artifacts from postsubmit job
+# - Creates N target clusters and runs the tests in parallel
+# - Does not build any images or require docker-in-docker
+.PHONY: test-e2e-gke-ci
+test-e2e-gke-ci: pull-postsubmit-retry test-e2e-gke-nobuild
 
 POSTSUBMIT_GCS_PREFIX ?= gs://kpt-config-sync-ci-postsubmit
 POSTSUBMIT_REGISTRY ?= us-docker.pkg.dev/kpt-config-sync-ci-artifacts/postsubmit

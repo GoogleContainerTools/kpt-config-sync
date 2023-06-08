@@ -23,16 +23,20 @@ set +e
 
 echo "Starting e2e tests"
 start_time=$(date +%s)
-go test ./e2e/... --e2e --test.v "$@" | tee test_results.txt
+go test ./e2e/... --p 1 --e2e --test.v "$@" | tee test_results.txt
 exit_code=$?
 end_time=$(date +%s)
 echo "Tests took $(( end_time - start_time )) seconds"
 
-if [ -d "/logs/artifacts" ]; then
+# Save test results to ARTIFACTS directory. The ARTIFACTS env var is set by prow.
+# The containerized entry points mount the ARTIFACTS directory to a path inside
+# the container, and pass the mounted path as ARTIFACTS. Using the env var directly
+# enables running this script more flexibly, e.g. without docker in docker.
+if [[ -n "${ARTIFACTS}" && -d "${ARTIFACTS}" ]]; then
   echo "Creating junit xml report"
-  cat test_results.txt | go-junit-report --subtest-mode=exclude-parents > /logs/artifacts/junit_report.xml
+  cat test_results.txt | go-junit-report --subtest-mode=exclude-parents > "${ARTIFACTS}/junit_report.xml"
   if [ "$exit_code" -eq 0 ]; then
-    junit-report reset-failure --path=/logs/artifacts/junit_report.xml
+    junit-report reset-failure --path="${ARTIFACTS}/junit_report.xml"
   fi
 fi
 

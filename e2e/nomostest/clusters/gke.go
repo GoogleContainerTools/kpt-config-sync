@@ -19,28 +19,35 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
+	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
-// GKECluster tells the test to use the GKE cluster pointed to by the config flags.
-func GKECluster(t testing.NTB) ntopts.Opt {
-	return func(opt *ntopts.New) {
-		t.Helper()
-		clusterName := *e2e.GCPCluster
-		if *e2e.CreateClusters {
-			opt.IsEphemeralCluster = true
-			clusterName = opt.Name
-			t.Cleanup(func() {
-				deleteGKECluster(t, clusterName)
-			})
-			createGKECluster(t, clusterName)
-		}
-		getGKECredentials(t, clusterName, opt.KubeconfigPath)
-	}
+// GKECluster is a GKE cluster for use in the e2e tests
+type GKECluster struct {
+	// T is a testing interface
+	T testing.NTB
+	// Name is the name of the cluster
+	Name string
+	// KubeConfigPath is the path to save the kube config
+	KubeConfigPath string
+}
+
+// Create the GKE cluster
+func (c *GKECluster) Create() error {
+	return createGKECluster(c.T, c.Name)
+}
+
+// Delete the GKE cluster
+func (c *GKECluster) Delete() error {
+	return deleteGKECluster(c.T, c.Name)
+}
+
+// Connect to the GKE cluster
+func (c *GKECluster) Connect() error {
+	return getGKECredentials(c.T, c.Name, c.KubeConfigPath)
 }
 
 func withKubeConfig(cmd *exec.Cmd, kubeconfig string) *exec.Cmd {
@@ -49,7 +56,7 @@ func withKubeConfig(cmd *exec.Cmd, kubeconfig string) *exec.Cmd {
 	return cmd
 }
 
-func deleteGKECluster(t testing.NTB, name string) {
+func deleteGKECluster(t testing.NTB, name string) error {
 	args := []string{
 		"container", "clusters", "delete",
 		name, "--project", *e2e.GCPProject, "--quiet", "--async",
@@ -60,24 +67,16 @@ func deleteGKECluster(t testing.NTB, name string) {
 	if *e2e.GCPRegion != "" {
 		args = append(args, "--region", *e2e.GCPRegion)
 	}
-	if skipClusterCleanup(t) {
-		t.Errorf("[WARNING] skipping cleanup of GKE cluster %s (--debug)", name)
-		t.Errorf("To delete GKE cluster %s:\ngcloud %s", name, strings.Join(args, " "))
-		return
-	}
-	t.Logf("Deleting GKE cluster %s", name)
-	start := time.Now()
-	defer func() {
-		t.Logf("took %s to delete cluster %s", time.Since(start), name)
-	}()
+	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.Command("gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
+		return errors.Errorf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
+	return nil
 }
 
-func createGKECluster(t testing.NTB, name string) {
+func createGKECluster(t testing.NTB, name string) error {
 	args := []string{
 		"container", "clusters",
 	}
@@ -111,21 +110,17 @@ func createGKECluster(t testing.NTB, name string) {
 	if *e2e.GKENumNodes > 0 {
 		args = append(args, "--num-nodes", fmt.Sprintf("%d", *e2e.GKENumNodes))
 	}
-	start := time.Now()
-	t.Logf("Creating GKE cluster %s at %s:\ngcloud %s",
-		name, start.Format(time.RFC3339), strings.Join(args, " "))
-	defer func() {
-		t.Logf("took %s to create GKE cluster %s", time.Since(start), name)
-	}()
+	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.Command("gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
+		return errors.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
+	return nil
 }
 
 // getGKECredentials fetches GKE credentials at the specified kubeconfig path.
-func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) {
+func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 	args := []string{
 		"container", "clusters", "get-credentials",
 		clusterName, "--project", *e2e.GCPProject,
@@ -136,32 +131,21 @@ func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) {
 	if *e2e.GCPRegion != "" {
 		args = append(args, "--region", *e2e.GCPRegion)
 	}
-	logFunc := func() {
-		t.Logf("To connect to GKE cluster %s:\ngcloud %s",
-			clusterName, strings.Join(args, " "))
-	}
-	t.Cleanup(func() {
-		if skipClusterCleanup(t) {
-			logFunc()
-		}
-	})
-	logFunc()
+	t.Logf("To connect to GKE cluster %s:\ngcloud %s",
+		clusterName, strings.Join(args, " "))
 	cmd := withKubeConfig( // gcloud container clusters get-credentials <args>
 		exec.Command("gcloud", args...),
 		kubeconfig,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to get credentials: %v\nstdout/stderr:\n%s", err, string(out))
+		return errors.Errorf("failed to get credentials: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 	cmd = withKubeConfig( // gcloud config config-helper --force-auth-refresh
 		exec.Command("gcloud", "config", "config-helper", "--force-auth-refresh"),
 		kubeconfig,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
+		return errors.Errorf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
 	}
-}
-
-func skipClusterCleanup(t testing.NTB) bool {
-	return t.Failed() && *e2e.Debug
+	return nil
 }

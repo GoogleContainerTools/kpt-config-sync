@@ -141,7 +141,6 @@ func TestPublicHelm(t *testing.T) {
 // resources with their namespace field not set should be deployed to the default namespace.
 // This test will work only with following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
-// A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmDefaultNamespace(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
@@ -150,20 +149,6 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Fetch password from Secret Manager")
-	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Create secret for authentication")
-	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", v1.NSConfigManagementSystem), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
-	if err != nil {
-		nt.T.Fatalf("failed to create secret, err: %v", err)
-	}
-	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "secret", "foo", "-n", v1.NSConfigManagementSystem, "--ignore-not-found")
-	})
 
 	remoteHelmChart, err := helm.PushHelmChart(nt, privateSimpleHelmChart, privateSimpleHelmChartVersion)
 	if err != nil {
@@ -171,8 +156,8 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "namespace": "", "deployNamespace": "", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, helm.PrivateARHelmRegistry, remoteHelmChart.ChartName, privateSimpleHelmChartVersion))
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "namespace": "", "deployNamespace": ""}}}`,
+		v1beta1.HelmSource, helm.PrivateARHelmRegistry, remoteHelmChart.ChartName, privateSimpleHelmChartVersion, gsaARReaderEmail))
 	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateSimpleHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
@@ -261,7 +246,6 @@ func TestHelmVersionRange(t *testing.T) {
 // sync the namespace scoped resources, and assign the RepoSync namespace to these resources.
 // This test will work only with following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
-// A JSON key file is generated for this service account and stored in Secret Manager
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
@@ -280,17 +264,6 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type"))
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 
-	nt.T.Log("Fetch password from Secret Manager")
-	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.T.Log("Create secret for authentication")
-	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", repoSyncNN.Namespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
-	if err != nil {
-		nt.T.Fatalf("failed to create secret, err: %v", err)
-	}
-
 	remoteHelmChart, err := helm.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
@@ -298,12 +271,12 @@ func TestHelmNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:        helm.PrivateARHelmRegistry,
-		Chart:       remoteHelmChart.ChartName,
-		Auth:        configsync.AuthToken,
-		Version:     privateNSHelmChartVersion,
-		ReleaseName: "test",
-		SecretRef:   &v1beta1.SecretReference{Name: "foo"},
+		Repo:                   helm.PrivateARHelmRegistry,
+		Chart:                  remoteHelmChart.ChartName,
+		Auth:                   configsync.AuthGCPServiceAccount,
+		GCPServiceAccountEmail: gsaARReaderEmail,
+		Version:                privateNSHelmChartVersion,
+		ReleaseName:            "test",
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))

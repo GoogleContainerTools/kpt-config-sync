@@ -46,26 +46,34 @@ import (
 // references resources for tenant-a, tenant-b, and tenant-c.
 // Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
 
-var (
+const (
 	// publicGCRImage pulls the public OCI image by the default `latest` tag
-	publicGCRImage = fmt.Sprintf("%s/kustomize-components", nomostesting.TestInfraContainerRegistry)
+	publicGCRImage = nomostesting.TestInfraContainerRegistry + "/kustomize-components"
 
 	// publicARImage pulls the public OCI image by the default `latest` tag
-	publicARImage = fmt.Sprintf("%s/kustomize-components", nomostesting.ConfigSyncTestPublicRegistry)
+	publicARImage = nomostesting.ConfigSyncTestPublicRegistry + "/kustomize-components"
 
 	// bookinfoARImage pulls the public OCI image by the default `latest` tag
-	bookinfoARImage = fmt.Sprintf("%s/namespace-repo-bookinfo", nomostesting.ConfigSyncTestPublicRegistry)
-
-	// privateGCRImage pulls the private OCI image by tag
-	privateGCRImage = fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
-
-	// privateARImage pulls the private OCI image by tag
-	privateARImage = fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", *e2e.GCPProject)
-
-	gsaARReaderEmail = fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
-
-	gsaGCRReaderEmail = fmt.Sprintf("e2e-test-gcr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+	bookinfoARImage = nomostesting.ConfigSyncTestPublicRegistry + "/namespace-repo-bookinfo"
 )
+
+// privateGCRImage pulls the private OCI image by tag
+func privateGCRImage() string {
+	return fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
+}
+
+// privateARImage() pulls the private OCI image by tag
+func privateARImage() string {
+	return fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", *e2e.GCPProject)
+}
+
+func gsaARReaderEmail() string {
+	return fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+}
+
+func gsaGCRReaderEmail() string {
+	return fmt.Sprintf("e2e-test-gcr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+}
 
 // TestPublicOCI can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public OCI images without any authentication.
@@ -115,9 +123,9 @@ func TestGCENodeOCI(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, privateARImage))
+		v1beta1.OciSource, tenant, privateARImage()))
 	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(privateARImage)),
+		nomostest.WithRootSha1Func(imageDigestFunc(privateARImage())),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
@@ -128,9 +136,9 @@ func TestGCENodeOCI(t *testing.T) {
 
 	tenant = "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage, tenant))
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage(), tenant))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage)),
+		nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage())),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
@@ -158,10 +166,10 @@ func TestOCIARGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  false,
 		crossProject: false,
-		sourceRepo:   privateARImage,
+		sourceRepo:   privateARImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage),
+		gsaEmail:     gsaARReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateARImage()),
 	})
 }
 
@@ -183,10 +191,10 @@ func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  false,
 		crossProject: false,
-		sourceRepo:   privateGCRImage,
+		sourceRepo:   privateGCRImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage),
+		gsaEmail:     gsaGCRReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateGCRImage()),
 	})
 }
 
@@ -208,10 +216,10 @@ func TestOCIARFleetWISameProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,
 		crossProject: false,
-		sourceRepo:   privateARImage,
+		sourceRepo:   privateARImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage),
+		gsaEmail:     gsaARReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateARImage()),
 	})
 }
 
@@ -233,10 +241,10 @@ func TestOCIGCRFleetWISameProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,
 		crossProject: false,
-		sourceRepo:   privateGCRImage,
+		sourceRepo:   privateGCRImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage),
+		gsaEmail:     gsaGCRReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateGCRImage()),
 	})
 }
 
@@ -259,10 +267,10 @@ func TestOCIARFleetWIDifferentProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,
 		crossProject: true,
-		sourceRepo:   privateARImage,
+		sourceRepo:   privateARImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail,
-		rootCommitFn: imageDigestFunc(privateARImage),
+		gsaEmail:     gsaARReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateARImage()),
 	})
 }
 
@@ -285,10 +293,10 @@ func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,
 		crossProject: true,
-		sourceRepo:   privateGCRImage,
+		sourceRepo:   privateGCRImage(),
 		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail,
-		rootCommitFn: imageDigestFunc(privateGCRImage),
+		gsaEmail:     gsaGCRReaderEmail(),
+		rootCommitFn: imageDigestFunc(privateGCRImage()),
 	})
 }
 

@@ -29,6 +29,12 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
   member             = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler]"
 }
 
+resource "google_service_account_iam_member" "k8s_sa_ns_binding" {
+  service_account_id = google_service_account.gcp_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
+}
+
 resource "google_project_iam_member" "gcp_sa_role" {
   role    = var.role
   member  = "serviceAccount:${google_service_account.gcp_sa.email}"

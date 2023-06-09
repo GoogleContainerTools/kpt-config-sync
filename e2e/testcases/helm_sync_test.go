@@ -247,7 +247,7 @@ func TestHelmVersionRange(t *testing.T) {
 // This test will work only with following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmNamespaceRepo(t *testing.T) {
-	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
+	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))

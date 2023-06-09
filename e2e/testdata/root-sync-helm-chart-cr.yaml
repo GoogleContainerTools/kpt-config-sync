@@ -18,6 +18,11 @@ metadata:
   name: root-sync
   namespace: config-management-system
 spec:
+  override:
+    resources:
+    - containerName: helm-sync
+      cpuRequest: "200m"
+      memoryRequest: "600Mi"
   sourceFormat: unstructured
   sourceType: helm
   helm:

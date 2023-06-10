@@ -48,6 +48,7 @@ import (
 
 const (
 	// publicGCRImage pulls the public OCI image by the default `latest` tag
+	// The test-infra GCR is public.
 	publicGCRImage = nomostesting.TestInfraContainerRegistry + "/kustomize-components"
 
 	// publicARImage pulls the public OCI image by the default `latest` tag
@@ -58,8 +59,9 @@ const (
 )
 
 // privateGCRImage pulls the private OCI image by tag
+// The test environment GCR is assumed to be private.
 func privateGCRImage() string {
-	return fmt.Sprintf("us.gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
+	return fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
 }
 
 // privateARImage() pulls the private OCI image by tag

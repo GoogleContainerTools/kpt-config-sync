@@ -49,6 +49,8 @@ data "google_compute_default_service_account" "default" {
 
 resource "google_project_iam_member" "gce-default-sa-iam" {
   for_each = toset([
+    "roles/source.reader",
+    "roles/artifactregistry.reader",
     "roles/storage.objectViewer",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",

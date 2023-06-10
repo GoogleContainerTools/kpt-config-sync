@@ -43,14 +43,17 @@ const (
 	crossProjectFleetProjectID = "cs-dev-hub"
 )
 
-var (
-	// The CSR repo was built from the directory e2e/testdata/hydration/kustomize-components,
-	// which includes a kustomization.yaml file in the root directory that
-	// references resources for tenant-a, tenant-b, and tenant-c.
-	// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
-	csrRepo           = fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", *e2e.GCPProject)
-	gsaCSRReaderEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
-)
+// The CSR repo was built from the directory e2e/testdata/hydration/kustomize-components,
+// which includes a kustomization.yaml file in the root directory that
+// references resources for tenant-a, tenant-b, and tenant-c.
+// Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
+func csrRepo() string {
+	return fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", *e2e.GCPProject)
+}
+
+func gsaCSRReaderEmail() string {
+	return fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+}
 
 // TestGCENode tests the `gcenode` auth type.
 //
@@ -71,7 +74,7 @@ func TestGCENode(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a CSR repo")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "%s", "repo": "%s", "auth": "gcenode", "secretRef": {"name": ""}}}}`,
-		tenant, syncBranch, csrRepo))
+		tenant, syncBranch, csrRepo()))
 
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
@@ -103,9 +106,9 @@ func TestGKEWorkloadIdentity(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  false,
 		crossProject: false,
-		sourceRepo:   csrRepo,
+		sourceRepo:   csrRepo(),
 		sourceType:   v1beta1.GitSource,
-		gsaEmail:     gsaCSRReaderEmail,
+		gsaEmail:     gsaCSRReaderEmail(),
 		rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 	})
 }
@@ -130,9 +133,9 @@ func TestFleetWISameProject(t *testing.T) {
 		workloadIdentityTestSpec{
 			fleetWITest:  true,
 			crossProject: false,
-			sourceRepo:   csrRepo,
+			sourceRepo:   csrRepo(),
 			sourceType:   v1beta1.GitSource,
-			gsaEmail:     gsaCSRReaderEmail,
+			gsaEmail:     gsaCSRReaderEmail(),
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		})
 }
@@ -157,9 +160,9 @@ func TestFleetWIDifferentProject(t *testing.T) {
 	testWorkloadIdentity(t, workloadIdentityTestSpec{
 		fleetWITest:  true,
 		crossProject: true,
-		sourceRepo:   csrRepo,
+		sourceRepo:   csrRepo(),
 		sourceType:   v1beta1.GitSource,
-		gsaEmail:     gsaCSRReaderEmail,
+		gsaEmail:     gsaCSRReaderEmail(),
 		rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 	})
 }

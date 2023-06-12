@@ -21,8 +21,7 @@ spec:
   override:
     resources:
     - containerName: helm-sync
-      cpuRequest: "200m"
-      memoryRequest: "600Mi"
+      memoryRequest: "300Mi"
   sourceFormat: unstructured
   sourceType: helm
   helm:

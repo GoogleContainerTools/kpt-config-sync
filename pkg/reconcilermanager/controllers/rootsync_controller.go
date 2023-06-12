@@ -78,7 +78,7 @@ type RootSyncReconciler struct {
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
-func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
+func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
 	return &RootSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			loggingController: loggingController{
@@ -86,6 +86,7 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			},
 			clusterName:             clusterName,
 			client:                  client,
+			watcher:                 watcher,
 			dynamicClient:           dynamicClient,
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
@@ -179,9 +180,16 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err := r.setup(ctx, reconcilerRef, rsRef, currentRS, rs); err != nil {
+	setupFn := func(ctx context.Context) error {
+		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
+	}
+	teardownFn := func(ctx context.Context) error {
+		return r.teardown(ctx, reconcilerRef, rsRef, currentRS, rs)
+	}
+
+	if err := r.setupOrTeardown(ctx, rs, setupFn, teardownFn); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, errors.Wrap(err, "setup failed")
+		return controllerruntime.Result{}, err
 	}
 
 	metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
@@ -277,10 +285,10 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	return nil
 }
 
-// setup performs the following setup steps:
-// - Set the Reconciling condition with the Setup reason (in-progress)
-// - Call upsertManagedObjects and update the Stalled condition if it errors
-// - Update the Reconciling condition with the Setup reason (complete)
+// setup performs the following steps:
+// - Create or update managed objects
+// - Convert any error into RootSync status conditions
+// - Update the RootSync status
 func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RootSync) error {
 	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
 	err = r.handleReconcileError(ctx, err, rs, "Setup")
@@ -305,6 +313,34 @@ func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef typ
 	return nil
 }
 
+// teardown performs the following steps:
+// - Delete managed objects
+// - Convert any error into RootSync status conditions
+// - Update the RootSync status
+func (r *RootSyncReconciler) teardown(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RootSync) error {
+	err := r.deleteManagedObjects(ctx, reconcilerRef)
+	err = r.handleReconcileError(ctx, err, rs, "Teardown")
+	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
+	if updateErr != nil {
+		if err == nil {
+			// If no other errors, return the updateStatus error and retry
+			return updateErr
+		}
+		// else - log the updateStatus error and retry
+		r.logger(ctx).Error(updateErr, "Object status update failed",
+			logFieldObjectRef, rsRef.String(),
+			logFieldObjectKind, r.syncKind)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	if updated {
+		r.logger(ctx).Info("Teardown successful")
+	}
+	return nil
+}
+
 // handleReconcileError updates the sync object status to reflect the Reconcile
 // error. If the error requires immediate retry, it will be returned.
 func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error, rs *v1beta1.RootSync, stage string) error {
@@ -324,6 +360,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 			logFieldObjectRef, opErr.ID.ObjectKey.String(),
 			logFieldObjectKind, opErr.ID.Kind,
 			logFieldOperation, opErr.Operation)
+		rootsync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		rootsync.SetStalled(rs, opErr.ID.Kind, err)
 	} else if errors.As(err, &statusErr) {
 		// Metadata from ObjectReconcileError used for log context
@@ -339,10 +376,12 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 			return nil // no retry - wait for next event
 		default:
 			// failed or invalid
+			rootsync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 			rootsync.SetStalled(rs, statusErr.ID.Kind, err)
 		}
 	} else {
 		r.logger(ctx).Error(err, fmt.Sprintf("%s failed", stage))
+		rootsync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		rootsync.SetStalled(rs, "Error", err)
 	}
 	return err // retry

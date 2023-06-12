@@ -18,22 +18,30 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,6 +62,149 @@ const (
 	expectedFirstContainerMemoryLimit1 = "100Mi"
 	expectedFirstContainerCPULimit1    = "180m"
 )
+
+// TestReconcilerManagerTeardown validates that when a RootSync or RepoSync is
+// deleted, the reconciler-manager finalizer handles deletion of the reconciler
+// and its dependencies managed by the reconciler-manager.
+func TestReconcilerManagerTeardown(t *testing.T) {
+	testNamespace := "teardown"
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.WithDelegatedControl, ntopts.Unstructured,
+		ntopts.NamespaceRepo(testNamespace, configsync.RepoSyncName))
+
+	t.Log("Validate the reconciler-manager deployment")
+	reconcilerManager := &appsv1.Deployment{}
+	setNN(reconcilerManager, client.ObjectKey{Name: reconcilermanager.ManagerName, Namespace: v1.NSConfigManagementSystem})
+	err := nt.Validate(reconcilerManager.Name, reconcilerManager.Namespace, reconcilerManager)
+	require.NoError(t, err)
+
+	t.Log("Validate the RootSync")
+	rootSync := &v1beta1.RootSync{}
+	setNN(rootSync, client.ObjectKey{Name: configsync.RootSyncName, Namespace: v1.NSConfigManagementSystem})
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+	})
+	require.NoError(t, err)
+
+	t.Log("Validate the RootSync reconciler and its dependencies")
+	var rootSyncFriends []client.Object
+
+	rootSyncReconciler := &appsv1.Deployment{}
+	setNN(rootSyncReconciler, core.RootReconcilerObjectKey(rootSync.Name))
+	rootSyncFriends = append(rootSyncFriends, rootSyncReconciler)
+
+	// Note: reconciler-manager no longer applies ConfigMaps to configure the
+	// reconciler. So we don't need to validate their deletion. The deletion
+	// only happens when upgrading from a very old unsupported version.
+
+	rootSyncCRB := &rbacv1.ClusterRoleBinding{}
+	setNN(rootSyncCRB, client.ObjectKey{Name: controllers.RootSyncPermissionsName()})
+	rootSyncFriends = append(rootSyncFriends, rootSyncCRB)
+
+	rootSyncSA := &corev1.ServiceAccount{}
+	setNN(rootSyncSA, client.ObjectKeyFromObject(rootSyncReconciler))
+	rootSyncFriends = append(rootSyncFriends, rootSyncSA)
+
+	for _, obj := range rootSyncFriends {
+		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj)
+		require.NoError(t, err)
+	}
+
+	t.Log("Validate the RepoSync")
+	repoSync := &v1beta1.RepoSync{}
+	setNN(repoSync, client.ObjectKey{Name: configsync.RepoSyncName, Namespace: testNamespace})
+	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+	})
+	require.NoError(t, err)
+
+	t.Log("Validate the RepoSync reconciler and its dependencies")
+	var repoSyncFriends []client.Object
+
+	repoSyncReconciler := &appsv1.Deployment{}
+	setNN(repoSyncReconciler, core.NsReconcilerObjectKey(repoSync.Namespace, repoSync.Name))
+	repoSyncFriends = append(repoSyncFriends, repoSyncReconciler)
+
+	// Note: reconciler-manager no longer applies ConfigMaps to configure the
+	// reconciler. So we don't need to validate their deletion. The deletion
+	// only happens when upgrading from a very old unsupported version.
+
+	repoSyncRB := &rbacv1.RoleBinding{}
+	setNN(repoSyncRB, client.ObjectKey{
+		Name:      controllers.RepoSyncPermissionsName(),
+		Namespace: testNamespace,
+	})
+	repoSyncFriends = append(repoSyncFriends, repoSyncRB)
+
+	repoSyncSA := &corev1.ServiceAccount{}
+	setNN(repoSyncSA, client.ObjectKeyFromObject(repoSyncReconciler))
+	repoSyncFriends = append(repoSyncFriends, repoSyncSA)
+
+	// See nomostest.CreateNamespaceSecret for creation of user secrets.
+	// This is a managed secret with a derivative name.
+	repoSyncAuthSecret := &corev1.Secret{}
+	setNN(repoSyncAuthSecret, client.ObjectKey{
+		Name:      controllers.ReconcilerResourceName(repoSyncReconciler.Name, nomostest.NamespaceAuthSecretName),
+		Namespace: repoSyncReconciler.Namespace,
+	})
+	repoSyncFriends = append(repoSyncFriends, repoSyncAuthSecret)
+
+	// See nomostest.CreateNamespaceSecret for creation of user secrets.
+	// This is a managed secret with a derivative name.
+	// For local kind clusters, the CA Certs are provided to authenticate the git server.
+	if nt.GitProvider.Type() == e2e.Local {
+		repoSyncCACertSecret := &corev1.Secret{}
+		setNN(repoSyncCACertSecret, client.ObjectKey{
+			Name:      controllers.ReconcilerResourceName(repoSyncReconciler.Name, nomostest.NamespaceAuthSecretName),
+			Namespace: repoSyncReconciler.Namespace,
+		})
+		repoSyncFriends = append(repoSyncFriends, repoSyncCACertSecret)
+	}
+
+	for _, obj := range repoSyncFriends {
+		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj)
+		require.NoError(t, err)
+	}
+
+	t.Log("Delete the RootSync and wait for it to be not found")
+	err = nomostest.DeleteObjectsAndWait(nt, rootSync)
+	require.NoError(t, err)
+
+	t.Log("Validate the RootSync reconciler and its dependencies were deleted")
+	for _, obj := range rootSyncFriends {
+		gvk, err := kinds.Lookup(obj, nt.Scheme)
+		require.NoError(t, err)
+		rObj, err := kinds.NewObjectForGVK(gvk, nt.Scheme)
+		require.NoError(t, err)
+		cObj, err := kinds.ObjectAsClientObject(rObj)
+		require.NoError(t, err)
+		err = nt.ValidateNotFound(obj.GetName(), obj.GetNamespace(), cObj)
+		require.NoError(t, err)
+	}
+
+	t.Log("Delete the RepoSync and wait for it to be not found")
+	err = nomostest.DeleteObjectsAndWait(nt, repoSync)
+	require.NoError(t, err)
+
+	t.Log("Validate the RepoSync reconciler and its dependencies were deleted")
+	for _, obj := range repoSyncFriends {
+		gvk, err := kinds.Lookup(obj, nt.Scheme)
+		require.NoError(t, err)
+		rObj, err := kinds.NewObjectForGVK(gvk, nt.Scheme)
+		require.NoError(t, err)
+		cObj, err := kinds.ObjectAsClientObject(rObj)
+		require.NoError(t, err)
+		err = nt.ValidateNotFound(obj.GetName(), obj.GetNamespace(), cObj)
+		require.NoError(t, err)
+	}
+}
+
+func setNN(obj client.Object, nn types.NamespacedName) {
+	obj.SetName(nn.Name)
+	obj.SetNamespace(nn.Namespace)
+}
 
 func TestManagingReconciler(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)

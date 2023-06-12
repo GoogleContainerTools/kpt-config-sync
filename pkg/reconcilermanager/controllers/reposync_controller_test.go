@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -289,6 +290,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
 		cs.Client,
+		cs.Client,
 		cs.DynamicClient,
 		controllerruntime.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		cs.Client.Scheme(),
@@ -340,6 +342,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -470,6 +473,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -704,6 +708,7 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -743,6 +748,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -1806,6 +1812,7 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -1912,6 +1919,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs1.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs1, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs1, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
@@ -1971,6 +1979,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs2.Status.Reconciler = nsReconcilerName2
 	reposync.SetReconciling(wantRs2, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName2))
+	controllerutil.AddFinalizer(wantRs2, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
@@ -2029,6 +2038,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs3.Status.Reconciler = nsReconcilerName3
 	reposync.SetReconciling(wantRs3, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName3))
+	controllerutil.AddFinalizer(wantRs3, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
@@ -2086,6 +2096,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs4.Status.Reconciler = nsReconcilerName4
 	reposync.SetReconciling(wantRs4, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName4))
+	controllerutil.AddFinalizer(wantRs4, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
@@ -2143,6 +2154,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRs5.Status.Reconciler = nsReconcilerName5
 	reposync.SetReconciling(wantRs5, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName5))
+	controllerutil.AddFinalizer(wantRs5, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{

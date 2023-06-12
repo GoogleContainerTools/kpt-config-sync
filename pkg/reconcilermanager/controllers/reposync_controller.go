@@ -69,7 +69,7 @@ type RepoSyncReconciler struct {
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
-func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
+func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
 	return &RepoSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			loggingController: loggingController{
@@ -78,6 +78,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			clusterName:             clusterName,
 			client:                  client,
 			dynamicClient:           dynamicClient,
+			watcher:                 watcher,
 			scheme:                  scheme,
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
@@ -170,9 +171,16 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err := r.setup(ctx, reconcilerRef, rsRef, currentRS, rs); err != nil {
+	setupFn := func(ctx context.Context) error {
+		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
+	}
+	teardownFn := func(ctx context.Context) error {
+		return r.teardown(ctx, reconcilerRef, rsRef, currentRS, rs)
+	}
+
+	if err := r.setupOrTeardown(ctx, rs, setupFn, teardownFn); err != nil {
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, errors.Wrap(err, "setup failed")
+		return controllerruntime.Result{}, err
 	}
 
 	metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
@@ -277,10 +285,10 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	return nil
 }
 
-// setup performs the following setup steps:
-// - Set the Reconciling condition with the Setup reason (in-progress)
-// - Call upsertManagedObjects and update the Stalled condition if it errors
-// - Update the Reconciling condition with the Setup reason (complete)
+// setup performs the following steps:
+// - Create or update managed objects
+// - Convert any error into RepoSync status conditions
+// - Update the RepoSync status
 func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
 	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
 	err = r.handleReconcileError(ctx, err, rs, "Setup")
@@ -305,6 +313,34 @@ func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef typ
 	return nil
 }
 
+// teardown performs the following teardown steps:
+// - Delete managed objects
+// - Convert any error into RepoSync status conditions
+// - Update the RepoSync status
+func (r *RepoSyncReconciler) teardown(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
+	err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef)
+	err = r.handleReconcileError(ctx, err, rs, "Teardown")
+	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
+	if updateErr != nil {
+		if err == nil {
+			// If no other errors, return the updateStatus error and retry
+			return updateErr
+		}
+		// else - log the updateStatus error and retry
+		r.logger(ctx).Error(updateErr, "Object status update failed",
+			logFieldObjectRef, rsRef.String(),
+			logFieldObjectKind, r.syncKind)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	if updated {
+		r.logger(ctx).Info("Teardown successful")
+	}
+	return nil
+}
+
 // handleReconcileError updates the sync object status to reflect the Reconcile
 // error. If the error requires immediate retry, it will be returned.
 func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error, rs *v1beta1.RepoSync, stage string) error {
@@ -324,6 +360,7 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 			logFieldObjectRef, opErr.ID.ObjectKey.String(),
 			logFieldObjectKind, opErr.ID.Kind,
 			logFieldOperation, opErr.Operation)
+		reposync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		reposync.SetStalled(rs, opErr.ID.Kind, err)
 	} else if errors.As(err, &statusErr) {
 		// Metadata from ObjectReconcileError used for log context
@@ -339,10 +376,12 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 			return nil // no immediate retry - wait for next event
 		default:
 			// failed or invalid
+			reposync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 			reposync.SetStalled(rs, statusErr.ID.Kind, err)
 		}
 	} else {
 		r.logger(ctx).Error(err, fmt.Sprintf("%s failed", stage))
+		reposync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		reposync.SetStalled(rs, "Error", err)
 	}
 	return err // retry

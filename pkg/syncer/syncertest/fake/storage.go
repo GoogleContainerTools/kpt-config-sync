@@ -499,12 +499,12 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 		log.AsYAMLDiffWithScheme(cachedObj, nil, ms.scheme))
 
 	// Default to background deletion propagation, if unspecified
-	if opts.PropagationPolicy == nil {
-		pp := metav1.DeletePropagationBackground
-		opts.PropagationPolicy = &pp
+	propagationPolicy := metav1.DeletePropagationBackground
+	if opts != nil && opts.PropagationPolicy != nil {
+		propagationPolicy = *opts.PropagationPolicy
 	}
 
-	switch *opts.PropagationPolicy {
+	switch propagationPolicy {
 	case metav1.DeletePropagationForeground:
 		// Delete managed objects beforehand
 		err = ms.deleteManagedObjectsWithoutLock(ctx, id)
@@ -658,7 +658,7 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 	if err != nil {
 		return err
 	}
-	if len(opts.DryRun) > 0 {
+	if opts != nil && len(opts.DryRun) > 0 {
 		// don't merge or store the result
 		return nil
 	}
@@ -863,6 +863,9 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 }
 
 func (ms *MemoryStorage) validatePatchOptions(opts *client.PatchOptions, patch client.Patch) error {
+	if opts == nil {
+		return nil
+	}
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
 			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
@@ -932,10 +935,7 @@ func (ms *MemoryStorage) Watch(_ context.Context, exampleList client.ObjectList,
 	// TODO: Should Client.Watch's context.Done cancel the background stream or just the initial request?
 	// If yes, StartWatcher needs to take a context.
 	// client-go's FakeDynamicClient.Watch seems to just ignore the context, so that's what we're doing here too.
-	go func() {
-		// Run watcher until watch.Interface.Stop is called
-		watcher.Run(context.Background())
-	}()
+	watcher.Start(context.Background())
 	return watcher, nil
 }
 

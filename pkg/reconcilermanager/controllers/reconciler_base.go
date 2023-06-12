@@ -39,6 +39,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -97,7 +98,8 @@ type reconcilerBase struct {
 	loggingController
 
 	clusterName             string
-	client                  client.Client
+	client                  client.Client    // caching
+	watcher                 client.WithWatch // non-caching
 	dynamicClient           dynamic.Interface
 	scheme                  *runtime.Scheme
 	isAutopilotCluster      *bool
@@ -543,5 +545,71 @@ func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
 		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	return nil
+}
+
+// setupOrTeardown handles the following lifecycle steps:
+//
+// - when deletionTimestamp IS NOT set...
+//   - add the ReconcilerManagerFinalizer
+//   - execute setupFn
+//
+// - when deletionTimestamp IS set...
+//   - wait for ReconcilerFinalizer to be removed (return and wait for next event)
+//   - execute teardownFn when the finalizer is set
+//   - remove the ReconcilerManagerFinalizer once teardownFn is successful
+//
+// A finalizer is used instead of the Kubernetes' built-in garbage collection,
+// because the Kubernetes garbage collector does not allow cross-namespace owner
+// references. Using the finalizer for all resources also ensures well ordered
+// deletion, which allows for stricter contracts when uninstalling.
+func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Object, setupFn, teardownFn func(context.Context) error) error {
+	if syncObj.GetDeletionTimestamp().IsZero() {
+		// The object is NOT being deleted.
+		if !controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerManagerFinalizer) {
+			// The object is new and doesn't have our finalizer yet.
+			// Add our finalizer and update the object.
+			controllerutil.AddFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
+			if err := r.client.Update(ctx, syncObj); err != nil {
+				err = status.APIServerError(err,
+					fmt.Sprintf("failed to update %s to add finalizer", r.syncKind))
+				r.logger(ctx).Error(err, "Finalizer injection failed")
+				return err
+			}
+			r.logger(ctx).Info("Finalizer injection successful")
+		}
+
+		// Our finalizer is present, so setup managed resource objects.
+		if err := setupFn(ctx); err != nil {
+			return errors.Wrap(err, "setup failed")
+		}
+		return nil
+	}
+	// Else - the object is being deleted.
+
+	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerFinalizer) {
+		// The object is being deleted, but the reconciler finalizer is still running.
+		// Wait for the reconciler finalizer to complete.
+		r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
+		return nil
+	}
+
+	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerManagerFinalizer) {
+		// Our finalizer is present, so delete managed resource objects.
+		if err := teardownFn(ctx); err != nil {
+			return errors.Wrap(err, "teardown failed")
+		}
+
+		// Remove our finalizer and update the object.
+		controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
+		if err := r.client.Update(ctx, syncObj); err != nil {
+			err = status.APIServerError(err,
+				fmt.Sprintf("failed to update %s to remove finalizer", r.syncKind))
+			r.logger(ctx).Error(err, "Finalizer removal failed")
+			return err
+		}
+		r.logger(ctx).Info("Finalizer removal successful")
+	}
+
 	return nil
 }

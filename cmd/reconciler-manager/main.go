@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -76,6 +77,18 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	// The Client built by ctrl.NewManager uses caching by default, and doesn't
+	// support the Watch method. So build another with shared config.
+	// This one can be used for watching and bypassing the cache, as needed.
+	// Use with discretion.
+	watcher, err := client.NewWithWatch(mgr.GetConfig(), client.Options{
+		Scheme: mgr.GetScheme(),
+		Mapper: mgr.GetRESTMapper(),
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create watching client")
+		os.Exit(1)
+	}
 	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		setupLog.Error(err, "failed to build dynamic client")
@@ -83,7 +96,8 @@ func main() {
 	}
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
-	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(), dynamicClient,
+	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
 	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
@@ -91,7 +105,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, mgr.GetClient(), dynamicClient,
+	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
 	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {

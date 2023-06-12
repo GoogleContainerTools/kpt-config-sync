@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -130,6 +131,7 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
+		cs.Client,
 		cs.Client,
 		cs.DynamicClient,
 		controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
@@ -1616,6 +1618,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs1.Status.Reconciler = rootReconcilerName
 	rootsync.SetReconciling(wantRs1, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
+	controllerutil.AddFinalizer(wantRs1, metadata.ReconcilerManagerFinalizer)
 	validateRootSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
@@ -1672,6 +1675,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs2.Status.Reconciler = rootReconcilerName2
 	rootsync.SetReconciling(wantRs2, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
+	controllerutil.AddFinalizer(wantRs2, metadata.ReconcilerManagerFinalizer)
 	validateRootSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
@@ -1726,6 +1730,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs3.Status.Reconciler = rootReconcilerName3
 	rootsync.SetReconciling(wantRs3, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
+	controllerutil.AddFinalizer(wantRs3, metadata.ReconcilerManagerFinalizer)
 	validateRootSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
@@ -1784,6 +1789,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs4.Status.Reconciler = rootReconcilerName4
 	rootsync.SetReconciling(wantRs4, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName4))
+	controllerutil.AddFinalizer(wantRs4, metadata.ReconcilerManagerFinalizer)
 	validateRootSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
@@ -1842,6 +1848,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	wantRs5.Status.Reconciler = rootReconcilerName5
 	rootsync.SetReconciling(wantRs5, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName5))
+	controllerutil.AddFinalizer(wantRs5, metadata.ReconcilerManagerFinalizer)
 	validateRootSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{

@@ -57,8 +57,8 @@ type ObjectOperationError struct {
 
 // Error returns the error string
 func (ooe *ObjectOperationError) Error() string {
-	return fmt.Sprintf("resource object operation failed (operation: %q, object: %q, objectKind: %q): %v",
-		ooe.Operation, ooe.ID.ObjectKey, ooe.ID.Kind, ooe.Cause)
+	return fmt.Sprintf("%s (%s) %s failed: %v",
+		ooe.ID.Kind, ooe.ID.ObjectKey, ooe.Operation, ooe.Cause)
 }
 
 // NewObjectOperationError constructs a new ObjectOperationError

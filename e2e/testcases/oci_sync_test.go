@@ -118,6 +118,12 @@ func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
+	if workloadPool, err := getWorkloadPool(nt); err != nil {
+		nt.T.Fatal(err)
+	} else if workloadPool != "" {
+		nt.T.Fatal("expected workload identity to be disabled")
+	}
+
 	tenant := "tenant-a"
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)

@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -69,6 +70,12 @@ func gsaCSRReaderEmail() string {
 func TestGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
+
+	if workloadPool, err := getWorkloadPool(nt); err != nil {
+		nt.T.Fatal(err)
+	} else if workloadPool != "" {
+		nt.T.Fatal("expected workload identity to be disabled")
+	}
 
 	tenant := "tenant-a"
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -248,6 +255,14 @@ func truncateStringByLength(s string, l int) string {
 func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 
+	// Verify workload identity is enabled on the cluster
+	expectedPool := fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject)
+	if workloadPool, err := getWorkloadPool(nt); err != nil {
+		nt.T.Fatal(err)
+	} else if workloadPool != expectedPool {
+		nt.T.Fatalf("expected workloadPool %s but got %s", expectedPool, workloadPool)
+	}
+
 	// Truncate the fleetMembership length to be at most 63 characters.
 	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), nt.ClusterName), 63)
 	gkeURI := "https://container.googleapis.com/v1/projects/" + *e2e.GCPProject
@@ -344,6 +359,43 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		}
 		validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	}
+}
+
+// clusterDescribe represents the output format of gcloud container clusters describe
+// this struct contains the field we are interested in
+type clusterDescribe struct {
+	// WorkloadIdentityConfig is the workload identity config
+	WorkloadIdentityConfig workloadIdentityConfig `json:"workloadIdentityConfig"`
+}
+
+type workloadIdentityConfig struct {
+	// WorkloadPool is the workload pool
+	WorkloadPool string `json:"workloadPool"`
+}
+
+// getWorkloadPool verifies that the target cluster has workload identity enabled
+func getWorkloadPool(nt *nomostest.NT) (string, error) {
+	args := []string{
+		"container", "clusters", "describe", nt.ClusterName,
+		"--project", *e2e.GCPProject,
+		"--format", "json",
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	cmd := nt.Shell.Command("gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	clusterConfig := &clusterDescribe{}
+	if err := json.Unmarshal(out, clusterConfig); err != nil {
+		return "", err
+	}
+	return clusterConfig.WorkloadIdentityConfig.WorkloadPool, nil
 }
 
 // validateFWICredentials validates whether the reconciler Pod manifests includes

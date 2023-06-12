@@ -85,10 +85,11 @@ func createGKECluster(t testing.NTB, name string) error {
 	} else {
 		args = append(args, "create")
 	}
-	args = append(args, name,
-		"--project", *e2e.GCPProject,
-		"--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject),
-	)
+	args = append(args, name, "--project", *e2e.GCPProject)
+	// gcenode tests require workload identity to be disabled
+	if !*e2e.GceNode {
+		args = append(args, "--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject))
+	}
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)
 	}

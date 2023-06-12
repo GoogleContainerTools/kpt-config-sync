@@ -90,7 +90,7 @@ var TestFeatures = flag.String("test-features", "",
 // NumClusters is the number of clusters to run tests on. Each cluster only has
 // a single test running on it at a given time. The number of clusters equals the
 // number of test threads which can run concurrently.
-var NumClusters = flag.Int("num-clusters", 1,
+var NumClusters = flag.Int("num-clusters", util.EnvInt("E2E_NUM_CLUSTERS", 1),
 	"Number of parallel test threads to run. Also dictates the number of clusters which will be created in parallel. Overrides the -test.parallel flag.")
 
 // Usage indicates to print usage and exit. This is a workaround for the builtin

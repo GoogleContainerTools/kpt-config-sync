@@ -13,28 +13,46 @@
 # limitations under the License.
 
 # special prow related things
+# Images are tagged with an arbitrary semver and git SHA. The git SHA ensures
+# unique tags and makes the images traceable back to a commit. The semver should
+# be revved upon any major changes to the image.
 
-# This is the image that our prow nomos-presubmit-e2e job runs so that it can
-# use KIND instead of setting up a GKE cluster per test run.
+# This is the image that our prow kind/e2e presubmit job runs so that it can
+# use KIND instead of setting up a GKE cluster per test run. Based on kubekins-e2e
+# for docker-in-docker support to build docker images and run kind.
 
 # Note: nothing builds this, if you update the version, you will need to rebuild manually.
-# For the version tag, concatenate the kubekins version and KIND version
-E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY := k8s-staging-test-infra
-E2E_TEST_IMAGE_OSS_PROW_KUBEKINS := v20230309-9a6b1b3121-1.23
-E2E_TEST_IMAGE_OSS_PROW_KIND := v0.14.0
-E2E_TEST_IMAGE_OSS_PROW_TAG := kubekins-e2e-$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS)-kind-$(E2E_TEST_IMAGE_OSS_PROW_KIND)
-E2E_TEST_IMAGE_OSS_PROW := gcr.io/oss-prow-build-kpt-config-sync/e2e-prow:$(E2E_TEST_IMAGE_OSS_PROW_TAG)
-image-oss-prow: build/prow/kubekins-kind/Dockerfile
-	@echo "+++ Building the image for the oss-prow presubmit run"
+# TODO: setup postsubmit job to build this image
+KUBEKINS_E2E_TAG := v1.0.0-$(shell git rev-parse --short HEAD)
+KUBEKINS_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/kubekins-e2e:$(KUBEKINS_E2E_TAG)
+.PHONY: build-kubekins-e2e
+build-kubekins-e2e: build/prow/kubekins-e2e/Dockerfile
+	@echo "+++ Building $(KUBEKINS_E2E_IMAGE)"
 	docker buildx build \
-		-t $(E2E_TEST_IMAGE_OSS_PROW) \
-		--build-arg KUBEKINS_REGISTRY=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS_REGISTRY) \
-		--build-arg KUBEKINS=$(E2E_TEST_IMAGE_OSS_PROW_KUBEKINS) \
-		--build-arg KIND_RELEASE=$(E2E_TEST_IMAGE_OSS_PROW_KIND) \
+		-t $(KUBEKINS_E2E_IMAGE) \
 		-f $< \
 		$(dir $<).
-	@docker push $(E2E_TEST_IMAGE_OSS_PROW)
 
+.PHONY: push-kubekins-e2e
+push-kubekins-e2e:
+	@docker push $(KUBEKINS_E2E_IMAGE)
+
+# This is the image used by the new GKE e2e jobs. This job type runs against GKE
+# clusters rather than kind, so we don't need docker in docker.
+# Note: nothing builds this, if you update the version, you will need to rebuild manually.
+# TODO: setup postsubmit job to build this image
+GKE_E2E_TAG := v1.0.0-$(shell git rev-parse --short HEAD)
+GKE_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(GKE_E2E_TAG)
+.PHONY: build-gke-e2e
+build-gke-e2e:
+	@echo "+++ Building $(GKE_E2E_IMAGE)"
+	docker buildx build \
+		-t $(GKE_E2E_IMAGE) \
+		-f build/prow/gke-e2e/Dockerfile
+
+.PHONY: push-gke-e2e
+push-gke-e2e:
+	@docker push $(GKE_E2E_IMAGE)
 
 ###################################
 # Helpers

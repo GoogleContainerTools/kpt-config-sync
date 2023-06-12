@@ -28,13 +28,27 @@ __install-nomos-local:
 # Run the Go e2e tests after building images/manifests.
 # Useful for when you're actively modifying code between runs.
 .PHONY: test-e2e-go
-test-e2e-go: config-sync-manifest-local __install-nomos-local test-e2e-go-nobuild
+test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 
 # Run the Go e2e tests without building images/manifests.
 # Useful for modifying test code and rerunning tests without rebuilding images.
 .PHONY: test-e2e-go-nobuild
-test-e2e-go-nobuild:
-	@GO111MODULE=on go test ./e2e/... --e2e $(E2E_ARGS)
+test-e2e-nobuild: install-kustomize install-helm
+	./build/test-e2e-go/e2e.sh $(E2E_ARGS)
+
+# Run the Go e2e tests on GKE without building images/manifests.
+# The test framework will create/teardown the GKE clusters.
+.PHONY: test-e2e-gke-nobuild
+test-e2e-gke-nobuild:
+	$(MAKE) test-e2e-nobuild \
+		E2E_ARGS="$(E2E_ARGS) --timeout=$(GKE_E2E_TIMEOUT) --share-test-env --create-clusters --test-cluster=gke" \
+		GCP_PROJECT=$(GCP_PROJECT) \
+		GCP_ZONE=$(GCP_ZONE) \
+		GCP_REGION=$(GCP_REGION)
+
+# Build Config Sync and run e2e tests on GKE
+.PHONY: test-e2e-gke
+test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 
 # This target runs all the e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo
@@ -44,7 +58,6 @@ test-e2e-kind-multi-repo: config-sync-manifest-local
 		--timeout 60m \
 		--test.v -v \
 		--num-clusters 15 \
-		--p 1 \
 		$(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.

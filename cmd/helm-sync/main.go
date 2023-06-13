@@ -119,7 +119,7 @@ func main() {
 			UserName:        *flUsername,
 			Password:        *flPassword,
 		}
-		if err := hydrator.HelmTemplate(ctx); err != nil {
+		if err := hydrator.HelmTemplate(ctx, *flWait); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {
 				// Exit after too many retries, maybe the error is not recoverable.
 				log.Error(err, "too many failures, aborting", "failCount", failCount)

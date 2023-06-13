@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
@@ -224,7 +225,7 @@ data:
 }
 
 // HelmTemplate runs helm template with args
-func (h *Hydrator) HelmTemplate(ctx context.Context) error {
+func (h *Hydrator) HelmTemplate(ctx context.Context, wait float64) error {
 	if h.Auth != configsync.AuthNone && h.isOCI() {
 		args, err := h.registryLoginArgs(ctx)
 		if err != nil {
@@ -256,8 +257,19 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
-	if err != nil {
+
+	var renderErr error
+	var out []byte
+	for i := 0; i < 3; i++ {
+		out, renderErr = exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+		if renderErr == nil {
+			break
+		}
+		klog.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
+		time.Sleep(util.WaitTime(wait))
+	}
+
+	if renderErr != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
 	}
 

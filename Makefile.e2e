@@ -55,6 +55,7 @@ test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 test-e2e-kind-multi-repo: config-sync-manifest-local
 	kind delete clusters --all
 	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh \
+		--share-test-env \
 		--timeout 60m \
 		--test.v -v \
 		--num-clusters 15 \

@@ -348,6 +348,7 @@ func TestExternalDependencyError(t *testing.T) {
 	// Both exist in the repo and in the cluster.
 	// Delete cm0 from the repo, expected a DependencyActuationMismatchError
 	nt.T.Log("A new test: verify that removing a dependant from the git repo cause a dependency error")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(namespaceName)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm0.yaml", fake.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
@@ -473,6 +474,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 			PeriodSeconds:       10,
 		},
 	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(namespaceName)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod1.yaml",
 		fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod2.yaml",

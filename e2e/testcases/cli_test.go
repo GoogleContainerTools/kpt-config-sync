@@ -850,8 +850,8 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	cmd := nt.Shell.Command("nomos", "bugreport")
 	cmd.Dir = nt.TmpDir
 	out, err := cmd.CombinedOutput()
+	nt.T.Log("nomos bugreport\n%s", string(out))
 	if err != nil {
-		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
 

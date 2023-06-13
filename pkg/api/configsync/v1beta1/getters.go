@@ -65,7 +65,7 @@ func GetReconcileTimeout(d *metav1.Duration) string {
 	return d.Duration.String()
 }
 
-// GetAPIServerTimeout returns the API server timeout in string, defaulting to 5s if empty
+// GetAPIServerTimeout returns the API server timeout in string, defaulting to 15s if empty
 func GetAPIServerTimeout(d *metav1.Duration) string {
 	if d == nil || d.Duration == 0 {
 		return restconfig.DefaultTimeout.String()

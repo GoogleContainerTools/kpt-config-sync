@@ -48,9 +48,6 @@ const (
 
 	// DefaultHydrationOutput specifies the default location to write the hydrated output.
 	DefaultHydrationOutput = "compiled"
-
-	// DefaultClusterClientTimeout specifies the timeout for connecting to each cluster.
-	DefaultClusterClientTimeout = 3 * time.Second
 )
 
 var (

@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", flags.DefaultClusterClientTimeout, "Timeout for connecting to the cluster")
+	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", restconfig.DefaultTimeout, "Timeout for connecting to the cluster")
 }
 
 // Cmd retrieves readers for all relevant nomos container logs and cluster state commands and writes them to a zip file

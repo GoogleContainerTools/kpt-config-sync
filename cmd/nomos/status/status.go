@@ -50,7 +50,7 @@ var (
 
 func init() {
 	flags.AddContexts(Cmd)
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", flags.DefaultClusterClientTimeout, "Timeout for connecting to each cluster")
+	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", restconfig.DefaultTimeout, "Timeout for connecting to each cluster")
 	Cmd.Flags().DurationVar(&pollingInterval, "poll", 0*time.Second, "Polling interval (leave unset to run once)")
 	Cmd.Flags().StringVar(&namespace, "namespace", "", "Namespace repo to get status for (multi-repo only, leave unset to get all repos)")
 	Cmd.Flags().BoolVar(&resourceStatus, "resources", true, "show resource level status for Namespace repo (multi-repo only)")

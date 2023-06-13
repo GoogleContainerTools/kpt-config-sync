@@ -44,7 +44,7 @@ import (
 
 func init() {
 	flags.AddContexts(Cmd)
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", flags.DefaultClusterClientTimeout, "Timeout for connecting to each cluster")
+	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", restconfig.DefaultTimeout, "Timeout for connecting to each cluster")
 }
 
 // GetVersionReadCloser returns a ReadCloser with the output produced by running the "nomos version" command as a string

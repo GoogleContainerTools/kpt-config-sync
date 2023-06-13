@@ -124,6 +124,14 @@ func Reset(nt *NT) error {
 	if err := ResetNamespaces(nt, nsListItems); err != nil {
 		return err
 	}
+	// Reset any modified system namespaces.
+	if err := resetSystemNamespaces(nt); err != nil {
+		return err
+	}
+	// Implicit namespaces may not have the test label. Delete them as well.
+	if err := deleteImplicitNamespacesAndWait(nt); err != nil {
+		return err
+	}
 
 	// NOTE: These git repos are not actually being deleted here, just
 	// unassigned to a specific RSync. All remote repos are cached in
@@ -339,9 +347,9 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 		obj := &item
 		nn := client.ObjectKeyFromObject(obj)
 
-		// If managed, skip direct deletion
+		// If managed, error. The test failed to clean up after itself
 		if manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			nt.T.Logf("[RESET] Namespace %s managed by %q", nn, manager)
+			nt.T.Errorf("[RESET] Failed to reset Namespace %s managed by %q", nn, manager)
 			continue
 		}
 

@@ -849,6 +849,9 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	// get bugreport
 	cmd := nt.Shell.Command("nomos", "bugreport")
 	cmd.Dir = nt.TmpDir
+	// Hack to work around the nomos bugreport workload identity auth issue
+	// TODO(b/280652816): remove this once nomos bugreport WI auth is fixed.
+	cmd.Env = append(cmd.Env, "KUBERNETES_SERVICE_HOST=")
 	out, err := cmd.CombinedOutput()
 	nt.T.Log("nomos bugreport\n%s", string(out))
 	if err != nil {

@@ -39,6 +39,11 @@ build-cli: pull-buildenv buildenv-dirs
 		--version $(VERSION) \
 		$(PLATFORMS)
 
+.PHONY: copy-cli
+copy-cli: buildenv-dirs
+	@cp $(OUTPUT_DIR)/go/bin/$(shell go env GOOS)_$(shell go env GOARCH)/nomos $(OUTPUT_DIR)/go/bin/nomos
+	@chmod 755 $(OUTPUT_DIR)/go/bin/nomos
+
 # NOTE: this rule depends on OUTPUT_DIR because buildenv needs those dirs to
 # exist in order to work.
 build-junit-report-cli: pull-buildenv buildenv-dirs

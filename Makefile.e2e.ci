@@ -125,6 +125,7 @@ pull-gcs: clean $(OUTPUT_DIR)
 	gsutil cp $(GCS_BUCKET)/darwin_arm64/nomos $(BIN_DIR)/darwin_arm64/nomos
 	gsutil cp $(GCS_BUCKET)/linux_amd64/nomos $(BIN_DIR)/linux_amd64/nomos
 	gsutil cp $(GCS_BUCKET)/linux_arm64/nomos $(BIN_DIR)/linux_arm64/nomos
+	$(MAKE) copy-cli
 
 .PHONY: pull-gcs-postsubmit
 pull-gcs-postsubmit:

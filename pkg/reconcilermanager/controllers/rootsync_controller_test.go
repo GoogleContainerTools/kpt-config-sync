@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
@@ -2961,7 +2962,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			reconcilermanager.StatusMode:              "enabled",
 			reconcilermanager.SourceBranchKey:         "master",
 			reconcilermanager.SourceRevKey:            "HEAD",
-			reconcilermanager.APIServerTimeout:        "5s",
+			reconcilermanager.APIServerTimeout:        restconfig.DefaultTimeout.String(),
 			reconcilermanager.ReconcileTimeout:        "5m0s",
 			reconcilermanager.ReconcilerPollingPeriod: "50ms",
 		},

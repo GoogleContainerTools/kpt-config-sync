@@ -31,7 +31,7 @@ import (
 )
 
 // DefaultTimeout is the default REST config timeout.
-const DefaultTimeout = 5 * time.Second
+const DefaultTimeout = 15 * time.Second
 
 // NewRestConfig will attempt to create a new rest config from all configured
 // options and return the first successfully created configuration.

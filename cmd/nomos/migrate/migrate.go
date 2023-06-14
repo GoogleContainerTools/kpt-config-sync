@@ -69,7 +69,7 @@ func init() {
 		`Accepts a comma-separated list of contexts to use in multi-cluster environments. Defaults to the current context. Use "all" for all contexts.`)
 	Cmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		`If enabled, only prints the migration output.`)
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "connect-timeout", flags.DefaultClusterClientTimeout, "Timeout for connecting to each cluster")
+	Cmd.Flags().DurationVar(&flags.ClientTimeout, "connect-timeout", restconfig.DefaultTimeout, "Timeout for connecting to each cluster")
 	Cmd.Flags().DurationVar(&waitTimeout, "wait-timeout", defaultWaitTimeout, "Timeout for waiting for condition to be true")
 }
 

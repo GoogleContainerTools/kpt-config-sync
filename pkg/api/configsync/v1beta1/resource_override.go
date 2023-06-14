@@ -54,7 +54,7 @@ type OverrideSpec struct {
 	ReconcileTimeout *metav1.Duration `json:"reconcileTimeout,omitempty"`
 
 	// apiServerTimeout allows one to override the client-side timeout for requests to the API server.
-	// Default: 5s.
+	// Default: 15s.
 	// Use string to specify this field value, like "30s", "1m".
 	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
 	// Recommended apiServerTimeout range is from "3s" to "1m".

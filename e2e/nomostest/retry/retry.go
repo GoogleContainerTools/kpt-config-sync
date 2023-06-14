@@ -15,8 +15,10 @@
 package retry
 
 import (
+	"context"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -43,6 +45,32 @@ func Retry(timeout time.Duration, fn func() error) (time.Duration, error) {
 		return err
 	})
 	return diff, err
+}
+
+// WithContext calls the passed function until it returns nil, or the provided
+// context is closed. Make sure to use a context that eventually closes.
+//
+// Retries once per second until context closes.
+// Returns how long the function retried, and the last error if the context
+// was closed.
+func WithContext(ctx context.Context, fn func() error) (time.Duration, error) {
+	start := time.Now()
+	err := func() error {
+		lastError := errors.Errorf("retry.WithContext function never ran")
+		for {
+			select {
+			case <-ctx.Done():
+				return lastError
+			default:
+			}
+			lastError = fn()
+			if lastError == nil || !defaultErrorFilter(lastError) {
+				return lastError
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+	return time.Since(start), err
 }
 
 // backoff returns a wait.Backoff that retries exactly once per second until

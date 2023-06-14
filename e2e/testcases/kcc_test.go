@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -75,16 +76,20 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	// Wait until all objects are reconciled
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return nt.Watcher.WatchForCurrentStatus(gvkPubSubTopic, "test-cs", "foo")
+		return nt.Watcher.WatchForCurrentStatus(gvkPubSubTopic, "test-cs", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForCurrentStatus(gvkPubSubSubscription, "test-cs-read", "foo")
+		return nt.Watcher.WatchForCurrentStatus(gvkPubSubSubscription, "test-cs-read", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForCurrentStatus(gvkServiceAccount, "pubsub-app", "foo")
+		return nt.Watcher.WatchForCurrentStatus(gvkServiceAccount, "pubsub-app", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForCurrentStatus(gvkPolicyMember, "policy-member-binding", "foo")
+		return nt.Watcher.WatchForCurrentStatus(gvkPolicyMember, "policy-member-binding", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -105,16 +110,20 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	// Wait until all objects are not found
 	tg = taskgroup.New()
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(gvkPubSubTopic, "test-cs", "foo")
+		return nt.Watcher.WatchForNotFound(gvkPubSubTopic, "test-cs", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(gvkPubSubSubscription, "test-cs-read", "foo")
+		return nt.Watcher.WatchForNotFound(gvkPubSubSubscription, "test-cs-read", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(gvkServiceAccount, "pubsub-app", "foo")
+		return nt.Watcher.WatchForNotFound(gvkServiceAccount, "pubsub-app", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(gvkPolicyMember, "policy-member-binding", "foo")
+		return nt.Watcher.WatchForNotFound(gvkPolicyMember, "policy-member-binding", "foo",
+			testwatcher.WatchUnstructured())
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)

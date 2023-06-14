@@ -27,9 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
@@ -38,17 +38,18 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
+	watchutil "kpt.dev/configsync/pkg/util/watch"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // WatchOption is an optional parameter for Watch
 type WatchOption func(watch *watchSpec)
 
 type watchSpec struct {
-	timeout time.Duration
-	ctx     context.Context
+	timeout      time.Duration
+	ctx          context.Context
+	unstructured bool
 }
 
 // WatchTimeout provides the timeout option to Watch.
@@ -62,6 +63,14 @@ func WatchTimeout(timeout time.Duration) WatchOption {
 func WatchContext(ctx context.Context) WatchOption {
 	return func(watch *watchSpec) {
 		watch.ctx = ctx
+	}
+}
+
+// WatchUnstructured tells the watcher to used unstructured objects, instead of
+// the default typed objects.
+func WatchUnstructured() WatchOption {
+	return func(watch *watchSpec) {
+		watch.unstructured = true
 	}
 }
 
@@ -135,7 +144,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	}
 	defer cancel()
 
-	lw, err := w.newListWatchForObject(ctx, gvk, name, namespace, spec.timeout)
+	lw, err := w.newListWatchForObject(ctx, gvk, name, namespace, spec.timeout, spec.unstructured)
 	if err != nil {
 		return errors.Wrap(err, errPrefix)
 	}
@@ -164,7 +173,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	}
 	// Since items are typed, we have to use some reflection to extract them.
 	// But since we filtered by name and namespace, there should only be one item.
-	cObj, err := getObjectFromList(cObjList, name, namespace)
+	cObj, err := getObjectFromList(cObjList)
 	if err != nil {
 		return errors.Wrap(err, errPrefix)
 	}
@@ -301,7 +310,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 // newListWatchForObject returns a ListWatch that does server-side filtering
 // down to a single resource object.
 // Optionally specify the minimum timeout for the REST client.
-func (w *Watcher) newListWatchForObject(ctx context.Context, gvk schema.GroupVersionKind, name, namespace string, timeout time.Duration) (*cache.ListWatch, error) {
+func (w *Watcher) newListWatchForObject(ctx context.Context, itemGVK schema.GroupVersionKind, name, namespace string, timeout time.Duration, unstructured bool) (cache.ListerWatcher, error) {
 	restConfig := w.restConfig
 	// Make sure the client-side watch timeout isn't too short.
 	// If not, duplicate the config and update the timeout.
@@ -313,54 +322,74 @@ func (w *Watcher) newListWatchForObject(ctx context.Context, gvk schema.GroupVer
 		restConfig = rest.CopyConfig(restConfig)
 		restConfig.Timeout = timeout * 2
 	}
-	// Use the custom client scheme to encode requests and decode responses
-	codecs := serializer.NewCodecFactory(w.kubeClient.Client.Scheme())
-	restClient, err := apiutil.RESTClientForGVK(gvk, false, restConfig, codecs)
-	if err != nil {
-		return nil, err
-	}
 	// Lookup the resource name from the GVK using discovery (usually cached)
-	mapping, err := w.kubeClient.Client.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapper := w.kubeClient.Client.RESTMapper()
+	mapping, err := mapper.RESTMapping(itemGVK.GroupKind(), itemGVK.Version)
 	if err != nil {
 		return nil, err
 	}
-	resource := mapping.Resource.Resource
 	// Validate namespace is empty for cluster-scoped resources
 	if mapping.Scope.Name() == meta.RESTScopeNameRoot && namespace != "" {
-		return nil, errors.Errorf("cannot watch cluster-scoped resource %q in namespace %q", resource, namespace)
+		return nil, errors.Errorf("cannot watch cluster-scoped resource %q in namespace %q", mapping.Resource.Resource, namespace)
 	}
-	// Use a selector to filter the events down to just the object we care about.
-	nameSelector := fields.OneTermEqualSelector("metadata.name", name)
-	// Create a ListerWatcher for this resource and namespace
-	lw := NewListWatchFromClient(ctx, restClient, resource, namespace, nameSelector)
+	// Filter by name and namespace
+	opts := &client.ListOptions{
+		Namespace:     namespace,
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", name),
+	}
+
+	var lw cache.ListerWatcher
+	if unstructured {
+		dynamicClient, err := dynamic.NewForConfig(restConfig)
+		if err != nil {
+			return nil, err
+		}
+		lw = &watchutil.DynamicListerWatcher{
+			Context:            ctx,
+			DynamicClient:      dynamicClient,
+			RESTMapper:         mapper,
+			ItemGVK:            itemGVK,
+			DefaultListOptions: opts,
+		}
+	} else {
+		// Use the custom client scheme to encode requests and decode responses
+		scheme := w.kubeClient.Client.Scheme()
+		typedClient, err := client.NewWithWatch(restConfig, client.Options{
+			Scheme: scheme,
+		})
+		if err != nil {
+			return nil, err
+		}
+		exampleList, err := kinds.NewTypedListForItemGVK(itemGVK, scheme)
+		if err != nil {
+			return nil, err
+		}
+		lw = &watchutil.TypedListerWatcher{
+			Context:            ctx,
+			Client:             typedClient,
+			ExampleList:        exampleList,
+			DefaultListOptions: opts,
+		}
+	}
 	return lw, nil
 }
 
-// getObjectFromList loops through the items in an ObjectList and returns the
-// one with the specified name and namespace.
-// This compexity is required because the items are typed without generics.
-// So we have to use reflection to read the type so we can access the fields.
-func getObjectFromList(objList client.ObjectList, name, namespace string) (client.Object, error) {
-	items, err := meta.ExtractList(objList)
+// getObjectFromList loops returns the first item in the list and errors if
+// there are more than one items.
+func getObjectFromList(objList client.ObjectList) (client.Object, error) {
+	objs, err := kinds.ExtractClientObjectList(objList)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to understand list result %#v",
-			objList)
+		return nil, err
 	}
-	// Iterate through the list to find the desired object, if it exists
-	for _, rObj := range items {
-		cObj, ok := rObj.(client.Object)
-		if !ok {
-			return nil, errors.Wrap(
-				testpredicates.WrongTypeErr(rObj, client.Object(nil)),
-				"unexpected list item type")
-		}
-		if cObj.GetName() == name && cObj.GetNamespace() == namespace {
-			return cObj, nil
-		}
-		// Ignore other objects, if any.
+	switch {
+	case len(objs) == 1:
+		return objs[0], nil
+	case len(objs) == 0:
+		return nil, nil // Not Found
+	default:
+		return nil, errors.Errorf("expected 1 or 0 list items, but got %d:\n%s",
+			len(objs), log.AsYAML(objList))
 	}
-	// Object Not Found
-	return nil, nil
 }
 
 // WatchForCurrentStatus watches the object until it reconciles (Current).
@@ -376,39 +405,4 @@ func (w *Watcher) WatchForNotFound(gvk schema.GroupVersionKind, name, namespace 
 	return w.WatchObject(gvk, name, namespace,
 		[]testpredicates.Predicate{testpredicates.ObjectNotFoundPredicate(w.scheme)},
 		opts...)
-}
-
-// NewListWatchFromClient replaces cache.NewListWatchFromClient, but adds a
-// context, to allow the List and Watch to be cancelled or time out.
-// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/cache/listwatch.go#L70
-func NewListWatchFromClient(ctx context.Context, c cache.Getter, resource string, namespace string, fieldSelector fields.Selector) *cache.ListWatch {
-	optionsModifier := func(options *metav1.ListOptions) {
-		options.FieldSelector = fieldSelector.String()
-	}
-	return NewFilteredListWatchFromClient(ctx, c, resource, namespace, optionsModifier)
-}
-
-// NewFilteredListWatchFromClient replaces cache.NewFilteredListWatchFromClient,
-// but adds a context, to allow the List and Watch to be cancelled or time out.
-// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/cache/listwatch.go#L80
-func NewFilteredListWatchFromClient(ctx context.Context, c cache.Getter, resource string, namespace string, optionsModifier func(options *metav1.ListOptions)) *cache.ListWatch {
-	listFunc := func(options metav1.ListOptions) (runtime.Object, error) {
-		optionsModifier(&options)
-		return c.Get().
-			Namespace(namespace).
-			Resource(resource).
-			VersionedParams(&options, metav1.ParameterCodec).
-			Do(ctx).
-			Get()
-	}
-	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
-		options.Watch = true
-		optionsModifier(&options)
-		return c.Get().
-			Namespace(namespace).
-			Resource(resource).
-			VersionedParams(&options, metav1.ParameterCodec).
-			Watch(ctx)
-	}
-	return &cache.ListWatch{ListFunc: listFunc, WatchFunc: watchFunc}
 }

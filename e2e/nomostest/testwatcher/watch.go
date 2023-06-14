@@ -23,7 +23,7 @@ import (
 	"go.uber.org/multierr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -149,67 +149,76 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 		return errors.Wrap(err, errPrefix)
 	}
 
-	// Don't need to specify the FieldSelector again.
-	// NewListWatchFromClient does it for us.
-	listOpts := metav1.ListOptions{}
-
-	// LIST with a name selector is functionally equivalent to a GET, except it
-	// can be performed with the same ListerWatcher, so we can re-use the same
-	// client.
-	// Using LIST also allows us to get the latest ResourceVersion for the whole
-	// resource, not just the RV when the object was last updated. This makes
-	// the subsequent WATCH a little more efficient, because it can skip the
-	// intermediate ResourceVersions (when only other objects were changed).
-	rObjList, err := lw.List(listOpts)
-	if err != nil {
-		return errors.Wrap(err, errPrefix)
-	}
-	// This cast should almost always work, except on some rarely used internal types.
-	cObjList, ok := rObjList.(client.ObjectList)
-	if !ok {
-		return errors.Wrapf(
-			testpredicates.WrongTypeErr(rObjList, client.ObjectList(nil)),
-			"%s unexpected list type", errPrefix)
-	}
-	// Since items are typed, we have to use some reflection to extract them.
-	// But since we filtered by name and namespace, there should only be one item.
-	cObj, err := getObjectFromList(cObjList)
-	if err != nil {
-		return errors.Wrap(err, errPrefix)
-	}
-
 	// Cache the last known object state for diffing with the new state.
 	var prevObj client.Object
 
-	if cObj == nil {
-		w.logger.Infof("%s GET Not Found", errPrefix)
-		// Predicates expect the object to be nil when Not Found.
+	// Cache the last set of predicate errors to return if UntilWithSync errors
+	var evalErrs []error
+
+	// Build an example object with the expected type and key fields
+	var exampleObj client.Object
+	if spec.unstructured {
+		exampleObj = &unstructured.Unstructured{}
+		exampleObj.GetObjectKind().SetGroupVersionKind(gvk)
 	} else {
-		w.logger.Infof("%s GET Found", errPrefix)
-		// Log the initial/current state as a diff to make it easy to compare with update diffs.
-		// Use diff.Diff because it doesn't truncate like cmp.Diff does.
-		// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
-		w.logger.Debugf("%s GET Diff (+ Current):\n%s",
-			errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
+		rObj, err := kinds.NewObjectForGVK(gvk, w.scheme)
+		if err != nil {
+			return errors.Wrap(err, errPrefix)
+		}
+		exampleObj, err = kinds.ObjectAsClientObject(rObj)
+		if err != nil {
+			return errors.Wrap(err, errPrefix)
+		}
+	}
+	exampleObj.SetName(name)
+	exampleObj.SetNamespace(namespace)
+
+	// UntilWithSync uses cache.MetaNamespaceKeyFunc for generating cache keys
+	// from event objects. Use the same method, just in case it changes in the
+	// future (e.g. from string to struct).
+	objKey, err := cache.MetaNamespaceKeyFunc(exampleObj)
+	if err != nil {
+		return errors.Wrap(err, errPrefix)
 	}
 
-	// Cache the predicate errors from the last evaluation and return them
-	// if the watch closes before the predicates all pass.
-	evalErrs := testpredicates.EvaluatePredicates(cObj, predicates)
-	if len(evalErrs) == 0 {
-		// Success! All predicates passed!
-		return nil
+	// precondition runs after the informer is synced.
+	// This means the initial list has completed and the cache is primed.
+	precondition := func(store cache.Store) (bool, error) {
+		iObj, found, err := store.GetByKey(objKey)
+		if err != nil {
+			return false, err
+		}
+
+		var cObj client.Object
+		if !found {
+			w.logger.Infof("%s GET Not Found", errPrefix)
+			// Predicates expect the object to be nil when Not Found.
+			// cObj = nil
+		} else {
+			w.logger.Infof("%s GET Found", errPrefix)
+			var ok bool
+			cObj, ok = iObj.(client.Object)
+			if !ok {
+				return false, errors.Errorf("invalid cache object: unsupported resource type (%T): failed to cast to client.Object",
+					iObj)
+			}
+			// Log the initial/current state as a diff to make it easy to compare with update diffs.
+			// Use diff.Diff because it doesn't truncate like cmp.Diff does.
+			// Use log.AsYAMLWithScheme to get the full scheme-consistent YAML with GVK.
+			w.logger.Debugf("%s GET Diff (+ Current):\n%s",
+				errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
+		}
+
+		evalErrs = testpredicates.EvaluatePredicates(cObj, predicates)
+		if len(evalErrs) == 0 {
+			// Success! All predicates returned without error.
+			return true, nil
+		}
+		// Update object cache for subsequent diffs
+		prevObj = cObj
+		// Continue watching.
+		return false, nil
 	}
-	// Update object cache for subsequent diffs
-	prevObj = cObj
-
-	// Specify ResourceVersion to ensure the Watch starts where the List stopped.
-	// watch.Until will update the ListOptions for us.
-	initialResourceVersion := cObjList.GetResourceVersion()
-
-	// Enable bookmarks to ensure retries start from the latest ResourceVersion,
-	// even if there haven't been any updates to the object being watched.
-	listOpts.AllowWatchBookmarks = true
 
 	// watch.Until watches the object and executes this ConditionFunc on each
 	// event until one of the following conditions is true:
@@ -274,7 +283,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 			return false, errors.Errorf("received unexpected event: %#v", event)
 		}
 	}
-	_, err = watchtools.Until(ctx, initialResourceVersion, lw, condition)
+	_, err = watchtools.UntilWithSync(ctx, lw, exampleObj, precondition, condition)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			// Until returns ErrWaitTimeout for any ctx.Done
@@ -372,24 +381,6 @@ func (w *Watcher) newListWatchForObject(ctx context.Context, itemGVK schema.Grou
 		}
 	}
 	return lw, nil
-}
-
-// getObjectFromList loops returns the first item in the list and errors if
-// there are more than one items.
-func getObjectFromList(objList client.ObjectList) (client.Object, error) {
-	objs, err := kinds.ExtractClientObjectList(objList)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case len(objs) == 1:
-		return objs[0], nil
-	case len(objs) == 0:
-		return nil, nil // Not Found
-	default:
-		return nil, errors.Errorf("expected 1 or 0 list items, but got %d:\n%s",
-			len(objs), log.AsYAML(objList))
-	}
 }
 
 // WatchForCurrentStatus watches the object until it reconciles (Current).

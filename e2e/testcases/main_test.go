@@ -60,6 +60,9 @@ func validateArgs() error {
 		if *e2e.GKEAutopilot && *e2e.GCPRegion == "" {
 			return errors.Errorf("Autopilot clusters must be created with a region")
 		}
+		if *e2e.GKEAutopilot && *e2e.GceNode {
+			return errors.Errorf("Cannot run gcenode tests on autopilot clusters")
+		}
 	}
 	return nil
 }

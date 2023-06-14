@@ -19,9 +19,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
@@ -68,12 +70,19 @@ func deleteGKECluster(t testing.NTB, name string) error {
 		args = append(args, "--region", *e2e.GCPRegion)
 	}
 	t.Logf("gcloud %s", strings.Join(args, " "))
-	cmd := exec.Command("gcloud", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return errors.Errorf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
-	}
-	return nil
+	// Sometimes an operation may be happening at the time the deletion request is
+	// sent, causing delete to error. Retry for a brief period to increase the
+	// chances for the delete operation.
+	took, err := retry.Retry(1*time.Minute, func() error {
+		cmd := exec.Command("gcloud", args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return errors.Errorf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
+		}
+		return nil
+	})
+	t.Logf("took %v retrying gke cluster deletion", took)
+	return err
 }
 
 func createGKECluster(t testing.NTB, name string) error {

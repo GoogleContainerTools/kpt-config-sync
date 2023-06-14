@@ -27,6 +27,7 @@ import (
 	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/kinds"
+	watchutil "kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -35,7 +36,7 @@ import (
 type Cache struct {
 	*Client
 
-	typedInformerFactory *TypedInformerFactory
+	typedInformerFactory *watchutil.TypedInformerFactory
 
 	// Namespace restricts the cache's ListWatch to the desired namespace
 	// Default watches all namespaces
@@ -85,7 +86,7 @@ func NewCache(fakeClient *Client, opts CacheOptions) *Cache {
 		startWait:            make(chan struct{}),
 		informersByGVK:       make(map[schema.GroupVersionKind]*MapEntry),
 		resyncPeriod:         opts.ResyncPeriod,
-		typedInformerFactory: NewTypedInformerFactory(fakeClient, opts.ResyncPeriod),
+		typedInformerFactory: watchutil.NewTypedInformerFactory(fakeClient, opts.ResyncPeriod),
 	}
 }
 

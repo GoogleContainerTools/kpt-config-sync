@@ -71,12 +71,11 @@ func UntilDeletedWithSync(ctx context.Context, c client.WithWatch, obj client.Ob
 			return err
 		}
 	}
-	watcher := &ClientListerWatcher{
-		Context:     ctx,
-		Client:      c,
-		Key:         client.ObjectKeyFromObject(obj),
-		Labels:      obj.GetLabels(),
-		ExampleList: objList,
+	watcher := &TypedListerWatcher{
+		Context:            ctx,
+		Client:             c,
+		ExampleList:        objList,
+		DefaultListOptions: SingleObjectListOptions(obj),
 	}
 	// Precondition runs after Watch and Sync but before Watch events are handled.
 	// So use it to confirm that the object still exists in the watch cache,

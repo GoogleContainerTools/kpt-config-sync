@@ -15,97 +15,30 @@
 package watch
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ClientListerWatcher wraps a client.WithWatch and implements the
-// cache.ListerWatcher interface.
-//
-// The following optional filters are supported:
-// - Key (name and/or namespace)
-// - Labels
-//
-// These filters are converted into ListOptions and merged with any ListOptions
-// passed to each List and Watch.
-type ClientListerWatcher struct {
-	// Context to pass to client list and watch methods
-	Context context.Context
-
-	// Client to list and watch with
-	Client client.WithWatch
-
-	// ExampleList is an example of the list type of resource to list & watch
-	ExampleList client.ObjectList
-
-	// Key is the name & namespace to watch (both optional)
-	Key client.ObjectKey
-
-	// Labels to filter with (optional)
-	Labels map[string]string
-}
-
-// List satisfies the cache.Lister interface.
-// The ListOptions specified here are merged with the ClientListerWatcher
-func (fw *ClientListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
-	objList, err := kinds.ObjectAsClientObjectList(fw.ExampleList.DeepCopyObject())
-	if err != nil {
-		return nil, err
-	}
-	cOpts, err := ConvertListOptions(&options)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
-	}
-	cOpts, err = MergeListOptions(cOpts, fw.listOptions())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
-	}
-	optsList := UnrollListOptions(cOpts)
-	klog.V(5).Infof("Listing %T %s: %v", objList, objList.GetObjectKind().GroupVersionKind().Kind, optsList)
-	err = fw.Client.List(fw.Context, objList, optsList...)
-	return objList, err
-}
-
-// Watch satisfies the cache.Watcher interface
-func (fw *ClientListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	objList, err := kinds.ObjectAsClientObjectList(fw.ExampleList.DeepCopyObject())
-	if err != nil {
-		return nil, err
-	}
-	cOpts, err := ConvertListOptions(&options)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
-	}
-	cOpts, err = MergeListOptions(cOpts, fw.listOptions())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
-	}
-	optsList := UnrollListOptions(cOpts)
-	klog.V(5).Infof("Watching %T %s: %v", objList, objList.GetObjectKind().GroupVersionKind().Kind, optsList)
-	return fw.Client.Watch(fw.Context, objList, optsList...)
-}
-
-// listOptions builds a set of List filters for the flexWatcher's Key and Labels.
-func (fw *ClientListerWatcher) listOptions() *client.ListOptions {
+// SingleObjectListOptions builds a set of List options that filter down to one
+// specific object.
+func SingleObjectListOptions(obj client.Object) *client.ListOptions {
 	opts := client.ListOptions{}
-	if len(fw.Key.Namespace) > 0 {
-		opts.Namespace = fw.Key.Namespace
+	// Use object name and namespace as filters
+	key := client.ObjectKeyFromObject(obj)
+	if len(key.Namespace) > 0 {
+		opts.Namespace = key.Namespace
 	}
-	if len(fw.Key.Name) > 0 {
-		opts.FieldSelector = fields.OneTermEqualSelector(metav1.ObjectNameField, fw.Key.Name)
+	if len(key.Name) > 0 {
+		opts.FieldSelector = fields.OneTermEqualSelector(metav1.ObjectNameField, key.Name)
 	}
-	if len(fw.Labels) > 0 {
+	// Use object labels as filters
+	labelMap := obj.GetLabels()
+	if len(labelMap) > 0 {
 		opts.LabelSelector = client.MatchingLabelsSelector{
-			Selector: labels.SelectorFromSet(fw.Labels),
+			Selector: labels.SelectorFromSet(labelMap),
 		}
 	}
 	return &opts

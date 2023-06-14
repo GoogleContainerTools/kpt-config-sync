@@ -86,10 +86,6 @@ func createGKECluster(t testing.NTB, name string) error {
 		args = append(args, "create")
 	}
 	args = append(args, name, "--project", *e2e.GCPProject)
-	// gcenode tests require workload identity to be disabled
-	if !*e2e.GceNode {
-		args = append(args, "--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject))
-	}
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)
 	}
@@ -108,11 +104,18 @@ func createGKECluster(t testing.NTB, name string) error {
 	if *e2e.GKEClusterVersion != "" {
 		args = append(args, "--cluster-version", *e2e.GKEClusterVersion)
 	}
-	if *e2e.GKEMachineType != "" {
-		args = append(args, "--machine-type", *e2e.GKEMachineType)
-	}
-	if *e2e.GKENumNodes > 0 {
-		args = append(args, "--num-nodes", fmt.Sprintf("%d", *e2e.GKENumNodes))
+	// Standard-specific options (cannot specify for autopilot)
+	if !*e2e.GKEAutopilot {
+		if *e2e.GKEMachineType != "" {
+			args = append(args, "--machine-type", *e2e.GKEMachineType)
+		}
+		if *e2e.GKENumNodes > 0 {
+			args = append(args, "--num-nodes", fmt.Sprintf("%d", *e2e.GKENumNodes))
+		}
+		// gcenode tests require workload identity to be disabled
+		if !*e2e.GceNode {
+			args = append(args, "--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject))
+		}
 	}
 	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.Command("gcloud", args...)

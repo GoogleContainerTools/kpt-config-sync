@@ -48,7 +48,8 @@ build-gke-e2e:
 	@echo "+++ Building $(GKE_E2E_IMAGE)"
 	docker buildx build \
 		-t $(GKE_E2E_IMAGE) \
-		-f build/prow/gke-e2e/Dockerfile
+		-f build/prow/gke-e2e/Dockerfile \
+		.
 
 .PHONY: push-gke-e2e
 push-gke-e2e:

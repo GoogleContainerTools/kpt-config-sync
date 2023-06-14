@@ -853,8 +853,8 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	// TODO(b/280652816): remove this once nomos bugreport WI auth is fixed.
 	cmd.Env = append(cmd.Env, "KUBERNETES_SERVICE_HOST=")
 	out, err := cmd.CombinedOutput()
-	nt.T.Log("nomos bugreport\n%s", string(out))
 	if err != nil {
+		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
 

@@ -22,10 +22,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
+	semverrange "github.com/Masterminds/semver/v3"
+	"golang.org/x/mod/semver"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
@@ -162,7 +163,7 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 		// step could still succeed, so we just log the error and continue
 		klog.Infof("failed to clear helm cache: %w\n", err)
 	}
-
+	klog.Infoln("using chart version: ", h.Version)
 	return nil
 }
 
@@ -224,8 +225,7 @@ data:
 	return pkgReadWriter.Write(newNodes)
 }
 
-// HelmTemplate runs helm template with args
-func (h *Hydrator) HelmTemplate(ctx context.Context, wait float64) error {
+func (h *Hydrator) registryLogin(ctx context.Context) error {
 	if h.Auth != configsync.AuthNone && h.isOCI() {
 		args, err := h.registryLoginArgs(ctx)
 		if err != nil {
@@ -236,9 +236,23 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, wait float64) error {
 			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))
 		}
 	}
+	return nil
+}
 
-	if err := h.getChartVersion(ctx); err != nil {
-		return err
+// HelmTemplate runs helm template with args
+func (h *Hydrator) HelmTemplate(ctx context.Context) error {
+	var loggedIn bool
+
+	if isRange(h.Version) {
+		klog.Infof("version range %s detected, fetching chart version\n", h.Version)
+		if err := h.registryLogin(ctx); err != nil {
+			return err
+		}
+		loggedIn = true
+
+		if err := h.getChartVersion(ctx); err != nil {
+			return err
+		}
 	}
 
 	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
@@ -253,23 +267,18 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, wait float64) error {
 		return nil
 	}
 
+	if !loggedIn {
+		if err := h.registryLogin(ctx); err != nil {
+			return err
+		}
+	}
+
 	args, err := h.templateArgs(ctx, destDir)
 	if err != nil {
 		return err
 	}
-
-	var renderErr error
-	var out []byte
-	for i := 0; i < 3; i++ {
-		out, renderErr = exec.CommandContext(ctx, "helm", args...).CombinedOutput()
-		if renderErr == nil {
-			break
-		}
-		klog.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
-		time.Sleep(util.WaitTime(wait))
-	}
-
-	if renderErr != nil {
+	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
 	}
 
@@ -299,4 +308,17 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 		args = append(args, "--password", token.AccessToken)
 	}
 	return args, nil
+}
+
+// we determine if a version is a valid range by checking that (a) it is not
+// valid semver on its own and (b) that it can be parsed correctly as a version range
+func isRange(version string) bool {
+	if version == "" {
+		return true
+	}
+	if semver.IsValid("v" + version) {
+		return false
+	}
+	_, err := semverrange.NewConstraint(version)
+	return err == nil
 }

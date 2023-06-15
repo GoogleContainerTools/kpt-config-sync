@@ -64,6 +64,9 @@ github.com/MakeNowJust/heredoc
 # github.com/Masterminds/semver v1.5.0
 ## explicit
 github.com/Masterminds/semver
+# github.com/Masterminds/semver/v3 v3.2.1
+## explicit; go 1.18
+github.com/Masterminds/semver/v3
 # github.com/alessio/shellescape v1.4.1
 ## explicit; go 1.14
 github.com/alessio/shellescape
@@ -429,6 +432,9 @@ go.uber.org/multierr
 ## explicit; go 1.17
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
+# golang.org/x/mod v0.9.0
+## explicit; go 1.17
+golang.org/x/mod/semver
 # golang.org/x/net v0.8.0
 ## explicit; go 1.17
 golang.org/x/net/context

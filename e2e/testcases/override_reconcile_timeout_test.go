@@ -56,10 +56,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	// (common on Autopilot clusters, which are optimized for utilization),
 	// this low priority workload will be evicted to make room for the new normal priority workload.
 	if nt.IsGKEAutopilot {
-		nt.MustKubectl("apply", "-f", "../testdata/low-priority-pause-deployment.yaml")
 		nt.T.Cleanup(func() {
 			nt.MustKubectl("delete", "-f", "../testdata/low-priority-pause-deployment.yaml", "--ignore-not-found")
 		})
+		nt.MustKubectl("apply", "-f", "../testdata/low-priority-pause-deployment.yaml")
 		require.NoError(nt.T,
 			nt.Watcher.WatchObject(kinds.Deployment(), "pause-deployment", "default", []testpredicates.Predicate{
 				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),

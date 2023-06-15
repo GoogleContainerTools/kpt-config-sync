@@ -329,7 +329,7 @@ func newSharedNT(name string) error {
 	if err := os.RemoveAll(tmpDir); err != nil {
 		return errors.Wrap(err, "failed to remove the shared test directory")
 	}
-	fakeNTB := &testing.FakeNTB{}
+	fakeNTB := testing.NewFakeNTB(name)
 	// Register a new SharedNT immediately with the fakeNTB. This way in the case
 	// of an error (e.g. during cluster creation) the cleanup can still run.
 	newSNT := mySharedNTs.newNT(fakeNTB)

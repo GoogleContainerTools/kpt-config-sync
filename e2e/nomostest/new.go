@@ -139,6 +139,9 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
 
 	sharedNt := SharedNT(t)
+	// Set t on the logger to ensure proper interleaving of logs
+	sharedNt.Logger.SetNTBForTest(t)
+
 	nt := &NT{
 		Context:                 sharedNt.Context,
 		T:                       t,

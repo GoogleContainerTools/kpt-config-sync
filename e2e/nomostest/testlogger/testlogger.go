@@ -33,6 +33,18 @@ func New(t testing.NTB, debugEnabled bool) *TestLogger {
 	}
 }
 
+// SetNTBForTest sets the loggers NTB for the scope of a test. This ensures that
+// for shared test environments, the actual test's logger is used for the scope
+// of the test. This ensures proper interleaving of logs when running tests in
+// parallel. Reset to the original logger after the test for post-test logging.
+func (tl *TestLogger) SetNTBForTest(t testing.NTB) {
+	originalNTB := tl.t
+	t.Cleanup(func() {
+		tl.t = originalNTB
+	})
+	tl.t = t
+}
+
 // IsDebugEnabled returns true if debug is enabled for this test
 func (tl *TestLogger) IsDebugEnabled() bool {
 	return tl.debugEnabled

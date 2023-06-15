@@ -109,11 +109,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 		}))
 
 	// Delete the RootSync
-	// DeletePropagationBackground is required when deleting RootSync, to
-	// avoid causing the reconciler Deployment to be deleted before the RootSync
-	// finishes finalizing.
-	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -197,11 +193,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 		}))
 
 	// Delete the RootSync
-	// DeletePropagationBackground is required when deleting RootSync, to
-	// avoid causing the reconciler Deployment to be deleted before the RootSync
-	// finishes finalizing.
-	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -320,11 +312,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		}))
 
 	// Delete the RootSync
-	// DeletePropagationBackground is required when deleting RootSync, to
-	// avoid causing the reconciler Deployment to be deleted before the RootSync
-	// finishes finalizing.
-	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -456,11 +444,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	}
 
 	// Delete the RootSync
-	// DeletePropagationBackground is required when deleting RootSync, to
-	// avoid causing the reconciler Deployment to be deleted before the RootSync
-	// finishes finalizing.
-	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.KubeClient.Delete(rootSync, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -607,8 +591,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 	}
 
 	nt.T.Logf("Deleting %s %s", gvk.Kind, key)
-	// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
-	err = nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationBackground))
+	err = nt.KubeClient.Delete(obj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -187,13 +186,8 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		defer cancel()
 		go TailReconcilerLogs(ctx, nt, RootReconcilerObjectKey(rsNN.Name))
 
-		// DeletePropagationBackground is required when deleting RSyncs with
-		// dependencies that have owners references. Otherwise the reconciler
-		// and dependenencies will be garbage collected before the finalizer
-		// can delete the managed resources.
-		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RootSync %s", rsNN)
-		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		if err := nt.KubeClient.Delete(rs); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
@@ -270,13 +264,8 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		defer cancel()
 		go TailReconcilerLogs(ctx, nt, NsReconcilerObjectKey(rsNN.Namespace, rsNN.Name))
 
-		// DeletePropagationBackground is required when deleting RSyncs with
-		// dependencies that have owners references. Otherwise the reconciler
-		// and dependenencies will be garbage collected before the finalizer
-		// can delete the managed resources.
-		// TODO: Remove explicit Background policy after the reconciler-manager finalizer is added.
 		nt.T.Logf("[RESET] Deleting RepoSync %s", rsNN)
-		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+		if err := nt.KubeClient.Delete(rs); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}

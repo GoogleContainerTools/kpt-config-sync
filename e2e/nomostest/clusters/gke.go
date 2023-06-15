@@ -15,6 +15,7 @@
 package clusters
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
@@ -58,6 +60,70 @@ func withKubeConfig(cmd *exec.Cmd, kubeconfig string) *exec.Cmd {
 	return cmd
 }
 
+// listOperations lists RUNNING operations on the target cluster
+func listOperations(ctx context.Context, t testing.NTB, name string) ([]string, error) {
+	args := []string{
+		"container", "operations", "list",
+		"--project", *e2e.GCPProject,
+		"--filter", fmt.Sprintf("status = RUNNING AND targetLink ~ %s", name),
+		"--format", "value(name)",
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := exec.CommandContext(ctx, "gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, errors.Errorf("failed to list operations for %s: %v\nstdout/stderr:\n%s",
+			name, err, string(out))
+	}
+	operations := strings.Fields(string(out))
+	return operations, nil
+}
+
+// waitOperation waits for the provided operation to complete
+func waitOperation(ctx context.Context, t testing.NTB, operation string) error {
+	args := []string{
+		"container", "operations", "wait",
+		operation,
+		"--project", *e2e.GCPProject,
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := exec.CommandContext(ctx, "gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return errors.Errorf("failed to wait for operation %s: %v\nstdout/stderr:\n%s",
+			operation, err, string(out))
+	}
+	return nil
+}
+
+func listAndWaitForOperations(ctx context.Context, t testing.NTB, name string) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	operations, err := listOperations(ctxWithTimeout, t, name)
+	if err != nil {
+		return err
+	}
+	tg := taskgroup.New()
+	for _, operation := range operations {
+		tg.Go(func() error {
+			return waitOperation(ctxWithTimeout, t, operation)
+		})
+	}
+	return tg.Wait()
+}
+
 func deleteGKECluster(t testing.NTB, name string) error {
 	args := []string{
 		"container", "clusters", "delete",
@@ -69,11 +135,16 @@ func deleteGKECluster(t testing.NTB, name string) error {
 	if *e2e.GCPRegion != "" {
 		args = append(args, "--region", *e2e.GCPRegion)
 	}
-	t.Logf("gcloud %s", strings.Join(args, " "))
 	// Sometimes an operation may be happening at the time the deletion request is
 	// sent, causing delete to error. Retry for a brief period to increase the
 	// chances for the delete operation.
-	took, err := retry.Retry(1*time.Minute, func() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	took, err := retry.WithContext(ctx, func() error {
+		if err := listAndWaitForOperations(ctx, t, name); err != nil {
+			return err
+		}
+		t.Logf("gcloud %s", strings.Join(args, " "))
 		cmd := exec.Command("gcloud", args...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -163,5 +234,7 @@ func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Errorf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
 	}
-	return nil
+	// after getting credentials, wait for any running operations to complete
+	// before handing over this cluster to the test environment
+	return listAndWaitForOperations(context.Background(), t, clusterName)
 }

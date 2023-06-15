@@ -16,6 +16,8 @@ apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: low-priority
+  labels:
+    nomos-test: enabled
 value: -1
 globalDefault: false
 ---
@@ -23,8 +25,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pause-deployment
+  namespace: default
   labels:
     app: pause
+    nomos-test: enabled
 spec:
   replicas: 1
   selector:

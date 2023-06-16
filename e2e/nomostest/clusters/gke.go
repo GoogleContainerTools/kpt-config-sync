@@ -98,6 +98,10 @@ func waitOperation(ctx context.Context, t testing.NTB, operation string) error {
 	if *e2e.GCPRegion != "" {
 		args = append(args, "--region", *e2e.GCPRegion)
 	}
+	start := time.Now()
+	defer func() {
+		t.Logf("took %v to wait for operation %s", time.Since(start), operation)
+	}()
 	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, "gcloud", args...)
 	out, err := cmd.CombinedOutput()
@@ -109,16 +113,20 @@ func waitOperation(ctx context.Context, t testing.NTB, operation string) error {
 }
 
 func listAndWaitForOperations(ctx context.Context, t testing.NTB, name string) error {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-	operations, err := listOperations(ctxWithTimeout, t, name)
+	if _, ok := ctx.Deadline(); !ok {
+		// set default timeout if parent context doesn't have a deadline
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+	}
+	operations, err := listOperations(ctx, t, name)
 	if err != nil {
 		return err
 	}
 	tg := taskgroup.New()
 	for _, operation := range operations {
 		tg.Go(func() error {
-			return waitOperation(ctxWithTimeout, t, operation)
+			return waitOperation(ctx, t, operation)
 		})
 	}
 	return tg.Wait()
@@ -165,7 +173,10 @@ func createGKECluster(t testing.NTB, name string) error {
 	} else {
 		args = append(args, "create")
 	}
-	args = append(args, name, "--project", *e2e.GCPProject)
+	args = append(args, name,
+		"--project", *e2e.GCPProject,
+		"--async",
+	)
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)
 	}
@@ -203,7 +214,9 @@ func createGKECluster(t testing.NTB, name string) error {
 	if err != nil {
 		return errors.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	return listAndWaitForOperations(ctx, t, name)
 }
 
 // getGKECredentials fetches GKE credentials at the specified kubeconfig path.

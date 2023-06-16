@@ -17,7 +17,6 @@ package nomostest
 import (
 	"context"
 	"fmt"
-	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
@@ -63,11 +62,7 @@ func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 				return err
 			}
 			v1api := prometheusv1.NewAPI(client)
-			err = predicate(ctx, v1api)
-			if err != nil && errors.Is(err, syscall.ECONNREFUSED) {
-				return retry.NewTerminalError(errors.Wrapf(err, "port-forwarding failed waiting for metrics predicate[%d]", i))
-			}
-			return err
+			return predicate(ctx, v1api)
 		})
 		if err != nil {
 			return errors.Wrapf(err, "timed out waiting for metrics predicate[%d]", i)

@@ -29,7 +29,7 @@ ENV CGO_ENABLED=0
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
-ARG HELM_VERSION=v3.11.3
+ARG HELM_VERSION=v3.12.1
 ARG KUSTOMIZE_VERSION=v5.0.3
 ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 

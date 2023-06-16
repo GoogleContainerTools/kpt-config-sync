@@ -17,6 +17,7 @@ package core
 import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1hpa "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -26,6 +27,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	autoscalingv1vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	clusterregistry "k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1"
 	k8sadmissionv1 "k8s.io/kubernetes/pkg/apis/admission/v1"
@@ -60,6 +62,7 @@ var Scheme = scheme.Scheme
 func init() {
 	mustRegisterKubernetesResources()
 	mustRegisterAPIExtensionsResources()
+	mustRegisterAutoscalingResources()
 
 	// Config Sync types
 	utilruntime.Must(clusterregistry.AddToScheme(scheme.Scheme))
@@ -121,4 +124,10 @@ func mustRegisterAPIExtensionsResources() {
 	utilruntime.Must(apiextensionsv1beta1.RegisterConversions(scheme.Scheme))
 
 	utilruntime.Must(scheme.Scheme.SetVersionPriority(apiextensionsv1.SchemeGroupVersion, apiextensionsv1beta1.SchemeGroupVersion))
+}
+
+func mustRegisterAutoscalingResources() {
+	utilruntime.Must(autoscalingv1hpa.AddToScheme(scheme.Scheme))
+	utilruntime.Must(autoscalingv1vpa.AddToScheme(scheme.Scheme))
+	// autoscaling API has no generated defaults or conversions
 }

@@ -748,6 +748,9 @@ k8s.io/apimachinery/third_party/forked/golang/reflect
 ## explicit; go 1.19
 k8s.io/apiserver/pkg/features
 k8s.io/apiserver/pkg/util/feature
+# k8s.io/autoscaler/vertical-pod-autoscaler v0.13.0
+## explicit; go 1.19
+k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1
 # k8s.io/cli-runtime v0.26.7
 ## explicit; go 1.19
 k8s.io/cli-runtime/pkg/genericclioptions

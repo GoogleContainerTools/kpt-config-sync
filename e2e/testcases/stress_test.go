@@ -25,10 +25,12 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	autoscalingv1vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -42,6 +44,8 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -125,7 +129,7 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 CronTab CRs managed by Config Sync on the cluster")
-	crList := &unstructured.UnstructuredList{}
+	crList := &metav1.PartialObjectMetadataList{}
 	crList.SetGroupVersionKind(crontabGVK)
 	if err := nt.KubeClient.List(crList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}); err != nil {
 		nt.T.Error(err)
@@ -165,8 +169,8 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
-	cmList := &corev1.ConfigMapList{}
-
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
 	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
@@ -175,9 +179,106 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 }
 
+// TestStressLargeNamespaceAutoscaling tests that Config Sync can sync a
+// namespace including 5000 resources successfully, when autoscaling it set to
+// Auto, with the smaller initial resource requests.
+// Ideally, the reconciler should be OOMKilled and/or evicted at least once and
+// be replaced with more CPU/Mem.
+func TestStressLargeNamespaceAutoscaling(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
+	nomostest.StopWebhook(nt)
+
+	nt.T.Log("Enable autoscaling")
+	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	if err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync); err != nil {
+		nt.T.Fatal(err)
+	}
+	core.SetAnnotation(rootSync, metadata.ReconcilerAutoscalingStrategyAnnotationKey, string(metadata.ReconcilerAutoscalingStrategyAuto))
+	reconcilerResourceSpec := v1beta1.ContainerResourcesSpec{
+		ContainerName: "reconciler",
+		CPURequest:    resource.MustParse("10m"),
+		CPULimit:      resource.MustParse("1"),
+		MemoryRequest: resource.MustParse("5Mi"),
+		MemoryLimit:   resource.MustParse("10Mi"),
+	}
+	rootSync.Spec.Override.Resources = []v1beta1.ContainerResourcesSpec{
+		reconcilerResourceSpec,
+	}
+	if err := nt.KubeClient.Update(rootSync); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Wait for the reconciler Deployment to reflect the RootSync changes
+	reconcilerKey := core.RootReconcilerObjectKey(configsync.RootSyncName)
+	err := nt.Watcher.WatchObject(kinds.Deployment(), reconcilerKey.Name, reconcilerKey.Namespace, []testpredicates.Predicate{
+		testpredicates.DeploymentContainerResourcesEqual(reconcilerResourceSpec),
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	reconcilerPod, err := nt.KubeClient.GetDeploymentPod(reconcilerKey.Name, reconcilerKey.Namespace, nt.DefaultWaitTimeout)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Reconciler container specs (before):")
+	for _, container := range reconcilerPod.Spec.Containers {
+		nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
+	}
+
+	ns := "my-ns-1"
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(ns)))
+
+	labelKey := "StressTestName"
+	labelValue := "TestStressLargeNamespace"
+	for i := 1; i <= 5000; i++ {
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
+			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
+	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add 5000 ConfigMaps and 1 Namespace"))
+	err = nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
+	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
+		nt.T.Error(err)
+	}
+	if len(cmList.Items) != 5000 {
+		nt.T.Errorf("The %s namespace should include 5000 ConfigMaps having the `%s: %s` label exactly, found %v instead", ns, labelKey, labelValue, len(cmList.Items))
+	}
+
+	reconcilerPod, err = nt.KubeClient.GetDeploymentPod(reconcilerKey.Name, reconcilerKey.Namespace, nt.DefaultWaitTimeout)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Reconciler container specs (after):")
+	for _, container := range reconcilerPod.Spec.Containers {
+		nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
+	}
+
+	vpa := &autoscalingv1vpa.VerticalPodAutoscaler{}
+	if err := nt.KubeClient.Get(reconcilerKey.Name, reconcilerKey.Namespace, vpa); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Reconciler VPA recommendations:")
+	nt.T.Log(log.AsYAML(vpa.Status.Recommendation.ContainerRecommendations))
+}
+
 // TestStressFrequentGitCommits adds 100 Git commits, and verifies that Config Sync can sync the changes in these commits successfully.
 func TestStressFrequentGitCommits(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.StressTest, ntopts.VPATest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
@@ -204,7 +305,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
-	cmList := &corev1.ConfigMapList{}
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
 	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}

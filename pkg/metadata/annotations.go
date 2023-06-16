@@ -145,6 +145,11 @@ const (
 	// reconciler-manager will create the reconciler with the hydration-controller
 	// sidecar container.
 	RequiresRenderingAnnotationKey = configsync.ConfigSyncPrefix + "requires-rendering"
+
+	// ReconcilerAutoscalingStrategyAnnotationKey is the annotation key set on
+	// RootSync/RepoSync objects to indicate whether to autoscale the reconciler
+	// deployment and what strategy to use.
+	ReconcilerAutoscalingStrategyAnnotationKey = configsync.ConfigSyncPrefix + "reconciler-autoscaling-strategy"
 )
 
 // Lifecycle annotations
@@ -227,4 +232,24 @@ const (
 	// affecting the managed resources.
 	// This is the default behavior if the annotation is not specified.
 	DeletionPropagationPolicyOrphan = DeletionPropagationPolicy("Orphan")
+)
+
+// ReconcilerAutoscalingStrategy is the type used to identify value enums to use
+// with the reconciler-autoscaling-strategy annotation.
+type ReconcilerAutoscalingStrategy string
+
+const (
+	// ReconcilerAutoscalingStrategyAuto indicates that a VPA config should be
+	// applied for the reconciler Deployment, if the VPA CRD is installed.
+	ReconcilerAutoscalingStrategyAuto = ReconcilerAutoscalingStrategy("Auto")
+
+	// ReconcilerAutoscalingStrategyRecommend indicates that a VPA config should
+	// be applied for the reconciler Deployment, if the VPA CRD is installed,
+	// but it should be configured only to monitor and make resource
+	// recommendations, not to apply them.
+	ReconcilerAutoscalingStrategyRecommend = ReconcilerAutoscalingStrategy("Recommend")
+
+	// ReconcilerAutoscalingStrategyDisabled indicates that a VPA config should
+	// NOT be applied for the reconciler Deployment.
+	ReconcilerAutoscalingStrategyDisabled = ReconcilerAutoscalingStrategy("Disabled")
 )

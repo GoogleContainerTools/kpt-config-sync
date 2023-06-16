@@ -15,6 +15,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -611,7 +613,16 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 			} else {
 				testCurrent = tc.current.DeepCopy()
 			}
-			dep, err := compareDeploymentsToCreatePatchData(tc.isAutopilot, testDeclared, testCurrent, reconcilerManagerAllowList, core.Scheme)
+			fakeClient := syncerFake.NewClient(t, core.Scheme)
+			if tc.isAutopilot {
+				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject())
+				require.NoError(t, err)
+			}
+			r := &reconcilerBase{
+				scheme: fakeClient.Scheme(),
+				client: fakeClient,
+			}
+			dep, err := r.compareDeploymentsToCreatePatchData(testDeclared, testCurrent, reconcilerManagerAllowList)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedSame, dep.same)
 		})

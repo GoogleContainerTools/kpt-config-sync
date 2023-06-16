@@ -59,7 +59,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+	fakeClient, _, testReconciler := setupRootReconciler(t, core.Scheme, secretObj)
 
 	defer logObjectYAMLIfFailed(t, fakeClient, rs)
 
@@ -139,7 +139,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeyToken), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+	fakeClient, _, testReconciler := setupRootReconciler(t, core.Scheme, secretObj)
 
 	defer logObjectYAMLIfFailed(t, fakeClient, rs)
 
@@ -212,7 +212,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+	fakeClient, _, testReconciler := setupRootReconciler(t, core.Scheme, secretObj)
 
 	defer logObjectYAMLIfFailed(t, fakeClient, rs)
 
@@ -449,7 +449,7 @@ func testRootSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyF
 	t.Log("building RootSyncReconciler")
 	syncObj := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+	fakeClient, _, testReconciler := setupRootReconciler(t, core.Scheme, secretObj)
 	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
 }
 

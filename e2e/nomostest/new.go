@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -63,6 +64,11 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		MultiRepo: ntopts.MultiRepo{
 			NamespaceRepos: make(map[types.NamespacedName]ntopts.RepoOpts),
 			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
+			// Enable autoscaling by default in tests to improve test coverage
+			// for this preview feature. To override, use
+			// WithReconcilerAutoscalingStrategy or
+			// WithoutReconcilerAutoscalingStrategy.
+			ReconcilerAutoscalingStrategy: pointerToStrategy(metadata.ReconcilerAutoscalingStrategyAuto),
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
 			ReconcileTimeout: pointer.Duration(1 * time.Minute),
@@ -87,6 +93,10 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 
 	if !*e2e.KCC && optsStruct.KCCTest {
 		t.Skip("Test skipped since it is a KCC test")
+	}
+
+	if !*e2e.VPA && optsStruct.VPATest {
+		t.Skip("Test skipped since it is a VPA test")
 	}
 
 	if !*e2e.GceNode && optsStruct.GCENodeTest {
@@ -147,32 +157,33 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	sharedNt.Logger.SetNTBForTest(t)
 
 	nt := &NT{
-		Context:                 sharedNt.Context,
-		T:                       t,
-		Logger:                  sharedNt.Logger,
-		Shell:                   sharedNt.Shell,
-		ClusterName:             sharedNt.ClusterName,
-		TmpDir:                  opts.TmpDir,
-		Config:                  opts.RESTConfig,
-		repoSyncPermissions:     opts.RepoSyncPermissions,
-		KubeClient:              sharedNt.KubeClient,
-		Watcher:                 sharedNt.Watcher,
-		WatchClient:             sharedNt.WatchClient,
-		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
-		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
-		DefaultReconcileTimeout: opts.ReconcileTimeout,
-		kubeconfigPath:          sharedNt.kubeconfigPath,
-		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
-		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
-		RootRepos:               sharedNt.RootRepos,
-		NonRootRepos:            sharedNt.NonRootRepos,
-		MetricsExpectations:     sharedNt.MetricsExpectations,
-		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
-		caCertPath:              sharedNt.caCertPath,
-		Scheme:                  sharedNt.Scheme,
-		RemoteRepositories:      sharedNt.RemoteRepositories,
-		WebhookDisabled:         sharedNt.WebhookDisabled,
-		GitProvider:             sharedNt.GitProvider,
+		Context:                              sharedNt.Context,
+		T:                                    t,
+		Logger:                               sharedNt.Logger,
+		Shell:                                sharedNt.Shell,
+		ClusterName:                          sharedNt.ClusterName,
+		TmpDir:                               opts.TmpDir,
+		Config:                               opts.RESTConfig,
+		repoSyncPermissions:                  opts.RepoSyncPermissions,
+		KubeClient:                           sharedNt.KubeClient,
+		Watcher:                              sharedNt.Watcher,
+		WatchClient:                          sharedNt.WatchClient,
+		IsGKEAutopilot:                       sharedNt.IsGKEAutopilot,
+		DefaultWaitTimeout:                   sharedNt.DefaultWaitTimeout,
+		DefaultReconcileTimeout:              opts.ReconcileTimeout,
+		DefaultReconcilerAutoscalingStrategy: opts.ReconcilerAutoscalingStrategy,
+		kubeconfigPath:                       sharedNt.kubeconfigPath,
+		ReconcilerPollingPeriod:              sharedNt.ReconcilerPollingPeriod,
+		HydrationPollingPeriod:               sharedNt.HydrationPollingPeriod,
+		RootRepos:                            sharedNt.RootRepos,
+		NonRootRepos:                         sharedNt.NonRootRepos,
+		MetricsExpectations:                  sharedNt.MetricsExpectations,
+		gitPrivateKeyPath:                    sharedNt.gitPrivateKeyPath,
+		caCertPath:                           sharedNt.caCertPath,
+		Scheme:                               sharedNt.Scheme,
+		RemoteRepositories:                   sharedNt.RemoteRepositories,
+		WebhookDisabled:                      sharedNt.WebhookDisabled,
+		GitProvider:                          sharedNt.GitProvider,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -234,23 +245,24 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	webhookDisabled := false
 	nt := &NT{
-		Context:                 ctx,
-		T:                       t,
-		Logger:                  logger,
-		Shell:                   shell,
-		ClusterName:             opts.ClusterName,
-		TmpDir:                  opts.TmpDir,
-		Config:                  opts.RESTConfig,
-		repoSyncPermissions:     opts.RepoSyncPermissions,
-		DefaultReconcileTimeout: opts.ReconcileTimeout,
-		kubeconfigPath:          opts.KubeconfigPath,
-		RootRepos:               make(map[string]*gitproviders.Repository),
-		NonRootRepos:            make(map[types.NamespacedName]*gitproviders.Repository),
-		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
-		Scheme:                  scheme,
-		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
-		WebhookDisabled:         &webhookDisabled,
-		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
+		Context:                              ctx,
+		T:                                    t,
+		Logger:                               logger,
+		Shell:                                shell,
+		ClusterName:                          opts.ClusterName,
+		TmpDir:                               opts.TmpDir,
+		Config:                               opts.RESTConfig,
+		repoSyncPermissions:                  opts.RepoSyncPermissions,
+		DefaultReconcileTimeout:              opts.ReconcileTimeout,
+		DefaultReconcilerAutoscalingStrategy: opts.ReconcilerAutoscalingStrategy,
+		kubeconfigPath:                       opts.KubeconfigPath,
+		RootRepos:                            make(map[string]*gitproviders.Repository),
+		NonRootRepos:                         make(map[types.NamespacedName]*gitproviders.Repository),
+		MetricsExpectations:                  testmetrics.NewSyncSetExpectations(t, scheme),
+		Scheme:                               scheme,
+		RemoteRepositories:                   make(map[types.NamespacedName]*gitproviders.Repository),
+		WebhookDisabled:                      &webhookDisabled,
+		GitProvider:                          gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
 	}
 
 	// TODO: Try speeding up the reconciler and hydration polling.
@@ -320,6 +332,19 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	if *e2e.KCC {
 		nt.setupConfigConnector()
+	}
+
+	// Install VPA on Kind, if requested.
+	// GKE standard clusters should use the VPA addon.
+	// GKE autopilot comes with VPA included.
+	// VPA depends on metrics-server.
+	if *e2e.VPA && *e2e.TestCluster == e2e.Kind {
+		if err := nt.installMetricsServer(); err != nil {
+			nt.T.Fatal(err)
+		}
+		if err := nt.installVerticalPrivateAutoscaler(); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 
 	t.Cleanup(func() {
@@ -486,4 +511,9 @@ func TestDir(t nomostesting.NTB) string {
 	})
 	t.Logf("created temporary directory %q", tmpDir)
 	return tmpDir
+}
+
+// pointerToStrategy returns a pointer to a ReconcilerAutoscalingStrategy.
+func pointerToStrategy(strategy metadata.ReconcilerAutoscalingStrategy) *metadata.ReconcilerAutoscalingStrategy {
+	return &strategy
 }

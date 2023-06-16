@@ -279,9 +279,12 @@ func parseManifestDir(dirPath string) ([]client.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths := make([]cmpath.Absolute, len(files))
-	for i, f := range files {
-		paths[i] = readPath.Join(cmpath.RelativeSlash(f.Name()))
+	paths := make([]cmpath.Absolute, 0, len(files))
+	for _, f := range files {
+		switch filepath.Ext(f.Name()) {
+		case ".yaml", ".yml", ".json":
+			paths = append(paths, readPath.Join(cmpath.RelativeSlash(f.Name())))
+		}
 	}
 	// Read the manifests cached in the tmpdir.
 	r := reader.File{}
@@ -666,6 +669,9 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
+	// Enable autoscaling by default.
+	// This helps validate VPA works for all test cases.
+	EnableReconcilerAutoscaling(rs)
 	return rs
 }
 
@@ -683,6 +689,11 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
+	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
 	}
 	return rs
 }
@@ -704,6 +715,9 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
+	// Enable autoscaling by default.
+	// This helps validate VPA works for all test cases.
+	EnableReconcilerAutoscaling(rs)
 	return rs
 }
 
@@ -722,6 +736,11 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
 	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
+	}
 	return rs
 }
 
@@ -739,6 +758,11 @@ func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
+	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
 	}
 	return rs
 }
@@ -765,6 +789,9 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
+	// Enable autoscaling by default.
+	// This helps validate VPA works for all test cases.
+	EnableReconcilerAutoscaling(rs)
 	return rs
 }
 
@@ -782,6 +809,11 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
+	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
@@ -811,6 +843,9 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
+	// Enable autoscaling by default.
+	// This helps validate VPA works for all test cases.
+	EnableReconcilerAutoscaling(rs)
 	return rs
 }
 
@@ -828,6 +863,11 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
+	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
 	}
 	// Add dependencies to ensure managed objects can be deleted.
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
@@ -850,6 +890,11 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
+	}
+	if nt.DefaultReconcilerAutoscalingStrategy != nil {
+		SetReconcilerAutoscalingStrategy(rs, *nt.DefaultReconcilerAutoscalingStrategy)
+	} else {
+		DisableReconcilerAutoscaling(rs)
 	}
 	// Add dependencies to ensure managed objects can be deleted.
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {

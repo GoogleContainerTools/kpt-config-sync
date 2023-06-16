@@ -25,6 +25,9 @@ type TestType struct {
 	// KCCTest specifies the test is for KCC resources.
 	KCCTest bool
 
+	// VPATest specifies the test requires VPA to be installed.
+	VPATest bool
+
 	// GCENodeTest specifies the test is for verifying the gcenode auth type.
 	// It requires a GKE cluster with workload identity disabled.
 	GCENodeTest bool
@@ -43,6 +46,11 @@ func StressTest(opt *New) {
 // KCCTest specifies the test is a kcc test.
 func KCCTest(opt *New) {
 	opt.KCCTest = true
+}
+
+// VPATest specifies the test requires VPA to be installed.
+func VPATest(opt *New) {
+	opt.VPATest = true
 }
 
 // GCENodeTest specifies the test is for verifying the gcenode auth type.

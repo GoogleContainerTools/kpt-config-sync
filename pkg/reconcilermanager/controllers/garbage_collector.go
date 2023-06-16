@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	autoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -260,4 +261,22 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 		return NewObjectOperationError(err, crb, OperationUpdate)
 	}
 	return nil
+}
+
+func (r *reconcilerBase) deleteVerticalPodAutoscaler(ctx context.Context, reconcilerRef types.NamespacedName) error {
+	vpaRef := reconcilerRef
+	vpaEnabled, err := r.isVPAEnabled()
+	if err != nil {
+		return err
+	}
+	if !vpaEnabled {
+		r.logger(ctx).Info("Managed object delete skipped - not enabled",
+			logFieldObjectRef, vpaRef.String(),
+			logFieldObjectKind, "VerticalPodAutoscaler")
+		return nil
+	}
+	obj := &autoscalingv1.VerticalPodAutoscaler{}
+	obj.Name = vpaRef.Name
+	obj.Namespace = vpaRef.Namespace
+	return r.cleanup(ctx, obj)
 }

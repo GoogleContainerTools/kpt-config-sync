@@ -111,6 +111,14 @@ func Clean(nt *NT) error {
 	if err := deleteResourceGroupController(nt); err != nil {
 		return err
 	}
+	if *e2e.VPA && *e2e.TestCluster == e2e.Kind {
+		if err := nt.uninstallVerticalPrivateAutoscaler(); err != nil {
+			return err
+		}
+		if err := nt.uninstallMetricsServer(); err != nil {
+			return err
+		}
+	}
 	// Reset any modified system namespaces.
 	if err := resetSystemNamespaces(nt); err != nil {
 		return err

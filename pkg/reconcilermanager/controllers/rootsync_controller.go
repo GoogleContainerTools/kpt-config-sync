@@ -203,21 +203,28 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
 	if _, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
-		return err
+		return errors.Wrap(err, "upserting service account")
 	}
 
 	// Overwrite reconciler clusterrolebinding.
 	if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "upserting cluster role binding")
+	}
+
+	// Upsert autoscaling config for the reconciler deployment
+	autoscalingStrategy := reconcilerAutoscalingStrategy(rs)
+	_, autoscale, err := r.upsertVerticalPodAutoscaler(ctx, autoscalingStrategy, reconcilerRef, labelMap)
+	if err != nil {
+		return errors.Wrap(err, "upserting autoscaler")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
-	mut := r.mutationsFor(ctx, rs, containerEnvs)
+	mut := r.mutationsFor(ctx, rs, containerEnvs, autoscale)
 
 	// Upsert Root reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "upserting reconciler deployment")
 	}
 
 	// Get the latest deployment to check the status.
@@ -225,7 +232,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if op == controllerutil.OperationResultNone {
 		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "getting reconciler deployment")
 		}
 	}
 
@@ -240,7 +247,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	result, err := kstatus.Compute(deployObj)
 	if err != nil {
-		return errors.Wrap(err, "computing reconciler Deployment status failed")
+		return errors.Wrap(err, "computing reconciler deployment status")
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -375,8 +382,12 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
 
+	if err := r.deleteVerticalPodAutoscaler(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "deleting autoscaler")
+	}
+
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting reconciler deployment")
 	}
 
 	// Note: ConfigMaps have been replaced by Deployment env vars.
@@ -384,17 +395,21 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// This deletion remains to clean up after users upgrade.
 
 	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting config maps")
 	}
 
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
 	if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting cluster role bindings")
 	}
 
-	return r.deleteServiceAccount(ctx, reconcilerRef)
+	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "deleting service account")
+	}
+
+	return nil
 }
 
 // SetupWithManager registers RootSync controller with reconciler-manager.
@@ -751,6 +766,10 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}
 
+	if err := r.validateAnnotations(ctx, rootSync); err != nil {
+		return err
+	}
+
 	secret, err := validateSecretExist(ctx,
 		v1beta1.GetSecretName(rootSync.Spec.SecretRef),
 		rootSync.Namespace,
@@ -851,7 +870,7 @@ func enableRendering(annotations map[string]string) bool {
 	return renderingRequired
 }
 
-func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
+func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootSync, containerEnvs map[string][]corev1.EnvVar, autoscale bool) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -908,14 +927,27 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		// in the RootSync CR.
 		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, caCertSecretRefName, rs.Spec.SourceType, r.membership)
 
-		var updatedContainers []corev1.Container
+		// Resource priority order:
+		// - user-specified resource overrides (from RepoSync)
+		// - autoscale defaults (hard-coded), if enabled
+		// - non-autoscale defaults (hard-coded)
+		// - declared defaults (from ConfigMap, if specified)
+		overrides := rs.Spec.SafeOverride()
+		resourceOverrides := overrides.Resources
+		if autoscale {
+			resourceOverrides = setContainerResourceDefaults(resourceOverrides,
+				ReconcilerContainerResourceAutoscaleDefaults())
+		} else {
+			resourceOverrides = setContainerResourceDefaults(resourceOverrides,
+				ReconcilerContainerResourceDefaults())
+		}
 
+		var updatedContainers []corev1.Container
 		for _, container := range templateSpec.Containers {
 			addContainer := true
 			switch container.Name {
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.HydrationController:
 				if !enableRendering(rs.GetAnnotations()) {
 					// if the sync source does not require rendering, omit the hydration controller
@@ -924,7 +956,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					container.Image = updateHydrationControllerImage(container.Image, *rs.Spec.SafeOverride())
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
@@ -933,7 +964,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					injectFWICredsToContainer(&container, injectFWICreds)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.HelmSync:
 				// Don't add the helm-sync container when sourceType is NOT helm.
@@ -947,7 +977,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					}
 					mountConfigMapValuesFiles(templateSpec, &container, r.getReconcilerHelmConfigMapRefs(rs))
 					injectFWICredsToContainer(&container, injectFWICreds)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -966,7 +995,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: secretName}
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.GCENodeAskpassSidecar:
 				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
@@ -977,12 +1005,14 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					// TODO: enable resource/logLevel overrides for gcenode-askpass-sidecar
 				}
 			case metrics.OtelAgentName:
-				// The no-op case to avoid unknown container error after
-				// first-ever reconcile.
+				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			default:
 				return errors.Errorf("unknown container in reconciler deployment template: %q", container.Name)
 			}
 			if addContainer {
+				// Common mutations for all containers
+				mutateContainerResource(&container, resourceOverrides)
+				mutateContainerLogLevel(&container, overrides.LogLevels)
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

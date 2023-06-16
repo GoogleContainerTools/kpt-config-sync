@@ -26,6 +26,7 @@ import (
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	autoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -262,4 +263,9 @@ func APIService() schema.GroupVersionKind {
 // ValidatingWebhookConfiguration returns the ValidatingWebhookConfiguration kind.
 func ValidatingWebhookConfiguration() schema.GroupVersionKind {
 	return admissionv1.SchemeGroupVersion.WithKind("ValidatingWebhookConfiguration")
+}
+
+// VerticalPodAutoscaler returns the VerticalPodAutoscaler kind.
+func VerticalPodAutoscaler() schema.GroupVersionKind {
+	return autoscalingv1.SchemeGroupVersion.WithKind("VerticalPodAutoscaler")
 }

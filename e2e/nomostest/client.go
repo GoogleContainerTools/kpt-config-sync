@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -30,6 +31,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	autoscalingv1vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/clusters"
@@ -82,6 +84,7 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 		apiextensionsv1.SchemeBuilder,
 		appsv1.SchemeBuilder,
 		corev1.SchemeBuilder,
+		batchv1.SchemeBuilder,
 		configmanagementv1.SchemeBuilder,
 		configsyncv1alpha1.SchemeBuilder,
 		configsyncv1beta1.SchemeBuilder,
@@ -91,6 +94,7 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 		rbacv1beta1.SchemeBuilder,
 		resourcegroupv1alpha1.SchemeBuilder.SchemeBuilder,
 		apiregistrationv1.SchemeBuilder,
+		autoscalingv1vpa.SchemeBuilder,
 	}
 	for _, b := range builders {
 		err := b.AddToScheme(s)

@@ -639,8 +639,8 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	var err error
 	// pod3 will never reconcile (image pull failure)
 	// TODO: kstatus should probably detect image pull failure and time out to Failure status, like it does for scheduling failure.
-	err = multierr.Append(err, nt.Validate("pod3", namespaceName, &corev1.Pod{},
-		testpredicates.StatusEquals(nt.Scheme, kstatus.InProgressStatus)))
+	err = multierr.Append(err, nt.Watcher.WatchObject(kinds.Pod(), "pod3", namespaceName,
+		[]testpredicates.Predicate{testpredicates.StatusEquals(nt.Scheme, kstatus.InProgressStatus)}))
 	err = multierr.Append(err, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
 	if err != nil {
 		nt.T.Fatal(err)

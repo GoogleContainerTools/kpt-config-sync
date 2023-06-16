@@ -46,6 +46,14 @@ type FakeNTB struct {
 	mu       sync.RWMutex
 	failed   bool
 	cleanups []func()
+	name     string
+}
+
+// NewFakeNTB returns a new FakeNTB
+func NewFakeNTB(name string) *FakeNTB {
+	return &FakeNTB{
+		name: name,
+	}
 }
 
 // Error is equivalent to Log followed by Fail.
@@ -94,7 +102,7 @@ func (t *FakeNTB) Fatalf(format string, args ...interface{}) {
 
 // Name returns an empty string.
 func (t *FakeNTB) Name() string {
-	return ""
+	return t.name
 }
 
 // Helper is a no-op function.
@@ -168,12 +176,11 @@ func (t *FakeNTB) Skipped() bool {
 
 // Log generates the output. It's always at the same stack depth.
 func (t *FakeNTB) Log(args ...interface{}) {
-	fmt.Println(args...)
+	fmt.Println(fmt.Sprintf("[%s]", t.name), fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to Printf, and
 // records the text in the error log.
 func (t *FakeNTB) Logf(format string, args ...interface{}) {
-	fmt.Printf(format, args...)
-	fmt.Println()
+	fmt.Println(fmt.Sprintf("[%s]", t.name), fmt.Sprintf(format, args...))
 }

@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -53,26 +53,33 @@ func connectToLocalRegistry(nt *NT) {
 	}
 }
 
-// checkImages ensures that all required images are installed on the local
+// CheckImages ensures that all required images are installed on the local
 // docker registry.
-func checkImages(t testing.NTB) {
-	t.Helper()
-
+func CheckImages() error {
 	var imageNames = []string{
 		reconcilermanager.Reconciler,
 		reconcilermanager.ManagerName,
 	}
 
 	for _, imageName := range imageNames {
-		image := imageTagFromManifest(t, imageName)
-		checkImage(t, image)
+		image, err := imageTagFromManifest(imageName)
+		if err != nil {
+			return err
+		}
+		if err = checkImage(image); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // VersionFromManifest parses the image tag from the local manifest
 func VersionFromManifest(t testing.NTB) string {
 	t.Helper()
-	image := imageTagFromManifest(t, reconcilermanager.ManagerName)
+	image, err := imageTagFromManifest(reconcilermanager.ManagerName)
+	if err != nil {
+		t.Fatal(err)
+	}
 	split := strings.Split(image, ":")
 	if len(split) < 2 {
 		t.Fatalf("unexpected format of image: %s", split)
@@ -80,26 +87,26 @@ func VersionFromManifest(t testing.NTB) string {
 	return split[len(split)-1]
 }
 
-func imageTagFromManifest(t testing.NTB, name string) string {
+func imageTagFromManifest(name string) (string, error) {
 	bytes, err := os.ReadFile(configSyncManifest)
 	if err != nil {
-		t.Fatalf("failed to read %s: %s", configSyncManifest, err)
+		return "", errors.Errorf("failed to read %s: %s", configSyncManifest, err)
 	}
 	re := regexp.MustCompile(
-		fmt.Sprintf(`(image: )(%s\/%s:.*)`, e2e.DefaultImagePrefix, name),
+		fmt.Sprintf(`(image: )(.*\/%s:.*)`, name),
 	)
 	match := re.FindStringSubmatch(string(bytes))
 	if match == nil || len(match) != 3 {
-		t.Fatalf("failed to find image %s in %s", name, configSyncManifest)
+		return "", errors.Errorf("failed to find image %s in %s", name, configSyncManifest)
 	}
-	return match[2]
+	return match[2], nil
 }
 
-func checkImage(t testing.NTB, image string) {
+func checkImage(image string) error {
 	url := fmt.Sprintf("http://%s", image)
 	resp, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("Failed to check for image %s in registry: %s", image, err)
+		return errors.Errorf("Failed to check for image %s in registry: %s", image, err)
 	}
 
 	defer func() {
@@ -107,6 +114,7 @@ func checkImage(t testing.NTB, image string) {
 	}()
 	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("Failed to read response for image %s in registry: %s", image, err)
+		return errors.Errorf("Failed to read response for image %s in registry: %s", image, err)
 	}
+	return nil
 }

@@ -276,7 +276,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		// repository. No need to clean before/after as these tests only exist for
 		// a single test.
 		connectToLocalRegistry(nt)
-		checkImages(nt.T)
 	}
 	if !opts.IsEphemeralCluster {
 		// We aren't using an ephemeral cluster, so make sure the cluster is

@@ -15,4 +15,3 @@
 resources:
 - ../base
 - ../cs-namespaces.yaml
-- ../third_party/resourcegroup-manifest.yaml

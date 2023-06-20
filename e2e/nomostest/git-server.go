@@ -233,23 +233,30 @@ func newTCPSocketProbe(port int, failureThreshold int32) *corev1.Probe {
 }
 
 // InitGitRepos initializes the specified repositories in the test-git-server
-func InitGitRepos(nt *NT, repos ...types.NamespacedName) {
+func InitGitRepos(nt *NT, repos ...types.NamespacedName) error {
 	nt.T.Helper()
 
 	pod, err := nt.KubeClient.GetDeploymentPod(testGitServer, testGitNamespace, nt.DefaultWaitTimeout)
 	if err != nil {
-		nt.T.Fatal(err)
+		return err
 	}
 	podName := pod.Name
 
 	for _, repo := range repos {
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
+		_, err := nt.Shell.Kubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "init", "--bare", "--shared", fmt.Sprintf("/git-server/repos/%s/%s", repo.Namespace, repo.Name))
+		if err != nil {
+			return err
+		}
 		// We set receive.denyNonFastforwards to allow force pushes for legacy test support (bats).  In the future we may
 		// need this support for testing GKE clusters since we will likely be re-using the cluster in that case.
 		// Alternatively, we could also run "rm -rf /git-server/repos/*" to clear out the state of the git server and
 		// re-initialize.
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
+		_, err = nt.Shell.Kubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
 			"git", "-C", fmt.Sprintf("/git-server/repos/%s", repo), "config", "receive.denyNonFastforwards", "false")
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

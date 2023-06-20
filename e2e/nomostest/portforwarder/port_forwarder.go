@@ -84,7 +84,7 @@ type PortForwarder struct {
 	port string
 	// onReadyCallback is a callback which will be invoked whenever the Pod changes and the
 	// port-forward is recreated.
-	onReadyCallback func(int, string)
+	onReadyCallback func(int, string) error
 	// mux is a mutex to synchronize getting/setting the port-forward value
 	mux sync.Mutex
 	// localPort is the local port which forwards to the Pod
@@ -106,7 +106,7 @@ type PortForwardOpt func(pf *PortForwarder)
 // deployment's underlying pod changes and the port-forward is recreated.
 // The callback must not invoke LocalPort from inside the callback, as this will
 // lead to a deadlock.
-func WithOnReadyCallback(onReadyFunc func(int, string)) PortForwardOpt {
+func WithOnReadyCallback(onReadyFunc func(int, string) error) PortForwardOpt {
 	return func(pf *PortForwarder) {
 		pf.onReadyCallback = onReadyFunc
 	}
@@ -157,7 +157,9 @@ func (pf *PortForwarder) update(cmd *exec.Cmd, port int, pod string) {
 	pf.pod = pod
 	pf.isReady = true
 	if pf.onReadyCallback != nil {
-		pf.onReadyCallback(port, pod)
+		if err := pf.onReadyCallback(port, pod); err != nil {
+			pf.logger.Infof("error in onReadyCallback for %s: %v", pod, err)
+		}
 	}
 }
 

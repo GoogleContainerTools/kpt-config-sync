@@ -654,10 +654,10 @@ func (nt *NT) portForwardGitServer() {
 	nt.T.Helper()
 	provider := nt.GitProvider.(*gitproviders.LocalProvider)
 	prevPodName := ""
-	resetGitRepos := func(newPort int, podName string) {
+	resetGitRepos := func(newPort int, podName string) error {
 		// pod unchanged, don't reset
 		if prevPodName == podName {
-			return
+			return nil
 		}
 		// allRepos specifies the slice all repos for port forwarding.
 		var allRepos []types.NamespacedName
@@ -673,18 +673,21 @@ func (nt *NT) portForwardGitServer() {
 			allRepoMap[repoNN] = repo
 		}
 		// re-init all repos
-		InitGitRepos(nt, allRepos...)
+		if err := InitGitRepos(nt, allRepos...); err != nil {
+			return errors.Wrap(err, "error in InitGitRepos, exiting to retry")
+		}
 		for repoNN, repo := range allRepoMap {
 			// construct remoteURL with provided port. Calling LocalPort would lead to deadlock
 			remoteURL, err := provider.RemoteURLWithPort(newPort, repoNN.String())
 			if err != nil {
-				nt.T.Fatal(err)
+				return errors.Wrap(err, "error in RemoteURLWithPort, exiting to retry")
 			}
 			if err := repo.PushAllBranches(remoteURL); err != nil {
-				nt.T.Fatal(err)
+				return errors.Wrap(err, "error in PushAllBranches, exiting to retry")
 			}
 		}
 		prevPodName = podName
+		return nil
 	}
 	nt.T.Cleanup(func() {
 		// clear PortForwarder after each test. at this point it has been stopped

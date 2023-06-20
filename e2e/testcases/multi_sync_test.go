@@ -120,7 +120,9 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	newRepos = append(newRepos, nn5)
 
 	if nt.GitProvider.Type() == e2e.Local {
-		nomostest.InitGitRepos(nt, newRepos...)
+		if err := nomostest.InitGitRepos(nt, newRepos...); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 	rr2Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
 	rr3Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)

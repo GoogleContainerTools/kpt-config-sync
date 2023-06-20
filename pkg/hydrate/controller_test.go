@@ -28,8 +28,12 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
-var originCommit = "1234567890abcdef"
-var differentCommit = "abcdef1234567890"
+const (
+	originCommit    = "1234567890abcdef"
+	differentCommit = "abcdef1234567890"
+	// kustomization is a minimal kustomization.yaml file that passes validation
+	kustomization = "namespace: test-ns"
+)
 
 func TestRunHydrate(t *testing.T) {
 	testCases := []struct {
@@ -68,12 +72,7 @@ func TestRunHydrate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			kustFileGenerated, err := ioutil.TempFile(commitDir, "kustomization.yaml")
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = os.Rename(kustFileGenerated.Name(), filepath.Join(commitDir, "kustomization.yaml"))
+			err = os.WriteFile(filepath.Join(commitDir, "kustomization.yaml"), []byte(kustomization), 0666)
 			if err != nil {
 				t.Fatal(err)
 			}

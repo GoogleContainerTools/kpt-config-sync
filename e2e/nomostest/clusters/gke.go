@@ -29,6 +29,12 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
 
+const (
+	createTimoutGKE   = 30 * time.Minute
+	deleteTimeoutGKE  = 15 * time.Minute
+	defaultTimeoutGKE = 10 * time.Minute
+)
+
 // GKECluster is a GKE cluster for use in the e2e tests
 type GKECluster struct {
 	// T is a testing interface
@@ -116,7 +122,7 @@ func listAndWaitForOperations(ctx context.Context, t testing.NTB, name string) e
 	if _, ok := ctx.Deadline(); !ok {
 		// set default timeout if parent context doesn't have a deadline
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+		ctx, cancel = context.WithTimeout(ctx, defaultTimeoutGKE)
 		defer cancel()
 	}
 	operations, err := listOperations(ctx, t, name)
@@ -146,7 +152,7 @@ func deleteGKECluster(t testing.NTB, name string) error {
 	// Sometimes an operation may be happening at the time the deletion request is
 	// sent, causing delete to error. Retry for a brief period to increase the
 	// chances for the delete operation.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeoutGKE)
 	defer cancel()
 	took, err := retry.WithContext(ctx, func() error {
 		if err := listAndWaitForOperations(ctx, t, name); err != nil {
@@ -160,8 +166,15 @@ func deleteGKECluster(t testing.NTB, name string) error {
 		}
 		return nil
 	})
-	t.Logf("took %v retrying gke cluster deletion", took)
-	return err
+	t.Logf("took %v retrying to start cluster deletion for %s", took, name)
+	if err != nil {
+		return err
+	}
+	// Wait for the cluster delete operation to complete. In CI we want to avoid
+	// having the next job start until the previous job cleaned up (e.g. quota).
+	deleteCtx, deleteCancel := context.WithTimeout(context.Background(), deleteTimeoutGKE)
+	defer deleteCancel()
+	return listAndWaitForOperations(deleteCtx, t, name)
 }
 
 func createGKECluster(t testing.NTB, name string) error {
@@ -214,7 +227,7 @@ func createGKECluster(t testing.NTB, name string) error {
 	if err != nil {
 		return errors.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), createTimoutGKE)
 	defer cancel()
 	return listAndWaitForOperations(ctx, t, name)
 }

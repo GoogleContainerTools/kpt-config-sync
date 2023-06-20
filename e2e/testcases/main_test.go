@@ -94,6 +94,11 @@ func main(m *testing.M) int {
 		return 1
 	}
 
+	if err := nomostest.CheckImages(); err != nil {
+		fmt.Println(err)
+		return 1
+	}
+
 	if *e2e.ShareTestEnv {
 		defer nomostest.CleanSharedNTs()
 		if err := nomostest.InitSharedEnvironments(); err != nil {

@@ -71,7 +71,7 @@ func listOperations(ctx context.Context, t testing.NTB, name string) ([]string, 
 	args := []string{
 		"container", "operations", "list",
 		"--project", *e2e.GCPProject,
-		"--filter", fmt.Sprintf("status = RUNNING AND targetLink ~ %s", name),
+		"--filter", fmt.Sprintf("status = RUNNING AND targetLink ~ ^.*/%s$", name),
 		"--format", "value(name)",
 	}
 	if *e2e.GCPZone != "" {

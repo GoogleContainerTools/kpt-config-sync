@@ -30,9 +30,10 @@ import (
 )
 
 const (
-	createTimoutGKE   = 30 * time.Minute
-	deleteTimeoutGKE  = 15 * time.Minute
-	defaultTimeoutGKE = 10 * time.Minute
+	// defaultOperationTimeoutGKE is the default time that we wait for a GKE
+	// operation to complete. These can take a long time, especially on autopilot.
+	// For example, we've observed RESIZE_CLUSTER operations take ~20 minutes.
+	defaultOperationTimeoutGKE = 30 * time.Minute
 )
 
 // GKECluster is a GKE cluster for use in the e2e tests
@@ -122,7 +123,7 @@ func listAndWaitForOperations(ctx context.Context, t testing.NTB, name string) e
 	if _, ok := ctx.Deadline(); !ok {
 		// set default timeout if parent context doesn't have a deadline
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, defaultTimeoutGKE)
+		ctx, cancel = context.WithTimeout(ctx, defaultOperationTimeoutGKE)
 		defer cancel()
 	}
 	operations, err := listOperations(ctx, t, name)
@@ -152,7 +153,7 @@ func deleteGKECluster(t testing.NTB, name string) error {
 	// Sometimes an operation may be happening at the time the deletion request is
 	// sent, causing delete to error. Retry for a brief period to increase the
 	// chances for the delete operation.
-	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeoutGKE)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeoutGKE)
 	defer cancel()
 	took, err := retry.WithContext(ctx, func() error {
 		if err := listAndWaitForOperations(ctx, t, name); err != nil {
@@ -172,9 +173,7 @@ func deleteGKECluster(t testing.NTB, name string) error {
 	}
 	// Wait for the cluster delete operation to complete. In CI we want to avoid
 	// having the next job start until the previous job cleaned up (e.g. quota).
-	deleteCtx, deleteCancel := context.WithTimeout(context.Background(), deleteTimeoutGKE)
-	defer deleteCancel()
-	return listAndWaitForOperations(deleteCtx, t, name)
+	return listAndWaitForOperations(context.Background(), t, name)
 }
 
 func createGKECluster(t testing.NTB, name string) error {
@@ -227,9 +226,7 @@ func createGKECluster(t testing.NTB, name string) error {
 	if err != nil {
 		return errors.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), createTimoutGKE)
-	defer cancel()
-	return listAndWaitForOperations(ctx, t, name)
+	return listAndWaitForOperations(context.Background(), t, name)
 }
 
 // getGKECredentials fetches GKE credentials at the specified kubeconfig path.

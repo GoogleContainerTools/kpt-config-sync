@@ -30,7 +30,7 @@ RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
 ARG HELM_VERSION=v3.12.1
-ARG KUSTOMIZE_VERSION=v5.0.3
+ARG KUSTOMIZE_VERSION=v5.1.0
 ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 
 # Install the render-helm-chart function.

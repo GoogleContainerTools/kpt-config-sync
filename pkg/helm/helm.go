@@ -31,6 +31,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/kio"
@@ -56,12 +57,14 @@ type Hydrator struct {
 	Namespace       string
 	DeployNamespace string
 	Values          string
+	ValuesFrom      []string
 	IncludeCRDs     string
 	HydrateRoot     string
 	Dest            string
 	Auth            configsync.AuthType
 	UserName        string
 	Password        string
+	ValuesMergeMode string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -89,11 +92,9 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 	if h.Version != "" {
 		args = append(args, "--version", h.Version)
 	}
-	if len(h.Values) > 0 {
-		args, err = h.appendValuesArgs(args)
-		if err != nil {
-			return nil, err
-		}
+	args, err = h.appendValuesArgs(args)
+	if err != nil {
+		return nil, err
 	}
 	includeCRDs, _ := strconv.ParseBool(h.IncludeCRDs)
 	if includeCRDs {
@@ -104,12 +105,67 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 }
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
-	valuesPath := filepath.Join(os.TempDir(), valuesFile)
-	if err := os.WriteFile(valuesPath, []byte(h.Values), 0644); err != nil {
+	var err error
+	switch h.ValuesMergeMode {
+
+	case "", "override":
+		for _, vf := range h.ValuesFrom {
+			val := os.Getenv(vf)
+
+			if val != "" {
+				klog.Infof("values from ConfigMap %s\n: %s\n", vf, val)
+				args, err = writeValuesPath([]byte(val), vf+"-", args)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		if len(h.Values) != 0 {
+			klog.Infof("inline values %s\n", h.Values)
+			args, err = writeValuesPath([]byte(h.Values), "", args)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+	case "merge":
+		var valuesToMerge [][]byte
+		for _, vf := range h.ValuesFrom {
+			val := os.Getenv(vf)
+			valuesToMerge = append(valuesToMerge, []byte(val))
+
+		}
+		if len(h.Values) != 0 {
+			valuesToMerge = append(valuesToMerge, []byte(h.Values))
+		}
+
+		merged, err := merge(valuesToMerge)
+		if err != nil {
+			return nil, fmt.Errorf("error merging values files: %w", err)
+		}
+		klog.Infof("using merged values: %s\n", string(merged))
+
+		args, err = writeValuesPath(merged, "", args)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesMergeMode)
+	}
+
+	return args, nil
+}
+
+func writeValuesPath(values []byte, pathPrefix string, args []string) ([]string, error) {
+	if values == nil {
+		return args, nil
+	}
+	valuesPath := filepath.Join(os.TempDir(), pathPrefix+valuesFile)
+	if err := os.WriteFile(valuesPath, values, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create values file: %w", err)
 	}
-	args = append(args, "--values", valuesPath)
-	return args, nil
+	return append(args, "--values", valuesPath), nil
 }
 
 func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
@@ -260,7 +316,7 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 		}
 	}
 
-	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
+	destDir := filepath.Join(h.HydrateRoot, h.Version)
 	linkPath := filepath.Join(h.HydrateRoot, h.Dest)
 	oldDir, err := filepath.EvalSymlinks(linkPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -270,6 +326,13 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 	if oldDir == destDir {
 		klog.Infof("no update required with the same helm chart version %q", h.Version)
 		return nil
+	}
+
+	for _, vf := range h.ValuesFrom {
+		if vf != "" && os.Getenv(vf) == "" {
+			configMapName := strings.TrimPrefix(vf, reconcilermanager.HelmConfigMapRef+"_")
+			return fmt.Errorf("received empty valuesFile for ConfigMap %s; ConfigMap or its specified data key might not exist", configMapName)
+		}
 	}
 
 	if !loggedIn {
@@ -291,7 +354,7 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 		return fmt.Errorf("failed to set the deploy namespace: %w", err)
 	}
 
-	klog.Infof("successfully rendered the helm chart : %s", string(out))
+	klog.Infof("successfully rendered the helm chart: %s", string(out))
 	return util.UpdateSymlink(h.HydrateRoot, linkPath, destDir, oldDir)
 }
 

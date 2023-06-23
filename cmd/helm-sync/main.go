@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2/klogr"
@@ -38,6 +39,10 @@ var (
 		"the version of the helm chart being synced")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
 		"set the helm chart values, will be used to override the default values")
+	flValuesFrom = flag.String("values-from", os.Getenv(reconcilermanager.HelmValuesFrom),
+		"set the helm chart values, will be used to override the default values")
+	flValuesMergeMode = flag.String("values-merge-mode", os.Getenv(reconcilermanager.HelmValuesMergeMode),
+		"set the helm values file merge strategy")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
 		"include CRDs in the helm rendering output")
 	flAuth = flag.String("auth", util.EnvString(reconcilermanager.HelmAuthType, string(configsync.AuthNone)),
@@ -76,7 +81,8 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
+		"--values", *flValues, "--valuesFrom", *flValuesFrom, "--valuesMergeMode", *flValuesMergeMode,
+		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
 
@@ -112,6 +118,7 @@ func main() {
 	start := time.Now()
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
+
 		hydrator := &helm.Hydrator{
 			Chart:           *flChart,
 			Repo:            *flRepo,
@@ -120,6 +127,8 @@ func main() {
 			Namespace:       *flNamespace,
 			DeployNamespace: *flDeployNamespace,
 			Values:          *flValues,
+			ValuesFrom:      strings.Split(*flValuesFrom, ","),
+			ValuesMergeMode: *flValuesMergeMode,
 			IncludeCRDs:     *flIncludeCRDs,
 			Auth:            configsync.AuthType(*flAuth),
 			HydrateRoot:     *flRoot,

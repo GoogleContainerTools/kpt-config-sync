@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -66,6 +67,11 @@ type RepoSyncReconciler struct {
 
 	// lock ensures that the Reconcile method only runs one at a time.
 	lock sync.Mutex
+
+	// configMapWatches stores which namespaces where we are currently watching ConfigMaps
+	configMapWatches map[string]bool
+
+	controller *controller.Controller
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
@@ -85,11 +91,13 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			helmSyncVersionPollingPeriod: helmSyncVersionPollingPeriod,
 			syncKind:                     configsync.RepoSyncKind,
 		},
+		configMapWatches: make(map[string]bool),
 	}
 }
 
 // +kubebuilder:rbac:groups=configsync.gke.io,resources=reposyncs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=configsync.gke.io,resources=reposyncs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile the RepoSync resource.
 func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -172,6 +180,17 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
+	if err := r.watchConfigMaps(rs); err != nil {
+		r.logger(ctx).Error(err, "Error watching ConfigMaps")
+		reposync.SetStalled(rs, "ConfigMapWatch", err)
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Error setting status")
+		}
+		// the error may be recoverable, so we retry (return the error)
+		return controllerruntime.Result{}, err
+	}
+
 	setupFn := func(ctx context.Context) error {
 		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
 	}
@@ -237,7 +256,11 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
-	mut := r.mutationsFor(ctx, rs, containerEnvs)
+	newValuesFrom, err := copyConfigMapsToCms(ctx, r.client, rs)
+	if err != nil {
+		return errors.Errorf("unable to copy ConfigMapRefs to config-management-system namespace: %s", err.Error())
+	}
+	mut := r.mutationsFor(ctx, rs, containerEnvs, newValuesFrom)
 
 	// Upsert Namespace reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
@@ -487,7 +510,34 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRepoSyncs()),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
-	return controllerBuilder.Complete(r)
+
+	ctrlr, err := controllerBuilder.Build(r)
+	r.controller = &ctrlr
+
+	return err
+}
+
+func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
+	// We add watches dynamically at runtime based on the RepoSync namespace
+	// in order to avoid watching ConfigMaps in the entire cluster.
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil ||
+		len(rs.Spec.Helm.ValuesFrom) == 0 {
+		return nil
+	}
+
+	if _, ok := r.configMapWatches[rs.Namespace]; !ok {
+		klog.Infoln("Adding watch for ConfigMaps in namespace ", rs.Namespace)
+		ctrlr := *r.controller
+
+		if err := ctrlr.Watch(&source.Kind{Type: withNamespace(&corev1.ConfigMap{}, rs.Namespace)},
+			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapToRepoSyncs),
+			predicate.ResourceVersionChangedPredicate{}); err != nil {
+			return err
+		}
+
+		r.configMapWatches[rs.Namespace] = true
+	}
+	return nil
 }
 
 func (r *RepoSyncReconciler) mapMembershipToRepoSyncs() func(client.Object) []reconcile.Request {
@@ -616,6 +666,96 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	return requests
 }
 
+func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconcile.Request {
+	objRef := client.ObjectKeyFromObject(obj)
+	if objRef.Namespace == v1.NSConfigManagementSystem {
+		// ignore ConfigMaps in the config-management-system namespace
+		return nil
+	}
+
+	ctx := context.Background()
+	allRepoSyncs := &v1beta1.RepoSyncList{}
+	if err := r.client.List(ctx, allRepoSyncs); err != nil {
+		klog.Error("failed to list all RepoSyncs for %s (%s): %v",
+			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
+		return nil
+	}
+
+	var result []reconcile.Request
+	for _, rs := range allRepoSyncs.Items {
+		if rs.Namespace != objRef.Namespace {
+			// ignore objects that do not match the RepoSync namespace
+			continue
+		}
+		if rs.Spec.SourceType != string(v1beta1.HelmSource) {
+			// we are only watching ConfigMaps to retrigger helm-sync, so we can ignore
+			// other source types
+			continue
+		}
+		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFrom) == 0 {
+			continue
+		}
+
+		var referenced bool
+		var key string
+		for _, vf := range rs.Spec.Helm.ValuesFrom {
+			if vf.Name == objRef.Name {
+				referenced = true
+				key = vf.Key
+				break
+			}
+		}
+
+		if !referenced {
+			continue
+		}
+
+		if err := validate.CheckConfigMapKeyExists(ctx, r.client, objRef, key, &rs); err != nil {
+			// If the ConfigMap was deleted or it no longer has the specified data key, we skip restarting the pod
+			// to avoid losing or modifying already synced resources
+			klog.Errorf("ConfigMap ref validation error: %s", err.Error())
+			// requeue the reconcile to surface the validation errors in the status
+			result = append(result, requeueRepoSyncRequest(obj, &rs)...)
+			continue
+		}
+
+		if _, err := copyOneConfigMapToCms(ctx, r.client, objRef); err != nil {
+			klog.Errorf("error copying updated configmap to config-management-system namespace: %s", err.Error)
+		}
+
+		rsRef := client.ObjectKeyFromObject(&rs)
+		reconcilerRef := types.NamespacedName{
+			Namespace: v1.NSConfigManagementSystem,
+			Name:      core.NsReconcilerName(rsRef.Namespace, rsRef.Name),
+		}
+
+		var reconciler appsv1.Deployment
+		cl := r.reconcilerBase.client
+		if err := cl.Get(ctx, reconcilerRef, &reconciler); err != nil {
+			klog.Errorf("failed to get reconciler reference: %s", err.Error())
+			if apierrors.IsNotFound(err) {
+				// if the root-reconciler doesn't exist, an updated ConfigMap should trigger a reconcile
+				// to create one
+				result = append(result, requeueRepoSyncRequest(obj, &rs)...)
+			}
+			continue
+		}
+
+		// A rereconcile doesn't necessarily update an existing root-reconciler deployment, so
+		// the root-reconciler pods need to be explicitly restarted to pick up the ConfigMap update.
+		reconciler.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+		if err := cl.Update(ctx, &reconciler); err != nil {
+			klog.Errorf("failed to update reconciler: %s", err.Error())
+			return nil
+		}
+
+		klog.Infof("Changes to ConfigMap %s triggered restart of pods in Deployment %s\n", objRef, reconcilerRef)
+		result = append(result, requeueRepoSyncRequest(obj, &rs)...)
+
+	}
+	return result
+}
+
 // mapObjectToRepoSync define a mapping from an object in 'config-management-system'
 // namespace to a RepoSync to be reconciled.
 func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.Request {
@@ -719,7 +859,10 @@ func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoS
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs)
+		if err := validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
+			return err
+		}
+		return validate.CheckValuesFromRefs(ctx, r.client, rs.Spec.Helm.ValuesFrom, rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}
@@ -825,7 +968,7 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	return true, nil
 }
 
-func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
+func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar, newValuesFrom []v1beta1.ValuesFrom) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -914,6 +1057,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					}
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(&container, rs.Spec.Override)
+					mountConfigMapValuesFiles(&container, newValuesFrom)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -956,4 +1100,62 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		templateSpec.Containers = updatedContainers
 		return nil
 	}
+}
+
+func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFrom, error) {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil {
+		return nil, nil
+	}
+
+	var newValuesFrom []v1beta1.ValuesFrom
+	for _, vf := range rs.Spec.Helm.ValuesFrom {
+		objRef := types.NamespacedName{
+			Name:      vf.Name,
+			Namespace: rs.Namespace,
+		}
+
+		newName, err := copyOneConfigMapToCms(ctx, cl, objRef)
+		if err != nil {
+			return nil, err
+		}
+		newValuesFrom = append(newValuesFrom, v1beta1.ValuesFrom{
+			Kind: "ConfigMap",
+			Name: newName,
+			Key:  vf.Key,
+		})
+	}
+
+	return newValuesFrom, nil
+}
+
+func copyOneConfigMapToCms(ctx context.Context, cl client.Client, objRef types.NamespacedName) (string, error) {
+	var cm corev1.ConfigMap
+	if err := cl.Get(ctx, objRef, &cm); err != nil {
+		return "", fmt.Errorf("failed to get referenced ConfigMap: %w", err)
+	}
+
+	newNamespace := configsync.ControllerNamespace
+	newName := core.NsReconcilerPrefix + "-" + cm.Name
+
+	var copiedCM corev1.ConfigMap
+	if err := cl.Get(ctx, types.NamespacedName{Name: newName, Namespace: newNamespace}, &copiedCM); err != nil {
+		if apierrors.IsNotFound(err) {
+			cm.ObjectMeta = metav1.ObjectMeta{
+				Namespace: newNamespace,
+				Name:      newName,
+			}
+			if err := cl.Create(ctx, &cm); err != nil {
+				return "", fmt.Errorf("failed to copy configmap: %w", err)
+			}
+		} else {
+			return "", fmt.Errorf("unexpected error trying to get old copied configmap: %w", err)
+		}
+	} else {
+		copiedCM.Data = cm.Data
+		if err := cl.Update(ctx, &copiedCM); err != nil {
+			return "", fmt.Errorf("error updating copied configmap: %w", err)
+		}
+	}
+
+	return newName, nil
 }

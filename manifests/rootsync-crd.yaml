@@ -1201,8 +1201,45 @@ spec:
                     type: object
                   values:
                     description: values to use instead of default values that accompany
-                      the chart
+                      the chart. Format values the same as default values.yaml. These
+                      values will take precedence if used in conjunction with valuesFrom.
                     x-kubernetes-preserve-unknown-fields: true
+                  valuesFrom:
+                    description: valuesFrom holds references to objects in the cluster
+                      that represent values to use instead of default values that
+                      accompany the chart. Currently, only ConfigMaps are supported.
+                      Objects listed later will take precedence.
+                    items:
+                      description: ValuesFrom holds references to objects in the cluster
+                        that represent values to use instead of default values that
+                        accompany the chart.
+                      properties:
+                        key:
+                          default: values.yaml
+                          description: key represents the object data key to read
+                            the value from.
+                          type: string
+                        kind:
+                          description: kind represents the Object kind. Must be `ConfigMap`.
+                            Required.
+                          enum:
+                          - ConfigMap
+                          type: string
+                        name:
+                          description: name represents the Object name. Required.
+                          type: string
+                      type: object
+                    type: array
+                  valuesMergeMode:
+                    default: override
+                    description: valuesMergeMode specifies the strategy for handling
+                      multiple valueFiles. Set to 'override' to have each valuesFile
+                      sent to helm CLI individually. Set to 'merge' to have valuesFiles
+                      merged together into one valuesFile.
+                    enum:
+                    - override
+                    - merge
+                    type: string
                   version:
                     description: version is the chart version. If this is not specified,
                       the latest version is used

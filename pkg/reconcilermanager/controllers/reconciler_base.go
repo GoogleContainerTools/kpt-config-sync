@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -420,6 +421,33 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 		return nil, NewObjectOperationErrorWithID(err, id, OperationGet)
 	}
 	return deployObj, nil
+}
+
+func mountConfigMapValuesFiles(c *corev1.Container, valuesFrom []v1beta1.ValuesFrom) {
+	if len(valuesFrom) == 0 {
+		return
+	}
+
+	var valuesFiles []string
+	for _, vf := range valuesFrom {
+		envVarName := reconcilermanager.HelmConfigMapRef + "_" + vf.Name
+		valuesFiles = append(valuesFiles, envVarName)
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name: envVarName,
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: vf.Name,
+					},
+					Key: vf.Key,
+				},
+			},
+		})
+	}
+	c.Env = append(c.Env, corev1.EnvVar{
+		Name:  reconcilermanager.HelmValuesFrom,
+		Value: strings.Join(valuesFiles, ","),
+	})
 }
 
 func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec) {

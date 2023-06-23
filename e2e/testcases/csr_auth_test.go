@@ -320,7 +320,7 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		}
 
 		testSpec.sourceChart = remoteHelmChart.ChartName
-		testSpec.rootCommitFn = helmChartVersion(remoteHelmChart.ChartName + ":" + testSpec.sourceVersion)
+		testSpec.rootCommitFn = helmChartVersion(testSpec.sourceVersion)
 	}
 
 	// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.

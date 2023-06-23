@@ -140,8 +140,14 @@ const (
 	// HelmValues is the OS env variable key for the Helm chart values.
 	HelmValues = "HELM_VALUES"
 
-	//HelmValuesFiles is the OS env variable key for Helm values files.
-	HelmValuesFiles = "HELM_VALUES_FILES"
+	// HelmConfigMapRef is the OS env variable key prefix for Helm values files from ConfigMaps.
+	HelmConfigMapRef = "HELM_CONFIGMAP_REF"
+
+	// HelmValuesFrom is the OS env variable key for the names of ConfigMaps holding valuesFiles.
+	HelmValuesFrom = "HELM_VALUES_FROM"
+
+	// HelmValuesMergeMode is the OS env variable key for Helm values files merge strategy.
+	HelmValuesMergeMode = "HELM_VALUES_MERGE_MODE"
 
 	//HelmIncludeCRDs is the OS env variable key for whether to include CRDs in helm rendering output.
 	HelmIncludeCRDs = "HELM_INCLUDE_CRDS"
@@ -151,4 +157,7 @@ const (
 
 	// HelmSyncWait is the OS env variable key for the Helm sync wait period in seconds.
 	HelmSyncWait = "HELM_SYNC_WAIT"
+
+	// HelmWatchNamespace is the OS env variable key for the namespace that Helm sync should watch for ConfigMap values.
+	HelmWatchNamespace = "HELM_WATCH_NAMESPACE"
 )

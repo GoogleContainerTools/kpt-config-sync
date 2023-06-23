@@ -57,9 +57,25 @@ type HelmBase struct {
 	// +optional
 	ReleaseName string `json:"releaseName,omitempty"`
 
-	// values to use instead of default values that accompany the chart
+	// values to use instead of default values that accompany the chart. Format
+	// values the same as default values.yaml. These values will take precedence if
+	// used in conjunction with valuesFrom.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
+
+	// valuesFrom holds references to objects in the cluster that represent
+	// values to use instead of default values that accompany the chart. Currently,
+	// only ConfigMaps are supported. Objects listed later will take precedence.
+	// +optional
+	ValuesFrom []ValuesFrom `json:"valuesFrom,omitempty"`
+
+	// valuesMergeMode specifies the strategy for handling multiple valueFiles.
+	// Set to 'override' to have each valuesFile sent to helm CLI individually.
+	// Set to 'merge' to have valuesFiles merged together into one valuesFile.
+	// +kubebuilder:validation:Enum=override;merge
+	// +kubebuilder:default:=override
+	// +optional
+	ValuesMergeMode string `json:"valuesMergeMode,omitempty"`
 
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
@@ -92,4 +108,20 @@ type HelmBase struct {
 	// +nullable
 	// +optional
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
+}
+
+// ValuesFrom holds references to objects in the cluster that represent
+// values to use instead of default values that accompany the chart.
+type ValuesFrom struct {
+	// kind represents the Object kind. Must be `ConfigMap`. Required.
+	// +kubebuilder:validation:Enum=ConfigMap
+	Kind string `json:"kind,omitempty"`
+
+	// name represents the Object name. Required.
+	Name string `json:"name,omitempty"`
+
+	// key represents the object data key to read the value from.
+	// +kubebuilder:default:=values.yaml
+	// +optional
+	Key string `json:"key,omitempty"`
 }

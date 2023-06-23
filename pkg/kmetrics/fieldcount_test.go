@@ -121,17 +121,13 @@ func TestKustomizeFieldUsage(t *testing.T) {
 			inputDir: "./testdata/withhelmcharts",
 			expected: &KustomizeFieldMetrics{
 				FieldCount: map[string]int{
-					"Generators":                  1,
 					"HelmCharts":                  1,
 					"HelmChartInflationGenerator": 1,
 				},
-				TopTierCount: map[string]int{
-					"Generators": 2,
-				},
-				PatchCount: map[string]int{},
-				BaseCount:  map[string]int{},
+				TopTierCount: map[string]int{},
+				PatchCount:   map[string]int{},
+				BaseCount:    map[string]int{},
 				HelmMetrics: map[string]int{
-					"render-helm-chart":           2,
 					"HelmChartInflationGenerator": 1,
 					"HelmCharts":                  2,
 				},

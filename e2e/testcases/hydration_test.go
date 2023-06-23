@@ -45,7 +45,6 @@ import (
 
 var testLabels = client.MatchingLabels{"test-case": "hydration"}
 var expectedBuiltinOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
-var expectedKrmFnOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: fn.kpt.dev/v1alpha1\n  kind: RenderHelmChart\n  name: demo\n"
 
 func TestHydrateKustomizeComponents(t *testing.T) {
 	nt := nomostest.New(t,
@@ -172,46 +171,6 @@ func TestHydrateHelmComponents(t *testing.T) {
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Error(err)
 	}
-
-	nt.T.Log("Use the render-helm-chart function to render the charts")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-kustomization.yaml", "./helm-components/kustomization.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("IfNotPresent"), firstContainerImageIs("coredns/coredns:1.8.4"),
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
-		nt.T.Fatal(err)
-	}
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
-	}
-
-	nt.T.Log("Use the render-helm-chart function to render the charts with multiple remote values.yaml files")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function with multiple remote values.yaml files from a public repo"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.9.3"),
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedKrmFnOrigin)); err != nil {
-		nt.T.Fatal(err)
-	}
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
-	}
 }
 
 func TestHydrateHelmOverlay(t *testing.T) {
@@ -273,36 +232,6 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	nt.T.Log("Make the parsing fail by checking in a deprecated group and kind")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "ERROR"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
-	}
-
-	nt.T.Log("Use the render-helm-chart function to render the charts")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-overlay/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-helm-overlay-kustomization.yaml", "./helm-overlay/base/kustomization.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use the render-helm-chart function"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
-	}
-
-	nt.T.Log("Make the parsing fail again by checking in a deprecated group and kind with the render-helm-chart function")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/krm-function-deprecated-GK-kustomization.yaml", "./helm-overlay/kustomization.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind with the render-helm-chart function"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)

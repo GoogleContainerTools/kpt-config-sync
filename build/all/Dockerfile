@@ -21,7 +21,6 @@ COPY . .
 
 # Version string to embed in built binary.
 ARG VERSION
-ARG HELM_INFLATOR_FUNCTION_VERSION=v0.3.0
 
 ARG HELM_VERSION=v3.12.1
 ARG KUSTOMIZE_VERSION=v5.1.0
@@ -49,10 +48,6 @@ RUN URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomiz
   rm "/tmp/${FILENAME}" /tmp/kustomize_checksums.txt && \
   mkdir -p ./vendor/sigs.k8s.io/kustomize && \
   wget "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/${KUSTOMIZE_VERSION}/LICENSE" -O ./vendor/sigs.k8s.io/kustomize/LICENSE
-
-# Install the render-helm-chart function.
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
-  go install github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/render-helm-chart@${HELM_INFLATOR_FUNCTION_VERSION}
 
 # Build all our stuff.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
@@ -86,7 +81,6 @@ USER nonroot:nonroot
 FROM gcr.io/distroless/static:nonroot as hydration-controller
 WORKDIR /
 COPY --from=bins /go/bin/hydration-controller .
-COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE
@@ -122,7 +116,6 @@ FROM debian-nonroot as hydration-controller-with-shell
 WORKDIR /
 USER root
 COPY --from=bins /go/bin/hydration-controller .
-COPY --from=bins /go/bin/render-helm-chart /usr/local/bin/render-helm-chart
 COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE

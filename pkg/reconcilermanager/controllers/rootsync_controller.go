@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -713,7 +714,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.RootReconciler, reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout)), sourceFormatEnv(rs.Spec.SourceFormat)),
+		reconcilermanager.Reconciler:          append(reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.RootReconciler, rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rootsync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout), enableRendering(rs.GetAnnotations())), sourceFormatEnv(rs.Spec.SourceFormat)),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -848,6 +849,24 @@ func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	return true, nil
 }
 
+// enableRendering returns whether rendering should be enabled for the reconciler
+// of this RSync. This is determined by an annotation that is set on the RSync
+// by the reconciler.
+func enableRendering(annotations map[string]string) bool {
+	val, ok := annotations[metadata.RequiresRenderingAnnotationKey]
+	if !ok { // default to disabling rendering
+		return false
+	}
+	renderingRequired, err := strconv.ParseBool(val)
+	if err != nil {
+		// This should never happen, as the annotation should always be set to a
+		// valid value by the reconciler. Log the error and return the default value.
+		klog.Infof("failed to parse %s value to boolean: %s", metadata.RequiresRenderingAnnotationKey, val)
+		return false
+	}
+	return renderingRequired
+}
+
 func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
@@ -910,13 +929,15 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.HydrationController:
-				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				if rs.Spec.SafeOverride().EnableShellInRendering == nil || !*rs.Spec.SafeOverride().EnableShellInRendering {
-					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationControllerWithShell, reconcilermanager.HydrationController)
+				if !enableRendering(rs.GetAnnotations()) {
+					// if the sync source does not require rendering, omit the hydration controller
+					// this minimizes the resource footprint of the reconciler
+					addContainer = false
 				} else {
-					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					container.Image = updateHydrationControllerImage(container.Image, *rs.Spec.SafeOverride())
+					mutateContainerResource(&container, rs.Spec.Override)
 				}
-				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
 				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.OciSource {

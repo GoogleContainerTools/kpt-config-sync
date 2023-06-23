@@ -106,6 +106,9 @@ type Options struct {
 	ReconcileTimeout string
 	// APIServerTimeout is the client-side timeout used for talking to the API server
 	APIServerTimeout string
+	// RenderingEnabled indicates whether the reconciler Pod is currently running
+	// with the hydration-controller.
+	RenderingEnabled bool
 	// RootOptions is the set of options to fill in if this is configuring the
 	// Root reconciler.
 	// Unset for Namespace repositories.
@@ -214,13 +217,13 @@ func Run(opts Options) {
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled)
 		if err != nil {
 			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
 		}
 	} else {
 		parser, err = parse.NewNamespaceRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.ReconcilerScope, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}

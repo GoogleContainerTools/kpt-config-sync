@@ -77,6 +77,10 @@ const (
 	// StatusMode is to control if the kpt applier needs to inject the actuation data
 	// into the ResourceGroup object.
 	StatusMode = "STATUS_MODE"
+
+	// RenderingEnabled tells the reconciler container whether the hydration-controller
+	// container is running in the Pod.
+	RenderingEnabled = "RENDERING_ENABLED"
 )
 
 const (

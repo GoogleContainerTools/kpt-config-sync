@@ -137,6 +137,14 @@ const (
 	// RootSync/RepoSync objects to indicate what do do with the managed
 	// resources when the RootSync/RepoSync object is deleted.
 	DeletionPropagationPolicyAnnotationKey = configsync.ConfigSyncPrefix + "deletion-propagation-policy"
+
+	// RequiresRenderingAnnotationKey is the annotation key set on
+	// RootSync/RepoSync objects to indicate whether the source of truth
+	// requires last mile hydration. The reconciler writes the value of this
+	// annotation and the reconciler-manager reads it. If set to true, the
+	// reconciler-manager will create the reconciler with the hydration-controller
+	// sidecar container.
+	RequiresRenderingAnnotationKey = configsync.ConfigSyncPrefix + "requires-rendering"
 )
 
 // Lifecycle annotations

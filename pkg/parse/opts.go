@@ -71,6 +71,10 @@ type opts struct {
 	// mux prevents status update conflicts.
 	mux *sync.Mutex
 
+	// renderingEnabled indicates whether the hydration-controller is currently
+	// running for this reconciler.
+	renderingEnabled bool
+
 	files
 	updater
 }
@@ -89,6 +93,8 @@ type Parser interface {
 	Syncing() bool
 	// K8sClient returns the Kubernetes client that talks to the API server.
 	K8sClient() client.Client
+	// setRequiresRendering sets the requires-rendering annotation on the RSync
+	setRequiresRendering(ctx context.Context, renderingRequired bool) error
 }
 
 func (o *opts) k8sClient() client.Client {

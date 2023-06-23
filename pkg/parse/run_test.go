@@ -45,7 +45,7 @@ const (
 	symLink = "rev"
 )
 
-func newParser(t *testing.T, fs FileSource) Parser {
+func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 	parser := &root{}
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
@@ -67,7 +67,8 @@ func newParser(t *testing.T, fs FileSource) Parser {
 			remediator: &noOpRemediator{},
 			applier:    &fakeApplier{},
 		},
-		mux: &sync.Mutex{},
+		mux:              &sync.Mutex{},
+		renderingEnabled: renderingEnabled,
 	}
 	return parser
 }
@@ -158,6 +159,8 @@ func TestRun(t *testing.T) {
 		name                       string
 		commit                     string
 		sourceRootExist            bool
+		renderingEnabled           bool
+		hasKustomization           bool
 		hydratedRootExist          bool
 		sourceError                string
 		hydratedError              string
@@ -195,6 +198,7 @@ func TestRun(t *testing.T) {
 			id:                "2",
 			name:              "rendering in progress",
 			sourceRootExist:   true,
+			renderingEnabled:  true,
 			hydratedRootExist: true,
 			needRetry:         true,
 			expectedMsg:       "Rendering is still in progress",
@@ -203,6 +207,8 @@ func TestRun(t *testing.T) {
 			id:                         "3",
 			name:                       "hydration error",
 			sourceRootExist:            true,
+			renderingEnabled:           true,
+			hasKustomization:           true,
 			hydratedRootExist:          true,
 			hydrationDone:              true,
 			hydratedError:              `{"code": "1068", "error": "rendering error"}`,
@@ -218,10 +224,45 @@ func TestRun(t *testing.T) {
 			id:                "4",
 			name:              "successful read",
 			sourceRootExist:   true,
+			renderingEnabled:  true,
+			hasKustomization:  true,
 			hydratedRootExist: true,
 			hydrationDone:     true,
 			needRetry:         false,
 			expectedMsg:       "Sync Completed",
+		},
+		{
+			id:                "5",
+			name:              "successful read without hydration",
+			sourceRootExist:   true,
+			hydratedRootExist: false,
+			hydrationDone:     false,
+			needRetry:         false,
+			expectedMsg:       "Sync Completed",
+		},
+		{
+			id:                "6",
+			name:              "error because hydration enabled with wet source",
+			sourceRootExist:   true,
+			renderingEnabled:  true,
+			hasKustomization:  false,
+			hydratedRootExist: false,
+			hydrationDone:     true,
+			needRetry:         true,
+			expectedMsg:       "Rendering is still in progress",
+			expectedErrors:    "KNV2016: sync source contains only wet configs and hydration-controller is running\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016",
+		},
+		{
+			id:                "7",
+			name:              "error because hydration disabled with dry source",
+			sourceRootExist:   true,
+			renderingEnabled:  false,
+			hasKustomization:  true,
+			hydratedRootExist: true,
+			hydrationDone:     true,
+			needRetry:         true,
+			expectedMsg:       "Rendering is still in progress",
+			expectedErrors:    "KNV2016: sync source contains dry configs and hydration-controller is not running\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016",
 		},
 	}
 
@@ -235,10 +276,16 @@ func TestRun(t *testing.T) {
 			}
 			sourceRoot := filepath.Join(rootDir, "source")     // /repo/source
 			hydratedRoot := filepath.Join(rootDir, "hydrated") // /repo/hydrated
+			sourceDir := filepath.Join(sourceRoot, symLink)
 
 			if tc.sourceRootExist {
 				if err = createRootDir(sourceRoot, sourceCommit); err != nil {
 					t.Fatal(err)
+				}
+				if tc.hasKustomization {
+					if err = writeFile(sourceDir, "kustomization.yaml", ""); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 			if tc.sourceError != "" {
@@ -263,7 +310,7 @@ func TestRun(t *testing.T) {
 			}
 
 			fs := FileSource{
-				SourceDir:    cmpath.Absolute(filepath.Join(sourceRoot, symLink)),
+				SourceDir:    cmpath.Absolute(sourceDir),
 				RepoRoot:     cmpath.Absolute(rootDir),
 				HydratedRoot: hydratedRoot,
 				HydratedLink: symLink,
@@ -271,14 +318,16 @@ func TestRun(t *testing.T) {
 				SourceRepo:   "https://github.com/test/test.git",
 				SourceBranch: "main",
 			}
-			parser := newParser(t, fs)
+			parser := newParser(t, fs, tc.renderingEnabled)
 			state := &reconcilerState{}
 			run(context.Background(), parser, triggerReimport, state)
 
 			testutil.AssertEqual(t, tc.needRetry, state.cache.needToRetry, "[%s] unexpected state.cache.needToRetry return", tc.name)
+			actualErrs := ""
 			if state.cache.errs != nil {
-				testutil.AssertEqual(t, tc.expectedErrors, state.cache.errs.Error(), "[%s] unexpected state.cache.errs return", tc.name)
+				actualErrs = state.cache.errs.Error()
 			}
+			testutil.AssertEqual(t, tc.expectedErrors, actualErrs, "[%s] unexpected state.cache.errs return", tc.name)
 			testutil.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
 			testutil.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
 

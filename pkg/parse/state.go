@@ -43,6 +43,9 @@ type renderingStatus struct {
 	message    string
 	errs       status.MultiError
 	lastUpdate metav1.Time
+	// requiresRendering indicates whether the sync source has dry configs
+	// only used internally (not surfaced on RSync status)
+	requiresRendering bool
 }
 
 func (rs renderingStatus) equal(other renderingStatus) bool {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -227,8 +228,17 @@ func rootsyncCACert(caCertSecretRef string) func(*v1beta1.RootSync) {
 	}
 }
 
+func rootsyncRenderingRequired(renderingRequired bool) func(*v1beta1.RootSync) {
+	return func(rs *v1beta1.RootSync) {
+		val := strconv.FormatBool(renderingRequired)
+		core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, val)
+	}
+}
+
 func rootSync(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
+	// default to require rendering for convenience with existing tests
+	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 	for _, opt := range opts {
 		opt(rs)
 	}
@@ -2971,6 +2981,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			reconcilermanager.APIServerTimeout:        restconfig.DefaultTimeout.String(),
 			reconcilermanager.ReconcileTimeout:        "5m0s",
 			reconcilermanager.ReconcilerPollingPeriod: "50ms",
+			reconcilermanager.RenderingEnabled:        "false",
 		},
 		reconcilermanager.GitSync: {
 			"GIT_KNOWN_HOSTS": "false",
@@ -3014,14 +3025,30 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 		expected map[string][]corev1.EnvVar
 	}{
 		{
-			name:     "no override uses default value",
-			rootSync: rootSyncWithGit(rootsyncName),
+			name: "no override uses default value",
+			rootSync: rootSyncWithGit(rootsyncName,
+				rootsyncRenderingRequired(false),
+			),
 			expected: createEnv(map[string]map[string]string{}),
 		},
 		{
-			name:     "override uses override value",
-			rootSync: rootSyncWithGit(rootsyncName, rootsyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
-			expected: createEnv(map[string]map[string]string{reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"}}),
+			name: "override uses override value",
+			rootSync: rootSyncWithGit(rootsyncName,
+				rootsyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second}),
+				rootsyncRenderingRequired(false),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"},
+			}),
+		},
+		{
+			name: "rendering-required annotation sets env var",
+			rootSync: rootSyncWithGit(rootsyncName,
+				rootsyncRenderingRequired(true),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true"},
+			}),
 		},
 	}
 

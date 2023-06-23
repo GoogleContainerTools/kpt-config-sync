@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,8 +223,17 @@ func reposyncCACert(caCertSecretRef string) func(sync *v1beta1.RepoSync) {
 	}
 }
 
+func reposyncRenderingRequired(renderingRequired bool) func(sync *v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		val := strconv.FormatBool(renderingRequired)
+		core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, val)
+	}
+}
+
 func repoSync(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+	// default to require rendering for convenience with existing tests
+	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 	for _, opt := range opts {
 		opt(rs)
 	}
@@ -3460,6 +3470,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 			reconcilermanager.APIServerTimeout:        restconfig.DefaultTimeout.String(),
 			reconcilermanager.ReconcileTimeout:        "5m0s",
 			reconcilermanager.ReconcilerPollingPeriod: "50ms",
+			reconcilermanager.RenderingEnabled:        "false",
 		},
 		reconcilermanager.GitSync: {
 			"GIT_KNOWN_HOSTS": "false",
@@ -3503,14 +3514,30 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 		expected map[string][]corev1.EnvVar
 	}{
 		{
-			name:     "no override uses default value",
-			repoSync: repoSyncWithGit(reposyncNs, reposyncName),
+			name: "no override uses default value",
+			repoSync: repoSyncWithGit(reposyncNs, reposyncName,
+				reposyncRenderingRequired(false),
+			),
 			expected: createEnv(map[string]map[string]string{}),
 		},
 		{
-			name:     "override uses override value",
-			repoSync: repoSyncWithGit(reposyncNs, reposyncName, reposyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
-			expected: createEnv(map[string]map[string]string{reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"}}),
+			name: "override uses override value",
+			repoSync: repoSyncWithGit(reposyncNs, reposyncName,
+				reposyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second}),
+				reposyncRenderingRequired(false),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"},
+			}),
+		},
+		{
+			name: "rendering-required annotation sets env var",
+			repoSync: repoSyncWithGit(reposyncNs, reposyncName,
+				reposyncRenderingRequired(true),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true"},
+			}),
 		},
 	}
 

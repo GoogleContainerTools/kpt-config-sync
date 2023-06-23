@@ -105,3 +105,61 @@ func TestHelmSyncEnvs(t *testing.T) {
 		})
 	}
 }
+
+func boolPointer(val bool) *bool {
+	return &val
+}
+
+func TestUpdateHydrationControllerImage(t *testing.T) {
+	testCases := []struct {
+		name          string
+		image         string
+		overrideSpec  v1beta1.OverrideSpec
+		expectedImage string
+	}{
+		{
+			name:          "update hydration-controller with enableShellInRendering: true",
+			image:         "gcr.io/example/hydration-controller:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: boolPointer(true)},
+			expectedImage: "gcr.io/example/hydration-controller-with-shell:v1.2.3",
+		},
+		{
+			name:          "update hydration-controller-with-shell with enableShellInRendering: true",
+			image:         "gcr.io/example/hydration-controller-with-shell:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: boolPointer(true)},
+			expectedImage: "gcr.io/example/hydration-controller-with-shell:v1.2.3",
+		},
+		{
+			name:          "update hydration-controller-with-shell with enableShellInRendering: false",
+			image:         "gcr.io/example/hydration-controller-with-shell:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: boolPointer(false)},
+			expectedImage: "gcr.io/example/hydration-controller:v1.2.3",
+		},
+		{
+			name:          "update hydration-controller with enableShellInRendering: false",
+			image:         "gcr.io/example/hydration-controller:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: boolPointer(false)},
+			expectedImage: "gcr.io/example/hydration-controller:v1.2.3",
+		},
+		{
+			name:          "update hydration-controller-with-shell with enableShellInRendering: nil",
+			image:         "gcr.io/example/hydration-controller-with-shell:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: nil},
+			expectedImage: "gcr.io/example/hydration-controller:v1.2.3",
+		},
+		{
+			name:          "update hydration-controller with enableShellInRendering: nil",
+			image:         "gcr.io/example/hydration-controller:v1.2.3",
+			overrideSpec:  v1beta1.OverrideSpec{EnableShellInRendering: nil},
+			expectedImage: "gcr.io/example/hydration-controller:v1.2.3",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := updateHydrationControllerImage(tc.image, tc.overrideSpec)
+			assert.Equal(t, tc.expectedImage, actual)
+		})
+	}
+
+}

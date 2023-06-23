@@ -66,15 +66,15 @@ func needsKustomize(dir string) (bool, error) {
 		return false, errors.Wrapf(err, "unable to traverse the directory: %s", dir)
 	}
 	for _, f := range files {
-		if hasKustomization(filepath.Base(f.Name())) {
+		if HasKustomization(filepath.Base(f.Name())) {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-// hasKustomization checks if the file is a Kustomize configuration file.
-func hasKustomization(filename string) bool {
+// HasKustomization checks if the file is a Kustomize configuration file.
+func HasKustomization(filename string) bool {
 	for _, kustomization := range validKustomizationFiles {
 		if filename == kustomization {
 			return true
@@ -98,7 +98,7 @@ func hasKustomizeSubdir(dir string) (bool, error) {
 			if fi.IsDir() {
 				return nil
 			}
-			if hasKustomization(fi.Name()) {
+			if HasKustomization(fi.Name()) {
 				found = true
 			}
 			return nil

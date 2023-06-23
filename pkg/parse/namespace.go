@@ -17,6 +17,7 @@ package parse
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,10 +27,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/reader"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/reposync"
@@ -41,7 +44,7 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface) (Parser, error) {
+func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -68,6 +71,7 @@ func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope decl
 			discoveryInterface: dc,
 			converter:          converter,
 			mux:                &sync.Mutex{},
+			renderingEnabled:   renderingEnabled,
 		},
 		scope: scope,
 	}, nil
@@ -198,6 +202,21 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 		return status.APIServerError(err, "failed to update RepoSync source status from parser")
 	}
 	return nil
+}
+
+func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
+	rs := &v1beta1.RepoSync{}
+	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), rs); err != nil {
+		return status.APIServerError(err, "failed to get RepoSync for parser")
+	}
+	newVal := strconv.FormatBool(renderingRequired)
+	if core.GetAnnotation(rs, metadata.RequiresRenderingAnnotationKey) == newVal {
+		// avoid unnecessary updates
+		return nil
+	}
+	existing := rs.DeepCopy()
+	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
+	return p.client.Patch(ctx, rs, client.MergeFrom(existing))
 }
 
 // setRenderingStatus implements the Parser interface

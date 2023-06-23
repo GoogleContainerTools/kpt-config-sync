@@ -903,7 +903,6 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 		"namespaces/config-management-system/RootSync-root-sync.txt",
 		"namespaces/config-management-system/RootSync-root-sync_yaml.txt",
 		"namespaces/config-management-system/root-reconciler.*/git-sync.txt",
-		"namespaces/config-management-system/root-reconciler.*/hydration-controller.txt",
 		"namespaces/config-management-system/root-reconciler.*/otel-agent.txt",
 		"namespaces/config-management-system/root-reconciler.*/reconciler.txt",
 		"namespaces/config-management-monitoring/pods.txt",

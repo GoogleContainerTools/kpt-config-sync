@@ -152,10 +152,6 @@ func TestHelmWatchConfigMap(t *testing.T) {
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
 
-	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "-f", rootSyncFilePath)
-	})
-
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
@@ -268,6 +264,31 @@ func TestHelmWatchConfigMap(t *testing.T) {
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
+		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
+	}
+
+	configMapFilePath = "../testdata/root-sync-helm-cm-update/configmap-1.yaml"
+	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
+	nt.MustKubectl("apply", "-f", configMapFilePath)
+
+	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
+		[]testpredicates.Predicate{
+			containerImagePullPolicy("Always"),
+			testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+				resource.MustParse(expectedCPURequest),
+				resource.MustParse(expectedCPULimit),
+				resource.MustParse(expectedMemoryRequest),
+				resource.MustParse(expectedMemoryLimit)),
+			testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
+		},
+		testwatcher.WatchTimeout(7*time.Minute)); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {

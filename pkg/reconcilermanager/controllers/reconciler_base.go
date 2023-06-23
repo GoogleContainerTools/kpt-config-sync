@@ -430,7 +430,7 @@ func mountConfigMapValuesFiles(c *corev1.Container, valuesFrom []v1beta1.ValuesF
 
 	var valuesFiles []string
 	for _, vf := range valuesFrom {
-		envVarName := reconcilermanager.HelmConfigMapRef + "_" + vf.Name
+		envVarName := reconcilermanager.HelmConfigMapRef + "_" + vf.Name + "_" + vf.Key
 		valuesFiles = append(valuesFiles, envVarName)
 		c.Env = append(c.Env, corev1.EnvVar{
 			Name: envVarName,

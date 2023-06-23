@@ -12,33 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-generators:
-- |-
-  apiVersion: fn.kpt.dev/v1alpha1
-  kind: RenderHelmChart
-  metadata:
-    name: demo
-    annotations:
-      config.kubernetes.io/function: |
-        container:
-          network: true
-          image: gcr.io/kpt-fn/render-helm-chart:v0.1
-  helmCharts:
-  - name: ocp-pipeline
-    namespace: mynamespace
-    version: 0.1.16
-    repo: https://bcgov.github.io/helm-charts
-    releaseName: moria
-    valuesInline:
-      releaseNamespace: ""
-      rbac:
-        create: true
-        rules:
-          - apiGroups: [""]
-            verbs: ["*"]
-            resources: ["*"]
-- helmchartconfig.yaml
-
 helmCharts:
 - name: minecraft
   repo: https://itzg.github.io/minecraft-server-charts

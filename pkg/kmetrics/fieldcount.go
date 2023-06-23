@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 
 	"sigs.k8s.io/kustomize/api/hasher"
 	"sigs.k8s.io/kustomize/api/konfig"
@@ -65,9 +64,6 @@ type KustomizeFieldMetrics struct {
 	// DeprecationMetrics looks at the usage of fields that may become deprecated
 	DeprecationMetrics map[string]int
 }
-
-// RenderHelmChart is the name of the KRM function that inflates a helm chart
-const RenderHelmChart = "render-helm-chart"
 
 // kustomizeFieldUsage reads the current kustomization file (and any
 // base kustomization file it refers to) to gather metrics about
@@ -150,7 +146,7 @@ func kustomizeFieldUsageRecurse(k *types.Kustomization, path string) (*Kustomize
 	topTierCount = aggregateMapCounts(topTierCount, orderedTopTierFieldCount(k))
 	patchCount = aggregateMapCounts(patchCount, patchTypeCount(k))
 	baseCount = aggregateMapCounts(baseCount, baseTypeCount(k, localBases))
-	helmMetrics = aggregateMapCounts(helmMetrics, helmCount(k, path))
+	helmMetrics = aggregateMapCounts(helmMetrics, helmCount(k))
 	k8sMetadata = aggregateMapCounts(k8sMetadata, k8sMetadataCount(k))
 	simplMetrics = aggregateMapCounts(simplMetrics, simplificationUsage(k, path))
 	deprecationMetrics = aggregateMapCounts(deprecationMetrics, deprecatedFieldCount(k))
@@ -246,17 +242,8 @@ func remoteBaseCount(k *types.Kustomization) int {
 	return result
 }
 
-func helmCount(k *types.Kustomization, path string) map[string]int {
+func helmCount(k *types.Kustomization) map[string]int {
 	result := make(map[string]int)
-	for _, g := range k.Generators {
-		contents, err := os.ReadFile(filepath.Join(path, g))
-		if err != nil {
-			contents = []byte(g)
-		}
-		if strings.Contains(string(contents), RenderHelmChart) {
-			result = aggregateMapCounts(result, map[string]int{RenderHelmChart: 1})
-		}
-	}
 	if len(k.HelmCharts) > 0 {
 		result["HelmCharts"] = len(k.HelmCharts)
 	}

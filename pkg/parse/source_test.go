@@ -23,8 +23,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
@@ -32,7 +34,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
 var originCommit = "1234567890abcde"
@@ -52,7 +53,7 @@ func TestReadConfigFiles(t *testing.T) {
 		{
 			name:      "read config files when commit is changed",
 			commit:    differentCommit,
-			wantedErr: testutil.EqualError(status.TransientError(fmt.Errorf("source commit changed while running Kustomize build, was %s, now %s. It will be retried in the next sync", originCommit, differentCommit))),
+			wantedErr: status.TransientError(fmt.Errorf("source commit changed while listing files, was %s, now %s. It will be retried in the next sync", originCommit, differentCommit)),
 		},
 	}
 
@@ -98,7 +99,7 @@ func TestReadConfigFiles(t *testing.T) {
 				}
 			}()
 
-			sourceState := &sourceState{
+			srcState := &sourceState{
 				commit:  originCommit,
 				syncDir: cmpath.Absolute(sourceCommitDir),
 				files:   nil,
@@ -123,8 +124,89 @@ func TestReadConfigFiles(t *testing.T) {
 			// set the necessary FileSource of parser
 			parser.SourceDir = symDir
 
-			err = parser.readConfigFiles(sourceState, parser)
-			testutil.AssertEqual(t, tc.wantedErr, err)
+			err = parser.readConfigFiles(srcState)
+			assert.Equal(t, tc.wantedErr, err)
+		})
+	}
+}
+
+func TestReadHydratedDir(t *testing.T) {
+	testCases := []struct {
+		name      string
+		commit    string
+		wantedErr hydrate.HydrationError
+	}{
+		{
+			name:      "read hydration status when commit is not changed",
+			commit:    originCommit,
+			wantedErr: nil,
+		},
+		{
+			name:      "read hydration status when commit is changed",
+			commit:    differentCommit,
+			wantedErr: status.TransientError(fmt.Errorf("source commit changed while listing hydrated files, was %s, now %s. It will be retried in the next sync", originCommit, differentCommit)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// create temporary directory for parser
+			tempRoot, _ := ioutil.TempDir(os.TempDir(), "read-hydrated-dir-test")
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}(tempRoot)
+			hydratedRoot := filepath.Join(tempRoot, "hydrated")
+			if err := os.Mkdir(hydratedRoot, os.ModePerm); err != nil {
+				t.Fatal(err)
+			}
+			// mock the parser's syncDir that could change while program running
+			parserCommitDir := filepath.Join(hydratedRoot, tc.commit)
+			if err := os.Mkdir(parserCommitDir, os.ModePerm); err != nil {
+				t.Fatal(err)
+			}
+
+			// create a symlink to point to the temporary directory
+			hydratedLink := symLink
+			symDir := filepath.Join(hydratedRoot, hydratedLink)
+			if err := os.Symlink(parserCommitDir, symDir); err != nil {
+				t.Fatal(err)
+			}
+			defer func(path string) {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			}(symDir)
+
+			srcState := &sourceState{
+				commit: originCommit,
+			}
+
+			parser := &root{
+				opts: opts{
+					files: files{
+						FileSource: FileSource{
+							HydratedRoot: hydratedRoot,
+							HydratedLink: hydratedLink,
+						},
+					},
+				},
+			}
+
+			wantState := sourceState{
+				commit:  tc.commit,
+				syncDir: cmpath.Absolute(parserCommitDir),
+			}
+
+			hydrationState, hydrationErr := parser.readHydratedDir(
+				cmpath.Absolute(hydratedRoot), parser.reconcilerName, *srcState)
+
+			assert.Equal(t, tc.wantedErr, hydrationErr)
+			if hydrationErr == nil {
+				assert.Equal(t, wantState, hydrationState)
+			}
 		})
 	}
 }

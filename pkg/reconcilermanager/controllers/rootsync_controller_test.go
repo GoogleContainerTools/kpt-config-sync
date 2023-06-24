@@ -228,42 +228,47 @@ func rootsyncCACert(caCertSecretRef string) func(*v1beta1.RootSync) {
 
 func rootSync(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
-	rs.Spec.Git = &v1beta1.Git{
-		Repo: rootsyncRepo,
-		Dir:  rootsyncDir,
-	}
 	for _, opt := range opts {
 		opt(rs)
 	}
 	return rs
+}
+
+func rootSyncWithGit(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
+	addGit := func(rs *v1beta1.RootSync) {
+		rs.Spec.SourceType = string(v1beta1.GitSource)
+		rs.Spec.Git = &v1beta1.Git{
+			Repo: rootsyncRepo,
+			Dir:  rootsyncDir,
+		}
+	}
+	opts = append([]func(*v1beta1.RootSync){addGit}, opts...)
+	return rootSync(name, opts...)
 }
 
 func rootSyncWithOCI(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
-	rs := fake.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceType = string(v1beta1.OciSource)
-	rs.Spec.Oci = &v1beta1.Oci{
-		Image: ociImage,
-		Dir:   rootsyncDir,
+	addOci := func(rs *v1beta1.RootSync) {
+		rs.Spec.SourceType = string(v1beta1.OciSource)
+		rs.Spec.Oci = &v1beta1.Oci{
+			Image: ociImage,
+			Dir:   rootsyncDir,
+		}
 	}
-	for _, opt := range opts {
-		opt(rs)
-	}
-	return rs
+	opts = append([]func(*v1beta1.RootSync){addOci}, opts...)
+	return rootSync(name, opts...)
 }
 
 func rootSyncWithHelm(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
-	rs := fake.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
-		Repo:    helmRepo,
-		Chart:   helmChart,
-		Version: helmVersion,
-	}}
-	for _, opt := range opts {
-		opt(rs)
+	addHelm := func(rs *v1beta1.RootSync) {
+		rs.Spec.SourceType = string(v1beta1.HelmSource)
+		rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
+			Repo:    helmRepo,
+			Chart:   helmChart,
+			Version: helmVersion,
+		}}
 	}
-	return rs
+	opts = append([]func(*v1beta1.RootSync){addHelm}, opts...)
+	return rootSync(name, opts...)
 }
 
 func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
@@ -294,7 +299,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH),
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH),
 		rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideResources(overrideAllContainerResources))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
@@ -403,7 +408,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -607,7 +612,7 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncNoSSLVerify())
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncNoSSLVerify())
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -639,7 +644,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -745,7 +750,7 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 	caCertSecret := "foo-secret"
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
 		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
 		rootsyncCACert(caCertSecret))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
@@ -785,7 +790,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	parseDeployment = parsedDeployment
 
 	caCertSecret := "foo-secret"
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
@@ -888,7 +893,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 	// rootsync setup for testing
 	caCertSecret := "foo-secret"
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
 		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
 		rootsyncCACert(caCertSecret))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
@@ -912,7 +917,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 func TestRootSyncWithInvalidCACertSecret(t *testing.T) {
 	// rootsync setup for testing
 	caCertSecret := "foo-secret"
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
 		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
 		rootsyncCACert(caCertSecret))
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
@@ -930,7 +935,7 @@ func TestRootSyncWithInvalidCACertSecret(t *testing.T) {
 func TestRootSyncWithoutCACertSecret(t *testing.T) {
 	// rootsync setup for testing
 	caCertSecret := "foo-secret"
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch),
 		rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName),
 		rootsyncCACert(caCertSecret))
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
@@ -950,7 +955,7 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideGitSyncDepth(5))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideGitSyncDepth(5))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -982,7 +987,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1121,7 +1126,7 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1153,7 +1158,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1258,7 +1263,7 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1287,7 +1292,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1393,7 +1398,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1508,7 +1513,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
@@ -1583,20 +1588,20 @@ func TestMultipleRootSyncs(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs1 := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	rs1 := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
 
-	rs2 := rootSync(configsync.RootSyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCENode))
+	rs2 := rootSyncWithGit(configsync.RootSyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCENode))
 	reqNamespacedName2 := namespacedName(rs2.Name, rs2.Namespace)
 
-	rs3 := rootSync("my-rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
+	rs3 := rootSyncWithGit("my-rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName3 := namespacedName(rs3.Name, rs3.Namespace)
 
-	rs4 := rootSync("my-rs-4", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthCookieFile), rootsyncSecretRef(reposyncCookie))
+	rs4 := rootSyncWithGit("my-rs-4", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthCookieFile), rootsyncSecretRef(reposyncCookie))
 	reqNamespacedName4 := namespacedName(rs4.Name, rs4.Namespace)
 	secret4 := secretObjWithProxy(t, reposyncCookie, "cookie_file", core.Namespace(rs4.Namespace))
 
-	rs5 := rootSync("my-rs-5", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
+	rs5 := rootSyncWithGit("my-rs-5", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
 	reqNamespacedName5 := namespacedName(rs5.Name, rs5.Namespace)
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
@@ -2152,11 +2157,11 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 	testSecretName := "ssh-test"
 	rootSyncs := map[string][]*v1beta1.RootSync{
 		rootsyncSSHKey: {
-			rootSync("rs-1", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey)),
-			rootSync("rs-2", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey)),
+			rootSyncWithGit("rs-1", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey)),
+			rootSyncWithGit("rs-2", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey)),
 		},
 		testSecretName: {
-			rootSync("rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(testSecretName)),
+			rootSyncWithGit("rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(testSecretName)),
 		},
 	}
 	var expectedRequests = func(secretName string) []reconcile.Request {
@@ -2235,7 +2240,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := rootSync(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 	testReconciler.membership = &hubv1.Membership{
@@ -3009,12 +3014,12 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 	}{
 		{
 			name:     "no override uses default value",
-			rootSync: rootSync(rootsyncName),
+			rootSync: rootSyncWithGit(rootsyncName),
 			expected: createEnv(map[string]map[string]string{}),
 		},
 		{
 			name:     "override uses override value",
-			rootSync: rootSync(rootsyncName, rootsyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
+			rootSync: rootSyncWithGit(rootsyncName, rootsyncOverrideAPIServerTimeout(metav1.Duration{Duration: 40 * time.Second})),
 			expected: createEnv(map[string]map[string]string{reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"}}),
 		},
 	}

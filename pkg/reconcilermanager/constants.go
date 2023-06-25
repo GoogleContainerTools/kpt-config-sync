@@ -140,7 +140,7 @@ const (
 	// HelmValues is the OS env variable key for the Helm chart values.
 	HelmValues = "HELM_VALUES"
 
-	// HelmConfigMapRef is the OS env variable key prefix for Helm values files from ConfigMaps.
+	// HelmConfigMapRef is the path where valuesFiles from ConfigMaps are mounted.
 	HelmConfigMapRef = "HELM_CONFIGMAP_REF"
 
 	// HelmValuesFrom is the OS env variable key for the names of ConfigMaps holding valuesFiles.
@@ -157,7 +157,4 @@ const (
 
 	// HelmSyncWait is the OS env variable key for the Helm sync wait period in seconds.
 	HelmSyncWait = "HELM_SYNC_WAIT"
-
-	// HelmWatchNamespace is the OS env variable key for the namespace that Helm sync should watch for ConfigMap values.
-	HelmWatchNamespace = "HELM_WATCH_NAMESPACE"
 )

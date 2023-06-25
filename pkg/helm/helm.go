@@ -31,7 +31,6 @@ import (
 	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/kio"
@@ -109,15 +108,23 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	switch h.ValuesMergeMode {
 
 	case "", "override":
-		for _, vf := range h.ValuesFrom {
-			val := os.Getenv(vf)
+		for i, vf := range h.ValuesFrom {
+			if vf == "" {
+				continue
+			}
+			b, err := os.ReadFile(vf)
+			if err != nil {
+				return nil, fmt.Errorf("error reading from provided valuesFile %s: %w", vf, err)
+			}
+			val := string(b)
+			if len(val) == 0 {
+				return nil, fmt.Errorf("error: received empty valuesFile %s", vf)
+			}
 
-			if val != "" {
-				klog.Infof("values from ConfigMap %s\n: %s\n", vf, val)
-				args, err = writeValuesPath([]byte(val), vf+"-", args)
-				if err != nil {
-					return nil, err
-				}
+			klog.Infof("values from ConfigMap %s\n: %s\n", vf, val)
+			args, err = writeValuesPath([]byte(val), fmt.Sprintf("values-file-%d-", i), args)
+			if err != nil {
+				return nil, err
 			}
 		}
 		if len(h.Values) != 0 {
@@ -131,8 +138,18 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	case "merge":
 		var valuesToMerge [][]byte
 		for _, vf := range h.ValuesFrom {
-			val := os.Getenv(vf)
-			valuesToMerge = append(valuesToMerge, []byte(val))
+			if vf == "" {
+				continue
+			}
+			b, err := os.ReadFile(vf)
+			if err != nil {
+				return nil, fmt.Errorf("error reading from provided valuesFile %s: %w", vf, err)
+			}
+			val := string(b)
+			if len(val) == 0 {
+				return nil, fmt.Errorf("error: received empty valuesFile %s", vf)
+			}
+			valuesToMerge = append(valuesToMerge, b)
 
 		}
 		if len(h.Values) != 0 {
@@ -326,13 +343,6 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 	if oldDir == destDir {
 		klog.Infof("no update required with the same helm chart version %q", h.Version)
 		return nil
-	}
-
-	for _, vf := range h.ValuesFrom {
-		if vf != "" && os.Getenv(vf) == "" {
-			configMapName := strings.TrimPrefix(vf, reconcilermanager.HelmConfigMapRef+"_")
-			return fmt.Errorf("received empty valuesFile for ConfigMap %s; ConfigMap or its specified data key might not exist", configMapName)
-		}
 	}
 
 	if !loggedIn {

@@ -423,31 +423,41 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
-func mountConfigMapValuesFiles(c *corev1.Container, valuesFrom []v1beta1.ValuesFrom) {
-	if len(valuesFrom) == 0 {
-		return
-	}
-
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFrom []v1beta1.ValuesFrom) {
 	var valuesFiles []string
-	for _, vf := range valuesFrom {
-		envVarName := reconcilermanager.HelmConfigMapRef + "_" + vf.Name + "_" + vf.Key
-		valuesFiles = append(valuesFiles, envVarName)
-		c.Env = append(c.Env, corev1.EnvVar{
-			Name: envVarName,
-			ValueFrom: &corev1.EnvVarSource{
-				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+
+	for i, vf := range valuesFrom {
+		fileName := reconcilermanager.HelmConfigMapRef
+		mountPath := filepath.Join("/etc/config", vf.Name, vf.Key)
+		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
+		volumeName := "configmap-vol-" + strings.ToLower(vf.Name) + fmt.Sprintf("-%d", i)
+
+		templateSpec.Volumes = append(templateSpec.Volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: vf.Name,
 					},
-					Key: vf.Key,
+					Items: []corev1.KeyToPath{{
+						Key:  vf.Key,
+						Path: fileName,
+					}},
 				},
 			},
 		})
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: mountPath,
+		})
 	}
-	c.Env = append(c.Env, corev1.EnvVar{
-		Name:  reconcilermanager.HelmValuesFrom,
-		Value: strings.Join(valuesFiles, ","),
-	})
+
+	if len(valuesFiles) > 0 {
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name:  reconcilermanager.HelmValuesFrom,
+			Value: strings.Join(valuesFiles, ","),
+		})
+	}
 }
 
 func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec) {

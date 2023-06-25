@@ -17,10 +17,11 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -143,11 +144,38 @@ func TestPublicHelm(t *testing.T) {
 func TestHelmWatchConfigMap(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	configMapFilePath := "../testdata/root-sync-helm-cm-update/configmap-1.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	configMapTypeMeta := metav1.TypeMeta{Kind: "ConfigMap"}
+	configMapObjMeta := metav1.ObjectMeta{Name: "foo", Namespace: configsync.ControllerNamespace}
 
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace, inline values, and a ConfigMap reference")
+	nt.T.Log("Apply the ConfigMap with values to the cluster")
+	cm1 := corev1.ConfigMap{
+		TypeMeta:   configMapTypeMeta,
+		ObjectMeta: configMapObjMeta,
+		Data: map[string]string{"values.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Always
+wordpressUsername: test-user-1
+wordpressEmail: override-this@example.com
+resources:
+  requests:
+    cpu: 150m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 300Mi
+mariadb:
+  primary:
+    persistence:
+      enabled: false
+service:
+  type: ClusterIP`},
+	}
+	cm1Copy := cm1.DeepCopy()
+	if err := nt.KubeClient.Create(&cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	rootSyncFilePath := "../testdata/root-sync-helm-cm-update/root-sync.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
@@ -189,9 +217,33 @@ func TestHelmWatchConfigMap(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	configMapFilePath = "../testdata/root-sync-helm-cm-update/configmap-2.yaml"
-	nt.T.Logf("Update the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	nt.T.Log("Apply the ConfigMap with values to the cluster")
+	cm2 := corev1.ConfigMap{
+		TypeMeta:   configMapTypeMeta,
+		ObjectMeta: configMapObjMeta,
+		Data: map[string]string{"values.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+wordpressUsername: test-user-2
+wordpressEmail: override-this@example.com
+resources:
+  requests:
+    cpu: 150m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 300Mi
+mariadb:
+  primary:
+    persistence:
+      enabled: false
+service:
+  type: ClusterIP`},
+	}
+	if err := nt.KubeClient.Update(&cm2); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
 		[]testpredicates.Predicate{
@@ -207,16 +259,26 @@ func TestHelmWatchConfigMap(t *testing.T) {
 			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
 			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
 		},
-		testwatcher.WatchTimeout(7*time.Minute)); err != nil {
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2)); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {
 		nt.T.FailNow()
 	}
 
-	configMapFilePath = "../testdata/root-sync-helm-cm-update/configmap-3.yaml"
-	nt.T.Logf("Update the ConfigMap with incorrect data key to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
+	cm3 := corev1.ConfigMap{
+		TypeMeta:   configMapTypeMeta,
+		ObjectMeta: configMapObjMeta,
+		Data: map[string]string{"something-else.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+`},
+	}
+	if err := nt.KubeClient.Update(&cm3); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nn := nomostest.DefaultRootRepoNamespacedName
 	nt.WaitForRootSyncStalledError(nn.Namespace, nn.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
@@ -243,8 +305,10 @@ func TestHelmWatchConfigMap(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	nt.T.Logf("Delete the referenced ConfigMap defined in %s", configMapFilePath)
-	nt.MustKubectl("delete", "-f", configMapFilePath)
+	nt.T.Log("Delete the referenced ConfigMap")
+	if err := nt.KubeClient.Delete(&cm3); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.WaitForRootSyncStalledError(nn.Namespace, nn.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
 	if nt.T.Failed() {
@@ -270,9 +334,10 @@ func TestHelmWatchConfigMap(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	configMapFilePath = "../testdata/root-sync-helm-cm-update/configmap-1.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	nt.T.Log("Reapply the referenced ConfigMap")
+	if err := nt.KubeClient.Create(cm1Copy); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
 		[]testpredicates.Predicate{
@@ -288,7 +353,7 @@ func TestHelmWatchConfigMap(t *testing.T) {
 			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
 			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
 		},
-		testwatcher.WatchTimeout(7*time.Minute)); err != nil {
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2)); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {
@@ -304,6 +369,28 @@ func TestHelmConfigMapMerge(t *testing.T) {
 	rootSyncDirPath := "../testdata/root-sync-helm-cm-merge"
 	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", rootSyncDirPath)
 	nt.MustKubectl("apply", "-f", rootSyncDirPath)
+
+	cm := corev1.ConfigMap{
+		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: configsync.ControllerNamespace},
+		Data: map[string]string{
+			"first": `
+extraEnvVars:
+- name: TEST_CM_1
+  value: "cm1"
+wordpressUsername: test-user-1
+wordpressEmail: override-this@example.com`,
+			"second": `
+extraEnvVars:
+- name: TEST_CM_2
+  value: "cm2"
+wordpressUsername: test-user-2
+wordpressEmail: override-this@example.com`,
+		},
+	}
+	if err := nt.KubeClient.Create(&cm); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
@@ -554,7 +641,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
 		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "second")},
-		testwatcher.WatchTimeout(7*time.Minute)); err != nil {
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2)); err != nil {
 		nt.T.Error(err)
 	}
 
@@ -580,6 +667,19 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
+		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
+	}
+
+	configMapFilePath = "../testdata/repo-sync-helm-cm-update/configmap-1.yaml"
+	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
+	nt.MustKubectl("apply", "-f", configMapFilePath)
+
+	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
+		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "first")},
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2)); err != nil {
 		nt.T.Error(err)
 	}
 	if nt.T.Failed() {

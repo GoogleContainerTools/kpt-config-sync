@@ -34,6 +34,8 @@ spec:
       wordpressEmail: test-user@example.com
     valuesFrom:
       - kind: ConfigMap
-        name: foo-1
+        name: foo
+        key: first
       - kind: ConfigMap
-        name: foo-2
+        name: foo
+        key: second

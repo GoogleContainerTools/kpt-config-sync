@@ -936,9 +936,9 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					if authTypeToken(rs.Spec.Helm.Auth) {
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
 					}
+					mountConfigMapValuesFiles(templateSpec, &container, rs.Spec.Helm.ValuesFrom)
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(&container, rs.Spec.Override)
-					mountConfigMapValuesFiles(&container, rs.Spec.Helm.ValuesFrom)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.

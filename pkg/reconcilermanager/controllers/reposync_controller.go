@@ -146,6 +146,17 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	currentRS := rs.DeepCopy()
 
+	if err := r.watchConfigMaps(rs); err != nil {
+		r.logger(ctx).Error(err, "Error watching ConfigMaps")
+		reposync.SetStalled(rs, "ConfigMapWatch", err)
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Error setting status")
+		}
+		// the error may be recoverable, so we retry (return the error)
+		return controllerruntime.Result{}, err
+	}
+
 	if err := r.validateNamespaceName(rsRef.Namespace); err != nil {
 		r.logger(ctx).Error(err, "Sync namespace invalid")
 		reposync.SetStalled(rs, "Validation", err)
@@ -178,17 +189,6 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// Use the validation error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 		return controllerruntime.Result{}, updateErr
-	}
-
-	if err := r.watchConfigMaps(rs); err != nil {
-		r.logger(ctx).Error(err, "Error watching ConfigMaps")
-		reposync.SetStalled(rs, "ConfigMapWatch", err)
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Error setting status")
-		}
-		// the error may be recoverable, so we retry (return the error)
-		return controllerruntime.Result{}, err
 	}
 
 	setupFn := func(ctx context.Context) error {

@@ -112,13 +112,9 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			if vf == "" {
 				continue
 			}
-			b, err := os.ReadFile(vf)
+			val, err := readFile(vf)
 			if err != nil {
-				return nil, fmt.Errorf("error reading from provided valuesFile %s: %w", vf, err)
-			}
-			val := string(b)
-			if len(val) == 0 {
-				return nil, fmt.Errorf("error: received empty valuesFile %s", vf)
+				return nil, err
 			}
 
 			klog.Infof("values from ConfigMap %s\n: %s\n", vf, val)
@@ -141,15 +137,11 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			if vf == "" {
 				continue
 			}
-			b, err := os.ReadFile(vf)
+			val, err := readFile(vf)
 			if err != nil {
-				return nil, fmt.Errorf("error reading from provided valuesFile %s: %w", vf, err)
+				return nil, err
 			}
-			val := string(b)
-			if len(val) == 0 {
-				return nil, fmt.Errorf("error: received empty valuesFile %s", vf)
-			}
-			valuesToMerge = append(valuesToMerge, b)
+			valuesToMerge = append(valuesToMerge, []byte(val))
 
 		}
 		if len(h.Values) != 0 {
@@ -399,4 +391,16 @@ func isRange(version string) bool {
 	}
 	_, err := semverrange.NewConstraint(version)
 	return err == nil
+}
+
+func readFile(filepath string) (string, error) {
+	b, err := os.ReadFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("error reading from provided valuesFile %s: %w", filepath, err)
+	}
+	val := string(b)
+	if len(val) == 0 {
+		return "", fmt.Errorf("error: received empty valuesFile %s", filepath)
+	}
+	return val, nil
 }

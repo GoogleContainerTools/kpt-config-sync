@@ -176,9 +176,40 @@ service:
 		nt.T.Fatal(err)
 	}
 
-	rootSyncFilePath := "../testdata/root-sync-helm-cm-update/root-sync.yaml"
-	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
-	nt.MustKubectl("apply", "-f", rootSyncFilePath)
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{
+		"spec": {
+		  "sourceFormat": "unstructured",
+		  "sourceType": "helm",
+		  "helm": {
+			"releaseName": "my-wordpress",
+			"namespace": "wordpress",
+			"auth": "none",
+			"repo": "https://charts.bitnami.com/bitnami",
+			"chart": "wordpress",
+			"version": "15.2.35",
+			"values": {
+			  "extraEnvVars": [
+				{
+				  "name": "TEST_1",
+				  "value": "val1"
+				},
+				{
+				  "name": "TEST_2",
+				  "value": "val2"
+				}
+			  ],
+			  "wordpressEmail": "test-user@example.com"
+			},
+			"valuesFrom": [
+			  {
+				"kind": "ConfigMap",
+				"name": "foo"
+			  }
+			]
+		  }
+		}
+	  }`)
 
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
@@ -279,13 +310,10 @@ image:
 	if err := nt.KubeClient.Update(&cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	nn := nomostest.DefaultRootRepoNamespacedName
-	nt.WaitForRootSyncStalledError(nn.Namespace, nn.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
 	if nt.T.Failed() {
 		nt.T.FailNow()
 	}
-
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -309,12 +337,10 @@ image:
 	if err := nt.KubeClient.Delete(&cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	nt.WaitForRootSyncStalledError(nn.Namespace, nn.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
 	if nt.T.Failed() {
 		nt.T.FailNow()
 	}
-
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -366,10 +392,6 @@ image:
 func TestHelmConfigMapMerge(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rootSyncDirPath := "../testdata/root-sync-helm-cm-merge"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", rootSyncDirPath)
-	nt.MustKubectl("apply", "-f", rootSyncDirPath)
-
 	cm := corev1.ConfigMap{
 		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: configsync.ControllerNamespace},
@@ -392,6 +414,43 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{
+		"spec": {
+		  "sourceFormat": "unstructured",
+		  "sourceType": "helm",
+		  "helm": {
+			"releaseName": "my-wordpress",
+			"namespace": "wordpress",
+			"auth": "none",
+			"repo": "https://charts.bitnami.com/bitnami",
+			"chart": "wordpress",
+			"version": "15.2.35",
+			"values": {
+			  "extraEnvVars": [
+				{
+				  "name": "TEST_INLINE",
+				  "value": "inline"
+				}
+			  ],
+			  "wordpressEmail": "test-user@example.com"
+			},
+			"valuesFrom": [
+			  {
+				"kind": "ConfigMap",
+				"name": "foo",
+				"key": "first"
+			  },
+			  {
+				"kind": "ConfigMap",
+				"name": "foo",
+				"key": "second"
+			  }
+			]
+		  }
+		}
+	  }`)
+
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
@@ -410,7 +469,6 @@ wordpressEmail: override-this@example.com`,
 		nt.T.FailNow()
 	}
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesMergeMode set to 'merge'")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"valuesMergeMode": "merge"}}}`)
 
@@ -600,7 +658,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
-		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
 
@@ -609,9 +667,18 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	configMapFilePath := "../testdata/repo-sync-helm-cm-update/configmap-1.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	nt.T.Log("Create a ConfigMap with values")
+	cm1 := corev1.ConfigMap{
+		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: testNs},
+		Data: map[string]string{
+			"foo.yaml": `label: first`,
+		},
+	}
+	cm1Copy := cm1.DeepCopy()
+	if err := nt.KubeClient.Create(&cm1); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
@@ -635,9 +702,17 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	configMapFilePath = "../testdata/repo-sync-helm-cm-update/configmap-2.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
+	nt.T.Log("Update the referenced ConfigMap")
+	cm2 := corev1.ConfigMap{
+		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: testNs},
+		Data: map[string]string{
+			"foo.yaml": `label: second`,
+		},
+	}
+	if err := nt.KubeClient.Update(&cm2); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
 		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "second")},
@@ -645,13 +720,17 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	nt.T.Logf("Delete the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("delete", "-f", configMapFilePath)
-
-	configMapFilePath = "../testdata/repo-sync-helm-cm-update/configmap-3.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
-
+	nt.T.Logf("Update the ConfigMap to have invalid key")
+	cm3 := corev1.ConfigMap{
+		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: testNs},
+		Data: map[string]string{
+			"values.yaml": `label: second`,
+		},
+	}
+	if err := nt.KubeClient.Update(&cm3); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
@@ -661,9 +740,10 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	nt.T.Logf("Delete the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("delete", "-f", configMapFilePath)
-
+	nt.T.Logf("Delete the ConfigMap with values")
+	if err := nt.KubeClient.Delete(&cm3); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
@@ -673,10 +753,10 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.FailNow()
 	}
 
-	configMapFilePath = "../testdata/repo-sync-helm-cm-update/configmap-1.yaml"
-	nt.T.Logf("Apply the ConfigMap with values to the cluster defined in %s", configMapFilePath)
-	nt.MustKubectl("apply", "-f", configMapFilePath)
-
+	nt.T.Log("Reapply the ConfigMap with values")
+	if err := nt.KubeClient.Create(cm1Copy); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
 		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "first")},
 		testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2)); err != nil {

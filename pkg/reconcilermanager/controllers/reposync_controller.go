@@ -520,8 +520,13 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 	// We add watches dynamically at runtime based on the RepoSync namespace
 	// in order to avoid watching ConfigMaps in the entire cluster.
-	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil ||
+	if rs == nil || rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil ||
 		len(rs.Spec.Helm.ValuesFrom) == 0 {
+		// TODO: When it's available, we should remove unneeded watches from the controller
+		// when all RepoSyncs with ConfigMap references in a particular namespace are
+		// deleted (or are no longer referencing ConfigMaps).
+		// See https://github.com/kubernetes-sigs/controller-runtime/pull/2159
+		// and https://github.com/kubernetes-sigs/controller-runtime/issues/1884
 		return nil
 	}
 

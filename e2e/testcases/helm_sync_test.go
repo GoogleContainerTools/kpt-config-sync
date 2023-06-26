@@ -658,7 +658,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
-		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.AppsAdmin(), policy.CoreAdmin()),
+		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
 
@@ -720,7 +720,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	nt.T.Logf("Update the ConfigMap to have invalid key")
+	nt.T.Logf("Update the ConfigMap to have incorrect key")
 	cm3 := corev1.ConfigMap{
 		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap"},
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: testNs},

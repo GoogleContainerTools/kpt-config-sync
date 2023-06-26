@@ -24,33 +24,7 @@ import (
 // merge will do a simple merge of an array of yaml documents. If there are conflicts,
 // yaml documents that appear later in the array will override those that appear earlier.
 // Sequence nodes will concatenated, while map nodes will be merged together.
-// Example:
-// The following two yaml documents:
-//
-//	```
-//	namespaces:
-//	  - name: foo
-//	    rolebindings:
-//	      name: foo-rb
-//	```
-//	```
-//	namespaces:
-//	  - name: bar
-//	    rolebindings:
-//	      name: bar-rb
-//	```
-//
-// Will get merged into the following:
-//
-//	```
-//	namespaces:
-//	  - name: foo
-//	    rolebindings:
-//	      name: foo-rb
-//	  - name: bar
-//	    rolebindings:
-//	      name: bar-rb
-//	```
+// See unit tests for examples.
 func merge(valuesToMerge [][]byte) ([]byte, error) {
 	if len(valuesToMerge) == 0 {
 		return nil, nil
@@ -85,7 +59,7 @@ func mergeTwo(first, second interface{}) (interface{}, error) {
 	secondType := reflect.TypeOf(second).Kind()
 
 	if firstType != secondType {
-		return nil, fmt.Errorf("unable to merge, mismatched types %s and %s", firstType.String(), secondType.String())
+		return first, nil
 	}
 
 	switch firstType {

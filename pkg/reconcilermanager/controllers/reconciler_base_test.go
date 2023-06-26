@@ -17,6 +17,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -26,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -611,6 +613,188 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 			dep, err := compareDeploymentsToCreatePatchData(tc.isAutopilot, testDeclared, testCurrent, reconcilerManagerAllowList, core.Scheme)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedSame, dep.same)
+		})
+	}
+}
+
+func TestMountConfigMapValuesFiles(t *testing.T) {
+	testCases := map[string]struct {
+		input    []v1beta1.ValuesFrom
+		expected corev1.PodSpec
+	}{
+		"empty valuesFrom": {
+			input:    nil,
+			expected: corev1.PodSpec{Containers: []corev1.Container{{}}},
+		},
+		"one valuesFrom": {
+			input: []v1beta1.ValuesFrom{
+				{
+					Kind: "ConfigMap",
+					Name: "foo",
+					Key:  "values.yaml",
+				},
+			},
+			expected: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					VolumeMounts: []corev1.VolumeMount{{
+						Name:      "configmap-vol-foo-0",
+						MountPath: "/etc/config/foo/values.yaml",
+					}},
+					Env: []corev1.EnvVar{{
+						Name:  reconcilermanager.HelmValuesFrom,
+						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef),
+					}},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "configmap-vol-foo-0",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "foo",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+				},
+			},
+		},
+		"two valuesFrom, different ConfigMaps": {
+			input: []v1beta1.ValuesFrom{
+				{
+					Kind: "ConfigMap",
+					Name: "foo",
+					Key:  "values.yaml",
+				},
+				{
+					Kind: "ConfigMap",
+					Name: "bar",
+					Key:  "values.yaml",
+				},
+			},
+			expected: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "configmap-vol-foo-0",
+							MountPath: "/etc/config/foo/values.yaml",
+						},
+						{
+							Name:      "configmap-vol-bar-1",
+							MountPath: "/etc/config/bar/values.yaml",
+						},
+					},
+					Env: []corev1.EnvVar{{
+						Name:  reconcilermanager.HelmValuesFrom,
+						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/bar/values.yaml", reconcilermanager.HelmConfigMapRef),
+					}},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "configmap-vol-foo-0",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "foo",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+					{
+						Name: "configmap-vol-bar-1",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "bar",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+				},
+			},
+		},
+		"two valuesFrom, same ConfigMap": {
+			input: []v1beta1.ValuesFrom{
+				{
+					Kind: "ConfigMap",
+					Name: "foo",
+					Key:  "values-0.yaml",
+				},
+				{
+					Kind: "ConfigMap",
+					Name: "foo",
+					Key:  "values-1.yaml",
+				},
+			},
+			expected: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "configmap-vol-foo-0",
+							MountPath: "/etc/config/foo/values-0.yaml",
+						},
+						{
+							Name:      "configmap-vol-foo-1",
+							MountPath: "/etc/config/foo/values-1.yaml",
+						},
+					},
+					Env: []corev1.EnvVar{{
+						Name:  reconcilermanager.HelmValuesFrom,
+						Value: filepath.Join("/etc/config/foo/values-0.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/foo/values-1.yaml", reconcilermanager.HelmConfigMapRef),
+					}},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "configmap-vol-foo-0",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "foo",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values-0.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+					{
+						Name: "configmap-vol-foo-1",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "foo",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values-1.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			container := corev1.Container{}
+			spec := corev1.PodSpec{Containers: []corev1.Container{container}}
+			mountConfigMapValuesFiles(&spec, &spec.Containers[0], tc.input)
+			require.Equal(t, tc.expected, spec)
 		})
 	}
 }

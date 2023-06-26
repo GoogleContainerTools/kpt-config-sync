@@ -43,7 +43,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	parseDeployment = parsedDeployment
 
 	t.Log("building RepoSyncReconciler")
-	rs := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
@@ -298,7 +298,7 @@ func TestRepoSyncReconcilerAuthSecretDriftProtection(t *testing.T) {
 
 func testRepoSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyFunc func(client.ObjectKey) client.ObjectKey, modify, validate func(client.Object) error) {
 	t.Log("building RepoSyncReconciler")
-	syncObj := repoSync(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	syncObj := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
 	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)

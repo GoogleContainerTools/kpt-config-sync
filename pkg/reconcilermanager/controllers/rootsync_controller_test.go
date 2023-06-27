@@ -132,6 +132,7 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
+		helmSyncVersionPollingPeriod,
 		cs.Client,
 		cs.Client,
 		cs.DynamicClient,

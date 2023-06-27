@@ -69,20 +69,21 @@ type RepoSyncReconciler struct {
 }
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
-func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
+func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod, helmSyncVersionPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
 	return &RepoSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			loggingController: loggingController{
 				log: log,
 			},
-			clusterName:             clusterName,
-			client:                  client,
-			dynamicClient:           dynamicClient,
-			watcher:                 watcher,
-			scheme:                  scheme,
-			reconcilerPollingPeriod: reconcilerPollingPeriod,
-			hydrationPollingPeriod:  hydrationPollingPeriod,
-			syncKind:                configsync.RepoSyncKind,
+			clusterName:                  clusterName,
+			client:                       client,
+			dynamicClient:                dynamicClient,
+			watcher:                      watcher,
+			scheme:                       scheme,
+			reconcilerPollingPeriod:      reconcilerPollingPeriod,
+			hydrationPollingPeriod:       hydrationPollingPeriod,
+			helmSyncVersionPollingPeriod: helmSyncVersionPollingPeriod,
+			syncKind:                     configsync.RepoSyncKind,
 		},
 	}
 }
@@ -706,7 +707,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace, "")
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace, "", r.helmSyncVersionPollingPeriod.String())
 	}
 	return result
 }

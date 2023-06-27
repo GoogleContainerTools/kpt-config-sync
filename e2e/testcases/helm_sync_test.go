@@ -220,6 +220,18 @@ func TestHelmLatestVersion(t *testing.T) {
 		[]testpredicates.Predicate{testpredicates.HasLabel("version", newVersion)}); err != nil {
 		nt.T.Error(err)
 	}
+
+	newVersion = "3.0.0"
+	if err := remoteHelmChart.UpdateVersion(newVersion); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := remoteHelmChart.Push(); err != nil {
+		nt.T.Fatal("failed to push helm chart update: %v", err)
+	}
+	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
+		[]testpredicates.Predicate{testpredicates.HasLabel("version", newVersion)}); err != nil {
+		nt.T.Error(err)
+	}
 }
 
 // TestHelmVersionRange verifies the Config Sync behavior for helm charts when helm.spec.version is specified as a range.

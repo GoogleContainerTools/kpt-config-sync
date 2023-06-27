@@ -50,6 +50,10 @@ var (
 		controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
 		"Period of time between checking the filesystem for source updates to render.")
 
+	helmSyncVersionPollingPeriod = flag.Duration("helm-sync-version-polling-period",
+		controllers.PollingPeriod(reconcilermanager.HelmSyncVersionPollingPeriod, configsync.DefaultHelmSyncVersionPollingPeriod),
+		"Period of time between checking the the latest version of a helm chart in helm-sync.")
+
 	setupLog = ctrl.Log.WithName("setup")
 )
 
@@ -71,8 +75,8 @@ func main() {
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())
 
-	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
-		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
+	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s; --helm-sync-version-polling-period=%s",
+		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, *helmSyncVersionPollingPeriod))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: core.Scheme,
@@ -100,7 +104,7 @@ func main() {
 	}
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
-	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, *helmSyncVersionPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
@@ -109,7 +113,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, *helmSyncVersionPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())

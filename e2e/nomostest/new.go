@@ -249,12 +249,18 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
 	}
 
+	// TODO: Try speeding up the reconciler and hydration polling.
+	// It seems that speeding them up too much can cause failures in
+	// our tests, so we will have to experiment and investigate to
+	// see how much we can speed it up.
+	// See original discussion in https://github.com/GoogleContainerTools/kpt-config-sync/pull/707#discussion_r1240911054
+
 	// Speed up the delay between sync attempts to speed up testing
 	// (default: 15s), but leave the remediator (paused while syncing) and retry
 	// code (1s delay) time to execute between sync attempts.
-	nt.ReconcilerPollingPeriod = 2 * time.Second
+	nt.ReconcilerPollingPeriod = 15 * time.Second
 	// Speed up the delay between rendering attempts to speed up testing (default: 5s)
-	nt.HydrationPollingPeriod = 1 * time.Second
+	nt.HydrationPollingPeriod = 5 * time.Second
 
 	// init the Client & WatchClient
 	nt.RenewClient()

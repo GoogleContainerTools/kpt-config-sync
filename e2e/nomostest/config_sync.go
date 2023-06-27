@@ -90,10 +90,18 @@ var (
 	hydrationPollingPeriod time.Duration
 )
 
-// IsReconcilerManagerConfigMap returns true if passed obj is the
+// IsReconcilerTemplateConfigMap returns true if passed obj is the
 // reconciler-manager ConfigMap reconciler-manager-cm in config-management namespace.
-func IsReconcilerManagerConfigMap(obj client.Object) bool {
+func IsReconcilerTemplateConfigMap(obj client.Object) bool {
 	return obj.GetName() == "reconciler-manager-cm" &&
+		obj.GetNamespace() == "config-management-system" &&
+		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
+}
+
+// IsReconcilerManagerConfigMap returns true if passed obj is the
+// reconciler-manager ConfigMap reconciler-manager in config-management namespace.
+func IsReconcilerManagerConfigMap(obj client.Object) bool {
+	return obj.GetName() == "reconciler-manager" &&
 		obj.GetNamespace() == "config-management-system" &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
@@ -114,7 +122,7 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 		return err
 	}
 	for _, obj := range objs {
-		if !IsReconcilerManagerConfigMap(obj) {
+		if !IsReconcilerTemplateConfigMap(obj) {
 			continue
 		}
 		nt.T.Logf("ResetReconcilerManagerConfigMap obj: %v", core.GKNN(obj))
@@ -299,7 +307,7 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 		if !isPSPCluster() && obj.GetName() == "acm-psp" {
 			continue
 		}
-		if IsReconcilerManagerConfigMap(obj) {
+		if IsReconcilerTemplateConfigMap(obj) {
 			// Mark that we've found the ReconcilerManager ConfigMap.
 			// This way we know we've enabled debug mode.
 			found = true
@@ -524,7 +532,7 @@ func setReconcilerDebugMode(obj client.Object) error {
 	if obj == nil {
 		return testpredicates.ErrObjectNotFound
 	}
-	if !IsReconcilerManagerConfigMap(obj) {
+	if !IsReconcilerTemplateConfigMap(obj) {
 		return nil
 	}
 

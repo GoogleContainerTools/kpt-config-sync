@@ -75,8 +75,8 @@ func main() {
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())
 
-	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
-		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
+	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s; --helm-sync-version-polling-period=%s",
+		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod, *helmSyncVersionPollingPeriod))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: core.Scheme,

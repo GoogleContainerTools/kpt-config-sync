@@ -88,6 +88,8 @@ var (
 	reconcilerPollingPeriod time.Duration
 	// hydrationPollingPeriod specifies hydration-controller polling period as time.Duration
 	hydrationPollingPeriod time.Duration
+	// helmSyncVersionPollingPeriod specifies the helm-sync version polling period as time.Duration.
+	helmSyncVersionPollingPeriod time.Duration
 )
 
 // IsReconcilerTemplateConfigMap returns true if passed obj is the
@@ -147,6 +149,8 @@ func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
 	}
 	reconcilerPollingPeriod = nt.ReconcilerPollingPeriod
 	hydrationPollingPeriod = nt.HydrationPollingPeriod
+	helmSyncVersionPollingPeriod = nt.HelmSyncVersionPollingPeriod
+
 	objs, err = multiRepoObjects(objs,
 		setReconcilerDebugMode,
 		setPollingPeriods,
@@ -594,6 +598,7 @@ func setPollingPeriods(obj client.Object) error {
 
 	cm.Data[reconcilermanager.ReconcilerPollingPeriod] = reconcilerPollingPeriod.String()
 	cm.Data[reconcilermanager.HydrationPollingPeriod] = hydrationPollingPeriod.String()
+	cm.Data[reconcilermanager.HelmSyncVersionPollingPeriod] = helmSyncVersionPollingPeriod.String()
 	return nil
 }
 

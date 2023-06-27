@@ -128,7 +128,7 @@ func main() {
 			Password:        *flPassword,
 		}
 
-		var refreshVersion bool
+		refreshVersion := false
 		if initialSync || time.Now().After(start.Add(duration)) {
 			refreshVersion = true
 			start = time.Now()

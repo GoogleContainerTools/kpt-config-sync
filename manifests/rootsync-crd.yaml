@@ -1241,8 +1241,8 @@ spec:
                       in later files to override the value from earlier files. This
                       is equivalent to passing in multiple valuesFiles to Helm CLI.
                       'merge' results in the duplicated keys being merged together
-                      (with list elements concatenated), where later files still override
-                      the values from earlier files for scalar values.
+                      (maps will be merged, lists will be concatenated, and scalars
+                      will be overriden).
                     enum:
                     - override
                     - merge

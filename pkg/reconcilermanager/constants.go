@@ -147,7 +147,7 @@ const (
 	HelmValuesFrom = "HELM_VALUES_FROM"
 
 	// HelmValuesKeyMergeMode is the OS env variable key for Helm values files merge strategy.
-	HelmValuesKeyMergeMode = "HELM_VALUES_MERGE_MODE"
+	HelmValuesKeyMergeMode = "HELM_VALUES_KEY_MERGE_MODE"
 
 	//HelmIncludeCRDs is the OS env variable key for whether to include CRDs in helm rendering output.
 	HelmIncludeCRDs = "HELM_INCLUDE_CRDS"

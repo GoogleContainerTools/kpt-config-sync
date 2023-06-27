@@ -77,9 +77,8 @@ type HelmBase struct {
 	// 'override' (default) results in the duplicated keys in later files to
 	// override the value from earlier files. This is equivalent to passing in
 	// multiple valuesFiles to Helm CLI.
-	// 'merge' results in the duplicated keys being merged together (with
-	// list elements concatenated), where later files still override the values from
-	// earlier files for scalar values.
+	// 'merge' results in the duplicated keys being merged together (maps will be
+	// merged, lists will be concatenated, and scalars will be overriden).
 	// +kubebuilder:validation:Enum=override;merge
 	// +kubebuilder:default:=override
 	// +optional

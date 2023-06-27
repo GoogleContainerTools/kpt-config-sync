@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -69,6 +70,9 @@ func main() {
 
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())
+
+	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
+		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: core.Scheme,

@@ -98,6 +98,14 @@ func IsReconcilerManagerCmConfigMap(obj client.Object) bool {
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
 
+// IsReconcilerManagerConfigMap returns true if passed obj is the
+// reconciler-manager ConfigMap reconciler-manager in config-management namespace.
+func IsReconcilerManagerConfigMap(obj client.Object) bool {
+	return obj.GetName() == "reconciler-manager" &&
+		obj.GetNamespace() == "config-management-system" &&
+		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
+}
+
 // isOtelCollectorDeployment returns true if passed obj is the
 // otel-collector Deployment in the config-management-monitoring namespace.
 func isOtelCollectorDeployment(obj client.Object) bool {
@@ -575,7 +583,7 @@ func setPollingPeriods(obj client.Object) error {
 	if obj == nil {
 		return testpredicates.ErrObjectNotFound
 	}
-	if !IsReconcilerManagerCmConfigMap(obj) {
+	if !IsReconcilerManagerConfigMap(obj) {
 		return nil
 	}
 

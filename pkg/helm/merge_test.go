@@ -49,12 +49,19 @@ namespaces:
     name: bar-rb
 `,
 		},
-		"map overrides": {
+		"map overrides and merges": {
 			file1: `  
-foo: bar-1`,
+foo: bar-1
+abc:
+  def: efg `,
 			file2: `  
-foo: bar-2`,
-			expected: `foo: bar-1
+foo: bar-2
+abc:
+  hij: klm`,
+			expected: `abc:
+  def: efg
+  hij: klm
+foo: bar-1
 `,
 		},
 	}
@@ -112,17 +119,27 @@ namespaces:
     name: foo-rb
 `,
 		},
-		"map overrides": { // last file should take precedence
+		"map overrides and merges": { // last file should take precedence
 			file1: `  
 abc: def
 foo: bar-1
+a:
+  b: c
 `,
 			file2: `  
 abc: efg
-foo: bar-2`,
+foo: bar-2
+a:
+  d: f`,
 			file3: `
-foo: bar-3`,
-			expected: `abc: efg
+foo: bar-3
+a:
+  g: h`,
+			expected: `a:
+  b: c
+  d: f
+  g: h
+abc: efg
 foo: bar-3
 `,
 		},

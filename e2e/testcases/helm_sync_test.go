@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	helmpkg "kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -422,6 +423,8 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
+	// the default valuesMergeMode is 'override', which results in duplicated keys from later files to override
+	// the keys from previous files.
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
@@ -432,8 +435,9 @@ wordpressEmail: override-this@example.com`,
 	}
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesMergeMode set to 'merge'")
-	nt.MustMergePatch(rs, `{"spec": {"helm": {"valuesMergeMode": "merge"}}}`)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesMergeMode": "%s"}}}`, helmpkg.ValuesMergeModeMerge))
 
+	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),

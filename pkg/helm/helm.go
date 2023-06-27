@@ -38,6 +38,17 @@ import (
 )
 
 const (
+	// ValuesMergeModeMerge results in duplicate keys in different valuesFiles to
+	// be merged together.
+	ValuesMergeModeMerge = "merge"
+
+	// ValuesMergeModeOverride results in duplicate keys in different valuesFile to be
+	// overriden by the latter files.
+	ValuesMergeModeOverride = "override"
+
+	// DefaultValuesMergeMode is the default valuesMergeMode if it is not set.
+	DefaultValuesMergeMode = ValuesMergeModeOverride
+
 	// valuesFile is the name of the file created to override defualt chart values.
 	valuesFile = "chart-values.yaml"
 )
@@ -107,7 +118,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	var err error
 	switch h.ValuesMergeMode {
 
-	case "", "override":
+	case "", ValuesMergeModeOverride:
 		for i, vf := range h.ValuesFrom {
 			if vf == "" {
 				continue
@@ -131,7 +142,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			}
 		}
 
-	case "merge":
+	case ValuesMergeModeMerge:
 		var valuesToMerge [][]byte
 		for _, vf := range h.ValuesFrom {
 			if vf == "" {

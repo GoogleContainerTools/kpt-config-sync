@@ -59,19 +59,27 @@ type HelmBase struct {
 
 	// values to use instead of default values that accompany the chart. Format
 	// values the same as default values.yaml. These values will take precedence if
-	// used in conjunction with valuesFrom.
+	// used in conjunction with valuesFrom. How to handle multiple valuesFiles is
+	// determined by `valuesMergeMode`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
 	// valuesFrom holds references to objects in the cluster that represent
 	// values to use instead of default values that accompany the chart. Currently,
 	// only ConfigMaps are supported. Objects listed later will take precedence.
+	// How to handle multiple valuesFiles is determined by `valuesMergeMode`.
 	// +optional
 	ValuesFrom []ValuesFrom `json:"valuesFrom,omitempty"`
 
-	// valuesMergeMode specifies the strategy for handling multiple valueFiles.
-	// Set to 'override' to have each valuesFile sent to helm CLI individually.
-	// Set to 'merge' to have valuesFiles merged together into one valuesFile.
+	// valuesMergeMode specifies the strategy for handling multiple valueFiles. It
+	// refers to how values are merged together if multiple valuesFile define the
+	// same key. Can be 'override' or 'merge'.
+	// 'override' (default) results in the duplicated keys in later files to
+	// override the value from earlier files. This is equivalent to passing in
+	// multiple valuesFiles to Helm CLI.
+	// 'merge' results in the duplicated keys being merged together (with
+	// list elements concatenated), where later files still override the values from
+	// earlier files for scalar values.
 	// +kubebuilder:validation:Enum=override;merge
 	// +kubebuilder:default:=override
 	// +optional

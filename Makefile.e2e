@@ -7,6 +7,9 @@ E2E_PARAMS := \
 
 GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
 
+E2E_CREATE_CLUSTERS ?= "true"
+E2E_DESTROY_CLUSTERS ?= "true"
+
 # Runs nomos vet locally for example repos.
 # Requires kubeconfig set up properly with Nomos cluster.
 # This is now a duplicate of cli.bats from the e2e tests framework,
@@ -41,10 +44,12 @@ test-e2e-nobuild: install-kustomize install-helm
 .PHONY: test-e2e-gke-nobuild
 test-e2e-gke-nobuild:
 	$(MAKE) test-e2e-nobuild \
-		E2E_ARGS="$(E2E_ARGS) --timeout=$(GKE_E2E_TIMEOUT) --share-test-env --create-clusters --test-cluster=gke" \
+		E2E_ARGS="$(E2E_ARGS) --timeout=$(GKE_E2E_TIMEOUT) --share-test-env --test-cluster=gke" \
 		GCP_PROJECT=$(GCP_PROJECT) \
 		GCP_ZONE=$(GCP_ZONE) \
-		GCP_REGION=$(GCP_REGION)
+		GCP_REGION=$(GCP_REGION) \
+		E2E_CREATE_CLUSTERS=$(E2E_CREATE_CLUSTERS) \
+		E2E_DESTROY_CLUSTERS=$(E2E_DESTROY_CLUSTERS)
 
 # Build Config Sync and run e2e tests on GKE
 .PHONY: test-e2e-gke

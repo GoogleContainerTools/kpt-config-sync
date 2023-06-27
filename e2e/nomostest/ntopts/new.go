@@ -63,10 +63,6 @@ type New struct {
 	// TestFeature is the feature that the test verifies
 	TestFeature testing.Feature
 
-	// IsEphemeralCluster indicates whether the cluster is ephemeral, i.e. created
-	// and destroyed in the scope of test execution.
-	IsEphemeralCluster bool
-
 	Nomos
 	MultiRepo
 	TestType

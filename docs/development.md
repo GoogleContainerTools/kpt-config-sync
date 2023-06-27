@@ -122,7 +122,7 @@ deleted after the test execution.
 ```shell
 # GKE cluster options can be provided as command line flags
 go test ./e2e/... --e2e --test.v --share-test-env --gcp-project=<PROJECT_ID> --test-cluster=gke \
-  --create-clusters --num-clusters=5 --gcp-zone=us-central1-a \
+  --create-clusters=true --num-clusters=5 --gcp-zone=us-central1-a \
   --test.run (test name regexp)
 ```
 

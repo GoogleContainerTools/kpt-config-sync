@@ -102,12 +102,54 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 
 // Cluster is an interface for a target k8s cluster used by the e2e tests
 type Cluster interface {
+	// Exists whether the cluster exists
+	Exists() (bool, error)
 	// Create the k8s cluster
 	Create() error
 	// Delete the k8s cluster
 	Delete() error
 	// Connect to the k8s cluster (generate kubeconfig)
 	Connect() error
+}
+
+func upsertCluster(t testing.NTB, cluster Cluster, opts *ntopts.New) {
+	exists, err := cluster.Exists()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists && *e2e.CreateClusters != e2e.CreateClustersLazy {
+		t.Fatalf("cluster %s already exists and create-clusters=%s", opts.ClusterName, *e2e.CreateClusters)
+	}
+	t.Cleanup(func() {
+		if !*e2e.DestroyClusters {
+			t.Logf("[WARNING] Skipping deletion of %s cluster %s (--destroy-clusters=false)", *e2e.TestCluster, opts.ClusterName)
+			return
+		} else if t.Failed() && *e2e.Debug {
+			t.Logf("[WARNING] Skipping deletion of %s cluster %s (tests failed with --debug)", *e2e.TestCluster, opts.ClusterName)
+			return
+		}
+		deleteStart := time.Now()
+		t.Logf("Deleting %s cluster %s at %s",
+			*e2e.TestCluster, opts.ClusterName, deleteStart.Format(time.RFC3339))
+		defer func() {
+			t.Logf("took %s to delete %s cluster %s",
+				time.Since(deleteStart), *e2e.TestCluster, opts.ClusterName)
+		}()
+		if err := cluster.Delete(); err != nil {
+			t.Error(err)
+		}
+	})
+	if exists && *e2e.CreateClusters == e2e.CreateClustersLazy {
+		return
+	}
+	createStart := time.Now()
+	t.Logf("Creating %s cluster %s at %s",
+		*e2e.TestCluster, opts.ClusterName, createStart.Format(time.RFC3339))
+	if err := cluster.Create(); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("took %s to create %s cluster %s",
+		time.Since(createStart), *e2e.TestCluster, opts.ClusterName)
 }
 
 // RestConfig sets up the config for creating a Client connection to a K8s cluster.
@@ -117,9 +159,7 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	opts.KubeconfigPath = filepath.Join(opts.TmpDir, clusters.Kubeconfig)
 	t.Logf("kubeconfig will be created at %s", opts.KubeconfigPath)
 	t.Logf("Connect to %s cluster using:\nexport KUBECONFIG=%s", *e2e.TestCluster, opts.KubeconfigPath)
-	createCluster := true
 	opts.ClusterName = opts.Name
-	opts.IsEphemeralCluster = true
 	var cluster Cluster
 	switch strings.ToLower(*e2e.TestCluster) {
 	case e2e.Kind:
@@ -131,11 +171,6 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 			KubernetesVersion: *e2e.KubernetesVersion,
 		}
 	case e2e.GKE:
-		if !*e2e.CreateClusters {
-			createCluster = false
-			opts.ClusterName = *e2e.GCPCluster
-			opts.IsEphemeralCluster = false
-		}
 		cluster = &clusters.GKECluster{
 			T:              t,
 			Name:           opts.ClusterName,
@@ -144,31 +179,8 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}
-	if createCluster {
-		t.Cleanup(func() {
-			if t.Failed() && *e2e.Debug {
-				t.Logf("[WARNING] Skipping deletion of %s cluster %s", *e2e.TestCluster, opts.ClusterName)
-				return
-			}
-			deleteStart := time.Now()
-			t.Logf("Deleting %s cluster %s at %s",
-				*e2e.TestCluster, opts.ClusterName, deleteStart.Format(time.RFC3339))
-			defer func() {
-				t.Logf("took %s to delete %s cluster %s",
-					time.Since(deleteStart), *e2e.TestCluster, opts.ClusterName)
-			}()
-			if err := cluster.Delete(); err != nil {
-				t.Error(err)
-			}
-		})
-		createStart := time.Now()
-		t.Logf("Creating %s cluster %s at %s",
-			*e2e.TestCluster, opts.ClusterName, createStart.Format(time.RFC3339))
-		if err := cluster.Create(); err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("took %s to create %s cluster %s",
-			time.Since(createStart), *e2e.TestCluster, opts.ClusterName)
+	if *e2e.CreateClusters != e2e.CreateClustersDisabled {
+		upsertCluster(t, cluster, opts)
 	}
 	t.Logf("Connecting to %s cluster %s",
 		*e2e.TestCluster, opts.ClusterName)

@@ -313,15 +313,21 @@ func InitSharedEnvironments() error {
 	}
 	timeStamp := time.Now().Unix()
 	tg := taskgroup.New()
-	for x := 0; x < e2e.NumParallel(); x++ {
-		name := fmt.Sprintf("cs-e2e-%v-%v", timeStamp, x)
+	clusters := *e2e.ClusterNames
+	if len(clusters) == 0 { // generate names for ephemeral clusters
+		for x := 0; x < e2e.NumParallel(); x++ {
+			clusters = append(clusters, fmt.Sprintf("cs-e2e-%v-%v", timeStamp, x))
+		}
+	}
+	for _, name := range clusters {
+		clusterName := name
 		tg.Go(func() (err error) {
 			defer func() {
 				if recoverErr := recover(); recoverErr != nil {
-					err = errors.Errorf("recovered from panic in InitSharedEnvironments (%s): %v", name, recoverErr)
+					err = errors.Errorf("recovered from panic in InitSharedEnvironments (%s): %v", clusterName, recoverErr)
 				}
 			}()
-			return newSharedNT(name)
+			return newSharedNT(clusterName)
 		})
 	}
 	return tg.Wait()

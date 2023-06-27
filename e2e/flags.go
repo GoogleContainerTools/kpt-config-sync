@@ -19,12 +19,35 @@ package e2e
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	// kubectl auth provider plugins
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"kpt.dev/configsync/pkg/util"
 )
+
+// stringListFlag parses a comma delimited string field into a string slice
+type stringListFlag struct {
+	arr []string
+}
+
+func (i *stringListFlag) String() string {
+	return strings.Join(i.arr, ",")
+}
+
+func (i *stringListFlag) Set(value string) error {
+	i.arr = strings.Split(value, ",")
+	return nil
+}
+
+func newStringListFlag(name string, def []string, usage string) *[]string {
+	lf := &stringListFlag{
+		arr: def,
+	}
+	flag.Var(lf, name, usage)
+	return &lf.arr
+}
 
 // E2E enables running end-to-end tests.
 var E2E = flag.Bool("e2e", false,
@@ -93,6 +116,11 @@ var TestFeatures = flag.String("test-features", "",
 var NumClusters = flag.Int("num-clusters", util.EnvInt("E2E_NUM_CLUSTERS", 1),
 	"Number of parallel test threads to run. Also dictates the number of clusters which will be created in parallel. Overrides the -test.parallel flag.")
 
+// ClusterNames is a list of cluster names to use for the tests. If specified without
+// create-clusters, assumes the clusters were pre-provisioned.
+var ClusterNames = newStringListFlag("cluster-names", util.EnvList("E2E_CLUSTER_NAMES", nil),
+	"List of cluster names to use for the tests. If specified without create-clusters, assumes the clusters were pre-provisioned.")
+
 // Usage indicates to print usage and exit. This is a workaround for the builtin
 // help command of `go test`
 var Usage = flag.Bool("usage", false, "Print usage and exit.")
@@ -141,9 +169,17 @@ var GKENumNodes = flag.Int("gke-num-nodes", util.EnvInt("GKE_NUM_NODES", Default
 var GKEAutopilot = flag.Bool("gke-autopilot", util.EnvBool("GKE_AUTOPILOT", false),
 	"Whether to create GKE clusters with autopilot enabled.")
 
-// CreateClusters indicates the test framework should create GKE clusters.
-var CreateClusters = flag.Bool("create-clusters", util.EnvBool("CREATE_CLUSTERS", false),
-	"Whether to create GKE clusters, otherwise will assume pre-provisioned GKE clusters.")
+// CreateClusters indicates the test framework should create clusters.
+var CreateClusters = flag.String("create-clusters", util.EnvString("E2E_CREATE_CLUSTERS", CreateClustersDisabled),
+	fmt.Sprintf("Whether to create clusters, otherwise will assume pre-provisioned clusters. Allowed values: [%s]",
+		strings.Join(CreateClustersAllowedValues, ", ")))
+
+// CreateClustersAllowedValues is a list of allowed values for the create-clusters parameter
+var CreateClustersAllowedValues = []string{CreateClustersEnabled, CreateClustersLazy, CreateClustersDisabled}
+
+// DestroyClusters indicates whether to destroy clusters that were created by the test suite after the tests.
+var DestroyClusters = flag.Bool("destroy-clusters", util.EnvBool("E2E_DESTROY_CLUSTERS", true),
+	"Whether to destroy clusters that were created by the test suite after the tests.")
 
 const (
 	// Kind indicates creating a Kind cluster for testing.
@@ -158,6 +194,14 @@ const (
 	DefaultGKEMachineType = "e2-standard-4"
 	// DefaultGKENumNodes is the default number of nodes to use when creating a GKE cluster
 	DefaultGKENumNodes = 3
+	// CreateClustersEnabled indicates that clusters should be created and error
+	// if the cluster already exists.
+	CreateClustersEnabled = "true"
+	// CreateClustersLazy indicates to use clusters that exist and create them
+	// if they don't
+	CreateClustersLazy = "lazy"
+	// CreateClustersDisabled indicates to not create clusters
+	CreateClustersDisabled = "false"
 )
 
 const (

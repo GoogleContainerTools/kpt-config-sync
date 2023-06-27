@@ -56,6 +56,10 @@ const (
 	// filesystem for source updates to sync, in seconds.
 	DefaultReconcilerPollingPeriodSeconds = 15
 
+	// DefaultHelmSyncVersionPollingPeriod is time delay between polling for
+	// helm chart version updates in helm-sync.
+	DefaultHelmSyncVersionPollingPeriod = 1 * time.Hour
+
 	// DefaultReconcilerPollingPeriod is the time delay between polling the
 	// filesystem for source updates to sync.
 	DefaultReconcilerPollingPeriod = DefaultReconcilerPollingPeriodSeconds * time.Second

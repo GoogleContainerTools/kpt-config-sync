@@ -240,18 +240,23 @@ func (h *Hydrator) registryLogin(ctx context.Context) error {
 }
 
 // HelmTemplate runs helm template with args
-func (h *Hydrator) HelmTemplate(ctx context.Context) error {
+func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error {
 	var loggedIn bool
 
 	if isRange(h.Version) {
-		klog.Infof("version range %s detected, fetching chart version\n", h.Version)
-		if err := h.registryLogin(ctx); err != nil {
-			return err
-		}
-		loggedIn = true
+		if refreshVersion {
+			klog.Infof("version range %s detected, fetching chart version\n", h.Version)
+			if err := h.registryLogin(ctx); err != nil {
+				return err
+			}
+			loggedIn = true
 
-		if err := h.getChartVersion(ctx); err != nil {
-			return err
+			if err := h.getChartVersion(ctx); err != nil {
+				return err
+			}
+		} else {
+			klog.Infof("version range %s detected, waiting to refresh\n", h.Version)
+			return nil
 		}
 	}
 

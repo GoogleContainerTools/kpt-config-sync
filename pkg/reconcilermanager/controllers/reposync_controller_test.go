@@ -79,6 +79,7 @@ const (
 
 var filesystemPollingPeriod time.Duration
 var hydrationPollingPeriod time.Duration
+var helmSyncVersionPollingPeriod time.Duration
 var nsReconcilerName = core.NsReconcilerName(reposyncNs, reposyncName)
 var reconcilerDeploymentReplicaCount int32 = 1
 
@@ -127,6 +128,7 @@ func init() {
 		klog.Exitf("failed to parse polling period: %q, got error: %v, want error: nil", pollingPeriod, err)
 	}
 	hydrationPollingPeriod = filesystemPollingPeriod
+	helmSyncVersionPollingPeriod = filesystemPollingPeriod
 }
 
 func reposyncSourceType(sourceType string) func(*v1beta1.RepoSync) {
@@ -296,6 +298,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
+		helmSyncVersionPollingPeriod,
 		cs.Client,
 		cs.Client,
 		cs.DynamicClient,

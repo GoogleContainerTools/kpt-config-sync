@@ -101,6 +101,10 @@ const (
 	// HydrationPollingPeriod defines how often the hydration controller should
 	// poll the filesystem for rendering the DRY configs.
 	HydrationPollingPeriod = "HYDRATION_POLLING_PERIOD"
+
+	// HelmSyncVersionPollingPeriod defines how often the hydration controller should
+	// poll the filesystem for rendering the DRY configs.
+	HelmSyncVersionPollingPeriod = "HELM_SYNC_VERSION_POLLING_PERIOD"
 )
 
 const (

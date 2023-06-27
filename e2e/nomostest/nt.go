@@ -138,6 +138,10 @@ type NT struct {
 	// poll the filesystem for rendering the DRY configs.
 	HydrationPollingPeriod time.Duration
 
+	// HelmSyncVersionPeriod defines how often helm-sync polls for a new chart
+	// verison.
+	HelmSyncVersionPollingPeriod time.Duration
+
 	// gitPrivateKeyPath is the path to the private key used for communicating with the Git server.
 	gitPrivateKeyPath string
 

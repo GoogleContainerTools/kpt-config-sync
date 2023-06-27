@@ -38,16 +38,16 @@ import (
 )
 
 const (
-	// ValuesMergeModeMerge results in duplicate keys in different valuesFiles to
+	// ValuesKeyMergeModeMerge results in duplicate keys in different valuesFiles to
 	// be merged together.
-	ValuesMergeModeMerge = "merge"
+	ValuesKeyMergeModeMerge = "merge"
 
-	// ValuesMergeModeOverride results in duplicate keys in different valuesFile to be
+	// ValuesKeyMergeModeOverride results in duplicate keys in different valuesFile to be
 	// overriden by the latter files.
-	ValuesMergeModeOverride = "override"
+	ValuesKeyMergeModeOverride = "override"
 
-	// DefaultValuesMergeMode is the default valuesMergeMode if it is not set.
-	DefaultValuesMergeMode = ValuesMergeModeOverride
+	// DefaultValuesKeyMergeMode is the default valuesKeyMergeMode if it is not set.
+	DefaultValuesKeyMergeMode = ValuesKeyMergeModeOverride
 
 	// valuesFile is the name of the file created to override defualt chart values.
 	valuesFile = "chart-values.yaml"
@@ -60,21 +60,21 @@ var (
 
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
-	Chart           string
-	Repo            string
-	Version         string
-	ReleaseName     string
-	Namespace       string
-	DeployNamespace string
-	Values          string
-	ValuesFrom      []string
-	IncludeCRDs     string
-	HydrateRoot     string
-	Dest            string
-	Auth            configsync.AuthType
-	UserName        string
-	Password        string
-	ValuesMergeMode string
+	Chart              string
+	Repo               string
+	Version            string
+	ReleaseName        string
+	Namespace          string
+	DeployNamespace    string
+	Values             string
+	ValuesFrom         []string
+	IncludeCRDs        string
+	HydrateRoot        string
+	Dest               string
+	Auth               configsync.AuthType
+	UserName           string
+	Password           string
+	ValuesKeyMergeMode string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -116,9 +116,9 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	var err error
-	switch h.ValuesMergeMode {
+	switch h.ValuesKeyMergeMode {
 
-	case "", ValuesMergeModeOverride:
+	case "", ValuesKeyMergeModeOverride:
 		for i, vf := range h.ValuesFrom {
 			if vf == "" {
 				continue
@@ -142,7 +142,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			}
 		}
 
-	case ValuesMergeModeMerge:
+	case ValuesKeyMergeModeMerge:
 		var valuesToMerge [][]byte
 		for _, vf := range h.ValuesFrom {
 			if vf == "" {
@@ -171,7 +171,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesMergeMode)
+		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesKeyMergeMode)
 	}
 
 	return args, nil

@@ -357,7 +357,7 @@ image:
 }
 
 // TestHelmConfigMapMerge can run on both Kind and GKE clusters.
-// It tests RSync spec.helm.valuesMergeMode field.
+// It tests RSync spec.helm.valuesKeyMergeMode field.
 func TestHelmConfigMapMerge(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
@@ -423,7 +423,7 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	// the default valuesMergeMode is 'override', which results in duplicated keys from later files to override
+	// the default valuesKeyMergeMode is 'override', which results in duplicated keys from later files to override
 	// the keys from previous files.
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
@@ -434,8 +434,8 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesMergeMode set to 'merge'")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesMergeMode": "%s"}}}`, helmpkg.ValuesMergeModeMerge))
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesKeyMergeMode set to 'merge'")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesKeyMergeMode": "%s"}}}`, helmpkg.ValuesKeyMergeModeMerge))
 
 	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
@@ -689,7 +689,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Delete the ConfigMap with values: labelsTest: first")
+	nt.T.Logf("Delete the ConfigMap with values")
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -699,7 +699,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Reapply the ConfigMap with values")
+	nt.T.Log("Reapply the ConfigMap with values: labelsTest: first")
 	if err := nt.KubeClient.Create(cm1Copy); err != nil {
 		nt.T.Fatal(err)
 	}

@@ -41,7 +41,7 @@ var (
 		"set the helm chart values, will be used to override the default values")
 	flValuesFrom = flag.String("values-from", os.Getenv(reconcilermanager.HelmValuesFrom),
 		"set the helm chart values, will be used to override the default values")
-	flValuesMergeMode = flag.String("values-merge-mode", os.Getenv(reconcilermanager.HelmValuesMergeMode),
+	flValuesKeyMergeMode = flag.String("values-key-merge-mode", os.Getenv(reconcilermanager.HelmValuesKeyMergeMode),
 		"set the helm values file merge strategy")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
 		"include CRDs in the helm rendering output")
@@ -81,7 +81,7 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--valuesFrom", *flValuesFrom, "--valuesMergeMode", *flValuesMergeMode,
+		"--values", *flValues, "--values-from", *flValuesFrom, "--values-key-merge-mode", *flValuesKeyMergeMode,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
@@ -120,21 +120,21 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 
 		hydrator := &helm.Hydrator{
-			Chart:           *flChart,
-			Repo:            *flRepo,
-			Version:         *flVersion,
-			ReleaseName:     *flReleaseName,
-			Namespace:       *flNamespace,
-			DeployNamespace: *flDeployNamespace,
-			Values:          *flValues,
-			ValuesFrom:      strings.Split(*flValuesFrom, ","),
-			ValuesMergeMode: *flValuesMergeMode,
-			IncludeCRDs:     *flIncludeCRDs,
-			Auth:            configsync.AuthType(*flAuth),
-			HydrateRoot:     *flRoot,
-			Dest:            *flDest,
-			UserName:        *flUsername,
-			Password:        *flPassword,
+			Chart:              *flChart,
+			Repo:               *flRepo,
+			Version:            *flVersion,
+			ReleaseName:        *flReleaseName,
+			Namespace:          *flNamespace,
+			DeployNamespace:    *flDeployNamespace,
+			Values:             *flValues,
+			ValuesFrom:         strings.Split(*flValuesFrom, ","),
+			ValuesKeyMergeMode: *flValuesKeyMergeMode,
+			IncludeCRDs:        *flIncludeCRDs,
+			Auth:               configsync.AuthType(*flAuth),
+			HydrateRoot:        *flRoot,
+			Dest:               *flDest,
+			UserName:           *flUsername,
+			Password:           *flPassword,
 		}
 
 		refreshVersion := false

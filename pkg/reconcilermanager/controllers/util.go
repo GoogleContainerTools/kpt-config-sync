@@ -248,8 +248,8 @@ func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace, deployNamespace,
 		Name:  reconcilermanager.HelmSyncVersionPollingPeriod,
 		Value: versionPollPeriod,
 	}, corev1.EnvVar{
-		Name:  reconcilermanager.HelmValuesMergeMode,
-		Value: helmBase.ValuesMergeMode,
+		Name:  reconcilermanager.HelmValuesKeyMergeMode,
+		Value: helmBase.ValuesKeyMergeMode,
 	})
 	return result
 }

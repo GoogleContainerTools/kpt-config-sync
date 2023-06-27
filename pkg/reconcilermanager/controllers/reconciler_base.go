@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -423,12 +424,12 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
-func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFrom []v1beta1.ValuesFrom) {
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFrom []v1beta1.ValuesFileSources) {
 	var valuesFiles []string
 
 	for i, vf := range valuesFrom {
 		fileName := reconcilermanager.HelmConfigMapRef
-		mountPath := filepath.Join("/etc/config", vf.Name, vf.Key)
+		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := "configmap-vol-" + strings.ToLower(vf.Name) + fmt.Sprintf("-%d", i)
 
@@ -440,7 +441,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 						Name: vf.Name,
 					},
 					Items: []corev1.KeyToPath{{
-						Key:  vf.Key,
+						Key:  vf.ValuesFile,
 						Path: fileName,
 					}},
 				},
@@ -454,7 +455,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 
 	if len(valuesFiles) > 0 {
 		c.Env = append(c.Env, corev1.EnvVar{
-			Name:  reconcilermanager.HelmValuesFrom,
+			Name:  reconcilermanager.HelmValuesFileSources,
 			Value: strings.Join(valuesFiles, ","),
 		})
 	}
@@ -626,9 +627,11 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	}
 	// Else - the object is being deleted.
 
+	klog.Infoln("checking finalizers")
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerFinalizer) {
 		// The object is being deleted, but the reconciler finalizer is still running.
 		// Wait for the reconciler finalizer to complete.
+		klog.Infoln("")
 		r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
 		return nil
 	}

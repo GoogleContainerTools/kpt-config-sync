@@ -38,16 +38,16 @@ import (
 )
 
 const (
-	// ValuesKeyMergeModeMerge results in duplicate keys in different valuesFiles to
+	// ValuesFileApplyStrategyMerge results in duplicate keys in different valuesFiles to
 	// be merged together.
-	ValuesKeyMergeModeMerge = "merge"
+	ValuesFileApplyStrategyMerge = "merge"
 
-	// ValuesKeyMergeModeOverride results in duplicate keys in different valuesFile to be
+	// ValuesFileApplyStrategyOverride results in duplicate keys in different valuesFile to be
 	// overriden by the latter files.
-	ValuesKeyMergeModeOverride = "override"
+	ValuesFileApplyStrategyOverride = "override"
 
-	// DefaultValuesKeyMergeMode is the default valuesKeyMergeMode if it is not set.
-	DefaultValuesKeyMergeMode = ValuesKeyMergeModeOverride
+	// DefaultValuesFileApplyStrategy is the default valuesFileApplyStrategy if it is not set.
+	DefaultValuesFileApplyStrategy = ValuesFileApplyStrategyOverride
 
 	// valuesFile is the name of the file created to override defualt chart values.
 	valuesFile = "chart-values.yaml"
@@ -60,21 +60,21 @@ var (
 
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
-	Chart              string
-	Repo               string
-	Version            string
-	ReleaseName        string
-	Namespace          string
-	DeployNamespace    string
-	Values             string
-	ValuesFrom         []string
-	IncludeCRDs        string
-	HydrateRoot        string
-	Dest               string
-	Auth               configsync.AuthType
-	UserName           string
-	Password           string
-	ValuesKeyMergeMode string
+	Chart                   string
+	Repo                    string
+	Version                 string
+	ReleaseName             string
+	Namespace               string
+	DeployNamespace         string
+	Values                  string
+	ValuesFileSources       []string
+	IncludeCRDs             string
+	HydrateRoot             string
+	Dest                    string
+	Auth                    configsync.AuthType
+	UserName                string
+	Password                string
+	ValuesFileApplyStrategy string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -116,19 +116,19 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	var err error
-	switch h.ValuesKeyMergeMode {
+	switch h.ValuesFileApplyStrategy {
 
-	case "", ValuesKeyMergeModeOverride:
-		for i, vf := range h.ValuesFrom {
-			if vf == "" {
+	case "", ValuesFileApplyStrategyOverride:
+		for i, vs := range h.ValuesFileSources {
+			if vs == "" {
 				continue
 			}
-			val, err := readFile(vf)
+			val, err := readFile(vs)
 			if err != nil {
 				return nil, err
 			}
 
-			klog.Infof("values from ConfigMap %s\n: %s\n", vf, val)
+			klog.Infof("values from ConfigMap %s\n: %s\n", vs, val)
 			args, err = writeValuesPath([]byte(val), fmt.Sprintf("values-file-%d-", i), args)
 			if err != nil {
 				return nil, err
@@ -142,13 +142,13 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			}
 		}
 
-	case ValuesKeyMergeModeMerge:
+	case ValuesFileApplyStrategyMerge:
 		var valuesToMerge [][]byte
-		for _, vf := range h.ValuesFrom {
-			if vf == "" {
+		for _, vs := range h.ValuesFileSources {
+			if vs == "" {
 				continue
 			}
-			val, err := readFile(vf)
+			val, err := readFile(vs)
 			if err != nil {
 				return nil, err
 			}
@@ -171,7 +171,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesKeyMergeMode)
+		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesFileApplyStrategy)
 	}
 
 	return args, nil

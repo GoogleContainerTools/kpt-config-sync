@@ -521,7 +521,7 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 	// We add watches dynamically at runtime based on the RepoSync namespace
 	// in order to avoid watching ConfigMaps in the entire cluster.
 	if rs == nil || rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil ||
-		len(rs.Spec.Helm.ValuesFrom) == 0 {
+		len(rs.Spec.Helm.ValuesFileSources) == 0 {
 		// TODO: When it's available, we should remove unneeded watches from the controller
 		// when all RepoSyncs with ConfigMap references in a particular namespace are
 		// deleted (or are no longer referencing ConfigMaps).
@@ -697,16 +697,16 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 			// other source types
 			continue
 		}
-		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFrom) == 0 {
+		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileSources) == 0 {
 			continue
 		}
 
 		var referenced bool
 		var key string
-		for _, vf := range rs.Spec.Helm.ValuesFrom {
+		for _, vf := range rs.Spec.Helm.ValuesFileSources {
 			if vf.Name == objRef.Name {
 				referenced = true
-				key = vf.Key
+				key = vf.ValuesFile
 				break
 			}
 		}
@@ -867,7 +867,7 @@ func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoS
 		if err := validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
 			return err
 		}
-		return validate.CheckValuesFromRefs(ctx, r.client, rs.Spec.Helm.ValuesFrom, rs)
+		return validate.CheckValuesFileSourcesRefs(ctx, r.client, rs.Spec.Helm.ValuesFileSources, rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}
@@ -973,7 +973,7 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	return true, nil
 }
 
-func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar, newValuesFrom []v1beta1.ValuesFrom) mutateFn {
+func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar, newValuesFrom []v1beta1.ValuesFileSources) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -1107,13 +1107,13 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 	}
 }
 
-func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFrom, error) {
+func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFileSources, error) {
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil {
 		return nil, nil
 	}
 
-	var newValuesFrom []v1beta1.ValuesFrom
-	for _, vf := range rs.Spec.Helm.ValuesFrom {
+	var newValuesFrom []v1beta1.ValuesFileSources
+	for _, vf := range rs.Spec.Helm.ValuesFileSources {
 		objRef := types.NamespacedName{
 			Name:      vf.Name,
 			Namespace: rs.Namespace,
@@ -1123,10 +1123,9 @@ func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.Repo
 		if err != nil {
 			return nil, err
 		}
-		newValuesFrom = append(newValuesFrom, v1beta1.ValuesFrom{
-			Kind: "ConfigMap",
-			Name: newName,
-			Key:  vf.Key,
+		newValuesFrom = append(newValuesFrom, v1beta1.ValuesFileSources{
+			Name:       newName,
+			ValuesFile: vf.ValuesFile,
 		})
 	}
 

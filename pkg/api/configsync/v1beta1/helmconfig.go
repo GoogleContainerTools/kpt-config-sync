@@ -59,20 +59,20 @@ type HelmBase struct {
 
 	// values to use instead of default values that accompany the chart. Format
 	// values the same as default values.yaml. These values will take precedence if
-	// used in conjunction with valuesFrom. How to handle multiple valuesFiles is
-	// determined by `valuesKeyMergeMode`.
+	// used in conjunction with valuesFileSources. How to handle multiple valuesFiles is
+	// determined by `valuesFileApplyStrategy`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
-	// valuesFrom holds references to objects in the cluster that represent
+	// valuesFileSources holds references to objects in the cluster that repremakesent
 	// values to use instead of default values that accompany the chart. Currently,
 	// only ConfigMaps are supported. Objects listed later will take precedence.
-	// How to handle multiple valuesFiles is determined by `valuesKeyMergeMode`.
+	// How to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.
 	// +optional
-	ValuesFrom []ValuesFrom `json:"valuesFrom,omitempty"`
+	ValuesFileSources []ValuesFileSources `json:"valuesFileSources,omitempty"`
 
-	// valuesKeyMergeMode specifies the strategy for handling multiple valueFiles. It
-	// refers to how values are merged together if multiple valuesFile define the
+	// valuesFileApplyStrategy specifies the strategy for handling multiple valueFiles. It
+	// refers to how valuesFiles are applied if multiple valuesFile define the
 	// same key. Can be 'override' or 'merge'.
 	// 'override' (default) results in the duplicated keys in later files to
 	// override the value from earlier files. This is equivalent to passing in
@@ -82,7 +82,7 @@ type HelmBase struct {
 	// +kubebuilder:validation:Enum=override;merge
 	// +kubebuilder:default:=override
 	// +optional
-	ValuesKeyMergeMode string `json:"valuesKeyMergeMode,omitempty"`
+	ValuesFileApplyStrategy string `json:"valuesFileApplyStrategy,omitempty"`
 
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
@@ -117,18 +117,14 @@ type HelmBase struct {
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
 }
 
-// ValuesFrom holds references to objects in the cluster that represent
+// ValuesFileSources holds references to ConfigMap objects in the cluster that represent
 // values to use instead of default values that accompany the chart.
-type ValuesFrom struct {
-	// kind represents the Object kind. Must be `ConfigMap`. Required.
-	// +kubebuilder:validation:Enum=ConfigMap
-	Kind string `json:"kind,omitempty"`
-
+type ValuesFileSources struct {
 	// name represents the Object name. Required.
 	Name string `json:"name,omitempty"`
 
-	// key represents the object data key to read the value from.
+	// valuesFile represents the object data key to read the value from.
 	// +kubebuilder:default:=values.yaml
 	// +optional
-	Key string `json:"key,omitempty"`
+	ValuesFile string `json:"valuesFile,omitempty"`
 }

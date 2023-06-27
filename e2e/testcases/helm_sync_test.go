@@ -196,7 +196,7 @@ service:
 			  ],
 			  "wordpressEmail": "test-user@example.com"
 			},
-			"valuesFrom": [
+			"valuesFileSources": [
 			  {
 				"kind": "ConfigMap",
 				"name": "foo"
@@ -293,7 +293,7 @@ image:
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -314,7 +314,7 @@ image:
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -357,7 +357,7 @@ image:
 }
 
 // TestHelmConfigMapMerge can run on both Kind and GKE clusters.
-// It tests RSync spec.helm.valuesKeyMergeMode field.
+// It tests RSync spec.helm.valuesFileApplyStrategy field.
 func TestHelmConfigMapMerge(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
@@ -401,16 +401,14 @@ wordpressEmail: override-this@example.com`,
 			  ],
 			  "wordpressEmail": "test-user@example.com"
 			},
-			"valuesFrom": [
+			"valuesFileSources": [
 			  {
-				"kind": "ConfigMap",
 				"name": "foo",
-				"key": "first"
+				"valuesFile": "first"
 			  },
 			  {
-				"kind": "ConfigMap",
 				"name": "foo",
-				"key": "second"
+				"valuesFile": "second"
 			  }
 			]
 		  }
@@ -423,7 +421,7 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	// the default valuesKeyMergeMode is 'override', which results in duplicated keys from later files to override
+	// the default valuesFileApplyStrategy is 'override', which results in duplicated keys from later files to override
 	// the keys from previous files.
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
@@ -434,8 +432,8 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesKeyMergeMode set to 'merge'")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesKeyMergeMode": "%s"}}}`, helmpkg.ValuesKeyMergeModeMerge))
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesFileApplyStrategy set to 'merge'")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesFileApplyStrategy": "%s"}}}`, helmpkg.ValuesFileApplyStrategyMerge))
 
 	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
@@ -649,7 +647,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		GCPServiceAccountEmail: gsaARReaderEmail(),
 		Version:                privateNSHelmChartVersion,
 		ReleaseName:            "test",
-		ValuesFrom:             []v1beta1.ValuesFrom{{Kind: "ConfigMap", Name: "foo", Key: "foo.yaml"}},
+		ValuesFileSources:      []v1beta1.ValuesFileSources{{Name: "foo", ValuesFile: "foo.yaml"}},
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
@@ -683,7 +681,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFrom.key")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)
@@ -693,7 +691,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFrom: ConfigMap \"foo\" not found")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)

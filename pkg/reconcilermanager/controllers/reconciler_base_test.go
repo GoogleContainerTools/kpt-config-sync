@@ -619,19 +619,18 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 
 func TestMountConfigMapValuesFiles(t *testing.T) {
 	testCases := map[string]struct {
-		input    []v1beta1.ValuesFrom
+		input    []v1beta1.ValuesFileSources
 		expected corev1.PodSpec
 	}{
-		"empty valuesFrom": {
+		"empty valuesFileSources": {
 			input:    nil,
 			expected: corev1.PodSpec{Containers: []corev1.Container{{}}},
 		},
-		"one valuesFrom": {
-			input: []v1beta1.ValuesFrom{
+		"one valuesFileSources": {
+			input: []v1beta1.ValuesFileSources{
 				{
-					Kind: "ConfigMap",
-					Name: "foo",
-					Key:  "values.yaml",
+					Name:       "foo",
+					ValuesFile: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -641,7 +640,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						MountPath: "/etc/config/foo/values.yaml",
 					}},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFrom,
+						Name:  reconcilermanager.HelmValuesFileSources,
 						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef),
 					}},
 				}},
@@ -663,17 +662,15 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				},
 			},
 		},
-		"two valuesFrom, different ConfigMaps": {
-			input: []v1beta1.ValuesFrom{
+		"two valuesFileSources, different ConfigMaps": {
+			input: []v1beta1.ValuesFileSources{
 				{
-					Kind: "ConfigMap",
-					Name: "foo",
-					Key:  "values.yaml",
+					Name:       "foo",
+					ValuesFile: "values.yaml",
 				},
 				{
-					Kind: "ConfigMap",
-					Name: "bar",
-					Key:  "values.yaml",
+					Name:       "bar",
+					ValuesFile: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -689,7 +686,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFrom,
+						Name:  reconcilermanager.HelmValuesFileSources,
 						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/bar/values.yaml", reconcilermanager.HelmConfigMapRef),
 					}},
 				}},
@@ -725,17 +722,15 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				},
 			},
 		},
-		"two valuesFrom, same ConfigMap": {
-			input: []v1beta1.ValuesFrom{
+		"two valuesFileSources, same ConfigMap": {
+			input: []v1beta1.ValuesFileSources{
 				{
-					Kind: "ConfigMap",
-					Name: "foo",
-					Key:  "values-0.yaml",
+					Name:       "foo",
+					ValuesFile: "values-0.yaml",
 				},
 				{
-					Kind: "ConfigMap",
-					Name: "foo",
-					Key:  "values-1.yaml",
+					Name:       "foo",
+					ValuesFile: "values-1.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -751,7 +746,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFrom,
+						Name:  reconcilermanager.HelmValuesFileSources,
 						Value: filepath.Join("/etc/config/foo/values-0.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/foo/values-1.yaml", reconcilermanager.HelmConfigMapRef),
 					}},
 				}},

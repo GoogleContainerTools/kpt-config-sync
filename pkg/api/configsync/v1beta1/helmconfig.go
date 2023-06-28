@@ -73,13 +73,13 @@ type HelmBase struct {
 
 	// valuesFileApplyStrategy specifies the strategy for handling multiple valueFiles. It
 	// refers to how valuesFiles are applied if multiple valuesFile define the
-	// same key. Can be 'override' or 'merge'.
+	// same key. Can be 'override' or 'listConcatenate'.
 	// 'override' (default) results in the duplicated keys in later files to
 	// override the value from earlier files. This is equivalent to passing in
 	// multiple valuesFiles to Helm CLI.
-	// 'merge' results in the duplicated keys being merged together (maps will be
-	// merged, lists will be concatenated, and scalars will be overriden).
-	// +kubebuilder:validation:Enum=override;merge
+	// 'listConcatenate' results in the duplicated keys that are list elements to have the
+	// lists concatenated together before being used to render the chart.
+	// +kubebuilder:validation:Enum=override;listConcatenate
 	// +kubebuilder:default:=override
 	// +optional
 	ValuesFileApplyStrategy string `json:"valuesFileApplyStrategy,omitempty"`

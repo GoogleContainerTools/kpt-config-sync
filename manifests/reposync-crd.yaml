@@ -1195,15 +1195,15 @@ spec:
                     description: valuesFileApplyStrategy specifies the strategy for
                       handling multiple valueFiles. It refers to how valuesFiles are
                       applied if multiple valuesFile define the same key. Can be 'override'
-                      or 'merge'. 'override' (default) results in the duplicated keys
-                      in later files to override the value from earlier files. This
-                      is equivalent to passing in multiple valuesFiles to Helm CLI.
-                      'merge' results in the duplicated keys being merged together
-                      (maps will be merged, lists will be concatenated, and scalars
-                      will be overriden).
+                      or 'listConcatenate'. 'override' (default) results in the duplicated
+                      keys in later files to override the value from earlier files.
+                      This is equivalent to passing in multiple valuesFiles to Helm
+                      CLI. 'listConcatenate' results in the duplicated keys that are
+                      list elements to have the lists concatenated together before
+                      being used to render the chart.
                     enum:
                     - override
-                    - merge
+                    - listConcatenate
                     type: string
                   valuesFileSources:
                     description: valuesFileSources holds references to objects in

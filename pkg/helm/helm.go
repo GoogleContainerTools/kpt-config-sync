@@ -38,9 +38,9 @@ import (
 )
 
 const (
-	// ValuesFileApplyStrategyMerge results in duplicate keys in different valuesFiles to
-	// be merged together.
-	ValuesFileApplyStrategyMerge = "merge"
+	// ValuesFileApplyStrategyListConcatenate results in duplicate keys in different valuesFiles to
+	// have list elements concatenated.
+	ValuesFileApplyStrategyListConcatenate = "listConcatenate"
 
 	// ValuesFileApplyStrategyOverride results in duplicate keys in different valuesFile to be
 	// overriden by the latter files.
@@ -142,7 +142,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			}
 		}
 
-	case ValuesFileApplyStrategyMerge:
+	case ValuesFileApplyStrategyListConcatenate:
 		var valuesToMerge [][]byte
 		for _, vs := range h.ValuesFileSources {
 			if vs == "" {
@@ -159,7 +159,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			valuesToMerge = append(valuesToMerge, []byte(h.Values))
 		}
 
-		merged, err := merge(valuesToMerge)
+		merged, err := listConcatenate(valuesToMerge)
 		if err != nil {
 			return nil, fmt.Errorf("error merging values files: %w", err)
 		}

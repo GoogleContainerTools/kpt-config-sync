@@ -432,8 +432,8 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesFileApplyStrategy set to 'merge'")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesFileApplyStrategy": "%s"}}}`, helmpkg.ValuesFileApplyStrategyMerge))
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesFileApplyStrategy set to 'listConcatenate'")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesFileApplyStrategy": "%s"}}}`, helmpkg.ValuesFileApplyStrategyListConcatenate))
 
 	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
 	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",

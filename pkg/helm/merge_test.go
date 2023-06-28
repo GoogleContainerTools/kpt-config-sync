@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-func TestMergeTwo(t *testing.T) {
+func TestListConcatenateTwo(t *testing.T) {
 	testCases := map[string]struct {
 		file1 string
 		file2 string
@@ -49,19 +49,37 @@ namespaces:
     name: bar-rb
 `,
 		},
-		"map overrides and merges": {
+		"nested lists": {
+			file1: `
+first:
+  second:
+  - third`,
+			file2: `
+first:
+  second:
+  - fourth`,
+			expected: `first:
+  second:
+  - third
+  - fourth
+`,
+		},
+		"map overrides and different keys": {
 			file1: `  
 foo: bar-1
 abc:
-  def: efg `,
+  def: efg 
+cow: moo`,
 			file2: `  
 foo: bar-2
 abc:
-  hij: klm`,
+  hij: klm
+moo: cow`,
 			expected: `abc:
   def: efg
-  hij: klm
+cow: moo
 foo: bar-1
+moo: cow
 `,
 		},
 	}
@@ -73,7 +91,7 @@ foo: bar-1
 			var secondMap map[string]interface{}
 			require.NoError(t, yaml.Unmarshal([]byte(tc.file2), &secondMap))
 
-			actualMap, err := mergeTwo(firstMap, secondMap)
+			actualMap, err := listConcatenateTwo(firstMap, secondMap)
 			require.NoError(t, err)
 
 			actual, err := yaml.Marshal(actualMap)
@@ -83,7 +101,7 @@ foo: bar-1
 	}
 }
 
-func TestMerge(t *testing.T) {
+func TestListConcatenate(t *testing.T) {
 	testCases := map[string]struct {
 		file1 string
 		file2 string
@@ -119,7 +137,27 @@ namespaces:
     name: foo-rb
 `,
 		},
-		"map overrides and merges": { // last file should take precedence
+		"nested lists": {
+			file1: `
+first:
+  second:
+  - third`,
+			file2: `
+first:
+  second:
+  - fourth`,
+			file3: `
+first:
+  second:
+  - fifth`,
+			expected: `first:
+  second:
+  - fifth
+  - fourth
+  - third
+`,
+		},
+		"map and scalar overrides": { // last file should take precedence
 			file1: `  
 abc: def
 foo: bar-1
@@ -134,11 +172,11 @@ a:
 			file3: `
 foo: bar-3
 a:
-  g: h`,
+  g: 
+    h: i`,
 			expected: `a:
-  b: c
-  d: f
-  g: h
+  g:
+    h: i
 abc: efg
 foo: bar-3
 `,
@@ -157,6 +195,19 @@ abc:
   foo: bar
 `,
 		},
+		"different keys": {
+			file1: `
+moo-1: cow-1`,
+			file2: `
+moo-2: cow-2`,
+			file3: `
+moo-3: cow-3`,
+
+			expected: `moo-1: cow-1
+moo-2: cow-2
+moo-3: cow-3
+`,
+		},
 	}
 
 	for name, tc := range testCases {
@@ -167,7 +218,7 @@ abc:
 				[]byte(tc.file3),
 			}
 
-			actual, err := merge(input)
+			actual, err := listConcatenate(input)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, string(actual))
 		})

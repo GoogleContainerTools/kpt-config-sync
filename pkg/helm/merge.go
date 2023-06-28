@@ -21,11 +21,9 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-// merge will do a simple merge of an array of yaml documents. If there are conflicts,
-// yaml documents that appear later in the array will override those that appear earlier.
-// Sequence nodes will concatenated, while map nodes will be merged together.
-// See unit tests for examples.
-func merge(valuesToMerge [][]byte) ([]byte, error) {
+// listConcatenate will combine yaml documents, with list elements
+// concatenated. See unit tests for examples.
+func listConcatenate(valuesToMerge [][]byte) ([]byte, error) {
 	if len(valuesToMerge) == 0 {
 		return nil, nil
 	}
@@ -40,7 +38,7 @@ func merge(valuesToMerge [][]byte) ([]byte, error) {
 		if err := yaml.Unmarshal(result, &secondMap); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal: %w", err)
 		}
-		r, err := mergeTwo(firstMap, secondMap)
+		r, err := listConcatenateTwo(firstMap, secondMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge: %w", err)
 		}
@@ -52,9 +50,9 @@ func merge(valuesToMerge [][]byte) ([]byte, error) {
 	return result, nil
 }
 
-// merges two interfaces together, with elements from the first overriding
-// the second in case of conflicts
-func mergeTwo(first, second interface{}) (interface{}, error) {
+// handles the nested nodes, ensuring that list elements are concatenated
+// but maps are still overriden
+func handleNested(first, second interface{}) (interface{}, error) {
 	firstType := reflect.TypeOf(first).Kind()
 	secondType := reflect.TypeOf(second).Kind()
 
@@ -65,17 +63,50 @@ func mergeTwo(first, second interface{}) (interface{}, error) {
 	switch firstType {
 	case reflect.Slice:
 		// slices get concatenated
-		firstSlice := interfaceToSlice(first)
-		secondSlice := interfaceToSlice(second)
-		return append(firstSlice, secondSlice...), nil
+		return concatenateSlices(first, second), nil
 	case reflect.Map:
-		// maps get merged together
 		firstMap := first.(map[string]interface{})
 		secondMap := second.(map[string]interface{})
 		for key, secondVal := range secondMap {
 			firstVal, found := firstMap[key]
 			if found {
-				m, err := mergeTwo(firstVal, secondVal)
+				m, err := handleNested(firstVal, secondVal)
+				if err != nil {
+					return nil, err
+				}
+				// we are only concatenating lists, other types will just get
+				// overriden
+				mType := reflect.TypeOf(m).Kind()
+				if mType == reflect.Slice {
+					firstMap[key] = m
+				}
+			}
+		}
+	}
+	return first, nil
+}
+
+// listConcatenate will combine just two yaml documents, with list elements
+// concatenated. See unit tests for examples.
+func listConcatenateTwo(first, second interface{}) (interface{}, error) {
+	firstType := reflect.TypeOf(first).Kind()
+	secondType := reflect.TypeOf(second).Kind()
+
+	if firstType != secondType {
+		return first, nil
+	}
+
+	switch firstType {
+	case reflect.Slice:
+		// slices get concatenated
+		return concatenateSlices(first, second), nil
+	case reflect.Map:
+		firstMap := first.(map[string]interface{})
+		secondMap := second.(map[string]interface{})
+		for key, secondVal := range secondMap {
+			firstVal, found := firstMap[key]
+			if found {
+				m, err := handleNested(firstVal, secondVal)
 				if err != nil {
 					return nil, err
 				}
@@ -96,4 +127,10 @@ func interfaceToSlice(i interface{}) []interface{} {
 	default:
 		return append([]interface{}{}, i)
 	}
+}
+
+func concatenateSlices(first interface{}, second interface{}) []interface{} {
+	firstSlice := interfaceToSlice(first)
+	secondSlice := interfaceToSlice(second)
+	return append(firstSlice, secondSlice...)
 }

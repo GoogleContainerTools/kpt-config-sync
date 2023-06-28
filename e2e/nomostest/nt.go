@@ -311,12 +311,16 @@ func InitSharedEnvironments() error {
 	mySharedNTs = &sharedNTs{
 		testMap: map[string]*sharedNT{},
 	}
-	timeStamp := time.Now().Unix()
+	prefix := *e2e.ClusterPrefix
+	if prefix == "" {
+		timeStamp := time.Now().Unix()
+		prefix = fmt.Sprintf("cs-e2e-%v", timeStamp)
+	}
 	tg := taskgroup.New()
 	clusters := *e2e.ClusterNames
 	if len(clusters) == 0 { // generate names for ephemeral clusters
 		for x := 0; x < e2e.NumParallel(); x++ {
-			clusters = append(clusters, fmt.Sprintf("cs-e2e-%v-%v", timeStamp, x))
+			clusters = append(clusters, fmt.Sprintf("%s-%d", prefix, x))
 		}
 	}
 	for _, name := range clusters {

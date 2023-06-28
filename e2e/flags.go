@@ -116,6 +116,12 @@ var TestFeatures = flag.String("test-features", "",
 var NumClusters = flag.Int("num-clusters", util.EnvInt("E2E_NUM_CLUSTERS", 1),
 	"Number of parallel test threads to run. Also dictates the number of clusters which will be created in parallel. Overrides the -test.parallel flag.")
 
+// ClusterPrefix is the prefix to use when naming clusters. An index is appended
+// to the prefix with the pattern '<prefix>-<index>', starting at 0. If unset, defaults
+// to cs-e2e-<UNIX_TIME>. cluster-names takes precedence, if provided.
+var ClusterPrefix = flag.String("cluster-prefix", util.EnvString("E2E_CLUSTER_PREFIX", ""),
+	"Prefix to use when naming clusters. An index is appended to the prefix with the pattern '<prefix>-<index>', starting at 0. If unset, defaults to cs-e2e-<UNIX_TIME>. cluster-names takes precedence, if provided.")
+
 // ClusterNames is a list of cluster names to use for the tests. If specified without
 // create-clusters, assumes the clusters were pre-provisioned.
 var ClusterNames = newStringListFlag("cluster-names", util.EnvList("E2E_CLUSTER_NAMES", nil),

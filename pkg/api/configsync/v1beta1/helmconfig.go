@@ -57,9 +57,32 @@ type HelmBase struct {
 	// +optional
 	ReleaseName string `json:"releaseName,omitempty"`
 
-	// values to use instead of default values that accompany the chart
+	// values to use instead of default values that accompany the chart. Format
+	// values the same as default values.yaml. These values will take precedence if
+	// used in conjunction with valuesFileSources. How to handle multiple valuesFiles is
+	// determined by `valuesFileApplyStrategy`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
+
+	// valuesFileSources holds references to objects in the cluster that repremakesent
+	// values to use instead of default values that accompany the chart. Currently,
+	// only ConfigMaps are supported. Objects listed later will take precedence.
+	// How to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.
+	// +optional
+	ValuesFileSources []ValuesFileSources `json:"valuesFileSources,omitempty"`
+
+	// valuesFileApplyStrategy specifies the strategy for handling multiple valueFiles. It
+	// refers to how valuesFiles are applied if multiple valuesFile define the
+	// same key. Can be 'override' or 'listConcatenate'.
+	// 'override' (default) results in the duplicated keys in later files to
+	// override the value from earlier files. This is equivalent to passing in
+	// multiple valuesFiles to Helm CLI.
+	// 'listConcatenate' results in the duplicated keys that are list elements to have the
+	// lists concatenated together before being used to render the chart.
+	// +kubebuilder:validation:Enum=override;listConcatenate
+	// +kubebuilder:default:=override
+	// +optional
+	ValuesFileApplyStrategy string `json:"valuesFileApplyStrategy,omitempty"`
 
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
@@ -92,4 +115,16 @@ type HelmBase struct {
 	// +nullable
 	// +optional
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
+}
+
+// ValuesFileSources holds references to ConfigMap objects in the cluster that represent
+// values to use instead of default values that accompany the chart.
+type ValuesFileSources struct {
+	// name represents the Object name. Required.
+	Name string `json:"name,omitempty"`
+
+	// valuesFile represents the object data key to read the value from.
+	// +kubebuilder:default:=values.yaml
+	// +optional
+	ValuesFile string `json:"valuesFile,omitempty"`
 }

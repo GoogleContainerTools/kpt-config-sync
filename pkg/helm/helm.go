@@ -38,6 +38,17 @@ import (
 )
 
 const (
+	// ValuesFileApplyStrategyListConcatenate results in duplicate keys in different valuesFiles to
+	// have list elements concatenated.
+	ValuesFileApplyStrategyListConcatenate = "listConcatenate"
+
+	// ValuesFileApplyStrategyOverride results in duplicate keys in different valuesFile to be
+	// overriden by the latter files.
+	ValuesFileApplyStrategyOverride = "override"
+
+	// DefaultValuesFileApplyStrategy is the default valuesFileApplyStrategy if it is not set.
+	DefaultValuesFileApplyStrategy = ValuesFileApplyStrategyOverride
+
 	// valuesFile is the name of the file created to override defualt chart values.
 	valuesFile = "chart-values.yaml"
 )
@@ -49,19 +60,21 @@ var (
 
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
-	Chart           string
-	Repo            string
-	Version         string
-	ReleaseName     string
-	Namespace       string
-	DeployNamespace string
-	Values          string
-	IncludeCRDs     string
-	HydrateRoot     string
-	Dest            string
-	Auth            configsync.AuthType
-	UserName        string
-	Password        string
+	Chart                   string
+	Repo                    string
+	Version                 string
+	ReleaseName             string
+	Namespace               string
+	DeployNamespace         string
+	Values                  string
+	ValuesFileSources       []string
+	IncludeCRDs             string
+	HydrateRoot             string
+	Dest                    string
+	Auth                    configsync.AuthType
+	UserName                string
+	Password                string
+	ValuesFileApplyStrategy string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -89,11 +102,9 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 	if h.Version != "" {
 		args = append(args, "--version", h.Version)
 	}
-	if len(h.Values) > 0 {
-		args, err = h.appendValuesArgs(args)
-		if err != nil {
-			return nil, err
-		}
+	args, err = h.appendValuesArgs(args)
+	if err != nil {
+		return nil, err
 	}
 	includeCRDs, _ := strconv.ParseBool(h.IncludeCRDs)
 	if includeCRDs {
@@ -104,12 +115,77 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 }
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
-	valuesPath := filepath.Join(os.TempDir(), valuesFile)
-	if err := os.WriteFile(valuesPath, []byte(h.Values), 0644); err != nil {
+	var err error
+	switch h.ValuesFileApplyStrategy {
+
+	case "", ValuesFileApplyStrategyOverride:
+		for i, vs := range h.ValuesFileSources {
+			if vs == "" {
+				continue
+			}
+			val, err := readFile(vs)
+			if err != nil {
+				return nil, err
+			}
+
+			klog.Infof("values from ConfigMap %s\n: %s\n", vs, val)
+			args, err = writeValuesPath([]byte(val), fmt.Sprintf("values-file-%d-", i), args)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(h.Values) != 0 {
+			klog.Infof("inline values %s\n", h.Values)
+			args, err = writeValuesPath([]byte(h.Values), "", args)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+	case ValuesFileApplyStrategyListConcatenate:
+		var valuesToMerge [][]byte
+		for _, vs := range h.ValuesFileSources {
+			if vs == "" {
+				continue
+			}
+			val, err := readFile(vs)
+			if err != nil {
+				return nil, err
+			}
+			valuesToMerge = append(valuesToMerge, []byte(val))
+
+		}
+		if len(h.Values) != 0 {
+			valuesToMerge = append(valuesToMerge, []byte(h.Values))
+		}
+
+		merged, err := listConcatenate(valuesToMerge)
+		if err != nil {
+			return nil, fmt.Errorf("error merging values files: %w", err)
+		}
+		klog.Infof("using merged values: %s\n", string(merged))
+
+		args, err = writeValuesPath(merged, "", args)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesFileApplyStrategy)
+	}
+
+	return args, nil
+}
+
+func writeValuesPath(values []byte, pathPrefix string, args []string) ([]string, error) {
+	if values == nil {
+		return args, nil
+	}
+	valuesPath := filepath.Join(os.TempDir(), pathPrefix+valuesFile)
+	if err := os.WriteFile(valuesPath, values, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create values file: %w", err)
 	}
-	args = append(args, "--values", valuesPath)
-	return args, nil
+	return append(args, "--values", valuesPath), nil
 }
 
 func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {
@@ -260,7 +336,7 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 		}
 	}
 
-	destDir := filepath.Join(h.HydrateRoot, h.Chart+":"+h.Version)
+	destDir := filepath.Join(h.HydrateRoot, h.Version)
 	linkPath := filepath.Join(h.HydrateRoot, h.Dest)
 	oldDir, err := filepath.EvalSymlinks(linkPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -291,7 +367,7 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 		return fmt.Errorf("failed to set the deploy namespace: %w", err)
 	}
 
-	klog.Infof("successfully rendered the helm chart : %s", string(out))
+	klog.Infof("successfully rendered the helm chart: %s", string(out))
 	return util.UpdateSymlink(h.HydrateRoot, linkPath, destDir, oldDir)
 }
 
@@ -326,4 +402,16 @@ func isRange(version string) bool {
 	}
 	_, err := semverrange.NewConstraint(version)
 	return err == nil
+}
+
+func readFile(filepath string) (string, error) {
+	b, err := os.ReadFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("error reading from provided valuesFile %s: %w", filepath, err)
+	}
+	val := string(b)
+	if len(val) == 0 {
+		return "", fmt.Errorf("error: received empty valuesFile %s", filepath)
+	}
+	return val, nil
 }

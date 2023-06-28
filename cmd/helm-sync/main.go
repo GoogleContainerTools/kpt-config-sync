@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2/klogr"
@@ -38,6 +39,10 @@ var (
 		"the version of the helm chart being synced")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
 		"set the helm chart values, will be used to override the default values")
+	flValuesFileSources = flag.String("values-file-sources", os.Getenv(reconcilermanager.HelmValuesFileSources),
+		"set the helm chart values, will be used to override the default values")
+	flValuesFileApplyStrategy = flag.String("values-file-apply-strategy", os.Getenv(reconcilermanager.HelmValuesFileApplyStrategy),
+		"set the helm values file merge strategy")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
 		"include CRDs in the helm rendering output")
 	flAuth = flag.String("auth", util.EnvString(reconcilermanager.HelmAuthType, string(configsync.AuthNone)),
@@ -76,7 +81,8 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
+		"--values", *flValues, "--values-files", *flValuesFileSources, "--values-key-merge-mode", *flValuesFileApplyStrategy,
+		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
 
@@ -112,20 +118,23 @@ func main() {
 	start := time.Now()
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
+
 		hydrator := &helm.Hydrator{
-			Chart:           *flChart,
-			Repo:            *flRepo,
-			Version:         *flVersion,
-			ReleaseName:     *flReleaseName,
-			Namespace:       *flNamespace,
-			DeployNamespace: *flDeployNamespace,
-			Values:          *flValues,
-			IncludeCRDs:     *flIncludeCRDs,
-			Auth:            configsync.AuthType(*flAuth),
-			HydrateRoot:     *flRoot,
-			Dest:            *flDest,
-			UserName:        *flUsername,
-			Password:        *flPassword,
+			Chart:                   *flChart,
+			Repo:                    *flRepo,
+			Version:                 *flVersion,
+			ReleaseName:             *flReleaseName,
+			Namespace:               *flNamespace,
+			DeployNamespace:         *flDeployNamespace,
+			Values:                  *flValues,
+			ValuesFileSources:       strings.Split(*flValuesFileSources, ","),
+			ValuesFileApplyStrategy: *flValuesFileApplyStrategy,
+			IncludeCRDs:             *flIncludeCRDs,
+			Auth:                    configsync.AuthType(*flAuth),
+			HydrateRoot:             *flRoot,
+			Dest:                    *flDest,
+			UserName:                *flUsername,
+			Password:                *flPassword,
 		}
 
 		refreshVersion := false

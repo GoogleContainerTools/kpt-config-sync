@@ -442,6 +442,9 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		Watches(&source.Kind{Type: withNamespace(&corev1.Secret{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRootSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(&source.Kind{Type: withNamespace(&corev1.ConfigMap{}, configsync.ControllerNamespace)},
+			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapsToRootSyncs),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Watches(&source.Kind{Type: withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
@@ -491,6 +494,90 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 		r.membership = m
 		return r.requeueAllRootSyncs()
 	}
+}
+
+// mapConfigMapsToRootSyncs handles updates to referenced ConfigMaps
+func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []reconcile.Request {
+	objRef := client.ObjectKeyFromObject(obj)
+
+	// Ignore changes from other namespaces.
+	if objRef.Namespace != configsync.ControllerNamespace {
+		return nil
+	}
+
+	ctx := context.Background()
+	allRootSyncs := &v1beta1.RootSyncList{}
+	if err := r.client.List(ctx, allRootSyncs); err != nil {
+		klog.Error("failed to list all RootSyncs for %s (%s): %v",
+			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
+		return nil
+	}
+
+	var result []reconcile.Request
+	for _, rs := range allRootSyncs.Items {
+		if rs.Spec.SourceType != string(v1beta1.HelmSource) {
+			// we are only watching ConfigMaps to retrigger helm-sync, so we can ignore
+			// other source types
+			continue
+		}
+		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileSources) == 0 {
+			continue
+		}
+
+		var referenced bool
+		var key string
+		for _, vf := range rs.Spec.Helm.ValuesFileSources {
+			if vf.Name == objRef.Name {
+				referenced = true
+				key = vf.ValuesFile
+				break
+			}
+		}
+
+		if !referenced {
+			continue
+		}
+
+		if err := validate.CheckConfigMapKeyExists(ctx, r.client, objRef, key, &rs); err != nil {
+			// If the ConfigMap was deleted or it no longer has the specified data key, we skip restarting the pod
+			// to avoid losing or modifying already synced resources
+			klog.Errorf("ConfigMap ref validation error: %s", err.Error())
+			// requeue the reconcile to rerun validation checks and status setting
+			result = append(result, requeueRootSyncRequest(obj, &rs)...)
+
+		}
+
+		rsRef := client.ObjectKeyFromObject(&rs)
+		reconcilerRef := types.NamespacedName{
+			Namespace: configmanagement.ControllerNamespace,
+			Name:      core.RootReconcilerName(rsRef.Name),
+		}
+
+		var reconciler appsv1.Deployment
+		cl := r.reconcilerBase.client
+		if err := cl.Get(ctx, reconcilerRef, &reconciler); err != nil {
+			klog.Errorf("failed to get reconciler reference: %s", err.Error())
+			if apierrors.IsNotFound(err) {
+				// if the root-reconciler doesn't exist, an updated ConfigMap should trigger a reconcile
+				// to create one
+				result = append(result, requeueRootSyncRequest(obj, &rs)...)
+			}
+			continue
+		}
+
+		// A rereconcile doesn't necessarily update an existing root-reconciler deployment, so
+		// the root-reconciler pods need to be explicitly restarted to pick up the ConfigMap update.
+		reconciler.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+		if err := cl.Update(ctx, &reconciler); err != nil {
+			klog.Errorf("failed to update reconciler: %s", err.Error())
+			return nil
+		}
+
+		klog.Infof("Changes to ConfigMap %s triggered restart of pods in Deployment %s\n", objRef, reconcilerRef)
+		result = append(result, requeueRootSyncRequest(obj, &rs)...)
+
+	}
+	return result
 }
 
 // mapObjectToRootSync define a mapping from an object in 'config-management-system'
@@ -657,6 +744,9 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
 		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
+			return err
+		}
+		if err := validate.CheckValuesFileSourcesRefs(ctx, r.client, rs.Spec.Helm.ValuesFileSources, rs); err != nil {
 			return err
 		}
 		if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
@@ -846,6 +936,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					if authTypeToken(rs.Spec.Helm.Auth) {
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
 					}
+					mountConfigMapValuesFiles(templateSpec, &container, rs.Spec.Helm.ValuesFileSources)
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(&container, rs.Spec.Override)
 				}

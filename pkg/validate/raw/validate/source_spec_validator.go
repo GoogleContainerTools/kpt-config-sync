@@ -15,8 +15,11 @@
 package validate
 
 import (
+	"context"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reposync"
@@ -181,6 +184,41 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 		return InvalidHelmAuthType(rs)
 	}
 
+	for _, vf := range helm.ValuesFileSources {
+		if vf.Name == "" {
+			return MissingHelmValuesFileSourcesName(rs)
+		}
+	}
+
+	return nil
+}
+
+// CheckValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
+// specified data key.
+func CheckValuesFileSourcesRefs(ctx context.Context, cl client.Client, valuesFileSources []v1beta1.ValuesFileSources, rs client.Object) status.Error {
+	for _, vf := range valuesFileSources {
+		objectKey := types.NamespacedName{
+			Name:      vf.Name,
+			Namespace: rs.GetNamespace(),
+		}
+		err := CheckConfigMapKeyExists(ctx, cl, objectKey, vf.ValuesFile, rs)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CheckConfigMapKeyExists checks that the ConfigMap specified by objRef exists and has the provided key.
+func CheckConfigMapKeyExists(ctx context.Context, cl client.Client,
+	objRef types.NamespacedName, key string, rs client.Object) status.Error {
+	var cm corev1.ConfigMap
+	if err := cl.Get(ctx, objRef, &cm); err != nil {
+		return MissingConfigMap(rs, err)
+	}
+	if _, found := cm.Data[key]; !found {
+		return MissingConfigMapKey(rs)
+	}
 	return nil
 }
 
@@ -368,5 +406,29 @@ func HelmNSAndDeployNS(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify only one of 'spec.helm.namespace' or 'spec.helm.deployNamespace'", kind).
+		BuildWithResources(o)
+}
+
+// MissingHelmValuesFileSourcesName reports that an RSync is missing spec.helm.valuesFileSources.name
+func MissingHelmValuesFileSourcesName(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify spec.helm.valuesFileSources.name", kind).
+		BuildWithResources(o)
+}
+
+// MissingConfigMap reports that an RSync is referencing a ConfigMap that doesn't exist.
+func MissingConfigMap(o client.Object, err error) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileSources: %s", kind, err.Error()).
+		BuildWithResources(o)
+}
+
+// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileSources.name
+func MissingConfigMapKey(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileSources.key", kind).
 		BuildWithResources(o)
 }

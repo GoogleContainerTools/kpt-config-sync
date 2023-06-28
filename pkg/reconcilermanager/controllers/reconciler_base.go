@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -422,6 +424,43 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFrom []v1beta1.ValuesFileSources) {
+	var valuesFiles []string
+
+	for i, vf := range valuesFrom {
+		fileName := reconcilermanager.HelmConfigMapRef
+		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
+		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
+		volumeName := "configmap-vol-" + strings.ToLower(vf.Name) + fmt.Sprintf("-%d", i)
+
+		templateSpec.Volumes = append(templateSpec.Volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: vf.Name,
+					},
+					Items: []corev1.KeyToPath{{
+						Key:  vf.ValuesFile,
+						Path: fileName,
+					}},
+				},
+			},
+		})
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: mountPath,
+		})
+	}
+
+	if len(valuesFiles) > 0 {
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name:  reconcilermanager.HelmValuesFileSources,
+			Value: strings.Join(valuesFiles, ","),
+		})
+	}
+}
+
 func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec) {
 	if override == nil {
 		return
@@ -588,9 +627,11 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	}
 	// Else - the object is being deleted.
 
+	klog.Infoln("checking finalizers")
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerFinalizer) {
 		// The object is being deleted, but the reconciler finalizer is still running.
 		// Wait for the reconciler finalizer to complete.
+		klog.Infoln("")
 		r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
 		return nil
 	}

@@ -31,6 +31,8 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
+	helmpkg "kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -58,7 +60,7 @@ func TestPublicHelm(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -97,7 +99,7 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with deploy namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": "deploy-ns"}}}`)
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -112,7 +114,7 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace or deploy namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": ""}}}`)
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.2.35")),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -132,6 +134,316 @@ func TestPublicHelm(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "deploy-ns"); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestHelmWatchConfigMap can run on both Kind and GKE clusters.
+// It tests that helm-sync properly watches ConfigMaps in the RSync namespace and pulls updated values.
+func TestHelmWatchConfigMap(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+
+	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
+	cm1 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm1.Data = map[string]string{"values.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Always
+wordpressUsername: test-user-1
+wordpressEmail: override-this@example.com
+resources:
+  requests:
+    cpu: 150m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 300Mi
+mariadb:
+  primary:
+    persistence:
+      enabled: false
+service:
+  type: ClusterIP`,
+	}
+
+	cm1Copy := cm1.DeepCopy()
+	if err := nt.KubeClient.Create(cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{
+		"spec": {
+		  "sourceFormat": "unstructured",
+		  "sourceType": "helm",
+		  "helm": {
+			"releaseName": "my-wordpress",
+			"namespace": "wordpress",
+			"auth": "none",
+			"repo": "https://charts.bitnami.com/bitnami",
+			"chart": "wordpress",
+			"version": "15.2.35",
+			"values": {
+			  "extraEnvVars": [
+				{
+				  "name": "TEST_1",
+				  "value": "val1"
+				},
+				{
+				  "name": "TEST_2",
+				  "value": "val2"
+				}
+			  ],
+			  "wordpressEmail": "test-user@example.com"
+			},
+			"valuesFileSources": [
+			  {
+				"kind": "ConfigMap",
+				"name": "foo"
+			  }
+			]
+		  }
+		}
+	  }`)
+
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	var expectedCPURequest string
+	var expectedCPULimit string
+	var expectedMemoryRequest string
+	var expectedMemoryLimit string
+	if nt.IsGKEAutopilot {
+		expectedCPURequest = "250m"
+		expectedCPULimit = expectedCPURequest
+		expectedMemoryRequest = "512Mi"
+		expectedMemoryLimit = expectedMemoryRequest
+	} else {
+		expectedCPURequest = "150m"
+		expectedCPULimit = "1"
+		expectedMemoryRequest = "250Mi"
+		expectedMemoryLimit = "300Mi"
+	}
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+			resource.MustParse(expectedCPURequest),
+			resource.MustParse(expectedCPULimit),
+			resource.MustParse(expectedMemoryRequest),
+			resource.MustParse(expectedMemoryLimit)),
+		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Never; wordpressUserName: test-user-2")
+	cm2 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm2.Data = map[string]string{"values.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+wordpressUsername: test-user-2
+wordpressEmail: override-this@example.com
+resources:
+  requests:
+    cpu: 150m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 300Mi
+mariadb:
+  primary:
+    persistence:
+      enabled: false
+service:
+  type: ClusterIP`,
+	}
+	if err := nt.KubeClient.Update(cm2); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
+		[]testpredicates.Predicate{
+			containerImagePullPolicy("Never"),
+			testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+				resource.MustParse(expectedCPURequest),
+				resource.MustParse(expectedCPULimit),
+				resource.MustParse(expectedMemoryRequest),
+				resource.MustParse(expectedMemoryLimit)),
+			testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
+		}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
+	cm3 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm3.Data = map[string]string{"something-else.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+`,
+	}
+	if err := nt.KubeClient.Update(cm3); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
+	// validate that the synced resources did not get modified or deleted
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		containerImagePullPolicy("Never"),
+		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+			resource.MustParse(expectedCPURequest),
+			resource.MustParse(expectedCPULimit),
+			resource.MustParse(expectedMemoryRequest),
+			resource.MustParse(expectedMemoryLimit)),
+		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Delete the referenced ConfigMap")
+	if err := nt.KubeClient.Delete(cm3); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
+	// validate that the synced resources did not get modified or deleted
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		containerImagePullPolicy("Never"),
+		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+			resource.MustParse(expectedCPURequest),
+			resource.MustParse(expectedCPULimit),
+			resource.MustParse(expectedMemoryRequest),
+			resource.MustParse(expectedMemoryLimit)),
+		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Reapply the referenced ConfigMap")
+	if err := nt.KubeClient.Create(cm1Copy); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
+		[]testpredicates.Predicate{
+			containerImagePullPolicy("Always"),
+			testpredicates.HasCorrectResourceRequestsLimits("wordpress",
+				resource.MustParse(expectedCPURequest),
+				resource.MustParse(expectedCPULimit),
+				resource.MustParse(expectedMemoryRequest),
+				resource.MustParse(expectedMemoryLimit)),
+			testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
+		}); err != nil {
+		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
+	}
+}
+
+// TestHelmConfigMapMerge can run on both Kind and GKE clusters.
+// It tests RSync spec.helm.valuesFileApplyStrategy field.
+func TestHelmConfigMapMerge(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+
+	cm := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm.Data = map[string]string{
+		"first": `
+extraEnvVars:
+- name: TEST_CM_1
+  value: "cm1"
+wordpressUsername: test-user-1
+wordpressEmail: override-this@example.com`,
+		"second": `
+extraEnvVars:
+- name: TEST_CM_2
+  value: "cm2"
+wordpressUsername: test-user-2
+wordpressEmail: override-this@example.com`,
+	}
+	if err := nt.KubeClient.Create(cm); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{
+		"spec": {
+		  "sourceFormat": "unstructured",
+		  "sourceType": "helm",
+		  "helm": {
+			"releaseName": "my-wordpress",
+			"namespace": "wordpress",
+			"auth": "none",
+			"repo": "https://charts.bitnami.com/bitnami",
+			"chart": "wordpress",
+			"version": "15.2.35",
+			"values": {
+			  "extraEnvVars": [
+				{
+				  "name": "TEST_INLINE",
+				  "value": "inline"
+				}
+			  ],
+			  "wordpressEmail": "test-user@example.com"
+			},
+			"valuesFileSources": [
+			  {
+				"name": "foo",
+				"valuesFile": "first"
+			  },
+			  {
+				"name": "foo",
+				"valuesFile": "second"
+			  }
+			]
+		  }
+		}
+	  }`)
+
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// the default valuesFileApplyStrategy is 'override', which results in duplicated keys from later files to override
+	// the keys from previous files.
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_INLINE", "inline"),
+		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_1"),
+		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_2")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesFileApplyStrategy set to 'listConcatenate'")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesFileApplyStrategy": "%s"}}}`, helmpkg.ValuesFileApplyStrategyListConcatenate))
+
+	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
+	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_INLINE", "inline"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_CM_1", "cm1"),
+			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_CM_2", "cm2"),
+		}); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -158,7 +470,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "namespace": "", "deployNamespace": ""}}}`,
 		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateSimpleHelmChartVersion, gsaARReaderEmail()))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateSimpleHelmChartVersion)),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateSimpleHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -243,7 +555,7 @@ func TestHelmVersionRange(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-version-range-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("wordpress:15.4.1")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.4.1")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -292,12 +604,106 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
-	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
+	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
+	}
+}
+
+// TestHelmConfigMapNamespaceRepo verifies RepoSync can pick up values and updates from ConfigMap references.
+// This test will work only with following pre-requisites:
+// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+func TestHelmConfigMapNamespaceRepo(t *testing.T) {
+	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
+		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+
+	remoteHelmChart, err := helm.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
+	}
+
+	nt.T.Log("Create a ConfigMap with values: labelTest: first")
+	cm1 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm1.Data = map[string]string{
+		"foo.yaml": `label: first`,
+	}
+	cm1Copy := cm1.DeepCopy()
+	if err := nt.KubeClient.Create(cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
+		Repo:                   helm.PrivateARHelmRegistry(),
+		Chart:                  remoteHelmChart.ChartName,
+		Auth:                   configsync.AuthGCPServiceAccount,
+		GCPServiceAccountEmail: gsaARReaderEmail(),
+		Version:                privateNSHelmChartVersion,
+		ReleaseName:            "test",
+		ValuesFileSources:      []v1beta1.ValuesFileSources{{Name: "foo", ValuesFile: "foo.yaml"}},
+	}}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
+	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
+		testpredicates.HasLabel("labelsTest", "first")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Update the referenced ConfigMap with values: labelsTest: second")
+	cm2 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm2.Data = map[string]string{
+		"foo.yaml": `label: second`,
+	}
+	if err := nt.KubeClient.Update(cm2); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
+		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "second")}); err != nil {
+		nt.T.Error(err)
+	}
+
+	nt.T.Logf("Update the ConfigMap to have incorrect key")
+	cm3 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm3.Data = map[string]string{
+		"values.yaml": `label: second`,
+	}
+	if err := nt.KubeClient.Update(cm3); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
+	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
+		testpredicates.HasLabel("labelsTest", "second")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Delete the ConfigMap with values")
+	if err := nt.KubeClient.Delete(cm3); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
+	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
+		testpredicates.HasLabel("labelsTest", "second")); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Reapply the ConfigMap with values: labelsTest: first")
+	if err := nt.KubeClient.Create(cm1Copy); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
+		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "first")}); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -324,7 +730,7 @@ func TestHelmARFleetWISameProject(t *testing.T) {
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -352,7 +758,7 @@ func TestHelmARFleetWIDifferentProject(t *testing.T) {
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -379,7 +785,7 @@ func TestHelmARGKEWorkloadIdentity(t *testing.T) {
 		sourceChart:   privateCoreDNSHelmChart,
 		sourceType:    v1beta1.HelmSource,
 		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChart + ":" + privateCoreDNSHelmChartVersion),
+		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
 	})
 }
 
@@ -401,7 +807,7 @@ func TestHelmGCENode(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
 		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateCoreDNSHelmChartVersion)),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateCoreDNSHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -447,7 +853,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
 		v1beta1.HelmSource, helm.PrivateARHelmRegistry(), remoteHelmChart.ChartName, privateCoreDNSHelmChartVersion))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(remoteHelmChart.ChartName+":"+privateCoreDNSHelmChartVersion)),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(privateCoreDNSHelmChartVersion)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)

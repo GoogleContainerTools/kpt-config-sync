@@ -4,6 +4,7 @@ metadata:
   name: {{ include "ns-chart.fullname" . }}
   labels:
     {{- include "ns-chart.labels" . | nindent 4 }}
+    labelsTest: {{ .Values.label}}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}

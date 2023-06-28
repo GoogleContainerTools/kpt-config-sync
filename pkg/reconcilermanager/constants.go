@@ -140,8 +140,14 @@ const (
 	// HelmValues is the OS env variable key for the Helm chart values.
 	HelmValues = "HELM_VALUES"
 
-	//HelmValuesFiles is the OS env variable key for Helm values files.
-	HelmValuesFiles = "HELM_VALUES_FILES"
+	// HelmConfigMapRef is the path where valuesFiles from ConfigMaps are mounted.
+	HelmConfigMapRef = "HELM_CONFIGMAP_REF"
+
+	// HelmValuesFileSources is the OS env variable key for the names of ConfigMaps holding valuesFiles.
+	HelmValuesFileSources = "HELM_VALUES_FILE_SOURCES"
+
+	// HelmValuesFileApplyStrategy is the OS env variable key for Helm values files apply strategy.
+	HelmValuesFileApplyStrategy = "HELM_VALUES_FILE_APPLY_STRATEGY"
 
 	//HelmIncludeCRDs is the OS env variable key for whether to include CRDs in helm rendering output.
 	HelmIncludeCRDs = "HELM_INCLUDE_CRDS"

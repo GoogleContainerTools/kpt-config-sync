@@ -20,10 +20,13 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
+	"go.uber.org/multierr"
+	"golang.org/x/exp/slices"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 )
@@ -37,34 +40,56 @@ func setParallelFlag() error {
 	return err
 }
 
+func setDefaultArgs() {
+	// backwards compatibility for GCPCLuster arg
+	if *e2e.GCPCluster != "" {
+		fmt.Printf("GCP_CLUSTER provided. Setting CLUSTER_NAMES to [%s]\n", *e2e.GCPCluster)
+		*e2e.ClusterNames = []string{*e2e.GCPCluster}
+	}
+	// if cluster-names is provided, set the number of test threads to the number
+	// of pre-provisioned clusters.
+	if len(*e2e.ClusterNames) > 0 {
+		*e2e.NumClusters = len(*e2e.ClusterNames)
+	}
+	// convenience to reduce required params. cluster-names implies share-test-env.
+	if len(*e2e.ClusterNames) > 0 {
+		*e2e.ShareTestEnv = true
+	}
+	// default to creating clusters for KinD. this is an acceptable default for
+	// KinD, but for GKE the user should explicitly request creating clusters.
+	if *e2e.TestCluster == e2e.Kind && len(*e2e.ClusterNames) == 0 {
+		*e2e.CreateClusters = e2e.CreateClustersEnabled
+	}
+}
+
 func validateArgs() error {
+	var errs error
+	if len(*e2e.ClusterNames) == 0 && *e2e.CreateClusters == e2e.CreateClustersDisabled {
+		errs = multierr.Append(errs, errors.Errorf("At least one of CLUSTER_NAMES or CREATE_CLUSTERS is required"))
+	}
+	if !slices.Contains(e2e.CreateClustersAllowedValues, *e2e.CreateClusters) {
+		errs = multierr.Append(errs,
+			errors.Errorf("Unrecognized value %s for CREATE_CLUSTERS. Allowed values: [%s]",
+				*e2e.CreateClusters, strings.Join(e2e.CreateClustersAllowedValues, ", ")))
+	}
 	if *e2e.TestCluster == e2e.GKE { // required vars for GKE
 		if *e2e.GCPProject == "" {
-			return errors.Errorf("Environment variable GCP_PROJECT is required for GKE clusters")
-		}
-		if *e2e.GCPCluster == "" && !*e2e.CreateClusters {
-			return errors.Errorf("One of GCP_CLUSTER or CREATE_CLUSTERS is required for GKE clusters")
-		}
-		if *e2e.GCPCluster != "" && *e2e.CreateClusters {
-			return errors.Errorf("At most one of GCP_CLUSTER or CREATE_CLUSTERS may be specified")
-		}
-		if e2e.RunInParallel() && !*e2e.CreateClusters {
-			return errors.Errorf("Must provide CREATE_CLUSTERS to run in parallel on GKE")
+			errs = multierr.Append(errs, errors.Errorf("Environment variable GCP_PROJECT is required for GKE clusters"))
 		}
 		if *e2e.GCPRegion == "" && *e2e.GCPZone == "" {
-			return errors.Errorf("One of GCP_REGION or GCP_ZONE is required for GKE clusters")
+			errs = multierr.Append(errs, errors.Errorf("One of GCP_REGION or GCP_ZONE is required for GKE clusters"))
 		}
 		if *e2e.GCPRegion != "" && *e2e.GCPZone != "" {
-			return errors.Errorf("At most one of GCP_ZONE or GCP_REGION may be specified")
+			errs = multierr.Append(errs, errors.Errorf("At most one of GCP_ZONE or GCP_REGION may be specified"))
 		}
 		if *e2e.GKEAutopilot && *e2e.GCPRegion == "" {
-			return errors.Errorf("Autopilot clusters must be created with a region")
+			errs = multierr.Append(errs, errors.Errorf("Autopilot clusters must be created with a region"))
 		}
 		if *e2e.GKEAutopilot && *e2e.GceNode {
-			return errors.Errorf("Cannot run gcenode tests on autopilot clusters")
+			errs = multierr.Append(errs, errors.Errorf("Cannot run gcenode tests on autopilot clusters"))
 		}
 	}
-	return nil
+	return errs
 }
 
 func TestMain(m *testing.M) {
@@ -83,6 +108,7 @@ func main(m *testing.M) int {
 		flag.Usage()
 		return 0
 	}
+	setDefaultArgs()
 	if err := setParallelFlag(); err != nil {
 		fmt.Printf("Error setting test.parallel: %v\n", err)
 		return 1

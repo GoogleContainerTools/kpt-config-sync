@@ -70,10 +70,30 @@ type KindCluster struct {
 	provider           *cluster.Provider
 }
 
+// Exists returns whether the KinD cluster exists
+func (c *KindCluster) Exists() (bool, error) {
+	c.initProvider()
+	kindClusters, err := c.provider.List()
+	if err != nil {
+		return false, err
+	}
+	for _, kindCluster := range kindClusters {
+		if kindCluster == c.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *KindCluster) initProvider() {
+	if c.provider == nil {
+		c.provider = cluster.NewProvider()
+	}
+}
+
 // Create the kind cluster
 func (c *KindCluster) Create() error {
-	c.provider = cluster.NewProvider()
-
+	c.initProvider()
 	version, err := asKindVersion(c.KubernetesVersion)
 	if err != nil {
 		return err
@@ -89,6 +109,7 @@ func (c *KindCluster) Create() error {
 
 // Delete the kind cluster
 func (c *KindCluster) Delete() error {
+	c.initProvider()
 	if !c.creationSuccessful {
 		// Since we have set retain=true, the cluster is still available even
 		// though creation did not execute successfully.
@@ -114,6 +135,7 @@ func (c *KindCluster) Delete() error {
 
 // Connect to the kind cluster
 func (c *KindCluster) Connect() error {
+	c.initProvider()
 	return c.provider.ExportKubeConfig(c.Name, c.KubeConfigPath, false)
 }
 

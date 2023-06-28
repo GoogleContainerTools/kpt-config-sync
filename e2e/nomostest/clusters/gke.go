@@ -46,6 +46,11 @@ type GKECluster struct {
 	KubeConfigPath string
 }
 
+// Exists returns whether the GKE cluster exists
+func (c *GKECluster) Exists() (bool, error) {
+	return clusterExistsGKE(c.T, c.Name)
+}
+
 // Create the GKE cluster
 func (c *GKECluster) Create() error {
 	return createGKECluster(c.T, c.Name)
@@ -260,4 +265,31 @@ func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 	// after getting credentials, wait for any running operations to complete
 	// before handing over this cluster to the test environment
 	return listAndWaitForOperations(context.Background(), t, clusterName)
+}
+
+func clusterExistsGKE(t testing.NTB, clusterName string) (bool, error) {
+	args := []string{
+		"container", "clusters", "list",
+		"--project", *e2e.GCPProject,
+		"--filter", fmt.Sprintf("name ~ ^%s$", clusterName),
+		"--format", "value(name)",
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := exec.Command("gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, errors.Errorf("failed to list cluster (%s): %v\nstdout/stderr:\n%s",
+			clusterName, err, string(out))
+	}
+	clusters := strings.Fields(string(out))
+	if len(clusters) == 1 && clusters[0] == clusterName {
+		return true, nil
+	}
+	return false, nil
 }

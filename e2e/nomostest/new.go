@@ -286,20 +286,28 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		// a single test.
 		connectToLocalRegistry(nt)
 	}
-	if !opts.IsEphemeralCluster {
-		// We aren't using an ephemeral cluster, so make sure the cluster is
-		// cleaned before and after running the test.
+	t.Cleanup(func() {
+		if *e2e.DestroyClusters {
+			nt.T.Logf("Skipping cleanup because cluster will be destroyed (--destroy-clusters=true)")
+			return
+		} else if t.Failed() && *e2e.Debug {
+			nt.T.Logf("Skipping cleanup because test failed with --debug")
+			return
+		}
+		// We aren't deleting the cluster after the test, so clean up
+		nt.T.Log("[CLEANUP] FreshTestEnv after test")
+		if err := Clean(nt); err != nil {
+			nt.T.Errorf("[CLEANUP] Failed to clean test environment: %v", err)
+		}
+	})
+	if *e2e.CreateClusters != e2e.CreateClustersEnabled {
+		// We may not be using a fresh cluster, so make sure the cluster is
+		// cleaned before running the test.
 		nt.T.Log("[CLEANUP] FreshTestEnv before test")
 		if err := Clean(nt); err != nil {
 			nt.T.Fatalf("[CLEANUP] Failed to clean test environment: %v", err)
 		}
-		t.Cleanup(func() {
-			// Clean the cluster now that the test is over.
-			nt.T.Log("[CLEANUP] FreshTestEnv after test")
-			if err := Clean(nt); err != nil {
-				nt.T.Errorf("[CLEANUP] Failed to clean test environment: %v", err)
-			}
-		})
+
 	}
 
 	t.Cleanup(func() {

@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -76,6 +77,15 @@ func EnvFloat(key string, def float64) float64 {
 			return def
 		}
 		return val
+	}
+	return def
+}
+
+// EnvList retrieves the comma delimited list value of the environment variable named by the key.
+// If the variable is not present, it returns default value.
+func EnvList(key string, def []string) []string {
+	if env := os.Getenv(key); env != "" {
+		return strings.Split(env, ",")
 	}
 	return def
 }

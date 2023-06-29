@@ -425,10 +425,10 @@ func MissingConfigMap(o client.Object, err error) status.Error {
 		BuildWithResources(o)
 }
 
-// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileSources.name
+// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileSources.valuesFile
 func MissingConfigMapKey(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileSources.key", kind).
+		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile", kind).
 		BuildWithResources(o)
 }

@@ -142,9 +142,10 @@ func TestPublicHelm(t *testing.T) {
 // It tests that helm-sync properly watches ConfigMaps in the RSync namespace and pulls updated values.
 func TestHelmWatchConfigMap(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	cmName := "helm-watch-config-map"
 
 	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
-	cm1 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm1.Data = map[string]string{"values.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -199,7 +200,7 @@ service:
 			"valuesFileSources": [
 			  {
 				"kind": "ConfigMap",
-				"name": "foo"
+				"name": "helm-watch-config-map"
 			  }
 			]
 		  }
@@ -241,7 +242,7 @@ service:
 	}
 
 	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Never; wordpressUserName: test-user-2")
-	cm2 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm2.Data = map[string]string{"values.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -283,7 +284,7 @@ service:
 	}
 
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
-	cm3 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm3 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm3.Data = map[string]string{"something-else.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -293,7 +294,7 @@ image:
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -314,7 +315,7 @@ image:
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"helm-watch-config-map\" not found")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -360,8 +361,9 @@ image:
 // It tests RSync spec.helm.valuesFileApplyStrategy field.
 func TestHelmConfigMapMerge(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	cmName := "helm-config-map-merge"
 
-	cm := fake.ConfigMapObject(core.Name("foo"), core.Namespace(configsync.ControllerNamespace))
+	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm.Data = map[string]string{
 		"first": `
 extraEnvVars:
@@ -403,11 +405,11 @@ wordpressEmail: override-this@example.com`,
 			},
 			"valuesFileSources": [
 			  {
-				"name": "foo",
+				"name": "helm-config-map-merge",
 				"valuesFile": "first"
 			  },
 			  {
-				"name": "foo",
+				"name": "helm-config-map-merge",
 				"valuesFile": "second"
 			  }
 			]
@@ -622,6 +624,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+	cmName := "helm-cm-ns-repo"
 
 	remoteHelmChart, err := helm.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
 	if err != nil {
@@ -629,7 +632,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Create a ConfigMap with values: labelTest: first")
-	cm1 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm1.Data = map[string]string{
 		"foo.yaml": `label: first`,
 	}
@@ -647,10 +650,11 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		GCPServiceAccountEmail: gsaARReaderEmail(),
 		Version:                privateNSHelmChartVersion,
 		ReleaseName:            "test",
-		ValuesFileSources:      []v1beta1.ValuesFileSources{{Name: "foo", ValuesFile: "foo.yaml"}},
+		ValuesFileSources:      []v1beta1.ValuesFileSources{{Name: cmName, ValuesFile: "foo.yaml"}},
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
+
 	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -661,7 +665,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Update the referenced ConfigMap with values: labelsTest: second")
-	cm2 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm2.Data = map[string]string{
 		"foo.yaml": `label: second`,
 	}
@@ -674,14 +678,14 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Logf("Update the ConfigMap to have incorrect key")
-	cm3 := fake.ConfigMapObject(core.Name("foo"), core.Namespace(testNs))
+	cm3 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm3.Data = map[string]string{
 		"values.yaml": `label: second`,
 	}
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.key")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)
@@ -691,7 +695,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"foo\" not found")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"helm-cm-ns-repo\" not found")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)
@@ -701,6 +705,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Create(cm1Copy); err != nil {
 		nt.T.Fatal(err)
 	}
+
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
 		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "first")}); err != nil {
 		nt.T.Fatal(err)

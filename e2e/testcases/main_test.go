@@ -72,6 +72,11 @@ func validateArgs() error {
 			errors.Errorf("Unrecognized value %s for CREATE_CLUSTERS. Allowed values: [%s]",
 				*e2e.CreateClusters, strings.Join(e2e.CreateClustersAllowedValues, ", ")))
 	}
+	if !slices.Contains(e2e.DestroyClustersAllowedValues, *e2e.DestroyClusters) {
+		errs = multierr.Append(errs,
+			errors.Errorf("Unrecognized value %s for DESTROY_CLUSTERS. Allowed values: [%s]",
+				*e2e.DestroyClusters, strings.Join(e2e.DestroyClustersAllowedValues, ", ")))
+	}
 	if *e2e.TestCluster == e2e.GKE { // required vars for GKE
 		if *e2e.GCPProject == "" {
 			errs = multierr.Append(errs, errors.Errorf("Environment variable GCP_PROJECT is required for GKE clusters"))

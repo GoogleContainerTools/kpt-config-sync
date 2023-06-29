@@ -41,6 +41,9 @@ type New struct {
 	// ClusterName is the name of the target cluster used by the test.
 	ClusterName string
 
+	// IsEphemeralCluster indicates whether the cluster will be destroyed.
+	IsEphemeralCluster bool
+
 	// TmpDir is the base temporary directory to use for the test. Overrides the
 	// generated directory based on Name and the OS's main temporary directory.
 	TmpDir string

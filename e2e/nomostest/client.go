@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -112,44 +113,29 @@ type Cluster interface {
 	Connect() error
 }
 
-func upsertCluster(t testing.NTB, cluster Cluster, opts *ntopts.New) {
+// upsertCluster creates the cluster if it does not exist
+// returns whether the cluster was created
+func upsertCluster(t testing.NTB, cluster Cluster, opts *ntopts.New) (bool, error) {
 	exists, err := cluster.Exists()
 	if err != nil {
-		t.Fatal(err)
+		return false, err
 	}
 	if exists && *e2e.CreateClusters != e2e.CreateClustersLazy {
-		t.Fatalf("cluster %s already exists and create-clusters=%s", opts.ClusterName, *e2e.CreateClusters)
+		return false, errors.Errorf("cluster %s already exists and create-clusters=%s", opts.ClusterName, *e2e.CreateClusters)
 	}
-	t.Cleanup(func() {
-		if !*e2e.DestroyClusters {
-			t.Logf("[WARNING] Skipping deletion of %s cluster %s (--destroy-clusters=false)", *e2e.TestCluster, opts.ClusterName)
-			return
-		} else if t.Failed() && *e2e.Debug {
-			t.Logf("[WARNING] Skipping deletion of %s cluster %s (tests failed with --debug)", *e2e.TestCluster, opts.ClusterName)
-			return
-		}
-		deleteStart := time.Now()
-		t.Logf("Deleting %s cluster %s at %s",
-			*e2e.TestCluster, opts.ClusterName, deleteStart.Format(time.RFC3339))
-		defer func() {
-			t.Logf("took %s to delete %s cluster %s",
-				time.Since(deleteStart), *e2e.TestCluster, opts.ClusterName)
-		}()
-		if err := cluster.Delete(); err != nil {
-			t.Error(err)
-		}
-	})
 	if exists && *e2e.CreateClusters == e2e.CreateClustersLazy {
-		return
+		t.Logf("cluster %s already exists, adopting (create-clusters=%s)", opts.ClusterName, *e2e.CreateClusters)
+		return false, nil
 	}
 	createStart := time.Now()
 	t.Logf("Creating %s cluster %s at %s",
 		*e2e.TestCluster, opts.ClusterName, createStart.Format(time.RFC3339))
 	if err := cluster.Create(); err != nil {
-		t.Fatal(err)
+		return true, err
 	}
 	t.Logf("took %s to create %s cluster %s",
 		time.Since(createStart), *e2e.TestCluster, opts.ClusterName)
+	return true, nil
 }
 
 // RestConfig sets up the config for creating a Client connection to a K8s cluster.
@@ -179,8 +165,49 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	default:
 		t.Fatalf("unsupported test cluster config %s. Allowed values are %s and %s.", *e2e.TestCluster, e2e.GKE, e2e.Kind)
 	}
+	switch *e2e.DestroyClusters {
+	case e2e.DestroyClustersEnabled:
+		opts.IsEphemeralCluster = true
+	case e2e.DestroyClustersDisabled:
+		opts.IsEphemeralCluster = false
+	case e2e.DestroyClustersAuto:
+		// set initial value for auto, but this may change below if cluster is created
+		opts.IsEphemeralCluster = false
+	default:
+		// this should never be reached due to earlier parameter validation
+		t.Fatalf("unrecognized option for destroy-clusters: %v", *e2e.DestroyClusters)
+	}
+	t.Cleanup(func() {
+		if !opts.IsEphemeralCluster {
+			t.Logf("[WARNING] Skipping deletion of %s cluster %s (--destroy-clusters=%s)",
+				*e2e.TestCluster, opts.ClusterName, *e2e.DestroyClusters)
+			return
+		} else if t.Failed() && *e2e.Debug {
+			t.Logf("[WARNING] Skipping deletion of %s cluster %s (tests failed with --debug)",
+				*e2e.TestCluster, opts.ClusterName)
+			return
+		}
+		deleteStart := time.Now()
+		t.Logf("Deleting %s cluster %s at %s",
+			*e2e.TestCluster, opts.ClusterName, deleteStart.Format(time.RFC3339))
+		defer func() {
+			t.Logf("took %s to delete %s cluster %s",
+				time.Since(deleteStart), *e2e.TestCluster, opts.ClusterName)
+		}()
+		if err := cluster.Delete(); err != nil {
+			t.Error(err)
+		}
+	})
 	if *e2e.CreateClusters != e2e.CreateClustersDisabled {
-		upsertCluster(t, cluster, opts)
+		createdCluster, err := upsertCluster(t, cluster, opts)
+		if *e2e.DestroyClusters == e2e.DestroyClustersAuto {
+			// if the cluster was created with --destroy-clusters=auto, the cluster
+			// will be cleaned up at the end of the test execution
+			opts.IsEphemeralCluster = createdCluster
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Logf("Connecting to %s cluster %s",
 		*e2e.TestCluster, opts.ClusterName)

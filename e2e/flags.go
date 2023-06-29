@@ -184,8 +184,12 @@ var CreateClusters = flag.String("create-clusters", util.EnvString("E2E_CREATE_C
 var CreateClustersAllowedValues = []string{CreateClustersEnabled, CreateClustersLazy, CreateClustersDisabled}
 
 // DestroyClusters indicates whether to destroy clusters that were created by the test suite after the tests.
-var DestroyClusters = flag.Bool("destroy-clusters", util.EnvBool("E2E_DESTROY_CLUSTERS", true),
-	"Whether to destroy clusters that were created by the test suite after the tests.")
+var DestroyClusters = flag.String("destroy-clusters", util.EnvString("E2E_DESTROY_CLUSTERS", DestroyClustersAuto),
+	fmt.Sprintf("Whether to destroy clusters that were created by the test suite after the tests. Allowed Values: [%s]",
+		strings.Join(DestroyClustersAllowedValues, ", ")))
+
+// DestroyClustersAllowedValues is a list of allowed values for the destroy-clusters parameter
+var DestroyClustersAllowedValues = []string{DestroyClustersEnabled, DestroyClustersAuto, DestroyClustersDisabled}
 
 const (
 	// Kind indicates creating a Kind cluster for testing.
@@ -208,6 +212,13 @@ const (
 	CreateClustersLazy = "lazy"
 	// CreateClustersDisabled indicates to not create clusters
 	CreateClustersDisabled = "false"
+	// DestroyClustersEnabled indicates to destroy clusters
+	DestroyClustersEnabled = "true"
+	// DestroyClustersAuto indicates to only destroy clusters if they were created
+	// by the test framework
+	DestroyClustersAuto = "auto"
+	// DestroyClustersDisabled indicates to not destroy clusters
+	DestroyClustersDisabled = "false"
 )
 
 const (

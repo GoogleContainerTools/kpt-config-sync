@@ -287,8 +287,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		connectToLocalRegistry(nt)
 	}
 	t.Cleanup(func() {
-		if *e2e.DestroyClusters {
-			nt.T.Logf("Skipping cleanup because cluster will be destroyed (--destroy-clusters=true)")
+		if opts.IsEphemeralCluster {
+			nt.T.Logf("Skipping cleanup because cluster will be destroyed (--destroy-clusters=%s)", *e2e.DestroyClusters)
 			return
 		} else if t.Failed() && *e2e.Debug {
 			nt.T.Logf("Skipping cleanup because test failed with --debug")

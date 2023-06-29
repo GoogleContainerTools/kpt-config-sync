@@ -636,7 +636,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 			expected: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{{
-						Name:      "configmap-vol-foo-0",
+						Name:      "vol-0-foo",
 						MountPath: "/etc/config/foo/values.yaml",
 					}},
 					Env: []corev1.EnvVar{{
@@ -646,7 +646,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "vol-0-foo",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -677,11 +677,11 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name:      "configmap-vol-foo-0",
+							Name:      "vol-0-foo",
 							MountPath: "/etc/config/foo/values.yaml",
 						},
 						{
-							Name:      "configmap-vol-bar-1",
+							Name:      "vol-1-bar",
 							MountPath: "/etc/config/bar/values.yaml",
 						},
 					},
@@ -692,7 +692,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "vol-0-foo",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -706,7 +706,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					{
-						Name: "configmap-vol-bar-1",
+						Name: "vol-1-bar",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -737,11 +737,11 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name:      "configmap-vol-foo-0",
+							Name:      "vol-0-foo",
 							MountPath: "/etc/config/foo/values-0.yaml",
 						},
 						{
-							Name:      "configmap-vol-foo-1",
+							Name:      "vol-1-foo",
 							MountPath: "/etc/config/foo/values-1.yaml",
 						},
 					},
@@ -752,7 +752,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "vol-0-foo",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -766,7 +766,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					{
-						Name: "configmap-vol-foo-1",
+						Name: "vol-1-foo",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -774,6 +774,42 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values-1.yaml",
+									Path: reconcilermanager.HelmConfigMapRef,
+								}},
+							},
+						},
+					},
+				},
+			},
+		},
+		"long name gets truncated": {
+			input: []v1beta1.ValuesFileSources{
+				{
+					Name:       "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx",
+					ValuesFile: "values.yaml",
+				},
+			},
+			expected: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					VolumeMounts: []corev1.VolumeMount{{
+						Name:      "vol-0-abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghi",
+						MountPath: "/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx/values.yaml",
+					}},
+					Env: []corev1.EnvVar{{
+						Name:  reconcilermanager.HelmValuesFileSources,
+						Value: filepath.Join("/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx/values.yaml", reconcilermanager.HelmConfigMapRef),
+					}},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "vol-0-abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghi",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx",
+								},
+								Items: []corev1.KeyToPath{{
+									Key:  "values.yaml",
 									Path: reconcilermanager.HelmConfigMapRef,
 								}},
 							},

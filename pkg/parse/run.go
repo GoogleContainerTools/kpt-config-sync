@@ -305,7 +305,7 @@ func readFromSource(ctx context.Context, p Parser, trigger string, state *reconc
 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
-		sourceState, hydrationErr = opts.readHydratedDir(absHydratedRoot, opts.HydratedLink, opts.reconcilerName)
+		sourceState, hydrationErr = opts.readHydratedDir(absHydratedRoot, opts.reconcilerName, sourceState)
 		if hydrationErr != nil {
 			hydrationStatus.message = RenderingFailed
 			hydrationStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
@@ -330,7 +330,7 @@ func readFromSource(ctx context.Context, p Parser, trigger string, state *reconc
 	state.resetCache()
 
 	// Read all the files under state.syncDir
-	sourceStatus.errs = opts.readConfigFiles(&sourceState, p)
+	sourceStatus.errs = opts.readConfigFiles(&sourceState)
 	if sourceStatus.errs == nil {
 		// Set `state.cache.source` after `readConfigFiles` succeeded
 		state.cache.source = sourceState

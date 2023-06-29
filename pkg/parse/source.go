@@ -77,7 +77,7 @@ type sourceState struct {
 // - if rendered is true, state.syncDir contains the hydrated files.
 // - if rendered is false, state.syncDir contains the source files.
 // readConfigFiles should be called after sourceState is populated.
-func (o *files) readConfigFiles(state *sourceState, p Parser) status.Error {
+func (o *files) readConfigFiles(state *sourceState) status.Error {
 	if state == nil || state.commit == "" || state.syncDir.OSPath() == "" {
 		return status.InternalError("sourceState is not populated yet")
 	}
@@ -96,7 +96,7 @@ func (o *files) readConfigFiles(state *sourceState, p Parser) status.Error {
 		return status.PathWrapError(errors.Wrap(err, "listing files in the configs directory"), syncDir.OSPath())
 	}
 
-	newCommit, err := hydrate.ComputeCommit(p.options().SourceDir)
+	newCommit, err := hydrate.ComputeCommit(o.SourceDir)
 	if err != nil {
 		return status.TransientError(err)
 	} else if newCommit != state.commit {
@@ -116,7 +116,7 @@ func (o *files) sourceContext() sourceContext {
 }
 
 // readHydratedDir returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded.
-func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, link, reconciler string) (sourceState, hydrate.HydrationError) {
+func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
 	result := sourceState{}
 	errorFile := hydratedRoot.Join(cmpath.RelativeSlash(hydrate.ErrorFile))
 	if _, err := os.Stat(errorFile.OSPath()); err == nil {
@@ -125,12 +125,16 @@ func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, link, reconciler s
 	} else if !os.IsNotExist(err) {
 		return result, hydrate.NewTransientError(errors.Wrapf(err, "failed to check the error file: %s", errorFile.OSPath()))
 	}
-	hydratedDir, err := hydratedRoot.Join(cmpath.RelativeSlash(link)).EvalSymlinks()
+	hydratedDir, err := hydratedRoot.Join(cmpath.RelativeSlash(o.HydratedLink)).EvalSymlinks()
 	if err != nil {
 		return result, hydrate.NewInternalError(errors.Wrapf(err, "unable to load the hydrated configs under %s", hydratedRoot.OSPath()))
 	}
 
 	result.commit = filepath.Base(hydratedDir.OSPath())
+	// assert that the commit has not changed during this parse
+	if result.commit != srcState.commit {
+		return result, status.TransientError(fmt.Errorf("source commit changed while listing hydrated files, was %s, now %s. It will be retried in the next sync", srcState.commit, result.commit))
+	}
 
 	relSyncDir := hydratedDir.Join(o.SyncDir)
 	syncDir, err := relSyncDir.EvalSymlinks()

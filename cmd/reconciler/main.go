@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -93,6 +94,8 @@ var (
 	debug = flag.Bool("debug", false,
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
 			"Do not use in production.")
+
+	renderingEnabled = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
 )
 
 var flags = struct {
@@ -183,6 +186,7 @@ func main() {
 		StatusMode:              *statusMode,
 		ReconcileTimeout:        *reconcileTimeout,
 		APIServerTimeout:        *apiServerTimeout,
+		RenderingEnabled:        *renderingEnabled,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

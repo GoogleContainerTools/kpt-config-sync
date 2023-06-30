@@ -834,7 +834,7 @@ func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile
 func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout)),
+		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout), enableRendering(rs.GetAnnotations())),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -1034,13 +1034,15 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.HydrationController:
-				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				if rs.Spec.SafeOverride().EnableShellInRendering == nil || !*rs.Spec.SafeOverride().EnableShellInRendering {
-					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationControllerWithShell, reconcilermanager.HydrationController)
+				if !enableRendering(rs.GetAnnotations()) {
+					// if the sync source does not require rendering, omit the hydration controller
+					// this minimizes the resource footprint of the reconciler
+					addContainer = false
 				} else {
-					container.Image = strings.ReplaceAll(container.Image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					container.Image = updateHydrationControllerImage(container.Image, *rs.Spec.SafeOverride())
+					mutateContainerResource(&container, rs.Spec.Override)
 				}
-				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
 				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.OciSource {

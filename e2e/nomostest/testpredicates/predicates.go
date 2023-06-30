@@ -428,6 +428,48 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 	}
 }
 
+// DeploymentHasContainer check whether the deployment has the
+// container with the specified name.
+func DeploymentHasContainer(containerName string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(o, d)
+		}
+		nn := core.ObjectNamespacedName(o)
+		for _, c := range d.Spec.Template.Spec.Containers {
+			if c.Name == containerName {
+				return nil
+			}
+		}
+		return errors.Errorf("Deployment %s should have container %s", nn, containerName)
+	}
+}
+
+// DeploymentMissingContainer check whether the deployment does not have the
+// container with the specified name.
+func DeploymentMissingContainer(containerName string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(o, d)
+		}
+		nn := core.ObjectNamespacedName(o)
+		for _, c := range d.Spec.Template.Spec.Containers {
+			if c.Name == containerName {
+				return errors.Errorf("Deployment %s should not have container %s", nn, containerName)
+			}
+		}
+		return nil
+	}
+}
+
 // IsManagedBy checks that the object is managed by configsync, has the expected
 // resource manager, and has a valid resource-id.
 // Use diff.IsManager if you just need a boolean without errors.

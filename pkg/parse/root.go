@@ -17,6 +17,7 @@ package parse
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -40,6 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -52,7 +55,7 @@ import (
 )
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface) (Parser, error) {
+func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -79,6 +82,7 @@ func NewRootRunner(clusterName, syncName, reconcilerName string, format filesyst
 			discoveryInterface: dc,
 			converter:          converter,
 			mux:                &sync.Mutex{},
+			renderingEnabled:   renderingEnabled,
 		},
 		sourceFormat: format,
 	}, nil
@@ -251,6 +255,21 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 	source.Errors = cse[0 : len(cse)/denominator]
 	source.ErrorSummary = errorSummary
 	source.LastUpdate = newStatus.lastUpdate
+}
+
+func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
+	rs := &v1beta1.RootSync{}
+	if err := p.client.Get(ctx, rootsync.ObjectKey(p.syncName), rs); err != nil {
+		return status.APIServerError(err, "failed to get RootSync for parser")
+	}
+	newVal := strconv.FormatBool(renderingRequired)
+	if core.GetAnnotation(rs, metadata.RequiresRenderingAnnotationKey) == newVal {
+		// avoid unnecessary updates
+		return nil
+	}
+	existing := rs.DeepCopy()
+	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
+	return p.client.Patch(ctx, rs, client.MergeFrom(existing))
 }
 
 // setRenderingStatus implements the Parser interface

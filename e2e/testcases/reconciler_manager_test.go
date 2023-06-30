@@ -689,7 +689,21 @@ func firstContainerMemoryRequestIs(memoryRequest int64) testpredicates.Predicate
 }
 
 func TestAutopilotReconcilerAdjustment(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController)
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
+
+	// push DRY configs to sync source to enable hydration-controller
+	nt.T.Log("Add the namespace-repo root directory to enable hydration")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/namespace-repo", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+	nt.T.Log("Update RootSync to sync from the namespace-repo directory")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "namespace-repo"}}}`)
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.RootSyncNN(configsync.RootSyncName): "namespace-repo",
+	}
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, reconcilerDeployment); err != nil {
@@ -697,11 +711,6 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	}
 	firstContainerName := reconcilerDeployment.Spec.Template.Spec.Containers[0].Name
 
-	rs := &v1beta1.RootSync{}
-
-	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
 	generation := reconcilerDeployment.Generation
 	var expectedTotalCPU int64
 	var expectedTotalMemory int64
@@ -715,7 +724,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	output := map[string]corev1.ResourceRequirements{}
 
 	// default container resource requests defined in the reconciler template: manifests/templates/reconciler-manager-configmap.yaml, total CPU/memory: 80m/600Mi
-	// - hydration-controller: 10m/100Mi
+	// - hydration-controller: 10m/100Mi (disabled by default)
 	// - reconciler: 50m/200Mi
 	// - git-sync: 10m/200Mi
 	// - otel-agent: 10m/100Mi
@@ -736,7 +745,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	if err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
 		hasGeneration(generation), totalContainerCPURequestIs(expectedTotalCPU),
 		totalContainerMemoryRequestIs(expectedTotalMemory), firstContainerCPURequestIs(expectedFirstContainerCPU)); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	// increase CPU and memory request to above current request autopilot increment

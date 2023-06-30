@@ -29,11 +29,13 @@ import (
 	nomosstatus "kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
@@ -52,6 +54,33 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 		ntopts.Unstructured,
 	)
 
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
+	}
+
+	// Dry configs not yet added to repo, assert that hydration is disabled
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate(
+			configsync.RootSyncName,
+			configsync.ControllerNamespace,
+			&v1beta1.RootSync{},
+			testpredicates.MissingAnnotation(metadata.RequiresRenderingAnnotationKey),
+		)
+	})
+	tg.Go(func() error {
+		return nt.Validate(
+			core.RootReconcilerName(configsync.RootSyncName),
+			configsync.ControllerNamespace,
+			&appsv1.Deployment{},
+			testpredicates.DeploymentMissingContainer(reconcilermanager.HydrationController),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "false"),
+		)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.T.Log("Add the kustomize components root directory")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
@@ -59,8 +88,30 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
-	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "kustomize-components"}))
-	if err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Dry configs added to repo, assert that hydration is enabled
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate(
+			configsync.RootSyncName,
+			configsync.ControllerNamespace,
+			&v1beta1.RootSync{},
+			testpredicates.HasAnnotation(metadata.RequiresRenderingAnnotationKey, "true"),
+		)
+	})
+	tg.Go(func() error {
+		return nt.Validate(
+			core.RootReconcilerName(configsync.RootSyncName),
+			configsync.ControllerNamespace,
+			&appsv1.Deployment{},
+			testpredicates.DeploymentHasContainer(reconcilermanager.HydrationController),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "true"),
+		)
+	})
+	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -90,8 +141,8 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.T.Log("Add kustomization.yaml back")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add kustomization.yml back"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "kustomize-components"}))
-	if err != nil {
+
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -114,6 +165,38 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
 		nt.T.Errorf("%v\nExpected error: Should fail to run kustomize build.\n", err)
+	}
+
+	// one final validation to ensure hydration-controller can be re-disabled
+	nt.T.Log("Remove all dry configs")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/compiled/kustomize-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Replace dry configs with wet configs"))
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the hydration-controller is omitted after dry configs were removed")
+	// Dry configs removed from repo, assert that hydration is disabled again
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate(
+			configsync.RootSyncName,
+			configsync.ControllerNamespace,
+			&v1beta1.RootSync{},
+			testpredicates.HasAnnotation(metadata.RequiresRenderingAnnotationKey, "false"),
+		)
+	})
+	tg.Go(func() error {
+		return nt.Validate(
+			core.RootReconcilerName(configsync.RootSyncName),
+			configsync.ControllerNamespace,
+			&appsv1.Deployment{},
+			testpredicates.DeploymentMissingContainer(reconcilermanager.HydrationController),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "false"),
+		)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -249,13 +332,6 @@ func TestHydrateRemoteResources(t *testing.T) {
 		ntopts.Unstructured,
 	)
 
-	nt.T.Log("Check hydration controller default image name")
-	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
 	nt.T.Log("Add the remote-base root directory")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
@@ -263,6 +339,15 @@ func TestHydrateRemoteResources(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+
+	// hydration-controller disabled by default, check for existing of container
+	// after sync source contains DRY configs
+	nt.T.Log("Check hydration controller default image name")
+	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.T.Log("Enable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": true}}}`)

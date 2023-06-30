@@ -17,6 +17,8 @@ package controllers
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -30,6 +32,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 )
+
+// updateHydrationControllerImage sets the image of hydration-controller based
+// on whether enableShellInRendering is set.
+func updateHydrationControllerImage(image string, overrides v1beta1.OverrideSpec) string {
+	if overrides.EnableShellInRendering == nil || !*overrides.EnableShellInRendering {
+		return strings.ReplaceAll(image, reconcilermanager.HydrationControllerWithShell, reconcilermanager.HydrationController)
+	}
+	return strings.ReplaceAll(image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")
+}
 
 // hydrationEnvs returns environment variables for the hydration controller.
 func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, scope declared.Scope, reconcilerName, pollPeriod string) []corev1.EnvVar {
@@ -74,7 +85,7 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string, apiServerTimeout string) []corev1.EnvVar {
+func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string, apiServerTimeout string, requiresRendering bool) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
@@ -159,6 +170,10 @@ func reconcilerEnvs(clusterName, syncName, reconcilerName string, reconcilerScop
 		corev1.EnvVar{
 			Name:  reconcilermanager.APIServerTimeout,
 			Value: apiServerTimeout,
+		},
+		corev1.EnvVar{
+			Name:  reconcilermanager.RenderingEnabled,
+			Value: strconv.FormatBool(requiresRendering),
 		},
 	)
 

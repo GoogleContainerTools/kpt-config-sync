@@ -74,8 +74,8 @@ type sourceState struct {
 }
 
 // readConfigFiles reads all the files under state.syncDir and sets state.files.
-// - if rendered is true, state.syncDir contains the hydrated files.
-// - if rendered is false, state.syncDir contains the source files.
+// - if rendering is enabled, state.syncDir contains the hydrated files.
+// - if rendered is disabled, state.syncDir contains the source files.
 // readConfigFiles should be called after sourceState is populated.
 func (o *files) readConfigFiles(state *sourceState) status.Error {
 	if state == nil || state.commit == "" || state.syncDir.OSPath() == "" {

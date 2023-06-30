@@ -16,7 +16,9 @@ package parse
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path"
 	"time"
 
 	"github.com/pkg/errors"
@@ -25,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -51,6 +54,13 @@ const (
 
 	// RenderingSkipped means that the configs don't need to be rendered.
 	RenderingSkipped string = "Rendering skipped"
+
+	// RenderingRequired means that the configs require rendering but the
+	// hydration-controller is not currently running.
+	RenderingRequired string = "Rendering required but is currently disabled"
+	// RenderingNotRequired means that the configs do not require rendering but the
+	// hydration-controller is currently running.
+	RenderingNotRequired string = "Rendering not required but is currently enabled"
 )
 
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
@@ -166,39 +176,42 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	}
 
 	rs := renderingStatus{
-		commit: gs.commit,
+		commit:            gs.commit,
+		requiresRendering: state.renderingStatus.requiresRendering,
 	}
 
 	// set the rendering status by checking the done file.
-	doneFilePath := p.options().RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
-	_, err := os.Stat(doneFilePath)
-	if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.commit) {
-		rs.message = RenderingInProgress
-		rs.lastUpdate = metav1.Now()
-		klog.V(3).Info("Updating rendering status (before read): %#v", rs)
-		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
-		if setRenderingStatusErr == nil {
-			state.reset()
-			state.renderingStatus = rs
-			state.syncingConditionLastUpdate = rs.lastUpdate
-		} else {
-			var m status.MultiError
-			state.invalidate(status.Append(m, setRenderingStatusErr))
+	if p.options().renderingEnabled {
+		doneFilePath := p.options().RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
+		_, err := os.Stat(doneFilePath)
+		if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.commit) {
+			rs.message = RenderingInProgress
+			rs.lastUpdate = metav1.Now()
+			klog.V(3).Info("Updating rendering status (before read): %#v", rs)
+			setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
+			if setRenderingStatusErr == nil {
+				state.reset()
+				state.renderingStatus = rs
+				state.syncingConditionLastUpdate = rs.lastUpdate
+			} else {
+				var m status.MultiError
+				state.invalidate(status.Append(m, setRenderingStatusErr))
+			}
+			return
 		}
-		return
-	}
-	if err != nil {
-		rs.message = RenderingFailed
-		rs.lastUpdate = metav1.Now()
-		rs.errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
-		klog.V(3).Info("Updating rendering status (before read): %#v", rs)
-		setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
-		if setRenderingStatusErr == nil {
-			state.renderingStatus = rs
-			state.syncingConditionLastUpdate = rs.lastUpdate
+		if err != nil {
+			rs.message = RenderingFailed
+			rs.lastUpdate = metav1.Now()
+			rs.errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
+			klog.V(3).Info("Updating rendering status (before read): %#v", rs)
+			setRenderingStatusErr := p.setRenderingStatus(ctx, state.renderingStatus, rs)
+			if setRenderingStatusErr == nil {
+				state.renderingStatus = rs
+				state.syncingConditionLastUpdate = rs.lastUpdate
+			}
+			state.invalidate(status.Append(rs.errs, setRenderingStatusErr))
+			return
 		}
-		state.invalidate(status.Append(rs.errs, setRenderingStatusErr))
-		return
 	}
 
 	// rendering is done, starts to read the source or hydrated configs.
@@ -238,6 +251,14 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 // It also updates the .status.rendering and .status.source fields.
 func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) status.MultiError {
 	hydrationStatus, sourceStatus := readFromSource(ctx, p, trigger, state, sourceState)
+	if p.options().renderingEnabled != hydrationStatus.requiresRendering {
+		// the reconciler is misconfigured. set the annotation so that the reconciler-manager
+		// will recreate this reconciler with the correct configuration.
+		if err := p.setRequiresRendering(ctx, hydrationStatus.requiresRendering); err != nil {
+			hydrationStatus.errs = status.Append(hydrationStatus.errs,
+				status.InternalHydrationError(err, "error setting %s annotation", metadata.RequiresRenderingAnnotationKey))
+		}
+	}
 	// Return the transient errors here to avoid surfacing them to the R*Sync status field.
 	// The transient errors might be auto-resolved in the next retry loop, so no need to expose to users.
 	if status.HasTransientErrors(hydrationStatus.errs) {
@@ -280,63 +301,98 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 	return status.Append(sourceStatus.errs, setSourceStatusErr)
 }
 
-// readFromSource reads the source or hydrated configs, checks whether the sourceState in
-// the cache is up-to-date. If the cache is not up-to-date, reads all the source or hydrated files.
-// readFromSource returns the rendering status and source status.
-func readFromSource(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) (renderingStatus, sourceStatus) {
-	opts := p.options()
-	start := time.Now()
-
-	hydrationStatus := renderingStatus{
-		commit: sourceState.commit,
+// parseHydrationState reads from the file path which the hydration-controller
+// container writes to. It checks if the hydrated files are ready and returns
+// a renderingStatus.
+func parseHydrationState(p Parser, srcState sourceState, hydrationStatus renderingStatus) (sourceState, renderingStatus) {
+	options := p.options()
+	if !options.renderingEnabled {
+		hydrationStatus.message = RenderingSkipped
+		return srcState, hydrationStatus
 	}
-	sourceStatus := sourceStatus{
-		commit: sourceState.commit,
-	}
-
 	// Check if the hydratedRoot directory exists.
-	// If exists, read the hydrated directory. Otherwise, read the source directory.
-	absHydratedRoot, err := cmpath.AbsoluteOS(opts.HydratedRoot)
+	// If exists, read the hydrated directory. Otherwise, fail.
+	absHydratedRoot, err := cmpath.AbsoluteOS(options.HydratedRoot)
 	if err != nil {
 		hydrationStatus.message = RenderingFailed
 		hydrationStatus.errs = status.InternalHydrationError(err, "hydrated-dir must be an absolute path")
-		return hydrationStatus, sourceStatus
+		return srcState, hydrationStatus
 	}
 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
-		sourceState, hydrationErr = opts.readHydratedDir(absHydratedRoot, opts.reconcilerName, sourceState)
+		srcState, hydrationErr = options.readHydratedDir(absHydratedRoot, options.reconcilerName, srcState)
 		if hydrationErr != nil {
 			hydrationStatus.message = RenderingFailed
 			hydrationStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
-			return hydrationStatus, sourceStatus
+			return srcState, hydrationStatus
 		}
 		hydrationStatus.message = RenderingSucceeded
 	} else if !os.IsNotExist(err) {
 		hydrationStatus.message = RenderingFailed
 		hydrationStatus.errs = status.InternalHydrationError(err, "unable to evaluate the hydrated path %s", absHydratedRoot.OSPath())
-		return hydrationStatus, sourceStatus
+		return srcState, hydrationStatus
 	} else {
-		hydrationStatus.message = RenderingSkipped
+		// Source of truth does not require hydration, but hydration-controller is running
+		hydrationStatus.message = RenderingNotRequired
+		hydrationStatus.requiresRendering = false
+		err := hydrate.NewTransientError(fmt.Errorf("sync source contains only wet configs and hydration-controller is running"))
+		hydrationStatus.errs = status.HydrationError(err.Code(), err)
+		return srcState, hydrationStatus
+	}
+	return srcState, hydrationStatus
+}
+
+// readFromSource reads the source or hydrated configs, checks whether the sourceState in
+// the cache is up-to-date. If the cache is not up-to-date, reads all the source or hydrated files.
+// readFromSource returns the rendering status and source status.
+func readFromSource(ctx context.Context, p Parser, trigger string, recState *reconcilerState, srcState sourceState) (renderingStatus, sourceStatus) {
+	options := p.options()
+	start := time.Now()
+
+	hydrationStatus := renderingStatus{
+		commit:            srcState.commit,
+		requiresRendering: options.renderingEnabled,
+	}
+	srcStatus := sourceStatus{
+		commit: srcState.commit,
 	}
 
-	if sourceState.syncDir == state.cache.source.syncDir {
-		return hydrationStatus, sourceStatus
+	srcState, hydrationStatus = parseHydrationState(p, srcState, hydrationStatus)
+	if hydrationStatus.errs != nil {
+		return hydrationStatus, srcStatus
 	}
 
-	klog.Infof("New source changes (%s) detected, reset the cache", sourceState.syncDir.OSPath())
+	if srcState.syncDir == recState.cache.source.syncDir {
+		return hydrationStatus, srcStatus
+	}
 
+	// Read all the files under srcState.syncDir
+	srcStatus.errs = options.readConfigFiles(&srcState)
+
+	if !options.renderingEnabled {
+		// Check if any kustomization files exist
+		for _, fi := range srcState.files {
+			if hydrate.HasKustomization(path.Base(fi.OSPath())) {
+				// Source of truth requires hydration, but the hydration-controller is not running
+				hydrationStatus.message = RenderingRequired
+				hydrationStatus.requiresRendering = true
+				err := hydrate.NewTransientError(fmt.Errorf("sync source contains dry configs and hydration-controller is not running"))
+				hydrationStatus.errs = status.HydrationError(err.Code(), err)
+				return hydrationStatus, srcStatus
+			}
+		}
+	}
+
+	klog.Infof("New source changes (%s) detected, reset the cache", srcState.syncDir.OSPath())
 	// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
-	state.resetCache()
-
-	// Read all the files under state.syncDir
-	sourceStatus.errs = opts.readConfigFiles(&sourceState)
-	if sourceStatus.errs == nil {
+	recState.resetCache()
+	if srcStatus.errs == nil {
 		// Set `state.cache.source` after `readConfigFiles` succeeded
-		state.cache.source = sourceState
+		recState.cache.source = srcState
 	}
-	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(sourceStatus.errs), start)
-	return hydrationStatus, sourceStatus
+	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(srcStatus.errs), start)
+	return hydrationStatus, srcStatus
 }
 
 func parseSource(ctx context.Context, p Parser, trigger string, state *reconcilerState) status.MultiError {

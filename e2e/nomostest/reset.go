@@ -490,16 +490,23 @@ func TailReconcilerLogs(ctx context.Context, nt *NT, reconcilerNN types.Namespac
 		"-n", reconcilerNN.Namespace,
 		"-c", reconcilermanager.Reconciler,
 		"-f")
+	nt.T.Logf("finished tailing logs for %s", reconcilerNN.String())
 	// Expect the logs to tail until the context is cancelled, or exit early if
 	// the reconciler container exited.
 	if err != nil && err.Error() != "signal: killed" {
 		// We're only using this for debugging, so don't trigger test failure.
 		nt.T.Logf("Failed to tail logs from reconciler %s: %v", reconcilerNN, err)
 	}
-	// Only print the logs if the test has failed
-	if nt.T.Failed() {
-		nt.T.Logf("Reconciler deployment logs (%s):\n%s", reconcilerNN, string(out))
-	}
+	// When TailReconcilerLogs is called async, it's possible that the test fails
+	// after the kubectl calls returns. For example, when the Pod is evicted the
+	// kubectl call will return early. Register a cleanup so that we always log in
+	// the case of a failed test.
+	nt.T.Cleanup(func() {
+		// Only print the logs if the test has failed
+		if nt.T.Failed() {
+			nt.T.Logf("Reconciler deployment logs (%s):\n%s", reconcilerNN, string(out))
+		}
+	})
 }
 
 // RootReconcilerObjectKey returns an ObjectKey for interracting with the

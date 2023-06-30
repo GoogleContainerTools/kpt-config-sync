@@ -16,13 +16,11 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -31,14 +29,13 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -114,20 +111,25 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nomostest.Wait(nt.T, fmt.Sprintf("%T %s finalization", rootSync, client.ObjectKeyFromObject(rootSync)), nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			// The RootSync should skip finalizing and be deleted immediately
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			// Namespace1 should NOT have been deleted, because it was orphaned by the RootSync.
-			errs = status.Append(errs, nt.Validate(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{},
-				testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
-			// Deployment1 should NOT have been deleted, because it was orphaned by the RootSync.
-			errs = status.Append(errs, nt.Validate(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{},
-				testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
-			return errs
-		},
-	)
+	// The RootSync should skip finalizing and be deleted immediately
+	err = nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		// Namespace1 should NOT have been deleted, because it was orphaned by the RootSync.
+		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
+			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()}) // metadata NOT removed when orphaned
+	})
+	tg.Go(func() error {
+		// Deployment1 should NOT have been deleted, because it was orphaned by the RootSync.
+		return nt.Watcher.WatchObject(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace(),
+			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()}) // metadata NOT removed when orphaned
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestReconcilerFinalizer_Foreground tests that the reconciler's finalizer
@@ -193,22 +195,27 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 		}))
 
 	// Delete the RootSync
+	nt.T.Log("Deleting RootSync")
 	err = nt.KubeClient.Delete(rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nomostest.Wait(nt.T, fmt.Sprintf("%T %s finalization", rootSync, client.ObjectKeyFromObject(rootSync)), nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			// Deleting the RootSync should trigger the RootSync's finalizer to delete the Deployment1 and Namespace
-			errs = status.Append(errs, nt.ValidateNotFound(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
-			errs = status.Append(errs, nt.ValidateNotFound(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{}))
-			// After Deployment1 is deleted, the RootSync should have its finalizer removed and be garbage collected
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			return errs
-		},
-	)
+	tg := taskgroup.New()
+	// Deleting the RootSync should trigger the RootSync's finalizer to delete the Deployment1 and Namespace
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace())
+	})
+	tg.Go(func() error {
+		// After Deployment1 is deleted, the RootSync should have its finalizer removed and be garbage collected
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestReconcilerFinalizer_MultiLevelForeground tests that the reconciler's
@@ -317,22 +324,25 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nomostest.Wait(nt.T, fmt.Sprintf("%T %s finalization", rootSync, client.ObjectKeyFromObject(rootSync)), nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			// Deleting the RootSync should trigger the RootSync's finalizer to delete the RepoSync and Deployment1
-			errs = status.Append(errs, nt.ValidateNotFound(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
-			// Deleting the RepoSync should trigger the RepoSync's finalizer to delete Deployment2
-			errs = status.Append(errs, nt.ValidateNotFound(deployment2.GetName(), deployment2.GetNamespace(), &appsv1.Deployment{}))
-			// After Deployment2 is deleted, the RepoSync should have its finalizer removed and be garbage collected
-			errs = status.Append(errs, nt.ValidateNotFound(repoSync.GetName(), repoSync.GetNamespace(), &v1beta1.RepoSync{}))
-			// After the RepoSync is gone, the garbage collector can finish finalizing the Namespace
-			errs = status.Append(errs, nt.ValidateNotFound(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{}))
-			// After RepoSync is deleted, the RootSync should have its finalizer removed and be garbage collected
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			return errs
-		},
-	)
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 // TestReconcilerFinalizer_MultiLevelMixed tests that the reconciler's finalizer
@@ -449,24 +459,37 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nomostest.Wait(nt.T, fmt.Sprintf("%T %s finalization", rootSync, client.ObjectKeyFromObject(rootSync)), nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			// Deleting the RootSync should trigger the RootSync's finalizer to delete the RepoSync and Deployment1
-			errs = status.Append(errs, nt.ValidateNotFound(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
-			// RepoSync should delete quickly without finalizing
-			errs = status.Append(errs, nt.ValidateNotFound(repoSync.GetName(), repoSync.GetNamespace(), &v1beta1.RepoSync{}))
-			// After RepoSync and Deployment1 are deleted, the RootSync should have its finalizer removed and be garbage collected
-			errs = status.Append(errs, nt.ValidateNotFound(rootSync.GetName(), rootSync.GetNamespace(), &v1beta1.RootSync{}))
-			// Namespace1 should NOT have been deleted, because it was abandoned by the RootSync.
-			// TODO: Use NoConfigSyncMetadata predicate once metadata removal is fixed (b/256043590)
-			errs = status.Append(errs, nt.Validate(namespace1.GetName(), namespace1.GetNamespace(), &corev1.Namespace{}))
-			// Deployment2 should NOT have been deleted, because it was orphaned by the RepoSync.
-			errs = status.Append(errs, nt.Validate(deployment2.GetName(), deployment2.GetNamespace(), &appsv1.Deployment{},
-				testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
-			return errs
-		},
-	)
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		// Deleting the RootSync should trigger the RootSync's finalizer to delete the RepoSync and Deployment1
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
+	})
+	tg.Go(func() error {
+		// RepoSync should delete quickly without finalizing
+		return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace())
+	})
+	tg.Go(func() error {
+		// After RepoSync and Deployment1 are deleted, the RootSync should have its finalizer removed and be garbage collected
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		// Namespace1 should NOT have been deleted, because it was abandoned by the RootSync.
+		// TODO: Use NoConfigSyncMetadata predicate once metadata removal is fixed (b/256043590)
+		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
+			[]testpredicates.Predicate{})
+	})
+	tg.Go(func() error {
+		// Deployment2 should NOT have been deleted, because it was orphaned by the RepoSync.
+		return nt.Watcher.WatchObject(kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace(),
+			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func cleanupSingleLevel(nt *nomostest.NT,
@@ -529,29 +552,34 @@ func cleanupSyncsAndObjects(nt *nomostest.NT, syncObjs []client.Object, objs []c
 		}
 	}
 
-	nomostest.Wait(nt.T, "test cleanup", nt.DefaultWaitTimeout,
-		func() error {
-			var errs status.MultiError
-			for _, syncObj := range syncObjs {
-				errs = status.Append(errs, validateNotFoundFromObject(nt, syncObj))
-			}
-			for _, obj := range objs {
-				errs = status.Append(errs, validateNotFoundFromObject(nt, obj))
-			}
-			return errs
-		},
-	)
+	tg := taskgroup.New()
+	for _, syncObj := range syncObjs {
+		o := syncObj
+		tg.Go(func() error {
+			return watchForNotFoundFromObject(nt, o)
+		})
+	}
+	for _, obj := range objs {
+		o := obj
+		tg.Go(func() error {
+			return watchForNotFoundFromObject(nt, o)
+		})
+	}
+	if err := tg.Wait(); err != nil {
+		nt.T.Error(err)
+	}
 }
 
-// validateNotFoundFromObject wraps nt.ValidateNotFound, but allows the object
+// watchForNotFoundFromObject wraps WatchForNotFound, but allows the object
 // to be fully populated, constructing a new empty typed object as needed.
-func validateNotFoundFromObject(nt *nomostest.NT, obj client.Object) error {
+func watchForNotFoundFromObject(nt *nomostest.NT, obj client.Object) error {
 	key := client.ObjectKeyFromObject(obj)
-	obj, _, err := newEmptyTypedObject(nt, obj)
+	scheme := nt.KubeClient.Client.Scheme()
+	gvk, err := kinds.Lookup(obj, scheme)
 	if err != nil {
 		return err
 	}
-	return nt.ValidateNotFound(key.Name, key.Namespace, obj)
+	return nt.Watcher.WatchForNotFound(gvk, key.Name, key.Namespace)
 }
 
 func newEmptyTypedObject(nt *nomostest.NT, obj client.Object) (client.Object, schema.GroupVersionKind, error) {

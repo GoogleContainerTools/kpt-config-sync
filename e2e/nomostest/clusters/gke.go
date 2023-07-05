@@ -217,6 +217,12 @@ func createGKECluster(t testing.NTB, name string) error {
 		if *e2e.GKEMachineType != "" {
 			args = append(args, "--machine-type", *e2e.GKEMachineType)
 		}
+		if *e2e.GKEDiskSize != "" {
+			args = append(args, "--disk-size", *e2e.GKEDiskSize)
+		}
+		if *e2e.GKEDiskType != "" {
+			args = append(args, "--disk-type", *e2e.GKEDiskType)
+		}
 		if *e2e.GKENumNodes > 0 {
 			args = append(args, "--num-nodes", fmt.Sprintf("%d", *e2e.GKENumNodes))
 		}

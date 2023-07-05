@@ -167,6 +167,14 @@ var GKEClusterVersion = flag.String("gke-cluster-version", util.EnvString("GKE_C
 var GKEMachineType = flag.String("gke-machine-type", util.EnvString("GKE_MACHINE_TYPE", DefaultGKEMachineType),
 	"GKE machine type to use when creating GKE clusters. Defaults to GKE_MACHINE_TYPE env var.")
 
+// GKEDiskSize is the GKE disk size to use when creating GKE clusters.
+var GKEDiskSize = flag.String("gke-disk-size", util.EnvString("GKE_DISK_SIZE", ""),
+	"GKE disk size to use when creating GKE clusters. Defaults to GKE_DISK_SIZE env var.")
+
+// GKEDiskType is the GKE disk type to use when creating GKE clusters.
+var GKEDiskType = flag.String("gke-disk-type", util.EnvString("GKE_DISK_TYPE", ""),
+	"GKE disk type to use when creating GKE clusters. Defaults to GKE_DISK_TYPE env var.")
+
 // GKENumNodes is the number of nodes to use when creating GKE clusters.
 var GKENumNodes = flag.Int("gke-num-nodes", util.EnvInt("GKE_NUM_NODES", DefaultGKENumNodes),
 	"Number of node to use when creating GKE clusters. Defaults to GKE_NUM_NODES env var.")

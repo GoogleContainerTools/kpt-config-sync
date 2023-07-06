@@ -131,6 +131,7 @@ processors:
           - reconciler_errors
           - pipeline_error_observed
           - reconcile_duration_seconds
+          - rg_reconcile_duration_seconds
           - parser_duration_seconds
           - declared_resources
           - apply_operations_total
@@ -145,15 +146,10 @@ processors:
           - git_sync_depth_override_count_total
           - no_ssl_verify_count_total
           - kcc_resource_count
-      exclude:
-        match_type: strict
-        metric_names:
-          - rg_reconcile_duration_seconds
-          # TODO remove kcc_resource_count_total rule once Resource Group Controller
-          # 1.0.9 is updated into Config Sync. This metric was unintentionally
-          # included by the 'regex include' filter above and is not included in
-          # our Monarch metric definitions
-          - kcc_resource_count_total
+          - last_sync_timestamp
+  # Remove custom configsync metric labels that are not registered with Monarch
+  # This action applies to all metrics that are sent through the pipeline that
+  # is using this processor
   attributes/kubernetes:
     actions:
       # Remove custom configsync metric labels that are not registered with Monarch

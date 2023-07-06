@@ -11,7 +11,6 @@ Follow the instructions to [install the Terraform CLI].
 
 # Dev Environments
 
-The Terraform config for dev environments is defined in the [dev directory].
 This configuration is designed to be configurable for an arbitrary GCP project
 for development purposes.
 As a result some variables must be provided at runtime, such as project name
@@ -62,14 +61,14 @@ terraform destroy
 
 The Terraform config for our prow environment is defined in the [prow directory].
 
-## oss-prow-build-kpt-config-sync
+## kpt-config-sync-ci-main
 
 This project hosts the GKE clusters which the main branch periodics run on.
 
 ```shell
-export TF_VAR_project=oss-prow-build-kpt-config-sync
+export TF_VAR_project=kpt-config-sync-ci-main
 export TF_VAR_prow=true
-terraform init -backend-config="bucket=oss-prow-build-kpt-config-sync-tfstate"
+terraform init -backend-config="bucket=kpt-config-sync-ci-main-tfstate"
 terraform apply
 ```
 
@@ -90,4 +89,3 @@ terraform apply
 [command line variables]: https://www.terraform.io/language/values/variables#variables-on-the-command-line
 [install the Terraform CLI]: https://learn.hashicorp.com/tutorials/terraform/install-cli
 [prow directory]: ./prow
-[dev directory]: ./dev

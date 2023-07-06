@@ -24,9 +24,3 @@ variable "prow" {
   description = "Whether to provision prow e2e clusters"
   default = false
 }
-
-variable "num_clusters" {
-  type = number
-  description = "How many user clusters to provision. Used for dev clusters (prow=false)."
-  default = 1
-}

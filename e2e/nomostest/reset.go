@@ -39,6 +39,7 @@ import (
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/syncer/differ"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -338,7 +339,7 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 
 		// If managed, error. The test failed to clean up after itself
 		if manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
-			nt.T.Errorf("[RESET] Failed to reset Namespace %s managed by %q", nn, manager)
+			nt.T.Errorf("[RESET] Failed to reset Namespace %s managed by %q:\n%s", nn, manager, log.AsYAML(obj))
 			continue
 		}
 

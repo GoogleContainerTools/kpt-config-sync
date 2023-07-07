@@ -227,11 +227,11 @@ func TestManagingReconciler(t *testing.T) {
 	})
 	nt.T.Log("Verify the container image should be reverted by the reconciler-manager")
 	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
-	nomostest.Wait(nt.T, "the container image to be reverted", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			firstContainerImageIs(managedImage))
-	})
+	err := nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerImageIs(managedImage)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 2: the reconciler-manager should manage the replicas field, so that the reconciler can be resumed after pause.
 	nt.T.Log("Manually update the replicas")
@@ -239,11 +239,11 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(reconcilerDeployment, fmt.Sprintf(`{"spec": {"replicas": %d}}`, newReplicas))
 	nt.T.Log("Verify the reconciler-manager should revert the replicas change")
 	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
-	nomostest.Wait(nt.T, "the replicas to be reverted", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			hasReplicas(managedReplicas))
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), hasReplicas(managedReplicas)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 3:  the reconciler-manager should not revert the change to the fields that are not owned by reconciler-manager
 	nt.T.Log("Manually update fields that are not owned by reconciler-manager")
@@ -258,11 +258,12 @@ func TestManagingReconciler(t *testing.T) {
 
 	nt.T.Log("Verify the reconciler-manager does not revert the change")
 	generation++ // generation bumped by 1 because reconicler-manager should not revert this change
-	nomostest.Wait(nt.T, "the reconciler deployment to be updated", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation), firstContainerTerminationMessagePathIs("dev/termination-message"),
-			firstContainerStdinIs(true), hasTolerations(modifiedTolerations), hasPriorityClassName("system-node-critical"))
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerTerminationMessagePathIs("dev/termination-message"),
+			firstContainerStdinIs(true), hasTolerations(modifiedTolerations), hasPriorityClassName("system-node-critical")})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 	// change the fields back to default values
 	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
 		d.Spec.Template.Spec.Containers[0].TerminationMessagePath = "dev/termination-log"
@@ -271,11 +272,12 @@ func TestManagingReconciler(t *testing.T) {
 		d.Spec.Template.Spec.PriorityClassName = ""
 	})
 	generation++ // generation bumped by 1 because reconciler-manager should not revert this change
-	nomostest.Wait(nt.T, "the reconciler deployment to be updated", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation), firstContainerTerminationMessagePathIs("dev/termination-log"),
-			firstContainerStdinIs(false), hasTolerations(originalTolerations), hasPriorityClassName(""))
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerTerminationMessagePathIs("dev/termination-log"),
+			firstContainerStdinIs(false), hasTolerations(originalTolerations), hasPriorityClassName("")})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 4: the reconciler-manager should update the reconciler Deployment if the manifest in the ConfigMap has been changed.
 	nt.T.Log("Update the Deployment manifest in the ConfigMap")
@@ -289,11 +291,11 @@ func TestManagingReconciler(t *testing.T) {
 	})
 	nt.T.Log("Verify the reconciler Deployment has been updated to the new manifest")
 	generation++ // generation bumped by 1 to apply the new change in the default manifests declared in the Config Map
-	nomostest.Wait(nt.T, "the deployment manifest to be updated", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			firstContainerImageIsNot(managedImage))
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerImageIsNot(managedImage)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 5: the reconciler-manager should delete the git-creds volume if not needed
 	currentVolumesCount := len(reconcilerDeployment.Spec.Template.Spec.Volumes)
@@ -302,11 +304,11 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 	nt.T.Log("Verify the git-creds volume is gone")
 	generation++ // generation bumped by 1 to delete the git-creds volume
-	nomostest.Wait(nt.T, "the git-creds volume to be deleted", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			gitCredsVolumeDeleted(currentVolumesCount))
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), gitCredsVolumeDeleted(currentVolumesCount)})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 6: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
 	nt.T.Log("Switch the auth type from none to gcpserviceaccount")
@@ -317,22 +319,22 @@ func TestManagingReconciler(t *testing.T) {
 	} else {
 		generation++ // generation bumped by 1 to apply the new sidecar container
 	}
-	nomostest.Wait(nt.T, "the gcenode-askpass-sidecar container to be added", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			templateForGcpServiceAccountAuthType())
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForGcpServiceAccountAuthType()})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// test case 7: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
 	nt.T.Log("Switch the auth type gcpserviceaccount to ssh")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"ssh","secretRef":{"name":"git-creds"}}}}`)
 	nt.T.Log("Verify the git-creds volume exists and the gcenode-askpass-sidecar container is gone")
 	generation++ // generation bumped by 1 to add the git-cred volume again
-	nomostest.Wait(nt.T, "the git-creds volume to be added and the gcenode-askpass-sidecar container to be deleted", nt.DefaultWaitTimeout, func() error {
-		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			templateForSSHAuthType())
-	})
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForSSHAuthType()})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 type updateFunc func(deployment *appsv1.Deployment)

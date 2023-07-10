@@ -433,7 +433,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 		fileName := reconcilermanager.HelmConfigMapRef
 		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
-		volumeName := fmt.Sprintf("vol-%d-", i) + strings.ToLower(vf.Name)
+		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 
 		if len(volumeName) > volumeNameLengthLimit {
 			// trim the volume name as we only have a length limit of 63, even though

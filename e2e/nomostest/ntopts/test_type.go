@@ -22,8 +22,8 @@ type TestType struct {
 	// StressTest specifies the test is a stress test.
 	StressTest bool
 
-	// KccTest specifies the test is for KCC resources.
-	KccTest bool
+	// KCCTest specifies the test is for KCC resources.
+	KCCTest bool
 
 	// GCENodeTest specifies the test is for verifying the gcenode auth type.
 	// It requires a GKE cluster with workload identity disabled.
@@ -40,9 +40,9 @@ func StressTest(opt *New) {
 	opt.StressTest = true
 }
 
-// KccTest specifies the test is a kcc test.
-func KccTest(opt *New) {
-	opt.KccTest = true
+// KCCTest specifies the test is a kcc test.
+func KCCTest(opt *New) {
+	opt.KCCTest = true
 }
 
 // GCENodeTest specifies the test is for verifying the gcenode auth type.

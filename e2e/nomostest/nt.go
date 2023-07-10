@@ -28,6 +28,7 @@ import (
 	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
@@ -64,6 +65,13 @@ import (
 // This must be different from the field manager used by config sync, in order
 // to allow both clients to manage different fields on the same objects.
 const FieldManager = configsync.GroupName + "/nomostest"
+
+const (
+	// kccSA is the name of the service account used for KCC tests
+	kccSA = "kcc-integration"
+	// kccProject is the name of the GCP project used for KCC tests
+	kccProject = "cs-dev-hub"
+)
 
 // NT represents the test environment for a single Nomos end-to-end test case.
 type NT struct {
@@ -781,6 +789,34 @@ func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 	}
 	if nt.IsGKEAutopilot && skipAutopilot {
 		nt.T.Skip("Test skipped when running on Autopilot clusters")
+	}
+}
+
+// setupConfigConnector creates the ConfigConnector CR on the KCC cluster.
+// The target project and associated resources (e.g. GSAs) are currently hard
+// coded due to lack of provisioning automation. Eventually we may want to make
+// this more flexible/repeatable for different environments.
+func (nt *NT) setupConfigConnector() {
+	kccObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "core.cnrm.cloud.google.com/v1beta1",
+			"kind":       "ConfigConnector",
+			"metadata": map[string]interface{}{
+				"name": "configconnector.core.cnrm.cloud.google.com",
+			},
+			"spec": map[string]interface{}{
+				"mode":                 "cluster",
+				"googleServiceAccount": fmt.Sprintf("%s@%s.iam.gserviceaccount.com", kccSA, kccProject),
+			},
+		},
+	}
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(kccObj); err != nil {
+			nt.T.Error(err)
+		}
+	})
+	if err := nt.KubeClient.Apply(kccObj); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

@@ -149,9 +149,6 @@ const (
 	// that were mounted from ConfigMaps.
 	HelmValuesFilePaths = "HELM_VALUES_FILE_PATHS"
 
-	// HelmValuesFileApplyStrategy is the OS env variable key for Helm values files apply strategy.
-	HelmValuesFileApplyStrategy = "HELM_VALUES_FILE_APPLY_STRATEGY"
-
 	//HelmIncludeCRDs is the OS env variable key for whether to include CRDs in helm rendering output.
 	HelmIncludeCRDs = "HELM_INCLUDE_CRDS"
 

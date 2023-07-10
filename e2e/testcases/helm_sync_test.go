@@ -32,7 +32,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	helmpkg "kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -356,11 +355,11 @@ image:
 	}
 }
 
-// TestHelmConfigMapMerge can run on both Kind and GKE clusters.
-// It tests RSync spec.helm.valuesFileApplyStrategy field.
-func TestHelmConfigMapMerge(t *testing.T) {
+// TestHelmConfigMapOverride can run on both Kind and GKE clusters.
+// It tests ConfigSync behavior when multiple valuesFiles are provided
+func TestHelmConfigMapOverride(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
-	cmName := "helm-config-map-merge"
+	cmName := "helm-config-map-override"
 
 	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm.Data = map[string]string{
@@ -369,13 +368,19 @@ extraEnvVars:
 - name: TEST_CM_1
   value: "cm1"
 wordpressUsername: test-user-1
-wordpressEmail: override-this@example.com`,
+wordpressEmail: override-this@example.com
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never`,
 		"second": `
 extraEnvVars:
 - name: TEST_CM_2
   value: "cm2"
 wordpressUsername: test-user-2
-wordpressEmail: override-this@example.com`,
+wordpressEmail: override-this@example.com
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Always`,
 	}
 	if err := nt.KubeClient.Create(cm); err != nil {
 		nt.T.Fatal(err)
@@ -404,11 +409,11 @@ wordpressEmail: override-this@example.com`,
 			},
 			"valuesFileRefs": [
 			  {
-				"name": "helm-config-map-merge",
+				"name": "helm-config-map-override",
 				"valuesFile": "first"
 			  },
 			  {
-				"name": "helm-config-map-merge",
+				"name": "helm-config-map-override",
 				"valuesFile": "second"
 			  }
 			]
@@ -422,29 +427,14 @@ wordpressEmail: override-this@example.com`,
 		nt.T.Fatal(err)
 	}
 
-	// the default valuesFileApplyStrategy is 'override', which results in duplicated keys from later files to override
-	// the keys from previous files.
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+	// duplicated keys from later files should override the keys from previous files.
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_INLINE", "inline"),
 		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_1"),
 		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_2")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Update RootSync to sync from a public Helm Chart with valuesFileApplyStrategy set to 'listConcatenate'")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"valuesFileApplyStrategy": "%s"}}}`, helmpkg.ValuesFileApplyStrategyListConcatenate))
-
-	// 'merge' results in duplicated keys to be merged together before the valuesFile is rendered by helm
-	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
-		[]testpredicates.Predicate{
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_INLINE", "inline"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_CM_1", "cm1"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_CM_2", "cm2"),
-		}); err != nil {
 		nt.T.Fatal(err)
 	}
 }

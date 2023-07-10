@@ -38,17 +38,6 @@ import (
 )
 
 const (
-	// ValuesFileApplyStrategyListConcatenate results in duplicate keys in different valuesFiles to
-	// have list elements concatenated.
-	ValuesFileApplyStrategyListConcatenate = "listConcatenate"
-
-	// ValuesFileApplyStrategyOverride results in duplicate keys in different valuesFile to be
-	// overriden by the latter files.
-	ValuesFileApplyStrategyOverride = "override"
-
-	// DefaultValuesFileApplyStrategy is the default valuesFileApplyStrategy if it is not set.
-	DefaultValuesFileApplyStrategy = ValuesFileApplyStrategyOverride
-
 	// valuesFile is the name of the file created to override defualt chart values.
 	valuesFile = "chart-values.yaml"
 )
@@ -115,61 +104,23 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 }
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
-	switch h.ValuesFileApplyStrategy {
-
-	case "", ValuesFileApplyStrategyOverride:
-		for _, vs := range h.ValuesFilePaths {
-			if vs == "" {
-				continue
-			}
-			args = append(args, "--values", vs)
+	for _, vs := range h.ValuesFilePaths {
+		if vs == "" {
+			continue
 		}
+		args = append(args, "--values", vs)
+	}
 
-		if len(h.ValuesYAML) != 0 {
-			// inline values are passed in as a literal string, so we
-			// must write them out to a file
-			valuesPath, err := writeValuesPath([]byte(h.ValuesYAML))
-			if err != nil {
-				return nil, err
-			}
-			if valuesPath != "" {
-				args = append(args, "--values", valuesPath)
-			}
-		}
-
-	case ValuesFileApplyStrategyListConcatenate:
-		var valuesToMerge [][]byte
-		for _, vs := range h.ValuesFilePaths {
-			if vs == "" {
-				continue
-			}
-			val, err := readFile(vs)
-			if err != nil {
-				return nil, err
-			}
-			valuesToMerge = append(valuesToMerge, []byte(val))
-
-		}
-		if len(h.ValuesYAML) != 0 {
-			valuesToMerge = append(valuesToMerge, []byte(h.ValuesYAML))
-		}
-
-		merged, err := listConcatenate(valuesToMerge)
-		if err != nil {
-			return nil, fmt.Errorf("error merging values files: %w", err)
-		}
-		klog.Infof("using merged values: %s\n", string(merged))
-
-		valuesPath, err := writeValuesPath(merged)
+	if len(h.ValuesYAML) != 0 {
+		// inline yaml values are passed in as a literal string, so we
+		// must write them out to a file
+		valuesPath, err := writeValuesPath([]byte(h.ValuesYAML))
 		if err != nil {
 			return nil, err
 		}
 		if valuesPath != "" {
 			args = append(args, "--values", valuesPath)
 		}
-
-	default:
-		return nil, fmt.Errorf("invalid merge mode: %s", h.ValuesFileApplyStrategy)
 	}
 
 	return args, nil
@@ -400,16 +351,4 @@ func isRange(version string) bool {
 	}
 	_, err := semverrange.NewConstraint(version)
 	return err == nil
-}
-
-func readFile(filepath string) (string, error) {
-	b, err := os.ReadFile(filepath)
-	if err != nil {
-		return "", fmt.Errorf("error reading from provided valuesFile %s: %w", filepath, err)
-	}
-	val := string(b)
-	if len(val) == 0 {
-		return "", fmt.Errorf("error: received empty valuesFile %s", filepath)
-	}
-	return val, nil
 }

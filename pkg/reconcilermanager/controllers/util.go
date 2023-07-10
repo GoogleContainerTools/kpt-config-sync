@@ -262,9 +262,6 @@ func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace, deployNamespace,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmSyncVersionPollingPeriod,
 		Value: versionPollPeriod,
-	}, corev1.EnvVar{
-		Name:  reconcilermanager.HelmValuesFileApplyStrategy,
-		Value: helmBase.ValuesFileApplyStrategy,
 	})
 	return result
 }

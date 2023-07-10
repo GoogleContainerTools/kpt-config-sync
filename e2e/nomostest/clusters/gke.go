@@ -230,6 +230,13 @@ func createGKECluster(t testing.NTB, name string) error {
 		if !*e2e.GceNode {
 			args = append(args, "--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject))
 		}
+		var addons []string
+		if *e2e.KCC {
+			addons = append(addons, "ConfigConnector")
+		}
+		if len(addons) > 0 {
+			args = append(args, "--addons", strings.Join(addons, ","))
+		}
 	}
 	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.Command("gcloud", args...)

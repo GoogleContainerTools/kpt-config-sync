@@ -81,7 +81,7 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		t.Skip("Test skipped since it is a stress test")
 	}
 
-	if !*e2e.Kcc && optsStruct.KccTest {
+	if !*e2e.KCC && optsStruct.KCCTest {
 		t.Skip("Test skipped since it is a KCC test")
 	}
 
@@ -308,6 +308,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 			nt.T.Fatalf("[CLEANUP] Failed to clean test environment: %v", err)
 		}
 
+	}
+
+	if *e2e.KCC {
+		nt.setupConfigConnector()
 	}
 
 	t.Cleanup(func() {

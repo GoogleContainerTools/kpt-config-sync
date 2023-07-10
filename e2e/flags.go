@@ -61,8 +61,8 @@ var Load = flag.Bool("load", false,
 var Stress = flag.Bool("stress", false,
 	"If true, run stress tests.")
 
-// Kcc enables running the e2e tests for kcc resources.
-var Kcc = flag.Bool("kcc", false,
+// KCC enables running the e2e tests for kcc resources.
+var KCC = flag.Bool("kcc", false,
 	"If true, run kcc tests.")
 
 // GceNode enables running the e2e tests for 'gcenode' auth type

@@ -521,13 +521,13 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 			// other source types
 			continue
 		}
-		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileSources) == 0 {
+		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 			continue
 		}
 
 		var referenced bool
 		var key string
-		for _, vf := range rs.Spec.Helm.ValuesFileSources {
+		for _, vf := range rs.Spec.Helm.ValuesFileRefs {
 			if vf.Name == objRef.Name {
 				referenced = true
 				key = vf.ValuesFile
@@ -747,7 +747,7 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
 			return err
 		}
-		if err := validate.CheckValuesFileSourcesRefs(ctx, r.client, rs.Spec.Helm.ValuesFileSources, rs); err != nil {
+		if err := validate.CheckValuesFileRefs(ctx, r.client, rs.Spec.Helm.ValuesFileRefs, rs); err != nil {
 			return err
 		}
 		if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
@@ -957,7 +957,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					if authTypeToken(rs.Spec.Helm.Auth) {
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
 					}
-					mountConfigMapValuesFiles(templateSpec, &container, rs.Spec.Helm.ValuesFileSources)
+					mountConfigMapValuesFiles(templateSpec, &container, rs.Spec.Helm.ValuesFileRefs)
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(&container, rs.Spec.Override)
 				}

@@ -67,7 +67,7 @@ type Hydrator struct {
 	Namespace               string
 	DeployNamespace         string
 	Values                  string
-	ValuesFileSources       []string
+	ValuesFileRefs          []string
 	IncludeCRDs             string
 	HydrateRoot             string
 	Dest                    string
@@ -119,7 +119,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	switch h.ValuesFileApplyStrategy {
 
 	case "", ValuesFileApplyStrategyOverride:
-		for i, vs := range h.ValuesFileSources {
+		for i, vs := range h.ValuesFileRefs {
 			if vs == "" {
 				continue
 			}
@@ -144,7 +144,7 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 
 	case ValuesFileApplyStrategyListConcatenate:
 		var valuesToMerge [][]byte
-		for _, vs := range h.ValuesFileSources {
+		for _, vs := range h.ValuesFileRefs {
 			if vs == "" {
 				continue
 			}

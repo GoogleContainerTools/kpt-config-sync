@@ -184,19 +184,19 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 		return InvalidHelmAuthType(rs)
 	}
 
-	for _, vf := range helm.ValuesFileSources {
+	for _, vf := range helm.ValuesFileRefs {
 		if vf.Name == "" {
-			return MissingHelmValuesFileSourcesName(rs)
+			return MissingHelmValuesFileRefsName(rs)
 		}
 	}
 
 	return nil
 }
 
-// CheckValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
+// CheckValuesFileRefs validates that the ConfigMaps specified in the RSync ValuesFileRefs exist and have the
 // specified data key.
-func CheckValuesFileSourcesRefs(ctx context.Context, cl client.Client, valuesFileSources []v1beta1.ValuesFileSources, rs client.Object) status.Error {
-	for _, vf := range valuesFileSources {
+func CheckValuesFileRefs(ctx context.Context, cl client.Client, valuesFileRefs []v1beta1.ValuesFileRefs, rs client.Object) status.Error {
+	for _, vf := range valuesFileRefs {
 		objectKey := types.NamespacedName{
 			Name:      vf.Name,
 			Namespace: rs.GetNamespace(),
@@ -409,11 +409,11 @@ func HelmNSAndDeployNS(o client.Object) status.Error {
 		BuildWithResources(o)
 }
 
-// MissingHelmValuesFileSourcesName reports that an RSync is missing spec.helm.valuesFileSources.name
-func MissingHelmValuesFileSourcesName(o client.Object) status.Error {
+// MissingHelmValuesFileRefsName reports that an RSync is missing spec.helm.valuesFileRefs.name
+func MissingHelmValuesFileRefsName(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.valuesFileSources.name", kind).
+		Sprintf("%ss must specify spec.helm.valuesFileRefs.name", kind).
 		BuildWithResources(o)
 }
 
@@ -421,14 +421,14 @@ func MissingHelmValuesFileSourcesName(o client.Object) status.Error {
 func MissingConfigMap(o client.Object, err error) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileSources: %s", kind, err.Error()).
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: %s", kind, err.Error()).
 		BuildWithResources(o)
 }
 
-// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileSources.valuesFile
+// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileRefs.valuesFile
 func MissingConfigMapKey(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile", kind).
+		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile", kind).
 		BuildWithResources(o)
 }

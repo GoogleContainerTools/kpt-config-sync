@@ -197,7 +197,7 @@ service:
 			  ],
 			  "wordpressEmail": "test-user@example.com"
 			},
-			"valuesFileSources": [
+			"valuesFileRefs": [
 			  {
 				"kind": "ConfigMap",
 				"name": "helm-watch-config-map"
@@ -294,7 +294,7 @@ image:
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -315,7 +315,7 @@ image:
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"helm-watch-config-map\" not found")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -403,7 +403,7 @@ wordpressEmail: override-this@example.com`,
 			  ],
 			  "wordpressEmail": "test-user@example.com"
 			},
-			"valuesFileSources": [
+			"valuesFileRefs": [
 			  {
 				"name": "helm-config-map-merge",
 				"valuesFile": "first"
@@ -650,7 +650,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		GCPServiceAccountEmail: gsaARReaderEmail(),
 		Version:                privateNSHelmChartVersion,
 		ReleaseName:            "test",
-		ValuesFileSources:      []v1beta1.ValuesFileSources{{Name: cmName, ValuesFile: "foo.yaml"}},
+		ValuesFileRefs:         []v1beta1.ValuesFileRefs{{Name: cmName, ValuesFile: "foo.yaml"}},
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
@@ -685,7 +685,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileSources.valuesFile")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)
@@ -695,7 +695,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Delete(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileSources: ConfigMap \"helm-cm-ns-repo\" not found")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)

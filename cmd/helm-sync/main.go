@@ -38,9 +38,9 @@ var (
 	flVersion = flag.String("version", os.Getenv(reconcilermanager.HelmChartVersion),
 		"the version of the helm chart being synced")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
-		"set the helm chart values, will be used to override the default values")
-	flValuesFileSources = flag.String("values-file-sources", os.Getenv(reconcilermanager.HelmValuesFileSources),
-		"set the helm chart values, will be used to override the default values")
+		"inline helm chart values, will be used to override the default values")
+	flValuesFileRefs = flag.String("values-file-paths", os.Getenv(reconcilermanager.HelmValuesFilePaths),
+		"filepaths to helm chart values, will be used to override the default values")
 	flValuesFileApplyStrategy = flag.String("values-file-apply-strategy", os.Getenv(reconcilermanager.HelmValuesFileApplyStrategy),
 		"set the helm values file merge strategy")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
@@ -81,7 +81,7 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--values-files", *flValuesFileSources, "--values-key-merge-mode", *flValuesFileApplyStrategy,
+		"--values", *flValues, "--values-files", *flValuesFileRefs, "--values-key-merge-mode", *flValuesFileApplyStrategy,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
@@ -127,7 +127,7 @@ func main() {
 			Namespace:               *flNamespace,
 			DeployNamespace:         *flDeployNamespace,
 			Values:                  *flValues,
-			ValuesFileSources:       strings.Split(*flValuesFileSources, ","),
+			ValuesFileRefs:          strings.Split(*flValuesFileRefs, ","),
 			ValuesFileApplyStrategy: *flValuesFileApplyStrategy,
 			IncludeCRDs:             *flIncludeCRDs,
 			Auth:                    configsync.AuthType(*flAuth),

@@ -619,15 +619,15 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 
 func TestMountConfigMapValuesFiles(t *testing.T) {
 	testCases := map[string]struct {
-		input    []v1beta1.ValuesFileSources
+		input    []v1beta1.ValuesFileRefs
 		expected corev1.PodSpec
 	}{
-		"empty valuesFileSources": {
+		"empty valuesFileRefs": {
 			input:    nil,
 			expected: corev1.PodSpec{Containers: []corev1.Container{{}}},
 		},
-		"one valuesFileSources": {
-			input: []v1beta1.ValuesFileSources{
+		"one valuesFileRefs": {
+			input: []v1beta1.ValuesFileRefs{
 				{
 					Name:       "foo",
 					ValuesFile: "values.yaml",
@@ -640,8 +640,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						MountPath: "/etc/config/foo/values.yaml",
 					}},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFileSources,
-						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef),
+						Name:  reconcilermanager.HelmValuesFilePaths,
+						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmValuesFilePath),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -654,7 +654,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
+									Path: reconcilermanager.HelmValuesFilePath,
 								}},
 							},
 						},
@@ -662,8 +662,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				},
 			},
 		},
-		"two valuesFileSources, different ConfigMaps": {
-			input: []v1beta1.ValuesFileSources{
+		"two valuesFileRefs, different ConfigMaps": {
+			input: []v1beta1.ValuesFileRefs{
 				{
 					Name:       "foo",
 					ValuesFile: "values.yaml",
@@ -686,8 +686,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFileSources,
-						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/bar/values.yaml", reconcilermanager.HelmConfigMapRef),
+						Name:  reconcilermanager.HelmValuesFilePaths,
+						Value: filepath.Join("/etc/config/foo/values.yaml", reconcilermanager.HelmValuesFilePath) + "," + filepath.Join("/etc/config/bar/values.yaml", reconcilermanager.HelmValuesFilePath),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -700,7 +700,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
+									Path: reconcilermanager.HelmValuesFilePath,
 								}},
 							},
 						},
@@ -714,7 +714,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
+									Path: reconcilermanager.HelmValuesFilePath,
 								}},
 							},
 						},
@@ -722,8 +722,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				},
 			},
 		},
-		"two valuesFileSources, same ConfigMap": {
-			input: []v1beta1.ValuesFileSources{
+		"two valuesFileRefs, same ConfigMap": {
+			input: []v1beta1.ValuesFileRefs{
 				{
 					Name:       "foo",
 					ValuesFile: "values-0.yaml",
@@ -746,8 +746,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					Env: []corev1.EnvVar{{
-						Name:  reconcilermanager.HelmValuesFileSources,
-						Value: filepath.Join("/etc/config/foo/values-0.yaml", reconcilermanager.HelmConfigMapRef) + "," + filepath.Join("/etc/config/foo/values-1.yaml", reconcilermanager.HelmConfigMapRef),
+						Name:  reconcilermanager.HelmValuesFilePaths,
+						Value: filepath.Join("/etc/config/foo/values-0.yaml", reconcilermanager.HelmValuesFilePath) + "," + filepath.Join("/etc/config/foo/values-1.yaml", reconcilermanager.HelmValuesFilePath),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -760,7 +760,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values-0.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
+									Path: reconcilermanager.HelmValuesFilePath,
 								}},
 							},
 						},
@@ -774,7 +774,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values-1.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
+									Path: reconcilermanager.HelmValuesFilePath,
 								}},
 							},
 						},

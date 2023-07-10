@@ -119,8 +119,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 }
 
 func TestHydrateHelmComponents(t *testing.T) {
-	t.Skipf("Test %s skipped given that it's no longer needed", t.Name())
-	
+	t.Skip("Test skipped since it's no longer needed")
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
 		ntopts.Unstructured,

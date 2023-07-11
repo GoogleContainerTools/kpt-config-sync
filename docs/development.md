@@ -50,7 +50,9 @@ These can be provided on the command line with `go test` or with program argumen
 - `--debug` - If true, do not destroy cluster and clean up temporary directory after test.
 - `--share-test-env` - Specify that the test is using a shared test environment instead of fresh installation per test case.
 - `--test-cluster` - The cluster config used for testing. Allowed values are: `kind` and `gke`.
-- `--num-clusters` -- Number of clusters to run tests on in parallel (only available for [kind]). Overrides the `--test.parallel` flag.
+- `--num-clusters` - Number of clusters to run tests on in parallel (only available for [kind]). Overrides the `--test.parallel` flag.
+- `--create-clusters` - Whether to create clusters in the test framework. Allowed values are [`true`, `lazy`, `false`]. If set to `lazy`, the tests will adopt an existing cluster.
+- `--destroy-clusters` - Whether to destroy clusters after test execution. Allowed values are [`true`, `auto`, `false`]. If set to `auto`, the tests will only destroy the cluster if it was created by the tests.
 
 Here are some useful flags from [go test](https://pkg.go.dev/cmd/go#hdr-Testing_flags):
 - `--test.v` - More verbose output.
@@ -116,16 +118,25 @@ make config-sync-manifest
 
 The e2e test scaffolding supports creating N clusters before test execution and
 reusing them between tests. This enables running the tests in parallel, where the
-number of clusters equals the number of test threads. The clusters will be
-deleted after the test execution.
+number of clusters equals the number of test threads. The clusters can be configured
+to be deleted or orphaned after test execution.
+
+Provide the `--create-clusters` option with:
+- `true` - always create clusters with tests (error if already exist)
+- `lazy` - create or adopt cluster if already exists
+- `false` - never create clusters with tests (error if not found)
+
+Provide the `--destroy-clusters` option with:
+- `true` - always destroy clusters after tests
+- `auto` - only destroy clusters if they were created by the tests
+- `false` - never destroy clusters after tests
 
 ```shell
 # GKE cluster options can be provided as command line flags
 go test ./e2e/... --e2e --test.v --share-test-env --gcp-project=<PROJECT_ID> --test-cluster=gke \
-  --create-clusters=true --num-clusters=5 --gcp-zone=us-central1-a \
+  --cluster-prefix=${USER}-test --create-clusters=lazy --destroy-clusters=false --num-clusters=5 --gcp-zone=us-central1-a \
   --test.run (test name regexp)
 ```
-
 
 #### Running E2E tests on GKE (pre-provisioned GKE clusters)
 

@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -775,67 +774,6 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values-1.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
-								}},
-							},
-						},
-					},
-				},
-			},
-		},
-		"long configmap names": {
-			input: []v1beta1.ValuesFileSources{
-				{
-					Name:       "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-0",
-					ValuesFile: "values.yaml",
-				},
-				{
-					Name:       "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-1",
-					ValuesFile: "values.yaml",
-				},
-			},
-			expected: corev1.PodSpec{
-				Containers: []corev1.Container{{
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "valuesfile-vol-0",
-							MountPath: "/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-0/values.yaml",
-						},
-						{
-							Name:      "valuesfile-vol-1",
-							MountPath: "/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-1/values.yaml",
-						},
-					},
-					Env: []corev1.EnvVar{{
-						Name: reconcilermanager.HelmValuesFileSources,
-						Value: strings.Join([]string{filepath.Join("/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-0/values.yaml", reconcilermanager.HelmConfigMapRef),
-							filepath.Join("/etc/config/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-1/values.yaml", reconcilermanager.HelmConfigMapRef)}, ","),
-					}},
-				}},
-				Volumes: []corev1.Volume{
-					{
-						Name: "valuesfile-vol-0",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-0",
-								},
-								Items: []corev1.KeyToPath{{
-									Key:  "values.yaml",
-									Path: reconcilermanager.HelmConfigMapRef,
-								}},
-							},
-						},
-					},
-					{
-						Name: "valuesfile-vol-1",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwx-1",
-								},
-								Items: []corev1.KeyToPath{{
-									Key:  "values.yaml",
 									Path: reconcilermanager.HelmConfigMapRef,
 								}},
 							},

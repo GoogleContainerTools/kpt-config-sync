@@ -114,8 +114,6 @@ type reconcilerBase struct {
 	syncKind string
 }
 
-const volumeNameLengthLimit = 63
-
 func (r *reconcilerBase) serviceAccountSubject(reconcilerRef types.NamespacedName) rbacv1.Subject {
 	return newSubject(reconcilerRef.Name, reconcilerRef.Namespace, kinds.ServiceAccount().Kind)
 }
@@ -434,13 +432,6 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
-
-		if len(volumeName) > volumeNameLengthLimit {
-			// trim the volume name as we only have a length limit of 63, even though
-			// the ConfigMap name can be much longer.  The prefix
-			// containing the index i should be sufficient to uniquify the value.
-			volumeName = volumeName[:volumeNameLengthLimit]
-		}
 
 		templateSpec.Volumes = append(templateSpec.Volumes, corev1.Volume{
 			Name: volumeName,

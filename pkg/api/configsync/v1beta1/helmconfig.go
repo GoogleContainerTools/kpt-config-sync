@@ -58,8 +58,8 @@ type HelmBase struct {
 	ReleaseName string `json:"releaseName,omitempty"`
 
 	// values to use instead of default values that accompany the chart. Format
-	// values the same as default values.yaml. These values will take precedence if
-	// `valuesFileRefs` is also specified.
+	// values the same as default values.yaml. If `valuesFileRefs` is also specified,
+	// fields from `values` will override fields from `valuesFileRefs`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
@@ -69,7 +69,7 @@ type HelmBase struct {
 	// as the RootSync or RepoSync. When multiple valuesFiles are used, duplicated keys
 	// in later files will override the value from earlier files. This is equivalent
 	// to passing in multiple valuesFiles to Helm CLI. If `values` is also specified,
-	// `values` will take precedence.
+	// fields from `values` will override fields from valuesFileRefs.
 	// +optional
 	ValuesFileRefs []ValuesFileRefs `json:"valuesFileRefs,omitempty"`
 

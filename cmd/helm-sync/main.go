@@ -79,7 +79,7 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValuesYAML, "--values-files", *flValuesFilePaths,
+		"--values", *flValuesYAML, "--values-file-paths", *flValuesFilePaths,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
@@ -117,6 +117,11 @@ func main() {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 
+		valuesFilePaths := []string{}
+		if len(*flValuesFilePaths) != 0 {
+			valuesFilePaths = strings.Split(*flValuesFilePaths, ",")
+		}
+
 		hydrator := &helm.Hydrator{
 			Chart:           *flChart,
 			Repo:            *flRepo,
@@ -125,7 +130,7 @@ func main() {
 			Namespace:       *flNamespace,
 			DeployNamespace: *flDeployNamespace,
 			ValuesYAML:      *flValuesYAML,
-			ValuesFilePaths: strings.Split(*flValuesFilePaths, ","),
+			ValuesFilePaths: valuesFilePaths,
 			IncludeCRDs:     *flIncludeCRDs,
 			Auth:            configsync.AuthType(*flAuth),
 			HydrateRoot:     *flRoot,

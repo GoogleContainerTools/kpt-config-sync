@@ -106,7 +106,7 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	for _, vs := range h.ValuesFilePaths {
 		if vs == "" {
-			continue
+			return nil, fmt.Errorf("received empty string as a values file path")
 		}
 		args = append(args, "--values", vs)
 	}
@@ -118,18 +118,14 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if valuesPath != "" {
-			args = append(args, "--values", valuesPath)
-		}
+		args = append(args, "--values", valuesPath)
+
 	}
 
 	return args, nil
 }
 
 func writeValuesPath(values []byte) (string, error) {
-	if len(values) == 0 {
-		return "", nil
-	}
 	valuesPath := filepath.Join(os.TempDir(), valuesFile)
 	if err := os.WriteFile(valuesPath, values, 0644); err != nil {
 		return "", fmt.Errorf("failed to create values file: %w", err)

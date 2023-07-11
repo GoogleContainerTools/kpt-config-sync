@@ -636,7 +636,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 			expected: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{{
-						Name:      "configmap-vol-foo-0",
+						Name:      "valuesfile-vol-0",
 						MountPath: "/etc/config/foo/values.yaml",
 					}},
 					Env: []corev1.EnvVar{{
@@ -646,7 +646,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "valuesfile-vol-0",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -677,11 +677,11 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name:      "configmap-vol-foo-0",
+							Name:      "valuesfile-vol-0",
 							MountPath: "/etc/config/foo/values.yaml",
 						},
 						{
-							Name:      "configmap-vol-bar-1",
+							Name:      "valuesfile-vol-1",
 							MountPath: "/etc/config/bar/values.yaml",
 						},
 					},
@@ -692,7 +692,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "valuesfile-vol-0",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -706,7 +706,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					{
-						Name: "configmap-vol-bar-1",
+						Name: "valuesfile-vol-1",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -737,11 +737,11 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name:      "configmap-vol-foo-0",
+							Name:      "valuesfile-vol-0",
 							MountPath: "/etc/config/foo/values-0.yaml",
 						},
 						{
-							Name:      "configmap-vol-foo-1",
+							Name:      "valuesfile-vol-1",
 							MountPath: "/etc/config/foo/values-1.yaml",
 						},
 					},
@@ -752,7 +752,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				}},
 				Volumes: []corev1.Volume{
 					{
-						Name: "configmap-vol-foo-0",
+						Name: "valuesfile-vol-0",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
@@ -766,7 +766,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 						},
 					},
 					{
-						Name: "configmap-vol-foo-1",
+						Name: "valuesfile-vol-1",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{

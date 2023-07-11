@@ -431,7 +431,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 		fileName := reconcilermanager.HelmConfigMapRef
 		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
-		volumeName := "configmap-vol-" + strings.ToLower(vf.Name) + fmt.Sprintf("-%d", i)
+		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 
 		templateSpec.Volumes = append(templateSpec.Volumes, corev1.Volume{
 			Name: volumeName,

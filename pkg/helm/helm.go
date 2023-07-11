@@ -66,7 +66,7 @@ type Hydrator struct {
 	ReleaseName             string
 	Namespace               string
 	DeployNamespace         string
-	Values                  string
+	ValuesInline            string
 	ValuesFilePaths         []string
 	IncludeCRDs             string
 	HydrateRoot             string
@@ -119,24 +119,17 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	switch h.ValuesFileApplyStrategy {
 
 	case "", ValuesFileApplyStrategyOverride:
-		for i, vs := range h.ValuesFilePaths {
+		for _, vs := range h.ValuesFilePaths {
 			if vs == "" {
 				continue
 			}
-			val, err := readFile(vs)
-			if err != nil {
-				return nil, err
-			}
-
-			klog.Infof("values from ConfigMap %s\n: %s\n", vs, val)
-			args, err = writeValuesPath([]byte(val), fmt.Sprintf("values-file-%d-", i), args)
-			if err != nil {
-				return nil, err
-			}
+			args = append(args, "--values", vs)
 		}
-		if len(h.Values) != 0 {
-			klog.Infof("inline values %s\n", h.Values)
-			args, err = writeValuesPath([]byte(h.Values), "", args)
+
+		if len(h.ValuesInline) != 0 {
+			// inline values are passed in as a literal string, so we
+			// must write them out to a file
+			args, err = writeValuesPath([]byte(h.ValuesInline), "", args)
 			if err != nil {
 				return nil, err
 			}
@@ -155,8 +148,8 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			valuesToMerge = append(valuesToMerge, []byte(val))
 
 		}
-		if len(h.Values) != 0 {
-			valuesToMerge = append(valuesToMerge, []byte(h.Values))
+		if len(h.ValuesInline) != 0 {
+			valuesToMerge = append(valuesToMerge, []byte(h.ValuesInline))
 		}
 
 		merged, err := listConcatenate(valuesToMerge)

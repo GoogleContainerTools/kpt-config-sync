@@ -637,11 +637,11 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				Containers: []corev1.Container{{
 					VolumeMounts: []corev1.VolumeMount{{
 						Name:      "valuesfile-vol-0",
-						MountPath: "/etc/config/foo/values.yaml",
+						MountPath: "/etc/config/helm_values_filepath_0",
 					}},
 					Env: []corev1.EnvVar{{
 						Name:  reconcilermanager.HelmValuesFilePaths,
-						Value: filepath.Join("/etc/config/foo/values.yaml/helm_values_filepath"),
+						Value: filepath.Join("/etc/config/helm_values_filepath_0/foo/values.yaml"),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -654,7 +654,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: "helm_values_filepath",
+									Path: "foo/values.yaml",
 								}},
 							},
 						},
@@ -678,16 +678,16 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "valuesfile-vol-0",
-							MountPath: "/etc/config/foo/values.yaml",
+							MountPath: "/etc/config/helm_values_filepath_0",
 						},
 						{
 							Name:      "valuesfile-vol-1",
-							MountPath: "/etc/config/bar/values.yaml",
+							MountPath: "/etc/config/helm_values_filepath_1",
 						},
 					},
 					Env: []corev1.EnvVar{{
 						Name:  reconcilermanager.HelmValuesFilePaths,
-						Value: filepath.Join("/etc/config/foo/values.yaml/helm_values_filepath") + "," + filepath.Join("/etc/config/bar/values.yaml/helm_values_filepath"),
+						Value: filepath.Join("/etc/config/helm_values_filepath_0/foo/values.yaml") + "," + filepath.Join("/etc/config/helm_values_filepath_1/bar/values.yaml"),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -700,7 +700,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: "helm_values_filepath",
+									Path: "foo/values.yaml",
 								}},
 							},
 						},
@@ -714,7 +714,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								},
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
-									Path: "helm_values_filepath",
+									Path: "bar/values.yaml",
 								}},
 							},
 						},
@@ -722,15 +722,15 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 				},
 			},
 		},
-		"two valuesFileRefs, same ConfigMap": {
+		"two valuesFileRefs, same ConfigMap, same key": {
 			input: []v1beta1.ValuesFileRefs{
 				{
 					Name:       "foo",
-					ValuesFile: "values-0.yaml",
+					ValuesFile: "values.yaml",
 				},
 				{
 					Name:       "foo",
-					ValuesFile: "values-1.yaml",
+					ValuesFile: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -738,16 +738,16 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "valuesfile-vol-0",
-							MountPath: "/etc/config/foo/values-0.yaml",
+							MountPath: "/etc/config/helm_values_filepath_0",
 						},
 						{
 							Name:      "valuesfile-vol-1",
-							MountPath: "/etc/config/foo/values-1.yaml",
+							MountPath: "/etc/config/helm_values_filepath_1",
 						},
 					},
 					Env: []corev1.EnvVar{{
 						Name:  reconcilermanager.HelmValuesFilePaths,
-						Value: filepath.Join("/etc/config/foo/values-0.yaml/helm_values_filepath") + "," + filepath.Join("/etc/config/foo/values-1.yaml/helm_values_filepath"),
+						Value: filepath.Join("/etc/config/helm_values_filepath_0/foo/values.yaml") + "," + filepath.Join("/etc/config/helm_values_filepath_1/foo/values.yaml/"),
 					}},
 				}},
 				Volumes: []corev1.Volume{
@@ -759,8 +759,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 									Name: "foo",
 								},
 								Items: []corev1.KeyToPath{{
-									Key:  "values-0.yaml",
-									Path: "helm_values_filepath",
+									Key:  "values.yaml",
+									Path: "foo/values.yaml",
 								}},
 							},
 						},
@@ -773,8 +773,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 									Name: "foo",
 								},
 								Items: []corev1.KeyToPath{{
-									Key:  "values-1.yaml",
-									Path: "helm_values_filepath",
+									Key:  "values.yaml",
+									Path: "foo/values.yaml",
 								}},
 							},
 						},

@@ -424,12 +424,14 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
+// mountConfigMapValuesFiles mounts the helm values files from the referenced ConfigMaps as files in the helm-sync
+// container.
 func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRefs) {
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
-		fileName := "helm_values_filepath"
-		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
+		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_filepath_%d", i))
+		fileName := filepath.Join(vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 

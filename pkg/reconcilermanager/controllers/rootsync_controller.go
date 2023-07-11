@@ -182,6 +182,23 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
+	if err := r.checkValuesFileSourcesRefs(ctx, r.client, rs); err != nil {
+		r.logger(ctx).Error(err, "Sync spec invalid")
+		rootsync.SetStalled(rs, "Validation", err)
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		// Use the validation error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+
+		// If the RSync is being deleted, we still need to run the teardown function,
+		// as we want the user to be able to delete the ConfigMap before the RSync.
+		// Therefore, we only return here if the RSync is not being deleted.
+		if rs.GetDeletionTimestamp().IsZero() {
+			return controllerruntime.Result{}, updateErr
+		}
+	}
+
 	setupFn := func(ctx context.Context) error {
 		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
 	}
@@ -526,11 +543,9 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 		}
 
 		var referenced bool
-		var key string
 		for _, vf := range rs.Spec.Helm.ValuesFileRefs {
 			if vf.Name == objRef.Name {
 				referenced = true
-				key = vf.ValuesFile
 				break
 			}
 		}
@@ -539,45 +554,10 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 			continue
 		}
 
-		if err := validate.CheckConfigMapKeyExists(ctx, r.client, objRef, key, &rs); err != nil {
-			// If the ConfigMap was deleted or it no longer has the specified data key, we skip restarting the pod
-			// to avoid losing or modifying already synced resources
-			klog.Errorf("ConfigMap ref validation error: %s", err.Error())
-			// requeue the reconcile to rerun validation checks and status setting
-			result = append(result, requeueRootSyncRequest(obj, &rs)...)
-
-		}
-
-		rsRef := client.ObjectKeyFromObject(&rs)
-		reconcilerRef := types.NamespacedName{
-			Namespace: configmanagement.ControllerNamespace,
-			Name:      core.RootReconcilerName(rsRef.Name),
-		}
-
-		var reconciler appsv1.Deployment
-		cl := r.reconcilerBase.client
-		if err := cl.Get(ctx, reconcilerRef, &reconciler); err != nil {
-			klog.Errorf("failed to get reconciler reference: %s", err.Error())
-			if apierrors.IsNotFound(err) {
-				// if the root-reconciler doesn't exist, an updated ConfigMap should trigger a reconcile
-				// to create one
-				result = append(result, requeueRootSyncRequest(obj, &rs)...)
-			}
-			continue
-		}
-
-		// A rereconcile doesn't necessarily update an existing root-reconciler deployment, so
-		// the root-reconciler pods need to be explicitly restarted to pick up the ConfigMap update.
-		reconciler.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-		if err := cl.Update(ctx, &reconciler); err != nil {
-			klog.Errorf("failed to update reconciler: %s", err.Error())
-			return nil
-		}
-
-		klog.Infof("Changes to ConfigMap %s triggered restart of pods in Deployment %s\n", objRef, reconcilerRef)
+		klog.Infof("Changes to ConfigMap %s triggered rereconcile of RootSync %s\n", objRef, rs.Name)
 		result = append(result, requeueRootSyncRequest(obj, &rs)...)
-
 	}
+
 	return result
 }
 
@@ -747,9 +727,6 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
 			return err
 		}
-		if err := validate.CheckValuesFileRefs(ctx, r.client, rs.Spec.Helm.ValuesFileRefs, rs); err != nil {
-			return err
-		}
 		if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
 			return validate.HelmNSAndDeployNS(rs)
 		}
@@ -757,6 +734,25 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	default:
 		return validate.InvalidSourceType(rs)
 	}
+}
+
+// checkValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
+// specified data key.
+func (r *RootSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, cl client.Client, rs *v1beta1.RootSync) status.Error {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+		return nil
+	}
+	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
+		objectKey := types.NamespacedName{
+			Name:      vf.Name,
+			Namespace: rs.GetNamespace(),
+		}
+		err := validate.CheckConfigMap(ctx, cl, objectKey, vf.ValuesFile, rs)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {

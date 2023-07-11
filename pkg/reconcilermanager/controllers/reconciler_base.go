@@ -426,7 +426,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 
 // mountConfigMapValuesFiles mounts the helm values files from the referenced ConfigMaps as files in the helm-sync
 // container.
-func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRefs) {
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRef) {
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
@@ -434,6 +434,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 		fileName := filepath.Join(vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
+		tr := true
 
 		templateSpec.Volumes = append(templateSpec.Volumes, corev1.Volume{
 			Name: volumeName,
@@ -446,6 +447,10 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 						Key:  vf.ValuesFile,
 						Path: fileName,
 					}},
+					// The ConfigMap may be deleted before the RSync. To prevent the reconciler
+					// pod from going into an error state when that happens, we must mark
+					// this ConfigMap mount as optional and have our validation checks elsewhere.
+					Optional: &tr,
 				},
 			},
 		})

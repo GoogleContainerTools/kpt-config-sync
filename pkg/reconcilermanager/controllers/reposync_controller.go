@@ -191,6 +191,23 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
+	if err := r.checkValuesFileSourcesRefs(ctx, r.client, rs); err != nil {
+		r.logger(ctx).Error(err, "Sync spec invalid")
+		reposync.SetStalled(rs, "Validation", err)
+		// Validation errors should not trigger retry (return error),
+		// unless the status update also fails.
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		// Use the validation error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+
+		// If the RSync is being deleted, we still need to run the teardown function,
+		// as we want the user to be able to delete the ConfigMap before the RSync.
+		// Therefore, we only return here if the RSync is not being deleted.
+		if rs.GetDeletionTimestamp().IsZero() {
+			return controllerruntime.Result{}, updateErr
+		}
+	}
+
 	setupFn := func(ctx context.Context) error {
 		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
 	}
@@ -702,11 +719,9 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 		}
 
 		var referenced bool
-		var key string
 		for _, vf := range rs.Spec.Helm.ValuesFileRefs {
 			if vf.Name == objRef.Name {
 				referenced = true
-				key = vf.ValuesFile
 				break
 			}
 		}
@@ -715,49 +730,10 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 			continue
 		}
 
-		if err := validate.CheckConfigMapKeyExists(ctx, r.client, objRef, key, &rs); err != nil {
-			// If the ConfigMap was deleted or it no longer has the specified data key, we skip restarting the pod
-			// to avoid losing or modifying already synced resources
-			klog.Errorf("ConfigMap ref validation error: %s", err.Error())
-			// requeue the reconcile to surface the validation errors in the status
-			result = append(result, requeueRepoSyncRequest(obj, &rs)...)
-			continue
-		}
-
-		if _, err := copyOneConfigMapToCms(ctx, r.client, objRef); err != nil {
-			klog.Errorf("error copying updated configmap to config-management-system namespace: %s", err.Error)
-		}
-
-		rsRef := client.ObjectKeyFromObject(&rs)
-		reconcilerRef := types.NamespacedName{
-			Namespace: v1.NSConfigManagementSystem,
-			Name:      core.NsReconcilerName(rsRef.Namespace, rsRef.Name),
-		}
-
-		var reconciler appsv1.Deployment
-		cl := r.reconcilerBase.client
-		if err := cl.Get(ctx, reconcilerRef, &reconciler); err != nil {
-			klog.Errorf("failed to get reconciler reference: %s", err.Error())
-			if apierrors.IsNotFound(err) {
-				// if the root-reconciler doesn't exist, an updated ConfigMap should trigger a reconcile
-				// to create one
-				result = append(result, requeueRepoSyncRequest(obj, &rs)...)
-			}
-			continue
-		}
-
-		// A rereconcile doesn't necessarily update an existing root-reconciler deployment, so
-		// the root-reconciler pods need to be explicitly restarted to pick up the ConfigMap update.
-		reconciler.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-		if err := cl.Update(ctx, &reconciler); err != nil {
-			klog.Errorf("failed to update reconciler: %s", err.Error())
-			return nil
-		}
-
-		klog.Infof("Changes to ConfigMap %s triggered restart of pods in Deployment %s\n", objRef, reconcilerRef)
+		klog.Infof("Changes to ConfigMap %s triggered rereconcile of RepoSync %s\n", objRef, rs.Name)
 		result = append(result, requeueRepoSyncRequest(obj, &rs)...)
-
 	}
+
 	return result
 }
 
@@ -864,13 +840,30 @@ func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoS
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
-		if err := validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
-			return err
-		}
-		return validate.CheckValuesFileRefs(ctx, r.client, rs.Spec.Helm.ValuesFileRefs, rs)
+		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs)
 	default:
 		return validate.InvalidSourceType(rs)
 	}
+}
+
+// checkValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
+// specified data key.
+func (r *RepoSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) status.Error {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+		return nil
+	}
+	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
+		objectKey := types.NamespacedName{
+			Name:      vf.Name,
+			Namespace: rs.GetNamespace(),
+		}
+		err := validate.CheckConfigMap(ctx, cl, objectKey, vf.ValuesFile, rs)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
@@ -973,7 +966,7 @@ func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1
 	return true, nil
 }
 
-func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar, newValuesFileRefs []v1beta1.ValuesFileRefs) mutateFn {
+func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar, newValuesFileRefs []v1beta1.ValuesFileRef) mutateFn {
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -1109,12 +1102,12 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 	}
 }
 
-func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFileRefs, error) {
+func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFileRef, error) {
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil {
 		return nil, nil
 	}
 
-	var newValuesFileRefs []v1beta1.ValuesFileRefs
+	var newValuesFileRefs []v1beta1.ValuesFileRef
 	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
 		objRef := types.NamespacedName{
 			Name:      vf.Name,
@@ -1125,7 +1118,7 @@ func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.Repo
 		if err != nil {
 			return nil, err
 		}
-		newValuesFileRefs = append(newValuesFileRefs, v1beta1.ValuesFileRefs{
+		newValuesFileRefs = append(newValuesFileRefs, v1beta1.ValuesFileRef{
 			Name:       newName,
 			ValuesFile: vf.ValuesFile,
 		})

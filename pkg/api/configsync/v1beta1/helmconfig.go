@@ -71,7 +71,7 @@ type HelmBase struct {
 	// to passing in multiple valuesFiles to Helm CLI. If `values` is also specified,
 	// fields from `values` will override fields from valuesFileRefs.
 	// +optional
-	ValuesFileRefs []ValuesFileRefs `json:"valuesFileRefs,omitempty"`
+	ValuesFileRefs []ValuesFileRef `json:"valuesFileRefs,omitempty"`
 
 	// includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
 	// If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
@@ -106,9 +106,9 @@ type HelmBase struct {
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
 }
 
-// ValuesFileRefs holds references to ConfigMap objects in the cluster that represent
+// ValuesFileRef holds references to ConfigMap objects in the cluster that represent
 // values to use instead of default values that accompany the chart.
-type ValuesFileRefs struct {
+type ValuesFileRef struct {
 	// name represents the Object name. Required.
 	Name string `json:"name,omitempty"`
 

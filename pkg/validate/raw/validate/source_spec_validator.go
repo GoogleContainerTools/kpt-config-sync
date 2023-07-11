@@ -193,28 +193,15 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	return nil
 }
 
-// CheckValuesFileRefs validates that the ConfigMaps specified in the RSync ValuesFileRefs exist and have the
-// specified data key.
-func CheckValuesFileRefs(ctx context.Context, cl client.Client, valuesFileRefs []v1beta1.ValuesFileRefs, rs client.Object) status.Error {
-	for _, vf := range valuesFileRefs {
-		objectKey := types.NamespacedName{
-			Name:      vf.Name,
-			Namespace: rs.GetNamespace(),
-		}
-		err := CheckConfigMapKeyExists(ctx, cl, objectKey, vf.ValuesFile, rs)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// CheckConfigMapKeyExists checks that the ConfigMap specified by objRef exists and has the provided key.
-func CheckConfigMapKeyExists(ctx context.Context, cl client.Client,
+// CheckConfigMap checks that the ConfigMap specified by objRef exists and has the provided key.
+func CheckConfigMap(ctx context.Context, cl client.Client,
 	objRef types.NamespacedName, key string, rs client.Object) status.Error {
 	var cm corev1.ConfigMap
 	if err := cl.Get(ctx, objRef, &cm); err != nil {
 		return MissingConfigMap(rs, err)
+	}
+	if cm.Immutable == nil || !(*cm.Immutable) {
+		return ConfigMapMustBeImmutable(rs)
 	}
 	if _, found := cm.Data[key]; !found {
 		return MissingConfigMapKey(rs, objRef.Name, key)
@@ -430,5 +417,14 @@ func MissingConfigMapKey(o client.Object, name, key string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%s field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key %q not found in ConfigMap %q", kind, key, name).
+		BuildWithResources(o)
+}
+
+// ConfigMapMustBeImmutable reports that a referenced ConfigMap from RSync spec.helm.valuesFileSources is
+// not immutable.
+func ConfigMapMustBeImmutable(o client.Object) status.Error {
+	kind := o.GetObjectKind().GroupVersionKind().Kind
+	return invalidSyncBuilder.
+		Sprintf("%ss must only reference ConfigMaps that are immutable", kind).
 		BuildWithResources(o)
 }

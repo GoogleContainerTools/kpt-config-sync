@@ -1201,7 +1201,7 @@ spec:
                       CLI. If `values` is also specified, fields from `values` will
                       override fields from valuesFileRefs.
                     items:
-                      description: ValuesFileRefs holds references to ConfigMap objects
+                      description: ValuesFileRef holds references to ConfigMap objects
                         in the cluster that represent values to use instead of default
                         values that accompany the chart.
                       properties:

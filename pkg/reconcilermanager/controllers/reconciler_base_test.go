@@ -618,8 +618,9 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 }
 
 func TestMountConfigMapValuesFiles(t *testing.T) {
+	tr := true
 	testCases := map[string]struct {
-		input    []v1beta1.ValuesFileRefs
+		input    []v1beta1.ValuesFileRef
 		expected corev1.PodSpec
 	}{
 		"empty valuesFileRefs": {
@@ -627,7 +628,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 			expected: corev1.PodSpec{Containers: []corev1.Container{{}}},
 		},
 		"one valuesFileRefs": {
-			input: []v1beta1.ValuesFileRefs{
+			input: []v1beta1.ValuesFileRef{
 				{
 					Name:       "foo",
 					ValuesFile: "values.yaml",
@@ -652,6 +653,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
+								Optional: &tr,
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -663,7 +665,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 			},
 		},
 		"two valuesFileRefs, different ConfigMaps": {
-			input: []v1beta1.ValuesFileRefs{
+			input: []v1beta1.ValuesFileRef{
 				{
 					Name:       "foo",
 					ValuesFile: "values.yaml",
@@ -698,6 +700,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
+								Optional: &tr,
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -712,6 +715,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "bar",
 								},
+								Optional: &tr,
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "bar/values.yaml",
@@ -723,7 +727,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 			},
 		},
 		"two valuesFileRefs, same ConfigMap, same key": {
-			input: []v1beta1.ValuesFileRefs{
+			input: []v1beta1.ValuesFileRef{
 				{
 					Name:       "foo",
 					ValuesFile: "values.yaml",
@@ -758,6 +762,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
+								Optional: &tr,
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -772,6 +777,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
+								Optional: &tr,
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",

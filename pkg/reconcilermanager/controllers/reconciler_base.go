@@ -424,12 +424,14 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 	return deployObj, nil
 }
 
-func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFrom []v1beta1.ValuesFileSources) {
+// mountConfigMapValuesFiles mounts the helm values files from the referenced ConfigMaps as files in the helm-sync
+// container.
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRefs) {
 	var valuesFiles []string
 
-	for i, vf := range valuesFrom {
-		fileName := reconcilermanager.HelmConfigMapRef
-		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
+	for i, vf := range valuesFileRefs {
+		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_file_path_%d", i))
+		fileName := filepath.Join(vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 
@@ -455,7 +457,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 
 	if len(valuesFiles) > 0 {
 		c.Env = append(c.Env, corev1.EnvVar{
-			Name:  reconcilermanager.HelmValuesFileSources,
+			Name:  reconcilermanager.HelmValuesFilePaths,
 			Value: strings.Join(valuesFiles, ","),
 		})
 	}

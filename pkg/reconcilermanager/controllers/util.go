@@ -248,7 +248,7 @@ func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace, deployNamespace,
 		Name:  reconcilermanager.HelmDeployNamespace,
 		Value: deployNamespace,
 	}, corev1.EnvVar{
-		Name:  reconcilermanager.HelmValues,
+		Name:  reconcilermanager.HelmValuesYAML,
 		Value: helmValues,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmIncludeCRDs,

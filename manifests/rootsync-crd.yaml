@@ -1202,7 +1202,7 @@ spec:
                   values:
                     description: values to use instead of default values that accompany
                       the chart. Format values the same as default values.yaml. These
-                      values will take precedence if used in conjunction with valuesFileSources.
+                      values will take precedence if valuesFileRefs is also specified.
                       How to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.
                     x-kubernetes-preserve-unknown-fields: true
                   valuesFileApplyStrategy:
@@ -1220,16 +1220,16 @@ spec:
                     - override
                     - listConcatenate
                     type: string
-                  valuesFileSources:
-                    description: valuesFileSources holds references to objects in
-                      the cluster that repremakesent values to use instead of default
-                      values that accompany the chart. Currently, only ConfigMaps
-                      are supported. Objects listed later will take precedence. How
-                      to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.
+                  valuesFileRefs:
+                    description: valuesFileRefs holds references to objects in the
+                      cluster that represent values to use instead of default values
+                      that accompany the chart. Currently, only ConfigMaps are supported.
+                      Objects listed later will take precedence. How to handle multiple
+                      valuesFiles is determined by `valuesFileApplyStrategy`.
                     items:
-                      description: ValuesFileSources holds references to ConfigMap
-                        objects in the cluster that represent values to use instead
-                        of default values that accompany the chart.
+                      description: ValuesFileRefs holds references to ConfigMap objects
+                        in the cluster that represent values to use instead of default
+                        values that accompany the chart.
                       properties:
                         name:
                           description: name represents the Object name. Required.

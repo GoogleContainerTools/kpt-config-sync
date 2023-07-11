@@ -37,10 +37,10 @@ var (
 		"the name of the helm chart being synced")
 	flVersion = flag.String("version", os.Getenv(reconcilermanager.HelmChartVersion),
 		"the version of the helm chart being synced")
-	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
-		"set the helm chart values, will be used to override the default values")
-	flValuesFileSources = flag.String("values-file-sources", os.Getenv(reconcilermanager.HelmValuesFileSources),
-		"set the helm chart values, will be used to override the default values")
+	flValuesYAML = flag.String("values-yaml", os.Getenv(reconcilermanager.HelmValuesYAML),
+		"inline helm chart values, yaml-formatted the same as the default values.yaml accompanying the chart, will be used to override the default values")
+	flValuesFilePaths = flag.String("values-file-paths", os.Getenv(reconcilermanager.HelmValuesFilePaths),
+		"comma-separated list of filepaths to helm chart values, will be used to override the default values")
 	flValuesFileApplyStrategy = flag.String("values-file-apply-strategy", os.Getenv(reconcilermanager.HelmValuesFileApplyStrategy),
 		"set the helm values file merge strategy")
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
@@ -81,7 +81,7 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--values-files", *flValuesFileSources, "--values-key-merge-mode", *flValuesFileApplyStrategy,
+		"--values", *flValuesYAML, "--values-files", *flValuesFilePaths, "--values-key-merge-mode", *flValuesFileApplyStrategy,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
@@ -126,8 +126,8 @@ func main() {
 			ReleaseName:             *flReleaseName,
 			Namespace:               *flNamespace,
 			DeployNamespace:         *flDeployNamespace,
-			Values:                  *flValues,
-			ValuesFileSources:       strings.Split(*flValuesFileSources, ","),
+			ValuesYAML:              *flValuesYAML,
+			ValuesFilePaths:         strings.Split(*flValuesFilePaths, ","),
 			ValuesFileApplyStrategy: *flValuesFileApplyStrategy,
 			IncludeCRDs:             *flIncludeCRDs,
 			Auth:                    configsync.AuthType(*flAuth),

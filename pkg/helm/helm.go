@@ -66,8 +66,8 @@ type Hydrator struct {
 	ReleaseName             string
 	Namespace               string
 	DeployNamespace         string
-	Values                  string
-	ValuesFileSources       []string
+	ValuesYAML              string
+	ValuesFilePaths         []string
 	IncludeCRDs             string
 	HydrateRoot             string
 	Dest                    string
@@ -115,36 +115,31 @@ func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, 
 }
 
 func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
-	var err error
 	switch h.ValuesFileApplyStrategy {
 
 	case "", ValuesFileApplyStrategyOverride:
-		for i, vs := range h.ValuesFileSources {
+		for _, vs := range h.ValuesFilePaths {
 			if vs == "" {
 				continue
 			}
-			val, err := readFile(vs)
-			if err != nil {
-				return nil, err
-			}
-
-			klog.Infof("values from ConfigMap %s\n: %s\n", vs, val)
-			args, err = writeValuesPath([]byte(val), fmt.Sprintf("values-file-%d-", i), args)
-			if err != nil {
-				return nil, err
-			}
+			args = append(args, "--values", vs)
 		}
-		if len(h.Values) != 0 {
-			klog.Infof("inline values %s\n", h.Values)
-			args, err = writeValuesPath([]byte(h.Values), "", args)
+
+		if len(h.ValuesYAML) != 0 {
+			// inline values are passed in as a literal string, so we
+			// must write them out to a file
+			valuesPath, err := writeValuesPath([]byte(h.ValuesYAML))
 			if err != nil {
 				return nil, err
+			}
+			if valuesPath != "" {
+				args = append(args, "--values", valuesPath)
 			}
 		}
 
 	case ValuesFileApplyStrategyListConcatenate:
 		var valuesToMerge [][]byte
-		for _, vs := range h.ValuesFileSources {
+		for _, vs := range h.ValuesFilePaths {
 			if vs == "" {
 				continue
 			}
@@ -155,8 +150,8 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 			valuesToMerge = append(valuesToMerge, []byte(val))
 
 		}
-		if len(h.Values) != 0 {
-			valuesToMerge = append(valuesToMerge, []byte(h.Values))
+		if len(h.ValuesYAML) != 0 {
+			valuesToMerge = append(valuesToMerge, []byte(h.ValuesYAML))
 		}
 
 		merged, err := listConcatenate(valuesToMerge)
@@ -165,9 +160,12 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 		}
 		klog.Infof("using merged values: %s\n", string(merged))
 
-		args, err = writeValuesPath(merged, "", args)
+		valuesPath, err := writeValuesPath(merged)
 		if err != nil {
 			return nil, err
+		}
+		if valuesPath != "" {
+			args = append(args, "--values", valuesPath)
 		}
 
 	default:
@@ -177,15 +175,15 @@ func (h *Hydrator) appendValuesArgs(args []string) ([]string, error) {
 	return args, nil
 }
 
-func writeValuesPath(values []byte, pathPrefix string, args []string) ([]string, error) {
-	if values == nil {
-		return args, nil
+func writeValuesPath(values []byte) (string, error) {
+	if len(values) == 0 {
+		return "", nil
 	}
-	valuesPath := filepath.Join(os.TempDir(), pathPrefix+valuesFile)
+	valuesPath := filepath.Join(os.TempDir(), valuesFile)
 	if err := os.WriteFile(valuesPath, values, 0644); err != nil {
-		return nil, fmt.Errorf("failed to create values file: %w", err)
+		return "", fmt.Errorf("failed to create values file: %w", err)
 	}
-	return append(args, "--values", valuesPath), nil
+	return valuesPath, nil
 }
 
 func (h *Hydrator) registryLoginArgs(ctx context.Context) ([]string, error) {

@@ -59,17 +59,17 @@ type HelmBase struct {
 
 	// values to use instead of default values that accompany the chart. Format
 	// values the same as default values.yaml. These values will take precedence if
-	// used in conjunction with valuesFileSources. How to handle multiple valuesFiles is
+	// valuesFileRefs is also specified. How to handle multiple valuesFiles is
 	// determined by `valuesFileApplyStrategy`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
-	// valuesFileSources holds references to objects in the cluster that repremakesent
+	// valuesFileRefs holds references to objects in the cluster that represent
 	// values to use instead of default values that accompany the chart. Currently,
 	// only ConfigMaps are supported. Objects listed later will take precedence.
 	// How to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.
 	// +optional
-	ValuesFileSources []ValuesFileSources `json:"valuesFileSources,omitempty"`
+	ValuesFileRefs []ValuesFileRefs `json:"valuesFileRefs,omitempty"`
 
 	// valuesFileApplyStrategy specifies the strategy for handling multiple valueFiles. It
 	// refers to how valuesFiles are applied if multiple valuesFile define the
@@ -117,9 +117,9 @@ type HelmBase struct {
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
 }
 
-// ValuesFileSources holds references to ConfigMap objects in the cluster that represent
+// ValuesFileRefs holds references to ConfigMap objects in the cluster that represent
 // values to use instead of default values that accompany the chart.
-type ValuesFileSources struct {
+type ValuesFileRefs struct {
 	// name represents the Object name. Required.
 	Name string `json:"name,omitempty"`
 

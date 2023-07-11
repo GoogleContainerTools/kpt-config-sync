@@ -141,14 +141,13 @@ const (
 	//HelmDeployNamespace is the OS env variable key for the Helm deploy namespace.
 	HelmDeployNamespace = "HELM_DEPLOY_NAMESPACE"
 
-	// HelmValues is the OS env variable key for the Helm chart values.
-	HelmValues = "HELM_VALUES"
+	// HelmValuesYAML is the OS env variable key for the inline Helm chart values, formatted as a yaml
+	// string in the same format as the default values.yaml accompanying the chart.
+	HelmValuesYAML = "HELM_VALUES_YAML"
 
-	// HelmConfigMapRef is the path where valuesFiles from ConfigMaps are mounted.
-	HelmConfigMapRef = "HELM_CONFIGMAP_REF"
-
-	// HelmValuesFileSources is the OS env variable key for the names of ConfigMaps holding valuesFiles.
-	HelmValuesFileSources = "HELM_VALUES_FILE_SOURCES"
+	// HelmValuesFilePaths is the OS env variable key for a comma-separated list of all the valuesFile paths
+	// that were mounted from ConfigMaps.
+	HelmValuesFilePaths = "HELM_VALUES_FILE_PATHS"
 
 	// HelmValuesFileApplyStrategy is the OS env variable key for Helm values files apply strategy.
 	HelmValuesFileApplyStrategy = "HELM_VALUES_FILE_APPLY_STRATEGY"

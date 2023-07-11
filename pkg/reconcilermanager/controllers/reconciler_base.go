@@ -428,7 +428,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
-		fileName := reconcilermanager.HelmValuesFilePath
+		fileName := "helm_values_filepath"
 		mountPath := filepath.Join("/etc/config", vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)

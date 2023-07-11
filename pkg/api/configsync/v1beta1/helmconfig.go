@@ -59,12 +59,12 @@ type HelmBase struct {
 
 	// values to use instead of default values that accompany the chart. Format
 	// values the same as default values.yaml. These values will take precedence if
-	// used in conjunction with valuesFileRefs. How to handle multiple valuesFiles is
+	// valuesFileRefs is also specified. How to handle multiple valuesFiles is
 	// determined by `valuesFileApplyStrategy`.
 	// +optional
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 
-	// valuesFileRefs holds references to objects in the cluster that repremakesent
+	// valuesFileRefs holds references to objects in the cluster that represent
 	// values to use instead of default values that accompany the chart. Currently,
 	// only ConfigMaps are supported. Objects listed later will take precedence.
 	// How to handle multiple valuesFiles is determined by `valuesFileApplyStrategy`.

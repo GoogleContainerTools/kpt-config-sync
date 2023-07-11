@@ -199,7 +199,6 @@ service:
 			},
 			"valuesFileRefs": [
 			  {
-				"kind": "ConfigMap",
 				"name": "helm-watch-config-map"
 			  }
 			]

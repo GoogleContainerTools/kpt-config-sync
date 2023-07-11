@@ -39,7 +39,7 @@ var (
 		"the version of the helm chart being synced")
 	flValues = flag.String("values", os.Getenv(reconcilermanager.HelmValues),
 		"inline helm chart values, will be used to override the default values")
-	flValuesFileRefs = flag.String("values-file-paths", os.Getenv(reconcilermanager.HelmValuesFilePaths),
+	flValuesFilePaths = flag.String("values-file-paths", os.Getenv(reconcilermanager.HelmValuesFilePaths),
 		"filepaths to helm chart values, will be used to override the default values")
 	flValuesFileApplyStrategy = flag.String("values-file-apply-strategy", os.Getenv(reconcilermanager.HelmValuesFileApplyStrategy),
 		"set the helm values file merge strategy")
@@ -81,7 +81,7 @@ func main() {
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
-		"--values", *flValues, "--values-files", *flValuesFileRefs, "--values-key-merge-mode", *flValuesFileApplyStrategy,
+		"--values", *flValues, "--values-files", *flValuesFilePaths, "--values-key-merge-mode", *flValuesFileApplyStrategy,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
 		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
@@ -127,7 +127,7 @@ func main() {
 			Namespace:               *flNamespace,
 			DeployNamespace:         *flDeployNamespace,
 			Values:                  *flValues,
-			ValuesFileRefs:          strings.Split(*flValuesFileRefs, ","),
+			ValuesFilePaths:         strings.Split(*flValuesFilePaths, ","),
 			ValuesFileApplyStrategy: *flValuesFileApplyStrategy,
 			IncludeCRDs:             *flIncludeCRDs,
 			Auth:                    configsync.AuthType(*flAuth),

@@ -144,9 +144,6 @@ const (
 	// HelmValues is the OS env variable key for the inline Helm chart values.
 	HelmValues = "HELM_VALUES"
 
-	// HelmValuesFilePath is the path where valuesFiles from a ConfigMap are mounted.
-	HelmValuesFilePath = "HELM_VALUES_FILEPATH"
-
 	// HelmValuesFilePaths is the OS env variable key for a comma-separated list of all the valuesFile paths
 	// that were mounted from ConfigMaps.
 	HelmValuesFilePaths = "HELM_VALUES_FILEPATHS"

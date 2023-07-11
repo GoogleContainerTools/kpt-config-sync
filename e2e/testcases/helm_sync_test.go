@@ -293,7 +293,7 @@ image:
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"values.yaml\" not found in ConfigMap \"helm-watch-config-map\"")
 	// validate that the synced resources did not get modified or deleted
 	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
 		containerImagePullPolicy("Never"),
@@ -676,7 +676,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	nt.T.Logf("Update the ConfigMap to have incorrect key")
+	nt.T.Logf("Update the ConfigMap to have incorrect data key")
 	cm3 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm3.Data = map[string]string{
 		"values.yaml": `label: second`,
@@ -684,7 +684,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Update(cm3); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"foo.yaml\" not found in ConfigMap \"helm-cm-ns-repo\"")
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "second")); err != nil {
 		nt.T.Fatal(err)

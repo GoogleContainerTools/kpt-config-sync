@@ -217,7 +217,7 @@ func CheckConfigMapKeyExists(ctx context.Context, cl client.Client,
 		return MissingConfigMap(rs, err)
 	}
 	if _, found := cm.Data[key]; !found {
-		return MissingConfigMapKey(rs)
+		return MissingConfigMapKey(rs, objRef.Name, key)
 	}
 	return nil
 }
@@ -426,9 +426,9 @@ func MissingConfigMap(o client.Object, err error) status.Error {
 }
 
 // MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileRefs.valuesFile
-func MissingConfigMapKey(o client.Object) status.Error {
+func MissingConfigMapKey(o client.Object, name, key string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference ConfigMaps with valid spec.helm.valuesFileRefs.valuesFile", kind).
+		Sprintf("%s field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key %q not found in ConfigMap %q", kind, key, name).
 		BuildWithResources(o)
 }

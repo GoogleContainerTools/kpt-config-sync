@@ -430,7 +430,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
-		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_filepath_%d", i))
+		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_file_path_%d", i))
 		fileName := filepath.Join(vf.Name, vf.ValuesFile)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)

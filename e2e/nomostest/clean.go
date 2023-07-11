@@ -24,7 +24,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/kubevirt/v1"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
@@ -101,11 +99,6 @@ func Clean(nt *NT) error {
 	}
 	// Completely uninstall any remaining config-sync components
 	if err := uninstallConfigSync(nt); err != nil {
-		return err
-	}
-	// TODO: remove this after all the test clusters are clean.
-	// Delete the Kubevirt resources
-	if err := deleteKubevirt(nt); err != nil {
 		return err
 	}
 	// Delete the resource-group-system namespace
@@ -333,79 +326,6 @@ func resetSystemNamespaces(nt *NT) error {
 		}
 	}
 	return nil
-}
-
-// deleteKubevirt cleans up the Kubevirt resources when the kubevirt namespace
-// is stuck in the `Terminating` phase.
-func deleteKubevirt(nt *NT) error {
-	nt.T.Log("[CLEANUP] Cleaning up kubevirt resources")
-	start := time.Now()
-	defer func() {
-		elapsed := time.Since(start)
-		nt.T.Logf("[CLEANUP] Cleaning up kubevirt resources took %v", elapsed)
-	}()
-
-	kubevirtNS := corev1.Namespace{}
-	if err := nt.KubeClient.Get("kubevirt", "", &kubevirtNS); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-	} else {
-		// Remove finalizers on KubeVirt object to skip cleanup, if it exists.
-		// WARNING: This may leave behind GCP resources on GKE clusters that
-		// support nested virtualization, like those with N2 nodes.
-		// TODO: Find a safer way to clean up KubeVirt...
-		obj := kubevirt.NewKubeVirtObject()
-		obj.SetName("kubevirt")
-		obj.SetNamespace("kubevirt")
-		if err := nt.KubeClient.MergePatch(obj, `{"metadata":{"finalizers":null}}`); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return err
-			}
-		}
-	}
-
-	var objs []client.Object
-	var obj client.Object
-
-	obj = &corev1.Namespace{}
-	obj.SetName("kubevirt")
-	objs = append(objs, obj)
-
-	obj = &apiregistrationv1.APIService{}
-	obj.SetName("v1.subresources.kubevirt.io")
-	objs = append(objs, obj)
-
-	obj = &apiregistrationv1.APIService{}
-	obj.SetName("v1alpha3.subresources.kubevirt.io")
-	objs = append(objs, obj)
-
-	// Mutating webhook objects are managed by Autopilot, so skip the cleanup if running on Autopilot clusters
-	if !nt.IsGKEAutopilot {
-		obj = &admissionregistrationv1.MutatingWebhookConfiguration{}
-		obj.SetName("virt-api-mutator")
-		objs = append(objs, obj)
-	}
-
-	obj = &admissionregistrationv1.ValidatingWebhookConfiguration{}
-	obj.SetName("virt-api-mutator")
-	objs = append(objs, obj)
-
-	obj = &admissionregistrationv1.ValidatingWebhookConfiguration{}
-	obj.SetName("virt-operator-validator")
-	objs = append(objs, obj)
-
-	// Delete specified KubeVirt objects in parallel and wait for NotFound
-	if err := DeleteObjectsAndWait(nt, objs...); err != nil {
-		return err
-	}
-
-	// Delete all KubeVirt labelled CRDs and wait for NotFound
-	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	if err := nt.KubeClient.List(crdList, withLabelListOption("app.kubernetes.io/component", "kubevirt")); err != nil {
-		return err
-	}
-	return DeleteObjectListItemsAndWait(nt, crdList)
 }
 
 // deleteAdmissionWebhook deletes the `admission-webhook.configsync.gke.io` ValidatingWebhookConfiguration.

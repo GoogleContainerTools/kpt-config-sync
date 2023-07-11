@@ -193,6 +193,7 @@ func createGKECluster(t testing.NTB, name string) error {
 	args = append(args, name,
 		"--project", *e2e.GCPProject,
 		"--async",
+		"--cluster-ipv4-cidr", "/19", // use smaller than default CIDR
 	)
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)

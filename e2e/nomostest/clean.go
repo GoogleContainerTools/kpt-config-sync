@@ -103,6 +103,7 @@ func Clean(nt *NT) error {
 	if err := uninstallConfigSync(nt); err != nil {
 		return err
 	}
+	// TODO: remove this after all the test clusters are clean.
 	// Delete the Kubevirt resources
 	if err := deleteKubevirt(nt); err != nil {
 		return err

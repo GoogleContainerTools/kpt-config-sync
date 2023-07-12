@@ -195,6 +195,7 @@ func createGKECluster(t testing.NTB, name string) error {
 		"--async",
 		"--cluster-ipv4-cidr", "/19", // use smaller than default CIDR
 	)
+	var scopes []string
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)
 	}
@@ -227,8 +228,11 @@ func createGKECluster(t testing.NTB, name string) error {
 		if *e2e.GKENumNodes > 0 {
 			args = append(args, "--num-nodes", fmt.Sprintf("%d", *e2e.GKENumNodes))
 		}
-		// gcenode tests require workload identity to be disabled
-		if !*e2e.GceNode {
+		if *e2e.GceNode {
+			// legacy oauth scopes are required for gcenode auth to access CSR/GAR
+			scopes = append(scopes, "cloud-platform")
+		} else {
+			// gcenode tests require workload identity to be disabled
 			args = append(args, "--workload-pool", fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject))
 		}
 		var addons []string
@@ -238,6 +242,9 @@ func createGKECluster(t testing.NTB, name string) error {
 		if len(addons) > 0 {
 			args = append(args, "--addons", strings.Join(addons, ","))
 		}
+	}
+	if len(scopes) > 0 {
+		args = append(args, "--scopes", strings.Join(scopes, ","))
 	}
 	t.Logf("gcloud %s", strings.Join(args, " "))
 	cmd := exec.Command("gcloud", args...)

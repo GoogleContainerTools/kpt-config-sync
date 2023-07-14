@@ -24,6 +24,12 @@
 
 FROM gcr.io/k8s-staging-test-infra/kubekins-e2e:v20230309-9a6b1b3121-1.23
 
+# Patch the OS-level packages and remove unneeded dependencies to minimize the vulnerabilities
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get -y autoremove \
+    && rm -rf /var/lib/apt/lists/*
+
 # TODO: using a pre-installed kind binary makes it very painful to upgrade the
 # kind version. Update the e2e tests to either:
 # - install kind binary at runtime

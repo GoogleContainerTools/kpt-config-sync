@@ -14,7 +14,11 @@
 
 FROM nginx:1.23
 
-RUN apt-get update && apt-get install -y git-core spawn-fcgi fcgiwrap
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y git-core spawn-fcgi fcgiwrap \
+    && apt-get -y autoremove \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY start.sh /docker-entrypoint.d/40-start-fcgi.sh

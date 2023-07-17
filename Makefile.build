@@ -298,6 +298,22 @@ push-http-git-server:
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_HTTP_GIT_SERVER)))
 	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)
 
+# The tinyproxy Docker image is used in e2e/testdata/proxy/tinyproxy.yaml.
+TINYPROXY_SOURCE := kalaksi/tinyproxy:1.6
+E2E_TEST_TINYPROXY_TAG := v1.0.0-$(shell git rev-parse --short HEAD)
+E2E_TEST_TINYPROXY := $(TEST_INFRA_REGISTRY)/tinyproxy:$(E2E_TEST_TINYPROXY_TAG)
+.PHONY: build-tinyproxy
+build-tinyproxy:
+	@echo "+++ Building $(E2E_TEST_TINYPROXY)"
+	docker pull $(TINYPROXY_SOURCE)
+	docker tag $(TINYPROXY_SOURCE) $(E2E_TEST_TINYPROXY)
+
+.PHONY: push-tinyproxy
+push-tinyproxy:
+	@echo "+++ Pushing $(E2E_TEST_TINYPROXY)"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_TINYPROXY)))
+	@docker push $(E2E_TEST_TINYPROXY)
+
 # Used by the vulnerability scanning periodic prow job.
 VULNERABILITY_SCANNER_VERSION := v1.0.0-$(shell git rev-parse --short HEAD)
 VULNERABILITY_SCANNER_IMAGE_TAG := $(TEST_INFRA_REGISTRY)/vulnerability-scanner:$(VULNERABILITY_SCANNER_VERSION)

@@ -408,7 +408,7 @@ image:
 			  "wordpressEmail": "test-user@example.com",
 			  "service": {
 				"type": "ClusterIP"
-			  },
+			  }
 			},
 			"valuesFileRefs": [
 			  {

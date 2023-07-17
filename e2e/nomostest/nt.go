@@ -810,11 +810,14 @@ func (nt *NT) setupConfigConnector() {
 			},
 		},
 	}
-	nt.T.Cleanup(func() {
-		if err := nt.KubeClient.Delete(kccObj); err != nil {
-			nt.T.Error(err)
-		}
-	})
+	// TODO(sdowell): there are currently issues with cleanup, most likely related to a
+	// known issue in cli-utils. This currently only runs on a dedicated KCC cluster,
+	// so it shouldn't be too disruptive to skip cleanup of the ConfigConnector CR.
+	//nt.T.Cleanup(func() {
+	//	if err := nt.KubeClient.Delete(kccObj); err != nil {
+	//		nt.T.Error(err)
+	//	}
+	//})
 	if err := nt.KubeClient.Apply(kccObj); err != nil {
 		nt.T.Fatal(err)
 	}

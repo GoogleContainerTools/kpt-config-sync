@@ -405,7 +405,10 @@ image:
 				  "value": "inline"
 				}
 			  ],
-			  "wordpressEmail": "test-user@example.com"
+			  "wordpressEmail": "test-user@example.com",
+			  "service": {
+				"type": "ClusterIP"
+			  }
 			},
 			"valuesFileRefs": [
 			  {

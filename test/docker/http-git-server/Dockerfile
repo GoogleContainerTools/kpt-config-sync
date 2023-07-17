@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nginx:1.23
+FROM nginx:1.25.1
 
 RUN apt-get update && apt-get install -y git-core spawn-fcgi fcgiwrap
 

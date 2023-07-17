@@ -36,7 +36,7 @@ const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
 const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0"
 const testGitHTTPServer = "http-git-server"
-const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0"
+const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0-b3b4984cd"
 
 func testGitServerSelector() map[string]string {
 	// Note that maps are copied by reference into objects.

@@ -198,7 +198,7 @@ image:
 	if err := nt.KubeClient.Create(cm0); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must only reference ConfigMaps that are immutable")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must only reference ConfigMaps that are immutable; ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
 
 	tr := true
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
@@ -587,7 +587,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Create(cm0); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must only reference ConfigMaps that are immutable")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must only reference ConfigMaps that are immutable; ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" is not immutable")
 
 	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
 	tr := true

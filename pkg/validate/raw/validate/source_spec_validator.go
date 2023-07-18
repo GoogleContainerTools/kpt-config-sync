@@ -193,18 +193,23 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	return nil
 }
 
-// CheckConfigMap checks that the ConfigMap specified by objRef exists and has the provided key.
-func CheckConfigMap(ctx context.Context, cl client.Client,
-	objRef types.NamespacedName, key string, rs client.Object) status.Error {
-	var cm corev1.ConfigMap
-	if err := cl.Get(ctx, objRef, &cm); err != nil {
-		return MissingConfigMap(rs, err)
-	}
-	if cm.Immutable == nil || !(*cm.Immutable) {
-		return ConfigMapMustBeImmutable(rs)
-	}
-	if _, found := cm.Data[key]; !found {
-		return MissingConfigMapKey(rs, objRef.Name, key)
+// CheckValuesFileRefs checks that the ConfigMaps specified by valuesFileRefs exist, are immutable, and have the provided data key.
+func CheckValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, valuesFileRefs []v1beta1.ValuesFileRef) status.Error {
+	for _, vf := range valuesFileRefs {
+		objRef := types.NamespacedName{
+			Name:      vf.Name,
+			Namespace: rs.GetNamespace(),
+		}
+		var cm corev1.ConfigMap
+		if err := cl.Get(ctx, objRef, &cm); err != nil {
+			return MissingConfigMap(rs, err)
+		}
+		if cm.Immutable == nil || !(*cm.Immutable) {
+			return ConfigMapMustBeImmutable(rs, objRef.Name)
+		}
+		if _, found := cm.Data[vf.ValuesFile]; !found {
+			return MissingConfigMapKey(rs, objRef.Name, vf.ValuesFile)
+		}
 	}
 	return nil
 }
@@ -422,9 +427,9 @@ func MissingConfigMapKey(o client.Object, name, key string) status.Error {
 
 // ConfigMapMustBeImmutable reports that a referenced ConfigMap from RSync spec.helm.valuesFileSources is
 // not immutable.
-func ConfigMapMustBeImmutable(o client.Object) status.Error {
+func ConfigMapMustBeImmutable(o client.Object, name string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must only reference ConfigMaps that are immutable", kind).
+		Sprintf("%ss must only reference ConfigMaps that are immutable; ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
 		BuildWithResources(o)
 }

@@ -66,7 +66,7 @@ type HelmBase struct {
 	// valuesFileRefs holds references to objects in the cluster that represent
 	// values to use instead of default values that accompany the chart. Currently,
 	// only ConfigMaps are supported, and the ConfigMap must be in the same namespace
-	// as the RootSync or RepoSync. When multiple valuesFiles are used, duplicated keys
+	// as the RootSync/RepoSync. When multiple valuesFiles are used, duplicated keys
 	// in later files will override the value from earlier files. This is equivalent
 	// to passing in multiple valuesFiles to Helm CLI. If `values` is also specified,
 	// fields from `values` will override fields from valuesFileRefs.
@@ -106,8 +106,8 @@ type HelmBase struct {
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
 }
 
-// ValuesFileRef holds references to ConfigMap objects in the cluster that represent
-// values to use instead of default values that accompany the chart.
+// ValuesFileRef references a ConfigMap object that contains a values file to use for
+// helm rendering. The ConfigMap must be in the same namespace as the RootSync/RepoSync.
 type ValuesFileRef struct {
 	// name represents the Object name. Required.
 	Name string `json:"name,omitempty"`

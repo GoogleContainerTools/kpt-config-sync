@@ -191,7 +191,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err := r.checkValuesFileSourcesRefs(ctx, r.client, rs); err != nil {
+	if err := r.checkValuesFileSourcesRefs(ctx, rs); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		reposync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
@@ -206,6 +206,10 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if rs.GetDeletionTimestamp().IsZero() {
 			return controllerruntime.Result{}, updateErr
 		}
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Failed to update status")
+		}
+
 	}
 
 	setupFn := func(ctx context.Context) error {
@@ -848,22 +852,11 @@ func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoS
 
 // checkValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
 // specified data key.
-func (r *RepoSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) status.Error {
+func (r *RepoSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, rs *v1beta1.RepoSync) status.Error {
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil
 	}
-	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-		objectKey := types.NamespacedName{
-			Name:      vf.Name,
-			Namespace: rs.GetNamespace(),
-		}
-		err := validate.CheckConfigMap(ctx, cl, objectKey, vf.ValuesFile, rs)
-		if err != nil {
-			return err
-		}
-
-	}
-	return nil
+	return validate.CheckValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
 }
 
 func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {

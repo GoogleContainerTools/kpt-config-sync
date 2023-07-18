@@ -182,7 +182,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	if err := r.checkValuesFileSourcesRefs(ctx, r.client, rs); err != nil {
+	if err := r.checkValuesFileSourcesRefs(ctx, rs); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		rootsync.SetStalled(rs, "Validation", err)
 		// Validation errors should not trigger retry (return error),
@@ -196,6 +196,9 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// Therefore, we only return here if the RSync is not being deleted.
 		if rs.GetDeletionTimestamp().IsZero() {
 			return controllerruntime.Result{}, updateErr
+		}
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Failed to update status")
 		}
 	}
 
@@ -736,23 +739,13 @@ func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootS
 	}
 }
 
-// checkValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
+// checkValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist, are immutable, and have the
 // specified data key.
-func (r *RootSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, cl client.Client, rs *v1beta1.RootSync) status.Error {
+func (r *RootSyncReconciler) checkValuesFileSourcesRefs(ctx context.Context, rs *v1beta1.RootSync) status.Error {
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil
 	}
-	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-		objectKey := types.NamespacedName{
-			Name:      vf.Name,
-			Namespace: rs.GetNamespace(),
-		}
-		err := validate.CheckConfigMap(ctx, cl, objectKey, vf.ValuesFile, rs)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return validate.CheckValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
 }
 
 func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {

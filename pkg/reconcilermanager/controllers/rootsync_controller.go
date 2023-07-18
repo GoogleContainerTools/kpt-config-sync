@@ -191,9 +191,12 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// Use the validation error for metric tagging.
 		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 
-		// If the RSync is being deleted, we still need to run the teardown function,
-		// as we want the user to be able to delete the ConfigMap before the RSync.
-		// Therefore, we only return here if the RSync is not being deleted.
+		// We want to allow deletion of ConfigMap and RSync to occur in any order.
+		// For example, if a namespace is deleted, the ConfigMap and RSync can
+		// be deleted in a random order. That means that validation errors
+		// from the ConfigMap should halt reconciliation progress only if the RSync
+		// is not being deleted. If the RSync is being deleted, we still need to finalize
+		// the RSync and run the teardown function.
 		if rs.GetDeletionTimestamp().IsZero() {
 			return controllerruntime.Result{}, updateErr
 		}

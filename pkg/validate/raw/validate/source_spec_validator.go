@@ -421,7 +421,7 @@ func HelmValuesMissingConfigMap(o client.Object, err error) status.Error {
 func HelmValuesMissingConfigMapKey(o client.Object, name, key string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap %q in namespace %q does not have data key %q", kind, name, o.GetNamespace(), key).
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q does not have data key %q", kind, name, o.GetNamespace(), key).
 		BuildWithResources(o)
 }
 
@@ -430,6 +430,6 @@ func HelmValuesMissingConfigMapKey(o client.Object, name, key string) status.Err
 func HelmValuesConfigMapMustBeImmutable(o client.Object, name string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
 		BuildWithResources(o)
 }

@@ -193,8 +193,8 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	return nil
 }
 
-// CheckValuesFileRefs checks that the ConfigMaps specified by valuesFileRefs exist, are immutable, and have the provided data key.
-func CheckValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, valuesFileRefs []v1beta1.ValuesFileRef) status.Error {
+// ValuesFileRefs checks that the ConfigMaps specified by valuesFileRefs exist, are immutable, and have the provided data key.
+func ValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, valuesFileRefs []v1beta1.ValuesFileRef) status.Error {
 	for _, vf := range valuesFileRefs {
 		objRef := types.NamespacedName{
 			Name:      vf.Name,
@@ -202,13 +202,13 @@ func CheckValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object
 		}
 		var cm corev1.ConfigMap
 		if err := cl.Get(ctx, objRef, &cm); err != nil {
-			return MissingConfigMap(rs, err)
+			return HelmValuesMissingConfigMap(rs, err)
 		}
 		if cm.Immutable == nil || !(*cm.Immutable) {
-			return ConfigMapMustBeImmutable(rs, objRef.Name)
+			return HelmValuesConfigMapMustBeImmutable(rs, objRef.Name)
 		}
 		if _, found := cm.Data[vf.ValuesFile]; !found {
-			return MissingConfigMapKey(rs, objRef.Name, vf.ValuesFile)
+			return HelmValuesMissingConfigMapKey(rs, objRef.Name, vf.ValuesFile)
 		}
 	}
 	return nil
@@ -409,27 +409,27 @@ func MissingHelmValuesFileRefsName(o client.Object) status.Error {
 		BuildWithResources(o)
 }
 
-// MissingConfigMap reports that an RSync is referencing a ConfigMap that doesn't exist.
-func MissingConfigMap(o client.Object, err error) status.Error {
+// HelmValuesMissingConfigMap reports that an RSync is referencing a ConfigMap that doesn't exist.
+func HelmValuesMissingConfigMap(o client.Object, err error) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: %s", kind, err.Error()).
 		BuildWithResources(o)
 }
 
-// MissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileRefs.valuesFile
-func MissingConfigMapKey(o client.Object, name, key string) status.Error {
+// HelmValuesMissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileRefs.valuesFile
+func HelmValuesMissingConfigMapKey(o client.Object, name, key string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%s field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key %q not found in ConfigMap %q", kind, key, name).
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap %q in namespace %q does not have data key %q", kind, name, o.GetNamespace(), key).
 		BuildWithResources(o)
 }
 
-// ConfigMapMustBeImmutable reports that a referenced ConfigMap from RSync spec.helm.valuesFileSources is
+// HelmValuesConfigMapMustBeImmutable reports that a referenced ConfigMap from RSync spec.helm.valuesFileRefs is
 // not immutable.
-func ConfigMapMustBeImmutable(o client.Object, name string) status.Error {
+func HelmValuesConfigMapMustBeImmutable(o client.Object, name string) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must only reference ConfigMaps that are immutable; ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
 		BuildWithResources(o)
 }

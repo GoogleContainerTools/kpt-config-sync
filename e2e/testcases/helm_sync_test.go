@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/helm"
@@ -181,9 +182,8 @@ func TestHelmWatchConfigMap(t *testing.T) {
 
 	cmName := "helm-watch-config-map"
 	nt.T.Log("Apply valid ConfigMap that is not immutable (which should not be allowed)")
-	f := false
 	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm0.Immutable = &f
+	cm0.Immutable = pointer.Bool(false)
 	cm0.Data = map[string]string{"something-else.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -198,12 +198,11 @@ image:
 	if err := nt.KubeClient.Create(cm0); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must only reference ConfigMaps that are immutable; ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
 
-	tr := true
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
 	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm1.Immutable = &tr
+	cm1.Immutable = pointer.Bool(true)
 	cm1.Data = map[string]string{"something-else.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -213,7 +212,7 @@ image:
 	if err := nt.KubeClient.Update(cm1); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"values.yaml\" not found in ConfigMap \"helm-watch-config-map\"")
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" does not have data key \"values.yaml\"")
 
 	// delete the ConfigMap
 	if err := nt.KubeClient.Delete(cm1); err != nil {
@@ -223,7 +222,7 @@ image:
 
 	nt.T.Log("Apply valid ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
 	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm2.Immutable = &tr
+	cm2.Immutable = pointer.Bool(true)
 	cm2.Data = map[string]string{"values.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -295,8 +294,7 @@ func TestHelmConfigMapOverride(t *testing.T) {
 	cmName := "helm-config-map-override"
 
 	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	tr := true
-	cm.Immutable = &tr
+	cm.Immutable = pointer.Bool(true)
 	cm.Data = map[string]string{
 		"first": `
 extraEnvVars:
@@ -587,18 +585,17 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Create(cm0); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must only reference ConfigMaps that are immutable; ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" is not immutable")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" is not immutable")
 
 	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
-	tr := true
-	cm0Copy.Immutable = &tr
+	cm0Copy.Immutable = pointer.Bool(true)
 	cm0Copy.Data = map[string]string{
 		"values.yaml": `label: foo`,
 	}
 	if err := nt.KubeClient.Update(cm0Copy); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"foo.yaml\" not found in ConfigMap \"helm-cm-ns-repo\"")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs; ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" does not have data key \"foo.yaml\"")
 
 	// delete the ConfigMap
 	if err := nt.KubeClient.Delete(cm0Copy); err != nil {
@@ -611,7 +608,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	cm1.Data = map[string]string{
 		"foo.yaml": `label: foo`,
 	}
-	cm1.Immutable = &tr
+	cm1.Immutable = pointer.Bool(true)
 	nt.T.Cleanup(func() {
 		if err := nt.KubeClient.Delete(cm1); err != nil {
 			nt.T.Log(err)

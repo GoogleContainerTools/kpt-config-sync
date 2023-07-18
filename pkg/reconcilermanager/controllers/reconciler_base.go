@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -426,7 +427,7 @@ func (r *reconcilerBase) deployment(ctx context.Context, dRef client.ObjectKey) 
 
 // mountConfigMapValuesFiles mounts the helm values files from the referenced ConfigMaps as files in the helm-sync
 // container.
-func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRefs) {
+func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container, valuesFileRefs []v1beta1.ValuesFileRef) {
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
@@ -446,6 +447,10 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 						Key:  vf.ValuesFile,
 						Path: fileName,
 					}},
+					// The ConfigMap may be deleted before the RSync. To prevent the reconciler
+					// pod from going into an error state when that happens, we must mark
+					// this ConfigMap mount as optional and have our validation checks elsewhere.
+					Optional: pointer.Bool(true),
 				},
 			},
 		})

@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/helm"
@@ -138,38 +139,10 @@ func TestPublicHelm(t *testing.T) {
 }
 
 // TestHelmWatchConfigMap can run on both Kind and GKE clusters.
-// It tests that helm-sync properly watches ConfigMaps in the RSync namespace and pulls updated values.
+// It tests that helm-sync properly watches ConfigMaps in the RSync namespace if the RSync is created before
+// the ConfigMap.
 func TestHelmWatchConfigMap(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
-	cmName := "helm-watch-config-map"
-
-	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
-	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm1.Data = map[string]string{"values.yaml": `
-image:
-  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
-  pullPolicy: Always
-wordpressUsername: test-user-1
-wordpressEmail: override-this@example.com
-resources:
-  requests:
-    cpu: 150m
-    memory: 250Mi
-  limits:
-    cpu: 1
-    memory: 300Mi
-mariadb:
-  primary:
-    persistence:
-      enabled: false
-service:
-  type: ClusterIP`,
-	}
-
-	cm1Copy := cm1.DeepCopy()
-	if err := nt.KubeClient.Create(cm1); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{
@@ -205,6 +178,80 @@ service:
 		}
 	  }`)
 
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
+
+	cmName := "helm-watch-config-map"
+	nt.T.Log("Apply valid ConfigMap that is not immutable (which should not be allowed)")
+	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm0.Immutable = pointer.Bool(false)
+	cm0.Data = map[string]string{"something-else.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+`,
+	}
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(cm0); err != nil {
+			nt.T.Log(err)
+		}
+	})
+	if err := nt.KubeClient.Create(cm0); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
+
+	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
+	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm1.Immutable = pointer.Bool(true)
+	cm1.Data = map[string]string{"something-else.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Never
+`,
+	}
+	if err := nt.KubeClient.Update(cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" does not have data key \"values.yaml\"")
+
+	// delete the ConfigMap
+	if err := nt.KubeClient.Delete(cm1); err != nil {
+		nt.T.Error(err)
+	}
+	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
+
+	nt.T.Log("Apply valid ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
+	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm2.Immutable = pointer.Bool(true)
+	cm2.Data = map[string]string{"values.yaml": `
+image:
+  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
+  pullPolicy: Always
+wordpressUsername: test-user-1
+wordpressEmail: override-this@example.com
+resources:
+  requests:
+    cpu: 150m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 300Mi
+mariadb:
+  primary:
+    persistence:
+      enabled: false
+service:
+  type: ClusterIP`,
+	}
+
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(cm2); err != nil {
+			nt.T.Log(err)
+		}
+	})
+	if err := nt.KubeClient.Create(cm2); err != nil {
+		nt.T.Fatal(err)
+	}
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
@@ -238,121 +285,6 @@ service:
 		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
 		nt.T.Fatal(err)
 	}
-
-	nt.T.Log("Apply the ConfigMap with values: imagePullPolicy: Never; wordpressUserName: test-user-2")
-	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm2.Data = map[string]string{"values.yaml": `
-image:
-  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
-  pullPolicy: Never
-wordpressUsername: test-user-2
-wordpressEmail: override-this@example.com
-resources:
-  requests:
-    cpu: 150m
-    memory: 250Mi
-  limits:
-    cpu: 1
-    memory: 300Mi
-mariadb:
-  primary:
-    persistence:
-      enabled: false
-service:
-  type: ClusterIP`,
-	}
-	if err := nt.KubeClient.Update(cm2); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
-		[]testpredicates.Predicate{
-			containerImagePullPolicy("Never"),
-			testpredicates.HasCorrectResourceRequestsLimits("wordpress",
-				resource.MustParse(expectedCPURequest),
-				resource.MustParse(expectedCPULimit),
-				resource.MustParse(expectedMemoryRequest),
-				resource.MustParse(expectedMemoryLimit)),
-			testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
-	cm3 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm3.Data = map[string]string{"something-else.yaml": `
-image:
-  digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
-  pullPolicy: Never
-`,
-	}
-	if err := nt.KubeClient.Update(cm3); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"values.yaml\" not found in ConfigMap \"helm-watch-config-map\"")
-	// validate that the synced resources did not get modified or deleted
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
-		containerImagePullPolicy("Never"),
-		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
-			resource.MustParse(expectedCPURequest),
-			resource.MustParse(expectedCPULimit),
-			resource.MustParse(expectedMemoryRequest),
-			resource.MustParse(expectedMemoryLimit)),
-		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Delete the referenced ConfigMap")
-	if err := nt.KubeClient.Delete(cm3); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
-	// validate that the synced resources did not get modified or deleted
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
-		containerImagePullPolicy("Never"),
-		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
-			resource.MustParse(expectedCPURequest),
-			resource.MustParse(expectedCPULimit),
-			resource.MustParse(expectedMemoryRequest),
-			resource.MustParse(expectedMemoryLimit)),
-		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Reapply the referenced ConfigMap")
-	if err := nt.KubeClient.Create(cm1Copy); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchObject(kinds.Deployment(), "my-wordpress", "wordpress",
-		[]testpredicates.Predicate{
-			containerImagePullPolicy("Always"),
-			testpredicates.HasCorrectResourceRequestsLimits("wordpress",
-				resource.MustParse(expectedCPURequest),
-				resource.MustParse(expectedCPULimit),
-				resource.MustParse(expectedMemoryRequest),
-				resource.MustParse(expectedMemoryLimit)),
-			testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-1"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
-			testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
-		}); err != nil {
-		nt.T.Error(err)
-	}
-	if nt.T.Failed() {
-		nt.T.FailNow()
-	}
 }
 
 // TestHelmConfigMapOverride can run on both Kind and GKE clusters.
@@ -362,6 +294,7 @@ func TestHelmConfigMapOverride(t *testing.T) {
 	cmName := "helm-config-map-override"
 
 	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm.Immutable = pointer.Bool(true)
 	cm.Data = map[string]string{
 		"first": `
 extraEnvVars:
@@ -623,16 +556,6 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Create a ConfigMap with values: labelTest: first")
-	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
-	cm1.Data = map[string]string{
-		"foo.yaml": `label: first`,
-	}
-	cm1Copy := cm1.DeepCopy()
-	if err := nt.KubeClient.Create(cm1); err != nil {
-		nt.T.Fatal(err)
-	}
-
 	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
@@ -642,64 +565,64 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		GCPServiceAccountEmail: gsaARReaderEmail(),
 		Version:                privateNSHelmChartVersion,
 		ReleaseName:            "test",
-		ValuesFileRefs:         []v1beta1.ValuesFileRefs{{Name: cmName, ValuesFile: "foo.yaml"}},
+		ValuesFileRefs:         []v1beta1.ValuesFileRef{{Name: cmName, ValuesFile: "foo.yaml"}},
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
 
+	nt.T.Log("Create a ConfigMap that is not immutable (which should not be allowed)")
+	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+	cm0.Data = map[string]string{
+		"foo.yaml": `label: foo`,
+	}
+	cm0Copy := cm0.DeepCopy()
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(cm0); err != nil {
+			nt.T.Log(err)
+		}
+	})
+	if err := nt.KubeClient.Create(cm0); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" is not immutable")
+
+	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
+	cm0Copy.Immutable = pointer.Bool(true)
+	cm0Copy.Data = map[string]string{
+		"values.yaml": `label: foo`,
+	}
+	if err := nt.KubeClient.Update(cm0Copy); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" does not have data key \"foo.yaml\"")
+
+	// delete the ConfigMap
+	if err := nt.KubeClient.Delete(cm0Copy); err != nil {
+		nt.T.Error(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
+
+	nt.T.Log("Apply valid ConfigMap with values: `label: foo`")
+	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+	cm1.Data = map[string]string{
+		"foo.yaml": `label: foo`,
+	}
+	cm1.Immutable = pointer.Bool(true)
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(cm1); err != nil {
+			nt.T.Log(err)
+		}
+	})
+	if err := nt.KubeClient.Create(cm1); err != nil {
+		nt.T.Fatal(err)
+	}
 	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
-		testpredicates.HasLabel("labelsTest", "first")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Update the referenced ConfigMap with values: labelsTest: second")
-	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
-	cm2.Data = map[string]string{
-		"foo.yaml": `label: second`,
-	}
-	if err := nt.KubeClient.Update(cm2); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
-		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "second")}); err != nil {
-		nt.T.Error(err)
-	}
-
-	nt.T.Logf("Update the ConfigMap to have incorrect data key")
-	cm3 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
-	cm3.Data = map[string]string{
-		"values.yaml": `label: second`,
-	}
-	if err := nt.KubeClient.Update(cm3); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSync field spec.helm.valuesFileRefs.valuesFile must specify an existing data key in the referenced ConfigMap; data key \"foo.yaml\" not found in ConfigMap \"helm-cm-ns-repo\"")
-	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
-		testpredicates.HasLabel("labelsTest", "second")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Logf("Delete the ConfigMap with values")
-	if err := nt.KubeClient.Delete(cm3); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
-	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs, &appsv1.Deployment{},
-		testpredicates.HasLabel("labelsTest", "second")); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Reapply the ConfigMap with values: labelsTest: first")
-	if err := nt.KubeClient.Create(cm1Copy); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	if err = nt.Watcher.WatchObject(kinds.Deployment(), rs.Spec.Helm.ReleaseName+"-"+remoteHelmChart.ChartName, testNs,
-		[]testpredicates.Predicate{testpredicates.HasLabel("labelsTest", "first")}); err != nil {
+		testpredicates.HasLabel("labelsTest", "foo")); err != nil {
 		nt.T.Fatal(err)
 	}
 }

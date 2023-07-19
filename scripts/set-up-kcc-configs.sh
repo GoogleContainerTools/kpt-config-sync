@@ -19,7 +19,7 @@ set -euo pipefail
 # The source configs are stored in the e2e/testdata/configsync-kcc folder, and used in the e2e/testcases/kcc_test.go test.
 #
 # Pre-requisite:
-# 1. GCP_PROJECT, KCC_MANAGED_PROJECT, GCP_CLUSTER and GCP_ZONE are set.
+# 1. GCP_PROJECT and KCC_MANAGED_PROJECT are set.
 # 2. The KCC_MANAGED_PROJECT project is created with the config-connector addon enabled.
 # 3. The CSR repository is created in the ${GCP_PROJECT} project.
 # 4. You have the write permission to the CSR repository.
@@ -34,16 +34,6 @@ fi
 
 if [ "${KCC_MANAGED_PROJECT:-"unset"}" == "unset" ]; then
   echo 'Error: KCC_MANAGED_PROJECT is unset. Please provide the KCC_MANAGED_PROJECT env variable to specify your KCC-managed project' >&2
-  exit 1
-fi
-
-if [ "${GCP_CLUSTER:-"unset"}" == "unset" ]; then
-  echo 'Error: GCP_CLUSTER is unset. Please provide the GCP_CLUSTER env variable to specify your GCP cluster' >&2
-  exit 1
-fi
-
-if [ "${GCP_ZONE:-"unset"}" == "unset" ]; then
-  echo 'Error: GCP_ZONE is unset. Please provide the GCP_ZONE env variable to specify your cluster zone' >&2
   exit 1
 fi
 

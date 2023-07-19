@@ -123,7 +123,6 @@ push-to-test-csr-repos:
 KCC_MANAGED_PROJECT ?= cs-dev-hub
 set-up-kcc-configs:
 	GCP_PROJECT=$(GCP_PROJECT) KCC_MANAGED_PROJECT=$(KCC_MANAGED_PROJECT) \
-	GCP_CLUSTER=$(GCP_CLUSTER) GCP_ZONE=$(GCP_ZONE) \
 	./scripts/set-up-kcc-configs.sh
 
 .PHONY: set-up-workload-identity-test

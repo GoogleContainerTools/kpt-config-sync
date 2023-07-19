@@ -7,6 +7,8 @@ E2E_PARAMS := \
 
 GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
 
+GCP_ZONE ?= us-central1-a
+GKE_E2E_TIMEOUT ?= 6h
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"
 

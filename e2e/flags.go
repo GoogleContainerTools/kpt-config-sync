@@ -168,11 +168,11 @@ var GKEMachineType = flag.String("gke-machine-type", util.EnvString("GKE_MACHINE
 	"GKE machine type to use when creating GKE clusters. Defaults to GKE_MACHINE_TYPE env var.")
 
 // GKEDiskSize is the GKE disk size to use when creating GKE clusters.
-var GKEDiskSize = flag.String("gke-disk-size", util.EnvString("GKE_DISK_SIZE", ""),
+var GKEDiskSize = flag.String("gke-disk-size", util.EnvString("GKE_DISK_SIZE", DefaultGKEDiskSize),
 	"GKE disk size to use when creating GKE clusters. Defaults to GKE_DISK_SIZE env var.")
 
 // GKEDiskType is the GKE disk type to use when creating GKE clusters.
-var GKEDiskType = flag.String("gke-disk-type", util.EnvString("GKE_DISK_TYPE", ""),
+var GKEDiskType = flag.String("gke-disk-type", util.EnvString("GKE_DISK_TYPE", DefaultGKEDiskType),
 	"GKE disk type to use when creating GKE clusters. Defaults to GKE_DISK_TYPE env var.")
 
 // GKENumNodes is the number of nodes to use when creating GKE clusters.
@@ -209,9 +209,13 @@ const (
 	// DefaultGKEChannel is the default GKE release channel to use when creating a cluster
 	DefaultGKEChannel = "regular"
 	// DefaultGKEMachineType is the default GKE machine type to use when creating a cluster
-	DefaultGKEMachineType = "e2-standard-4"
+	DefaultGKEMachineType = "n2-standard-8"
 	// DefaultGKENumNodes is the default number of nodes to use when creating a GKE cluster
-	DefaultGKENumNodes = 3
+	DefaultGKENumNodes = 1
+	// DefaultGKEDiskType is the default disk type to use when creating a cluster
+	DefaultGKEDiskType = "pd-ssd"
+	// DefaultGKEDiskSize is the default disk size to use when creating a GKE cluster
+	DefaultGKEDiskSize = "50Gb"
 	// CreateClustersEnabled indicates that clusters should be created and error
 	// if the cluster already exists.
 	CreateClustersEnabled = "true"

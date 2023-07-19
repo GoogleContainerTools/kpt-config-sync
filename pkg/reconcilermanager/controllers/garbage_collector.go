@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -164,6 +167,33 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, reconcilerRe
 	}
 	if err := r.client.Update(ctx, rb); err != nil {
 		return NewObjectOperationError(err, rb, OperationUpdate)
+	}
+	return nil
+}
+
+func (r *RepoSyncReconciler) deleteHelmValuesFileRefCopies(ctx context.Context, rs *v1beta1.RepoSync) error {
+	if rs == nil || rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+		return nil
+	}
+
+	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
+		copiedNamespace := configsync.ControllerNamespace
+		copiedName := core.NsReconcilerPrefix + "-" + vf.Name + "-" + rs.Namespace
+
+		var existingConfigMapCopy corev1.ConfigMap
+		err := r.client.Get(ctx, types.NamespacedName{Name: copiedName, Namespace: copiedNamespace}, &existingConfigMapCopy)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// the copied ConfigMap doesn't exist, so we don't need to do anything
+				continue
+			} else {
+				return fmt.Errorf("unexpected error fetching ConfigMap: %w", err)
+			}
+		}
+
+		if err := r.client.Delete(ctx, &existingConfigMapCopy); err != nil {
+			return fmt.Errorf("failed to delete copy of ConfigMap: %w", err)
+		}
 	}
 	return nil
 }

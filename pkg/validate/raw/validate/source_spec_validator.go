@@ -28,9 +28,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// gcpSASuffix specifies the default suffix used with gcp ServiceAccount email.
-// https://cloud.google.com/iam/docs/service-accounts#user-managed
-const gcpSASuffix = ".iam.gserviceaccount.com"
+const (
+	// gcpSASuffix specifies the default suffix used with gcp ServiceAccount email.
+	// https://cloud.google.com/iam/docs/service-accounts#user-managed
+	gcpSASuffix = ".iam.gserviceaccount.com"
+
+	// HelmValuesDefaultDataKey is the default data key to use when spec.helm.valuesFileRefs.dataKey
+	// is not specified.
+	HelmValuesDefaultDataKey = "values.yaml"
+)
 
 // RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
 func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
@@ -207,8 +213,12 @@ func ValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, val
 		if cm.Immutable == nil || !(*cm.Immutable) {
 			return HelmValuesConfigMapMustBeImmutable(rs, objRef.Name)
 		}
-		if _, found := cm.Data[vf.ValuesFile]; !found {
-			return HelmValuesMissingConfigMapKey(rs, objRef.Name, vf.ValuesFile)
+		key := vf.DataKey
+		if key == "" {
+			key = HelmValuesDefaultDataKey
+		}
+		if _, found := cm.Data[key]; !found {
+			return HelmValuesMissingConfigMapKey(rs, objRef.Name, key)
 		}
 	}
 	return nil

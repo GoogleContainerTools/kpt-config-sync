@@ -122,7 +122,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			// This code path is unlikely, because the custom finalizer should
 			// have already deleted the managed resources and removed the
 			// repoSyncs cache entry. But if we get here, clean up anyway.
-			if err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef); err != nil {
+			if err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef, rs); err != nil {
 				r.logger(ctx).Error(err, "Failed to delete managed objects")
 				// Failed to delete a managed object.
 				// Return an error to trigger retry.
@@ -212,11 +212,25 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Failed to update sync status")
 		}
+	}
 
+	newValuesFileRefs, err := copyConfigMapsToCms(ctx, r.client, rs)
+	if err != nil {
+		err = errors.Errorf("unable to copy ValuesFileRefs objects to config-management-system namespace: %s", err.Error())
+		r.logger(ctx).Error(err, "Error copying ConfigMaps")
+		reposync.SetStalled(rs, "ConfigMapCopy", err)
+		_, updateErr := r.updateStatus(ctx, currentRS, rs)
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Failed to update status")
+		}
+		// Use the error for metric tagging.
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		// Errors copying the ConfigMap should trigger retry with backoff, so we return the error
+		return controllerruntime.Result{}, err
 	}
 
 	setupFn := func(ctx context.Context) error {
-		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
+		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs, newValuesFileRefs)
 	}
 	teardownFn := func(ctx context.Context) error {
 		return r.teardown(ctx, reconcilerRef, rsRef, currentRS, rs)
@@ -231,7 +245,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	return controllerruntime.Result{}, nil
 }
 
-func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync) error {
+func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync, newValuesFileRefs []v1beta1.ValuesFileRef) error {
 	rsRef := client.ObjectKeyFromObject(rs)
 	r.logger(ctx).V(3).Info("Reconciling managed objects")
 
@@ -280,10 +294,6 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
-	newValuesFileRefs, err := copyConfigMapsToCms(ctx, r.client, rs)
-	if err != nil {
-		return errors.Errorf("unable to copy ConfigMapRefs to config-management-system namespace: %s", err.Error())
-	}
 	mut := r.mutationsFor(ctx, rs, containerEnvs, newValuesFileRefs)
 
 	// Upsert Namespace reconciler deployment.
@@ -337,8 +347,8 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 // - Create or update managed objects
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
-func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
-	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
+func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync, newValuesFileRefs []v1beta1.ValuesFileRef) error {
+	err := r.upsertManagedObjects(ctx, reconcilerRef, rs, newValuesFileRefs)
 	err = r.handleReconcileError(ctx, err, rs, "Setup")
 	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
 	if updateErr != nil {
@@ -366,7 +376,7 @@ func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef typ
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
 func (r *RepoSyncReconciler) teardown(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
-	err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef)
+	err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef, rs)
 	err = r.handleReconcileError(ctx, err, rs, "Teardown")
 	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
 	if updateErr != nil {
@@ -438,7 +448,7 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 // deleteManagedObjects deletes objects managed by the reconciler-manager for
 // this RepoSync. If updateStatus is true, the RepoSync status will be updated
 // to reflect the teardown progress.
-func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
+func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, rs *v1beta1.RepoSync) error {
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
@@ -458,6 +468,10 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	}
 
 	if err := r.deleteRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+		return err
+	}
+
+	if err := r.deleteHelmValuesFileRefCopies(ctx, rs); err != nil {
 		return err
 	}
 
@@ -703,6 +717,28 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 	}
 
 	ctx := context.Background()
+	var sourceConfigMap corev1.ConfigMap
+	err := r.client.Get(ctx, objRef, &sourceConfigMap)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// the referenced ConfigMap doesn't exist anymore, so we should delete our copy of it (if we have one).
+			newNamespace := configsync.ControllerNamespace
+			newName := core.NsReconcilerPrefix + "-" + objRef.Name + "-" + objRef.Namespace
+
+			sourceConfigMapCopy := sourceConfigMap.DeepCopy()
+			sourceConfigMapCopy.ObjectMeta = metav1.ObjectMeta{
+				Namespace: newNamespace,
+				Name:      newName,
+			}
+			if err := r.client.Delete(ctx, sourceConfigMapCopy); err != nil {
+				klog.Errorf("failed to delete copy of ConfigMap: %w", err)
+			}
+		} else {
+			klog.Errorf("failed to get referenced ConfigMap: %w", err)
+		}
+	}
+
 	allRepoSyncs := &v1beta1.RepoSyncList{}
 	if err := r.client.List(ctx, allRepoSyncs); err != nil {
 		klog.Error("failed to list all RepoSyncs for %s (%s): %v",
@@ -1099,7 +1135,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 }
 
 func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.RepoSync) ([]v1beta1.ValuesFileRef, error) {
-	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil, nil
 	}
 
@@ -1115,8 +1151,8 @@ func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.Repo
 			return nil, err
 		}
 		newValuesFileRefs = append(newValuesFileRefs, v1beta1.ValuesFileRef{
-			Name:       newName,
-			ValuesFile: vf.ValuesFile,
+			Name:    newName,
+			DataKey: vf.DataKey,
 		})
 	}
 
@@ -1124,32 +1160,38 @@ func copyConfigMapsToCms(ctx context.Context, cl client.Client, rs *v1beta1.Repo
 }
 
 func copyOneConfigMapToCms(ctx context.Context, cl client.Client, objRef types.NamespacedName) (string, error) {
-	var cm corev1.ConfigMap
-	if err := cl.Get(ctx, objRef, &cm); err != nil {
-		return "", fmt.Errorf("failed to get referenced ConfigMap: %w", err)
+	var sourceConfigMap corev1.ConfigMap
+	err := cl.Get(ctx, objRef, &sourceConfigMap)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// the source ConfigMap doesn't exist, so there is nothing to copy. The previous validation checks
+			// will already surface this as an error on the RepoSync, so we don't need to do anything here.
+			return "", nil
+		} else {
+			return "", fmt.Errorf("unexpected error fetching ConfigMap: %w", err)
+		}
 	}
 
 	newNamespace := configsync.ControllerNamespace
-	newName := core.NsReconcilerPrefix + "-" + cm.Name
+	newName := core.NsReconcilerPrefix + "-" + sourceConfigMap.Name + "-" + sourceConfigMap.Namespace
 
-	var copiedCM corev1.ConfigMap
-	if err := cl.Get(ctx, types.NamespacedName{Name: newName, Namespace: newNamespace}, &copiedCM); err != nil {
-		if apierrors.IsNotFound(err) {
-			cm.ObjectMeta = metav1.ObjectMeta{
-				Namespace: newNamespace,
-				Name:      newName,
-			}
-			if err := cl.Create(ctx, &cm); err != nil {
-				return "", fmt.Errorf("failed to copy configmap: %w", err)
-			}
-		} else {
-			return "", fmt.Errorf("unexpected error trying to get old copied configmap: %w", err)
-		}
-	} else {
-		copiedCM.Data = cm.Data
-		if err := cl.Update(ctx, &copiedCM); err != nil {
-			return "", fmt.Errorf("error updating copied configmap: %w", err)
-		}
+	var existingConfigMapCopy corev1.ConfigMap
+	err = cl.Get(ctx, types.NamespacedName{Name: newName, Namespace: newNamespace}, &existingConfigMapCopy)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", fmt.Errorf("unexpected error fetching configmap: %w", err)
+	}
+	if err == nil {
+		// the copied ConfigMap already exists, and is immutable, so we don't need to do anything.
+		return newName, nil
+	}
+
+	sourceConfigMapCopy := sourceConfigMap.DeepCopy()
+	sourceConfigMapCopy.ObjectMeta = metav1.ObjectMeta{
+		Namespace: newNamespace,
+		Name:      newName,
+	}
+	if err := cl.Create(ctx, sourceConfigMapCopy); err != nil {
+		return "", fmt.Errorf("failed to create copy of configmap: %w", err)
 	}
 
 	return newName, nil

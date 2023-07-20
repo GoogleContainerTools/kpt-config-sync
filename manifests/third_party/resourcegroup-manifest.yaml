@@ -507,7 +507,7 @@ spec:
         env:
         - name: OC_RESOURCE_LABELS
           value: k8s.container.name="manager"
-        image: gcr.io/config-management-release/resource-group-controller:v1.0.13
+        image: gcr.io/config-management-release/resource-group-controller:v1.0.14
         name: manager
         resources:
           requests:

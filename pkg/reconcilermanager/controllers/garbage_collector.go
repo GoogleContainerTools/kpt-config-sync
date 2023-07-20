@@ -25,10 +25,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -177,18 +177,19 @@ func (r *RepoSyncReconciler) deleteHelmValuesFileRefCopies(ctx context.Context, 
 	}
 
 	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-		copiedNamespace := configsync.ControllerNamespace
-		copiedName := core.NsReconcilerPrefix + "-" + vf.Name + "-" + rs.Namespace
+		sourceConfigMapCopy := createSourceConfigMapCopy(rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:      vf.Name,
+			Namespace: rs.Namespace,
+		}})
 
 		var existingConfigMapCopy corev1.ConfigMap
-		err := r.client.Get(ctx, types.NamespacedName{Name: copiedName, Namespace: copiedNamespace}, &existingConfigMapCopy)
+		err := r.client.Get(ctx, types.NamespacedName{Name: sourceConfigMapCopy.Name, Namespace: sourceConfigMapCopy.Namespace}, &existingConfigMapCopy)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// the copied ConfigMap doesn't exist, so we don't need to do anything
 				continue
-			} else {
-				return fmt.Errorf("unexpected error fetching ConfigMap: %w", err)
 			}
+			return fmt.Errorf("unexpected error fetching ConfigMap: %w", err)
 		}
 
 		if err := r.client.Delete(ctx, &existingConfigMapCopy); err != nil {

@@ -1207,7 +1207,7 @@ spec:
                       properties:
                         dataKey:
                           description: 'dataKey represents the object data key to
-                            read the value from. Default: `values.yaml`'
+                            read the values from. Default: `values.yaml`'
                           type: string
                         name:
                           description: name represents the Object name. Required.

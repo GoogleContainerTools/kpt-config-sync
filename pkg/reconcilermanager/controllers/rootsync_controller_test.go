@@ -3116,6 +3116,94 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 	}
 }
 
+func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+
+	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully created")
+
+	overrideLogLevel := []v1beta1.ContainerLogLevelOverride{
+		{
+			ContainerName: reconcilermanager.Reconciler,
+			LogLevel:      5,
+		},
+		{
+			ContainerName: reconcilermanager.HydrationController,
+			LogLevel:      7,
+		},
+		{
+			ContainerName: reconcilermanager.GitSync,
+			LogLevel:      9,
+		},
+	}
+
+	containerArgs := map[string][]string{
+		"reconciler": {
+			"-v=5",
+		},
+		"hydration-controller": {
+			"-v=7",
+		},
+		"git-sync": {
+			"-v=9",
+		},
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	rs.Spec.Override = &v1beta1.OverrideSpec{
+		LogLevels: overrideLogLevel,
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerArgsMutator(containerArgs),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("2"), setGeneration(2),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+}
+
 func validateRootSyncStatus(t *testing.T, want *v1beta1.RootSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 
@@ -3228,6 +3316,14 @@ func containerEnvMutator(containerEnvs map[string][]corev1.EnvVar) depMutator {
 	}
 }
 
+func containerArgsMutator(containerArgs map[string][]string) depMutator {
+	return func(dep *appsv1.Deployment) {
+		for i, con := range dep.Spec.Template.Spec.Containers {
+			dep.Spec.Template.Spec.Containers[i].Args = containerArgs[con.Name]
+		}
+	}
+}
+
 func gceNodeMutator(gsaEmail string) depMutator {
 	return func(dep *appsv1.Deployment) {
 		dep.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "repo"}}
@@ -3292,6 +3388,7 @@ func fleetWorkloadIdentityContainers(gsaEmail string) []corev1.Container {
 			ReadOnly:  true,
 			MountPath: gcpKSATokenDir,
 		}},
+		Args: []string{"--port=9102", "--logtostderr"},
 	})
 	return containers
 }
@@ -3311,14 +3408,17 @@ func fwiOciContainers() []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.OciSync,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 			Env: []corev1.EnvVar{{
 				Name:  googleApplicationCredentialsEnvKey,
 				Value: filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile),
@@ -3403,6 +3503,18 @@ func defaultResourceRequirements() corev1.ResourceRequirements {
 	}
 }
 
+func defaultArgs() []string {
+	return []string{
+		"-v=0",
+	}
+}
+
+func defaultGitSyncArgs() []string {
+	return []string{
+		"-v=5",
+	}
+}
+
 func defaultContainers() []corev1.Container {
 	return []corev1.Container{
 		{
@@ -3453,15 +3565,18 @@ func secretMountContainers(caCertSecret string) []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:         reconcilermanager.GitSync,
 			Resources:    defaultResourceRequirements(),
 			VolumeMounts: gitSyncVolumeMounts,
+			Args:         defaultGitSyncArgs(),
 		},
 	}
 }
@@ -3475,15 +3590,18 @@ func helmSecretMountContainers() []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:         reconcilermanager.HelmSync,
 			Resources:    defaultResourceRequirements(),
 			VolumeMounts: helmSyncVolumeMounts,
+			Args:         defaultArgs(),
 		},
 	}
 }
@@ -3493,14 +3611,17 @@ func noneGitContainers() []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.GitSync,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultGitSyncArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},
@@ -3512,14 +3633,17 @@ func noneOciContainers() []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.OciSync,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},
@@ -3531,14 +3655,17 @@ func noneHelmContainers() []corev1.Container {
 		{
 			Name:      reconcilermanager.Reconciler,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HydrationController,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 		},
 		{
 			Name:      reconcilermanager.HelmSync,
 			Resources: defaultResourceRequirements(),
+			Args:      defaultArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},
@@ -3550,6 +3677,7 @@ func gceNodeContainers(gsaEmail string) []corev1.Container {
 	containers = append(containers, corev1.Container{
 		Name: GceNodeAskpassSidecarName,
 		Env:  []corev1.EnvVar{{Name: gsaEmailEnvKey, Value: gsaEmail}},
+		Args: []string{"--port=9102", "--logtostderr"},
 	})
 	return containers
 }

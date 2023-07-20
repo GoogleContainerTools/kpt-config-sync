@@ -66,6 +66,13 @@ type OverrideSpec struct {
 	// support pulling remote bases from public repositories.
 	// +optional
 	EnableShellInRendering *bool `json:"enableShellInRendering,omitempty"`
+
+	// logLevels specify the container name and log level override value for the reconciler deployment container.
+	// Each entry must contain the name of the reconciler deployment container and the desired log level.
+	// +listType=map
+	// +listMapKey=containerName
+	// +optional
+	LogLevels []ContainerLogLevelOverride `json:"logLevels,omitempty"`
 }
 
 // ContainerResourcesSpec allows to override the resource requirements for a container
@@ -88,4 +95,22 @@ type ContainerResourcesSpec struct {
 	// memoryLimit allows one to override the memory limit of a container
 	// +optional
 	MemoryLimit resource.Quantity `json:"memoryLimit,omitempty"`
+}
+
+// ContainerLogLevelOverride specifies the container name and log level override value
+type ContainerLogLevelOverride struct {
+	// containerName specifies the name of the reconciler deployment container for which log level will be overridden.
+	// Must be one of the following: "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+	ContainerName string `json:"containerName"`
+
+	// logLevel specifies the log level override value for the container.
+	// The default value for git-sync container is 5, while all other containers will default to 0.
+	// Allowed values are from 0 to 10
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +kubebuilder:validation:Required
+	LogLevel int `json:"logLevel"`
 }

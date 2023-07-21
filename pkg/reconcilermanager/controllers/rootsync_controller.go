@@ -182,6 +182,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
+	r.setDefaultHelmDataKey(rs)
 	if err := r.validateValuesFileSourcesRefs(ctx, rs); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		rootsync.SetStalled(rs, "Validation", err)
@@ -994,5 +995,16 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 
 		templateSpec.Containers = updatedContainers
 		return nil
+	}
+}
+
+func (r *RootSyncReconciler) setDefaultHelmDataKey(rs *v1beta1.RootSync) {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+		return
+	}
+	for i := range rs.Spec.Helm.ValuesFileRefs {
+		if rs.Spec.Helm.ValuesFileRefs[i].DataKey == "" {
+			rs.Spec.Helm.ValuesFileRefs[i].DataKey = helmValuesDefaultDataKey
+		}
 	}
 }

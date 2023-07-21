@@ -43,7 +43,6 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -66,6 +65,10 @@ const (
 
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
+
+	// HelmValuesDefaultDataKey is the default data key to use when spec.helm.valuesFileRefs.dataKey
+	// is not specified.
+	helmValuesDefaultDataKey = "values.yaml"
 
 	logFieldSyncKind        = "syncKind"
 	logFieldSyncRef         = "sync"
@@ -431,13 +434,8 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 	var valuesFiles []string
 
 	for i, vf := range valuesFileRefs {
-		key := vf.DataKey
-		if key == "" {
-			key = validate.HelmValuesDefaultDataKey
-		}
-
 		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_file_path_%d", i))
-		fileName := filepath.Join(vf.Name, key)
+		fileName := filepath.Join(vf.Name, vf.DataKey)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 
@@ -449,7 +447,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 						Name: vf.Name,
 					},
 					Items: []corev1.KeyToPath{{
-						Key:  key,
+						Key:  vf.DataKey,
 						Path: fileName,
 					}},
 					// The ConfigMap may be deleted before the RSync. To prevent the reconciler

@@ -80,9 +80,9 @@ const (
 	// the following annotations are added to ConfigMaps that are copied from references
 	// in spec.helm.valuesFileRefs to the config-management-system namespace, to keep track
 	// of where the ConfigMap came from
-	repoSyncNameAnnotationKey          = configsync.ConfigSyncPrefix + "repoSyncName"
-	repoSyncNamespaceAnnotationKey     = configsync.ConfigSyncPrefix + "repoSyncNamespace"
-	originalConfigMapNameAnnotationKey = configsync.ConfigSyncPrefix + "originalConfigMapName"
+	repoSyncNameAnnotationKey          = configsync.ConfigSyncPrefix + "repo-sync-name"
+	repoSyncNamespaceAnnotationKey     = configsync.ConfigSyncPrefix + "repo-sync-namespace"
+	originalConfigMapNameAnnotationKey = configsync.ConfigSyncPrefix + "original-configmap-name"
 )
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
@@ -202,6 +202,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
+	r.setDefaultHelmDataKey(rs)
 	if err := r.validateValuesFileSourcesRefs(ctx, rs); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		reposync.SetStalled(rs, "Validation", err)
@@ -230,8 +231,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		err = errors.Errorf("unable to copy ValuesFileRefs objects to config-management-system namespace: %s", err.Error())
 		r.logger(ctx).Error(err, "Error copying ConfigMaps")
 		reposync.SetStalled(rs, "ConfigMapCopy", err)
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		if updateErr != nil {
+		if _, updateErr := r.updateStatus(ctx, currentRS, rs); updateErr != nil {
 			r.logger(ctx).Error(updateErr, "Failed to update status")
 		}
 		// Use the error for metric tagging.
@@ -1138,6 +1138,17 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 
 		templateSpec.Containers = updatedContainers
 		return nil
+	}
+}
+
+func (r *RepoSyncReconciler) setDefaultHelmDataKey(rs *v1beta1.RepoSync) {
+	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+		return
+	}
+	for i := range rs.Spec.Helm.ValuesFileRefs {
+		if rs.Spec.Helm.ValuesFileRefs[i].DataKey == "" {
+			rs.Spec.Helm.ValuesFileRefs[i].DataKey = helmValuesDefaultDataKey
+		}
 	}
 }
 

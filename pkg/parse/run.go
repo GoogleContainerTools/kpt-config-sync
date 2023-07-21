@@ -130,7 +130,6 @@ func Run(ctx context.Context, p Parser) {
 			}
 			run(ctx, p, trigger, state)
 
-			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Update the sync status to report management conflicts (from the remediator).

@@ -1220,13 +1220,12 @@ spec:
                         contains a values file to use for helm rendering. The ConfigMap
                         must be in the same namespace as the RootSync/RepoSync.
                       properties:
+                        dataKey:
+                          description: 'dataKey represents the object data key to
+                            read the values from. Default: `values.yaml`'
+                          type: string
                         name:
                           description: name represents the Object name. Required.
-                          type: string
-                        valuesFile:
-                          default: values.yaml
-                          description: valuesFile represents the object data key to
-                            read the value from.
                           type: string
                       type: object
                     type: array

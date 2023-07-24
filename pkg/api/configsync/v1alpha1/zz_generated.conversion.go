@@ -473,6 +473,7 @@ func autoConvert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in *v1beta1.HelmBase, out
 	out.Version = in.Version
 	out.ReleaseName = in.ReleaseName
 	out.Values = (*v1.JSON)(unsafe.Pointer(in.Values))
+	// WARNING: in.ValuesFileRefs requires manual conversion: does not exist in peer-type
 	out.IncludeCRDs = in.IncludeCRDs
 	out.Period = in.Period
 	out.Auth = configsync.AuthType(in.Auth)
@@ -787,7 +788,15 @@ func autoConvert_v1alpha1_RepoSyncSpec_To_v1beta1_RepoSyncSpec(in *RepoSyncSpec,
 	out.SourceType = in.SourceType
 	out.Git = (*v1beta1.Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*v1beta1.Oci)(unsafe.Pointer(in.Oci))
-	out.Helm = (*v1beta1.HelmRepoSync)(unsafe.Pointer(in.Helm))
+	if in.Helm != nil {
+		in, out := &in.Helm, &out.Helm
+		*out = new(v1beta1.HelmRepoSync)
+		if err := Convert_v1alpha1_HelmRepoSync_To_v1beta1_HelmRepoSync(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.Helm = nil
+	}
 	out.Override = (*v1beta1.OverrideSpec)(unsafe.Pointer(in.Override))
 	return nil
 }
@@ -802,7 +811,15 @@ func autoConvert_v1beta1_RepoSyncSpec_To_v1alpha1_RepoSyncSpec(in *v1beta1.RepoS
 	out.SourceType = in.SourceType
 	out.Git = (*Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*Oci)(unsafe.Pointer(in.Oci))
-	out.Helm = (*HelmRepoSync)(unsafe.Pointer(in.Helm))
+	if in.Helm != nil {
+		in, out := &in.Helm, &out.Helm
+		*out = new(HelmRepoSync)
+		if err := Convert_v1beta1_HelmRepoSync_To_v1alpha1_HelmRepoSync(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.Helm = nil
+	}
 	out.Override = (*OverrideSpec)(unsafe.Pointer(in.Override))
 	return nil
 }

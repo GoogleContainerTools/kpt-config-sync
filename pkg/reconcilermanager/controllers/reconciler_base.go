@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -66,6 +65,10 @@ const (
 
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
+
+	// HelmValuesDefaultDataKey is the default data key to use when spec.helm.valuesFileRefs.dataKey
+	// is not specified.
+	helmValuesDefaultDataKey = "values.yaml"
 
 	logFieldSyncKind        = "syncKind"
 	logFieldSyncRef         = "sync"
@@ -432,7 +435,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 
 	for i, vf := range valuesFileRefs {
 		mountPath := filepath.Join("/etc/config", fmt.Sprintf("helm_values_file_path_%d", i))
-		fileName := filepath.Join(vf.Name, vf.ValuesFile)
+		fileName := filepath.Join(vf.Name, vf.DataKey)
 		valuesFiles = append(valuesFiles, filepath.Join(mountPath, fileName))
 		volumeName := fmt.Sprintf("valuesfile-vol-%d", i)
 
@@ -444,7 +447,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 						Name: vf.Name,
 					},
 					Items: []corev1.KeyToPath{{
-						Key:  vf.ValuesFile,
+						Key:  vf.DataKey,
 						Path: fileName,
 					}},
 					// The ConfigMap may be deleted before the RSync. To prevent the reconciler
@@ -634,11 +637,9 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	}
 	// Else - the object is being deleted.
 
-	klog.Infoln("checking finalizers")
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerFinalizer) {
 		// The object is being deleted, but the reconciler finalizer is still running.
 		// Wait for the reconciler finalizer to complete.
-		klog.Infoln("")
 		r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
 		return nil
 	}

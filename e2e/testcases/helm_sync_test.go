@@ -346,11 +346,11 @@ image:
 			"valuesFileRefs": [
 			  {
 				"name": "helm-config-map-override",
-				"valuesFile": "first"
+				"dataKey": "first"
 			  },
 			  {
 				"name": "helm-config-map-override",
-				"valuesFile": "second"
+				"dataKey": "second"
 			  }
 			]
 		  }
@@ -565,7 +565,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		GCPServiceAccountEmail: gsaARReaderEmail(),
 		Version:                privateNSHelmChartVersion,
 		ReleaseName:            "test",
-		ValuesFileRefs:         []v1beta1.ValuesFileRef{{Name: cmName, ValuesFile: "foo.yaml"}},
+		ValuesFileRefs:         []v1beta1.ValuesFileRef{{Name: cmName, DataKey: "foo.yaml"}},
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))

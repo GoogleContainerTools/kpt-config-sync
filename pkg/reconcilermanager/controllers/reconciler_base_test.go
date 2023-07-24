@@ -630,8 +630,8 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 		"one valuesFileRefs": {
 			input: []v1beta1.ValuesFileRef{
 				{
-					Name:       "foo",
-					ValuesFile: "values.yaml",
+					Name:    "foo",
+					DataKey: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -667,12 +667,12 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 		"two valuesFileRefs, different ConfigMaps": {
 			input: []v1beta1.ValuesFileRef{
 				{
-					Name:       "foo",
-					ValuesFile: "values.yaml",
+					Name:    "foo",
+					DataKey: "values.yaml",
 				},
 				{
-					Name:       "bar",
-					ValuesFile: "values.yaml",
+					Name:    "bar",
+					DataKey: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{
@@ -729,12 +729,12 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 		"two valuesFileRefs, same ConfigMap, same key": {
 			input: []v1beta1.ValuesFileRef{
 				{
-					Name:       "foo",
-					ValuesFile: "values.yaml",
+					Name:    "foo",
+					DataKey: "values.yaml",
 				},
 				{
-					Name:       "foo",
-					ValuesFile: "values.yaml",
+					Name:    "foo",
+					DataKey: "values.yaml",
 				},
 			},
 			expected: corev1.PodSpec{

@@ -207,8 +207,8 @@ func ValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, val
 		if cm.Immutable == nil || !(*cm.Immutable) {
 			return HelmValuesConfigMapMustBeImmutable(rs, objRef.Name)
 		}
-		if _, found := cm.Data[vf.ValuesFile]; !found {
-			return HelmValuesMissingConfigMapKey(rs, objRef.Name, vf.ValuesFile)
+		if _, found := cm.Data[vf.DataKey]; !found {
+			return HelmValuesMissingConfigMapKey(rs, objRef.Name, vf.DataKey)
 		}
 	}
 	return nil

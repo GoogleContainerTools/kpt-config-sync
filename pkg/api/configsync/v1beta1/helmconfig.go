@@ -112,8 +112,7 @@ type ValuesFileRef struct {
 	// name represents the Object name. Required.
 	Name string `json:"name,omitempty"`
 
-	// valuesFile represents the object data key to read the value from.
-	// +kubebuilder:default:=values.yaml
+	// dataKey represents the object data key to read the values from. Default: `values.yaml`
 	// +optional
-	ValuesFile string `json:"valuesFile,omitempty"`
+	DataKey string `json:"dataKey,omitempty"`
 }

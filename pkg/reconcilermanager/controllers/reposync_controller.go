@@ -79,9 +79,13 @@ type RepoSyncReconciler struct {
 const (
 	// the following annotations are added to ConfigMaps that are copied from references
 	// in spec.helm.valuesFileRefs to the config-management-system namespace, to keep track
-	// of where the ConfigMap came from
-	repoSyncNameAnnotationKey          = configsync.ConfigSyncPrefix + "repo-sync-name"
-	repoSyncNamespaceAnnotationKey     = configsync.ConfigSyncPrefix + "repo-sync-namespace"
+	// of where the ConfigMap came from for cleanup
+	repoSyncNameAnnotationKey      = configsync.ConfigSyncPrefix + "repo-sync-name"
+	repoSyncNamespaceAnnotationKey = configsync.ConfigSyncPrefix + "repo-sync-namespace"
+
+	// originalConfigMapNameAnnotationKey isn't used anywhere, but is added to ConfigMaps that are
+	// copied from references in spec.helm.valuesFileRefs to the config-management-system namespace,
+	// to keep track of where the ConfigMap came from, for debugging and troubleshooting
 	originalConfigMapNameAnnotationKey = configsync.ConfigSyncPrefix + "original-configmap-name"
 )
 
@@ -768,12 +772,17 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// the referenced ConfigMap doesn't exist anymore, so we should delete our copy of it (if we have one).
-				sourceConfigMapCopy := createSourceConfigMapCopy(&rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+				sourceConfigMapCopy, err := createSourceConfigMapCopy(&rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
 					Name:      objRef.Name,
 					Namespace: objRef.Namespace,
 				}})
+				if err != nil {
+					klog.Errorf("failed to create source ConfigMap copy: %s", err.Error())
+				}
 				if err := r.client.Delete(ctx, &sourceConfigMapCopy); err != nil {
-					klog.Errorf("failed to delete copy of ConfigMap: %w", err)
+					if !apierrors.IsNotFound(err) {
+						klog.Errorf("failed to delete copy of ConfigMap: %w", err)
+					}
 				}
 			} else {
 				klog.Errorf("failed to get referenced ConfigMap: %w", err)
@@ -1223,7 +1232,10 @@ func copyOneConfigMapToCms(ctx context.Context, cl client.Client, objRef types.N
 
 	}
 
-	sourceConfigMapCopy := createSourceConfigMapCopy(rs, sourceConfigMap)
+	sourceConfigMapCopy, err := createSourceConfigMapCopy(rs, sourceConfigMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to create source ConfigMap copy: %w", err)
+	}
 
 	var existingConfigMapCopy corev1.ConfigMap
 	err = cl.Get(ctx, types.NamespacedName{Name: sourceConfigMapCopy.Name, Namespace: sourceConfigMapCopy.Namespace}, &existingConfigMapCopy)
@@ -1241,7 +1253,11 @@ func copyOneConfigMapToCms(ctx context.Context, cl client.Client, objRef types.N
 	return sourceConfigMapCopy.Name, nil
 }
 
-func createSourceConfigMapCopy(rs *v1beta1.RepoSync, sourceConfigMap corev1.ConfigMap) corev1.ConfigMap {
+func createSourceConfigMapCopy(rs *v1beta1.RepoSync, sourceConfigMap corev1.ConfigMap) (corev1.ConfigMap, error) {
+	if rs.Namespace == configsync.ControllerNamespace {
+		return corev1.ConfigMap{}, fmt.Errorf("RepoSync must not be in namespace %s", configsync.ControllerNamespace)
+	}
+
 	// use a hash to prevent the name from being too long
 	hash := sha1.Sum([]byte(fmt.Sprintf("%s:%s:%s", rs.Name, rs.Namespace, sourceConfigMap.Name)))
 	newName := core.NsReconcilerPrefix + "-" + hex.EncodeToString(hash[:])
@@ -1260,5 +1276,5 @@ func createSourceConfigMapCopy(rs *v1beta1.RepoSync, sourceConfigMap corev1.Conf
 		},
 	}
 
-	return *sourceConfigMapCopy
+	return *sourceConfigMapCopy, nil
 }

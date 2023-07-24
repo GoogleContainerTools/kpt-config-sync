@@ -177,14 +177,16 @@ func (r *RepoSyncReconciler) deleteHelmValuesFileRefCopies(ctx context.Context, 
 	}
 
 	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-		sourceConfigMapCopy := createSourceConfigMapCopy(rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		sourceConfigMapCopy, err := createSourceConfigMapCopy(rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
 			Name:      vf.Name,
 			Namespace: rs.Namespace,
 		}})
+		if err != nil {
+			return fmt.Errorf("failed to create source ConfigMap copy: %w", err)
+		}
 
 		var existingConfigMapCopy corev1.ConfigMap
-		err := r.client.Get(ctx, types.NamespacedName{Name: sourceConfigMapCopy.Name, Namespace: sourceConfigMapCopy.Namespace}, &existingConfigMapCopy)
-		if err != nil {
+		if err = r.client.Get(ctx, types.NamespacedName{Name: sourceConfigMapCopy.Name, Namespace: sourceConfigMapCopy.Namespace}, &existingConfigMapCopy); err != nil {
 			if apierrors.IsNotFound(err) {
 				// the copied ConfigMap doesn't exist, so we don't need to do anything
 				continue

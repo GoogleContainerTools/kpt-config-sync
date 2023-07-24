@@ -31,7 +31,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -345,6 +344,7 @@ func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secret
 
 func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	bsNamespace := "bookstore"
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	repoSyncNN := nomostest.RepoSyncNN(bsNamespace, configsync.RepoSyncName)
 	nt := nomostest.New(
 		t,
@@ -353,7 +353,6 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 		ntopts.WithCentralizedControl,
 	)
 
-	rootReconciler := core.RootReconcilerName(configsync.RootSyncName)
 	nsReconciler := core.NsReconcilerName(bsNamespace, configsync.RepoSyncName)
 
 	// Validate status condition "Reconciling" and Stalled is set to "False" after
@@ -391,27 +390,22 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
 
-	rootSyncReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		rootReconciler, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	repoSyncReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nsReconciler, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	rootCommitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	nnCommitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	// Skip sync & ops metrics and just validate reconciler-manager and reconciler errors.
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerManagerMetrics(nt),
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncReconcilerPod.Name, rootCommitHash, metrics.ErrorSummary{}),
-		nomostest.ReconcilerErrorMetrics(nt, repoSyncReconcilerPod.Name, nnCommitHash, metrics.ErrorSummary{}))
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, rootCommitHash, metrics.ErrorSummary{}),
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, nnCommitHash, metrics.ErrorSummary{}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -38,7 +38,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -243,6 +242,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
 	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs2}, 1)
 	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNameLabel: nr1}, 2)
+
+	// TODO: validate sync-generation label
 }
 
 func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, labels map[string]string, expectedCount int) {
@@ -303,14 +304,10 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "declared in another repository")
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
-	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
-	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nsReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
@@ -318,8 +315,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		// KptManagementConflictError is recorded by the applier, but they have
 		// similar error messages. So while there should be a ReconcilerError
 		// metric, there might not be a LastSyncTimestamp with status=error.
-		// nomostest.ReconcilerSyncError(nt, nsReconcilerPod.Name, commitHash),
-		nomostest.ReconcilerErrorMetrics(nt, nsReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		// nomostest.ReconcilerSyncError(nt, repoSyncLabels, commitHash),
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
 			Sync: 1,
 		}))
 	if err != nil {
@@ -437,18 +434,15 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	}
 
 	// Validate reconciler error metric is emitted from namespace reconciler.
-	nsReconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
-	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nsReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerSyncError(nt, nsReconcilerPod.Name, commitHash),
-		nomostest.ReconcilerErrorMetrics(nt, nsReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerSyncError(nt, rootSyncLabels, commitHash),
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Sync: 1,
 		}))
 	if err != nil {
@@ -697,18 +691,15 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
-	nsReconciler2Name := core.NsReconcilerName(repoSyncNN2.Namespace, repoSyncNN2.Name)
-	nsReconciler2Pod, err := nt.KubeClient.GetDeploymentPod(
-		nsReconciler2Name, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	repoSync2Labels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN2)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	commitHash := nt.NonRootRepos[repoSyncNN2].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerSyncError(nt, nsReconciler2Pod.Name, commitHash),
-		nomostest.ReconcilerErrorMetrics(nt, nsReconciler2Pod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerSyncError(nt, repoSync2Labels, commitHash),
+		nomostest.ReconcilerErrorMetrics(nt, repoSync2Labels, commitHash, metrics.ErrorSummary{
 			Sync: 1,
 		}))
 	if err != nil {

@@ -30,7 +30,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -725,21 +724,19 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	safetyNSObj := fake.NamespaceObject(nt.RootRepos[configsync.RootSyncName].SafetyNSName)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, safetyNSObj)
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerSyncError(nt, rootReconcilerPod.Name, commitHash),
-		nomostest.ReconcilerSourceMetrics(nt, rootReconcilerPod.Name, commitHash,
+		nomostest.ReconcilerSyncError(nt, rootSyncLabels, commitHash),
+		nomostest.ReconcilerSourceMetrics(nt, rootSyncLabels, commitHash,
 			nt.MetricsExpectations.ExpectedRootSyncObjectCount(configsync.RootSyncName)),
-		nomostest.ReconcilerOperationsMetrics(nt, rootReconcilerPod.Name,
+		nomostest.ReconcilerOperationsMetrics(nt, rootSyncLabels,
 			nt.MetricsExpectations.ExpectedRootSyncObjectOperations(configsync.RootSyncName)...),
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Sync: 1,
 		}))
 	if err != nil {

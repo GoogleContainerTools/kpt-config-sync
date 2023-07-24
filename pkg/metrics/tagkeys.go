@@ -73,7 +73,7 @@ var (
 	// TODO: replace with k8s.container.name resource attribute
 	KeyContainer, _ = tag.NewKey("container")
 
-	// KeyResourceType groups metris by their resource types. Possible values: cpu, memory.
+	// KeyResourceType groups metrics by their resource types. Possible values: cpu, memory.
 	KeyResourceType, _ = tag.NewKey("resource")
 )
 
@@ -89,6 +89,10 @@ var (
 
 	// ResourceKeySyncNamespace groups metrics by the Sync namespace.
 	ResourceKeySyncNamespace, _ = tag.NewKey("configsync_sync_namespace")
+
+	// ResourceKeySyncGeneration groups metrics by the Sync metadata.generation.
+	// This allows matching metrics to a specific Sync configuration.
+	ResourceKeySyncGeneration, _ = tag.NewKey("configsync_sync_generation")
 
 	// ResourceKeyDeploymentName groups metrics by k8s deployment name.
 	ResourceKeyDeploymentName, _ = tag.NewKey("k8s_deployment_name")

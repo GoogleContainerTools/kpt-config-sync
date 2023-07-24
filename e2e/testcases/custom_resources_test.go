@@ -28,7 +28,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -119,17 +118,14 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
 		}))
 	if err != nil {
@@ -234,20 +230,18 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, firstCommitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
 			// Remediator conflict after the first commit, because the declared
 			// Anvil was deleted by another client after successful sync.
 			Conflicts: 1,
 		}),
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, secondCommitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, secondCommitHash, metrics.ErrorSummary{
 			// No remediator conflict after the second commit, because the
 			// reconciler hasn't been updated with the latest declared resources,
 			// because there was a source error.

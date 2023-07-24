@@ -853,17 +853,15 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add both cluster selector annotations to a role binding"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
 		}))
 	if err != nil {

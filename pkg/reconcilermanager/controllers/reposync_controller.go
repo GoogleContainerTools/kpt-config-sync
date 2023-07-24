@@ -457,6 +457,10 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 		reposync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		reposync.SetStalled(rs, "Error", err)
 	}
+
+	if err != nil {
+		err = errors.Wrap(err, stage)
+	}
 	return err // retry
 }
 
@@ -867,7 +871,7 @@ func requeueRepoSyncRequest(obj client.Object, rs *v1beta1.RepoSync) []reconcile
 func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout), enableRendering(rs.GetAnnotations())),
+		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, rs.Generation, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout), enableRendering(rs.GetAnnotations())),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -1045,6 +1049,10 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				return err
 			}
 		}
+
+		// Add sync-generation label
+		core.SetLabel(&d.ObjectMeta, metadata.SyncGenerationLabel, fmt.Sprint(rs.GetGeneration()))
+		core.SetLabel(&d.Spec.Template, metadata.SyncGenerationLabel, fmt.Sprint(rs.GetGeneration()))
 
 		// Add unique reconciler label
 		core.SetLabel(&d.Spec.Template, metadata.ReconcilerLabel, reconcilerName)

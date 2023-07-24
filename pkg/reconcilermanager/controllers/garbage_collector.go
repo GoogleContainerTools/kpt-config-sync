@@ -202,5 +202,6 @@ func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, recon
 	if err := r.client.Update(ctx, crb); err != nil {
 		return NewObjectOperationError(err, crb, OperationUpdate)
 	}
+
 	return nil
 }

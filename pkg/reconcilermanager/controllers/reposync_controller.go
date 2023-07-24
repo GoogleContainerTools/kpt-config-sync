@@ -772,18 +772,16 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// the referenced ConfigMap doesn't exist anymore, so we should delete our copy of it (if we have one).
-				sourceConfigMapCopy, err := createSourceConfigMapCopy(&rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+				if sourceConfigMapCopy, err := createSourceConfigMapCopy(&rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
 					Name:      objRef.Name,
 					Namespace: objRef.Namespace,
-				}})
-				if err != nil {
+				}}); err != nil {
 					klog.Errorf("failed to create source ConfigMap copy: %s", err.Error())
+
+				} else if err := r.client.Delete(ctx, &sourceConfigMapCopy); err != nil && !apierrors.IsNotFound(err) {
+					klog.Errorf("failed to delete copy of ConfigMap: %w", err)
 				}
-				if err := r.client.Delete(ctx, &sourceConfigMapCopy); err != nil {
-					if !apierrors.IsNotFound(err) {
-						klog.Errorf("failed to delete copy of ConfigMap: %w", err)
-					}
-				}
+
 			} else {
 				klog.Errorf("failed to get referenced ConfigMap: %w", err)
 			}
@@ -1255,6 +1253,7 @@ func copyOneConfigMapToCms(ctx context.Context, cl client.Client, objRef types.N
 
 func createSourceConfigMapCopy(rs *v1beta1.RepoSync, sourceConfigMap corev1.ConfigMap) (corev1.ConfigMap, error) {
 	if rs.Namespace == configsync.ControllerNamespace {
+		// this is guarded by validation code and shouldn't happen, this is just a sanity check
 		return corev1.ConfigMap{}, fmt.Errorf("RepoSync must not be in namespace %s", configsync.ControllerNamespace)
 	}
 

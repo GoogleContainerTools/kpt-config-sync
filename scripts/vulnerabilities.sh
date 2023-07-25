@@ -47,7 +47,7 @@ for image in "${images[@]}"; do
   vulnerabilities=$(gcloud beta container images describe --show-package-vulnerability --format json --verbosity error "${image}" |
     jq -r '.package_vulnerability_summary.vulnerabilities')
   fixable=$(echo "${vulnerabilities}" |
-    jq -r 'with_entries(select(.key == "CRITICAL" or .key == "HIGH" or .key == "MEDIUM")) | select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
+    jq -r 'select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
   vuln_map[${image}]=${fixable}
   fixable_total=$((fixable_total + fixable))
 done
@@ -63,6 +63,6 @@ echo # done scanning
 ) | column -ts $'\t'
 
 if [[ "${fixable_total}" != "0" ]]; then
-  echo "ERROR: ${fixable_total} critical, high, or medium vulnerabilities are fixable" >&2
+  echo "ERROR: ${fixable_total} vulnerabilities are fixable" >&2
   exit 1
 fi

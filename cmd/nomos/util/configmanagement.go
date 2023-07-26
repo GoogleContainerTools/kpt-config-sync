@@ -48,8 +48,11 @@ const (
 	ReconcilerManagerName = "reconciler-manager"
 )
 
-// DynamicClient obtains a client based on the supplied REST config.  Can be overridden in tests.
-var DynamicClient = dynamic.NewForConfig
+// DynamicClient obtains a client based on the supplied REST config.
+// Returns dynamic.Interface to be overridden in tests.
+var DynamicClient = func(config *rest.Config) (dynamic.Interface, error) {
+	return dynamic.NewForConfig(config)
+}
 
 // ConfigManagementClient wraps a dynamic resource interface for reading ConfigManagement resources.
 type ConfigManagementClient struct {

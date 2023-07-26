@@ -35,6 +35,9 @@ type TaskStatusRunner struct {
 // the statusPoller.
 type Options struct {
 	EmitStatusEvents bool
+	// RESTScopeStrategy specifies which strategy to use when listing and
+	// watching resources. By default, the strategy is selected automatically.
+	WatcherRESTScopeStrategy watcher.RESTScopeStrategy
 }
 
 // Run executes the tasks in the taskqueue, with the statusPoller running in the
@@ -57,7 +60,9 @@ func (tsr *TaskStatusRunner) Run(
 	// If taskStatusRunner.Run is cancelled, baseRunner.run will exit early,
 	// causing the poller to be cancelled.
 	statusCtx, cancelFunc := context.WithCancel(context.Background())
-	statusChannel := tsr.StatusWatcher.Watch(statusCtx, tsr.Identifiers, watcher.Options{})
+	statusChannel := tsr.StatusWatcher.Watch(statusCtx, tsr.Identifiers, watcher.Options{
+		RESTScopeStrategy: opts.WatcherRESTScopeStrategy,
+	})
 
 	// complete stops the statusPoller, drains the statusChannel, and returns
 	// the provided error.

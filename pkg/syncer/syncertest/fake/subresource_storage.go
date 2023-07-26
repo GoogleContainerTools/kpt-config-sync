@@ -43,12 +43,16 @@ func (ss *SubresourceStorage) setSubresourceInterface(uObj *unstructured.Unstruc
 	return unstructured.SetNestedField(uObj.Object, value, ss.Field)
 }
 
+func (ss *SubresourceStorage) validateSubResourceUpdateOptions(opts *client.SubResourceUpdateOptions) error {
+	return ss.Storage.validateUpdateOptions(&opts.UpdateOptions)
+}
+
 // Update the sub-resource field. All other fields are ignored.
-func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opts *client.UpdateOptions) error {
+func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opts *client.SubResourceUpdateOptions) error {
 	ss.Storage.lock.Lock()
 	defer ss.Storage.lock.Unlock()
 
-	err := ss.Storage.validateUpdateOptions(opts)
+	err := ss.validateSubResourceUpdateOptions(opts)
 	if err != nil {
 		return err
 	}
@@ -130,7 +134,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 }
 
 // Patch the sub-resource field. All other fields are ignored.
-func (ss *SubresourceStorage) Patch(_ context.Context, _ client.Object, _ client.Patch, _ *client.PatchOptions) error {
+func (ss *SubresourceStorage) Patch(_ context.Context, _ client.Object, _ client.Patch, _ *client.SubResourcePatchOptions) error {
 	ss.Storage.lock.Lock()
 	defer ss.Storage.lock.Unlock()
 

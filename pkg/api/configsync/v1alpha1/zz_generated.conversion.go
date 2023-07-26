@@ -78,11 +78,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.HelmBase)(nil), (*HelmBase)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_HelmBase_To_v1alpha1_HelmBase(a.(*v1beta1.HelmBase), b.(*HelmBase), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*HelmRepoSync)(nil), (*v1beta1.HelmRepoSync)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_HelmRepoSync_To_v1beta1_HelmRepoSync(a.(*HelmRepoSync), b.(*v1beta1.HelmRepoSync), scope)
 	}); err != nil {
@@ -295,6 +290,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*v1beta1.SyncStatus)(nil), (*SyncStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_SyncStatus_To_v1alpha1_SyncStatus(a.(*v1beta1.SyncStatus), b.(*SyncStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.HelmBase)(nil), (*HelmBase)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_HelmBase_To_v1alpha1_HelmBase(a.(*v1beta1.HelmBase), b.(*HelmBase), scope)
 	}); err != nil {
 		return err
 	}

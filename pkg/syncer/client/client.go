@@ -51,7 +51,10 @@ func New(client client.Client, latencyMetric *prometheus.HistogramVec) *Client {
 }
 
 // clientUpdateFn is a Client function signature for updating an entire resource or a resource's status.
-type clientUpdateFn func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error
+// Note: Update and Status Update now have a different option signature, so the
+// options argument is currently omitted. Refactoring may be required if we need
+// to support options.
+type clientUpdateFn func(ctx context.Context, obj client.Object) error
 
 // update is a function that updates the state of an API object. The argument is expected to be a copy of the object,
 // so no there is no need to worry about mutating the argument when implementing an Update function.
@@ -126,7 +129,9 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 // Return the current object state and a NoUpdateNeeded error from the updateFn
 // to skip posting the update if no changes are required.
 func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
-	return c.apply(ctx, obj, updateFn, c.Client.Update)
+	return c.apply(ctx, obj, updateFn, func(ctx context.Context, obj client.Object) error {
+		return c.Client.Update(ctx, obj)
+	})
 }
 
 // ApplyStatus gets the current object status, modifies it with the provided
@@ -134,7 +139,9 @@ func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update) 
 // Return the current object state and a NoUpdateNeeded error from the updateFn
 // to skip posting the update if no changes are required.
 func (c *Client) ApplyStatus(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
-	return c.apply(ctx, obj, updateFn, c.Client.Status().Update)
+	return c.apply(ctx, obj, updateFn, func(ctx context.Context, obj client.Object) error {
+		return c.Client.Status().Update(ctx, obj)
+	})
 }
 
 // apply updates the given obj in the Kubernetes cluster using clientUpdateFn and records prometheus

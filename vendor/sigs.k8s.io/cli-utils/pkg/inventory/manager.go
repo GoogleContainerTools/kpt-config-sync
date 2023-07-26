@@ -117,7 +117,7 @@ func (tc *Manager) AppliedResourceUID(id object.ObjMetadata) (types.UID, bool) {
 
 // AppliedResourceUIDs returns a set with the UIDs of all the
 // successfully applied resources.
-func (tc *Manager) AppliedResourceUIDs() sets.String {
+func (tc *Manager) AppliedResourceUIDs() sets.String { // nolint:staticcheck
 	uids := sets.NewString()
 	for _, objStatus := range tc.inventory.Status.Objects {
 		if objStatus.Strategy == actuation.ActuationStrategyApply &&

@@ -15,7 +15,7 @@ import (
 // if an object should not be pruned (deleted) because it has recently
 // been applied.
 type CurrentUIDFilter struct {
-	CurrentUIDs sets.String
+	CurrentUIDs sets.String // nolint:staticcheck
 }
 
 // Name returns a filter identifier for logging.

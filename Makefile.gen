@@ -16,8 +16,18 @@
 
 ######################################################################
 
+CANONICAL_GOPATH := $(shell go env GOPATH)/src/kpt.dev/configsync
+
+.PHONY: symlink-gopath
+symlink-gopath:
+	@[[ -d $(CANONICAL_GOPATH) ]] || ln -s $(shell pwd) $(CANONICAL_GOPATH)
+	@[[ $(shell pwd) == $(shell realpath $(CANONICAL_GOPATH)) ]] \
+		|| (echo "expected $(shell pwd) to equal $(shell realpath $(CANONICAL_GOPATH))" ; exit 1)
+
+# The code generation libraries are not module aware, and expect the module to be
+# at the canonical gopath. Create a symlink as a hack to enable running clientgen.
 .PHONY: clientgen
-clientgen:
+clientgen: symlink-gopath
 	@echo "+++ Generating clientgen directory"
 	./scripts/generate-clientset.sh
 

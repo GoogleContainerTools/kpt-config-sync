@@ -31,3 +31,16 @@ import (
 func Convert_v1beta1_HelmRootSync_To_v1alpha1_HelmRootSync(in *v1beta1.HelmRootSync, out *HelmRootSync, s conversion.Scope) error {
 	return autoConvert_v1beta1_HelmRootSync_To_v1alpha1_HelmRootSync(in, out, s)
 }
+
+// Convert_v1beta1_HelmBase_To_v1alpha1_HelmBase converts HelmBase from v1beta1
+// to v1alpha1.
+//
+// This conversion is manual, because it is lossy.
+// The `ValuesFileRefs` field is in v1beta1, but not v1alpha1.
+// This is fine. New versions are allowed to add new fields.
+// The newer version is used for storage.
+//
+//nolint:revive // name underscores required by conversion-gen
+func Convert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in *v1beta1.HelmBase, out *HelmBase, s conversion.Scope) error {
+	return autoConvert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in, out, s)
+}

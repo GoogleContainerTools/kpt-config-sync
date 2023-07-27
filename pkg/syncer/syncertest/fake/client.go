@@ -16,6 +16,7 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -139,34 +140,60 @@ func (c *Client) DeleteAllOf(ctx context.Context, obj client.Object, opts ...cli
 	return c.storage.DeleteAllOf(ctx, listObj, options)
 }
 
-// StatusWriter is a fake implementation of client.StatusWriter.
-type statusWriter struct {
+// subResourceClient is a fake implementation of client.SubResourceClient.
+type subResourceClient struct {
+	subResourceReader
+	subResourceWriter
+}
+
+var _ client.SubResourceClient = &subResourceClient{}
+
+// subResourceReader is a fake implementation of client.SubResourceReader.
+type subResourceReader struct {
 	Client  *Client
 	storage *SubresourceStorage
 }
 
-var _ client.StatusWriter = &statusWriter{}
+var _ client.SubResourceReader = &subResourceReader{}
+
+// Get implements SubResourceReader.
+func (s *subResourceReader) Get(_ context.Context, _ client.Object, _ client.Object, _ ...client.SubResourceGetOption) error {
+	return fmt.Errorf("subResourceReader.Get not yet implemented")
+}
+
+// subResourceWriter is a fake implementation of client.SubResourceWriter.
+type subResourceWriter struct {
+	Client  *Client
+	storage *SubresourceStorage
+}
+
+var _ client.SubResourceWriter = &subResourceWriter{}
 
 // Status implements client.Client.
-func (c *Client) Status() client.StatusWriter {
-	return &statusWriter{
+func (c *Client) Status() client.SubResourceWriter {
+	return &subResourceWriter{
 		Client:  c,
 		storage: c.storage.Subresource("status"),
 	}
 }
 
-// Update implements client.StatusWriter. It only updates the status field.
-func (s *statusWriter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	options := &client.UpdateOptions{}
+// Update implements client.SubResourceWriter. It only updates the status field.
+func (s *subResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	options := &client.SubResourceUpdateOptions{}
 	options.ApplyOptions(opts)
 	return s.storage.Update(ctx, obj, options)
 }
 
-// Patch implements client.StatusWriter. It only updates the status field.
-func (s *statusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	options := &client.PatchOptions{}
+// Patch implements client.SubResourceWriter. It only updates the status field.
+func (s *subResourceWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	options := &client.SubResourcePatchOptions{}
 	options.ApplyOptions(opts)
 	return s.storage.Patch(ctx, obj, patch, options)
+}
+
+// Create implements client.SubResourceWriter.
+func (s *subResourceWriter) Create(_ context.Context, _ client.Object, _ client.Object, _ ...client.SubResourceCreateOption) error {
+	panic("Create not implemented for SubResourceWriter")
 }
 
 // Check reports an error to `t` if the passed objects in wants do not match the
@@ -213,4 +240,18 @@ func (c *Client) RESTMapper() meta.RESTMapper {
 // Storage returns the backing Storage layer
 func (c *Client) Storage() *MemoryStorage {
 	return c.storage
+}
+
+// SubResource implements client.Client
+func (c *Client) SubResource(subResource string) client.SubResourceClient {
+	return &subResourceClient{
+		subResourceReader: subResourceReader{
+			Client:  c,
+			storage: c.storage.Subresource(subResource),
+		},
+		subResourceWriter: subResourceWriter{
+			Client:  c,
+			storage: c.storage.Subresource(subResource),
+		},
+	}
 }

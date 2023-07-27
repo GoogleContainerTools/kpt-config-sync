@@ -1,9 +1,9 @@
 # Abstract JSON 
 
-[![Build Status](https://travis-ci.com/spyzhov/ajson.svg?branch=master)](https://travis-ci.com/spyzhov/ajson)
+[![Build](https://github.com/spyzhov/ajson/actions/workflows/main.yml/badge.svg)](https://github.com/spyzhov/ajson/actions/workflows/main.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/spyzhov/ajson)](https://goreportcard.com/report/github.com/spyzhov/ajson)
 [![GoDoc](https://godoc.org/github.com/spyzhov/ajson?status.svg)](https://godoc.org/github.com/spyzhov/ajson)
-[![Coverage Status](https://coveralls.io/repos/github/spyzhov/ajson/badge.svg?branch=master)](https://coveralls.io/github/spyzhov/ajson?branch=master)
+[![codecov](https://codecov.io/gh/spyzhov/ajson/branch/master/graph/badge.svg)](https://codecov.io/gh/spyzhov/ajson)
 [![Awesome](https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg)](https://github.com/avelino/awesome-go#json)
 
 Abstract [JSON](https://www.json.org/) is a small golang package provides a parser for JSON with support of JSONPath, in case when you are not sure in its structure.
@@ -53,7 +53,7 @@ func main() {
 You can download `ajson` cli from the [release page](https://github.com/spyzhov/ajson/releases), or install from the source:
 
 ```shell script
-go get github.com/spyzhov/ajson/cmd/ajson@v0.7.1
+go get github.com/spyzhov/ajson/cmd/ajson@v0.7.2
 ```
 
 Usage:
@@ -299,6 +299,9 @@ Package has several predefined functions.
     atan         math.Atan         integers, floats
     atanh        math.Atanh        integers, floats
     avg          Average           array of integers or floats
+    b64decode    b64 Decoding      string
+    b64encode    b64 Encoding      string 
+    b64encoden   b64 Encoding (no padding)   string
     cbrt         math.Cbrt         integers, floats
     ceil         math.Ceil         integers, floats
     cos          math.Cos          integers, floats

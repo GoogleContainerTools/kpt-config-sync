@@ -20,6 +20,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/apply"
 	cmddelete "k8s.io/kubectl/pkg/cmd/delete"
+
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
@@ -121,7 +122,7 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 							// only log event emitted errors if the verbosity > 4
 							klog.Errorf("apply filter errored (filter: %s, object: %s): %v", applyFilter.Name(), id, fatalErr.Err)
 						}
-						taskContext.SendEvent(a.createApplyFailedEvent(id, err))
+						taskContext.SendEvent(a.createApplyFailedEvent(id, fatalErr))
 						taskContext.InventoryManager().AddFailedApply(id)
 						break
 					}

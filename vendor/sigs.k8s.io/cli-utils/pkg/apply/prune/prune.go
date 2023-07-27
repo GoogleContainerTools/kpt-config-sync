@@ -153,6 +153,18 @@ func (p *Pruner) Prune(
 					}
 				}
 
+				// Remove the object from inventory if it was determined that the object should not be pruned,
+				// because it had recently been applied. This probably means that the object is in the inventory
+				// more than one time with a different group (e.g. kind Ingress and apiGroups networking.k8s.io & extensions)
+				// due to being cohabitated: https://github.com/kubernetes/kubernetes/blob/v1.25.0/pkg/kubeapiserver/default_storage_factory_builder.go#L124-L131
+				var deleteAfterApplyErr *filter.ApplyPreventedDeletionError
+				if errors.As(filterErr, &deleteAfterApplyErr) {
+					if !opts.DryRunStrategy.ClientOrServerDryRun() {
+						// Register for removal from the inventory.
+						taskContext.AddAbandonedObject(id)
+					}
+				}
+
 				taskContext.SendEvent(eventFactory.CreateSkippedEvent(obj, filterErr))
 				taskContext.InventoryManager().AddSkippedDelete(id)
 				break

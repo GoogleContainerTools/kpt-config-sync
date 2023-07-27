@@ -242,7 +242,8 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		runner := taskrunner.NewTaskStatusRunner(allIds, statusWatcher)
 		klog.V(4).Infoln("applier running TaskStatusRunner...")
 		err = runner.Run(ctx, taskContext, taskQueue.ToChannel(), taskrunner.Options{
-			EmitStatusEvents: options.EmitStatusEvents,
+			EmitStatusEvents:         options.EmitStatusEvents,
+			WatcherRESTScopeStrategy: options.WatcherRESTScopeStrategy,
 		})
 		if err != nil {
 			handleError(eventChannel, err)
@@ -288,6 +289,10 @@ type ApplierOptions struct {
 
 	// ValidationPolicy defines how to handle invalid objects.
 	ValidationPolicy validation.Policy
+
+	// RESTScopeStrategy specifies which strategy to use when listing and
+	// watching resources. By default, the strategy is selected automatically.
+	WatcherRESTScopeStrategy watcher.RESTScopeStrategy
 }
 
 // setDefaults set the options to the default values if they
@@ -311,7 +316,7 @@ func handleError(eventChannel chan event.Event, err error) {
 // for the passed non cluster-scoped localObjs, plus the namespace
 // of the passed inventory object. This is used to skip deleting
 // namespaces which have currently applied objects in them.
-func localNamespaces(localInv inventory.Info, localObjs []object.ObjMetadata) sets.String {
+func localNamespaces(localInv inventory.Info, localObjs []object.ObjMetadata) sets.String { // nolint:staticcheck
 	namespaces := sets.NewString()
 	for _, obj := range localObjs {
 		if obj.Namespace != "" {

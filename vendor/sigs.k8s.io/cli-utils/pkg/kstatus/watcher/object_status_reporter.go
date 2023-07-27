@@ -350,7 +350,11 @@ func (w *ObjectStatusReporter) startInformerNow(
 		return fmt.Errorf("failed to set error handler on new informer for %v: %v", mapping.Resource, err)
 	}
 
-	informer.AddEventHandler(w.eventHandler(ctx, eventCh))
+	_, err = informer.AddEventHandler(w.eventHandler(ctx, eventCh))
+	if err != nil {
+		// Should never happen.
+		return fmt.Errorf("failed add event handler on new informer for %v: %v", mapping.Resource, err)
+	}
 
 	// Start the informer in the background.
 	// Informer will be stopped when the context is cancelled.

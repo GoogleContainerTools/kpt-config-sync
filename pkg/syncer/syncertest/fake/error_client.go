@@ -67,9 +67,14 @@ func (e ErrorClient) DeleteAllOf(_ context.Context, _ client.Object, _ ...client
 	return e.error
 }
 
+// SubResource implements client.Client.
+func (e ErrorClient) SubResource(_ string) client.SubResourceClient {
+	return SubResourceErrorClient(e)
+}
+
 // Status implements client.Client.
 func (e ErrorClient) Status() client.StatusWriter {
-	return e
+	return SubResourceErrorClient(e)
 }
 
 // Scheme implements client.Client.
@@ -80,4 +85,31 @@ func (e ErrorClient) Scheme() *runtime.Scheme {
 // RESTMapper implements client.Client.
 func (e ErrorClient) RESTMapper() meta.RESTMapper {
 	panic("fake.ErrorClient does not support RESTMapper()")
+}
+
+// SubResourceErrorClient is a SubResourceClient that always returns a specified error.
+type SubResourceErrorClient struct {
+	error error
+}
+
+var _ client.SubResourceClient = SubResourceErrorClient{}
+
+// Get implements client.SubResourceReader
+func (e SubResourceErrorClient) Get(_ context.Context, _ client.Object, _ client.Object, _ ...client.SubResourceGetOption) error {
+	return e.error
+}
+
+// Create implements client.SubResourceWriter
+func (e SubResourceErrorClient) Create(_ context.Context, _ client.Object, _ client.Object, _ ...client.SubResourceCreateOption) error {
+	return e.error
+}
+
+// Update implements client.SubResourceWriter
+func (e SubResourceErrorClient) Update(_ context.Context, _ client.Object, _ ...client.SubResourceUpdateOption) error {
+	return e.error
+}
+
+// Patch implements client.SubResourceWriter
+func (e SubResourceErrorClient) Patch(_ context.Context, _ client.Object, _ client.Patch, _ ...client.SubResourcePatchOption) error {
+	return e.error
 }

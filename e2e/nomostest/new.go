@@ -280,6 +280,12 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
 
+	// Longer default wait timeout for stress tests
+	// Particularly the reset/finalizer takes a long time for the stress tests
+	if *e2e.Stress {
+		nt.DefaultWaitTimeout = nt.DefaultWaitTimeout * 2
+	}
+
 	if *e2e.TestCluster == e2e.Kind {
 		// We're using an ephemeral Kind cluster, so connect to the local Docker
 		// repository. No need to clean before/after as these tests only exist for

@@ -228,25 +228,24 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 		if !ok {
 			return WrongTypeErr(dep, &appsv1.Deployment{})
 		}
-		for _, container := range dep.Spec.Template.Spec.Containers {
-			if containerName == container.Name {
-				expectImage := ""
-				if expectImageName != "" {
-					expectImage = "/" + expectImageName
-				}
-				if expectImageTag != "" {
-					expectImage += ":" + expectImageTag
-				}
-				if expectImageDigest != "" {
-					expectImage += "@" + expectImageDigest
-				}
-				if !strings.Contains(container.Image, expectImage) {
-					return errors.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
-				}
-				return nil
-			}
+		container := ContainerByName(dep, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
 		}
-		return errors.Errorf("Container %q not found", containerName)
+		expectImage := ""
+		if expectImageName != "" {
+			expectImage = "/" + expectImageName
+		}
+		if expectImageTag != "" {
+			expectImage += ":" + expectImageTag
+		}
+		if expectImageDigest != "" {
+			expectImage += "@" + expectImageDigest
+		}
+		if !strings.Contains(container.Image, expectImage) {
+			return errors.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
+		}
+		return nil
 	}
 }
 
@@ -260,25 +259,23 @@ func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit
 		if !ok {
 			return WrongTypeErr(dep, &appsv1.Deployment{})
 		}
-		for _, container := range dep.Spec.Template.Spec.Containers {
-			if containerName == container.Name {
-				if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceCPU], cpuRequest) {
-					return errors.Errorf("The CPU request of the %q container should be %v, got %v", container.Name, cpuRequest, container.Resources.Requests[corev1.ResourceCPU])
-				}
-				if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceCPU], cpuLimit) {
-					return errors.Errorf("The CPU limit of the %q container should be %v, got %v", container.Name, cpuLimit, container.Resources.Limits[corev1.ResourceCPU])
-				}
-				if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceMemory], memoryRequest) {
-					return errors.Errorf("The memory request of the %q container should be %v, got %v", container.Name, memoryRequest, container.Resources.Requests[corev1.ResourceMemory])
-				}
-				if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceMemory], memoryLimit) {
-					return errors.Errorf("The memory limit of the %q container should be %v, got %v", container.Name, memoryLimit, container.Resources.Limits[corev1.ResourceMemory])
-				}
-
-				return nil
-			}
+		container := ContainerByName(dep, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
 		}
-		return errors.Errorf("Container %q not found", containerName)
+		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceCPU], cpuRequest) {
+			return errors.Errorf("The CPU request of the %q container should be %v, got %v", container.Name, cpuRequest, container.Resources.Requests[corev1.ResourceCPU])
+		}
+		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceCPU], cpuLimit) {
+			return errors.Errorf("The CPU limit of the %q container should be %v, got %v", container.Name, cpuLimit, container.Resources.Limits[corev1.ResourceCPU])
+		}
+		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceMemory], memoryRequest) {
+			return errors.Errorf("The memory request of the %q container should be %v, got %v", container.Name, memoryRequest, container.Resources.Requests[corev1.ResourceMemory])
+		}
+		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceMemory], memoryLimit) {
+			return errors.Errorf("The memory limit of the %q container should be %v, got %v", container.Name, memoryLimit, container.Resources.Limits[corev1.ResourceMemory])
+		}
+		return nil
 	}
 }
 
@@ -386,19 +383,18 @@ func DeploymentHasEnvVar(containerName, key, value string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, d)
 		}
-		for _, c := range d.Spec.Template.Spec.Containers {
-			if c.Name == containerName {
-				for _, e := range c.Env {
-					if e.Name == key {
-						if e.Value == value {
-							return nil
-						}
-						return errors.Errorf("Container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
-					}
+		container := ContainerByName(d, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		for _, e := range container.Env {
+			if e.Name == key {
+				if e.Value == value {
+					return nil
 				}
+				return errors.Errorf("Container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
 			}
 		}
-
 		return errors.Errorf("Container %q does not contain environment variable %q", containerName, key)
 	}
 }
@@ -414,16 +410,15 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, d)
 		}
-		for _, c := range d.Spec.Template.Spec.Containers {
-			if c.Name == containerName {
-				for _, e := range c.Env {
-					if e.Name == key {
-						return errors.Errorf("Container %q should not have environment variable %q", containerName, key)
-					}
-				}
+		container := ContainerByName(d, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		for _, e := range container.Env {
+			if e.Name == key {
+				return errors.Errorf("Container %q should not have environment variable %q", containerName, key)
 			}
 		}
-
 		return nil
 	}
 }
@@ -439,13 +434,12 @@ func DeploymentHasContainer(containerName string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, d)
 		}
-		nn := core.ObjectNamespacedName(o)
-		for _, c := range d.Spec.Template.Spec.Containers {
-			if c.Name == containerName {
-				return nil
-			}
+		container := ContainerByName(d, containerName)
+		if container == nil {
+			return errors.Errorf("Deployment %s should have container %s",
+				core.ObjectNamespacedName(o), containerName)
 		}
-		return errors.Errorf("Deployment %s should have container %s", nn, containerName)
+		return nil
 	}
 }
 
@@ -460,11 +454,10 @@ func DeploymentMissingContainer(containerName string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, d)
 		}
-		nn := core.ObjectNamespacedName(o)
-		for _, c := range d.Spec.Template.Spec.Containers {
-			if c.Name == containerName {
-				return errors.Errorf("Deployment %s should not have container %s", nn, containerName)
-			}
+		container := ContainerByName(d, containerName)
+		if container != nil {
+			return errors.Errorf("Deployment %s should not have container %s",
+				core.ObjectNamespacedName(o), containerName)
 		}
 		return nil
 	}
@@ -893,4 +886,62 @@ func WatchSyncPredicate() (Predicate, <-chan struct{}) {
 		})
 		return nil
 	}, syncCh
+}
+
+// DeploymentContainerImageEquals returns a predicate that errors if the
+// deployment does not have a container with the specified name and image.
+func DeploymentContainerImageEquals(containerName, image string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		container := ContainerByName(d, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		if container.Image != image {
+			return fmt.Errorf("expected %q container image to equal: %s, got: %s",
+				containerName, image, container.Image)
+		}
+		return nil
+	}
+}
+
+// DeploymentContainerPullPolicyEquals returns a predicate that errors if the
+// deployment does not have a container with the specified name and
+// imagePullPolicy.
+func DeploymentContainerPullPolicyEquals(containerName string, policy corev1.PullPolicy) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(d, &appsv1.Deployment{})
+		}
+		container := ContainerByName(d, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		if container.ImagePullPolicy != policy {
+			return fmt.Errorf("expected %q container imagePullPolicy to equal: %s, got: %s",
+				containerName, policy, container.ImagePullPolicy)
+		}
+		return nil
+	}
+}
+
+// ContainerByName returns a copy of the container with the specified name,
+// found in the specified Deployment.
+func ContainerByName(obj *appsv1.Deployment, containerName string) *corev1.Container {
+	for _, container := range obj.Spec.Template.Spec.Containers {
+		if container.Name == containerName {
+			return container.DeepCopy()
+		}
+	}
+	return nil
 }

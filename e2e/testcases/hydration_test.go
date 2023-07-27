@@ -242,7 +242,8 @@ func TestHydrateHelmComponents(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("Always"), firstContainerImageIs("coredns/coredns:1.8.4"),
+		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "Always"),
+		testpredicates.DeploymentContainerImageEquals("coredns", "coredns/coredns:1.8.4"),
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -474,24 +475,6 @@ func validateNamespaces(nt *nomostest.NT, expectedNamespaces []string, expectedO
 	}
 }
 
-func containerImagePullPolicy(policy string) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		rq, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(rq, &appsv1.Deployment{})
-		}
-
-		actual := rq.Spec.Template.Spec.Containers[0].ImagePullPolicy
-		if policy != string(actual) {
-			return fmt.Errorf("container policy %q is not equal to the expected %q", actual, policy)
-		}
-		return nil
-	}
-}
-
 // getRootSyncCommitStatusErrorSummary converts the given rootSync into a RepoState, then into a string
 func getRootSyncCommitStatusErrorSummary(rootSync *v1beta1.RootSync, rg *unstructured.Unstructured, syncingConditionSupported bool) (string, string, string) {
 	rs := nomosstatus.RootRepoStatus(rootSync, rg, syncingConditionSupported)
@@ -553,13 +536,14 @@ func validateTenant(nt *nomostest.NT, reconcilerScope, tenant, baseRelPath strin
 func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
 	nt.T.Log("Validate resources are synced")
 	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("IfNotPresent"),
+		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent"),
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("my-wordpress", "wordpress",
-		&appsv1.Deployment{}, containerImagePullPolicy("IfNotPresent"),
+		&appsv1.Deployment{},
+		testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "IfNotPresent"),
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)

@@ -22,15 +22,22 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 )
 
-var (
-	// deploymentConfig is defined in configmap manifests/templates/reconciler-manager-configmap.yaml
-	deploymentConfig = "deployment.yaml"
+const (
+	// ReconcilerTemplateConfigMapKey is the key used to specify the reconciler
+	// deployment template in the "reconciler-manager-cm" ConfigMap.
+	// Defined in configmap manifests/templates/reconciler-manager-configmap.yaml
+	ReconcilerTemplateConfigMapKey = "deployment.yaml"
+
+	// ReconcilerTemplateConfigMapName is the name of the ConfigMap used to
+	// specify the reconciler deployment template.
+	// Defined in configmap manifests/templates/reconciler-manager-configmap.yaml
+	ReconcilerTemplateConfigMapName = "reconciler-manager-cm"
 )
 
 // parseDeployment parse deployment from deployment.yaml to deploy reconciler pod
 // Alias to enable test mocking.
 var parseDeployment = func(de *appsv1.Deployment) error {
-	return parseFromDeploymentConfig(deploymentConfig, de)
+	return parseFromDeploymentConfig(ReconcilerTemplateConfigMapKey, de)
 }
 
 func parseFromDeploymentConfig(config string, obj *appsv1.Deployment) error {

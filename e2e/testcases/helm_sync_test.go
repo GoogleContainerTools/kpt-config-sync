@@ -80,7 +80,8 @@ func TestPublicHelm(t *testing.T) {
 		expectedMemoryRequest = "250Mi"
 		expectedMemoryLimit = "300Mi"
 	}
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "Always"),
 		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
 			resource.MustParse(expectedCPURequest),
 			resource.MustParse(expectedCPULimit),
@@ -272,7 +273,8 @@ service:
 		expectedMemoryRequest = "250Mi"
 		expectedMemoryLimit = "300Mi"
 	}
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "Always"),
 		testpredicates.HasCorrectResourceRequestsLimits("wordpress",
 			resource.MustParse(expectedCPURequest),
 			resource.MustParse(expectedCPULimit),
@@ -364,7 +366,8 @@ image:
 	}
 
 	// duplicated keys from later files should override the keys from previous files.
-	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{}, containerImagePullPolicy("Always"),
+	if err := nt.Validate("my-wordpress", "wordpress", &appsv1.Deployment{},
+		testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "Always"),
 		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
@@ -733,7 +736,7 @@ func TestHelmGCENode(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", remoteHelmChart.ChartName), "coredns", &appsv1.Deployment{},
-		containerImagePullPolicy("IfNotPresent")); err != nil {
+		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent")); err != nil {
 		nt.T.Error(err)
 	}
 }

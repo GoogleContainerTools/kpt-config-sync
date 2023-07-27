@@ -95,16 +95,16 @@ var (
 // IsReconcilerTemplateConfigMap returns true if passed obj is the
 // reconciler-manager ConfigMap reconciler-manager-cm in config-management namespace.
 func IsReconcilerTemplateConfigMap(obj client.Object) bool {
-	return obj.GetName() == "reconciler-manager-cm" &&
-		obj.GetNamespace() == "config-management-system" &&
+	return obj.GetName() == controllers.ReconcilerTemplateConfigMapName &&
+		obj.GetNamespace() == configmanagement.ControllerNamespace &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
 
 // IsReconcilerManagerConfigMap returns true if passed obj is the
 // reconciler-manager ConfigMap reconciler-manager in config-management namespace.
 func IsReconcilerManagerConfigMap(obj client.Object) bool {
-	return obj.GetName() == "reconciler-manager" &&
-		obj.GetNamespace() == "config-management-system" &&
+	return obj.GetName() == reconcilermanager.ManagerName &&
+		obj.GetNamespace() == configmanagement.ControllerNamespace &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
 }
 

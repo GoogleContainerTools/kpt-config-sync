@@ -24,6 +24,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	jserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e"
@@ -214,21 +217,29 @@ func TestManagingReconciler(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	generation := reconcilerDeployment.Generation
-	managedImage := reconcilerDeployment.Spec.Template.Spec.Containers[0].Image
+	originalImagePullPolicy := testpredicates.ContainerByName(reconcilerDeployment, reconcilermanager.Reconciler).ImagePullPolicy
+	updatedImagePullPolicy := corev1.PullAlways
+	require.NotEqual(nt.T, updatedImagePullPolicy, originalImagePullPolicy)
 	managedReplicas := *reconcilerDeployment.Spec.Replicas
 	originalTolerations := reconcilerDeployment.Spec.Template.Spec.Tolerations
 
 	// test case 1: The reconciler-manager should manage most of the fields with one exception:
 	// - changes to the container resource requirements should be ignored when the autopilot annotation is set.
-	nt.T.Log("Manually update the container image")
+	nt.T.Log("Manually update the ImagePullPolicy")
 	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
-		newImage := managedImage + "-updated"
-		d.Spec.Template.Spec.Containers[0].Image = newImage
+		for i, container := range d.Spec.Template.Spec.Containers {
+			if container.Name == reconcilermanager.Reconciler {
+				d.Spec.Template.Spec.Containers[i].ImagePullPolicy = updatedImagePullPolicy
+			}
+		}
 	})
-	nt.T.Log("Verify the container image should be reverted by the reconciler-manager")
+	nt.T.Log("Verify the ImagePullPolicy should be reverted by the reconciler-manager")
 	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
 	err := nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerImageIs(managedImage)})
+		[]testpredicates.Predicate{
+			testpredicates.HasGenerationAtLeast(generation),
+			testpredicates.DeploymentContainerPullPolicyEquals(reconcilermanager.Reconciler, originalImagePullPolicy),
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -281,18 +292,25 @@ func TestManagingReconciler(t *testing.T) {
 
 	// test case 4: the reconciler-manager should update the reconciler Deployment if the manifest in the ConfigMap has been changed.
 	nt.T.Log("Update the Deployment manifest in the ConfigMap")
-	nt.MustKubectl("apply", "-f", "../testdata/reconciler-manager-configmap-updated.yaml")
+	nt.T.Cleanup(func() {
+		resetReconcilerDeploymentManifests(nt, reconcilermanager.Reconciler, originalImagePullPolicy)
+	})
+	mustUpdateReconcilerTemplateConfigMap(nt, func(d *appsv1.Deployment) {
+		for i, container := range d.Spec.Template.Spec.Containers {
+			if container.Name == reconcilermanager.Reconciler {
+				d.Spec.Template.Spec.Containers[i].ImagePullPolicy = updatedImagePullPolicy
+			}
+		}
+	})
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
-	// Reset the reconciler-manager in the cleanup stage so other test cases can still run in a shared testing cluster.
-	nt.T.Cleanup(func() {
-		generation++
-		resetReconcilerDeploymentManifests(nt, managedImage, generation)
-	})
 	nt.T.Log("Verify the reconciler Deployment has been updated to the new manifest")
 	generation++ // generation bumped by 1 to apply the new change in the default manifests declared in the Config Map
 	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), firstContainerImageIsNot(managedImage)})
+		[]testpredicates.Predicate{
+			testpredicates.HasGenerationAtLeast(generation),
+			testpredicates.DeploymentContainerPullPolicyEquals(reconcilermanager.Reconciler, updatedImagePullPolicy),
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -353,7 +371,42 @@ func mustUpdateRootReconciler(nt *nomostest.NT, f updateFunc) {
 	}
 }
 
-func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, generation int64) {
+func mustUpdateReconcilerTemplateConfigMap(nt *nomostest.NT, f updateFunc) {
+	decoder := serializer.NewCodecFactory(nt.Scheme).UniversalDeserializer()
+	yamlSerializer := jserializer.NewYAMLSerializer(jserializer.DefaultMetaFactory, nt.Scheme, nt.Scheme)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get ConfigMap
+		rmConfigMap := &corev1.ConfigMap{}
+		if err := nt.KubeClient.Get(controllers.ReconcilerTemplateConfigMapName, configsync.ControllerNamespace, rmConfigMap); err != nil {
+			return err
+		}
+
+		// Decode ConfigMap data entry as Deployment
+		yamlString := rmConfigMap.Data[controllers.ReconcilerTemplateConfigMapKey]
+		rmObj := &appsv1.Deployment{}
+		if _, _, err := decoder.Decode([]byte(yamlString), nil, rmObj); err != nil {
+			return err
+		}
+
+		// Mutate Deployment
+		f(rmObj)
+
+		// Encode Deployment and update ConfigMap data entry
+		yamlBytes, err := runtime.Encode(yamlSerializer, rmObj)
+		if err != nil {
+			return err
+		}
+		rmConfigMap.Data[controllers.ReconcilerTemplateConfigMapKey] = string(yamlBytes)
+
+		// Update ConfigMap
+		return nt.KubeClient.Update(rmConfigMap)
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func resetReconcilerDeploymentManifests(nt *nomostest.NT, containerName string, pullPolicy corev1.PullPolicy) {
 	nt.T.Log("Reset the Deployment manifest in the ConfigMap")
 	if err := nomostest.ResetReconcilerManagerConfigMap(nt); err != nil {
 		nt.T.Fatalf("failed to reset configmap: %v", err)
@@ -365,8 +418,8 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, origImg string, genera
 	nt.T.Log("Verify the reconciler Deployment has been reverted to the original manifest")
 	nomostest.Wait(nt.T, "the deployment manifest to be reverted", nt.DefaultWaitTimeout, func() error {
 		return nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
-			&appsv1.Deployment{}, hasGeneration(generation),
-			firstContainerImageIs(origImg))
+			&appsv1.Deployment{},
+			testpredicates.DeploymentContainerPullPolicyEquals(containerName, pullPolicy))
 	})
 }
 
@@ -443,37 +496,6 @@ func hasPriorityClassName(priorityClassName string) testpredicates.Predicate {
 		}
 		if d.Spec.Template.Spec.PriorityClassName != priorityClassName {
 			return fmt.Errorf("expected priorityClassName is: %s, got: %s", priorityClassName, d.Spec.Template.Spec.PriorityClassName)
-		}
-		return nil
-	}
-}
-func firstContainerImageIs(image string) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		d, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		if d.Spec.Template.Spec.Containers[0].Image != image {
-			return fmt.Errorf("expected first image: %s, got: %s", image, d.Spec.Template.Spec.Containers[0].Image)
-		}
-		return nil
-	}
-}
-
-func firstContainerImageIsNot(image string) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		d, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		if d.Spec.Template.Spec.Containers[0].Image == image {
-			return fmt.Errorf("expected first image not to be: %s, got: %s", image, d.Spec.Template.Spec.Containers[0].Image)
 		}
 		return nil
 	}

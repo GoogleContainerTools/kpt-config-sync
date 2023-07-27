@@ -334,16 +334,19 @@ func ResetNamespaces(nt *NT, nsList []corev1.Namespace) error {
 	}
 	var objList []client.Object
 	for _, item := range nsList {
-		obj := &item
-		nn := client.ObjectKeyFromObject(obj)
+		// create local variable for pointer reference
+		obj := item
+		nn := client.ObjectKeyFromObject(&obj)
 
-		// If managed, error. The test failed to clean up after itself
-		if manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
+		manager, found := obj.GetAnnotations()[string(metadata.ResourceManagerKey)]
+		// Some namespaces may have been deleted but are pending garbage collection.
+		// DeleteObjectsAndWait will wait for them to be NotFound.
+		if found && obj.GetDeletionTimestamp().IsZero() {
+			// If managed, error. The test failed to clean up after itself
 			nt.T.Errorf("[RESET] Failed to reset Namespace %s managed by %q:\n%s", nn, manager, log.AsYAML(obj))
-			continue
+		} else {
+			objList = append(objList, &obj)
 		}
-
-		objList = append(objList, obj)
 	}
 	return DeleteObjectsAndWait(nt, objList...)
 }

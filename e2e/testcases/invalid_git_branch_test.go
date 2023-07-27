@@ -23,9 +23,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -38,17 +36,15 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
 		}))
 	if err != nil {
@@ -69,10 +65,10 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName))
-	nn := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
-	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-	rs.Spec.Branch = "invalid-branch"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs))
+	repoSyncNN := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
+	repoSync := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
+	repoSync.Spec.Branch = "invalid-branch"
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to invalid branch name"))
 
 	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
@@ -85,31 +81,27 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nsReconcilerName := core.NsReconcilerName(nn.Namespace, nn.Name)
-	nsReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nsReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
-	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
+	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		// Source error prevents apply, so don't wait for a sync with the current commit.
-		nomostest.ReconcilerErrorMetrics(nt, nsReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	rs.Spec.Branch = gitproviders.MainBranch
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, rs.Name), rs))
+	repoSync.Spec.Branch = gitproviders.MainBranch
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to valid branch name"))
 
 	// Ensure RepoSync's active branch is checked out, so the correct commit is used for validation.
-	nt.Must(nt.NonRootRepos[nn].CheckoutBranch(gitproviders.MainBranch))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CheckoutBranch(gitproviders.MainBranch))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -124,7 +116,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	}
 
 	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
-		Sync:        nn,
+		Sync:        repoSyncNN,
 		ObjectCount: 0, // no additional managed objects
 	})
 	if err != nil {

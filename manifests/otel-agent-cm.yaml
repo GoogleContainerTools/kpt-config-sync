@@ -33,7 +33,12 @@ data:
           insecure: true
     processors:
       # Attributes processor adds custom configsync metric labels to applicable
-      # metrics to identify the sync object used to configure this deployment
+      # metrics to identify the sync object used to configure this deployment.
+      #
+      # Note: configsync.sync.generation is explicitly excluded here, because it
+      # is high cardinality. So we don't want to send it as a label, only as a
+      # resource attribute. That way it's only propagated to Prometheus, and not
+      # Monarch or Cloud Monitoring, which ignore custom resource attributes.
       attributes:
         actions:
           - key: configsync.sync.kind

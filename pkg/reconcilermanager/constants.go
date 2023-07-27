@@ -37,6 +37,10 @@ const (
 	// the RootSync or RepoSync object.
 	SyncNameKey = "SYNC_NAME"
 
+	// SyncGenerationKey is the OS env variable key for the generation of
+	// the RootSync or RepoSync object.
+	SyncGenerationKey = "SYNC_GENERATION"
+
 	// ReconcilerNameKey is the OS env variable key for the name of
 	// the Reconciler Deployment.
 	ReconcilerNameKey = "RECONCILER_NAME"

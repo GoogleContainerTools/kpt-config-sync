@@ -22,7 +22,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -59,17 +58,15 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
 		"This may indicate Config Sync is fighting with another controller over the object.")
 
-	rootReconcilerPod, err := nt.KubeClient.GetDeploymentPod(
-		nomostest.DefaultRootReconcilerName, configmanagement.ControllerNamespace,
-		nt.DefaultWaitTimeout)
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
 	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootReconcilerPod.Name, commitHash, metrics.ErrorSummary{
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Fights: 5,
 		}))
 	if err != nil {

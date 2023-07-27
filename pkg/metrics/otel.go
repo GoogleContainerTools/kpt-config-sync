@@ -159,6 +159,8 @@ processors:
         action: delete
       - key: configsync.sync.namespace
         action: delete
+      - key: configsync.sync.generation
+        action: delete
       # Remove high cardinality configsync metric labels when sending to Monarch.
       # These labels are useful to users, but too noisy for global aggregation.
       - key: commit

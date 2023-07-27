@@ -24,12 +24,13 @@ import (
 	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prometheusmodel "github.com/prometheus/common/model"
 	"go.uber.org/multierr"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/util/log"
@@ -102,18 +103,53 @@ func ValidateStandardMetrics(nt *NT) error {
 	return nil
 }
 
+// MetricLabelsForRootSync returns a metric LabelSet that uniquely identifies
+// metrics related to the specified RootSync, since the latest generation.
+func MetricLabelsForRootSync(nt *NT, syncNN types.NamespacedName) (prometheusmodel.LabelSet, error) {
+	syncObj := &unstructured.Unstructured{}
+	syncObj.SetGroupVersionKind(kinds.RootSyncV1Beta1())
+	if err := nt.KubeClient.Get(syncNN.Name, syncNN.Namespace, syncObj); err != nil {
+		return nil, errors.Wrapf(err, "getting RootSync: %s", syncNN)
+	}
+	return prometheusmodel.LabelSet{
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncKind.Name()):       prometheusmodel.LabelValue(configsync.RootSyncKind),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncName.Name()):       prometheusmodel.LabelValue(syncObj.GetName()),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncNamespace.Name()):  prometheusmodel.LabelValue(syncObj.GetNamespace()),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncGeneration.Name()): prometheusmodel.LabelValue(fmt.Sprint(syncObj.GetGeneration())),
+	}, nil
+}
+
+// MetricLabelsForRepoSync returns a metric LabelSet that uniquely identifies
+// metrics related to the specified RepoSync, since the latest generation.
+func MetricLabelsForRepoSync(nt *NT, syncNN types.NamespacedName) (prometheusmodel.LabelSet, error) {
+	syncObj := &unstructured.Unstructured{}
+	syncObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
+	if err := nt.KubeClient.Get(syncNN.Name, syncNN.Namespace, syncObj); err != nil {
+		return nil, errors.Wrapf(err, "getting RepoSync: %s", syncNN)
+	}
+	return prometheusmodel.LabelSet{
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncKind.Name()):       prometheusmodel.LabelValue(configsync.RepoSyncKind),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncName.Name()):       prometheusmodel.LabelValue(syncObj.GetName()),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncNamespace.Name()):  prometheusmodel.LabelValue(syncObj.GetNamespace()),
+		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncGeneration.Name()): prometheusmodel.LabelValue(fmt.Sprint(syncObj.GetGeneration())),
+	}, nil
+}
+
 // ValidateStandardMetricsForRootSync validates the set of standard metrics for
 // the specified RootSync.
 func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) error {
 	if _, found := nt.RootRepos[summary.Sync.Name]; !found {
 		return errors.Errorf("RootRepo %q not found", summary.Sync)
 	}
-	reconcilerName := core.RootReconcilerName(summary.Sync.Name)
 	commitHash, err := nt.RootRepos[summary.Sync.Name].Hash()
 	if err != nil {
 		return errors.Wrapf(err, "hashing RootRepo for RootSync: %s", summary.Sync)
 	}
-	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, reconcilerName, commitHash, summary)
+	syncLabels, err := MetricLabelsForRootSync(nt, summary.Sync)
+	if err != nil {
+		return errors.Wrap(err, "reading sync metric labels")
+	}
+	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, syncLabels, commitHash, summary)
 }
 
 // ValidateStandardMetricsForRepoSync validates the set of standard metrics for
@@ -122,17 +158,20 @@ func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) err
 	if _, found := nt.NonRootRepos[summary.Sync]; !found {
 		return errors.Errorf("NonRootRepo %q not found", summary.Sync)
 	}
-	reconcilerName := core.NsReconcilerName(summary.Sync.Namespace, summary.Sync.Name)
 	commitHash, err := nt.NonRootRepos[summary.Sync].Hash()
 	if err != nil {
 		return errors.Wrapf(err, "hashing NonRootRepo for RepoSync: %s", summary.Sync)
 	}
-	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, reconcilerName, commitHash, summary)
+	syncLabels, err := MetricLabelsForRepoSync(nt, summary.Sync)
+	if err != nil {
+		return errors.Wrap(err, "reading sync metric labels")
+	}
+	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, syncLabels, commitHash, summary)
 }
 
 // ValidateStandardMetricsForSync validates the set of standard metrics for the
 // specified sync.
-func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, reconcilerName, commitHash string, summary testmetrics.Summary) error {
+func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, syncLabels prometheusmodel.LabelSet, commitHash string, summary testmetrics.Summary) error {
 	count := summary.ObjectCount
 	ops := summary.Operations
 	if !summary.Absolute {
@@ -142,17 +181,12 @@ func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, recon
 		ops = testmetrics.AppendOperations(ops,
 			nt.MetricsExpectations.ExpectedObjectOperations(syncKind, summary.Sync)...)
 	}
-	pod, err := nt.KubeClient.GetDeploymentPod(reconcilerName, configmanagement.ControllerNamespace, nt.DefaultWaitTimeout)
-	if err != nil {
-		return err
-	}
-	reconcilerPodName := pod.Name
 	return ValidateMetrics(nt,
-		ReconcilerSyncSuccess(nt, reconcilerPodName, commitHash),
-		ReconcilerSourceMetrics(nt, reconcilerPodName, commitHash, count),
-		ReconcilerSyncMetrics(nt, reconcilerPodName, commitHash),
-		ReconcilerOperationsMetrics(nt, reconcilerPodName, ops...),
-		ReconcilerErrorMetrics(nt, reconcilerPodName, commitHash, summary.Errors))
+		ReconcilerSyncSuccess(nt, syncLabels, commitHash),
+		ReconcilerSourceMetrics(nt, syncLabels, commitHash, count),
+		ReconcilerSyncMetrics(nt, syncLabels, commitHash),
+		ReconcilerOperationsMetrics(nt, syncLabels, ops...),
+		ReconcilerErrorMetrics(nt, syncLabels, commitHash, summary.Errors))
 }
 
 // ReconcilerManagerMetrics returns a MetricsPredicate that validates the
@@ -173,41 +207,41 @@ func ReconcilerManagerMetrics(nt *NT) MetricsPredicate {
 
 // ReconcilerSourceMetrics returns a MetricsPredicate that validates the
 // DeclaredResourcesView metric.
-func ReconcilerSourceMetrics(nt *NT, reconcilerPodName, commitHash string, numResources int) MetricsPredicate {
+func ReconcilerSourceMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string, numResources int) MetricsPredicate {
 	nt.Logger.Debugf("[METRICS] Expecting declared resources (commit: %s): %d", commitHash, numResources)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricDeclaredResourcesViewHasValue(ctx, nt, v1api,
-			reconcilerPodName, commitHash, numResources))
+			syncLabels, commitHash, numResources))
 		return err
 	}
 }
 
 // ReconcilerSyncMetrics returns a MetricsPredicate that validates the
 // LastApplyTimestampView, ApplyDurationView, and LastSyncTimestampView metrics.
-func ReconcilerSyncMetrics(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
+func ReconcilerSyncMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
 	nt.Logger.Debugf("[METRICS] Expecting last apply & sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricLastApplyTimestampHasStatus(ctx, nt, v1api,
-			reconcilerPodName, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, metrics.StatusSuccess))
 		err = multierr.Append(err, metricApplyDurationViewHasStatus(ctx, nt, v1api,
-			reconcilerPodName, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, metrics.StatusSuccess))
 		err = multierr.Append(err, metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			reconcilerPodName, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, metrics.StatusSuccess))
 		return err
 	}
 }
 
 // ReconcilerOperationsMetrics returns a MetricsPredicate that validates the
 // APICallDurationView, ApplyOperationsView, and RemediateDurationView metrics.
-func ReconcilerOperationsMetrics(nt *NT, reconcilerPodName string, ops ...testmetrics.ObjectOperation) MetricsPredicate {
+func ReconcilerOperationsMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, ops ...testmetrics.ObjectOperation) MetricsPredicate {
 	var predicates []MetricsPredicate
 	for _, op := range ops {
 		if op.Operation == testmetrics.SkipOperation {
 			continue
 		}
-		predicates = append(predicates, reconcilerOperationMetrics(nt, reconcilerPodName, op))
+		predicates = append(predicates, reconcilerOperationMetrics(nt, syncLabels, op))
 	}
 	nt.Logger.Debugf("[METRICS] Expecting operations: %s", log.AsJSON(ops))
 	return func(ctx context.Context, v1api prometheusv1.API) error {
@@ -219,12 +253,12 @@ func ReconcilerOperationsMetrics(nt *NT, reconcilerPodName string, ops ...testme
 	}
 }
 
-func reconcilerOperationMetrics(nt *NT, reconcilerPodName string, op testmetrics.ObjectOperation) MetricsPredicate {
+func reconcilerOperationMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, op testmetrics.ObjectOperation) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
-		err = multierr.Append(err, metricAPICallDurationViewOperationHasStatus(ctx, nt, v1api, reconcilerPodName, string(op.Operation), op.Kind, ocmetrics.StatusSuccess))
-		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, reconcilerPodName, string(op.Operation), op.Kind, ocmetrics.StatusSuccess, op.Count))
-		err = multierr.Append(err, metricRemediateDurationViewHasStatus(ctx, nt, v1api, reconcilerPodName, op.Kind, ocmetrics.StatusSuccess))
+		err = multierr.Append(err, metricAPICallDurationViewOperationHasStatus(ctx, nt, v1api, syncLabels, string(op.Operation), op.Kind, ocmetrics.StatusSuccess))
+		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, syncLabels, string(op.Operation), op.Kind, ocmetrics.StatusSuccess, op.Count))
+		err = multierr.Append(err, metricRemediateDurationViewHasStatus(ctx, nt, v1api, syncLabels, op.Kind, ocmetrics.StatusSuccess))
 		return err
 	}
 }
@@ -235,18 +269,18 @@ func reconcilerOperationMetrics(nt *NT, reconcilerPodName string, op testmetrics
 // - ResourceConflictsView
 // - InternalErrorsView
 // - ReconcilerErrorsView
-func ReconcilerErrorMetrics(nt *NT, reconcilerPodName, commitHash string, summary testmetrics.ErrorSummary) MetricsPredicate {
+func ReconcilerErrorMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string, summary testmetrics.ErrorSummary) MetricsPredicate {
 	nt.Logger.Debugf("[METRICS] Expecting reconciler errors: %s", log.AsJSON(summary))
 
 	var predicates []MetricsPredicate
 	// Metrics aggregated by total count
-	predicates = append(predicates, metricResourceFightsHasValueAtLeast(nt, reconcilerPodName, summary.Fights))
-	predicates = append(predicates, metricResourceConflictsHasValueAtLeast(nt, reconcilerPodName, commitHash, summary.Conflicts))
-	predicates = append(predicates, metricInternalErrorsHasValueAtLeast(nt, reconcilerPodName, summary.Internal))
+	predicates = append(predicates, metricResourceFightsHasValueAtLeast(nt, syncLabels, summary.Fights))
+	predicates = append(predicates, metricResourceConflictsHasValueAtLeast(nt, syncLabels, commitHash, summary.Conflicts))
+	predicates = append(predicates, metricInternalErrorsHasValueAtLeast(nt, syncLabels, summary.Internal))
 	// Metrics aggregated by last value
-	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, reconcilerPodName, componentRendering, summary.Rendering))
-	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, reconcilerPodName, componentSource, summary.Source))
-	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, reconcilerPodName, componentSync, summary.Sync))
+	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, syncLabels, componentRendering, summary.Rendering))
+	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, syncLabels, componentSource, summary.Source))
+	predicates = append(predicates, metricReconcilerErrorsHasValue(nt, syncLabels, componentSync, summary.Sync))
 
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
@@ -259,21 +293,21 @@ func ReconcilerErrorMetrics(nt *NT, reconcilerPodName, commitHash string, summar
 
 // ReconcilerSyncSuccess returns a MetricsPredicate that validates that the
 // latest commit synced successfully for the specified reconciler and commit.
-func ReconcilerSyncSuccess(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
+func ReconcilerSyncSuccess(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
 	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			reconcilerPodName, commitHash, metrics.StatusSuccess)
+			syncLabels, commitHash, metrics.StatusSuccess)
 	}
 }
 
 // ReconcilerSyncError returns a MetricsPredicate that validates that the
 // latest commit sync errored for the specified reconciler and commit.
-func ReconcilerSyncError(nt *NT, reconcilerPodName, commitHash string) MetricsPredicate {
+func ReconcilerSyncError(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
 	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusError)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			reconcilerPodName, commitHash, metrics.StatusError)
+			syncLabels, commitHash, metrics.StatusError)
 	}
 }
 
@@ -282,15 +316,14 @@ func ReconcilerSyncError(nt *NT, reconcilerPodName, commitHash string) MetricsPr
 // metric with the specified component and quantity value.
 // If the expected value is zero, the metric being not found is also acceptable.
 // Expected components: "rendering", "source", or "sync".
-func metricReconcilerErrorsHasValue(nt *NT, reconcilerPodName, componentName string, value int) MetricsPredicate {
+func metricReconcilerErrorsHasValue(nt *NT, syncLabels prometheusmodel.LabelSet, componentName string, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ReconcilerErrorsView.Name
 		metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 		labels := prometheusmodel.LabelSet{
 			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):         prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-			prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()):   prometheusmodel.LabelValue(reconcilerPodName),
 			prometheusmodel.LabelName(ocmetrics.KeyExportedComponent.Name()): prometheusmodel.LabelValue(componentName),
-		}
+		}.Merge(syncLabels)
 		// ReconcilerErrorsView only keeps the LastValue, so we don't need to aggregate
 		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
@@ -305,14 +338,13 @@ func metricReconcilerErrorsHasValue(nt *NT, reconcilerPodName, componentName str
 // metricResourceFightsHasValueAtLeast returns a MetricsPredicate that validates
 // that ResourceFights has at least the expected value.
 // If the expected value is zero, the metric must be zero or not found.
-func metricResourceFightsHasValueAtLeast(nt *NT, reconcilerPodName string, value int) MetricsPredicate {
+func metricResourceFightsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.LabelSet, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ResourceFightsView.Name
 		metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 		labels := prometheusmodel.LabelSet{
-			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-			prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		}
+			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		}.Merge(syncLabels)
 		// ResourceFightsView counts the total number of ResourceFights, so we don't need to aggregate
 		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
@@ -327,15 +359,14 @@ func metricResourceFightsHasValueAtLeast(nt *NT, reconcilerPodName string, value
 // metricResourceConflictsHasValueAtLeast returns a MetricsPredicate that
 // validates that ResourceConflicts has at least the expected value.
 // If the expected value is zero, the metric must be zero or not found.
-func metricResourceConflictsHasValueAtLeast(nt *NT, reconcilerPodName string, commitHash string, value int) MetricsPredicate {
+func metricResourceConflictsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ResourceConflictsView.Name
 		metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 		labels := prometheusmodel.LabelSet{
-			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-			prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-			prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):          prometheusmodel.LabelValue(commitHash),
-		}
+			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+			prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
+		}.Merge(syncLabels)
 		// ResourceConflictsView counts the total number of ResourceConflicts, so we don't need to aggregate
 		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
@@ -350,14 +381,13 @@ func metricResourceConflictsHasValueAtLeast(nt *NT, reconcilerPodName string, co
 // metricInternalErrorsHasValueAtLeast returns a MetricsPredicate that validates
 // that InternalErrors has at least the expected value.
 // If the expected value is zero, the metric must be zero or not found.
-func metricInternalErrorsHasValueAtLeast(nt *NT, reconcilerPodName string, value int) MetricsPredicate {
+func metricInternalErrorsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.LabelSet, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.InternalErrorsView.Name
 		metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 		labels := prometheusmodel.LabelSet{
-			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-			prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		}
+			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		}.Merge(syncLabels)
 		// InternalErrorsView counts the total number of InternalErrors, so we don't need to aggregate
 		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
@@ -369,102 +399,95 @@ func metricInternalErrorsHasValueAtLeast(nt *NT, reconcilerPodName string, value
 	}
 }
 
-func metricLastSyncTimestampHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, commitHash, status string) error {
+func metricLastSyncTimestampHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, commitHash, status string) error {
 	metricName := ocmetrics.LastSyncTimestampView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):          prometheusmodel.LabelValue(commitHash),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	// LastSyncTimestampView only keeps the LastValue, so we don't need to aggregate
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricLastApplyTimestampHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, commitHash, status string) error {
+func metricLastApplyTimestampHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, commitHash, status string) error {
 	metricName := ocmetrics.LastApplyTimestampView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):          prometheusmodel.LabelValue(commitHash),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	// LastApplyTimestampView only keeps the LastValue, so we don't need to aggregate
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricApplyDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, commitHash, status string) error {
+func metricApplyDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, commitHash, status string) error {
 	metricName := ocmetrics.ApplyDurationView.Name
 	// ApplyDurationView is a distribution. Query count to aggregate.
 	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):          prometheusmodel.LabelValue(commitHash),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricDeclaredResourcesViewHasValue(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, commitHash string, numResources int) error {
+func metricDeclaredResourcesViewHasValue(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, commitHash string, numResources int) error {
 	metricName := ocmetrics.DeclaredResourcesView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):          prometheusmodel.LabelValue(commitHash),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
+	}.Merge(syncLabels)
 	// DeclaredResourcesView only keeps the LastValue, so we don't need to aggregate
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExistsWithValue(ctx, nt, v1api, query, float64(numResources))
 }
 
-func metricAPICallDurationViewOperationHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, operation, kind, status string) error {
+func metricAPICallDurationViewOperationHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, kind, status string) error {
 	metricName := ocmetrics.APICallDurationView.Name
 	// APICallDurationView is a distribution. Query count to aggregate.
 	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):       prometheusmodel.LabelValue(operation),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):            prometheusmodel.LabelValue(kind),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()): prometheusmodel.LabelValue(operation),
+		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):      prometheusmodel.LabelValue(kind),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, operation, kind, status string, value int) error {
+func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, kind, status string, value int) error {
 	metricName := ocmetrics.ApplyOperationsView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyController.Name()):      prometheusmodel.LabelValue(ocmetrics.ApplierController),
-		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):       prometheusmodel.LabelValue(operation),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):            prometheusmodel.LabelValue(kind),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):  prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyController.Name()): prometheusmodel.LabelValue(ocmetrics.ApplierController),
+		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):  prometheusmodel.LabelValue(operation),
+		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):       prometheusmodel.LabelValue(kind),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):     prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	// ApplyOperationsView is a count, so we don't need to aggregate
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
 }
 
-func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, reconcilerPodName, kind, status string) error {
+func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, kind, status string) error {
 	metricName := ocmetrics.RemediateDurationView.Name
 	// RemediateDurationView is a distribution. Query count to aggregate.
 	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
 	labels := prometheusmodel.LabelSet{
-		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):       prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.ResourceKeyPodName.Name()): prometheusmodel.LabelValue(reconcilerPodName),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):            prometheusmodel.LabelValue(kind),
-		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):          prometheusmodel.LabelValue(status),
-	}
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):      prometheusmodel.LabelValue(kind),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }

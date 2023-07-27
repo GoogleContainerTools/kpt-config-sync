@@ -372,6 +372,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerResourcesMutator(overrideReconcilerAndGitSyncResourceLimits),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -421,6 +422,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -457,6 +459,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -502,6 +505,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -557,6 +561,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -611,6 +616,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -657,6 +663,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -692,6 +699,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -737,6 +745,7 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -882,7 +891,6 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoDeployment.ResourceVersion = "3"
-
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
@@ -915,7 +923,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
-		setUID("1"), setResourceVersion("4"), setGeneration(4),
+		setUID("1"), setResourceVersion("4"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(updatedRepoDeployment)] = updatedRepoDeployment
 
@@ -1002,6 +1010,22 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	reposync.ClearCondition(wantRs, v1beta1.RepoSyncReconciling)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("6"), setGeneration(2),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+
 	// Set rs.Spec.NoSSLVerify to false
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
@@ -1021,7 +1045,14 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoDeployment.ResourceVersion = "7"
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("7"), setGeneration(3),
+	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
@@ -1063,6 +1094,7 @@ func TestRepoSyncCreateWithCACert(t *testing.T) {
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
 		containerEnvMutator(repoContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -1100,6 +1132,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
 		containerEnvMutator(repoContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -1169,7 +1202,16 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoDeployment.ResourceVersion = "3"
+	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsSecretName),
+		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
+		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
+		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
+		containerEnvMutator(repoContainerEnvs),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
@@ -1261,6 +1303,7 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -1382,7 +1425,14 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoDeployment.ResourceVersion = "4"
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("4"), setGeneration(4),
+	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
@@ -1434,6 +1484,7 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -1523,7 +1574,14 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoDeployment.ResourceVersion = "3"
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
@@ -1576,6 +1634,7 @@ func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
@@ -1605,9 +1664,8 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
-		setResourceVersion("1"),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
-	repoDeployment.ResourceVersion = "1"
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -1638,9 +1696,8 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerEnvMutator(repoContainerEnv),
-		setResourceVersion("2"),
+		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
-	updatedRepoDeployment.ResourceVersion = "2"
 	wantDeployments[core.IDOf(repoDeployment)] = updatedRepoDeployment
 
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -1664,7 +1721,14 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoDeployment.ResourceVersion = "3"
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
@@ -1881,8 +1945,15 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoDeployment.ResourceVersion = "3"
-
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
@@ -2781,6 +2852,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -2817,7 +2889,6 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	}
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
-
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2953,13 +3024,14 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
+	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
 		containerResourcesMutator(overrideHelmSyncResources),
 		containerEnvMutator(repoContainerEnvs),
-		setUID("1"), setResourceVersion("3"), setGeneration(4),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -3116,6 +3188,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3159,6 +3232,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3460,6 +3534,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 			reconcilermanager.ScopeKey:                reposyncNs,
 			reconcilermanager.SyncNameKey:             reposyncName,
 			reconcilermanager.NamespaceNameKey:        reposyncNs,
+			reconcilermanager.SyncGenerationKey:       "1",
 			reconcilermanager.ReconcilerNameKey:       nsReconcilerName,
 			reconcilermanager.SyncDirKey:              reposyncDir,
 			reconcilermanager.SourceRepoKey:           reposyncRepo,
@@ -3651,6 +3726,11 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 		// Compare Deployment ResourceVersion
 		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
 			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff: %v", id, diff)
+		}
+
+		// Compare Deployment Generation
+		if diff := cmp.Diff(want.Generation, got.Generation); diff != "" {
+			return errors.Errorf("Unexpected Deployment Generation found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Annotations

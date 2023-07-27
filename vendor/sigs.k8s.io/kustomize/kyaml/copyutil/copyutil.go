@@ -7,18 +7,19 @@ package copyutil
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
+	"sigs.k8s.io/kustomize/kyaml/errors"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/sets"
 )
 
 // CopyDir copies a src directory to a dst directory.  CopyDir skips copying the .git directory from the src.
-func CopyDir(src string, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+func CopyDir(fSys filesys.FileSystem, src string, dst string) error {
+	return errors.Wrap(fSys.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -37,21 +38,21 @@ func CopyDir(src string, dst string) error {
 
 		// make directories that don't exist
 		if info.IsDir() {
-			return os.MkdirAll(filepath.Join(dst, copyTo), info.Mode())
+			return errors.Wrap(fSys.MkdirAll(filepath.Join(dst, copyTo)))
 		}
 
 		// copy file by reading and writing it
-		b, err := ioutil.ReadFile(filepath.Join(src, copyTo))
+		b, err := fSys.ReadFile(filepath.Join(src, copyTo))
 		if err != nil {
-			return err
+			return errors.Wrap(err)
 		}
-		err = ioutil.WriteFile(filepath.Join(dst, copyTo), b, info.Mode())
+		err = fSys.WriteFile(filepath.Join(dst, copyTo), b)
 		if err != nil {
-			return err
+			return errors.Wrap(err)
 		}
 
 		return nil
-	})
+	}))
 }
 
 // Diff returns a list of files that differ between the source and destination.
@@ -112,11 +113,11 @@ func Diff(sourceDir, destDir string) (sets.String, error) {
 		}
 
 		// compare upstreamFiles
-		b1, err := ioutil.ReadFile(filepath.Join(destDir, f))
+		b1, err := os.ReadFile(filepath.Join(destDir, f))
 		if err != nil {
 			return diff, err
 		}
-		b2, err := ioutil.ReadFile(filepath.Join(sourceDir, f))
+		b2, err := os.ReadFile(filepath.Join(sourceDir, f))
 		if err != nil {
 			return diff, err
 		}
@@ -162,7 +163,7 @@ func SyncFile(src, dst string) error {
 		return nil
 	}
 
-	input, err := ioutil.ReadFile(src)
+	input, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func SyncFile(src, dst string) error {
 		filePerm = dstFileInfo.Mode().Perm()
 	}
 
-	err = ioutil.WriteFile(dst, input, filePerm)
+	err = os.WriteFile(dst, input, filePerm)
 	if err != nil {
 		return err
 	}

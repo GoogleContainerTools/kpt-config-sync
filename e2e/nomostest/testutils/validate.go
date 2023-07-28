@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/util/log"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ValidateError returns true if the specified errors contain an error
@@ -39,4 +40,16 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string) error {
 		return errors.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
 	}
 	return errors.Errorf("error %s not present: %s", code, log.AsJSON(errs))
+}
+
+// AppendFinalizer adds a finalizer to the object
+func AppendFinalizer(obj client.Object, finalizer string) {
+	finalizers := obj.GetFinalizers()
+	finalizers = append(finalizers, finalizer)
+	obj.SetFinalizers(finalizers)
+}
+
+// RemoveFinalizers removes all finalizers from the object
+func RemoveFinalizers(obj client.Object) {
+	obj.SetFinalizers(nil)
 }

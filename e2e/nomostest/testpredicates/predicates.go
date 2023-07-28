@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -942,6 +943,35 @@ func ContainerByName(obj *appsv1.Deployment, containerName string) *corev1.Conta
 		if container.Name == containerName {
 			return container.DeepCopy()
 		}
+	}
+	return nil
+}
+
+// RootSyncHasCondition returns a Predicate that errors if the RootSync does not
+// have the specified RootSyncCondition. Fields such as timestamps are ignored.
+func RootSyncHasCondition(expected *v1beta1.RootSyncCondition) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(rs, &v1beta1.RootSync{})
+		}
+		condition := rootsync.GetCondition(rs.Status.Conditions, expected.Type)
+		if condition == nil {
+			return fmt.Errorf("RootSyncCondition with type %s not found", expected.Type)
+		}
+		return validateRootSyncCondition(condition, expected)
+	}
+}
+
+func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1beta1.RootSyncCondition) error {
+	e := expected.DeepCopy()
+	e.LastUpdateTime = actual.LastUpdateTime
+	e.LastTransitionTime = actual.LastTransitionTime
+	if diff := cmp.Diff(e, actual); diff != "" {
+		return fmt.Errorf("unexpected diff: %s", diff)
 	}
 	return nil
 }

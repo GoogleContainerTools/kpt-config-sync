@@ -16,11 +16,14 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,7 +35,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -486,6 +492,88 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		// Deployment2 should NOT have been deleted, because it was orphaned by the RepoSync.
 		return nt.Watcher.WatchObject(kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace(),
 			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestReconcileFinalizerReconcileTimeout verifies that the reconciler finalizer
+// blocks deletion and continues to track objects which fail garbage collection.
+// A RootSync is created which manages a single Namespace, and a fake finalizer
+// is added to that Namespace from the test. Deletion of both the Namespace and
+// RootSync should be blocked until the Namespace finalizer is removed.
+func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nestedRootSyncNN := nomostest.RootSyncNN("nested-root-sync")
+	namespaceNN := types.NamespacedName{Name: "managed-ns"}
+	contrivedFinalizer := "e2e-test"
+	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.Unstructured,
+		ntopts.RootRepo(nestedRootSyncNN.Name),      // Create a nested RootSync to delete mid-test
+		ntopts.WithCentralizedControl,               // This test assumes centralized control
+		ntopts.WithReconcileTimeout(10*time.Second), // Reconcile expected to fail, so use a short timeout
+	)
+	// add a Namespace to the nested RootSync
+	namespace := fake.NamespaceObject(namespaceNN.Name)
+	nsPath := nomostest.StructuredNSPath(namespace.GetNamespace(), namespaceNN.Name)
+	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].Add(nsPath, namespace))
+	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].CommitAndPush(fmt.Sprintf("add Namespace %s", namespaceNN.Name)))
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Add a fake finalizer to the namespace to block deletion
+	testutils.AppendFinalizer(namespace, "config-sync/e2e-test")
+	nt.T.Logf("Add a fake finalizer named %s to Namespace %s", contrivedFinalizer, namespaceNN.Name)
+	if err := nt.KubeClient.Apply(namespace); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Try to remove the nested RootSync. Deletion should be blocked by ns finalizer
+	nestedRootSyncPath := fmt.Sprintf("acme/namespaces/%s/%s.yaml",
+		configsync.ControllerNamespace, nestedRootSyncNN.Name)
+	nt.Must(nt.RootRepos[rootSyncNN.Name].Remove(nestedRootSyncPath))
+	nt.Must(nt.RootRepos[rootSyncNN.Name].CommitAndPush(fmt.Sprintf("remove Namespace %s", namespaceNN.Name)))
+	expectedCondition := &v1beta1.RootSyncCondition{
+		Type:    v1beta1.RootSyncReconcilerFinalizerFailure,
+		Status:  "True",
+		Reason:  "DestroyFailure",
+		Message: "Failed to delete managed resource objects",
+		Errors: []v1beta1.ConfigSyncError{
+			{
+				Code:         applier.ApplierErrorCode,
+				ErrorMessage: "KNV2009: failed to wait for Namespace, /managed-ns: reconcile timeout\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+			},
+		},
+	}
+	// Finalizer currently only sets condition, not sync status
+	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), nestedRootSyncNN.Name, nestedRootSyncNN.Namespace,
+		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Wait a fixed duration for RootSync deletion to be blocked
+	time.Sleep(30 * time.Second)
+	if err := nt.Validate(nestedRootSyncNN.Name, nestedRootSyncNN.Namespace, &v1beta1.RootSync{}); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Validate(namespaceNN.Name, namespaceNN.Namespace, &corev1.Namespace{}); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Remove the fake finalizer
+	namespace = fake.NamespaceObject(namespaceNN.Name)
+	testutils.RemoveFinalizers(namespace)
+	nt.T.Logf("Remove the fake finalizer named %s from Namespace %s", contrivedFinalizer, namespaceNN.Name)
+	if err := nt.KubeClient.Apply(namespace); err != nil {
+		nt.T.Fatal(err)
+	}
+	// With the finalizer removed, the deletion should reconcile
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
+			nestedRootSyncNN.Name, nestedRootSyncNN.Namespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Namespace(),
+			namespaceNN.Name, namespaceNN.Namespace)
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)

@@ -3633,6 +3633,108 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 	}
 }
 
+func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs.Spec = rs.Spec
+	wantRs.Status.Reconciler = nsReconcilerName
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully created")
+
+	overrideLogLevel := []v1beta1.ContainerLogLevelOverride{
+		{
+			ContainerName: reconcilermanager.Reconciler,
+			LogLevel:      5,
+		},
+		{
+			ContainerName: reconcilermanager.HydrationController,
+			LogLevel:      7,
+		},
+		{
+			ContainerName: reconcilermanager.GitSync,
+			LogLevel:      9,
+		},
+	}
+
+	containerArgs := map[string][]string{
+		"reconciler": {
+			"-v=5",
+		},
+		"hydration-controller": {
+			"-v=7",
+		},
+		"git-sync": {
+			"-v=9",
+		},
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.Override = &v1beta1.OverrideSpec{
+		LogLevels: overrideLogLevel,
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantRs.Spec = rs.Spec
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerArgsMutator(containerArgs),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("2"), setGeneration(2),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+}
+
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 
@@ -3789,6 +3891,11 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 					// Compare Resources fields in the container.
 					if diff := cmp.Diff(i.Resources, j.Resources); diff != "" {
 						return errors.Errorf("Unexpected resources found for the %q container of %q, diff %s", i.Name, id, diff)
+					}
+
+					// Compare Args
+					if diff := cmp.Diff(i.Args, j.Args); diff != "" {
+						return errors.Errorf("Unexpected args found for the %q container of %q, diff %s", i.Name, id, diff)
 					}
 				}
 			}

@@ -78,6 +78,9 @@ const (
 	logFieldObjectStatus    = "objectStatus"
 	logFieldReconciler      = "reconciler"
 	logFieldResourceVersion = "resourceVersion"
+
+	defaultContainerLogLevel = 0
+	defaultGitSyncLogLevel   = 5
 )
 
 // The fields in reconcilerManagerAllowList are the fields that reconciler manager allow
@@ -503,6 +506,31 @@ func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec
 				c.Resources.Limits[corev1.ResourceMemory] = override.MemoryLimit
 			}
 		}
+	}
+
+	c.Args = append(c.Args, fmt.Sprintf("-v=%d", containerLogLevel(c.Name, override.LogLevels)))
+}
+
+// containerLogLevel will determine the log level value for any reconciler deployment container
+func containerLogLevel(containerName string, override []v1beta1.ContainerLogLevelOverride) int {
+	for _, logLevel := range override {
+		if logLevel.ContainerName == containerName {
+			return logLevel.LogLevel
+		}
+	}
+
+	return containerLogLevelDefault(containerName)
+}
+
+// containerLogLevelDefault will return the default log level value for any reconciler deployment container
+// when override is not specified
+func containerLogLevelDefault(containerName string) int {
+	switch containerName {
+	// git-sync container's default is 5
+	case reconcilermanager.GitSync:
+		return defaultGitSyncLogLevel
+	default:
+		return defaultContainerLogLevel
 	}
 }
 

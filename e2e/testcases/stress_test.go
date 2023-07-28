@@ -209,6 +209,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	}
 }
 
+// This test creates a RootSync pointed at https://github.com/config-sync-examples/crontab-crs
+// This repository contains 13,000+ objects, which takes a long time to reconcile
 func TestStressLargeRequest(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
@@ -253,8 +255,7 @@ func TestStressLargeRequest(t *testing.T) {
 		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: "configs",
-		}),
-		nomostest.WithTimeout(30*time.Minute))
+		}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -101,12 +101,18 @@ const (
 )
 
 // WithReconcileTimeout tells the test case to override the default reconcile
-// timeout on all RootSyncs and RepoSyncs.
+// timeout on all RootSyncs and RepoSyncs by default.
 func WithReconcileTimeout(timeout time.Duration) func(opt *New) {
 	return func(opt *New) {
 		timeoutCopy := timeout
 		opt.ReconcileTimeout = &timeoutCopy
 	}
+}
+
+// WithoutReconcileTimeout tells the test case not to override the default
+// reconcile timeout on all RootSyncs and RepoSyncs by default.
+func WithoutReconcileTimeout(opt *New) {
+	opt.ReconcileTimeout = nil
 }
 
 // RepoSyncPermissions specifies PolicyRule(s) to grant NS reconcilers

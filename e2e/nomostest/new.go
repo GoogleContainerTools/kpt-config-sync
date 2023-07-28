@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
@@ -62,6 +63,9 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		MultiRepo: ntopts.MultiRepo{
 			NamespaceRepos: make(map[types.NamespacedName]ntopts.RepoOpts),
 			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
+			// Default to 1m to keep tests fast.
+			// To override, use WithReconcileTimeout.
+			ReconcileTimeout: pointer.Duration(1 * time.Minute),
 		},
 	}
 	for _, opt := range ntOptions {
@@ -156,7 +160,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		WatchClient:                  sharedNt.WatchClient,
 		IsGKEAutopilot:               sharedNt.IsGKEAutopilot,
 		DefaultWaitTimeout:           sharedNt.DefaultWaitTimeout,
-		DefaultReconcileTimeout:      sharedNt.DefaultReconcileTimeout,
+		DefaultReconcileTimeout:      opts.ReconcileTimeout,
 		kubeconfigPath:               sharedNt.kubeconfigPath,
 		ReconcilerPollingPeriod:      sharedNt.ReconcilerPollingPeriod,
 		HydrationPollingPeriod:       sharedNt.HydrationPollingPeriod,
@@ -239,7 +243,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
-		DefaultReconcileTimeout: 1 * time.Minute,
+		DefaultReconcileTimeout: opts.ReconcileTimeout,
 		kubeconfigPath:          opts.KubeconfigPath,
 		RootRepos:               make(map[string]*gitproviders.Repository),
 		NonRootRepos:            make(map[types.NamespacedName]*gitproviders.Repository),
@@ -429,14 +433,14 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.Control = opts.Control
 	switch opts.Control {
 	case ntopts.DelegatedControl:
-		setupDelegatedControl(nt, opts.ReconcileTimeout)
+		setupDelegatedControl(nt)
 	case ntopts.CentralControl:
-		setupCentralizedControl(nt, opts.ReconcileTimeout)
+		setupCentralizedControl(nt)
 	default:
 		nt.Control = ntopts.CentralControl
 		// Most tests don't care about centralized/delegated control, but can
 		// specify the behavior if that distinction is under test.
-		setupCentralizedControl(nt, opts.ReconcileTimeout)
+		setupCentralizedControl(nt)
 	}
 
 	// Wait for all RootSyncs and all RepoSyncs to be reconciled

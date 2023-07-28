@@ -458,28 +458,6 @@ func noOOMKilledContainer(nt *NT) testpredicates.Predicate {
 	}
 }
 
-func setupRootSync(nt *NT, rsName string, reconcileTimeout *time.Duration) {
-	// create RootSync to initialize the root reconciler.
-	rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-	if reconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
-	}
-	if err := nt.KubeClient.Apply(rs); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
-func setupRepoSync(nt *NT, nn types.NamespacedName, reconcileTimeout *time.Duration) {
-	// create RepoSync to initialize the Namespace reconciler.
-	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-	if reconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
-	}
-	if err := nt.KubeClient.Create(rs); err != nil {
-		nt.T.Fatal(err)
-	}
-}
-
 // RepoSyncRoleBinding returns rolebinding that grants service account
 // permission to manage resources in the namespace.
 func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
@@ -623,7 +601,7 @@ func setOtelCollectorPrometheusAnnotations(obj client.Object) error {
 	return nil
 }
 
-func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
+func setupDelegatedControl(nt *NT) {
 	nt.T.Log("[SETUP] Delegated control")
 
 	// Just create one RepoSync ClusterRole, even if there are no Namespace repos.
@@ -636,7 +614,10 @@ func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
 		if rsName == configsync.RootSyncName {
 			continue
 		}
-		setupRootSync(nt, rsName, reconcileTimeout)
+		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
+		if err := nt.KubeClient.Apply(rs); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 
 	for nn := range nt.NonRootRepos {
@@ -665,7 +646,10 @@ func setupDelegatedControl(nt *NT, reconcileTimeout *time.Duration) {
 			nt.T.Fatal(err)
 		}
 
-		setupRepoSync(nt, nn, reconcileTimeout)
+		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+		if err := nt.KubeClient.Apply(rs); err != nil {
+			nt.T.Fatal(err)
+		}
 	}
 }
 
@@ -699,8 +683,10 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Alpha1(name, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	return rs
 }
@@ -735,8 +721,10 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Beta1(name, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	return rs
 }
@@ -751,8 +739,10 @@ func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RootSyncObjectV1Beta1(syncName, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	return rs
 }
@@ -792,8 +782,10 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := RepoSyncObjectV1Alpha1(nn, repoURL)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
@@ -836,8 +828,10 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	// Add dependencies to ensure managed objects can be deleted.
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
@@ -856,8 +850,10 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != 0 {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(nt.DefaultReconcileTimeout)
+	if nt.DefaultReconcileTimeout != nil {
+		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+	} else if rs.Spec.Override != nil {
+		rs.Spec.Override.ReconcileTimeout = nil
 	}
 	// Add dependencies to ensure managed objects can be deleted.
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
@@ -868,7 +864,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 
 // setupCentralizedControl is a pure central-control mode.
 // A default root repo (root-sync) manages all other root repos and namespace repos.
-func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
+func setupCentralizedControl(nt *NT) {
 	nt.T.Log("[SETUP] Centralized control")
 
 	rsCount := 0
@@ -882,9 +878,6 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 			continue
 		}
 		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-		if reconcileTimeout != nil {
-			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
-		}
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsName), rs))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rsName))
@@ -935,9 +928,6 @@ func setupCentralizedControl(nt *NT, reconcileTimeout *time.Duration) {
 
 		// Add RepoSync pointing to the Git repo specified in nt.NonRootRepos[rsNN]
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, rsNN)
-		if reconcileTimeout != nil {
-			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*reconcileTimeout)
-		}
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 

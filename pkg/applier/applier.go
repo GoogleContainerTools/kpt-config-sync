@@ -212,7 +212,14 @@ func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGr
 	return inv, nil
 }
 
-func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
+type eventHandler struct {
+	// isDestroy indicates whether the events being processed are for a Destroy
+	isDestroy bool
+	// clientSet is used for accessing various k8s clients
+	clientSet *ClientSet
+}
+
+func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
 	id := idFrom(e.Identifier)
 	s.Add(e.Status)
 
@@ -247,14 +254,14 @@ func processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEv
 	case event.ApplySkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return handleApplySkippedEvent(e.Resource, id, e.Error)
+		return h.handleApplySkippedEvent(e.Resource, id, e.Error)
 
 	default:
 		return ErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
 }
 
-func processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMap ObjectStatusMap) error {
+func (h *eventHandler) processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMap ObjectStatusMap) error {
 	id := idFrom(e.Identifier)
 	s.Add(e.Status)
 
@@ -273,8 +280,16 @@ func processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMa
 		objectStatus.Reconcile = actuation.ReconcileSucceeded
 	case event.ReconcileFailed:
 		objectStatus.Reconcile = actuation.ReconcileFailed
+		// ReconcileFailed is treated as an error for destroy
+		if h.isDestroy {
+			return WaitErrorForResource(fmt.Errorf("reconcile failed"), id)
+		}
 	case event.ReconcileTimeout:
 		objectStatus.Reconcile = actuation.ReconcileTimeout
+		// ReconcileTimeout is treated as an error for destroy
+		if h.isDestroy {
+			return WaitErrorForResource(fmt.Errorf("reconcile timeout"), id)
+		}
 	default:
 		return ErrorForResource(fmt.Errorf("unexpected wait event status: %v", e.Status), id)
 	}
@@ -282,7 +297,7 @@ func processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMa
 }
 
 // handleApplySkippedEvent translates from apply skipped event into resource error.
-func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (h *eventHandler) handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	var depErr *filter.DependencyPreventedActuationError
 	if errors.As(err, &depErr) {
 		return SkipErrorForResource(err, id, depErr.Strategy)
@@ -306,7 +321,7 @@ func handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err err
 }
 
 // processPruneEvent handles PruneEvents from the Applier
-func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (h *eventHandler) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	s.Add(e.Status)
 
@@ -335,7 +350,7 @@ func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 	case event.PruneSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return a.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
+		return h.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
 
 	default:
 		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
@@ -343,7 +358,7 @@ func (a *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 }
 
 // processDeleteEvent handles DeleteEvents from the Destroyer
-func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
 	s.Add(e.Status)
 
@@ -371,7 +386,7 @@ func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent
 	case event.DeleteSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return a.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
+		return h.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
 
 	default:
 		return DeleteErrorForResource(fmt.Errorf("unexpected delete event status: %v", e.Status), id)
@@ -380,11 +395,11 @@ func (a *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent
 
 // handleDeleteSkippedEvent translates from prune skip or delete skip event into
 // a resource error.
-func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-		err := a.abandonObject(ctx, obj)
+		err := h.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (protected namespace): %v",
@@ -432,7 +447,7 @@ func (a *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType eve
 		// For prunes/deletes, this is desired behavior, not a fatal error.
 		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
 		// The `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-		err := a.abandonObject(ctx, obj)
+		err := h.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
@@ -481,6 +496,10 @@ func (a *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Clie
 // applyInner triggers a kpt live apply library call to apply a set of resources.
 func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
 	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
+	eh := eventHandler{
+		isDestroy: false,
+		clientSet: a.clientSet,
+	}
 
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
@@ -489,7 +508,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 	enabledObjs, disabledObjs := partitionObjs(objs)
 	if len(disabledObjs) > 0 {
 		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
-		disabledCount, err := a.handleDisabledObjects(ctx, a.inventory, disabledObjs)
+		disabledCount, err := eh.handleDisabledObjects(ctx, a.inventory, disabledObjs)
 		if err != nil {
 			a.addError(err)
 			return nil, a.Errors()
@@ -560,21 +579,21 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 			} else {
 				klog.V(1).Info(e.WaitEvent)
 			}
-			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+			a.addError(eh.processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.ApplyType:
 			if e.ApplyEvent.Error != nil {
 				klog.Info(e.ApplyEvent)
 			} else {
 				klog.V(1).Info(e.ApplyEvent)
 			}
-			a.addError(processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
+			a.addError(eh.processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
 		case event.PruneType:
 			if e.PruneEvent.Error != nil {
 				klog.Info(e.PruneEvent)
 			} else {
 				klog.V(1).Info(e.PruneEvent)
 			}
-			a.addError(a.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
+			a.addError(eh.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
@@ -636,6 +655,10 @@ func (a *supervisor) invalidateErrors() {
 func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
+	eh := eventHandler{
+		isDestroy: true,
+		clientSet: a.clientSet,
+	}
 
 	options := apply.DestroyerOptions{
 		InventoryPolicy: a.policy,
@@ -680,14 +703,14 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 			} else {
 				klog.V(1).Info(e.WaitEvent)
 			}
-			a.addError(processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+			a.addError(eh.processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
 		case event.DeleteType:
 			if e.DeleteEvent.Error != nil {
 				klog.Info(e.DeleteEvent)
 			} else {
 				klog.V(1).Info(e.DeleteEvent)
 			}
-			a.addError(a.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
+			a.addError(eh.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
@@ -756,10 +779,10 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (h *eventHandler) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
-	err := a.removeFromInventory(rg, objs)
+	err := h.removeFromInventory(rg, objs)
 	if err != nil {
 		if nomosutil.IsRequestTooLargeError(err) {
 			return disabledCount, largeResourceGroupError(err, idFromInventory(rg))
@@ -769,7 +792,7 @@ func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 	var errs status.MultiError
 	for _, obj := range objs {
 		id := core.IDOf(obj)
-		err := a.abandonObject(ctx, obj)
+		err := h.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err, id.Kind)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
@@ -787,8 +810,8 @@ func (a *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (a *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
-	clusterInv, err := a.clientSet.InvClient.GetClusterInventoryInfo(rg)
+func (h *eventHandler) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
+	clusterInv, err := h.clientSet.InvClient.GetClusterInventoryInfo(rg)
 	if err != nil {
 		return err
 	}
@@ -809,19 +832,19 @@ func (a *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs [
 	if err != nil {
 		return err
 	}
-	return a.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
+	return h.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
 }
 
 // abandonObject removes ConfigSync labels and annotations from an object,
 // disabling management.
-func (a *supervisor) abandonObject(ctx context.Context, obj client.Object) error {
-	gvk, err := kinds.Lookup(obj, a.clientSet.Client.Scheme())
+func (h *eventHandler) abandonObject(ctx context.Context, obj client.Object) error {
+	gvk, err := kinds.Lookup(obj, h.clientSet.Client.Scheme())
 	if err != nil {
 		return err
 	}
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
-	err = a.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
+	err = h.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.Warningf("Failed to abandon object: object not found: %s", core.IDOf(obj))
@@ -848,7 +871,7 @@ func (a *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 		// Use merge-patch instead of server-side-apply, because we don't have
 		// the object's source of truth handy and don't want to take ownership
 		// of all the fields managed by other clients.
-		return a.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
+		return h.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
 			client.FieldOwner(configsync.FieldManager))
 	}
 	return nil

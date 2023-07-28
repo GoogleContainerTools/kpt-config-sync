@@ -495,12 +495,15 @@ func TestProcessApplyEvent(t *testing.T) {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	unknownTypeResources := make(map[core.ID]struct{})
+	eh := eventHandler{
+		isDestroy: false,
+	}
 
-	err := processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
+	err := eh.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
 
-	err = processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
+	err = eh.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -535,15 +538,16 @@ func TestProcessPruneEvent(t *testing.T) {
 	s := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	cs := &ClientSet{}
-	applier := &supervisor{
+	eh := eventHandler{
+		isDestroy: false,
 		clientSet: cs,
 	}
 
-	err := applier.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
+	err := eh.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
 	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = applier.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, s.PruneEvent, objStatusMap)
+	err = eh.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, s.PruneEvent, objStatusMap)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -573,29 +577,102 @@ func TestProcessWaitEvent(t *testing.T) {
 	deploymentID := object.UnstructuredToObjMetadata(newDeploymentObj())
 	testID := object.UnstructuredToObjMetadata(newTestObj("test-1"))
 
-	s := stats.NewSyncStats()
-	objStatusMap := make(ObjectStatusMap)
-
-	err := processWaitEvent(formWaitEvent(event.ReconcileFailed, &deploymentID).WaitEvent, s.WaitEvent, objStatusMap)
-	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileFailed)
-
-	err = processWaitEvent(formWaitEvent(event.ReconcileSuccessful, &testID).WaitEvent, s.WaitEvent, objStatusMap)
-	assert.Nil(t, err, "expected processWaitEvent NOT to error on reconcile %s", event.ReconcileSuccessful)
-
-	expectedApplyStatus := stats.NewSyncStats()
-	expectedApplyStatus.WaitEvent.Add(event.ReconcileFailed)
-	expectedApplyStatus.WaitEvent.Add(event.ReconcileSuccessful)
-	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
-
-	expectedObjStatusMap := ObjectStatusMap{
-		idFrom(deploymentID): {
-			Reconcile: actuation.ReconcileFailed,
+	type eventStatus struct {
+		status         event.WaitEventStatus
+		id             *object.ObjMetadata
+		expectedErr    error
+		expectedStatus actuation.ReconcileStatus
+	}
+	testCases := []struct {
+		name                 string
+		isDestroy            bool
+		events               []eventStatus
+		expectedWaitStatuses []stats.WaitEventStats
+		expectedObjStatusMap ObjectStatusMap
+	}{
+		{
+			name:      "reconcile fail/success for an apply",
+			isDestroy: false,
+			events: []eventStatus{
+				{
+					status:         event.ReconcileFailed,
+					id:             &deploymentID,
+					expectedErr:    nil,
+					expectedStatus: actuation.ReconcileFailed,
+				},
+				{
+					status:         event.ReconcileSuccessful,
+					id:             &testID,
+					expectedErr:    nil,
+					expectedStatus: actuation.ReconcileSucceeded,
+				},
+			},
 		},
-		idFrom(testID): {
-			Reconcile: actuation.ReconcileSucceeded,
+		{
+			name:      "reconcile fail/success for a destroy",
+			isDestroy: true,
+			events: []eventStatus{
+				{
+					status:         event.ReconcileFailed,
+					id:             &deploymentID,
+					expectedErr:    fmt.Errorf("KNV2009: failed to wait for Deployment.apps, test-namespace/random-name: reconcile failed\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009"),
+					expectedStatus: actuation.ReconcileFailed,
+				},
+				{
+					status:         event.ReconcileSuccessful,
+					id:             &testID,
+					expectedErr:    nil,
+					expectedStatus: actuation.ReconcileSucceeded,
+				},
+			},
+		},
+		{
+			name:      "reconcile timeout/success for a destroy",
+			isDestroy: true,
+			events: []eventStatus{
+				{
+					status:         event.ReconcileTimeout,
+					id:             &deploymentID,
+					expectedErr:    fmt.Errorf("KNV2009: failed to wait for Deployment.apps, test-namespace/random-name: reconcile timeout\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009"),
+					expectedStatus: actuation.ReconcileTimeout,
+				},
+				{
+					status:         event.ReconcileSuccessful,
+					id:             &testID,
+					expectedErr:    nil,
+					expectedStatus: actuation.ReconcileSucceeded,
+				},
+			},
 		},
 	}
-	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			p := eventHandler{
+				isDestroy: tc.isDestroy,
+			}
+			s := stats.NewSyncStats()
+			objStatusMap := make(ObjectStatusMap)
+			expectedApplyStatus := stats.NewSyncStats()
+			expectedObjStatusMap := ObjectStatusMap{}
+
+			for _, e := range tc.events {
+				err := p.processWaitEvent(formWaitEvent(e.status, e.id).WaitEvent, s.WaitEvent, objStatusMap)
+				if e.expectedErr == nil {
+					assert.Nil(t, err)
+				} else {
+					assert.Equal(t, err.Error(), e.expectedErr.Error())
+				}
+				expectedApplyStatus.WaitEvent.Add(e.status)
+				expectedObjStatusMap[idFrom(*e.id)] = &ObjectStatus{
+					Reconcile: e.expectedStatus,
+				}
+			}
+
+			testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
+			testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+		})
+	}
 }
 
 func indent(in string, indentation uint) string {

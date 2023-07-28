@@ -20,6 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -164,6 +165,13 @@ func DeleteAndWait(ctx context.Context, c client.WithWatch, obj client.Object, r
 					logFieldObjectRef, id.ObjectKey.String(),
 					logFieldObjectKind, id.Kind)
 				// Stop waiting - object already deleted
+				return true, nil
+			}
+			if meta.IsNoMatchError(err) {
+				klog.V(3).Infof("Resource not registered %q=%q, %q=%q",
+					logFieldObjectRef, id.ObjectKey.String(),
+					logFieldObjectKind, id.Kind)
+				// Stop waiting - resource not registered
 				return true, nil
 			}
 			// Stop waiting

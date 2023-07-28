@@ -62,6 +62,15 @@ func UntilDeletedWithSync(ctx context.Context, c client.WithWatch, obj client.Ob
 	if err != nil {
 		return err
 	}
+	// Validate that the resource API is registered.
+	// If not, error and let the caller deal with whether NoMatchError is
+	// tolerated or not.
+	// Without this check, the informer will retry endlessly waiting for the
+	// ListAndWatch to succeed.
+	_, err = c.RESTMapper().RESTMapping(itemGVK.GroupKind(), itemGVK.Version)
+	if err != nil {
+		return err
+	}
 	var objList client.ObjectList
 	if _, ok := obj.(*unstructured.Unstructured); ok {
 		objList = kinds.NewUnstructuredListForItemGVK(itemGVK)

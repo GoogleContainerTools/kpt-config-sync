@@ -61,6 +61,12 @@ func (ooe *ObjectOperationError) Error() string {
 		ooe.ID.Kind, ooe.ID.ObjectKey, ooe.Operation, ooe.Cause)
 }
 
+// Unwrap returns the cause of the error, to allow type checking with errors.Is
+// and errors.As.
+func (ooe *ObjectOperationError) Unwrap() error {
+	return ooe.Cause
+}
+
 // NewObjectOperationError constructs a new ObjectOperationError
 func NewObjectOperationError(err error, obj client.Object, op Operation) *ObjectOperationError {
 	id := core.IDOf(obj)
@@ -142,6 +148,12 @@ type ObjectReconcileError struct {
 func (oripe *ObjectReconcileError) Error() string {
 	return fmt.Sprintf("%s (%s) %s: %v",
 		oripe.ID.Kind, oripe.ID.ObjectKey, oripe.Status, oripe.Cause)
+}
+
+// Unwrap returns the cause of the error, to allow type checking with errors.Is
+// and errors.As.
+func (oripe *ObjectReconcileError) Unwrap() error {
+	return oripe.Cause
 }
 
 // NewObjectReconcileError constructs a new ObjectReconcileError

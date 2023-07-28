@@ -60,3 +60,21 @@ resource "google_project_iam_member" "gce-default-sa-iam" {
   member  = "serviceAccount:${data.google_compute_default_service_account.default.email}"
   project = data.google_project.project.id
 }
+
+resource "google_service_account" "e2e_metric_writer_sa" {
+  account_id = "e2e-test-metric-writer"
+  display_name = "Test Metric Writer"
+  description = "Service account used to write to Google Cloud Monitoring"
+}
+
+resource "google_project_iam_member" "e2e_metric_writer_gcp_role" {
+  role = "roles/monitoring.metricWriter"
+  member = "serviceAccount:${google_service_account.e2e_metric_writer_sa.email}"
+  project = data.google_project.project.id
+}
+
+resource "google_service_account_iam_member" "e2e_metric_writer_gke_binding" {
+  service_account_id = google_service_account.e2e_metric_writer_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-monitoring/default]"
+}

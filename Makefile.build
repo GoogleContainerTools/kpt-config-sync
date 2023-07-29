@@ -247,8 +247,8 @@ config-sync-manifest: config-sync-manifest-no-push push-images
 # config-sync-manifest-local builds config sync for local testing in kind.
 # starts local docker registry and pushes images to the local registry
 .PHONY: config-sync-manifest-local
-config-sync-manifest-local:
-	@bash scripts/docker-registry.sh
+config-sync-manifest-local: install-kind
+	@KIND_VERSION=$(KIND_VERSION) bash scripts/docker-registry.sh
 	$(MAKE) config-sync-manifest \
 		REGISTRY=localhost:5000 \
 		IMAGE_TAG=$(IMAGE_TAG)

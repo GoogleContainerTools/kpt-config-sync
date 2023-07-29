@@ -9,6 +9,8 @@ GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
 
 GCP_ZONE ?= us-central1-a
 GKE_E2E_TIMEOUT ?= 6h
+KIND_E2E_TIMEOUT ?= 60m
+
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"
 
@@ -58,12 +60,13 @@ test-e2e-gke-nobuild:
 test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 
 # This target runs all the e2e tests with the multi-repo mode.
+# This is the target used by the presubmits.
 .PHONY: test-e2e-kind-multi-repo
 test-e2e-kind-multi-repo: config-sync-manifest-local
 	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/e2e-kind.sh \
+	GCP_PROJECT=$(GCP_PROJECT) KIND_VERSION=$(KIND_VERSION) ./scripts/e2e-kind.sh \
 		--share-test-env \
-		--timeout 60m \
+		--timeout $(KIND_E2E_TIMEOUT) \
 		--test.v -v \
 		--num-clusters 15 \
 		$(E2E_ARGS)

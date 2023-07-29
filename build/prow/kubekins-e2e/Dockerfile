@@ -23,10 +23,3 @@
 # actually being used.
 
 FROM gcr.io/k8s-staging-test-infra/kubekins-e2e:v20230309-9a6b1b3121-1.23
-
-# TODO: using a pre-installed kind binary makes it very painful to upgrade the
-# kind version. Update the e2e tests to either:
-# - install kind binary at runtime
-# - consolidate kind usage to Go dependency rather than mixing usage with binary
-RUN wget -q -O /bin/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
-RUN chmod +x /bin/kind

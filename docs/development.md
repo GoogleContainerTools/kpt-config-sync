@@ -66,8 +66,7 @@ This section provides instructions on how to run the e2e tests on [kind].
 
 Install [kind]
 ```shell
-# install the kind version specified in https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/scripts/docker-registry.sh#L50
-go install sigs.k8s.io/kind@v0.14.0
+make install-kind
 ```
 
 - This will put kind in `$(go env GOPATH)/bin`. This directory will need to be added to `$PATH` if it isn't already.

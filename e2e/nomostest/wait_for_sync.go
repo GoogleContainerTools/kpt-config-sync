@@ -185,8 +185,10 @@ func (nt *NT) WatchForSync(
 		return errors.Wrap(err, "failed to retrieve sha1")
 	}
 
-	var predicates []testpredicates.Predicate
-	predicates = append(predicates, syncSha1(sha1))
+	predicates := []testpredicates.Predicate{
+		testpredicates.HasObservedLatestGeneration(nt.Scheme),
+		syncSha1(sha1),
+	}
 	if syncDirPair != nil {
 		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Dir))
 	}

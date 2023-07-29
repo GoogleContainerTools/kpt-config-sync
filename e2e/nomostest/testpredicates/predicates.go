@@ -736,6 +736,37 @@ func RootSyncHasRenderingError(errCode, errMessage string) Predicate {
 	}
 }
 
+// HasObservedLatestGeneration returns an error if the object
+// status.observedGeneration does not equal the metadata.generation.
+func HasObservedLatestGeneration(scheme *runtime.Scheme) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		uObj, err := kinds.ToUnstructured(obj, scheme)
+		if err != nil {
+			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
+				obj, core.ObjectNamespacedName(obj))
+		}
+		gvk := uObj.GroupVersionKind()
+		expected := obj.GetGeneration()
+		found, ok, err := unstructured.NestedInt64(uObj.UnstructuredContent(), "status", "observedGeneration")
+		if err != nil {
+			return errors.Wrapf(err, "expected %s %s to have observedGeneration",
+				gvk.Kind, core.ObjectNamespacedName(obj))
+		} else if !ok {
+			return errors.Errorf("expected %s %s to have observedGeneration, but the field is missing",
+				gvk.Kind, core.ObjectNamespacedName(obj))
+		}
+		if found != expected {
+			return errors.Errorf("expected %s %s to have observedGeneration equal to %d, but got %d",
+				gvk.Kind, core.ObjectNamespacedName(obj),
+				expected, found)
+		}
+		return nil
+	}
+}
+
 // RootSyncHasObservedGenerationNoLessThan returns an error if the RootSync has the observedGeneration
 // less than the expected generation.
 func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {

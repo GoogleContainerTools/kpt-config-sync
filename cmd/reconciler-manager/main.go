@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
@@ -57,12 +58,6 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func init() {
-	// klogr flags
-	_ = flag.Set("v", "1")
-	_ = flag.Set("logtostderr", "true")
-}
-
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -70,8 +65,8 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.Parse()
 
+	log.Setup()
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())
 

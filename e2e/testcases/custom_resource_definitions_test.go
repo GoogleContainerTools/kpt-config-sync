@@ -77,7 +77,12 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CRD but leaving Anvil CR"))
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.UnsupportedCRDRemovalErrorCode, "")
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace, []testpredicates.Predicate{
+		testpredicates.RootSyncHasSourceError(nonhierarchical.UnsupportedCRDRemovalErrorCode, ""),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {

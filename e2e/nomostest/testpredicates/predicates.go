@@ -606,7 +606,8 @@ func GenerationEquals(generation int64) Predicate {
 			return ErrObjectNotFound
 		}
 		if obj.GetGeneration() != generation {
-			return fmt.Errorf("expected generation: %d, got: %d", generation, obj.GetGeneration())
+			return fmt.Errorf("expected generation to equal %d, but found: %d",
+				generation, obj.GetGeneration())
 		}
 		return nil
 	}
@@ -622,6 +623,21 @@ func HasGenerationAtLeast(minGeneration int64) Predicate {
 		gen := obj.GetGeneration()
 		if gen < minGeneration {
 			return fmt.Errorf("expected generation of at least %d, but found %d", minGeneration, gen)
+		}
+		return nil
+	}
+}
+
+// GenerationNotEquals checks that the object's Generation does not equal the
+// specified value.
+func GenerationNotEquals(generation int64) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		if obj.GetGeneration() == generation {
+			return fmt.Errorf("expected generation to not equal %d, but found %d",
+				generation, obj.GetGeneration())
 		}
 		return nil
 	}

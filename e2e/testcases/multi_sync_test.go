@@ -17,7 +17,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -37,7 +36,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -526,13 +524,13 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured, ntopts.RootRepo(rootSync2))
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
-	nt.T.Logf("Add a Role to root: %s", configsync.RootSyncName)
+	nt.T.Logf("Add a Role to RootSync: %s", configsync.RootSyncName)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(podRoleFilePath, rootPodRole()))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add pod viewer role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Logf("Ensure the Role is managed by Root %s", configsync.RootSyncName)
+	nt.T.Logf("Ensure the Role is managed by RootSync %s", configsync.RootSyncName)
 	role := &rbacv1.Role{}
 	err := nt.Validate("pods", testNs, role,
 		roleHasRules(rootPodRole().Rules),
@@ -543,12 +541,12 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 
 	roleResourceVersion := role.ResourceVersion
 
-	nt.T.Logf("Declare a conflicting Role in another Root repo: %s", rootSync2)
+	nt.T.Logf("Declare a conflicting Role in RootSync %s", rootSync2)
 	nt.Must(nt.RootRepos[rootSync2].Add(podRoleFilePath, rootPodRole()))
 	nt.Must(nt.RootRepos[rootSync2].CommitAndPush("add conflicting pod owner role"))
 
 	// When the webhook is enabled, it will block adoption of managed objects.
-	nt.T.Logf("Only the second RootSyncs should report a conflict with the webhook enabled")
+	nt.T.Logf("Only RootSync %s should report a conflict with the webhook enabled", rootSync2)
 	tg := taskgroup.New()
 	// The first reconciler never encounters any conflict.
 	// The second reconciler pauses its remediator before applying, but then its
@@ -577,12 +575,14 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Stop the admission webhook, the remediator should report the conflicts")
+	nt.T.Logf("Stop the admission webhook, to confirm that the remediator still reports the conflicts")
 	nomostest.StopWebhook(nt)
+
 	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
 	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
-		[]testpredicates.Predicate{testpredicates.ResourceVersionNotEquals(nt.Scheme, roleResourceVersion)},
-		testwatcher.WatchTimeout(90*time.Second))
+		[]testpredicates.Predicate{
+			testpredicates.ResourceVersionNotEquals(nt.Scheme, roleResourceVersion),
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -613,22 +613,21 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Remove the declaration from one Root repo %s", configsync.RootSyncName)
+	nt.T.Logf("Remove the declaration from RootSync %s", configsync.RootSyncName)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(podRoleFilePath))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role from Root"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove conflicting pod role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Logf("Ensure the Role is managed by the other Root repo %s", rootSync2)
+	nt.T.Logf("Ensure the Role is managed by RootSync %s", rootSync2)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
 	// Therefore, we need to retry here to wait until the `root-test` Root repo recreates the pod role.
 	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
 		[]testpredicates.Predicate{
 			roleHasRules(rootPodRole().Rules),
 			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rootSync2),
-		},
-		testwatcher.WatchTimeout(90*time.Second))
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

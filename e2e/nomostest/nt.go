@@ -119,8 +119,8 @@ type NT struct {
 	DefaultWaitTimeout time.Duration
 
 	// DefaultReconcileTimeout is the default timeout for the applier to wait
-	// for object reconcilition.
-	DefaultReconcileTimeout time.Duration
+	// for object reconciliation.
+	DefaultReconcileTimeout *time.Duration
 
 	// RootRepos is the root repositories the cluster is syncing to.
 	// The key is the RootSync name and the value points to the corresponding Repository object.

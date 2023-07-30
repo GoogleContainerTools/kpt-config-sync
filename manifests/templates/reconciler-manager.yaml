@@ -41,6 +41,7 @@ spec:
         - /reconciler-manager
         args:
         - --enable-leader-election
+        - "-v=1"
         image: RECONCILER_MANAGER_IMAGE_NAME
         name: reconciler-manager
         securityContext:

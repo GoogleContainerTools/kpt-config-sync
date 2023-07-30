@@ -705,11 +705,11 @@ func firstContainerCPURequestIs(cpuRequest int64) testpredicates.Predicate {
 }
 
 func firstContainerMemoryRequestIs(memoryRequest int64) testpredicates.Predicate {
+	memoryRequest *= memoryMB
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
 		}
-		memoryRequest *= memoryMB
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})

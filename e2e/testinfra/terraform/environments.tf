@@ -20,12 +20,6 @@ module "prow_environment" {
   count = var.prow ? 1 : 0
 }
 
-module "dev_environment" {
-  source = "./dev"
-  count = var.prow ? 0 : 1
-  num_clusters = var.num_clusters
-}
-
 module "common" {
   source = "./common"
 }

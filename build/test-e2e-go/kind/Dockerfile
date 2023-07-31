@@ -58,7 +58,7 @@ FROM kpt-config-sync-e2e
 # We're running tests within kind clusters.
 # If you upgrade the version, you also need to update the special kubekins-with-Kind
 # images we use in the test-infra repository. See Makefile.prow.
-ARG KIND_VERSION=v0.14.0
+ARG KIND_VERSION
 RUN go install sigs.k8s.io/kind@${KIND_VERSION}
 
 # Steps after here can't be cached since they touch the local filesystem.

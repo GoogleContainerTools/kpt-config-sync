@@ -21,6 +21,11 @@ set -euxo pipefail
 #
 # Installs kind if it is not already installed. If you already have kind
 # installed but this does not work, make sure you're on version 0.10.0 or later.
+KIND_VERSION="${KIND_VERSION:-"unset"}"
+if [[ "${KIND_VERSION}" == "unset" ]]; then
+  echo "KIND_VERSION not specified"
+  exit 1
+fi
 
 # create registry container unless it already exists
 reg_name='kind-registry'
@@ -36,19 +41,21 @@ docker inspect "${reg_name}" &>/dev/null || (
 # It's safe to run this even if the container is already running.
 docker start "${reg_name}"
 
-# Ensure kind v0.14.0 is installed.
+# Ensure kind is installed with the expected version.
 # Dear future people: Feel free to upgrade this as new versions are released.
 # Note that upgrading the kind version will require updating the image versions:
 # https://github.com/kubernetes-sigs/kind/releases
 kind &>/dev/null || (
-  echo "Kind is not installed. Install v0.14.0."
+  echo "Kind is not installed. Install ${KIND_VERSION}."
   echo "https://kind.sigs.k8s.io/docs/user/quick-start/"
+  echo "    make install-kind"
   exit 1
 )
 
-kind version | grep v0.14.0 || (
-  echo "Using unsupported kind version. Install v0.14.0."
+kind version | grep "${KIND_VERSION}" || (
+  echo "Using unsupported kind version. Install ${KIND_VERSION}."
   echo "https://kind.sigs.k8s.io/docs/user/quick-start/"
+  echo "    make install-kind"
   exit 1
 )
 

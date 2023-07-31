@@ -37,6 +37,9 @@ GO_DIR := $(OUTPUT_DIR)/go
 BIN_DIR := $(GO_DIR)/bin
 KUSTOMIZE_VERSION := v5.1.0
 HELM_VERSION := v3.12.2
+# Keep KIND_VERSION in sync with the version defined in go.mod
+# When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
+KIND_VERSION := v0.14.0
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging
@@ -300,6 +303,15 @@ lint-license: pull-buildenv buildenv-dirs
 
 .PHONY: install-kustomize
 install-kustomize: "$(BIN_DIR)/kustomize"
+
+"$(GOBIN)/kind":
+	go install sigs.k8s.io/kind@$(KIND_VERSION)
+
+"$(BIN_DIR)/kind": "$(GOBIN)/kind" buildenv-dirs
+	cp $(GOBIN)/kind $(BIN_DIR)/kind
+
+.PHONY: install-kind
+install-kind: "$(BIN_DIR)/kind"
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"

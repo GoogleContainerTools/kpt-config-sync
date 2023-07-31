@@ -218,6 +218,22 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
+			// Remediator conflict after the first commit, because the declared
+			// Anvil was deleted by another client after successful sync.
+			// TODO: distinguish between management conflict (spec/generation drift) and concurrent status update conflict (resource version change)
+			Conflicts: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Reset discovery client to invalidate the cached Anvil CRD
 	nt.RenewClient()
 
@@ -230,17 +246,12 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	rootSyncLabels, err = nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
-			// Remediator conflict after the first commit, because the declared
-			// Anvil was deleted by another client after successful sync.
-			Conflicts: 1,
-		}),
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, secondCommitHash, metrics.ErrorSummary{
 			// No remediator conflict after the second commit, because the
 			// reconciler hasn't been updated with the latest declared resources,

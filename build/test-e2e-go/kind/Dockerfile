@@ -30,7 +30,7 @@ RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
 ARG HELM_VERSION=v3.12.2
-ARG KUSTOMIZE_VERSION=v5.1.0
+ARG KUSTOMIZE_VERSION=v5.1.1
 
 # Install Helm
 RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \

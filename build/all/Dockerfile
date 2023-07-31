@@ -23,7 +23,7 @@ COPY . .
 ARG VERSION
 
 ARG HELM_VERSION=v3.12.2
-ARG KUSTOMIZE_VERSION=v5.1.0
+ARG KUSTOMIZE_VERSION=v5.1.1
 
 # Install Helm with license
 RUN URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" && \

@@ -59,6 +59,7 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -114,6 +115,14 @@ func isOtelCollectorDeployment(obj client.Object) bool {
 		obj.GetObjectKind().GroupVersionKind() == kinds.Deployment()
 }
 
+// isOtelAgentConfigMap returns true if passed obj is the
+// otel-agent ConfigMap in the config-management-monitoring namespace.
+func isOtelAgentConfigMap(obj client.Object) bool {
+	return obj.GetName() == ocmetrics.OtelAgentName &&
+		obj.GetNamespace() == configmanagement.ControllerNamespace &&
+		obj.GetObjectKind().GroupVersionKind() == kinds.ConfigMap()
+}
+
 // ResetReconcilerManagerConfigMap resets the reconciler manager config map
 // to what is defined in the manifest
 func ResetReconcilerManagerConfigMap(nt *NT) error {
@@ -151,6 +160,7 @@ func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
 	objs, err = multiRepoObjects(objs,
 		setReconcilerDebugMode,
 		setPollingPeriods,
+		setOtelAgentBatchDisabled,
 		setOtelCollectorPrometheusAnnotations)
 	if err != nil {
 		return nil, err
@@ -576,6 +586,44 @@ func setPollingPeriods(obj client.Object) error {
 
 	cm.Data[reconcilermanager.ReconcilerPollingPeriod] = reconcilerPollingPeriod.String()
 	cm.Data[reconcilermanager.HydrationPollingPeriod] = hydrationPollingPeriod.String()
+	return nil
+}
+
+// setOtelAgentBatch updates the otel-agent ConfigMap config to disable metrics
+// batching.
+func setOtelAgentBatchDisabled(obj client.Object) error {
+	if obj == nil {
+		return testpredicates.ErrObjectNotFound
+	}
+	if !isOtelAgentConfigMap(obj) {
+		return nil
+	}
+	cm, ok := obj.(*corev1.ConfigMap)
+	if !ok {
+		return fmt.Errorf("failed to cast %T to *corev1.ConfigMap", obj)
+	}
+	yamlString := cm.Data["otel-agent-config.yaml"]
+	var dataMap map[string]interface{}
+	if err := yaml.Unmarshal([]byte(yamlString), &dataMap); err != nil {
+		return errors.Wrapf(err, "unmarshaling yaml data from ConfigMap %s",
+			client.ObjectKeyFromObject(obj))
+	}
+	processors, found, err := unstructured.NestedMap(dataMap, "processors")
+	if err != nil {
+		return errors.Wrapf(err, "ConfigMap %s missing processors field",
+			client.ObjectKeyFromObject(obj))
+	}
+	if !found {
+		return errors.Errorf("ConfigMap %s missing processors field",
+			client.ObjectKeyFromObject(obj))
+	}
+	delete(processors, "batch")
+	yamlBytes, err := yaml.Marshal(dataMap)
+	if err != nil {
+		return errors.Wrapf(err, "marshaling yaml data for ConfigMap %s",
+			client.ObjectKeyFromObject(obj))
+	}
+	cm.Data["otel-agent-config.yaml"] = string(yamlBytes)
 	return nil
 }
 

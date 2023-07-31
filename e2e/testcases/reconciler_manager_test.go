@@ -51,7 +51,7 @@ import (
 const (
 	initialFirstCPU                    = 10
 	initialFirstMemory                 = 100
-	initialTotalCPU                    = 80
+	initialTotalCPU                    = 90
 	initialAdjustedTotalCPU            = 250
 	initialTotalMemory                 = 600
 	autopilotCPUIncrements             = 250

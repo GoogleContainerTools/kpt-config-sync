@@ -49,6 +49,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// ConfigSyncE2EFinalizer is a contrived finalizer to block deletion of
+	// objects created by the e2e tests.
+	ConfigSyncE2EFinalizer = "config-sync/e2e-test"
+)
+
 // Clean removes all objects of types registered in the Scheme, with the above
 // caveats. It should be run before and after a test is run against any
 // non-ephemeral cluster.

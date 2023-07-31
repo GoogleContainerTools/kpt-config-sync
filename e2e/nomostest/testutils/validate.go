@@ -49,7 +49,19 @@ func AppendFinalizer(obj client.Object, finalizer string) {
 	obj.SetFinalizers(finalizers)
 }
 
-// RemoveFinalizers removes all finalizers from the object
-func RemoveFinalizers(obj client.Object) {
-	obj.SetFinalizers(nil)
+// RemoveFinalizer removes a finalizer from the object.
+// Returns whether the finalizer was removed.
+func RemoveFinalizer(obj client.Object, removeFinalizer string) bool {
+	finalizers := obj.GetFinalizers()
+	var newFinalizers []string
+	found := false
+	for _, finalizer := range finalizers {
+		if finalizer == removeFinalizer {
+			found = true
+		} else {
+			newFinalizers = append(newFinalizers, finalizer)
+		}
+	}
+	obj.SetFinalizers(newFinalizers)
+	return found
 }

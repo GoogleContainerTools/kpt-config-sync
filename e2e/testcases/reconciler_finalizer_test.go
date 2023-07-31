@@ -522,8 +522,26 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
+	nt.T.Cleanup(func() {
+		namespace := &corev1.Namespace{}
+		if err := nt.KubeClient.Get(namespaceNN.Name, namespaceNN.Namespace, namespace); err != nil {
+			if apierrors.IsNotFound(err) { // Happy path - exit
+				return
+			}
+			nt.T.Error(err) // unexpected error
+			return
+		}
+		if testutils.RemoveFinalizer(namespace, nomostest.ConfigSyncE2EFinalizer) {
+			// The test failed to remove the finalizer. Remove to enable deletion.
+			if err := nt.KubeClient.Update(namespace); err != nil {
+				nt.T.Error(err)
+			} else {
+				nt.T.Log("removed finalizer in test cleanup")
+			}
+		}
+	})
 	// Add a fake finalizer to the namespace to block deletion
-	testutils.AppendFinalizer(namespace, "config-sync/e2e-test")
+	testutils.AppendFinalizer(namespace, nomostest.ConfigSyncE2EFinalizer)
 	nt.T.Logf("Add a fake finalizer named %s to Namespace %s", contrivedFinalizer, namespaceNN.Name)
 	if err := nt.KubeClient.Apply(namespace); err != nil {
 		nt.T.Fatal(err)
@@ -560,7 +578,6 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	}
 	// Remove the fake finalizer
 	namespace = fake.NamespaceObject(namespaceNN.Name)
-	testutils.RemoveFinalizers(namespace)
 	nt.T.Logf("Remove the fake finalizer named %s from Namespace %s", contrivedFinalizer, namespaceNN.Name)
 	if err := nt.KubeClient.Apply(namespace); err != nil {
 		nt.T.Fatal(err)

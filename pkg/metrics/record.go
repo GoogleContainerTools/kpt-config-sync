@@ -29,7 +29,7 @@ import (
 
 func record(ctx context.Context, ms ...stats.Measurement) {
 	stats.Record(ctx, ms...)
-	if klog.V(5).Enabled() {
+	if klog.V(0).Enabled() {
 		for _, m := range ms {
 			klog.Infof("Metric recorded: { \"Name\": %q, \"Value\": %#v, \"Tags\": %s }", m.Measure().Name(), m.Value(), tag.FromContext(ctx))
 		}

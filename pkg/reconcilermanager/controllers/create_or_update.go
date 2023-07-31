@@ -40,7 +40,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f c
 		if !apierrors.IsNotFound(err) {
 			return controllerutil.OperationResultNone, NewObjectOperationErrorWithKey(err, obj, OperationGet, key)
 		}
-		if err := mutate(f, key, obj); err != nil {
+		if err := mutateWrapper(f, key, obj); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
 		if err := c.Create(ctx, obj); err != nil {
@@ -50,7 +50,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f c
 	}
 
 	existing := obj.DeepCopyObject() //nolint
-	if err := mutate(f, key, obj); err != nil {
+	if err := mutateWrapper(f, key, obj); err != nil {
 		return controllerutil.OperationResultNone, err
 	}
 
@@ -64,8 +64,8 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f c
 	return controllerutil.OperationResultUpdated, nil
 }
 
-// mutate wraps a MutateFn and applies validation to its result.
-func mutate(f controllerutil.MutateFn, key client.ObjectKey, obj client.Object) error {
+// mutateWrapper wraps a MutateFn and applies validation to its result.
+func mutateWrapper(f controllerutil.MutateFn, key client.ObjectKey, obj client.Object) error {
 	if err := f(); err != nil {
 		return err
 	}

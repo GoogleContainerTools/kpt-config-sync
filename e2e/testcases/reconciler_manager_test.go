@@ -524,21 +524,6 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, containerName string, 
 	}
 }
 
-func hasGeneration(generation int64) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		d, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		if d.Generation != generation {
-			return fmt.Errorf("expected generation: %d, got: %d", generation, d.Generation)
-		}
-		return nil
-	}
-}
 func firstContainerTerminationMessagePathIs(terminationMessagePath string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {

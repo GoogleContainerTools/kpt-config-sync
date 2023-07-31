@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -133,12 +134,13 @@ func TestStatus(t *testing.T) {
 			// Expect no update because there was an error
 			expectedUpdated: false,
 			// Expect a conflict, because the ResourceVersion in the request is older than the one on the server
-			expectedError: status.APIServerError(
-				apierrors.NewConflict(
-					schema.GroupResource{Group: "apps", Resource: "Deployment"},
-					"default/hello-world",
-					fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-				"failed to update object status",
+			expectedError: status.APIServerErrorWrap(
+				errors.Wrapf(
+					apierrors.NewConflict(
+						schema.GroupResource{Group: "apps", Resource: "Deployment"},
+						"default/hello-world",
+						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
+					"failed to update object status: %s", kinds.ObjectSummary(deployment1)),
 				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
@@ -194,7 +196,7 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-func TestWithRetry(t *testing.T) {
+func TestSpec(t *testing.T) {
 	deployment1 := yamlToTypedObject(t, deployment1Yaml)
 
 	var inputObj client.Object
@@ -265,12 +267,13 @@ func TestWithRetry(t *testing.T) {
 			// Expect no update because there was an error
 			expectedUpdated: false,
 			// Expect a conflict, because the ResourceVersion in the request is older than the one on the server
-			expectedError: status.APIServerError(
-				apierrors.NewConflict(
-					schema.GroupResource{Group: "apps", Resource: "Deployment"},
-					"default/hello-world",
-					fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-				"failed to update object",
+			expectedError: status.APIServerErrorWrap(
+				errors.Wrapf(
+					apierrors.NewConflict(
+						schema.GroupResource{Group: "apps", Resource: "Deployment"},
+						"default/hello-world",
+						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
+					"failed to update object: %s", kinds.ObjectSummary(deployment1)),
 				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
@@ -367,7 +370,7 @@ func TestWithRetry(t *testing.T) {
 			// Expect err, because the UID in the request is older than the one on the server
 			expectedError: errors.Wrap(
 				errors.New("metadata.uid has changed: object may have been re-created"),
-				"failed to update object: *v1.Deployment default/hello-world"),
+				"failed to update object: apps/v1.Deployment(*v1.Deployment)[default/hello-world]"),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				// no change persisted
@@ -387,7 +390,7 @@ func TestWithRetry(t *testing.T) {
 			scheme := core.Scheme
 			fakeClient = fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
-			updated, err := WithRetry(ctx, fakeClient, tc.obj, tc.mutateFunc)
+			updated, err := Spec(ctx, fakeClient, tc.obj, tc.mutateFunc)
 			if tc.expectedError != nil && err != nil {
 				// AssertEqual doesn't work well on APIServerError, because the
 				// Error.Is impl is too lenient. So check the error message and

@@ -260,11 +260,13 @@ func TestRootSyncFinalize(t *testing.T) {
 			},
 			expectedError: errors.Wrapf(
 				errors.Wrapf(
-					status.APIServerError(
-						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
-							"config-management-system/root-sync"),
-						"failed to update object status",
+					status.APIServerErrorWrap(
+						errors.Wrapf(
+							apierrors.NewNotFound(
+								schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+								"config-management-system/root-sync"),
+							"failed to update object status: %s",
+							kinds.ObjectSummary(rootSync1)),
 						rootSync1.DeepCopy()),
 					"failed to set ReconcilerFinalizing condition"),
 				"setting Finalizing condition"),
@@ -415,11 +417,13 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
-				status.APIServerError(
-					apierrors.NewNotFound(
-						schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
-						"config-management-system/root-sync"),
-					"failed to update object",
+				status.APIServerErrorWrap(
+					errors.Wrapf(
+						apierrors.NewNotFound(
+							schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+							"config-management-system/root-sync"),
+						"failed to update object: %s",
+						kinds.ObjectSummary(rootSync1)),
 					rootSync1.DeepCopy()),
 				"failed to add finalizer"),
 			expectedUpdated: false,
@@ -557,11 +561,13 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
-				status.APIServerError(
-					apierrors.NewNotFound(
-						schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
-						"config-management-system/root-sync"),
-					"failed to update object",
+				status.APIServerErrorWrap(
+					errors.Wrapf(
+						apierrors.NewNotFound(
+							schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+							"config-management-system/root-sync"),
+						"failed to update object: %s",
+						kinds.ObjectSummary(rootSync1)),
 					rootSync1.DeepCopy()),
 				"failed to remove finalizer"),
 			expectedUpdated: false,

@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -48,6 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
+	"kpt.dev/configsync/pkg/util/mutate"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -107,10 +108,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 
 	rsRef := req.NamespacedName
 	start := time.Now()
-	reconcilerRef := types.NamespacedName{
-		Namespace: configmanagement.ControllerNamespace,
-		Name:      core.RootReconcilerName(rsRef.Name),
-	}
+	reconcilerRef := core.RootReconcilerObjectKey(rsRef.Name)
 	ctx = r.setLoggerValues(ctx,
 		logFieldSyncKind, r.syncKind,
 		logFieldSyncRef, rsRef.String(),
@@ -139,19 +137,19 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
 
-	currentRS := rs.DeepCopy()
-
 	if rs.DeletionTimestamp.IsZero() {
 		// Only validate RootSync if it is not deleting. Otherwise, the validation
 		// error will block the finalizer.
 		if err := r.validateRootSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.logger(ctx).Error(err, "RootSync spec invalid")
-			rootsync.SetStalled(rs, "Validation", err)
-			// Validation errors should not trigger retry (return error),
-			// unless the status update also fails.
-			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
+				rootsync.SetStalled(rs, "Validation", err)
+				return nil
+			})
 			// Use the validation error for metric tagging.
 			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+			// Spec errors are not recoverable without user input.
+			// So only retry if there was an updateErr.
 			return controllerruntime.Result{}, updateErr
 		}
 	} else {
@@ -159,10 +157,10 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	setupFn := func(ctx context.Context) error {
-		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
+		return r.setup(ctx, reconcilerRef, rs)
 	}
 	teardownFn := func(ctx context.Context) error {
-		return r.teardown(ctx, reconcilerRef, rsRef, currentRS, rs)
+		return r.teardown(ctx, reconcilerRef, rs)
 	}
 
 	if err := r.setupOrTeardown(ctx, rs, setupFn, teardownFn); err != nil {
@@ -221,7 +219,6 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if err != nil {
 		return err
 	}
-	rs.Status.Reconciler = reconcilerRef.Name
 
 	// Get the latest deployment to check the status.
 	// For other operations, upsertDeployment will have returned the latest already.
@@ -267,56 +264,60 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 // - Create or update managed objects
 // - Convert any error into RootSync status conditions
 // - Update the RootSync status
-func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RootSync) error {
 	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
-	err = r.handleReconcileError(ctx, err, rs, "Setup")
-	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
-	if updateErr != nil {
-		if err == nil {
-			// If no other errors, return the updateStatus error and retry
-			return updateErr
+	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
+		// Modify the sync status,
+		// but keep the upsert error separate from the status update error.
+		err = r.handleReconcileError(ctx, err, syncObj, "Setup")
+		return nil
+	})
+	switch {
+	case updateErr != nil && err == nil:
+		// Return the updateSyncStatus error and re-reconcile
+		return updateErr
+	case err != nil:
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// else - log the updateStatus error and retry
-		r.logger(ctx).Error(updateErr, "Object status update failed",
-			logFieldObjectRef, rsRef.String(),
-			logFieldObjectKind, r.syncKind)
+		// Return the upsertManagedObjects error and re-reconcile
 		return err
+	default: // both nil
+		if updated {
+			r.logger(ctx).Info("Setup successful")
+		}
+		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if updated {
-		r.logger(ctx).Info("Setup successful")
-	}
-	return nil
 }
 
 // teardown performs the following steps:
 // - Delete managed objects
 // - Convert any error into RootSync status conditions
 // - Update the RootSync status
-func (r *RootSyncReconciler) teardown(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) teardown(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RootSync) error {
 	err := r.deleteManagedObjects(ctx, reconcilerRef)
-	err = r.handleReconcileError(ctx, err, rs, "Teardown")
-	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
-	if updateErr != nil {
-		if err == nil {
-			// If no other errors, return the updateStatus error and retry
-			return updateErr
+	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
+		// Modify the sync status,
+		// but keep the upsert error separate from the status update error.
+		err = r.handleReconcileError(ctx, err, syncObj, "Teardown")
+		return nil
+	})
+	switch {
+	case updateErr != nil && err == nil:
+		// Return the updateSyncStatus error and re-reconcile
+		return updateErr
+	case err != nil:
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// else - log the updateStatus error and retry
-		r.logger(ctx).Error(updateErr, "Object status update failed",
-			logFieldObjectRef, rsRef.String(),
-			logFieldObjectKind, r.syncKind)
+		// Return the upsertManagedObjects error and re-reconcile
 		return err
+	default: // both nil
+		if updated {
+			r.logger(ctx).Info("Teardown successful")
+		}
+		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if updated {
-		r.logger(ctx).Info("Teardown successful")
-	}
-	return nil
 }
 
 // handleReconcileError updates the sync object status to reflect the Reconcile
@@ -370,8 +371,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 }
 
 // deleteManagedObjects deletes objects managed by the reconciler-manager for
-// this RootSync. If updateStatus is true, the RootSync status will be updated
-// to reflect the teardown progress.
+// this RootSync.
 func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
 
@@ -789,27 +789,48 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, recon
 	return crbRef, nil
 }
 
-func (r *RootSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RootSync) (bool, error) {
-	rs.Status.ObservedGeneration = rs.Generation
-
-	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
-		r.logger(ctx).V(3).Info("Skipping sync status update",
-			logFieldResourceVersion, rs.ResourceVersion)
-		return false, nil
+func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.RootSync, reconcilerRef types.NamespacedName, updateFn func(*v1beta1.RootSync) error) (bool, error) {
+	// Always set the reconciler and observedGeneration when updating sync status
+	updateFn2 := func(syncObj *v1beta1.RootSync) error {
+		err := updateFn(syncObj)
+		syncObj.Status.Reconciler = reconcilerRef.Name
+		syncObj.Status.ObservedGeneration = syncObj.Generation
+		return err
 	}
 
-	if r.logger(ctx).V(5).Enabled() {
-		r.logger(ctx).Info("Updating sync status",
-			logFieldResourceVersion, rs.ResourceVersion,
-			"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s", cmp.Diff(currentRS.Status, rs.Status)))
-	}
-
-	err := r.client.Status().Update(ctx, rs)
+	updated, err := mutate.Status(ctx, r.client, rs, func() error {
+		before := rs.DeepCopy()
+		if err := updateFn2(rs); err != nil {
+			return err
+		}
+		// TODO: Fix the status condition helpers to not update the timestamps if nothing changed.
+		// There's no good way to do a semantic comparison that ignores timestamps.
+		// So we're doing both for now to try to prevent updates whenever possible.
+		if equality.Semantic.DeepEqual(before.Status, rs.Status) {
+			// No update necessary.
+			return &mutate.NoUpdateError{}
+		}
+		if cmp.Equal(before.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+			// No update necessary.
+			return &mutate.NoUpdateError{}
+		}
+		if r.logger(ctx).V(5).Enabled() {
+			r.logger(ctx).Info("Updating sync status",
+				logFieldResourceVersion, rs.ResourceVersion,
+				"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s",
+					cmp.Diff(before.Status, rs.Status)))
+		}
+		return nil
+	})
 	if err != nil {
-		return false, err
+		return updated, errors.Wrapf(err, "Sync status update failed")
 	}
-	return true, nil
+	if updated {
+		r.logger(ctx).Info("Sync status update successful")
+	} else {
+		r.logger(ctx).V(5).Info("Sync status update skipped: no change")
+	}
+	return updated, nil
 }
 
 // enableRendering returns whether rendering should be enabled for the reconciler

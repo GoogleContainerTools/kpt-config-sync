@@ -155,7 +155,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -166,7 +166,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -175,7 +175,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -233,7 +233,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of root-reconciler are not affected by the resource changes of ns-reconciler-backend and ns-reconciler-fronend
 	err = nt.Validate(rootReconcilerNN.Name, rootReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(rootReconcilerDeploymentGeneration),
+		testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -242,7 +242,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the new resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -251,7 +251,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the new resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -266,7 +266,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, resource.MustParse("333m"), defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -277,7 +277,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -286,7 +286,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -301,7 +301,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -312,7 +312,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -321,7 +321,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -329,7 +329,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncBackend
-	repoSyncBackend.Spec.Override = &v1alpha1.OverrideSpec{}
+	repoSyncBackend.Spec.Override = nil
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -339,7 +339,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -348,7 +348,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify root-reconciler uses the default resource requests and limits
 	err = nt.Validate(rootReconcilerNN.Name, rootReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(rootReconcilerDeploymentGeneration),
+		testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -357,7 +357,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of ns-reconciler-backend
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -365,7 +365,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncFrontend
-	repoSyncFrontend.Spec.Override = &v1alpha1.OverrideSpec{}
+	repoSyncFrontend.Spec.Override = nil
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -375,7 +375,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -458,7 +458,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -469,7 +469,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -478,7 +478,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -536,7 +536,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of root-reconciler are not affected by the resource changes of ns-reconciler-backend and ns-reconciler-fronend
 	err = nt.Validate(rootReconcilerNN.Name, rootReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(rootReconcilerDeploymentGeneration),
+		testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("800m"), resource.MustParse("400Mi"), resource.MustParse("411Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -545,7 +545,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the new resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -554,7 +554,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the new resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -569,7 +569,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, resource.MustParse("333m"), defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -580,7 +580,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -589,7 +589,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -604,7 +604,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
 		[]testpredicates.Predicate{
-			hasGeneration(rootReconcilerDeploymentGeneration),
+			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 			testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits),
 		},
@@ -615,7 +615,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("500m"), resource.MustParse("1000m"), resource.MustParse("500Mi"), resource.MustParse("555Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("600m"), resource.MustParse("1"), resource.MustParse("600Mi"), resource.MustParse("666Mi")))
 	if err != nil {
@@ -624,7 +624,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -632,7 +632,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncBackend
-	repoSyncBackend.Spec.Override = &v1beta1.OverrideSpec{}
+	repoSyncBackend.Spec.Override = nil
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -642,7 +642,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerBackendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -651,7 +651,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify root-reconciler uses the default resource requests and limits
 	err = nt.Validate(rootReconcilerNN.Name, rootReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(rootReconcilerDeploymentGeneration),
+		testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {
@@ -660,7 +660,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify the resource requests and limits of ns-reconciler-frontend are not affected by the resource limit change of ns-reconciler-backend
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, resource.MustParse("511m"), resource.MustParse("2000m"), resource.MustParse("511Mi"), resource.MustParse("544Mi")),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, resource.MustParse("611m"), resource.MustParse("2"), resource.MustParse("611Mi"), resource.MustParse("644Mi")))
 	if err != nil {
@@ -668,7 +668,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Clear `spec.override` from repoSyncFrontend
-	repoSyncFrontend.Spec.Override = &v1beta1.OverrideSpec{}
+	repoSyncFrontend.Spec.Override = nil
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -678,7 +678,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Verify ns-reconciler-frontend uses the default resource requests and limits
 	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		hasGeneration(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.Reconciler, defaultReconcilerCPURequest, defaultReconcilerCPULimits, defaultReconcilerMemRequest, defaultReconcilerMemLimits),
 		testpredicates.HasCorrectResourceRequestsLimits(reconcilermanager.GitSync, defaultGitSyncCPURequest, defaultGitSyncCPULimits, defaultGitSyncMemRequest, defaultGitSyncMemLimits))
 	if err != nil {

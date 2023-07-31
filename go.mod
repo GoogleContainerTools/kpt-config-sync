@@ -53,7 +53,7 @@ require (
 	kpt.dev/resourcegroup v0.0.0-20221109031828-db4c3d2c630f
 	sigs.k8s.io/cli-utils v0.35.0
 	sigs.k8s.io/controller-runtime v0.14.1
-	sigs.k8s.io/kind v0.14.0
+	sigs.k8s.io/kind v0.20.0
 	sigs.k8s.io/kustomize/api v0.12.1
 	sigs.k8s.io/kustomize/kyaml v0.13.9
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3
@@ -91,6 +91,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
+	github.com/google/safetext v0.0.0-20220905092116-b49f7bc46da2 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.1 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect

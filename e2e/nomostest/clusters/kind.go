@@ -31,21 +31,7 @@ import (
 // KindVersion is a specific Kind version associated with a Kubernetes minor version.
 type KindVersion string
 
-// kind v0.14.x supports k8s 1.18-1.24 - images from https://github.com/kubernetes-sigs/kind/releases/tag/v0.14.0
-// kind v0.12.x supports k8s 1.14-1.23 - images from https://github.com/kubernetes-sigs/kind/releases/tag/v0.12.0
 const (
-	Kind1_24 KindVersion = "kindest/node:v1.24.0@sha256:0866296e693efe1fed79d5e6c7af8df71fc73ae45e3679af05342239cdc5bc8e"
-	Kind1_23 KindVersion = "kindest/node:v1.23.6@sha256:b1fa224cc6c7ff32455e0b1fd9cbfd3d3bc87ecaa8fcb06961ed1afb3db0f9ae"
-	Kind1_22 KindVersion = "kindest/node:v1.22.9@sha256:8135260b959dfe320206eb36b3aeda9cffcb262f4b44cda6b33f7bb73f453105"
-	Kind1_21 KindVersion = "kindest/node:v1.21.12@sha256:f316b33dd88f8196379f38feb80545ef3ed44d9197dca1bfd48bcb1583210207"
-	Kind1_20 KindVersion = "kindest/node:v1.20.15@sha256:6f2d011dffe182bad80b85f6c00e8ca9d86b5b8922cdf433d53575c4c5212248"
-	Kind1_19 KindVersion = "kindest/node:v1.19.16@sha256:d9c819e8668de8d5030708e484a9fdff44d95ec4675d136ef0a0a584e587f65c"
-	Kind1_18 KindVersion = "kindest/node:v1.18.20@sha256:738cdc23ed4be6cc0b7ea277a2ebcc454c8373d7d8fb991a7fcdbd126188e6d7"
-	Kind1_17 KindVersion = "kindest/node:v1.17.17@sha256:e477ee64df5731aa4ef4deabbafc34e8d9a686b49178f726563598344a3898d5"
-	Kind1_16 KindVersion = "kindest/node:v1.16.15@sha256:64bac16b83b6adfd04ea3fbcf6c9b5b893277120f2b2cbf9f5fa3e5d4c2260cc"
-	Kind1_15 KindVersion = "kindest/node:v1.15.12@sha256:9dfc13db6d3fd5e5b275f8c4657ee6a62ef9cb405546664f2de2eabcfd6db778"
-	Kind1_14 KindVersion = "kindest/node:v1.14.10@sha256:b693339da2a927949025869425e20daf80111ccabf020d4021a23c00bae29d82"
-
 	// Kubeconfig is the filename of the KUBECONFIG file.
 	Kubeconfig = "KUBECONFIG"
 
@@ -53,6 +39,18 @@ const (
 	// a single test.
 	maxKindTries = 6
 )
+
+// When upgrading KinD, find the node images from the release at https://github.com/kubernetes-sigs/kind/releases
+// Update this mapping accordingly.
+var kindNodeImages = map[string]KindVersion{
+	"1.27": "kindest/node:v1.27.3@sha256:3966ac761ae0136263ffdb6cfd4db23ef8a83cba8a463690e98317add2c9ba72",
+	"1.26": "kindest/node:v1.26.6@sha256:6e2d8b28a5b601defe327b98bd1c2d1930b49e5d8c512e1895099e4504007adb",
+	"1.25": "kindest/node:v1.25.11@sha256:227fa11ce74ea76a0474eeefb84cb75d8dad1b08638371ecf0e86259b35be0c8",
+	"1.24": "kindest/node:v1.24.15@sha256:7db4f8bea3e14b82d12e044e25e34bd53754b7f2b0e9d56df21774e6f66a70ab",
+	"1.23": "kindest/node:v1.23.17@sha256:59c989ff8a517a93127d4a536e7014d28e235fb3529d9fba91b3951d461edfdb",
+	"1.22": "kindest/node:v1.22.17@sha256:f5b2e5698c6c9d6d0adc419c0deae21a425c07d81bbf3b6a6834042f25d4fba2",
+	"1.21": "kindest/node:v1.21.14@sha256:8a4e9bb3f415d2bb81629ce33ef9c76ba514c14d707f9797a01e3216376ba093",
+}
 
 // KindCluster is a kind cluster for use in the e2e tests
 type KindCluster struct {
@@ -142,29 +140,9 @@ func (c *KindCluster) Connect() error {
 // asKindVersion returns the latest Kind version associated with a given
 // Kubernetes minor version.
 func asKindVersion(version string) (KindVersion, error) {
-	switch version {
-	case "1.14":
-		return Kind1_14, nil
-	case "1.15":
-		return Kind1_15, nil
-	case "1.16":
-		return Kind1_16, nil
-	case "1.17":
-		return Kind1_17, nil
-	case "1.18":
-		return Kind1_18, nil
-	case "1.19":
-		return Kind1_19, nil
-	case "1.20":
-		return Kind1_20, nil
-	case "1.21":
-		return Kind1_21, nil
-	case "1.22":
-		return Kind1_22, nil
-	case "1.23":
-		return Kind1_23, nil
-	case "1.24":
-		return Kind1_24, nil
+	kindVersion, ok := kindNodeImages[version]
+	if ok {
+		return kindVersion, nil
 	}
 	return "", errors.Errorf("Unrecognized Kind version: %q", version)
 }

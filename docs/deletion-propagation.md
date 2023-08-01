@@ -77,7 +77,7 @@ can add an explicit dependency from the RepoSync to the RoleBinding using the
 
 Config Sync Deletion Propagation uses similar terminology to
 [Kubernetes Garbage Collection](https://kubernetes.io/docs/concepts/architecture/garbage-collection/).
-However, the implimentations are pretty different.
+However, the implementations are pretty different.
 
 There are multiple reasons why Config Sync doesn't use Kubernetes Garbage
 Collection to implement Deletion Propagation:

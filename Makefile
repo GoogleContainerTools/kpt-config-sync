@@ -35,7 +35,7 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
-KUSTOMIZE_VERSION := v5.1.0
+KUSTOMIZE_VERSION := v5.1.1
 HELM_VERSION := v3.12.2
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go

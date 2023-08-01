@@ -152,10 +152,6 @@ spec:
         volumeMounts:
         - name: otel-collector-config-vol
           mountPath: /conf
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 13133 # Health Check extension default port.
         readinessProbe:
           httpGet:
             path: /

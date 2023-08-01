@@ -556,10 +556,6 @@ spec:
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
         image: gcr.io/config-management-release/otelcontribcol:v0.54.0-gke.1
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 13133
         name: otel-agent
         ports:
         - containerPort: 55678

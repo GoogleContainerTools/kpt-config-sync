@@ -1475,7 +1475,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1744,7 +1744,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
 	rootDeployment2 := rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
-		gceNodeMutator(""),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnv2),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1800,7 +1800,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
 	rootDeployment3 := rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnv3),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2015,7 +2015,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
 	rootDeployment2 = rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
-		gceNodeMutator(""),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnv2),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2053,7 +2053,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
 	rootDeployment3 = rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnv3),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2314,7 +2314,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2346,7 +2346,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
 		setServiceAccountName(rootReconcilerName),
-		fleetWorkloadIdentityMutator(workloadIdentityPool, gcpSAEmail),
+		fleetWorkloadIdentityMutator(workloadIdentityPool),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -3324,10 +3324,10 @@ func containerArgsMutator(containerArgs map[string][]string) depMutator {
 	}
 }
 
-func gceNodeMutator(gsaEmail string) depMutator {
+func gceNodeMutator() depMutator {
 	return func(dep *appsv1.Deployment) {
 		dep.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "repo"}}
-		dep.Spec.Template.Spec.Containers = gceNodeContainers(gsaEmail)
+		dep.Spec.Template.Spec.Containers = gceNodeContainers()
 	}
 }
 
@@ -3362,33 +3362,29 @@ func fwiVolume(workloadIdentityPool string) corev1.Volume {
 	}
 }
 
-func fleetWorkloadIdentityMutator(workloadIdentityPool, gsaEmail string) depMutator {
+func fleetWorkloadIdentityMutator(workloadIdentityPool string) depMutator {
 	return func(dep *appsv1.Deployment) {
 		dep.Spec.Template.Spec.Volumes = []corev1.Volume{
 			{Name: "repo"},
 			fwiVolume(workloadIdentityPool),
 		}
-		dep.Spec.Template.Spec.Containers = fleetWorkloadIdentityContainers(gsaEmail)
+		dep.Spec.Template.Spec.Containers = fleetWorkloadIdentityContainers()
 	}
 }
 
-func fleetWorkloadIdentityContainers(gsaEmail string) []corev1.Container {
+func fleetWorkloadIdentityContainers() []corev1.Container {
 	containers := noneGitContainers()
 	containers = append(containers, corev1.Container{
-		Name: GceNodeAskpassSidecarName,
+		Name: reconcilermanager.GCENodeAskpassSidecar,
 		Env: []corev1.EnvVar{{
 			Name:  googleApplicationCredentialsEnvKey,
 			Value: filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile),
-		}, {
-			Name:  gsaEmailEnvKey,
-			Value: gsaEmail,
 		}},
 		VolumeMounts: []corev1.VolumeMount{{
 			Name:      gcpKSAVolumeName,
 			ReadOnly:  true,
 			MountPath: gcpKSATokenDir,
 		}},
-		Args: []string{"--port=9102", "--logtostderr"},
 	})
 	return containers
 }
@@ -3534,6 +3530,9 @@ func defaultContainers() []corev1.Container {
 			},
 		},
 		{
+			Name: reconcilermanager.GCENodeAskpassSidecar,
+		},
+		{
 			Name:      reconcilermanager.OciSync,
 			Resources: defaultResourceRequirements(),
 			VolumeMounts: []corev1.VolumeMount{
@@ -3672,12 +3671,10 @@ func noneHelmContainers() []corev1.Container {
 	}
 }
 
-func gceNodeContainers(gsaEmail string) []corev1.Container {
+func gceNodeContainers() []corev1.Container {
 	containers := noneGitContainers()
 	containers = append(containers, corev1.Container{
-		Name: GceNodeAskpassSidecarName,
-		Env:  []corev1.EnvVar{{Name: gsaEmailEnvKey, Value: gsaEmail}},
-		Args: []string{"--port=9102", "--logtostderr"},
+		Name: reconcilermanager.GCENodeAskpassSidecar,
 	})
 	return containers
 }

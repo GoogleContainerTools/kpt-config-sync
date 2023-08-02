@@ -15,13 +15,6 @@
 
 set -euo pipefail
 
-# find the tag for the gcenode-askpass-sidecar image by reading it from a Go constant.
-# This sidecar is injected at runtime. So it's not in any local manifest files.
-find_askpass_image_tag() {
-  grep -ohE --color=never 'gceNodeAskpassImageTag\s*=.*' pkg/reconcilermanager/controllers/gcenode_askpass_sidecar.go |
-    sed -E 's/gceNodeAskpassImageTag\s*=\s*"(\S+)"/\1/'
-}
-
 # find the "name:tag" of images in the manifests directory.
 find_manifest_images() {
   grep -rohE --color=never "image:\s+\S+:\S+" .output/staging/oss/*.yaml |
@@ -30,10 +23,7 @@ find_manifest_images() {
 
 config_sync_images() {
   # Build a full list of images with tags
-  gcenode_askpass_tag=$(find_askpass_image_tag)
-  images=(
-    "gcr.io/config-management-release/gcenode-askpass-sidecar:${gcenode_askpass_tag}"
-  )
+  images=()
 
   echo "++++ Parsing image tags from rendered manifests at: .output/staging" >&2
 

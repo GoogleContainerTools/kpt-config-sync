@@ -1792,7 +1792,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2083,7 +2083,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	repoDeployment2 := repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
-		gceNodeMutator(""),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv2),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2142,7 +2142,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	repoDeployment3 := repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv3),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2344,7 +2344,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	repoDeployment2 = repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
-		gceNodeMutator(""),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv2),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2379,7 +2379,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	repoDeployment3 = repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv3),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2825,7 +2825,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
-		gceNodeMutator(gcpSAEmail),
+		gceNodeMutator(),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2859,7 +2859,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
 		setServiceAccountName(nsReconcilerName),
-		fleetWorkloadIdentityMutator(workloadIdentityPool, gcpSAEmail),
+		fleetWorkloadIdentityMutator(workloadIdentityPool),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)

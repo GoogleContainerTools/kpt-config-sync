@@ -86,7 +86,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 			// Make initial delay longer than current reconcile timeout 30s.
 			// This will cause the applier to exit with a timeout,
 			// but the workload will still become available afterwards
-			InitialDelaySeconds: 60,
+			InitialDelaySeconds: 3600,
 			PeriodSeconds:       10,
 		},
 	}
@@ -115,9 +115,6 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
 			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
@@ -129,8 +126,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	if err := nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}); err != nil {
 		nt.T.Fatal(err)
 	}
+	pod1.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds = 30
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s", pod1Name)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s (ready after 30s)", pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

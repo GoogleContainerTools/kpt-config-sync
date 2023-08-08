@@ -16,6 +16,7 @@ package watch
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -210,7 +211,11 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 // threadsafe.
 func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind) {
 	if err := r.Run(ctx); err != nil {
-		klog.Warningf("Error running watcher for %s: %v", gvk.String(), status.FormatSingleLine(err))
+		if errors.Is(err, context.Canceled) {
+			klog.Infof("Watcher stopped for %s: %v", gvk, status.FormatSingleLine(err))
+		} else {
+			klog.Warningf("Error running watcher for %s: %v", gvk, status.FormatSingleLine(err))
+		}
 		m.mux.Lock()
 		delete(m.watcherMap, gvk)
 		m.needsUpdate = true

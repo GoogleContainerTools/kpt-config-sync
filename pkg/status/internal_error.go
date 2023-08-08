@@ -40,3 +40,8 @@ func InternalErrorf(format string, a ...interface{}) Error {
 func InternalWrap(err error) Error {
 	return InternalErrorBuilder.Wrap(err).Build()
 }
+
+// InternalWrapf wraps an error as an internal error with a formatted message
+func InternalWrapf(err error, format string, a ...interface{}) Error {
+	return InternalErrorBuilder.Wrap(err).Sprintf(format, a...).Build()
+}

@@ -16,15 +16,24 @@ package watch
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/remediator/queue"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -32,8 +41,11 @@ import (
 )
 
 type action struct {
-	event watch.EventType
-	obj   client.Object
+	event     watch.EventType
+	obj       runtime.Object
+	cancel    bool
+	stopRun   bool
+	stopWatch bool
 }
 
 func TestFilteredWatcher(t *testing.T) {
@@ -56,125 +68,255 @@ func TestFilteredWatcher(t *testing.T) {
 	testCases := []struct {
 		name     string
 		declared []client.Object
-		actions  []action
+		watches  [][]action
+		timeout  *time.Duration
 		want     []core.ID
+		wantErr  status.Error
 	}{
 		{
-			"Enqueue events for declared resources",
-			[]client.Object{
+			name: "Enqueue events for declared resources",
+			declared: []client.Object{
 				deployment1,
 				deployment2,
 				deployment3,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Added,
-					deployment1,
+					event: watch.Added,
+					obj:   deployment1,
 				},
 				{
-					watch.Modified,
-					deployment2,
+					event: watch.Modified,
+					obj:   deployment2,
 				},
 				{
-					watch.Deleted,
-					deployment3,
+					event: watch.Deleted,
+					obj:   deployment3,
 				},
-			},
-			[]core.ID{
+				{
+					stopRun: true,
+				},
+			}},
+			want: []core.ID{
 				core.IDOf(deployment1),
 				core.IDOf(deployment2),
 				core.IDOf(deployment3),
 			},
 		},
 		{
-			"Filter events for undeclared-but-managed-by-other-reconciler resource",
-			[]client.Object{
+			name: "Filter events for undeclared-but-managed-by-other-reconciler resource",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Modified,
-					managedByOtherDeployment,
+					event: watch.Modified,
+					obj:   managedByOtherDeployment,
 				},
-			},
-			nil,
+				{
+					stopRun: true,
+				},
+			}},
+			want: nil,
 		},
 		{
-			"Enqueue events for undeclared-but-managed-by-this-reconciler resource",
-			[]client.Object{
+			name: "Enqueue events for undeclared-but-managed-by-this-reconciler resource",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Modified,
-					managedBySelfDeployment,
+					event: watch.Modified,
+					obj:   managedBySelfDeployment,
 				},
-			},
-			[]core.ID{
+				{
+					stopRun: true,
+				},
+			}},
+			want: []core.ID{
 				core.IDOf(managedBySelfDeployment),
 			},
 		},
 		{
-			"Filter events for undeclared-and-unmanaged resources",
-			[]client.Object{
+			name: "Filter events for undeclared-and-unmanaged resources",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Added,
-					deployment2,
+					event: watch.Added,
+					obj:   deployment2,
 				},
 				{
-					watch.Added,
-					deployment3,
+					event: watch.Added,
+					obj:   deployment3,
 				},
-			},
-			nil,
+				{
+					stopRun: true,
+				},
+			}},
+			want: nil,
 		},
 		{
-			"Filter events for declared resource with different manager",
-			[]client.Object{
+			name: "Filter events for declared resource with different manager",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Modified,
-					deploymentForRoot,
+					event: watch.Modified,
+					obj:   deploymentForRoot,
 				},
-			},
-			nil,
+				{
+					stopRun: true,
+				},
+			}},
+			want: nil,
 		},
 		{
-			"Filter events for declared resource with different GVK",
-			[]client.Object{
+			name: "Filter events for declared resource with different GVK",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Modified,
-					deployment1Beta,
+					event: watch.Modified,
+					obj:   deployment1Beta,
 				},
-			},
-			nil,
+				{
+					stopRun: true,
+				},
+			}},
+			want: nil,
 		},
 		{
-			"Handle bookmark events",
-			[]client.Object{
+			name: "Handle bookmark events",
+			declared: []client.Object{
 				deployment1,
 			},
-			[]action{
+			watches: [][]action{{
 				{
-					watch.Modified,
-					deployment1,
+					event: watch.Modified,
+					obj:   deployment1,
 				},
 				{
-					watch.Bookmark,
-					deployment1,
+					event: watch.Bookmark,
+					obj:   deployment1,
 				},
-			},
-			[]core.ID{
+				{
+					stopRun: true,
+				},
+			}},
+			want: []core.ID{
 				core.IDOf(deployment1),
 			},
+		},
+		{
+			name: "Error on context cancellation",
+			declared: []client.Object{
+				deployment1,
+			},
+			watches: [][]action{{
+				{
+					event: watch.Modified,
+					obj:   deployment1,
+				},
+				{
+					cancel: true,
+				},
+				// Ignored event
+				{
+					event: watch.Added,
+					obj:   deployment2,
+				},
+				// No Stop
+			}},
+			want: []core.ID{
+				core.IDOf(deployment1),
+			},
+			wantErr: status.InternalWrapf(context.Canceled,
+				"remediator watch stopped for %s", kinds.Deployment()),
+		},
+		{
+			name:     "Error on context timeout",
+			declared: []client.Object{},
+			timeout:  pointer.Duration(1 * time.Second),
+
+			watches: [][]action{{
+				// No Stop
+			}},
+			want: nil,
+			wantErr: status.InternalWrapf(context.DeadlineExceeded,
+				"remediator watch stopped for %s", kinds.Deployment()),
+		},
+		{
+			name: "Error on context cancellation from http client",
+			declared: []client.Object{
+				deployment1,
+			},
+			watches: [][]action{{
+				{
+					event: watch.Modified,
+					obj:   deployment1,
+				},
+				{
+					event: watch.Error,
+					// Simulate context cancel error from the http client.
+					// https://github.com/kubernetes/client-go/blob/v0.26.7/rest/request.go#L785
+					// https://github.com/kubernetes/apimachinery/blob/v0.26.7/pkg/watch/streamwatcher.go#L120
+					obj: apierrors.NewClientErrorReporter(http.StatusInternalServerError, "GET", string(ClientWatchDecodingCause)).AsObject(
+						fmt.Errorf("unable to decode an event from the watch stream: %v", context.Canceled)),
+				},
+				// Ignored event
+				{
+					event: watch.Added,
+					obj:   deployment2,
+				},
+				// No Stop
+			}},
+			want: []core.ID{
+				core.IDOf(deployment1),
+			},
+			wantErr: status.InternalWrapf(context.Canceled,
+				"remediator watch stopped for %s", kinds.Deployment()),
+		},
+		{
+			name: "Retry on context timeout from http client",
+			declared: []client.Object{
+				deployment1,
+				deployment2,
+			},
+			watches: [][]action{
+				{
+					{
+						event: watch.Modified,
+						obj:   deployment1,
+					},
+					{
+						event: watch.Error,
+						// Simulate context timeout error from the http client.
+						// https://github.com/kubernetes/client-go/blob/v0.26.7/rest/request.go#L785
+						// https://github.com/kubernetes/apimachinery/blob/v0.26.7/pkg/watch/streamwatcher.go#L120
+						obj: apierrors.NewClientErrorReporter(http.StatusInternalServerError, "GET", string(ClientWatchDecodingCause)).AsObject(
+							fmt.Errorf("unable to decode an event from the watch stream: %v", context.DeadlineExceeded)),
+					},
+				},
+				// Error should cause watcher to re-start
+				{
+					{
+						event: watch.Added,
+						obj:   deployment2,
+					},
+					{
+						stopRun: true,
+					},
+				},
+			},
+			want: []core.ID{
+				core.IDOf(deployment1),
+				core.IDOf(deployment2),
+			},
+			wantErr: nil,
 		},
 	}
 
@@ -182,38 +324,54 @@ func TestFilteredWatcher(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dr := &declared.Resources{}
 			ctx := context.Background()
+			var cancel context.CancelFunc
+			if tc.timeout != nil {
+				ctx, cancel = context.WithTimeout(ctx, *tc.timeout)
+			} else {
+				ctx, cancel = context.WithCancel(ctx)
+			}
 			if _, err := dr.Update(ctx, tc.declared, "unused"); err != nil {
 				t.Fatalf("unexpected error %v", err)
 			}
 
-			base := watch.NewFake()
+			watches := make(chan watch.Interface) // TODO: test startWatch errors
 			q := queue.New("test")
 			cfg := watcherConfig{
+				gvk:       kinds.Deployment(),
 				scope:     scope,
 				syncName:  syncName,
 				resources: dr,
 				queue:     q,
 				startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
-					return base, nil
+					return <-watches, nil
 				},
 				conflictHandler: testfake.NewConflictHandler(),
 			}
 			w := NewFiltered(cfg)
 
 			go func() {
-				for _, a := range tc.actions {
-					// Each base.Action() blocks until the code within w.Run() reads its
-					// event from the queue.
-					base.Action(a.event, a.obj)
+				for _, actions := range tc.watches {
+					// Unblock startWatch with a new fake watcher
+					base := watch.NewFake()
+					watches <- base
+					for _, a := range actions {
+						if a.stopWatch {
+							base.Stop()
+						} else if a.stopRun {
+							w.Stop()
+						} else if a.cancel {
+							cancel()
+						} else {
+							// Each base.Action() blocks until the code within w.Run() reads its
+							// event from the queue.
+							base.Action(a.event, a.obj)
+						}
+					}
 				}
-				// This is not reached until after w.Run() reads the last event from the
-				// queue.
-				w.Stop()
 			}()
-			// w.Run() blocks until w.Stop() is called.
-			if err := w.Run(ctx); err != nil {
-				t.Fatalf("got Run() = %v, want Run() = <nil>", err)
-			}
+			// w.Run() blocks until w.Stop() is called or the context is cancelled.
+			err := w.Run(ctx)
+			require.Equal(t, tc.wantErr, err)
 
 			var got []core.ID
 			for q.Len() > 0 {

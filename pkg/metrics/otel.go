@@ -165,10 +165,15 @@ processors:
       # These labels are useful to users, but too noisy for global aggregation.
       - key: commit
         action: delete
-      - key: type
-        action: delete
   metricstransform/kubernetes:
     transforms:
+      - include: api_duration_seconds
+        action: update
+        operations:
+          # Remove high cardinality 'type' tag from metric using aggregation
+          - action: aggregate_labels
+            label_set: [status, operation]
+            aggregation_type: sum
       - include: declared_resources
         action: update
         new_name: current_declared_resources
@@ -181,6 +186,11 @@ processors:
       - include: apply_operations_total
         action: update
         new_name: apply_operations_count
+        operations:
+          # Remove high cardinality 'type' tag from metric using aggregation
+          - action: aggregate_labels
+            label_set: [controller, operation, status]
+            aggregation_type: sum
       - include: resource_fights_total
         action: update
         new_name: resource_fights_count
@@ -193,6 +203,13 @@ processors:
       - include: rendering_count_total
         action: update
         new_name: rendering_count
+      - include: remediate_duration_seconds
+        action: update
+        operations:
+          # Remove high cardinality 'type' tag from metric using aggregation
+          - action: aggregate_labels
+            label_set: [status]
+            aggregation_type: sum
       - include: skip_rendering_count_total
         action: update
         new_name: skip_rendering_count

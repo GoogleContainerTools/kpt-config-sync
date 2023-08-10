@@ -22,7 +22,7 @@ COPY . .
 # Version string to embed in built binary.
 ARG VERSION
 
-ARG HELM_VERSION=v3.12.2
+ARG HELM_VERSION=v3.12.3
 ARG KUSTOMIZE_VERSION=v5.1.1
 
 # Install Helm with license

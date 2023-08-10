@@ -29,7 +29,7 @@ ENV CGO_ENABLED=0
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
-ARG HELM_VERSION=v3.12.2
+ARG HELM_VERSION=v3.12.3
 ARG KUSTOMIZE_VERSION=v5.1.1
 
 # Install Helm

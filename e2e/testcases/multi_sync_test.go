@@ -48,6 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -252,7 +253,8 @@ func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, l
 		nt.T.Fatal(err)
 	}
 	if len(list.Items) != expectedCount {
-		nt.T.Fatalf("expected %d reconciler %s(s), got %d", expectedCount, gvk.Kind, len(list.Items))
+		nt.T.Fatalf("expected %d reconciler %s(s), got %d:\n%s",
+			expectedCount, gvk.Kind, len(list.Items), log.AsYAML(list))
 	}
 }
 

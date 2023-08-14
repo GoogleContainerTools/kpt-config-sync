@@ -17,6 +17,8 @@ kind: IAMPolicyMember
 metadata:
   name: policy-member-binding
   namespace: foo
+  annotations:
+    config.kubernetes.io/depends-on: iam.cnrm.cloud.google.com/namespaces/foo/IAMServiceAccount/pubsub-app
 spec:
   member: serviceAccount:pubsub-app@KCC-MANAGED-PROJECT.iam.gserviceaccount.com
   role: roles/pubsub.subscriber

@@ -1166,8 +1166,9 @@ spec:
                     description: 'period is the time duration between consecutive
                       syncs. Default: 15s. Use string to specify this field value,
                       like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Chart will not be resynced if version is specified. Note: Resyncing
-                      chart for "latest" version is not supported in feature preview.'
+                      Charts will be repulled every 1hr if the version is specified
+                      as a range or left empty to indicate that Config Sync should
+                      pull the latest.'
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -1193,13 +1194,13 @@ spec:
                   valuesFileRefs:
                     description: valuesFileRefs holds references to objects in the
                       cluster that represent values to use instead of default values
-                      that accompany the chart. Currently, only ConfigMaps are supported,
-                      and the ConfigMap must be in the same namespace as the RootSync/RepoSync.
-                      When multiple values files are specified, duplicated keys in
-                      later files will override the value from earlier files. This
-                      is equivalent to passing in multiple values files to Helm CLI.
-                      If `values` is also specified, fields from `values` will override
-                      fields from valuesFileRefs.
+                      that accompany the chart. Currently, only ConfigMaps are supported.
+                      The ConfigMaps must be immuatble and in the same namespace as
+                      the RootSync/RepoSync. When multiple values files are specified,
+                      duplicated keys in later files will override the value from
+                      earlier files. This is equivalent to passing in multiple values
+                      files to Helm CLI. If `values` is also specified, fields from
+                      `values` will override fields from `valuesFileRefs`.
                     items:
                       description: ValuesFileRef references a ConfigMap object that
                         contains a values file to use for helm rendering. The ConfigMap
@@ -1215,8 +1216,12 @@ spec:
                       type: object
                     type: array
                   version:
-                    description: version is the chart version. If this is not specified,
-                      the latest version is used
+                    description: 'version is the chart version. This can be specified
+                      as a static version, or as a range of values from which Config
+                      Sync will pull the latest. If left empty, Config Sync will pull
+                      the latest version. The supported version range syntax is identical
+                      to the version range syntax supported by helm CLI, and is documented
+                      here: https://github.com/Masterminds/semver#hyphen-range-comparisons.'
                     type: string
                 required:
                 - auth

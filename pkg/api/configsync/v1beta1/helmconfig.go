@@ -49,7 +49,11 @@ type HelmBase struct {
 	// chart is a Helm chart name. Required.
 	Chart string `json:"chart"`
 
-	// version is the chart version. If this is not specified, the latest version is used
+	// version is the chart version.
+	// This can be specified as a static version, or as a range of values from which Config Sync
+	// will pull the latest. If left empty, Config Sync will pull the latest version.
+	// The supported version range syntax is identical to the version range syntax
+	// supported by helm CLI, and is documented here: https://github.com/Masterminds/semver#hyphen-range-comparisons.
 	// +optional
 	Version string `json:"version,omitempty"`
 
@@ -65,11 +69,11 @@ type HelmBase struct {
 
 	// valuesFileRefs holds references to objects in the cluster that represent
 	// values to use instead of default values that accompany the chart. Currently,
-	// only ConfigMaps are supported, and the ConfigMap must be in the same namespace
-	// as the RootSync/RepoSync. When multiple values files are specified, duplicated keys
-	// in later files will override the value from earlier files. This is equivalent
+	// only ConfigMaps are supported. The ConfigMaps must be immuatble and in the same
+	// namespace as the RootSync/RepoSync. When multiple values files are specified, duplicated
+	// keys in later files will override the value from earlier files. This is equivalent
 	// to passing in multiple values files to Helm CLI. If `values` is also specified,
-	// fields from `values` will override fields from valuesFileRefs.
+	// fields from `values` will override fields from `valuesFileRefs`.
 	// +optional
 	ValuesFileRefs []ValuesFileRef `json:"valuesFileRefs,omitempty"`
 
@@ -82,8 +86,8 @@ type HelmBase struct {
 	// period is the time duration between consecutive syncs. Default: 15s.
 	// Use string to specify this field value, like "30s", "5m".
 	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-	// Chart will not be resynced if version is specified.
-	// Note: Resyncing chart for "latest" version is not supported in feature preview.
+	// Charts will be repulled every 1hr if the version is specified as
+	// a range or left empty to indicate that Config Sync should pull the latest.
 	// +optional
 	Period metav1.Duration `json:"period,omitempty"`
 

@@ -885,6 +885,9 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 		})
+		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
+			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
+		}
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriodSeconds))
 	case v1beta1.HelmSource:
@@ -1130,6 +1133,14 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(&container, rs.Spec.Override)
 				}
+			case reconcilermanager.GCENodeAskpassSidecar:
+				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
+					addContainer = false
+				} else {
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					injectFWICredsToContainer(&container, injectFWICreds)
+					// TODO: enable resource/logLevel overrides for gcenode-askpass-sidecar
+				}
 			case metrics.OtelAgentName:
 				// The no-op case to avoid unknown container error after
 				// first-ever reconcile.
@@ -1141,18 +1152,17 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			}
 		}
 
-		// Add container spec for the "gcenode-askpass-sidecar" (defined as
-		// a constant) to the reconciler Deployment when `.spec.sourceType` is `git`,
-		// and `.spec.git.auth` is either `gcenode` or `gcpserviceaccount`.
-		// The container is added first time when the reconciler deployment is created.
-		if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource &&
-			(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
-			updatedContainers = append(updatedContainers, gceNodeAskPassSidecar(gcpSAEmail, injectFWICreds))
-		}
-
 		templateSpec.Containers = updatedContainers
 		return nil
 	}
+}
+
+func enableAskpassSidecar(sourceType string, auth configsync.AuthType) bool {
+	if v1beta1.SourceType(sourceType) == v1beta1.GitSource &&
+		(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
+		return true
+	}
+	return false
 }
 
 func (r *RepoSyncReconciler) setDefaultHelmDataKey(rs *v1beta1.RepoSync) {

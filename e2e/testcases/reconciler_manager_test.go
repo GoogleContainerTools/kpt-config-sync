@@ -598,11 +598,11 @@ func templateForGcpServiceAccountAuthType() testpredicates.Predicate {
 			}
 		}
 		for _, container := range d.Spec.Template.Spec.Containers {
-			if container.Name == controllers.GceNodeAskpassSidecarName {
+			if container.Name == reconcilermanager.GCENodeAskpassSidecar {
 				return nil
 			}
 		}
-		return fmt.Errorf("the %s container has not be created yet", controllers.GceNodeAskpassSidecarName)
+		return fmt.Errorf("the %s container has not be created yet", reconcilermanager.GCENodeAskpassSidecar)
 	}
 }
 
@@ -616,7 +616,7 @@ func templateForSSHAuthType() testpredicates.Predicate {
 			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
 		for _, container := range d.Spec.Template.Spec.Containers {
-			if container.Name == controllers.GceNodeAskpassSidecarName {
+			if container.Name == reconcilermanager.GCENodeAskpassSidecar {
 				return fmt.Errorf("the gcenode-askpass-sidecar container should not exist for `ssh` auth type")
 			}
 		}

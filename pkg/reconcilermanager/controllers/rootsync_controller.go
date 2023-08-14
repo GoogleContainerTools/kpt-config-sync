@@ -981,6 +981,14 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 					mutateContainerResource(&container, rs.Spec.Override)
 				}
+			case reconcilermanager.GCENodeAskpassSidecar:
+				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
+					addContainer = false
+				} else {
+					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					injectFWICredsToContainer(&container, injectFWICreds)
+					// TODO: enable resource/logLevel overrides for gcenode-askpass-sidecar
+				}
 			case metrics.OtelAgentName:
 				// The no-op case to avoid unknown container error after
 				// first-ever reconcile.
@@ -990,15 +998,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			if addContainer {
 				updatedContainers = append(updatedContainers, container)
 			}
-		}
-
-		// Add container spec for the "gcenode-askpass-sidecar" (defined as
-		// a constant) to the reconciler Deployment when `.spec.sourceType` is `git`,
-		// and `.spec.git.auth` is either `gcenode` or `gcpserviceaccount`.
-		// The container is added first time when the reconciler deployment is created.
-		if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource &&
-			(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
-			updatedContainers = append(updatedContainers, gceNodeAskPassSidecar(gcpSAEmail, injectFWICreds))
 		}
 
 		templateSpec.Containers = updatedContainers

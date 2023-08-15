@@ -140,88 +140,109 @@ processors:
           - remediate_duration_seconds
           - resource_conflicts_total
           - internal_errors_total
-          - rendering_count_total
-          - skip_rendering_count_total
-          - resource_override_count_total
-          - git_sync_depth_override_count_total
-          - no_ssl_verify_count_total
           - kcc_resource_count
           - last_sync_timestamp
-  # Remove custom configsync metric labels that are not registered with Monarch
-  # This action applies to all metrics that are sent through the pipeline that
-  # is using this processor
-  attributes/kubernetes:
-    actions:
-      # Remove custom configsync metric labels that are not registered with Monarch
-      - key: configsync.sync.kind
-        action: delete
-      - key: configsync.sync.name
-        action: delete
-      - key: configsync.sync.namespace
-        action: delete
-      - key: configsync.sync.generation
-        action: delete
-      # Remove high cardinality configsync metric labels when sending to Monarch.
-      # These labels are useful to users, but too noisy for global aggregation.
-      - key: commit
-        action: delete
+  # Transform the metrics so that their names and labels are aligned with definition in go/config-sync-monarch-metrics
   metricstransform/kubernetes:
     transforms:
       - include: api_duration_seconds
         action: update
         operations:
-          # Remove high cardinality 'type' tag from metric using aggregation
           - action: aggregate_labels
+            # label_set is the allowlist of labels to keep after aggregation
             label_set: [status, operation]
             aggregation_type: sum
       - include: declared_resources
         action: update
         new_name: current_declared_resources
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: sum
+      - include: kcc_resource_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [resourcegroup]
+            aggregation_type: sum
       - include: reconciler_errors
         action: update
         new_name: last_reconciler_errors
+        operations:
+          - action: aggregate_labels
+            label_set: [component, errorclass]
+            aggregation_type: sum
+      - include: reconcile_duration_seconds
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [status]
+            aggregation_type: sum
+      - include: rg_reconcile_duration_seconds
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [stallreason]
+            aggregation_type: sum
+      - include: last_sync_timestamp
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [status]
+            aggregation_type: sum
+      - include: parser_duration_seconds
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [status, source, trigger]
+            aggregation_type: sum
       - include: pipeline_error_observed
         action: update
         new_name: last_pipeline_error_observed
+        operations:
+          - action: aggregate_labels
+            label_set: [name, component, reconciler]
+            aggregation_type: sum
       - include: apply_operations_total
         action: update
         new_name: apply_operations_count
         operations:
-          # Remove high cardinality 'type' tag from metric using aggregation
           - action: aggregate_labels
             label_set: [controller, operation, status]
+            aggregation_type: sum
+      - include: apply_duration_seconds
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [status]
             aggregation_type: sum
       - include: resource_fights_total
         action: update
         new_name: resource_fights_count
+        operations:
+          - action: aggregate_labels
+            label_set: [name, component, reconciler]
+            aggregation_type: sum
       - include: resource_conflicts_total
         action: update
         new_name: resource_conflicts_count
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: sum
       - include: internal_errors_total
         action: update
         new_name: internal_errors_count
-      - include: rendering_count_total
-        action: update
-        new_name: rendering_count
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: sum
       - include: remediate_duration_seconds
         action: update
         operations:
-          # Remove high cardinality 'type' tag from metric using aggregation
           - action: aggregate_labels
             label_set: [status]
             aggregation_type: sum
-      - include: skip_rendering_count_total
-        action: update
-        new_name: skip_rendering_count
-      - include: resource_override_count_total
-        action: update
-        new_name: resource_override_count
-      - include: git_sync_depth_override_count_total
-        action: update
-        new_name: git_sync_depth_override_count
-      - include: no_ssl_verify_count_total
-        action: update
-        new_name: no_ssl_verify_count
 extensions:
   health_check:
 service:
@@ -237,6 +258,6 @@ service:
       exporters: [prometheus]
     metrics/kubernetes:
       receivers: [opencensus]
-      processors: [batch, filter/kubernetes, attributes/kubernetes, metricstransform/kubernetes, resourcedetection]
+      processors: [batch, filter/kubernetes, metricstransform/kubernetes, resourcedetection]
       exporters: [googlecloud/kubernetes]`
 )

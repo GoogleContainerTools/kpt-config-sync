@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/kinds"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -91,6 +92,10 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
+
+	nt.T.Log("Adding test commit after otel-collector is started up so multiple commit hashes are processed in pipelines")
+	namespace := fake.NamespaceObject("foo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 
 	nt.T.Log("Watch for metrics in GCM, timeout 2 minutes")
 	ctx := context.Background()

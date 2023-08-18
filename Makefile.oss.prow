@@ -68,15 +68,24 @@ install-crane:
 # remove any existing helm directory/binary. The install-helm target was previously
 # creating a directory at this path rather than the binary/file.
 clean-helm:
+	rm -rf $(HELM_STAGING_DIR)
 	rm -rf $(HELM)
+
+HELM_URL := gs://config-management-release/config-sync/helm/tag/$(HELM_VERSION)/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
+HELM_TARBALL := /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 
 .PHONY: install-helm
 # install helm binary to publish the image
 install-helm: clean-helm buildenv-dirs
-	wget https://get.helm.sh/helm-$(HELM_VERSION)-linux-amd64.tar.gz -O /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
-	tar -zxvf /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz -C /tmp
-	mv /tmp/linux-amd64/helm $(HELM)
-	rm /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+	gsutil cp $(HELM_URL).sha256 $(HELM_TARBALL).sha256
+	gsutil cp $(HELM_URL) $(HELM_TARBALL)
+	echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum --check
+	mkdir -p $(HELM_STAGING_DIR)
+	tar -zxvf $(HELM_TARBALL) -C $(HELM_STAGING_DIR)
+	cp $(HELM_STAGING_DIR)/helm $(HELM)
+	rm $(HELM_TARBALL)
+	rm $(HELM_TARBALL).sha256
 
 ###################################
 # Prow environment provisioning

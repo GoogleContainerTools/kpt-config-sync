@@ -18,15 +18,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -37,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -259,6 +263,91 @@ func TestStressLargeRequest(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func TestStress100CRDs(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	// Apply 100 small CRDs on the cluster to make sure Config Sync can still work.
+	for i := 1; i <= 100; i++ {
+		crd := fakeCRD("anvil", fmt.Sprintf("acme-%d.com", i))
+		if err := nt.KubeClient.Create(crd); err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+
+	nt.T.Log("restarting the reconciler Pod to discovery the new 100 CRDs in the controller startup time")
+	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
+
+	nt.T.Log("adding a test namespace to the repo to trigger a new sync")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("stress-test-ns.yaml", fake.NamespaceObject("stress-test-ns")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a test namespace to trigger a new sync"))
+
+	nt.T.Logf("waiting for the sync to complete")
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func fakeCRD(name, group string) *apiextensionsv1.CustomResourceDefinition {
+	crd := fake.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%ss.%s", name, group)))
+	crd.Spec.Group = group
+	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
+		Plural:   name + "s",
+		Singular: name,
+		Kind:     strings.ToTitle(name),
+	}
+	crd.Spec.Scope = apiextensionsv1.NamespaceScoped
+	crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{
+		{
+			Name:    "v1",
+			Served:  true,
+			Storage: false,
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:     "object",
+							Required: []string{"lbs"},
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"lbs": {
+									Type:    "integer",
+									Minimum: pointer.Float64(1.0),
+									Maximum: pointer.Float64(9000.0),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:    "v2",
+			Served:  true,
+			Storage: true,
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:     "object",
+							Required: []string{"lbs"},
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"lbs": {
+									Type:    "integer",
+									Minimum: pointer.Float64(1.0),
+									Maximum: pointer.Float64(9000.0),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return crd
 }
 
 func truncateSourceErrors() testpredicates.Predicate {

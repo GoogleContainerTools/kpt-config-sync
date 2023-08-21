@@ -181,7 +181,6 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, updateErr
 	}
 
-	r.setDefaultHelmDataKey(rs)
 	if err := r.validateValuesFileSourcesRefs(ctx, rs); err != nil {
 		r.logger(ctx).Error(err, "Sync spec invalid")
 		rootsync.SetStalled(rs, "Validation", err)
@@ -533,25 +532,24 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 		return nil
 	}
 
+	// Look up RootSyncs and see if any of them reference this ConfigMap.
 	ctx := context.Background()
-	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, allRootSyncs); err != nil {
-		klog.Error("failed to list all RootSyncs for %s (%s): %v",
-			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
+	rootSyncList := &v1beta1.RootSyncList{}
+	if err := r.client.List(ctx, rootSyncList, &client.ListOptions{Namespace: objRef.Namespace}); err != nil {
+		klog.Error("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
 		return nil
 	}
-
-	var result []reconcile.Request
-	for _, rs := range allRootSyncs.Items {
+	var requests []reconcile.Request
+	var attachedRSNames []string
+	for _, rs := range rootSyncList.Items {
 		if rs.Spec.SourceType != string(v1beta1.HelmSource) {
-			// we are only watching ConfigMaps to retrigger helm-sync, so we can ignore
-			// other source types
+			// we are only watching ConfigMaps to re-trigger helm-sync,
+			// so we can ignore other source types
 			continue
 		}
 		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 			continue
 		}
-
 		var referenced bool
 		for _, vf := range rs.Spec.Helm.ValuesFileRefs {
 			if vf.Name == objRef.Name {
@@ -559,16 +557,19 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 				break
 			}
 		}
-
 		if !referenced {
 			continue
 		}
-
-		klog.Infof("Changes to ConfigMap %s triggered rereconcile of RootSync %s\n", objRef, rs.Name)
-		result = append(result, requeueRootSyncRequest(obj, &rs)...)
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&rs),
+		})
+		attachedRSNames = append(attachedRSNames, rs.GetName())
 	}
-
-	return result
+	if len(requests) > 0 {
+		klog.Infof("Changes to %s triggered a reconciliation for the RootSync(s) (%s)",
+			kinds.ObjectSummary(obj), strings.Join(attachedRSNames, ", "))
+	}
+	return requests
 }
 
 // mapObjectToRootSync define a mapping from an object in 'config-management-system'
@@ -957,7 +958,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					if authTypeToken(rs.Spec.Helm.Auth) {
 						container.Env = append(container.Env, helmSyncTokenAuthEnv(secretRefName)...)
 					}
-					mountConfigMapValuesFiles(templateSpec, &container, rs.Spec.Helm.ValuesFileRefs)
+					mountConfigMapValuesFiles(templateSpec, &container, r.getReconcilerHelmConfigMapRefs(rs))
 					injectFWICredsToContainer(&container, injectFWICreds)
 					mutateContainerResource(&container, rs.Spec.Override)
 				}
@@ -1001,16 +1002,5 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 
 		templateSpec.Containers = updatedContainers
 		return nil
-	}
-}
-
-func (r *RootSyncReconciler) setDefaultHelmDataKey(rs *v1beta1.RootSync) {
-	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
-		return
-	}
-	for i := range rs.Spec.Helm.ValuesFileRefs {
-		if rs.Spec.Helm.ValuesFileRefs[i].DataKey == "" {
-			rs.Spec.Helm.ValuesFileRefs[i].DataKey = helmValuesDefaultDataKey
-		}
 	}
 }

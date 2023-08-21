@@ -32,6 +32,19 @@ import (
 // https://cloud.google.com/iam/docs/service-accounts#user-managed
 const gcpSASuffix = ".iam.gserviceaccount.com"
 
+// HelmValuesFileDefaultDataKey is the default data key to use when
+// spec.helm.valuesFileRefs.dataKey is not specified.
+const HelmValuesFileDefaultDataKey = "values.yaml"
+
+// HelmValuesFileDataKeyOrDefault returns the key or the default if the key is
+// empty.
+func HelmValuesFileDataKeyOrDefault(key string) string {
+	if len(key) == 0 {
+		return HelmValuesFileDefaultDataKey
+	}
+	return key
+}
+
 // RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
 func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
 	switch v1beta1.SourceType(sourceType) {
@@ -207,8 +220,9 @@ func ValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, val
 		if cm.Immutable == nil || !(*cm.Immutable) {
 			return HelmValuesConfigMapMustBeImmutable(rs, objRef.Name)
 		}
-		if _, found := cm.Data[vf.DataKey]; !found {
-			return HelmValuesMissingConfigMapKey(rs, objRef.Name, vf.DataKey)
+		dataKey := HelmValuesFileDataKeyOrDefault(vf.DataKey)
+		if _, found := cm.Data[dataKey]; !found {
+			return HelmValuesMissingConfigMapKey(rs, objRef.Name, dataKey)
 		}
 	}
 	return nil

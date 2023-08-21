@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -25,13 +24,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util/watch"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -171,31 +170,56 @@ func (r *RepoSyncReconciler) deleteRoleBinding(ctx context.Context, reconcilerRe
 	return nil
 }
 
-func (r *RepoSyncReconciler) deleteHelmValuesFileRefCopies(ctx context.Context, rs *v1beta1.RepoSync) error {
-	if rs == nil || rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
-		return nil
+// deleteHelmConfigMapCopies deletes helm values file ConfigMap copies,
+// except those specified in the cmNamesToKeep set.
+func (r *RepoSyncReconciler) deleteHelmConfigMapCopies(ctx context.Context, rsRef types.NamespacedName, cmNamesToKeep map[string]struct{}) error {
+	// cleanup old copied ConfigMaps that we don't need anymore, e.g. if the list in valuesFileRefs changes
+	// TODO: Eventually remove the annotations and use the labels for list filtering, to optimize cleanup.
+	// We can't remove the annotations until v1.16.0 is no longer supported.
+	var cmList corev1.ConfigMapList
+	if err := r.client.List(ctx, &cmList, &client.ListOptions{Namespace: configsync.ControllerNamespace}); err != nil {
+		return errors.Wrapf(err, "config map list failed in namespace: %s", configsync.ControllerNamespace)
 	}
-
-	for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-		sourceConfigMapCopy, err := createSourceConfigMapCopy(rs, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
-			Name:      vf.Name,
-			Namespace: rs.Namespace,
-		}})
-		if err != nil {
-			return fmt.Errorf("failed to create source ConfigMap copy: %w", err)
+	for _, cm := range cmList.Items {
+		if !strings.HasPrefix(cm.Name, core.NsReconcilerPrefix) {
+			continue
 		}
-
-		var existingConfigMapCopy corev1.ConfigMap
-		if err = r.client.Get(ctx, types.NamespacedName{Name: sourceConfigMapCopy.Name, Namespace: sourceConfigMapCopy.Namespace}, &existingConfigMapCopy); err != nil {
-			if apierrors.IsNotFound(err) {
-				// the copied ConfigMap doesn't exist, so we don't need to do anything
+		labels := cm.GetLabels()
+		if labels != nil {
+			if value, found := labels[metadata.SyncKindLabel]; !found || value != configsync.RepoSyncKind {
+				// this ConfigMap was not created for this RepoSync
 				continue
 			}
-			return fmt.Errorf("unexpected error fetching ConfigMap: %w", err)
+			if value, found := labels[metadata.SyncNameLabel]; !found || value != rsRef.Name {
+				// this ConfigMap was not created for this RepoSync
+				continue
+			}
+			if value, found := labels[metadata.SyncNamespaceLabel]; !found || value != rsRef.Namespace {
+				// this ConfigMap was not created for this RepoSync
+				continue
+			}
 		}
-
-		if err := r.client.Delete(ctx, &existingConfigMapCopy); err != nil {
-			return fmt.Errorf("failed to delete copy of ConfigMap: %w", err)
+		annotations := cm.GetAnnotations()
+		if annotations != nil {
+			if value, found := annotations[repoSyncNameAnnotationKey]; !found || value != rsRef.Name {
+				// this ConfigMap was not created for this RepoSync
+				continue
+			}
+			if value, found := annotations[repoSyncNamespaceAnnotationKey]; !found || value != rsRef.Namespace {
+				// this ConfigMap was not created for this RepoSync
+				continue
+			}
+		}
+		if cmNamesToKeep != nil {
+			if _, found := cmNamesToKeep[cm.Name]; found {
+				// this ConfigMap is still needed for this RepoSync
+				continue
+			}
+		}
+		// none of the above conditions apply, so this ConfigMap is no longer
+		// needed, and we should delete it for cleanup
+		if err := r.cleanup(ctx, &cm); err != nil {
+			return err
 		}
 	}
 	return nil

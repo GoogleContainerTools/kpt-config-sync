@@ -70,8 +70,6 @@ var (
 		"the username to use for helm authantication")
 	flPassword = flag.String("password", util.EnvString("HELM_SYNC_PASSWORD", ""),
 		"the password or personal access token to use for helm authantication")
-	flVersionPollPeriod = flag.String("version-poll-period", util.EnvString(reconcilermanager.HelmSyncVersionPollingPeriod, "1h"),
-		"the amount of time between version polling when a version range is specified")
 )
 
 func main() {
@@ -82,7 +80,7 @@ func main() {
 		"--values", *flValuesYAML, "--values-file-paths", *flValuesFilePaths,
 		"--include-crds", *flIncludeCRDs, "--dest", *flDest, "--wait", *flWait,
 		"--error-file", *flErrorFile, "--timeout", *flSyncTimeout,
-		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures, "--version-poll-period", *flVersionPollPeriod)
+		"--one-time", *flOneTime, "--max-sync-failures", *flMaxSyncFailures)
 
 	if *flRepo == "" {
 		utillog.HandleError(log, true, "ERROR: --repo must be specified")
@@ -106,14 +104,8 @@ func main() {
 		}
 	}
 
-	duration, err := time.ParseDuration(*flVersionPollPeriod)
-	if err != nil {
-		utillog.HandleError(log, true, "ERROR: --version-poll-period must be a valid duration")
-	}
-
 	initialSync := true
 	failCount := 0
-	start := time.Now()
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 
@@ -139,13 +131,7 @@ func main() {
 			Password:        *flPassword,
 		}
 
-		refreshVersion := false
-		if initialSync || time.Now().After(start.Add(duration)) {
-			refreshVersion = true
-			start = time.Now()
-		}
-
-		if err := hydrator.HelmTemplate(ctx, refreshVersion); err != nil {
+		if err := hydrator.HelmTemplate(ctx); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {
 				// Exit after too many retries, maybe the error is not recoverable.
 				log.Error(err, "too many failures, aborting", "failCount", failCount)

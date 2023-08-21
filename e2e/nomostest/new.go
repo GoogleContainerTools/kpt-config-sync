@@ -147,33 +147,32 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	sharedNt.Logger.SetNTBForTest(t)
 
 	nt := &NT{
-		Context:                      sharedNt.Context,
-		T:                            t,
-		Logger:                       sharedNt.Logger,
-		Shell:                        sharedNt.Shell,
-		ClusterName:                  sharedNt.ClusterName,
-		TmpDir:                       opts.TmpDir,
-		Config:                       opts.RESTConfig,
-		repoSyncPermissions:          opts.RepoSyncPermissions,
-		KubeClient:                   sharedNt.KubeClient,
-		Watcher:                      sharedNt.Watcher,
-		WatchClient:                  sharedNt.WatchClient,
-		IsGKEAutopilot:               sharedNt.IsGKEAutopilot,
-		DefaultWaitTimeout:           sharedNt.DefaultWaitTimeout,
-		DefaultReconcileTimeout:      opts.ReconcileTimeout,
-		kubeconfigPath:               sharedNt.kubeconfigPath,
-		ReconcilerPollingPeriod:      sharedNt.ReconcilerPollingPeriod,
-		HydrationPollingPeriod:       sharedNt.HydrationPollingPeriod,
-		HelmSyncVersionPollingPeriod: sharedNt.HelmSyncVersionPollingPeriod,
-		RootRepos:                    sharedNt.RootRepos,
-		NonRootRepos:                 sharedNt.NonRootRepos,
-		MetricsExpectations:          sharedNt.MetricsExpectations,
-		gitPrivateKeyPath:            sharedNt.gitPrivateKeyPath,
-		caCertPath:                   sharedNt.caCertPath,
-		Scheme:                       sharedNt.Scheme,
-		RemoteRepositories:           sharedNt.RemoteRepositories,
-		WebhookDisabled:              sharedNt.WebhookDisabled,
-		GitProvider:                  sharedNt.GitProvider,
+		Context:                 sharedNt.Context,
+		T:                       t,
+		Logger:                  sharedNt.Logger,
+		Shell:                   sharedNt.Shell,
+		ClusterName:             sharedNt.ClusterName,
+		TmpDir:                  opts.TmpDir,
+		Config:                  opts.RESTConfig,
+		repoSyncPermissions:     opts.RepoSyncPermissions,
+		KubeClient:              sharedNt.KubeClient,
+		Watcher:                 sharedNt.Watcher,
+		WatchClient:             sharedNt.WatchClient,
+		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
+		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
+		DefaultReconcileTimeout: opts.ReconcileTimeout,
+		kubeconfigPath:          sharedNt.kubeconfigPath,
+		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
+		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
+		RootRepos:               sharedNt.RootRepos,
+		NonRootRepos:            sharedNt.NonRootRepos,
+		MetricsExpectations:     sharedNt.MetricsExpectations,
+		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
+		caCertPath:              sharedNt.caCertPath,
+		Scheme:                  sharedNt.Scheme,
+		RemoteRepositories:      sharedNt.RemoteRepositories,
+		WebhookDisabled:         sharedNt.WebhookDisabled,
+		GitProvider:             sharedNt.GitProvider,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -266,8 +265,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	nt.ReconcilerPollingPeriod = 15 * time.Second
 	// Speed up the delay between rendering attempts to speed up testing (default: 5s)
 	nt.HydrationPollingPeriod = 5 * time.Second
-	// Speed up the delay between helm version polling to speed up testing (default: 1h)
-	nt.HelmSyncVersionPollingPeriod = 1 * time.Minute
 
 	// init the Client & WatchClient
 	nt.RenewClient()

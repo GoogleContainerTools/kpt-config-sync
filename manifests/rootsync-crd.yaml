@@ -1178,9 +1178,10 @@ spec:
                       setting with "deployNamespace". Default: default.'
                     type: string
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 1hour. Use string to specify this field value,
-                      like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                    description: 'period is the time duration that Config Sync waits
+                      before refetching the chart and resyncing. Default: 1 hour.
+                      Use string to specify this field value, like "30s", "5m". More
+                      details about valid inputs: https://pkg.go.dev/time#ParseDuration.
                       If the chart version is a range, the literal tag "latest", or
                       left empty to indicate that Config Sync should fetch the latest
                       version, the chart will be fetched every sync. If the chart

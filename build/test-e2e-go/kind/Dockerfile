@@ -29,14 +29,6 @@ ENV CGO_ENABLED=0
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
-ARG KUSTOMIZE_VERSION=v5.1.1
-
-# Install Kustomize
-RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -O /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
-  tar -zxvf /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -C /tmp && \
-  mv /tmp/kustomize /usr/local/bin/kustomize && \
-  rm /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
-
 # Copy installed gcloud and kubectl into image
 COPY --from=gcloud-install /usr/lib/google-cloud-sdk /opt/gcloud/google-cloud-sdk
 COPY --from=gcloud-install /usr/bin/kubectl /opt/gcloud/google-cloud-sdk/bin/kubectl
@@ -60,6 +52,7 @@ RUN go install sigs.k8s.io/kind@${KIND_VERSION}
 COPY . .
 
 COPY .output/go/bin/helm /usr/local/bin/helm
+COPY .output/go/bin/kustomize /usr/local/bin/kustomize
 
 # Make sure the nomos command is available for tests.
 RUN go install kpt.dev/configsync/cmd/nomos

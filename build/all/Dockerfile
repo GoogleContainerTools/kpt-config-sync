@@ -22,20 +22,6 @@ COPY . .
 # Version string to embed in built binary.
 ARG VERSION
 
-ARG KUSTOMIZE_VERSION=v5.1.1
-
-# Install Kustomize with license
-RUN URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" && \
-  URL_PREFIX="$(dirname "${URL}")" && FILENAME="$(basename "${URL}")" && \
-  wget "${URL}" -O "/tmp/${FILENAME}" && \
-  wget "${URL_PREFIX}/checksums.txt" -O /tmp/kustomize_checksums.txt && \
-  echo "$(grep "${FILENAME}" /tmp/kustomize_checksums.txt | cut -d ' ' -f 1)  /tmp/${FILENAME}" | sha256sum --check && \
-  tar -zxvf "/tmp/${FILENAME}" -C /tmp && \
-  mv /tmp/kustomize /usr/local/bin/kustomize && \
-  rm "/tmp/${FILENAME}" /tmp/kustomize_checksums.txt && \
-  mkdir -p ./vendor/sigs.k8s.io/kustomize && \
-  wget "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/${KUSTOMIZE_VERSION}/LICENSE" -O ./vendor/sigs.k8s.io/kustomize/LICENSE
-
 # Build all our stuff.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
   go install \
@@ -70,7 +56,8 @@ WORKDIR /
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
 COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
-COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
@@ -107,7 +94,8 @@ USER root
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
 COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
-COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 RUN apt-get update && apt-get install -y git
@@ -156,7 +144,8 @@ WORKDIR /opt/nomos/bin
 COPY --from=bins /go/bin/nomos nomos
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
 COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
-COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
+COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 

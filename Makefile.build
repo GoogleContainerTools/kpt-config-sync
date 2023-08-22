@@ -54,7 +54,7 @@ build-junit-report-cli: pull-buildenv buildenv-dirs
 
 # Build Config Sync docker images
 .PHONY: build-images
-build-images: install-helm
+build-images: install-helm install-kustomize
 	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \
@@ -180,7 +180,7 @@ build-manifests: build-manifests-operator build-manifests-oss
 
 # Build Config Sync manifests for OSS installations
 .PHONY: build-manifests-oss
-build-manifests-oss: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
+build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(OSS_MANIFEST_STAGING_DIR)"
 	@ echo "    Using these tags:"
 	@ echo "    $(RECONCILER_MANAGER_IMAGE): $(RECONCILER_MANAGER_TAG)"
@@ -191,7 +191,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
 	@ rm -f $(OSS_MANIFEST_STAGING_DIR)/*
-	@ "$(GOBIN)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
+	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
 		| sed \
 			-e "s|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|g" \
 			-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|g" \
@@ -212,7 +212,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
 
 # Build Config Sync manifests for ACM operator
 .PHONY: build-manifests-operator
-build-manifests-operator: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DIR)
+build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(NOMOS_MANIFEST_STAGING_DIR)"
 	@ echo "    Using these tags:"
 	@ echo "    $(RECONCILER_MANAGER_IMAGE): $(RECONCILER_MANAGER_TAG)"
@@ -223,7 +223,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(GOBIN)/kustomize" $(OUTPUT_DI
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
 	@ rm -f $(NOMOS_MANIFEST_STAGING_DIR)/*
-	@ "$(GOBIN)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
+	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
 		| sed \
 			-e "s|RECONCILER_IMAGE_NAME|$(RECONCILER_TAG)|g" \
 			-e "s|OCI_SYNC_IMAGE_NAME|$(OCI_SYNC_TAG)|g" \

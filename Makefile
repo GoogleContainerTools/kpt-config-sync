@@ -35,7 +35,7 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
-KUSTOMIZE_VERSION := v5.1.1
+KUSTOMIZE_VERSION := v5.1.1-gke.0
 HELM_VERSION := v3.12.3-gke.1
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
@@ -232,7 +232,7 @@ build-status:
 	@./scripts/build-status.sh
 
 .PHONY: test-unit
-test-unit: pull-buildenv buildenv-dirs "$(BIN_DIR)/kustomize"
+test-unit: pull-buildenv buildenv-dirs install-kustomize
 	@echo "+++ Running unit tests in a docker container"
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
@@ -294,12 +294,24 @@ lint-license: pull-buildenv buildenv-dirs
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0
 
-"$(GOBIN)/kustomize":
-	CGO_ENABLED=0 go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
+.PHONY: clean-kustomize
+clean-kustomize:
+	@rm -rf $(KUSTOMIZE_STAGING_DIR)
+	@rm -rf $(BIN_DIR)/kustomize
 
-# install kustomize binary for containerized testing
-"$(BIN_DIR)/kustomize": "$(GOBIN)/kustomize"
-	cp $(GOBIN)/kustomize $(BIN_DIR)/kustomize
+KUSTOMIZE_URL := gs://config-management-release/config-sync/kustomize/tag/$(KUSTOMIZE_VERSION)/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
+KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
+KUSTOMIZE_TARBALL := /tmp/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
+
+"$(BIN_DIR)/kustomize": clean-kustomize buildenv-dirs
+	@gsutil cp $(KUSTOMIZE_URL).sha256 $(KUSTOMIZE_TARBALL).sha256
+	@gsutil cp $(KUSTOMIZE_URL) $(KUSTOMIZE_TARBALL)
+	@echo "$$(cat $(KUSTOMIZE_TARBALL).sha256)  $(KUSTOMIZE_TARBALL)" | sha256sum -c
+	@mkdir -p $(KUSTOMIZE_STAGING_DIR)
+	@tar -zxvf $(KUSTOMIZE_TARBALL) -C $(KUSTOMIZE_STAGING_DIR)
+	@cp $(KUSTOMIZE_STAGING_DIR)/kustomize $(BIN_DIR)/kustomize
+	@rm $(KUSTOMIZE_TARBALL)
+	@rm $(KUSTOMIZE_TARBALL).sha256
 
 .PHONY: install-kustomize
 install-kustomize: "$(BIN_DIR)/kustomize"

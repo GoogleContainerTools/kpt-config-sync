@@ -44,10 +44,3 @@ func Convert_v1beta1_HelmRootSync_To_v1alpha1_HelmRootSync(in *v1beta1.HelmRootS
 func Convert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in *v1beta1.HelmBase, out *HelmBase, s conversion.Scope) error {
 	return autoConvert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in, out, s)
 }
-
-// Convert_v1beta1_OverrideSpec_To_v1alpha1_OverrideSpec is written manually because of lossy conversion
-//
-//nolint:revive // name underscores required by conversion-gen
-func Convert_v1beta1_OverrideSpec_To_v1alpha1_OverrideSpec(in *v1beta1.OverrideSpec, out *OverrideSpec, s conversion.Scope) error {
-	return autoConvert_v1beta1_OverrideSpec_To_v1alpha1_OverrideSpec(in, out, s)
-}

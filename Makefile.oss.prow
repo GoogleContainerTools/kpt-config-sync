@@ -80,7 +80,7 @@ HELM_TARBALL := /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
 install-helm: clean-helm buildenv-dirs
 	gsutil cp $(HELM_URL).sha256 $(HELM_TARBALL).sha256
 	gsutil cp $(HELM_URL) $(HELM_TARBALL)
-	echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum --check
+	echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum -c
 	mkdir -p $(HELM_STAGING_DIR)
 	tar -zxvf $(HELM_TARBALL) -C $(HELM_STAGING_DIR)
 	cp $(HELM_STAGING_DIR)/helm $(HELM)

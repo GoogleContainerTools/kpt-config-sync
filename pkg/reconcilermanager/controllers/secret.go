@@ -139,7 +139,7 @@ func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef, rsRef t
 	cmsSecret.Namespace = cmsSecretRef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
-		r.addLabels(cmsSecret, map[string]string{
+		core.AddLabels(cmsSecret, map[string]string{
 			metadata.SyncNamespaceLabel: rsRef.Namespace,
 			metadata.SyncNameLabel:      rsRef.Name,
 		})

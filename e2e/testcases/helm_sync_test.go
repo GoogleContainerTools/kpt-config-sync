@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -543,7 +544,9 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	}
 }
 
-// TestHelmConfigMapNamespaceRepo verifies RepoSync can pick up values and updates from ConfigMap references.
+// TestHelmConfigMapNamespaceRepo verifies RepoSync can pick up values from
+// ConfigMap references. The ConfigMap must be immutable, so updates require
+// creating a new ConfigMap and changing the reference in ValuesFileRefs.
 // This test will work only with following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
@@ -552,7 +555,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
-	cmName := "helm-cm-ns-repo"
+	cmName := "helm-cm-ns-repo-1"
 
 	remoteHelmChart, err := helm.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
 	if err != nil {
@@ -572,54 +575,70 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" not found")
 
 	nt.T.Log("Create a ConfigMap that is not immutable (which should not be allowed)")
-	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
-	cm0.Data = map[string]string{
-		"foo.yaml": `label: foo`,
-	}
-	cm0Copy := cm0.DeepCopy()
-	nt.T.Cleanup(func() {
-		if err := nt.KubeClient.Delete(cm0); err != nil {
-			nt.T.Log(err)
-		}
-	})
-	if err := nt.KubeClient.Create(cm0); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" is not immutable")
-
-	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
-	cm0Copy.Immutable = pointer.Bool(true)
-	cm0Copy.Data = map[string]string{
-		"values.yaml": `label: foo`,
-	}
-	if err := nt.KubeClient.Update(cm0Copy); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" in namespace \"test-ns\" does not have data key \"foo.yaml\"")
-
-	// delete the ConfigMap
-	if err := nt.KubeClient.Delete(cm0Copy); err != nil {
-		nt.T.Error(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo\" not found")
-
-	nt.T.Log("Apply valid ConfigMap with values: `label: foo`")
 	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm1.Data = map[string]string{
 		"foo.yaml": `label: foo`,
 	}
-	cm1.Immutable = pointer.Bool(true)
 	nt.T.Cleanup(func() {
+		cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 		if err := nt.KubeClient.Delete(cm1); err != nil {
-			nt.T.Log(err)
+			if !apierrors.IsNotFound(err) {
+				nt.T.Log(err)
+			}
 		}
 	})
 	if err := nt.KubeClient.Create(cm1); err != nil {
 		nt.T.Fatal(err)
 	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" in namespace \"test-ns\" is not immutable")
+
+	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
+	cm1 = fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+	if err := nt.KubeClient.Get(cmName, testNs, cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+	cm1.Immutable = pointer.Bool(true)
+	cm1.Data = map[string]string{
+		"values.yaml": `label: foo`,
+	}
+	if err := nt.KubeClient.Update(cm1); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" in namespace \"test-ns\" does not have data key \"foo.yaml\"")
+
+	// delete the ConfigMap
+	if err := nt.KubeClient.Delete(cm1); err != nil {
+		nt.T.Error(err)
+	}
+	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" not found")
+
+	nt.T.Log("Create new valid ConfigMap with values: `label: foo`")
+	cmName2 := "helm-cm-ns-repo-2"
+	cm2 := fake.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
+	cm2.Data = map[string]string{
+		"foo.yaml": `label: foo`,
+	}
+	cm2.Immutable = pointer.Bool(true)
+	nt.T.Cleanup(func() {
+		cm2 := fake.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
+		if err := nt.KubeClient.Delete(cm2); err != nil {
+			if !apierrors.IsNotFound(err) {
+				nt.T.Log(err)
+			}
+		}
+	})
+	if err := nt.KubeClient.Create(cm2); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Update ValuesFileRefs to reference new ConfigMap`")
+	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{{Name: cmName2, DataKey: "foo.yaml"}}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to reference new ConfigMap"))
+
 	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(privateNSHelmChartVersion)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: remoteHelmChart.ChartName}))
 	if err != nil {
 		nt.T.Fatal(err)

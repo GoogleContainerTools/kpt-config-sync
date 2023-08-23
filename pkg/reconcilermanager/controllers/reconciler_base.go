@@ -106,16 +106,15 @@ var reconcilerManagerAllowList = []string{
 type reconcilerBase struct {
 	loggingController
 
-	clusterName                  string
-	client                       client.Client    // caching
-	watcher                      client.WithWatch // non-caching
-	dynamicClient                dynamic.Interface
-	scheme                       *runtime.Scheme
-	isAutopilotCluster           *bool
-	reconcilerPollingPeriod      time.Duration
-	hydrationPollingPeriod       time.Duration
-	helmSyncVersionPollingPeriod time.Duration
-	membership                   *hubv1.Membership
+	clusterName             string
+	client                  client.Client    // caching
+	watcher                 client.WithWatch // non-caching
+	dynamicClient           dynamic.Interface
+	scheme                  *runtime.Scheme
+	isAutopilotCluster      *bool
+	reconcilerPollingPeriod time.Duration
+	hydrationPollingPeriod  time.Duration
+	membership              *hubv1.Membership
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string

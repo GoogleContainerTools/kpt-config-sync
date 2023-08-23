@@ -20,10 +20,10 @@ import (
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// GetPeriodSecs returns the sync period defaulting to 15 if empty.
-func GetPeriodSecs(period metav1.Duration) float64 {
+// GetPeriodSecs returns the sync period defaulting to the provided defaultPeriod if empty.
+func GetPeriodSecs(period metav1.Duration, defaultPeriod float64) float64 {
 	if period.Duration == 0 {
-		return configsync.DefaultReconcilerPollingPeriodSeconds
+		return defaultPeriod
 	}
 	return period.Duration.Seconds()
 }

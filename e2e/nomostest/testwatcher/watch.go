@@ -240,7 +240,6 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 				// Added to watch cache for the first time, but not to k8s
 				eType = watch.Modified
 			}
-			w.logger.Infof("%s %s", errPrefix, eType)
 
 			// For Added/Modified/Deleted events, the object should be of the
 			// type being watched.
@@ -253,6 +252,9 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 				// Should never happen, due to name selector.
 				return false, nil
 			}
+
+			w.logger.Infof("%s %s (generation: %d, resourceVersion: %s)",
+				errPrefix, eType, cObj.GetGeneration(), cObj.GetResourceVersion())
 
 			if eType == watch.Deleted {
 				// For delete events, the object is the last known state, but

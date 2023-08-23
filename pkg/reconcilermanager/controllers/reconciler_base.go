@@ -136,7 +136,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 	childSA.Namespace = childSARef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, childSA, func() error {
-		r.addLabels(childSA, labelMap)
+		core.AddLabels(childSA, labelMap)
 		// Update ownerRefs for RootSync ServiceAccount.
 		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
 		// performs garbage collection for Reposync controller resources.
@@ -176,7 +176,7 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 
 	// Add common deployment labels.
 	// This enables label selecting deployment by R*Sync name & namespace.
-	r.addLabels(reconcilerDeployment, labelMap)
+	core.AddLabels(reconcilerDeployment, labelMap)
 
 	// Add common deployment labels to the pod template.
 	// This enables label selecting deployment pods by R*Sync name & namespace.
@@ -529,21 +529,6 @@ func containerLogLevelDefault(containerName string) int {
 	default:
 		return defaultContainerLogLevel
 	}
-}
-
-// addLabels will copy the content of labelMaps to the current resource labels
-func (r *reconcilerBase) addLabels(resource client.Object, labelMap map[string]string) {
-	currentLabels := resource.GetLabels()
-	if currentLabels == nil {
-		currentLabels = make(map[string]string)
-	}
-
-	for key, value := range labelMap {
-		currentLabels[key] = value
-	}
-
-	resource.SetLabels(currentLabels)
-
 }
 
 func (r *reconcilerBase) injectFleetWorkloadIdentityCredentials(podTemplate *corev1.PodTemplateSpec, gsaEmail string) error {

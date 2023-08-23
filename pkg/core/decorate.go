@@ -68,6 +68,18 @@ func RemoveAnnotations(obj client.Object, annotations ...string) {
 	obj.SetAnnotations(as)
 }
 
+// AddAnnotations adds the specified annotations to the object.
+func AddAnnotations(obj client.Object, annotations map[string]string) {
+	existing := obj.GetAnnotations()
+	if existing == nil {
+		existing = make(map[string]string, len(annotations))
+	}
+	for key, value := range annotations {
+		existing[key] = value
+	}
+	obj.SetAnnotations(existing)
+}
+
 // Labeled is the interface defined by types with labeled. Note that
 // some non-objects (such as PodTemplates) define labels but are not objects.
 type Labeled interface {
@@ -83,6 +95,18 @@ func SetLabel(obj Labeled, label, value string) {
 	}
 	ls[label] = value
 	obj.SetLabels(ls)
+}
+
+// AddLabels adds the specified labels to the object.
+func AddLabels(obj Labeled, labels map[string]string) {
+	existing := obj.GetLabels()
+	if existing == nil {
+		existing = make(map[string]string, len(labels))
+	}
+	for key, value := range labels {
+		existing[key] = value
+	}
+	obj.SetLabels(existing)
 }
 
 // copyMap returns a copy of the passed map. Otherwise the Labels or Annotations maps will have two

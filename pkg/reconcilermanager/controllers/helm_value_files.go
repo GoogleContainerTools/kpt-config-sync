@@ -141,14 +141,14 @@ func (r *RepoSyncReconciler) upsertHelmConfigMap(ctx context.Context, cmsCMRef, 
 	op, err := CreateOrUpdate(ctx, r.client, cmsConfigMap, func() error {
 		// TODO: Eventually remove the annotations and use the labels for list filtering, to optimize cleanup.
 		// We can't remove the annotations until v1.16.0 is no longer supported.
-		r.addLabels(cmsConfigMap, labelMap)
+		core.AddLabels(cmsConfigMap, labelMap)
 		// Add annotations so we can identify where the ConfigMap came from so
 		// that we can cleanup properly
-		annotations := cmsConfigMap.GetAnnotations()
-		annotations[repoSyncNameAnnotationKey] = rsRef.Name
-		annotations[repoSyncNamespaceAnnotationKey] = rsRef.Namespace
-		annotations[originalConfigMapNameAnnotationKey] = userCM.Name
-		cmsConfigMap.SetAnnotations(annotations)
+		core.AddAnnotations(cmsConfigMap, map[string]string{
+			repoSyncNameAnnotationKey:          rsRef.Name,
+			repoSyncNamespaceAnnotationKey:     rsRef.Namespace,
+			originalConfigMapNameAnnotationKey: userCM.Name,
+		})
 		// Copy user secret data & type to managed secret
 		cmsConfigMap.Data = userCM.Data
 		cmsConfigMap.Immutable = userCM.Immutable

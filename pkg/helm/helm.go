@@ -261,23 +261,18 @@ func (h *Hydrator) registryLogin(ctx context.Context) error {
 }
 
 // HelmTemplate runs helm template with args
-func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error {
+func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	var loggedIn bool
 
 	if isRange(h.Version) {
-		if refreshVersion {
-			klog.Infof("version range %s detected, fetching chart version\n", h.Version)
-			if err := h.registryLogin(ctx); err != nil {
-				return err
-			}
-			loggedIn = true
+		klog.Infof("version range %s detected, fetching chart version\n", h.Version)
+		if err := h.registryLogin(ctx); err != nil {
+			return err
+		}
+		loggedIn = true
 
-			if err := h.getChartVersion(ctx); err != nil {
-				return err
-			}
-		} else {
-			klog.Infof("version range %s detected, waiting to refresh\n", h.Version)
-			return nil
+		if err := h.getChartVersion(ctx); err != nil {
+			return err
 		}
 	}
 
@@ -288,7 +283,8 @@ func (h *Hydrator) HelmTemplate(ctx context.Context, refreshVersion bool) error 
 		return fmt.Errorf("failed to evaluate the symbolic path %q to the Helm chart: %w", linkPath, err)
 	}
 
-	if oldDir == destDir {
+	// for "latest" tag, we always re-fetch and re-sync
+	if h.Version != "latest" && oldDir == destDir {
 		klog.Infof("no update required with the same helm chart version %q", h.Version)
 		return nil
 	}
@@ -339,6 +335,8 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 // we determine if a version is a valid range by checking that (a) it is not
 // valid semver on its own and (b) that it can be parsed correctly as a version range
 func isRange(version string) bool {
+	// Empty version is treated as a version range, and indicates that we should try to fetch
+	// the latest version that we can detect according to semver.
 	if version == "" {
 		return true
 	}

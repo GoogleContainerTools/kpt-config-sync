@@ -444,7 +444,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "deployNamespace": "simple"}, "git": null}}`,
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "", "period": "5s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "deployNamespace": "simple"}, "git": null}}`,
 		v1beta1.HelmSource, remoteHelmChart.ChartName, helm.PrivateARHelmRegistry(), gsaARReaderEmail()))
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
 		[]testpredicates.Predicate{testpredicates.HasLabel("version", privateSimpleHelmChartVersion)}); err != nil {

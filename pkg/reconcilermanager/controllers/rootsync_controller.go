@@ -79,21 +79,20 @@ type RootSyncReconciler struct {
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
-func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod, helmSyncVersionPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
+func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
 	return &RootSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			loggingController: loggingController{
 				log: log,
 			},
-			clusterName:                  clusterName,
-			client:                       client,
-			watcher:                      watcher,
-			dynamicClient:                dynamicClient,
-			scheme:                       scheme,
-			reconcilerPollingPeriod:      reconcilerPollingPeriod,
-			hydrationPollingPeriod:       hydrationPollingPeriod,
-			helmSyncVersionPollingPeriod: helmSyncVersionPollingPeriod,
-			syncKind:                     configsync.RootSyncKind,
+			clusterName:             clusterName,
+			client:                  client,
+			watcher:                 watcher,
+			dynamicClient:           dynamicClient,
+			scheme:                  scheme,
+			reconcilerPollingPeriod: reconcilerPollingPeriod,
+			hydrationPollingPeriod:  hydrationPollingPeriod,
+			syncKind:                configsync.RootSyncKind,
 		},
 	}
 }
@@ -715,16 +714,16 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			branch:          rs.Spec.Git.Branch,
 			repo:            rs.Spec.Git.Repo,
 			secretType:      rs.Spec.Git.Auth,
-			period:          v1beta1.GetPeriodSecs(rs.Spec.Git.Period),
+			period:          v1beta1.GetPeriodSecs(rs.Spec.Git.Period, configsync.DefaultReconcilerPollingPeriodSeconds),
 			proxy:           rs.Spec.Proxy,
 			depth:           rs.Spec.SafeOverride().GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 		})
 	case v1beta1.OciSource:
-		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period))
+		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriodSeconds))
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace, rs.Spec.Helm.DeployNamespace, r.helmSyncVersionPollingPeriod.String())
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace, rs.Spec.Helm.DeployNamespace)
 	}
 	return result
 }

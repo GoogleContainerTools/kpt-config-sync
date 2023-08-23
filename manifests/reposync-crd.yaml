@@ -1164,14 +1164,14 @@ spec:
                     type: boolean
                   period:
                     description: 'period is the time duration that Config Sync waits
-                      before refetching the chart and resyncing. Default: 1 hour.
-                      Use string to specify this field value, like "30s", "5m". More
-                      details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      If the chart version is a range, the literal tag "latest", or
-                      left empty to indicate that Config Sync should fetch the latest
-                      version, the chart will be fetched every sync. If the chart
-                      version is specified as a single static version, the chart will
-                      not be re-fetched.'
+                      before refetching the chart. Default: 1 hour. Use string to
+                      specify this field value, like "30s", "5m". More details about
+                      valid inputs: https://pkg.go.dev/time#ParseDuration. If the
+                      chart version is a range, the literal tag "latest", or left
+                      empty to indicate that Config Sync should fetch the latest version,
+                      the chart will be re-fetched according to spec.helm.period.
+                      If the chart version is specified as a single static version,
+                      the chart will not be re-fetched.'
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.

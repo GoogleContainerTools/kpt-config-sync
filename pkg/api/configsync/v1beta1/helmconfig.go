@@ -85,12 +85,12 @@ type HelmBase struct {
 	// +optional
 	IncludeCRDs bool `json:"includeCRDs,omitempty"`
 
-	// period is the time duration that Config Sync waits before refetching the chart and resyncing.
+	// period is the time duration that Config Sync waits before refetching the chart.
 	// Default: 1 hour.
 	// Use string to specify this field value, like "30s", "5m".
 	// More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
 	// If the chart version is a range, the literal tag "latest", or left empty to indicate that Config Sync
-	// should fetch the latest version, the chart will be fetched every sync.
+	// should fetch the latest version, the chart will be re-fetched according to spec.helm.period.
 	// If the chart version is specified as a single static version, the chart will not be re-fetched.
 	// +optional
 	Period metav1.Duration `json:"period,omitempty"`

@@ -139,69 +139,23 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RootSync")
 	}
 
-	if !rs.DeletionTimestamp.IsZero() {
-		// Deletion requested.
-		// Cleanup is handled above, after the RootSync is NotFound.
-		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
-	}
-
 	currentRS := rs.DeepCopy()
 
-	if err := r.validateNamespaceName(rsRef.Namespace); err != nil {
-		r.logger(ctx).Error(err, "Sync namespace invalid")
-		rootsync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
-		err := errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
-		r.logger(ctx).Error(err, "Sync name or namespace invalid")
-		rootsync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if err := r.validateSpec(ctx, rs, reconcilerRef.Name); err != nil {
-		r.logger(ctx).Error(err, "Sync spec invalid")
-		rootsync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if err := r.validateValuesFileSourcesRefs(ctx, rs); err != nil {
-		r.logger(ctx).Error(err, "Sync spec invalid")
-		rootsync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-
-		// We want to allow deletion of ConfigMap and RSync to occur in any order.
-		// For example, if a namespace is deleted, the ConfigMap and RSync can
-		// be deleted in a random order. That means that validation errors
-		// from the ConfigMap should halt reconciliation progress only if the RSync
-		// is not being deleted. If the RSync is being deleted, we still need to finalize
-		// the RSync and run the teardown function.
-		if rs.GetDeletionTimestamp().IsZero() {
+	if rs.DeletionTimestamp.IsZero() {
+		// Only validate RootSync if it is not deleting. Otherwise, the validation
+		// error will block the finalizer.
+		if err := r.validateRootSync(ctx, rs, reconcilerRef.Name); err != nil {
+			r.logger(ctx).Error(err, "RootSync spec invalid")
+			rootsync.SetStalled(rs, "Validation", err)
+			// Validation errors should not trigger retry (return error),
+			// unless the status update also fails.
+			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			// Use the validation error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 			return controllerruntime.Result{}, updateErr
 		}
-		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Failed to update sync status")
-		}
+	} else {
+		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
 
 	setupFn := func(ctx context.Context) error {
@@ -728,7 +682,23 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result
 }
 
-func (r *RootSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
+func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
+	if rs.Namespace != configsync.ControllerNamespace {
+		return fmt.Errorf("RootSync objects are only allowed in the %s namespace, not in %s", configsync.ControllerNamespace, rs.Namespace)
+	}
+
+	if err := validation.IsDNS1123Subdomain(reconcilerName); err != nil {
+		return fmt.Errorf("invalid reconciler name %q: %s", reconcilerName, strings.Join(err, ", "))
+	}
+
+	if err := r.validateSourceSpec(ctx, rs, reconcilerName); err != nil {
+		return err
+	}
+
+	return r.validateValuesFileSourcesRefs(ctx, rs)
+}
+
+func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
@@ -764,13 +734,6 @@ func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.Ro
 		return err
 	}
 	return r.validateRootSecret(ctx, rs, reconcilerName)
-}
-
-func (r *RootSyncReconciler) validateNamespaceName(namespaceName string) error {
-	if namespaceName != configsync.ControllerNamespace {
-		return fmt.Errorf("RootSync objects are only allowed in the %s namespace, not in %s", configsync.ControllerNamespace, namespaceName)
-	}
-	return nil
 }
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.

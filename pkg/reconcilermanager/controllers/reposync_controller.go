@@ -149,80 +149,38 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RepoSync")
 	}
 
-	if !rs.DeletionTimestamp.IsZero() {
-		// Deletion requested.
-		// Cleanup is handled above, after the RepoSync is NotFound.
-		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
-	}
-
 	currentRS := rs.DeepCopy()
 
-	if err := r.watchConfigMaps(rs); err != nil {
-		r.logger(ctx).Error(err, "Error watching ConfigMaps")
-		reposync.SetStalled(rs, "ConfigMapWatch", err)
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Error setting status")
+	if rs.DeletionTimestamp.IsZero() {
+		// Only validate RepoSync if it is not deleting. Otherwise, the validation
+		// error will block the finalizer.
+		if err := r.watchConfigMaps(rs); err != nil {
+			r.logger(ctx).Error(err, "Error watching ConfigMaps")
+			reposync.SetStalled(rs, "ConfigMapWatch", err)
+			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			if updateErr != nil {
+				r.logger(ctx).Error(updateErr, "Error setting status")
+			}
+			// Use the watch setup error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+			// the error may be recoverable, so we retry (return the error)
+			return controllerruntime.Result{}, err
 		}
-		// the error may be recoverable, so we retry (return the error)
-		return controllerruntime.Result{}, err
-	}
 
-	if err := r.validateNamespaceName(rsRef.Namespace); err != nil {
-		r.logger(ctx).Error(err, "Sync namespace invalid")
-		reposync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if errs := validation.IsDNS1123Subdomain(reconcilerRef.Name); errs != nil {
-		err := errors.Errorf("Invalid reconciler name %q: %s.", reconcilerRef.Name, strings.Join(errs, ", "))
-		r.logger(ctx).Error(err, "Sync name or namespace invalid")
-		reposync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if err := r.validateSpec(ctx, rs, reconcilerRef.Name); err != nil {
-		r.logger(ctx).Error(err, "Sync spec invalid")
-		reposync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-		return controllerruntime.Result{}, updateErr
-	}
-
-	if err := r.validateValuesFileSourcesRefs(ctx, rs); err != nil {
-		r.logger(ctx).Error(err, "Sync spec invalid")
-		reposync.SetStalled(rs, "Validation", err)
-		// Validation errors should not trigger retry (return error),
-		// unless the status update also fails.
-		_, updateErr := r.updateStatus(ctx, currentRS, rs)
-		// Use the validation error for metric tagging.
-		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-
-		// We want to allow deletion of ConfigMap and RSync to occur in any order.
-		// For example, if a namespace is deleted, the ConfigMap and RSync can
-		// be deleted in a random order. That means that validation errors
-		// from the ConfigMap should halt reconciliation progress only if the RSync
-		// is not being deleted. If the RSync is being deleted, we still need to finalize
-		// the RSync and run the teardown function.
-		if rs.GetDeletionTimestamp().IsZero() {
+		// Validate the RepoSync after the ConfigMap watch is set up, so new
+		// ConfigMaps can be validated.
+		if err := r.validateRepoSync(ctx, rs, reconcilerRef.Name); err != nil {
+			r.logger(ctx).Error(err, "Invalid RepoSync Spec")
+			reposync.SetStalled(rs, "Validation", err)
+			// Validation errors should not trigger retry (return error),
+			// unless the status update also fails.
+			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			// Use the validation error for metric tagging.
+			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 			return controllerruntime.Result{}, updateErr
 		}
-		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Failed to update sync status")
-		}
+	} else {
+		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
 
 	setupFn := func(ctx context.Context) error {
@@ -882,7 +840,23 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result
 }
 
-func (r *RepoSyncReconciler) validateSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+	if rs.Namespace == configsync.ControllerNamespace {
+		return fmt.Errorf("RepoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace)
+	}
+
+	if err := validation.IsDNS1123Subdomain(reconcilerName); err != nil {
+		return fmt.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(err, ", "))
+	}
+
+	if err := r.validateSourceSpec(ctx, rs, reconcilerName); err != nil {
+		return err
+	}
+
+	return r.validateValuesFileSourcesRefs(ctx, rs)
+}
+
+func (r *RepoSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
@@ -946,13 +920,6 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 		return errors.Wrapf(err, "Secret %s get failed", namespaceSecretName)
 	}
 	return validateSecretData(authType, secret)
-}
-
-func (r *RepoSyncReconciler) validateNamespaceName(namespaceName string) error {
-	if namespaceName == configsync.ControllerNamespace {
-		return fmt.Errorf("RepoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace)
-	}
-	return nil
 }
 
 func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {

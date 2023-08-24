@@ -190,12 +190,11 @@ func (ae *SyncSetExpectations) ExpectedObjectOperations(syncKind SyncKind, syncN
 		return nil
 	}
 	var ops []ObjectOperation
-	for id, operation := range ae.expectations[syncKind][syncNN] {
+	for _, operation := range ae.expectations[syncKind][syncNN] {
 		if operation == SkipOperation {
 			continue
 		}
 		ops = AppendOperations(ops, ObjectOperation{
-			Kind:      id.Kind,
 			Operation: operation,
 			Count:     1,
 		})

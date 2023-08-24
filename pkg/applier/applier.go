@@ -237,12 +237,12 @@ func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent
 
 	case event.ApplySuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "update", e.Error, id.Kind)
+		handleMetrics(ctx, "update", e.Error)
 		return nil
 
 	case event.ApplyFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
-		handleMetrics(ctx, "update", e.Error, id.Kind)
+		handleMetrics(ctx, "update", e.Error)
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
@@ -339,12 +339,12 @@ func (h *eventHandler) processPruneEvent(ctx context.Context, e event.PruneEvent
 
 	case event.PruneSuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "delete", e.Error, id.Kind)
+		handleMetrics(ctx, "delete", e.Error)
 		return nil
 
 	case event.PruneFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
-		handleMetrics(ctx, "delete", e.Error, id.Kind)
+		handleMetrics(ctx, "delete", e.Error)
 		return PruneErrorForResource(e.Error, id)
 
 	case event.PruneSkipped:
@@ -376,7 +376,7 @@ func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEve
 
 	case event.DeleteSuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
-		handleMetrics(ctx, "delete", e.Error, id.Kind)
+		handleMetrics(ctx, "delete", e.Error)
 		return nil
 
 	case event.DeleteFailed:
@@ -400,7 +400,7 @@ func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType e
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 		err := h.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, id.Kind)
+		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (protected namespace): %v",
 				id, err)
@@ -448,7 +448,7 @@ func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType e
 		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
 		// The `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
 		err := h.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, id.Kind)
+		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
 				id, abandonErr.Annotation, abandonErr.Value, err)
@@ -466,13 +466,13 @@ func isNamespace(obj *unstructured.Unstructured) bool {
 	return obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind()
 }
 
-func handleMetrics(ctx context.Context, operation string, err error, kind string) {
+func handleMetrics(ctx context.Context, operation string, err error) {
 	// TODO capture the apply duration in the kpt apply library.
 	start := time.Now()
 
-	m.RecordAPICallDuration(ctx, operation, m.StatusTagKey(err), kind, start)
-	metrics.Operations.WithLabelValues(operation, kind, metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.ApplierController, operation, m.StatusTagKey(err), kind)
+	m.RecordAPICallDuration(ctx, operation, m.StatusTagKey(err), start)
+	metrics.Operations.WithLabelValues(operation, metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, m.ApplierController, operation, m.StatusTagKey(err))
 }
 
 // checkInventoryObjectSize checks the inventory object size limit.
@@ -793,7 +793,7 @@ func (h *eventHandler) handleDisabledObjects(ctx context.Context, rg *live.Inven
 	for _, obj := range objs {
 		id := core.IDOf(obj)
 		err := h.abandonObject(ctx, obj)
-		handleMetrics(ctx, "unmanage", err, id.Kind)
+		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
 				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled, err)

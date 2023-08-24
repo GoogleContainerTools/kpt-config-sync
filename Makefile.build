@@ -30,7 +30,7 @@ build: $(OUTPUT_DIR) pull-buildenv
 
 # NOTE: this rule depends on OUTPUT_DIR because buildenv needs those dirs to
 # exist in order to work.
-PLATFORMS := linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64
+PLATFORMS := linux_amd64
 build-cli: pull-buildenv buildenv-dirs
 	@echo "+++ Compiling Nomos binaries for $(PLATFORMS)"
 	@echo "+++ Compiling with VERSION: $(VERSION)"

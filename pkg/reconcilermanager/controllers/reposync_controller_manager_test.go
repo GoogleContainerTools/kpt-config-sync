@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -35,9 +36,9 @@ import (
 )
 
 // TestRepoSyncReconcilerDeploymentLifecycle validates that the
-// RootSyncReconciler works with the ControllerManager.
-// - Create a root-reconciler Deployment when a RootSync is created
-// - Delete the root-reconciler Deployment when the RootSync is deleted
+// RepoSyncReconciler works with the ControllerManager.
+// - Create a ns-reconciler Deployment when a RepoSync is created
+// - Delete the ns-reconciler Deployment when the RepoSync is deleted
 func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -73,7 +74,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
-	// Create RootSync
+	// Create RepoSync
 	err = fakeClient.Create(ctx, rs)
 	require.NoError(t, err)
 
@@ -110,6 +111,192 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	// Only the user Secret should remain.
 	secretObj.SetUID("1")
 	t.Log("verifying all managed objects were deleted")
+	fakeClient.Check(t, secretObj)
+}
+
+// TestReconcileInvalidRepoSyncLifecycle validates that the RepoSyncReconciler
+// handles the lifecycle of an invalid RepoSync object.
+// - Surface an error for an invalid RepoSync object without generating any resources.
+// - Delete the RepoSync object.
+func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	t.Log("building RepoSyncReconciler")
+	// rs is an invalid RepoSync as its auth type is set to `token`, but the token key is not configured in the secret.
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(reposyncSSHKey))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+
+	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
+
+	defer logObjectYAMLIfFailed(t, fakeClient, rs)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+
+	// Wait for manager to exit before returning
+	defer func() {
+		cancel()
+		t.Log("waiting for controller-manager to stop")
+		for err := range errCh {
+			require.NoError(t, err)
+		}
+	}()
+
+	t.Log("watching for RepoSync status update")
+	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel()
+
+	watcher, err := watchObjects(watchCtx, fakeClient, &v1beta1.RepoSyncList{})
+	require.NoError(t, err)
+
+	t.Log("creating RepoSync")
+	err = fakeClient.Create(ctx, rs)
+	require.NoError(t, err)
+
+	var rsObj *v1beta1.RepoSync
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+		t.Logf("RepoSync %s", event.Type)
+		if event.Type == watch.Modified {
+			rsObj = event.Object.(*v1beta1.RepoSync)
+			for _, cond := range rsObj.Status.Conditions {
+				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+					return nil
+				}
+			}
+			return fmt.Errorf("RepoSync status not updated yet")
+		}
+		// keep watching
+		return fmt.Errorf("RepoSync object %s", event.Type)
+	})
+	require.NoError(t, err)
+	if rsObj == nil {
+		t.Fatal("timed out waiting for RepoSync to become stalled")
+	}
+
+	t.Log("only the stalled RepoSync and user Secret should be present, no other generated resources")
+	secretObj.SetUID("1")
+	fakeClient.Check(t, secretObj, rsObj)
+
+	t.Log("deleting sync object and watching for NotFound")
+	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	require.NoError(t, err)
+	t.Log("only the user Secret should be present")
+	fakeClient.Check(t, secretObj)
+}
+
+// TestReconcileRepoSyncLifecycleValidToInvalid validates that the RepoSyncReconciler
+// handles the lifecycle of an RepoSync object changing from valid to invalid state.
+// - Create a ns-reconciler Deployment when a valid RepoSync is created
+// - Surface an error when the RepoSync object becomes invalid without deleting the generated resources
+// - Delete the RepoSync object and its generated dependencies.
+func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	t.Log("building RepoSyncReconciler")
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+
+	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
+
+	defer logObjectYAMLIfFailed(t, fakeClient, rs)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+
+	// Wait for manager to exit before returning
+	defer func() {
+		cancel()
+		t.Log("waiting for controller-manager to stop")
+		for err := range errCh {
+			require.NoError(t, err)
+		}
+	}()
+
+	reconcilerKey := core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
+
+	t.Log("watching for reconciler deployment creation")
+	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer watchCancel()
+
+	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	require.NoError(t, err)
+
+	// Create RepoSync
+	err = fakeClient.Create(ctx, rs)
+	require.NoError(t, err)
+
+	var reconcilerObj *appsv1.Deployment
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			// success! deployment was applied.
+			// Since there's no deployment controller,
+			// don't wait for availability.
+			return nil
+		}
+		// keep watching
+		return errors.Errorf("reconciler deployment %s", event.Type)
+	})
+	require.NoError(t, err)
+	if reconcilerObj == nil {
+		t.Fatal("timed out waiting for reconciler deployment to be applied")
+	}
+
+	t.Log("verifying the reconciler-manager finalizer is present")
+	rsKey := client.ObjectKeyFromObject(rs)
+	rs = &v1beta1.RepoSync{}
+	err = fakeClient.Get(ctx, rsKey, rs)
+	require.NoError(t, err)
+	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
+
+	t.Log("watching for RepoSync status update")
+	watcher, err = watchObjects(watchCtx, fakeClient, &v1beta1.RepoSyncList{})
+	require.NoError(t, err)
+
+	t.Log("updating RepoSync to make it invalid")
+	rs.Spec.Auth = configsync.AuthToken
+	err = fakeClient.Update(ctx, rs)
+	require.NoError(t, err)
+
+	var rsObj *v1beta1.RepoSync
+	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+		t.Logf("RepoSync %s", event.Type)
+		if event.Type == watch.Modified {
+			rsObj = event.Object.(*v1beta1.RepoSync)
+			for _, cond := range rsObj.Status.Conditions {
+				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+					return nil
+				}
+			}
+			return fmt.Errorf("RepoSync status not updated yet")
+		}
+		// keep watching
+		return fmt.Errorf("RepoSync object %s", event.Type)
+	})
+	require.NoError(t, err)
+	if rsObj == nil {
+		t.Fatal("timed out waiting for RepoSync to become stalled")
+	}
+
+	t.Log("verifying the reconciler deployment object still exists")
+	err = fakeClient.Get(ctx, reconcilerKey, &appsv1.Deployment{})
+	require.NoError(t, err)
+
+	t.Log("deleting sync object and watching for NotFound")
+	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	require.NoError(t, err)
+
+	// All managed objects should have been deleted by the reconciler-manager finalizer.
+	// Only the user Secret should remain.
+	t.Log("verifying all managed objects were deleted")
+	secretObj.SetUID("1")
 	fakeClient.Check(t, secretObj)
 }
 

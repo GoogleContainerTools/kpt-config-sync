@@ -32,14 +32,16 @@ import (
 // Validates the object against each of the passed Predicates, returning error
 // if any Predicate fails.
 func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...testpredicates.Predicate) error {
-	err := nt.KubeClient.Get(name, namespace, o)
-	if err != nil {
+	if err := nt.KubeClient.Get(name, namespace, o); err != nil {
 		return err
 	}
-	for _, p := range predicates {
-		err = p(o)
+	for i, p := range predicates {
+		err := p(o)
 		if err != nil {
-			return err
+			// Use fmt.Errorf instead of errors.Errorf/Wrapf so that the YAML
+			// can be appended after the error message.
+			return fmt.Errorf("Validate failed: %s failed predicate %d: %w:\n%s",
+				kinds.ObjectSummary(o), i, err, log.AsYAML(o))
 		}
 	}
 	return nil
@@ -51,19 +53,14 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...te
 // 1) a struct pointer to the type of the object to search for, or
 // 2) an unstructured.Unstructured with the type information filled in.
 func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
-	err := nt.KubeClient.Get(name, namespace, o)
-	if err == nil {
-		gvk, err := kinds.Lookup(o, nt.Scheme)
-		if err != nil {
-			return errors.Wrapf(err, "failed to lookup kind of %T", o)
+	if err := nt.KubeClient.Get(name, namespace, o); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil // success
 		}
-		// Include full object json to help determine why the object still exists
-		return errors.Errorf("%s %s/%s found:\n%s", gvk.Kind, namespace, name, log.AsJSON(o))
+		return err
 	}
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	return err
+	return errors.Errorf("ValidateNotFound failed: %s still exists:\n%s",
+		kinds.ObjectSummary(o), log.AsYAML(o))
 }
 
 // ValidateNotFoundOrNoMatch returns an error if the indicated object is
@@ -72,19 +69,14 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 // Use this instead of ValidateNotFound when deleting a CRD or APIService at the
 // same time as a custom resource, to avoid the race between possible errors.
 func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object) error {
-	err := nt.KubeClient.Get(name, namespace, o)
-	if err == nil {
-		gvk, err := kinds.Lookup(o, nt.Scheme)
-		if err != nil {
-			return errors.Wrapf(err, "failed to lookup kind of %T", o)
+	if err := nt.KubeClient.Get(name, namespace, o); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return nil // success
 		}
-		// Include full object json to help determine why the object still exists
-		return errors.Errorf("%s %s/%s found:\n%s", gvk.Kind, namespace, name, log.AsJSON(o))
+		return err
 	}
-	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-		return nil
-	}
-	return err
+	return errors.Errorf("ValidateNotFoundOrNoMatch failed: %s still exists:\n%s",
+		kinds.ObjectSummary(o), log.AsYAML(o))
 }
 
 // ValidateSyncObject validates the specified object satisfies the specified

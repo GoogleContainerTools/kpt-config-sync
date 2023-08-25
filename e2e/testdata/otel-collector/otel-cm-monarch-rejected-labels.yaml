@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This test file removes the attribute processor that was in place for removing
+# labels that are not allowed in Cloud Monarch, in order to create
+# `failed to export` error in the otel-collector Deployment log.
+
 apiVersion: v1
 data:
   otel-collector-config.yaml: |-
@@ -127,24 +131,6 @@ data:
             - no_ssl_verify_count_total
             - kcc_resource_count
             - last_sync_timestamp
-      # Remove custom configsync metric labels that are not registered with Monarch
-      # This action applies to all metrics that are sent through the pipeline that
-      # is using this processor
-      attributes/kubernetes:
-        actions:
-        # Remove custom configsync metric labels that are not registered with Monarch
-        - key: configsync.sync.kind
-          action: delete
-        - key: configsync.sync.name
-          action: delete
-        - key: configsync.sync.namespace
-          action: delete
-        # Remove high cardinality configsync metric labels when sending to Monarch.
-        # These labels are useful to users, but too noisy for global aggregation.
-        - key: commit
-          action: delete
-        - key: type
-          action: delete
       metricstransform/kubernetes:
         transforms:
         - include: declared_resources
@@ -198,7 +184,7 @@ data:
           exporters: [prometheus]
         metrics/kubernetes:
           receivers: [opencensus]
-          processors: [batch, filter/kubernetes, attributes/kubernetes, metricstransform/kubernetes, resourcedetection]
+          processors: [batch, filter/kubernetes, metricstransform/kubernetes, resourcedetection]
           exporters: [googlecloud/kubernetes]
 kind: ConfigMap
 metadata:

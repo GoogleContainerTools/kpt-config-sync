@@ -56,7 +56,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	})
 
 	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "-f", "../testdata/otel-collector/otel-cm-duplicate-timeseries.yaml", "--ignore-not-found")
+		nt.MustKubectl("delete", "-f", "../testdata/otel-collector/otel-cm-monarch-rejected-labels.yaml", "--ignore-not-found")
 		nt.T.Log("Restart otel-collector pod to reset the ConfigMap and log")
 		nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
 		if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
@@ -128,7 +128,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	// will take precedence over 'otel-collector-googlecloud' that was deployed
 	// by the test.
 	nt.T.Log("Apply custom otel-collector ConfigMap that could cause duplicate time series error")
-	nt.MustKubectl("apply", "-f", "../testdata/otel-collector/otel-cm-duplicate-timeseries.yaml")
+	nt.MustKubectl("apply", "-f", "../testdata/otel-collector/otel-cm-monarch-rejected-labels.yaml")
 	nt.T.Log("Restart otel-collector pod to refresh the ConfigMap and log")
 	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {

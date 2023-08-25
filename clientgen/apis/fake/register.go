@@ -19,8 +19,8 @@ var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
 	configmanagementv1.AddToScheme,
-	configsyncv1alpha1.AddToScheme,
 	configsyncv1beta1.AddToScheme,
+	configsyncv1alpha1.AddToScheme,
 	hubv1.AddToScheme,
 }
 

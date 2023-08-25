@@ -201,7 +201,7 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 		core.GKNN(object), newManager, manager)
 	gvknn := queue.GVKNNOf(object)
 	w.conflictHandler.AddConflictError(gvknn, status.ManagementConflictErrorWrap(object, newManager))
-	metrics.RecordResourceConflict(context.Background(), gvknn.Kind, commit)
+	metrics.RecordResourceConflict(context.Background(), commit)
 }
 
 func (w *filteredWatcher) ClearManagementConflict() {

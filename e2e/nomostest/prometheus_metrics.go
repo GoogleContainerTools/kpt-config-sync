@@ -256,9 +256,9 @@ func ReconcilerOperationsMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, op
 func reconcilerOperationMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, op testmetrics.ObjectOperation) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
-		err = multierr.Append(err, metricAPICallDurationViewOperationHasStatus(ctx, nt, v1api, syncLabels, string(op.Operation), op.Kind, ocmetrics.StatusSuccess))
-		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, syncLabels, string(op.Operation), op.Kind, ocmetrics.StatusSuccess, op.Count))
-		err = multierr.Append(err, metricRemediateDurationViewHasStatus(ctx, nt, v1api, syncLabels, op.Kind, ocmetrics.StatusSuccess))
+		err = multierr.Append(err, metricAPICallDurationViewOperationHasStatus(ctx, nt, v1api, syncLabels, string(op.Operation), ocmetrics.StatusSuccess))
+		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, syncLabels, string(op.Operation), ocmetrics.StatusSuccess, op.Count))
+		err = multierr.Append(err, metricRemediateDurationViewHasStatus(ctx, nt, v1api, syncLabels, ocmetrics.StatusSuccess))
 		return err
 	}
 }
@@ -450,28 +450,26 @@ func metricDeclaredResourcesViewHasValue(ctx context.Context, nt *NT, v1api prom
 	return metricExistsWithValue(ctx, nt, v1api, query, float64(numResources))
 }
 
-func metricAPICallDurationViewOperationHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, kind, status string) error {
+func metricAPICallDurationViewOperationHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, status string) error {
 	metricName := ocmetrics.APICallDurationView.Name
 	// APICallDurationView is a distribution. Query count to aggregate.
 	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
 	labels := prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
 		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()): prometheusmodel.LabelValue(operation),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):      prometheusmodel.LabelValue(kind),
 		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
 	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, kind, status string, value int) error {
+func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, status string, value int) error {
 	metricName := ocmetrics.ApplyOperationsView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):  prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
 		prometheusmodel.LabelName(ocmetrics.KeyController.Name()): prometheusmodel.LabelValue(ocmetrics.ApplierController),
 		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):  prometheusmodel.LabelValue(operation),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):       prometheusmodel.LabelValue(kind),
 		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):     prometheusmodel.LabelValue(status),
 	}.Merge(syncLabels)
 	// ApplyOperationsView is a count, so we don't need to aggregate
@@ -479,13 +477,12 @@ func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api
 	return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
 }
 
-func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, kind, status string) error {
+func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, status string) error {
 	metricName := ocmetrics.RemediateDurationView.Name
 	// RemediateDurationView is a distribution. Query count to aggregate.
 	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
 	labels := prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.KeyType.Name()):      prometheusmodel.LabelValue(kind),
 		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
 	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)

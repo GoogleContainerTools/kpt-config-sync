@@ -51,9 +51,6 @@ var (
 	// KeyStatus groups metrics by their status. Possible values: success, error.
 	KeyStatus, _ = tag.NewKey("status")
 
-	// KeyType groups metrics by their resource Kind.
-	KeyType, _ = tag.NewKey("type")
-
 	// KeyInternalErrorSource groups the InternalError metrics by their source. Possible values: parser, differ, remediator.
 	KeyInternalErrorSource, _ = tag.NewKey("source")
 

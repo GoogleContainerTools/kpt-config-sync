@@ -115,8 +115,8 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 			err = status.ResourceWrap(err1, "unable to apply resource", intendedState)
 		}
 	}
-	metrics.Operations.WithLabelValues("create", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "create", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind)
+	metrics.Operations.WithLabelValues("create", metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, m.RemediatorController, "create", m.StatusTagKey(err))
 
 	if err != nil {
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
@@ -135,8 +135,8 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 // Update implements Applier.
 func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error {
 	patch, err := c.update(ctx, intendedState, currentState)
-	metrics.Operations.WithLabelValues("update", intendedState.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind)
+	metrics.Operations.WithLabelValues("update", metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err))
 
 	switch {
 	case apierrors.IsConflict(err):
@@ -174,8 +174,8 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 		}
 		return obj, nil
 	})
-	metrics.Operations.WithLabelValues("update", u.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, controller, "update", m.StatusTagKey(err), u.GroupVersionKind().Kind)
+	metrics.Operations.WithLabelValues("update", metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, controller, "update", m.StatusTagKey(err))
 
 	if changed {
 		klog.V(3).Infof("RemoveNomosMeta changed the object %v", core.GKNN(u))
@@ -188,8 +188,8 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 // Delete implements Applier.
 func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	err := c.client.Delete(ctx, obj)
-	metrics.Operations.WithLabelValues("delete", obj.GetKind(), metrics.StatusLabel(err)).Inc()
-	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err), obj.GroupVersionKind().Kind)
+	metrics.Operations.WithLabelValues("delete", metrics.StatusLabel(err)).Inc()
+	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err))
 
 	if err != nil {
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
@@ -249,8 +249,8 @@ func (c *clientApplier) update(ctx context.Context, intendedState, currentState 
 	start := time.Now()
 	err = c.client.Patch(ctx, intendedState, client.Apply, client.FieldOwner(configsync.FieldManager), client.ForceOwnership)
 	duration := time.Since(start).Seconds()
-	metrics.APICallDuration.WithLabelValues("update", intendedState.GroupVersionKind().String(), metrics.StatusLabel(err)).Observe(duration)
-	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), intendedState.GroupVersionKind().Kind, start)
+	metrics.APICallDuration.WithLabelValues("update", metrics.StatusLabel(err)).Observe(duration)
+	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
 	return []byte(cmp.Diff(currentState, intendedState)), err
 }
 
@@ -298,7 +298,7 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 	patch := c.calculateStrategic(resourceDescription, gvk, previous, modified, current)
 	// If patch is nil, it means we don't have access to the schema.
 	if patch != nil {
-		err = attemptPatch(ctx, resourceClient, name, types.StrategicMergePatchType, patch, gvk)
+		err = attemptPatch(ctx, resourceClient, name, types.StrategicMergePatchType, patch)
 		// UnsupportedMediaType error indicates an invalid strategic merge patch (always true for a
 		// custom resource), so we reset the patch and try again below.
 		if err != nil {
@@ -314,7 +314,7 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 	if patch == nil {
 		patch, err = c.calculateJSONMerge(previous, modified, current)
 		if err == nil {
-			err = attemptPatch(ctx, resourceClient, name, types.MergePatchType, patch, gvk)
+			err = attemptPatch(ctx, resourceClient, name, types.MergePatchType, patch)
 		}
 	}
 
@@ -370,7 +370,7 @@ func isNoOpPatch(patch []byte) bool {
 
 // attemptPatch patches resClient with the given patch.
 // TODO: Add unit tests for noop logic.
-func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name string, patchType types.PatchType, patch []byte, gvk schema.GroupVersionKind) error {
+func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name string, patchType types.PatchType, patch []byte) error {
 	if isNoOpPatch(patch) {
 		return nil
 	}
@@ -383,8 +383,8 @@ func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name
 	start := time.Now()
 	_, err := resClient.Patch(ctx, name, patchType, patch, metav1.PatchOptions{})
 	duration := time.Since(start).Seconds()
-	metrics.APICallDuration.WithLabelValues("update", gvk.String(), metrics.StatusLabel(err)).Observe(duration)
-	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), gvk.Kind, start)
+	metrics.APICallDuration.WithLabelValues("update", metrics.StatusLabel(err)).Observe(duration)
+	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
 	return err
 }
 

@@ -31,7 +31,7 @@ var (
 		Name:        APICallDuration.Name(),
 		Measure:     APICallDuration,
 		Description: "The latency distribution of API server calls",
-		TagKeys:     []tag.Key{KeyOperation, KeyType, KeyStatus},
+		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 
@@ -97,7 +97,7 @@ var (
 		Name:        ApplyOperations.Name() + "_total",
 		Measure:     ApplyOperations,
 		Description: "The total number of operations that have been performed to sync resources to source of truth",
-		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyType, KeyStatus},
+		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyStatus},
 		Aggregation: view.Count(),
 	}
 
@@ -132,7 +132,7 @@ var (
 		Name:        RemediateDuration.Name(),
 		Measure:     RemediateDuration,
 		Description: "The latency distribution of remediator reconciliation events",
-		TagKeys:     []tag.Key{KeyType, KeyStatus},
+		TagKeys:     []tag.Key{KeyStatus},
 		Aggregation: view.Distribution(distributionBounds...),
 	}
 

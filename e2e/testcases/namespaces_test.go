@@ -454,7 +454,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 		// The abandoned object is NOT in the declared objects but it does get
 		// updated to remove config sync annotations and labels.
 		Operations: []metrics.ObjectOperation{
-			{Kind: "ConfigMap", Operation: metrics.UpdateOperation, Count: 1},
+			{Operation: metrics.UpdateOperation, Count: 1}, // ConfigMap
 		},
 	})
 	if err != nil {
@@ -648,7 +648,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		// The implicit object is NOT in the declared objects but it does get
 		// updated to remove config sync annotations and labels.
 		Operations: []metrics.ObjectOperation{
-			{Kind: "Namespace", Operation: metrics.UpdateOperation, Count: 1},
+			{Operation: metrics.UpdateOperation, Count: 1}, // Namespace
 		},
 	})
 	if err != nil {

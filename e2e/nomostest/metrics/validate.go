@@ -39,10 +39,8 @@ const (
 )
 
 // ObjectOperation is used for validating count aggregated metrics that have a
-// "type" tag (ex: `api_duration_seconds` & `apply_operations`).
+// "operation" tag (ex: `api_duration_seconds` & `apply_operations`).
 type ObjectOperation struct {
-	// Kind of the object
-	Kind string
 	// Operation performed on the object
 	Operation Operation
 	// Count of the times the operation was performed on objects of the
@@ -56,7 +54,7 @@ func AppendOperations(to []ObjectOperation, from ...ObjectOperation) []ObjectOpe
 loop:
 	for _, fromOp := range from {
 		for j, toOp := range to {
-			if fromOp.Kind == toOp.Kind && fromOp.Operation == toOp.Operation {
+			if fromOp.Operation == toOp.Operation {
 				to[j].Count += fromOp.Count
 				continue loop // stop looking for matches for this operation
 			}

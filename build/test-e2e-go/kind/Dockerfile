@@ -53,9 +53,7 @@ COPY . .
 
 COPY .output/go/bin/helm /usr/local/bin/helm
 COPY .output/go/bin/kustomize /usr/local/bin/kustomize
-
-# Make sure the nomos command is available for tests.
-RUN go install kpt.dev/configsync/cmd/nomos
+COPY .output/go/bin/nomos /usr/local/bin/nomos
 
 # Make sure the junit-report command is available for tests.
 RUN go install kpt.dev/configsync/cmd/junit-report

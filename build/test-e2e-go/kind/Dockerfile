@@ -66,9 +66,6 @@ RUN go install sigs.k8s.io/kind@${KIND_VERSION}
 # Just copy everything in the nomos repository so we have whatever we might need.
 COPY . .
 
-# Make sure the nomos command is available for tests.
-RUN go install kpt.dev/configsync/cmd/nomos
-
 # Make sure the junit-report command is available for tests.
 RUN go install kpt.dev/configsync/cmd/junit-report
 

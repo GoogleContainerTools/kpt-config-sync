@@ -132,6 +132,10 @@ data:
          - name: gcenode-askpass-sidecar
            image: gcr.io/config-management-release/gcenode-askpass-sidecar:v1.0.3
            args: ["--port=9102", "--logtostderr"]
+           resources:
+             requests:
+               cpu: 10m
+               memory: 100Mi
            imagePullPolicy: IfNotPresent
            terminationMessagePolicy: File
            terminationMessagePath: /dev/termination-log

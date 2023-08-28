@@ -32,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/strings/slices"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -842,6 +843,12 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 	}
 }
 
+// TestCLIBugreportNomosRunningCorrectly
+//
+// tests the `nomos bugreport` by running it against a
+// cluster and making sure that the right minimum set of files
+// is output.  Changing the contents of the archive will make
+// this test fail.
 func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 	var bugReportZipName, bugReportDirName string
 	nt := nomostest.New(t, nomostesting.NomosCLI)
@@ -878,9 +885,16 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
+
 	context := strings.TrimSpace(string(out))
+
+	// gather all of the files that are generally
+	// collected by nomos bugreport.
+	// if you do add additional file extensions these need to be added here
+	extensions := []string{".txt", ".json", ".yaml", ".log"}
 	files := glob(bugReportDirName, func(s string) bool {
-		return filepath.Ext(s) == ".txt"
+		extension := filepath.Ext(s)
+		return slices.Contains(extensions, extension)
 	})
 
 	generalBugReportFiles := []string{"version.txt", "status.txt"}
@@ -902,12 +916,12 @@ func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
 		"namespaces/config-management-system/ResourceGroup-root-sync.yaml",
 		"namespaces/config-management-system/RootSync-root-sync.json",
 		"namespaces/config-management-system/RootSync-root-sync.yaml",
-		"namespaces/config-management-system/root-reconciler.*/git-sync.json",
-		"namespaces/config-management-system/root-reconciler.*/otel-agent.json",
-		"namespaces/config-management-system/root-reconciler.*/reconciler.json",
+		"namespaces/config-management-system/root-reconciler.*/git-sync.log",
+		"namespaces/config-management-system/root-reconciler.*/otel-agent.log",
+		"namespaces/config-management-system/root-reconciler.*/reconciler.log",
 		"namespaces/config-management-monitoring/pods.json",
 		"namespaces/config-management-monitoring/pods.yaml",
-		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.json",
+		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.log",
 		"namespaces/gatekeeper-system/pods.json",
 		"namespaces/gatekeeper-system/pods.yaml",
 		"namespaces/resource-group-system/pods.json",

@@ -295,6 +295,38 @@ spec:
                     format: int64
                     minimum: 0
                     type: integer
+                  logLevels:
+                    description: logLevels specify the container name and log level
+                      override value for the reconciler deployment container. Each
+                      entry must contain the name of the reconciler deployment container
+                      and the desired log level.
+                    items:
+                      description: ContainerLogLevelOverride specifies the container
+                        name and log level override value
+                      properties:
+                        containerName:
+                          description: 'containerName specifies the name of the reconciler
+                            deployment container for which log level will be overridden.
+                            Must be one of the following: "reconciler", "git-sync",
+                            "hydration-controller", "oci-sync", or "helm-sync".'
+                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+                          type: string
+                        logLevel:
+                          description: logLevel specifies the log level override value
+                            for the container. The default value for git-sync container
+                            is 5, while all other containers will default to 0. Allowed
+                            values are from 0 to 10
+                          maximum: 10
+                          minimum: 0
+                          type: integer
+                      required:
+                      - containerName
+                      - logLevel
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - containerName
+                    x-kubernetes-list-type: map
                   reconcileTimeout:
                     description: 'reconcileTimeout allows one to override the threshold
                       for how long to wait for all resources to reconcile before giving

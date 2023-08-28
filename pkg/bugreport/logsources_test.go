@@ -73,15 +73,15 @@ func TestConvertLogSourcesToReadables(t *testing.T) {
 			expected: Readables{
 				{
 					ReadCloser: &mockReadCloser{},
-					Name:       "source_a",
+					Name:       "source_a.log",
 				},
 				{
 					ReadCloser: &mockReadCloser{},
-					Name:       "source_b",
+					Name:       "source_b.log",
 				},
 				{
 					ReadCloser: &mockReadCloser{},
-					Name:       "source_c",
+					Name:       "source_c.log",
 				},
 			},
 			numErrors: 0,
@@ -113,11 +113,11 @@ func TestConvertLogSourcesToReadables(t *testing.T) {
 			expected: Readables{
 				{
 					ReadCloser: &mockReadCloser{},
-					Name:       "source_c",
+					Name:       "source_c.log",
 				},
 				{
 					ReadCloser: &mockReadCloser{},
-					Name:       "source_d",
+					Name:       "source_d.log",
 				},
 			},
 			numErrors: 2,

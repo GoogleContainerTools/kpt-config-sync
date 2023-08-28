@@ -54,11 +54,11 @@ COPY . .
 COPY .output/go/bin/helm /usr/local/bin/helm
 COPY .output/go/bin/kustomize /usr/local/bin/kustomize
 
-# Make sure the nomos command is available for tests.
-RUN go install kpt.dev/configsync/cmd/nomos
+# install the nomos CLI, which is used in several e2e tests.
+RUN go install ./cmd/nomos
 
 # Make sure the junit-report command is available for tests.
-RUN go install kpt.dev/configsync/cmd/junit-report
+RUN go install ./cmd/junit-report
 
 # Set Kubernetes environment.
 ENV KUBERNETES_ENV=KIND

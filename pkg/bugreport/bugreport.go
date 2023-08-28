@@ -472,7 +472,7 @@ func (b *BugReporter) AddNomosStatusToZip(ctx context.Context) {
 	}()
 	if err != nil {
 		b.ErrorList = append(b.ErrorList, err)
-	} else if err = b.copyToZip(tmpFile, path.Join(Processed, b.k8sContext, "status")); err != nil {
+	} else if err = b.copyToZip(tmpFile, path.Join(Processed, b.k8sContext, "status.txt")); err != nil {
 		b.WritingErrors = append(b.WritingErrors, err)
 	}
 }
@@ -481,7 +481,7 @@ func (b *BugReporter) AddNomosStatusToZip(ctx context.Context) {
 func (b *BugReporter) copyToZip(inputFile *os.File, zipFileName string) error {
 	baseName := filepath.Base(b.name)
 	dirName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	fileName := filepath.FromSlash(filepath.Join(dirName, zipFileName) + ".txt")
+	fileName := filepath.FromSlash(filepath.Join(dirName, zipFileName))
 	zipFile, err := b.writer.Create(fileName)
 	if err != nil {
 		e := fmt.Errorf("failed to create file %v inside zip: %v", fileName, err)
@@ -503,7 +503,7 @@ func (b *BugReporter) AddNomosVersionToZip(ctx context.Context) {
 	if versionRc, err := version.GetVersionReadCloser(ctx, []string{b.k8sContext}); err != nil {
 		b.ErrorList = append(b.ErrorList, err)
 	} else if err = b.writeReadableToZip(Readable{
-		Name:       path.Join(Processed, b.k8sContext, "version"),
+		Name:       path.Join(Processed, b.k8sContext, "version.txt"),
 		ReadCloser: versionRc,
 	}); err != nil {
 		b.WritingErrors = append(b.WritingErrors, err)
@@ -524,7 +524,7 @@ func getReportName() string {
 func (b *BugReporter) writeReadableToZip(readable Readable) error {
 	baseName := filepath.Base(b.name)
 	dirName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	fileName := filepath.FromSlash(filepath.Join(dirName, readable.Name) + ".txt")
+	fileName := filepath.FromSlash(filepath.Join(dirName, readable.Name))
 	f, err := b.writer.Create(fileName)
 	if err != nil {
 		e := fmt.Errorf("failed to create file %v inside zip: %v", fileName, err)
@@ -611,7 +611,7 @@ func (b *BugReporter) appendPrettyJSON(rd []Readable, pathName string, object in
 	} else {
 		rd = append(rd, Readable{
 			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-			Name:       pathName,
+			Name:       fmt.Sprintf("%s.json", pathName),
 		})
 	}
 	// also write to yaml for easier manual readability
@@ -620,7 +620,7 @@ func (b *BugReporter) appendPrettyJSON(rd []Readable, pathName string, object in
 	} else {
 		rd = append(rd, Readable{
 			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-			Name:       fmt.Sprintf("%s_yaml", pathName),
+			Name:       fmt.Sprintf("%s.yaml", pathName),
 		})
 	}
 	return rd

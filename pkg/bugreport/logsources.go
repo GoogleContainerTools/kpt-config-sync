@@ -42,7 +42,7 @@ func (ls logSources) convertLogSourcesToReadables(ctx context.Context, cs coreCl
 
 		rs = append(rs, Readable{
 			ReadCloser: rc,
-			Name:       l.pathName(),
+			Name:       fmt.Sprintf("%s.log", l.pathName()),
 		})
 	}
 

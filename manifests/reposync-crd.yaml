@@ -1195,11 +1195,15 @@ spec:
                       false.'
                     type: boolean
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 15s. Use string to specify this field value,
-                      like "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Chart will not be resynced if version is specified. Note: Resyncing
-                      chart for "latest" version is not supported in feature preview.'
+                    description: 'period is the time duration that Config Sync waits
+                      before refetching the chart. Default: 1 hour. Use string to
+                      specify this field value, like "30s", "5m". More details about
+                      valid inputs: https://pkg.go.dev/time#ParseDuration. If the
+                      chart version is a range, the literal tag "latest", or left
+                      empty to indicate that Config Sync should fetch the latest version,
+                      the chart will be re-fetched according to spec.helm.period.
+                      If the chart version is specified as a single static version,
+                      the chart will not be re-fetched.'
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -1225,13 +1229,13 @@ spec:
                   valuesFileRefs:
                     description: valuesFileRefs holds references to objects in the
                       cluster that represent values to use instead of default values
-                      that accompany the chart. Currently, only ConfigMaps are supported,
-                      and the ConfigMap must be in the same namespace as the RootSync/RepoSync.
-                      When multiple values files are specified, duplicated keys in
-                      later files will override the value from earlier files. This
-                      is equivalent to passing in multiple values files to Helm CLI.
-                      If `values` is also specified, fields from `values` will override
-                      fields from valuesFileRefs.
+                      that accompany the chart. Currently, only ConfigMaps are supported.
+                      The ConfigMaps must be immutable and in the same namespace as
+                      the RootSync/RepoSync. When multiple values files are specified,
+                      duplicated keys in later files will override the value from
+                      earlier files. This is equivalent to passing in multiple values
+                      files to Helm CLI. If `values` is also specified, fields from
+                      `values` will override fields from `valuesFileRefs`.
                     items:
                       description: ValuesFileRef references a ConfigMap object that
                         contains a values file to use for helm rendering. The ConfigMap
@@ -1247,8 +1251,15 @@ spec:
                       type: object
                     type: array
                   version:
-                    description: version is the chart version. If this is not specified,
-                      the latest version is used
+                    description: 'version is the chart version. This can be specified
+                      as a static version, or as a range of values from which Config
+                      Sync will fetch the latest. If left empty, Config Sync will
+                      fetch the latest version according to semver. The supported
+                      version range syntax is identical to the version range syntax
+                      supported by helm CLI, and is documented here: https://github.com/Masterminds/semver#hyphen-range-comparisons.
+                      Versions specified as a range, the literal tag "latest", or
+                      left empty to indicate that Config Sync should fetch the latest
+                      version, will be fetched every sync according to spec.helm.period.'
                     type: string
                 required:
                 - auth

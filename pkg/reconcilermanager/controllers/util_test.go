@@ -29,10 +29,9 @@ import (
 func TestHelmSyncEnvs(t *testing.T) {
 	duration, _ := time.ParseDuration("15s")
 	testCases := map[string]struct {
-		base              v1beta1.HelmBase
-		releaseNamespace  string
-		deployNamespace   string
-		versionPollPeriod string
+		base             v1beta1.HelmBase
+		releaseNamespace string
+		deployNamespace  string
 
 		expected []corev1.EnvVar
 	}{
@@ -48,9 +47,8 @@ func TestHelmSyncEnvs(t *testing.T) {
 				Period: metav1.Duration{Duration: duration},
 				Auth:   "none",
 			},
-			releaseNamespace:  "releaseNamespace",
-			deployNamespace:   "deployNamespace",
-			versionPollPeriod: "1h",
+			releaseNamespace: "releaseNamespace",
+			deployNamespace:  "deployNamespace",
 
 			expected: []corev1.EnvVar{
 				{Name: reconcilermanager.HelmRepo, Value: "example.com/repo"},
@@ -63,7 +61,6 @@ func TestHelmSyncEnvs(t *testing.T) {
 				{Name: reconcilermanager.HelmIncludeCRDs, Value: "false"},
 				{Name: reconcilermanager.HelmAuthType, Value: "none"},
 				{Name: reconcilermanager.HelmSyncWait, Value: "15.000000"},
-				{Name: reconcilermanager.HelmSyncVersionPollingPeriod, Value: "1h"},
 			},
 		},
 		"without inline values": {
@@ -72,12 +69,10 @@ func TestHelmSyncEnvs(t *testing.T) {
 				Chart:       "my-chart",
 				Version:     "1.0.0",
 				ReleaseName: "release-name",
-				Period:      metav1.Duration{Duration: duration},
 				Auth:        "none",
 			},
-			releaseNamespace:  "releaseNamespace",
-			deployNamespace:   "deployNamespace",
-			versionPollPeriod: "1h",
+			releaseNamespace: "releaseNamespace",
+			deployNamespace:  "deployNamespace",
 
 			expected: []corev1.EnvVar{
 				{Name: reconcilermanager.HelmRepo, Value: "example.com/repo"},
@@ -89,15 +84,14 @@ func TestHelmSyncEnvs(t *testing.T) {
 				{Name: reconcilermanager.HelmValuesYAML, Value: ""},
 				{Name: reconcilermanager.HelmIncludeCRDs, Value: "false"},
 				{Name: reconcilermanager.HelmAuthType, Value: "none"},
-				{Name: reconcilermanager.HelmSyncWait, Value: "15.000000"},
-				{Name: reconcilermanager.HelmSyncVersionPollingPeriod, Value: "1h"},
+				{Name: reconcilermanager.HelmSyncWait, Value: "3600.000000"},
 			},
 		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, helmSyncEnvs(&tc.base, tc.releaseNamespace, tc.deployNamespace, tc.versionPollPeriod))
+			assert.Equal(t, tc.expected, helmSyncEnvs(&tc.base, tc.releaseNamespace, tc.deployNamespace))
 		})
 	}
 }

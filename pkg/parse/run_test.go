@@ -21,8 +21,10 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -319,7 +321,11 @@ func TestRun(t *testing.T) {
 				SourceBranch: "main",
 			}
 			parser := newParser(t, fs, tc.renderingEnabled)
-			state := &reconcilerState{}
+			state := &reconcilerState{
+				backoff:     defaultBackoff(),
+				retryTimer:  time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
+				retryPeriod: configsync.DefaultReconcilerRetryPeriod,
+			}
 			run(context.Background(), parser, triggerReimport, state)
 
 			testutil.AssertEqual(t, tc.needRetry, state.cache.needToRetry, "[%s] unexpected state.cache.needToRetry return", tc.name)

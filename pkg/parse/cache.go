@@ -16,7 +16,6 @@ package parse
 
 import (
 	"sort"
-	"time"
 
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
@@ -66,12 +65,6 @@ type cacheForCommit struct {
 	// needToRetry indicates whether a retry is needed.
 	needToRetry bool
 
-	// reconciliationWithSameErrs tracks the number of reconciliation attempts failed with the same errors.
-	reconciliationWithSameErrs int
-
-	// nextRetryTime tracks when the next retry should happen.
-	nextRetryTime time.Time
-
 	// errs tracks all the errors encounted during the reconciliation.
 	errs status.MultiError
 }
@@ -82,10 +75,6 @@ func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs statu
 	c.objsToApply = knownScopeObjs
 	c.parserErrs = parserErrs
 	c.hasParserResult = true
-}
-
-func (c *cacheForCommit) readyToRetry() bool {
-	return !time.Now().Before(c.nextRetryTime)
 }
 
 func (c *cacheForCommit) parserResultUpToDate() bool {

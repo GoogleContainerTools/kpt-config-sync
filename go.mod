@@ -3,6 +3,7 @@ module kpt.dev/configsync
 go 1.19
 
 require (
+	cloud.google.com/go/monitoring v1.8.0
 	cloud.google.com/go/trace v1.4.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
 	github.com/GoogleContainerTools/kpt v1.0.0-beta.39
@@ -34,6 +35,7 @@ require (
 	golang.org/x/mod v0.11.0
 	golang.org/x/net v0.8.0
 	golang.org/x/oauth2 v0.6.0
+	google.golang.org/api v0.108.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.26.7
 	k8s.io/apiextensions-apiserver v0.26.7
@@ -133,7 +135,6 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
-	google.golang.org/api v0.108.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230124163310-31e0e69b6fc2 // indirect
 	google.golang.org/grpc v1.51.0 // indirect

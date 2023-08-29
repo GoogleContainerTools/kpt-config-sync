@@ -187,11 +187,11 @@ func (nt *NT) WatchForSync(
 	}
 
 	predicates := []testpredicates.Predicate{
-		// Status reflects latest spec changes
+		// Wait until status.observedGeneration matches metadata.generation
 		testpredicates.HasObservedLatestGeneration(nt.Scheme),
-		// Not Terminating, Reconciling, or Stalled
+		// Wait until metadata.deletionTimestamp is missing, and conditions do not iniclude Reconciling=True or Stalled=True
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-		// Expected commit/version is parsed, rendered, and synced
+		// Wait until expected commit/version is parsed, rendered, and synced
 		syncSha1(sha1),
 	}
 	if syncDirPair != nil {

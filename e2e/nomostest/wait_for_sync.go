@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/repo"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
 type watchForAllSyncsOptions struct {
@@ -186,7 +187,11 @@ func (nt *NT) WatchForSync(
 	}
 
 	predicates := []testpredicates.Predicate{
+		// Status reflects latest spec changes
 		testpredicates.HasObservedLatestGeneration(nt.Scheme),
+		// Not Terminating, Reconciling, or Stalled
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+		// Expected commit/version is parsed, rendered, and synced
 		syncSha1(sha1),
 	}
 	if syncDirPair != nil {

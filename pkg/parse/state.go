@@ -15,17 +15,12 @@
 package parse
 
 import (
-	"math"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/status"
-)
-
-const (
-	retriesBeforeStartingBackoff = 5
-	maxRetryInterval             = time.Duration(5) * time.Minute
 )
 
 type sourceStatus struct {
@@ -81,6 +76,34 @@ type reconcilerState struct {
 
 	// cache tracks the progress made by the reconciler for a source commit.
 	cache cacheForCommit
+
+	// backoff defines the duration to wait before retries
+	// backoff is initialized to `defaultBackoff()` when a reconcilerState struct is created.
+	// backoff is updated before a retry starts.
+	// backoff should only be reset back to `defaultBackoff()` when a new commit is detected.
+	backoff wait.Backoff
+
+	retryTimer *time.Timer
+
+	retryPeriod time.Duration
+}
+
+// retryLimit defines the maximal number of retries allowed on a given commit.
+const retryLimit = 12
+
+// The returned backoff includes 12 steps.
+// Here is an example of the duration between steps:
+//
+//	1.055843837s, 2.085359785s, 4.229560375s, 8.324724174s,
+//	16.295984061s, 34.325711987s, 1m5.465642392s, 2m18.625713221s,
+//	4m24.712222056s, 9m18.97652295s, 17m15.344384599s, 35m15.603237976s.
+func defaultBackoff() wait.Backoff {
+	return wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Steps:    retryLimit,
+		Jitter:   0.1,
+	}
 }
 
 func (s *reconcilerState) checkpoint() {
@@ -92,8 +115,6 @@ func (s *reconcilerState) checkpoint() {
 	s.cache.errs = nil
 	s.lastApplied = applied
 	s.cache.needToRetry = false
-	s.cache.reconciliationWithSameErrs = 0
-	s.cache.nextRetryTime = time.Time{}
 	s.cache.errs = nil
 }
 
@@ -104,42 +125,18 @@ func (s *reconcilerState) reset() {
 	s.resetCache()
 	s.lastApplied = ""
 	s.cache.needToRetry = true
-	s.cache.nextRetryTime = time.Now().Add(time.Second)
 }
 
 // invalidate logs the errors, clears the state tracking information.
 // invalidate does not clean up the `s.cache`.
 func (s *reconcilerState) invalidate(errs status.MultiError) {
 	klog.Errorf("Invalidating reconciler checkpoint: %v", status.FormatSingleLine(errs))
-	oldErrs := s.cache.errs
 	s.cache.errs = errs
 	// Invalidate state on error since this could be the result of switching
 	// branches or some other operation where inverting the operation would
 	// result in repeating a previous state that was checkpointed.
 	s.lastApplied = ""
 	s.cache.needToRetry = true
-	if status.DeepEqual(oldErrs, s.cache.errs) {
-		s.cache.reconciliationWithSameErrs++
-	} else {
-		s.cache.reconciliationWithSameErrs = 1
-	}
-	s.cache.nextRetryTime = calculateNextRetryTime(s.cache.reconciliationWithSameErrs)
-}
-
-func calculateNextRetryTime(retries int) time.Time {
-	// For the first several retries, the reconciler waits 1 second before retrying.
-	if retries <= retriesBeforeStartingBackoff {
-		return time.Now().Add(time.Second)
-	}
-
-	// For the remaining retries, the reconciler does exponential backoff retry up to 5 minutes.
-	// i.e., 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s, 5m, 5m, ...
-	seconds := int64(math.Pow(2, float64(retries-retriesBeforeStartingBackoff)))
-	duration := time.Duration(seconds) * time.Second
-	if duration > maxRetryInterval {
-		duration = maxRetryInterval
-	}
-	return time.Now().Add(duration)
 }
 
 // resetCache resets the whole cache.
@@ -149,15 +146,19 @@ func (s *reconcilerState) resetCache() {
 	s.cache = cacheForCommit{}
 }
 
-// resetAllButSourceState resets the whole cache except for the cached sourceState.
+// resetPartialCache resets the whole cache except for the cached sourceState and the cached needToRetry.
+// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
+// The cached needToRetry will not be reset to avoid resetting the backoff retries.
 //
-// resetAllButSourceState is called when:
+// resetPartialCache is called when:
 //   - a force-resync happens, or
 //   - one of the watchers noticed a management conflict.
-func (s *reconcilerState) resetAllButSourceState() {
+func (s *reconcilerState) resetPartialCache() {
 	source := s.cache.source
+	needToRetry := s.cache.needToRetry
 	s.cache = cacheForCommit{}
 	s.cache.source = source
+	s.cache.needToRetry = needToRetry
 }
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.

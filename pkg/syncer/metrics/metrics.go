@@ -30,9 +30,8 @@ var (
 			Buckets:   []float64{.001, .01, .1, 1},
 		},
 		// operation: create, patch, update, delete
-		// type: resource kind
 		// status: success, error
-		[]string{"operation", "type", "status"},
+		[]string{"operation", "status"},
 	)
 	ControllerRestarts = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -52,9 +51,8 @@ var (
 			Name:      "operations_total",
 		},
 		// operation: create, update, delete
-		// type: resource kind
 		// status: success, error
-		[]string{"operation", "type", "status"},
+		[]string{"operation", "status"},
 	)
 	ReconcileDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -64,9 +62,8 @@ var (
 			Name:      "reconcile_duration_seconds",
 			Buckets:   []float64{.001, .01, .1, 1, 10, 100},
 		},
-		// type: cluster, crd, namespace, repo, sync
 		// status: success, error
-		[]string{"type", "status"},
+		[]string{"status"},
 	)
 	ReconcileEventTimes = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -75,8 +72,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "reconcile_event_timestamps",
 		},
-		// type: cluster, crd, namespace, repo, sync
-		[]string{"type"},
+		[]string{},
 	)
 )
 

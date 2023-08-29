@@ -199,7 +199,7 @@ func TestPreventDeletionRole(t *testing.T) {
 		// Adjust operations for this edge case.
 		// Deletion is prevented, but management annotations/labels are removed.
 		Operations: []metrics.ObjectOperation{
-			{Kind: "Role", Operation: metrics.UpdateOperation, Count: 1},
+			{Operation: metrics.UpdateOperation, Count: 1}, // Role
 		},
 	})
 	if err != nil {

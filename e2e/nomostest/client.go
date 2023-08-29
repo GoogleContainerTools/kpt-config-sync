@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -91,6 +92,7 @@ func newScheme(t testing.NTB) *runtime.Scheme {
 		rbacv1beta1.SchemeBuilder,
 		resourcegroupv1alpha1.SchemeBuilder.SchemeBuilder,
 		apiregistrationv1.SchemeBuilder,
+		autoscalingv2.SchemeBuilder,
 	}
 	for _, b := range builders {
 		err := b.AddToScheme(s)

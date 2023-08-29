@@ -18,6 +18,7 @@ import (
 	kptfilev1 "github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -262,4 +263,9 @@ func APIService() schema.GroupVersionKind {
 // ValidatingWebhookConfiguration returns the ValidatingWebhookConfiguration kind.
 func ValidatingWebhookConfiguration() schema.GroupVersionKind {
 	return admissionv1.SchemeGroupVersion.WithKind("ValidatingWebhookConfiguration")
+}
+
+// Deployment returns the canonical Deployment GroupVersionKind.
+func HorizontalPodAutoscaler() schema.GroupVersionKind {
+	return autoscalingv2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler")
 }

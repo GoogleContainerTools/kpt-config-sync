@@ -135,7 +135,7 @@ data:
            resources:
              requests:
                cpu: 10m
-               memory: 20Mi
+               memory: 100Mi
            imagePullPolicy: IfNotPresent
            terminationMessagePolicy: File
            terminationMessagePath: /dev/termination-log

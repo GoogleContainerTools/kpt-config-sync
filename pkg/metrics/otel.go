@@ -184,98 +184,98 @@ processors:
           - action: aggregate_labels
             # label_set is the allowlist of labels to keep after aggregation
             label_set: [status, operation]
-            aggregation_type: sum
+            aggregation_type: max
       - include: declared_resources
         action: update
         new_name: current_declared_resources
         operations:
           - action: aggregate_labels
             label_set: []
-            aggregation_type: sum
+            aggregation_type: max
       - include: kcc_resource_count
         action: update
         operations:
           - action: aggregate_labels
             label_set: [resourcegroup]
-            aggregation_type: sum
+            aggregation_type: max
       - include: reconciler_errors
         action: update
         new_name: last_reconciler_errors
         operations:
           - action: aggregate_labels
             label_set: [component, errorclass]
-            aggregation_type: sum
+            aggregation_type: max
       - include: reconcile_duration_seconds
         action: update
         operations:
           - action: aggregate_labels
             label_set: [status]
-            aggregation_type: sum
+            aggregation_type: max
       - include: rg_reconcile_duration_seconds
         action: update
         operations:
           - action: aggregate_labels
             label_set: [stallreason]
-            aggregation_type: sum
+            aggregation_type: max
       - include: last_sync_timestamp
         action: update
         operations:
           - action: aggregate_labels
             label_set: [status]
-            aggregation_type: sum
+            aggregation_type: max
       - include: parser_duration_seconds
         action: update
         operations:
           - action: aggregate_labels
             label_set: [status, source, trigger]
-            aggregation_type: sum
+            aggregation_type: max
       - include: pipeline_error_observed
         action: update
         new_name: last_pipeline_error_observed
         operations:
           - action: aggregate_labels
             label_set: [name, component, reconciler]
-            aggregation_type: sum
+            aggregation_type: max
       - include: apply_operations_total
         action: update
         new_name: apply_operations_count
         operations:
           - action: aggregate_labels
             label_set: [controller, operation, status]
-            aggregation_type: sum
+            aggregation_type: max
       - include: apply_duration_seconds
         action: update
         operations:
           - action: aggregate_labels
             label_set: [status]
-            aggregation_type: sum
+            aggregation_type: max
       - include: resource_fights_total
         action: update
         new_name: resource_fights_count
         operations:
           - action: aggregate_labels
             label_set: [name, component, reconciler]
-            aggregation_type: sum
+            aggregation_type: max
       - include: resource_conflicts_total
         action: update
         new_name: resource_conflicts_count
         operations:
           - action: aggregate_labels
             label_set: []
-            aggregation_type: sum
+            aggregation_type: max
       - include: internal_errors_total
         action: update
         new_name: internal_errors_count
         operations:
           - action: aggregate_labels
             label_set: []
-            aggregation_type: sum
+            aggregation_type: max
       - include: remediate_duration_seconds
         action: update
         operations:
           - action: aggregate_labels
             label_set: [status]
-            aggregation_type: sum
+            aggregation_type: max
 extensions:
   health_check:
 service:

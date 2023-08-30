@@ -29,14 +29,7 @@ ENV CGO_ENABLED=0
 RUN apk add --no-cache \
   bash curl docker gcc git jq make openssh-client python3 diffutils
 
-ARG HELM_VERSION=v3.12.2
 ARG KUSTOMIZE_VERSION=v5.1.1
-
-# Install Helm
-RUN wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz && \
-  tar -zxvf /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz -C /tmp && \
-  mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
-  rm -rf /tmp/linux-amd64 /tmp/helm-${HELM_VERSION}-linux-amd64.tar.gz
 
 # Install Kustomize
 RUN wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -O /tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz && \
@@ -65,6 +58,8 @@ RUN go install sigs.k8s.io/kind@${KIND_VERSION}
 
 # Just copy everything in the nomos repository so we have whatever we might need.
 COPY . .
+
+COPY .output/go/bin/helm /usr/local/bin/helm
 
 # Make sure the nomos command is available for tests.
 RUN go install kpt.dev/configsync/cmd/nomos

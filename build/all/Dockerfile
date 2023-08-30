@@ -22,20 +22,7 @@ COPY . .
 # Version string to embed in built binary.
 ARG VERSION
 
-ARG HELM_VERSION=v3.12.2
 ARG KUSTOMIZE_VERSION=v5.1.1
-
-# Install Helm with license
-RUN URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" && \
-  URL_PREFIX="$(dirname "${URL}")" && FILENAME="$(basename "${URL}")" && \
-  wget "${URL}" -O "/tmp/${FILENAME}" && \
-  wget "${URL}.sha256" -O /tmp/helm_checksum.txt && \
-  echo "$(cat /tmp/helm_checksum.txt)  /tmp/${FILENAME}" | sha256sum --check && \
-  tar -zxvf "/tmp/${FILENAME}" -C /tmp && \
-  mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
-  mkdir -p ./vendor/helm.sh/helm/v3 && \
-  mv /tmp/linux-amd64/LICENSE ./vendor/helm.sh/helm/v3/LICENSE && \
-  rm -rf /tmp/linux-amd64 "/tmp/${FILENAME}" /tmp/helm_checksum.txt
 
 # Install Kustomize with license
 RUN URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" && \
@@ -81,7 +68,8 @@ USER nonroot:nonroot
 FROM gcr.io/distroless/static:nonroot as hydration-controller
 WORKDIR /
 COPY --from=bins /go/bin/hydration-controller .
-COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
@@ -105,7 +93,8 @@ FROM gcr.io/distroless/static:latest as helm-sync
 ENV HOME=/tmp
 WORKDIR /
 COPY --from=bins /go/bin/helm-sync .
-COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
@@ -116,7 +105,8 @@ FROM debian-nonroot as hydration-controller-with-shell
 WORKDIR /
 USER root
 COPY --from=bins /go/bin/hydration-controller .
-COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
@@ -164,7 +154,8 @@ RUN apt-get update && apt-get install -y bash git
 RUN mkdir -p /opt/nomos/bin
 WORKDIR /opt/nomos/bin
 COPY --from=bins /go/bin/nomos nomos
-COPY --from=bins /usr/local/bin/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
+COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /usr/local/bin/kustomize /usr/local/bin/kustomize
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt

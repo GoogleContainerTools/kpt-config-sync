@@ -54,7 +54,7 @@ build-junit-report-cli: pull-buildenv buildenv-dirs
 
 # Build Config Sync docker images
 .PHONY: build-images
-build-images:
+build-images: install-helm
 	@echo "+++ Building the Reconciler image: $(RECONCILER_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_IMAGE) \

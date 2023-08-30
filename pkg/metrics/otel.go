@@ -121,6 +121,39 @@ processors:
           - cluster_scoped_resource_count
           - resource_ns_count
           - api_duration_seconds
+  # Aggregate some metrics sent to Cloud Monitoring to remove high-cardinality labels (e.g. "commit")
+  metricstransform/cloudmonitoring:
+    transforms:
+      - include: last_sync_timestamp
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set:
+              - configsync.sync.kind
+              - configsync.sync.name
+              - configsync.sync.namespace
+              - status
+            aggregation_type: max
+      - include: declared_resources
+        action: update
+        new_name: current_declared_resources
+        operations:
+          - action: aggregate_labels
+            label_set:
+              - configsync.sync.kind
+              - configsync.sync.name
+              - configsync.sync.namespace
+            aggregation_type: max
+      - include: apply_duration_seconds
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set:
+              - configsync.sync.kind
+              - configsync.sync.name
+              - configsync.sync.namespace
+              - status
+            aggregation_type: max
   filter/kubernetes:
     metrics:
       include:
@@ -250,7 +283,7 @@ service:
   pipelines:
     metrics/cloudmonitoring:
       receivers: [opencensus]
-      processors: [batch, filter/cloudmonitoring, resourcedetection]
+      processors: [batch, filter/cloudmonitoring, metricstransform/cloudmonitoring, resourcedetection]
       exporters: [googlecloud]
     metrics/prometheus:
       receivers: [opencensus]

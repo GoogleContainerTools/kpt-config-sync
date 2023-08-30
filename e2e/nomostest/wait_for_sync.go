@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/repo"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
 type watchForAllSyncsOptions struct {
@@ -186,7 +187,11 @@ func (nt *NT) WatchForSync(
 	}
 
 	predicates := []testpredicates.Predicate{
+		// Wait until status.observedGeneration matches metadata.generation
 		testpredicates.HasObservedLatestGeneration(nt.Scheme),
+		// Wait until metadata.deletionTimestamp is missing, and conditions do not iniclude Reconciling=True or Stalled=True
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+		// Wait until expected commit/version is parsed, rendered, and synced
 		syncSha1(sha1),
 	}
 	if syncDirPair != nil {

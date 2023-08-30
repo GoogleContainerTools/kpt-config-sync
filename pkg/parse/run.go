@@ -81,7 +81,11 @@ func Run(ctx context.Context, p Parser) {
 	statusUpdateTimer := time.NewTimer(opts.statusUpdatePeriod)
 	defer statusUpdateTimer.Stop()
 
-	state := &reconcilerState{}
+	state := &reconcilerState{
+		backoff:     defaultBackoff(),
+		retryTimer:  retryTimer,
+		retryPeriod: opts.retryPeriod,
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -89,48 +93,72 @@ func Run(ctx context.Context, p Parser) {
 
 		// Re-apply even if no changes have been detected.
 		// This case should be checked first since it resets the cache.
+		// If the reconciler is in the process of reconciling a given commit, the resync won't
+		// happen until the ongoing reconciliation is done.
 		case <-resyncTimer.C:
 			klog.Infof("It is time for a force-resync")
-			// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
+			// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-			state.resetAllButSourceState()
+			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
+			state.resetPartialCache()
 			run(ctx, p, triggerResync, state)
 
-			resyncTimer.Reset(opts.resyncPeriod)             // Schedule resync attempt
-			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			resyncTimer.Reset(opts.resyncPeriod) // Schedule resync attempt
+			// we should not reset retryTimer under this `case` since it is not aware of the
+			// state of backoff retry.
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Re-import declared resources from the filesystem (from git-sync).
+		// If the reconciler is in the process of reconciling a given commit, the re-import won't
+		// happen until the ongoing reconciliation is done.
 		case <-runTimer.C:
 			run(ctx, p, triggerReimport, state)
 
-			runTimer.Reset(opts.pollingPeriod)               // Schedule re-run attempt
-			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			runTimer.Reset(opts.pollingPeriod) // Schedule re-import attempt
+			// we should not reset retryTimer under this `case` since it is not aware of the
+			// state of backoff retry.
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C:
 			var trigger string
 			if opts.managementConflict() {
-				// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
+				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-				state.resetAllButSourceState()
+				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
+				state.resetPartialCache()
 				trigger = triggerManagementConflict
-				// When conflict is detected, wait longer (same as the polling frequency) for the next retry.
-				time.Sleep(opts.pollingPeriod)
-			} else if state.cache.needToRetry && state.cache.readyToRetry() {
-				klog.Infof("The last reconciliation failed")
+			} else if state.cache.needToRetry {
 				trigger = triggerRetry
 			} else if opts.needToUpdateWatch() {
-				klog.Infof("Some watches need to be updated")
 				trigger = triggerWatchUpdate
 			} else {
-				// Don't reset the retry timer if there's nothing to retry.
+				// Reset retryTimer here to make sure it can be fired in the future.
+				// Image the following scenario:
+				// When the for loop starts, retryTimer fires first, none of triggerManagementConflict,
+				// triggerRetry, and triggerWatchUpdate is true. If we don't reset retryTimer here, when
+				// the `run` function fails when runTimer or resyncTimer fires, the retry logic under this `case`
+				// will never be executed.
+				retryTimer.Reset(opts.retryPeriod)
 				continue
 			}
-			run(ctx, p, trigger, state)
+			if state.backoff.Steps == 0 {
+				klog.Infof("Retry limit (%v) has been reached", retryLimit)
+				// Don't reset retryTimer if retry limit has been reached.
+				continue
+			}
 
-			retryTimer.Reset(opts.retryPeriod)               // Schedule retry attempt
+			retryDuration := state.backoff.Step()
+			retries := retryLimit - state.backoff.Steps
+			klog.Infof("a retry is triggered (trigger type: %v, retries: %v/%v)", trigger, retries, retryLimit)
+			// During the execution of `run`, if a new commit is detected,
+			// retryTimer will be reset to `opts.retryPeriod`, and state.backoff is reset to `defaultBackoff()`.
+			// In this case, `run` will try to sync the configs from the new commit instead of the old commit
+			// being retried.
+			run(ctx, p, trigger, state)
+			// Reset retryTimer after `run` to make sure `retryDuration` happens between the end of one execution
+			// of `run` and the start of the next execution.
+			retryTimer.Reset(retryDuration)
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 
 		// Update the sync status to report management conflicts (from the remediator).
@@ -148,6 +176,8 @@ func Run(ctx context.Context, p Parser) {
 			}
 
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+			// we should not reset retryTimer under this `case` since it is not aware of the
+			// state of backoff retry.
 		}
 	}
 }
@@ -227,12 +257,17 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	}
 
 	newSyncDir := state.cache.source.syncDir
+
+	if newSyncDir != oldSyncDir {
+		// Reset the backoff and retryTimer since it is a new commit
+		state.backoff = defaultBackoff()
+		state.retryTimer.Reset(state.retryPeriod)
+	}
+
 	// The parse-apply-watch sequence will be skipped if the trigger type is `triggerReimport` and
 	// there is no new source changes. The reasons are:
 	//   * If a former parse-apply-watch sequence for syncDir succeeded, there is no need to run the sequence again;
-	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence;
-	//   * The retry logic tracks the number of reconciliation attempts failed with the same errors, and when
-	//     the next retry should happen. Calling the parse-apply-watch sequence here makes the retry logic meaningless.
+	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence.
 	if trigger == triggerReimport && oldSyncDir == newSyncDir {
 		return
 	}

@@ -56,6 +56,9 @@ const (
 	// GitSync is the name of the git-sync container in reconciler pods.
 	GitSync = "git-sync"
 
+	// GCENodeAskpassSidecar is the name of the gcenode-askpass-sidecar container in reconciler pods.
+	GCENodeAskpassSidecar = "gcenode-askpass-sidecar"
+
 	// OciSync is the name of the oci-sync container in reconciler pods.
 	OciSync = "oci-sync"
 

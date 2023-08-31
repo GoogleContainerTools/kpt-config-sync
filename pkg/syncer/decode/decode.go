@@ -18,8 +18,6 @@ package decode
 import (
 	"fmt"
 
-	"kpt.dev/configsync/pkg/syncer/scheme"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,8 +33,6 @@ type Decoder interface {
 	// resources and returns a slice of all the resources grouped by their
 	// respective GroupVersionKind.
 	DecodeResources(genericResources []v1.GenericResources) (map[schema.GroupVersionKind][]*unstructured.Unstructured, error)
-	// UpdateScheme updates the scheme of the underlying decoder, so it can decode the given GroupVersionKinds.
-	UpdateScheme(gvks map[schema.GroupVersionKind]bool)
 }
 
 var _ Decoder = &genericResourceDecoder{}
@@ -55,12 +51,6 @@ func NewGenericResourceDecoder(scheme *runtime.Scheme) Decoder {
 		decoder:               serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 		unstructuredConverter: runtime.DefaultUnstructuredConverter,
 	}
-}
-
-// UpdateScheme implements Decoder.
-func (d *genericResourceDecoder) UpdateScheme(gvks map[schema.GroupVersionKind]bool) {
-	scheme.AddToSchemeAsUnstructured(d.scheme, gvks)
-	d.decoder = serializer.NewCodecFactory(d.scheme).UniversalDeserializer()
 }
 
 // DecodeResources implements Decoder.

@@ -432,11 +432,7 @@ func TestManagingReconciler(t *testing.T) {
 	nt.T.Log("Switch the auth type from none to gcpserviceaccount")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"gcpserviceaccount","secretRef":{"name":""},"gcpServiceAccountEmail":"test-gcp-sa-email@test-project.iam.gserviceaccount.com"}}}`)
 	nt.T.Log("Verify the gcenode-askpass-sidecar container should be added")
-	if nt.IsGKEAutopilot {
-		generation += 2 // generation bumped by 2 because the sidecar container will first be added and then the resource requirements will be adjusted by autopilot
-	} else {
-		generation++ // generation bumped by 1 to apply the new sidecar container
-	}
+	generation++ // generation bumped by 1 to apply the new sidecar container
 	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem,
 		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForGcpServiceAccountAuthType()})
 	if err != nil {

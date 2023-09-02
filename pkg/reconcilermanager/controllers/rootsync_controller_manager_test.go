@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -59,15 +60,13 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
 
+	errCh := startControllerManager(ctx, t, cs, setupRootReconciler(t, secretObj))
 	// Wait for manager to exit before returning
 	defer func() {
 		cancel()
@@ -83,15 +82,15 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
 	// Create RootSync
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -111,19 +110,19 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	t.Log("verifying the reconciler-manager finalizer is present")
 	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RootSync{}
-	err = fakeClient.Get(ctx, rsKey, rs)
+	err = cs.Client.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
 	// Only the user Secret should remain.
 	secretObj.SetUID("1")
 	t.Log("verifying all managed objects were deleted")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestReconcileInvalidRootSyncLifecycle validates that the RootSyncReconciler
@@ -139,14 +138,13 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeyToken), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
+
+	errCh := startControllerManager(ctx, t, cs, setupRootReconciler(t, secretObj))
 
 	// Wait for manager to exit before returning
 	defer func() {
@@ -161,15 +159,15 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &v1beta1.RootSyncList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &v1beta1.RootSyncList{})
 	require.NoError(t, err)
 
 	t.Log("creating RootSync")
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RootSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RootSync)
@@ -190,13 +188,13 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 
 	t.Log("only the stalled RootSync and user Secret should be present, no other generated resources")
 	secretObj.SetUID("1")
-	fakeClient.Check(t, secretObj, rsObj)
+	cs.Client.Check(t, secretObj, rsObj)
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 	t.Log("only the user Secret should be present")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestReconcileRootSyncLifecycleValidToInvalid validates that the RootSyncReconciler handles
@@ -204,7 +202,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 // - Create a ns-reconciler Deployment when a valid RootSync is created
 // - Surface an error when the RootSync object becomes invalid without deleting the generated resources
 // - Delete the RootSync object and its generated dependencies.
-func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
+func TestReconcileRootSyncLifecycleValidToInvalid(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
@@ -212,15 +210,13 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
 
+	errCh := startControllerManager(ctx, t, cs, setupRootReconciler(t, secretObj))
 	// Wait for manager to exit before returning
 	defer func() {
 		cancel()
@@ -236,15 +232,15 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
 	// Create RootSync
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -264,22 +260,22 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	t.Log("verifying the reconciler-manager finalizer is present")
 	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RootSync{}
-	err = fakeClient.Get(ctx, rsKey, rs)
+	err = cs.Client.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
 	t.Log("watching for RootSync status update")
-	watcher, err = watchObjects(watchCtx, fakeClient, &v1beta1.RootSyncList{})
+	watcher, err = watchObjects(watchCtx, cs.Client, &v1beta1.RootSyncList{})
 	require.NoError(t, err)
 
 	t.Log("updating RootSync to make it invalid")
 	existing := rs.DeepCopy()
 	rs.Spec.Auth = configsync.AuthToken
-	err = fakeClient.Patch(ctx, rs, client.MergeFrom(existing))
+	err = cs.Client.Patch(ctx, rs, client.MergeFrom(existing))
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RootSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RootSync)
@@ -299,18 +295,18 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	}
 
 	t.Log("verifying the reconciler deployment object still exists")
-	err = fakeClient.Get(ctx, reconcilerKey, &appsv1.Deployment{})
+	err = cs.Client.Get(ctx, reconcilerKey, &appsv1.Deployment{})
 	require.NoError(t, err)
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
 	// Only the user Secret should remain.
 	t.Log("verifying all managed objects were deleted")
 	secretObj.SetUID("1")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestRootSyncReconcilerDeploymentDriftProtection validates that changes to
@@ -449,20 +445,20 @@ func testRootSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyF
 	t.Log("building RootSyncReconciler")
 	syncObj := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
-	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
+	testDriftProtection(t, setupRootReconciler(t, secretObj), syncObj, exampleObj, objKeyFunc, modify, validate)
 }
 
-func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconciler Controller, syncObj, exampleObj client.Object, objKeyFunc func(client.ObjectKey) client.ObjectKey, modify, validate func(client.Object) error) {
+func testDriftProtection(t *testing.T, newReconciler newReconcilerFunc, syncObj, exampleObj client.Object, objKeyFunc func(client.ObjectKey) client.ObjectKey, modify, validate func(client.Object) error) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	defer logObjectYAMLIfFailed(t, fakeClient, syncObj)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, syncObj)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	errCh := startControllerManager(ctx, t, cs, newReconciler)
 
 	// Wait for manager to exit before returning
 	defer func() {
@@ -480,20 +476,20 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	defer watchCancel()
 
 	// Start watching
-	gvk, err := kinds.Lookup(exampleObj, fakeClient.Scheme())
+	gvk, err := kinds.Lookup(exampleObj, cs.Client.Scheme())
 	require.NoError(t, err)
-	exampleObjList, err := kinds.NewTypedListForItemGVK(gvk, fakeClient.Scheme())
+	exampleObjList, err := kinds.NewTypedListForItemGVK(gvk, cs.Client.Scheme())
 	require.NoError(t, err)
-	watcher, err := watchObjects(watchCtx, fakeClient, exampleObjList)
+	watcher, err := watchObjects(watchCtx, cs.Client, exampleObjList)
 	require.NoError(t, err)
 
 	// Create RootSync
-	err = fakeClient.Create(ctx, syncObj)
+	err = cs.Client.Create(ctx, syncObj)
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
 	var obj client.Object
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			obj = event.Object.(client.Object)
@@ -514,17 +510,17 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	defer watchCancel2()
 
 	// Start watching
-	watcher, err = watchObjects(watchCtx2, fakeClient, exampleObjList)
+	watcher, err = watchObjects(watchCtx2, cs.Client, exampleObjList)
 	require.NoError(t, err)
 
 	// Update object to apply unwanted drift
 	err = modify(obj)
 	require.NoError(t, err)
-	err = fakeClient.Update(ctx, obj)
+	err = cs.Client.Update(ctx, obj)
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			return validate(event.Object.(client.Object))
@@ -535,38 +531,43 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 }
 
-func startControllerManager(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, testReconciler Controller) <-chan error {
-	t.Helper()
-
-	// start sub-context so we can cancel & stop the manager in case of pre-return error
-	ctx, cancel := context.WithCancel(ctx)
-
-	fakeCache := syncerFake.NewCache(fakeClient, syncerFake.CacheOptions{})
-
+func buildControllerManager(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, fakeCache *syncerFake.Cache) controllerruntime.Manager {
 	t.Log("building controller-manager")
 	mgr, err := controllerruntime.NewManager(&rest.Config{}, controllerruntime.Options{
-		Scheme: core.Scheme,
-		Logger: testr.New(t),
+		Scheme:             core.Scheme,
+		Logger:             testr.New(t),
+		MetricsBindAddress: "0",
 		BaseContext: func() context.Context {
 			return ctx
 		},
 		NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 			return fakeCache, nil
 		},
-		NewClient: func(_ cache.Cache, _ *rest.Config, _ client.Options, _ ...client.Object) (client.Client, error) {
+		NewClient: func(_ *rest.Config, _ client.Options) (client.Client, error) {
 			return fakeClient, nil
 		},
-		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return fakeClient.RESTMapper(), nil
 		},
 	})
 	require.NoError(t, err)
+	return mgr
+}
 
-	err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
-	require.NoError(t, err)
+type newReconcilerFunc func(mgr controllerruntime.Manager, cs *syncerFake.ClientSet) (Controller, *syncerFake.ClientSet)
+
+func startControllerManager(ctx context.Context, t *testing.T, cs *syncerFake.ClientSet, newReconciler newReconcilerFunc) <-chan error {
+	t.Helper()
+
+	// start sub-context so we can cancel & stop the manager in case of pre-return error
+	ctx, cancel := context.WithCancel(ctx)
+
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
 
 	t.Log("registering root-reconciler-controller")
-	err = testReconciler.SetupWithManager(mgr, false)
+	testReconciler, _ := newReconciler(mgr, cs)
+	err := testReconciler.SetupWithManager(false)
 	require.NoError(t, err)
 
 	errCh := make(chan error)

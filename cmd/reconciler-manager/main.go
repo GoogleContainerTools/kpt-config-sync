@@ -96,19 +96,17 @@ func main() {
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
 	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
-		mgr.GetClient(), watcher, dynamicClient,
-		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
-		mgr.GetScheme())
-	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
+		mgr, watcher, dynamicClient,
+		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind))
+	if err := repoSync.SetupWithManager(watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configsync.RepoSyncKind)
 		os.Exit(1)
 	}
 
 	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
-		mgr.GetClient(), watcher, dynamicClient,
-		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
-		mgr.GetScheme())
-	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
+		mgr, watcher, dynamicClient,
+		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind))
+	if err := rootSync.SetupWithManager(watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configsync.RootSyncKind)
 		os.Exit(1)
 	}

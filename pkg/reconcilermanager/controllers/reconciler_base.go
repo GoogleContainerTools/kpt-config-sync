@@ -44,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -102,7 +103,7 @@ var reconcilerManagerAllowList = []string{
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
 	loggingController
-
+	mgr                     controllerruntime.Manager
 	clusterName             string
 	client                  client.Client    // caching
 	watcher                 client.WithWatch // non-caching

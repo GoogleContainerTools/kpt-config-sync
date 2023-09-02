@@ -537,8 +537,8 @@ func TestMergeListOptions(t *testing.T) {
 			},
 			expectedError: testutil.EqualError(
 				errors.New("not yet implemented: merging two different raw ListOptions: " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,} & " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,}")),
+					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,SendInitialEvents:nil,} & " +
+					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,SendInitialEvents:nil,}")),
 		},
 		// AllTheThings!
 		{

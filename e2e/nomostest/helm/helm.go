@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
 
 // PrivateARHelmRegistry is the registry URL to the private AR used for testing.
@@ -95,7 +96,7 @@ func (r *RemoteHelmChart) RegistryLogin() error {
 // CopyChartFromLocal accepts a local path to a helm chart and recursively copies it to r.Dir, modifying
 // the name of the copied chart from its original name to r.ChartName
 func (r *RemoteHelmChart) CopyChartFromLocal(chartPath, originalChartName string) error {
-	if err := copyutil.CopyDir(chartPath, r.Dir); err != nil {
+	if err := copyutil.CopyDir(filesys.MakeFsOnDisk(), chartPath, r.Dir); err != nil {
 		return fmt.Errorf("failed to copy helm chart: %v", err)
 	}
 	if err := findAndReplaceInFile(filepath.Join(r.Dir, "Chart.yaml"), fmt.Sprintf("name: %s", originalChartName), fmt.Sprintf("name: %s", r.ChartName)); err != nil {

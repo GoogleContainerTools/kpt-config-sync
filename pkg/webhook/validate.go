@@ -20,7 +20,6 @@ import (
 
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
@@ -64,7 +63,7 @@ func handler(cfg *rest.Config) (*Validator, error) {
 	if err != nil {
 		return nil, err
 	}
-	vc, err := declared.NewValueConverter(dc)
+	vc, err := declared.NewValueConverter(dc.OpenAPIV3())
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +98,7 @@ func (v *Validator) Handle(_ context.Context, req admission.Request) admission.R
 		err = diff.ValidateManager(username, manager, id, req.Operation)
 		if err != nil {
 			klog.Error(err.Error())
-			return deny(metav1.StatusReasonUnauthorized, err.Error())
+			return deny(err.Error())
 		}
 		return allow()
 	}
@@ -126,7 +125,7 @@ func (v *Validator) Handle(_ context.Context, req admission.Request) admission.R
 func (v *Validator) handleCreate(newObj client.Object, username string) admission.Response {
 	if differ.ManagedByConfigSync(newObj) {
 		klog.Errorf("%s is not authorized to create managed resource %q", username, core.GKNN(newObj))
-		return deny(metav1.StatusReasonUnauthorized, fmt.Sprintf("%s is not authorized to create managed resource %q", username, core.GKNN(newObj)))
+		return deny(fmt.Sprintf("%s is not authorized to create managed resource %q", username, core.GKNN(newObj)))
 	}
 	return allow()
 }
@@ -139,7 +138,7 @@ func (v *Validator) handleDelete(oldObj client.Object, username string) admissio
 	}
 	if differ.ManagedByConfigSync(oldObj) {
 		klog.Errorf("%s is not authorized to delete managed resource %q", username, core.GKNN(oldObj))
-		return deny(metav1.StatusReasonUnauthorized, fmt.Sprintf("%s is not authorized to delete managed resource %q", username, core.GKNN(oldObj)))
+		return deny(fmt.Sprintf("%s is not authorized to delete managed resource %q", username, core.GKNN(oldObj)))
 	}
 	return allow()
 }
@@ -164,7 +163,7 @@ func (v *Validator) handleUpdate(oldObj, newObj client.Object, username string) 
 	// request immediately.
 	if csSet := ConfigSyncMetadata(diffSet); !csSet.Empty() {
 		klog.Errorf("%s cannot modify Config Sync metadata of object %q: %s", username, core.GKNN(oldObj), csSet.String())
-		return deny(metav1.StatusReasonForbidden, fmt.Sprintf("%s cannot modify Config Sync metadata of object %q: %s", username, core.GKNN(oldObj), csSet.String()))
+		return deny(fmt.Sprintf("%s cannot modify Config Sync metadata of object %q: %s", username, core.GKNN(oldObj), csSet.String()))
 	}
 
 	if oldObj.GetAnnotations()[csmetadata.LifecycleMutationAnnotation] == csmetadata.IgnoreMutation {
@@ -186,7 +185,7 @@ func (v *Validator) handleUpdate(oldObj, newObj client.Object, username string) 
 	invalidSet := diffSet.Intersection(declaredSet)
 	if !invalidSet.Empty() {
 		klog.Errorf("%s cannot modify fields of object %q managed by Config Sync: %s", username, core.GKNN(oldObj), invalidSet.String())
-		return deny(metav1.StatusReasonForbidden, fmt.Sprintf("%s cannot modify fields of object %q managed by Config Sync: %s", username, core.GKNN(oldObj), invalidSet.String()))
+		return deny(fmt.Sprintf("%s cannot modify fields of object %q managed by Config Sync: %s", username, core.GKNN(oldObj), invalidSet.String()))
 	}
 	return allow()
 }
@@ -260,8 +259,7 @@ func allow() admission.Response {
 	return admission.Allowed("")
 }
 
-func deny(reason metav1.StatusReason, message string) admission.Response {
-	resp := admission.Denied(string(reason))
-	resp.Result.Message = message
+func deny(message string) admission.Response {
+	resp := admission.Denied(message)
 	return resp
 }

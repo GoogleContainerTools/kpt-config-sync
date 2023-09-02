@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
+	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -47,14 +48,13 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
+
+	errCh := startControllerManager(ctx, t, cs, setupNSReconciler(t, secretObj))
 
 	// Wait for manager to exit before returning
 	defer func() {
@@ -71,15 +71,15 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
 	// Create RepoSync
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -99,19 +99,19 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	t.Log("verifying the reconciler-manager finalizer is present")
 	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RepoSync{}
-	err = fakeClient.Get(ctx, rsKey, rs)
+	err = cs.Client.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
 	// Only the user Secret should remain.
 	secretObj.SetUID("1")
 	t.Log("verifying all managed objects were deleted")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestReconcileInvalidRepoSyncLifecycle validates that the RepoSyncReconciler
@@ -127,14 +127,13 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
+
+	errCh := startControllerManager(ctx, t, cs, setupNSReconciler(t, secretObj))
 
 	// Wait for manager to exit before returning
 	defer func() {
@@ -149,15 +148,15 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &v1beta1.RepoSyncList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &v1beta1.RepoSyncList{})
 	require.NoError(t, err)
 
 	t.Log("creating RepoSync")
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RepoSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
@@ -178,13 +177,13 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 
 	t.Log("only the stalled RepoSync and user Secret should be present, no other generated resources")
 	secretObj.SetUID("1")
-	fakeClient.Check(t, secretObj, rsObj)
+	cs.Client.Check(t, secretObj, rsObj)
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 	t.Log("only the user Secret should be present")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestReconcileRepoSyncLifecycleValidToInvalid validates that the RepoSyncReconciler
@@ -200,14 +199,13 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
-
-	defer logObjectYAMLIfFailed(t, fakeClient, rs)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	defer logObjectYAMLIfFailed(t, cs.Client, rs)
+
+	errCh := startControllerManager(ctx, t, cs, setupNSReconciler(t, secretObj))
 
 	// Wait for manager to exit before returning
 	defer func() {
@@ -224,15 +222,15 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	watcher, err := watchObjects(watchCtx, cs.Client, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
 	// Create RepoSync
-	err = fakeClient.Create(ctx, rs)
+	err = cs.Client.Create(ctx, rs)
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -252,21 +250,21 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	t.Log("verifying the reconciler-manager finalizer is present")
 	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RepoSync{}
-	err = fakeClient.Get(ctx, rsKey, rs)
+	err = cs.Client.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
 	t.Log("watching for RepoSync status update")
-	watcher, err = watchObjects(watchCtx, fakeClient, &v1beta1.RepoSyncList{})
+	watcher, err = watchObjects(watchCtx, cs.Client, &v1beta1.RepoSyncList{})
 	require.NoError(t, err)
 
 	t.Log("updating RepoSync to make it invalid")
 	rs.Spec.Auth = configsync.AuthToken
-	err = fakeClient.Update(ctx, rs)
+	err = cs.Client.Update(ctx, rs)
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, cs.Client.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RepoSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
@@ -286,18 +284,18 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	}
 
 	t.Log("verifying the reconciler deployment object still exists")
-	err = fakeClient.Get(ctx, reconcilerKey, &appsv1.Deployment{})
+	err = cs.Client.Get(ctx, reconcilerKey, &appsv1.Deployment{})
 	require.NoError(t, err)
 
 	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	err = watchutil.DeleteAndWait(ctx, cs.Client, rs, 10*time.Second)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
 	// Only the user Secret should remain.
 	t.Log("verifying all managed objects were deleted")
 	secretObj.SetUID("1")
-	fakeClient.Check(t, secretObj)
+	cs.Client.Check(t, secretObj)
 }
 
 // TestRepoSyncReconcilerDeploymentDriftProtection validates that changes to
@@ -487,6 +485,5 @@ func testRepoSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyF
 	t.Log("building RepoSyncReconciler")
 	syncObj := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
-	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
-	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
+	testDriftProtection(t, setupNSReconciler(t, secretObj), syncObj, exampleObj, objKeyFunc, modify, validate)
 }

@@ -56,7 +56,7 @@ import (
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
 func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool) (Parser, error) {
-	converter, err := declared.NewValueConverter(dc)
+	converter, err := declared.NewValueConverter(dc.OpenAPIV3())
 	if err != nil {
 		return nil, err
 	}

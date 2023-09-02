@@ -19,6 +19,7 @@ import (
 	"time"
 
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -47,7 +48,12 @@ func GetSyncedCRDs(ctx context.Context, skipAPIServer bool, apiServerTimeout tim
 		return nil, getSyncedCRDsError(err, "failed to create rest config")
 	}
 
-	mapper, err := apiutil.NewDynamicRESTMapper(config)
+	httpClient, err := rest.HTTPClientFor(config)
+	if err != nil {
+		return nil, getSyncedCRDsError(err, "failed to create HTTP client")
+	}
+
+	mapper, err := apiutil.NewDynamicRESTMapper(config, httpClient)
 	if err != nil {
 		return nil, getSyncedCRDsError(err, "failed to create mapper")
 	}

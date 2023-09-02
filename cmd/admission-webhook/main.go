@@ -27,8 +27,9 @@ import (
 	"kpt.dev/configsync/pkg/webhook"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
@@ -54,13 +55,15 @@ func main() {
 
 	setupLog.Info("starting manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Port:    configuration.ContainerPort,
-		CertDir: configuration.CertDir,
+		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+			Port:    configuration.ContainerPort,
+			CertDir: configuration.CertDir,
+		}),
 		// Required for the ReadyzCheck
 		HealthProbeBindAddress:  healthProbeBindAddress,
 		GracefulShutdownTimeout: &gracefulShutdownTimeout,
-		Controller: v1alpha1.ControllerConfigurationSpec{
-			CacheSyncTimeout: &cacheSyncTimeout,
+		Controller: config.Controller{
+			CacheSyncTimeout: cacheSyncTimeout,
 		},
 	})
 	if err != nil {

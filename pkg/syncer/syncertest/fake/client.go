@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/kinds"
@@ -43,6 +44,15 @@ type Client struct {
 	codecs  serializer.CodecFactory
 	mapper  meta.RESTMapper
 	storage *MemoryStorage
+}
+
+func (c *Client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return obj.GetObjectKind().GroupVersionKind(), nil
+}
+
+func (c *Client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // Prove Client satisfies the client.Client interface

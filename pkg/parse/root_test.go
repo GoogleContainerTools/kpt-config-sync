@@ -254,7 +254,7 @@ func TestRoot_Parse(t *testing.T) {
 					fake.WithRootSyncSourceType(v1beta1.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:git":{"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{"f:rendering":{"f:lastUpdate":{}},"f:source":{"f:lastUpdate":{}},"f:sync":{"f:lastUpdate":{}}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -542,7 +542,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			expectedError:   fakeParseError(context.DeadlineExceeded, kinds.Namespace(), kinds.Role()),
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
-				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				// add a faked object in parser.parsed without CRD so it's scope will be unknown when validating
 				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			want: []ast.FileObject{},
@@ -554,7 +554,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			expectedError:   fakeParseError(errors.New("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), kinds.Namespace(), kinds.Role()),
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
-				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				// add a faked object in parser.parsed without CRD so it's scope will be unknown when validating
 				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			want: []ast.FileObject{},
@@ -574,7 +574,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			expectedError:   status.UnknownObjectKindError(fake.Unstructured(kinds.Anvil(), core.Name("deploy"))),
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
-				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
+				// add a faked object in parser.parsed without CRD so it's scope will be unknown when validating
 				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			want: []ast.FileObject{

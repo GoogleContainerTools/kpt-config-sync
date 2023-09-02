@@ -309,7 +309,7 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 
 		serverResourcer = dc
 
-		converter, err = declared.NewValueConverter(dc)
+		converter, err = declared.NewValueConverter(dc.OpenAPIV3())
 		if err != nil {
 			return options, err
 		}

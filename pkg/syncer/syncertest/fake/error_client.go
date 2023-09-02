@@ -19,12 +19,22 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ErrorClient is a Client that always returns a specified error.
 type ErrorClient struct {
 	error error
+}
+
+func (e ErrorClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return obj.GetObjectKind().GroupVersionKind(), nil
+}
+
+func (e ErrorClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // NewErrorClient returns a Client that always returns an error.

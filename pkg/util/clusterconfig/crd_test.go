@@ -76,7 +76,7 @@ func TestGetCRDs(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.want, actual, cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(apiextensionsv1beta1.CustomResourceDefinition{}, "TypeMeta")); diff != "" {
+				cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "TypeMeta")); diff != "" {
 				t.Error(diff)
 			}
 		})

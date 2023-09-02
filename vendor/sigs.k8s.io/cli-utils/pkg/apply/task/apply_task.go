@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
@@ -187,8 +188,8 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 	openAPIGetter discovery.OpenAPISchemaInterface) applyOptions {
 	emptyString := ""
 	return &apply.ApplyOptions{
-		VisitedNamespaces: sets.NewString(),
-		VisitedUids:       sets.NewString(),
+		VisitedNamespaces: sets.New[string](),
+		VisitedUids:       sets.New[types.UID](),
 		Overwrite:         true, // Normally set in apply.NewApplyOptions
 		OpenAPIPatch:      true, // Normally set in apply.NewApplyOptions
 		Recorder:          genericclioptions.NoopRecorder{},
@@ -214,7 +215,6 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 			groupName: taskName,
 		}).toPrinterFunc(),
 		DynamicClient:  dynamicClient,
-		DryRunVerifier: resource.NewQueryParamVerifier(dynamicClient, openAPIGetter, resource.QueryParamDryRun),
 	}
 }
 

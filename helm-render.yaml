@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helm-render
+  namespace: default
+  labels:
+    app: helm-render
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: helm-render
+  template:
+    metadata:
+      labels:
+        app: helm-render
+    spec:
+      containers:
+      - image: gcr.io/stolos-dev/helm-render:v0.1.0
+        imagePullPolicy: IfNotPresent
+        name: helm-render

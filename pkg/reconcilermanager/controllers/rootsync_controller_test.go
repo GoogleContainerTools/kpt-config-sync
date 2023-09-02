@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -113,33 +112,27 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 	return result
 }
 
-func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RootSyncReconciler) {
+func setupRootReconciler(t *testing.T, objs ...client.Object) newReconcilerFunc {
 	t.Helper()
 
-	// Configure controller-manager to log to the test logger
-	controllerruntime.SetLogger(testr.New(t))
-
-	cs := syncerFake.NewClientSet(t, core.Scheme)
-
-	ctx := context.Background()
-	for _, obj := range objs {
-		err := cs.Client.Create(ctx, obj)
-		if err != nil {
-			t.Fatalf("Failed to create object: %v", err)
+	return func(mgr controllerruntime.Manager, cs *syncerFake.ClientSet) (Controller, *syncerFake.ClientSet) {
+		ctx := context.Background()
+		for _, obj := range objs {
+			err := cs.Client.Create(ctx, obj)
+			if err != nil {
+				t.Fatalf("Failed to create object: %v", err)
+			}
 		}
+		return NewRootSyncReconciler(
+			testCluster,
+			filesystemPollingPeriod,
+			hydrationPollingPeriod,
+			mgr,
+			cs.Client,
+			cs.DynamicClient,
+			controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
+		), cs
 	}
-
-	testReconciler := NewRootSyncReconciler(
-		testCluster,
-		filesystemPollingPeriod,
-		hydrationPollingPeriod,
-		cs.Client,
-		cs.Client,
-		cs.DynamicClient,
-		controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
-		cs.Client.Scheme(),
-	)
-	return cs.Client, cs.DynamicClient, testReconciler
 }
 
 func rootsyncRef(rev string) func(*v1beta1.RootSync) {
@@ -312,10 +305,15 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH),
 		rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideResources(overrideAllContainerResources))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +328,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -356,13 +354,13 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideSelectedResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -379,7 +377,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -387,11 +385,11 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -407,7 +405,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -422,10 +420,15 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -440,7 +443,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -473,13 +476,13 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideAllContainerResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -497,7 +500,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -523,13 +526,13 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideReconcilerAndHydrationResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -546,7 +549,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -563,13 +566,13 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideGitSyncResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -586,7 +589,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -594,12 +597,12 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.OverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -615,7 +618,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -630,10 +633,15 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncNoSSLVerify())
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -648,7 +656,7 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -663,10 +671,15 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -680,7 +693,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -688,12 +701,12 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	t.Log("Deployment successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.NoSSLVerify to false
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -701,7 +714,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -709,12 +722,12 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	t.Log("No need to update Deployment")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.NoSSLVerify to true
 	rs.Spec.NoSSLVerify = true
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -730,7 +743,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -738,12 +751,12 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.NoSSLVerify to false
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -759,7 +772,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -780,10 +793,15 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
 	certSecret.Data[CACertSecretKey] = []byte("test-data")
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, gitSecret, certSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -801,7 +819,7 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully created")
@@ -818,10 +836,15 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
 	certSecret.Data[CACertSecretKey] = []byte("test-data")
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, gitSecret, certSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -838,17 +861,17 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Unset rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -856,17 +879,17 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("No need to update Deployment")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -885,17 +908,17 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Unset rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -914,7 +937,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Fatalf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
@@ -930,10 +953,15 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
-	fakeClient, _, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, gitSecret, certSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// reconcile
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -941,7 +969,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 	// rootsync should be in stalled status
 	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
 	rootsync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 }
 
 func TestRootSyncWithInvalidCACertSecret(t *testing.T) {
@@ -953,8 +981,13 @@ func TestRootSyncWithInvalidCACertSecret(t *testing.T) {
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
-	_, _, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+
 	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, gitSecret, certSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// validation should return an error
 	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
@@ -972,8 +1005,12 @@ func TestRootSyncWithoutCACertSecret(t *testing.T) {
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 
 	// no cert secret is setup to trigger not found error
-	_, _, testReconciler := setupRootReconciler(t, rs, gitSecret)
 	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, gitSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// validation should return a not found error
 	err := testReconciler.validateCACertSecret(ctx, rs.Namespace, caCertSecret)
@@ -987,10 +1024,15 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideGitSyncDepth(5))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1005,7 +1047,7 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1020,10 +1062,15 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1037,7 +1084,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1045,13 +1092,13 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test overriding the git sync depth to a positive value
 	var depth int64 = 5
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1068,7 +1115,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1076,13 +1123,13 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test overriding the git sync depth to 0
 	depth = 0
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1099,7 +1146,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1107,12 +1154,12 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.Override.GitSyncDepth to nil.
 	rs.Spec.SafeOverride().GitSyncDepth = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1128,7 +1175,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1136,12 +1183,12 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.OverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1149,7 +1196,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1164,10 +1211,15 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1182,7 +1234,7 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1197,10 +1249,15 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1213,7 +1270,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1221,13 +1278,13 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1244,7 +1301,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1252,12 +1309,12 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
 	rs.Spec.SafeOverride().ReconcileTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1273,7 +1330,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1281,19 +1338,19 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.OverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1308,10 +1365,15 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1326,7 +1388,7 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully created")
@@ -1338,10 +1400,15 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1354,7 +1421,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1362,13 +1429,13 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1384,7 +1451,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(updatedRootDeployment)] = updatedRootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1392,12 +1459,12 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
 	rs.Spec.SafeOverride().ReconcileTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1413,7 +1480,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1421,19 +1488,19 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.OverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1448,10 +1515,15 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources with GCPServiceAccount auth type.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1482,12 +1554,12 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 
 	// compare ServiceAccount.
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(wantServiceAccount): wantServiceAccount}
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1495,13 +1567,13 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	}
 	t.Log("Resources successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating RootSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: rootsyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -1517,7 +1589,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1525,13 +1597,13 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating RootSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -1548,7 +1620,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1563,10 +1635,15 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1580,7 +1657,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1602,7 +1679,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 		t.Fatalf("failed to change unstructured to byte array: %v", err)
 	}
 	t.Logf("Applying Patch: %s", string(patchData))
-	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
+	_, err = cs.DynamicClient.Resource(kinds.DeploymentResource()).
 		Namespace(rootDeployment.Namespace).
 		Patch(ctx, rootDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
 	if err != nil {
@@ -1621,7 +1698,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Fatalf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
@@ -1655,7 +1732,12 @@ func TestMultipleRootSyncs(t *testing.T) {
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs1.Namespace)))
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs1.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	rootReconcilerName2 := core.RootReconcilerName(rs2.Name)
 	rootReconcilerName3 := core.RootReconcilerName(rs3.Name)
@@ -1663,7 +1745,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootReconcilerName5 := core.RootReconcilerName(rs5.Name)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -1674,7 +1755,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootsync.SetReconciling(wantRs1, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	controllerutil.AddFinalizer(wantRs1, metadata.ReconcilerManagerFinalizer)
-	validateRootSyncStatus(t, wantRs1, fakeClient)
+	validateRootSyncStatus(t, wantRs1, cs.Client)
 
 	label1 := map[string]string{
 		metadata.SyncNamespaceLabel: rs1.Namespace,
@@ -1704,13 +1785,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment1): rootDeployment1}
 
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Error(err)
 	}
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1719,7 +1800,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
 	// Test reconciler rs2: root-sync
-	if err := fakeClient.Create(ctx, rs2); err != nil {
+	if err := cs.Client.Create(ctx, rs2); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -1732,7 +1813,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootsync.SetReconciling(wantRs2, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
 	controllerutil.AddFinalizer(wantRs2, metadata.ReconcilerManagerFinalizer)
-	validateRootSyncStatus(t, wantRs2, fakeClient)
+	validateRootSyncStatus(t, wantRs2, cs.Client)
 
 	label2 := map[string]string{
 		metadata.SyncNamespaceLabel: rs2.Namespace,
@@ -1748,7 +1829,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments[core.IDOf(rootDeployment2)] = rootDeployment2
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
@@ -1759,14 +1840,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	wantServiceAccounts[core.IDOf(serviceAccount2)] = serviceAccount2
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName2)
 	crb.ResourceVersion = "2"
 	crb.Generation = 2
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1775,7 +1856,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs3: my-rs-3
-	if err := fakeClient.Create(ctx, rs3); err != nil {
+	if err := cs.Client.Create(ctx, rs3); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -1788,7 +1869,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootsync.SetReconciling(wantRs3, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
 	controllerutil.AddFinalizer(wantRs3, metadata.ReconcilerManagerFinalizer)
-	validateRootSyncStatus(t, wantRs3, fakeClient)
+	validateRootSyncStatus(t, wantRs3, cs.Client)
 
 	label3 := map[string]string{
 		metadata.SyncNamespaceLabel: rs3.Namespace,
@@ -1804,7 +1885,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments[core.IDOf(rootDeployment3)] = rootDeployment3
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Error(err)
 	}
 
@@ -1816,14 +1897,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	wantServiceAccounts[core.IDOf(serviceAccount3)] = serviceAccount3
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName3)
 	crb.ResourceVersion = "3"
 	crb.Generation = 3
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1832,10 +1913,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs4: my-rs-4
-	if err := fakeClient.Create(ctx, rs4); err != nil {
+	if err := cs.Client.Create(ctx, rs4); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret4); err != nil {
+	if err := cs.Client.Create(ctx, secret4); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -1848,7 +1929,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootsync.SetReconciling(wantRs4, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName4))
 	controllerutil.AddFinalizer(wantRs4, metadata.ReconcilerManagerFinalizer)
-	validateRootSyncStatus(t, wantRs4, fakeClient)
+	validateRootSyncStatus(t, wantRs4, cs.Client)
 
 	label4 := map[string]string{
 		metadata.SyncNamespaceLabel: rs4.Namespace,
@@ -1865,7 +1946,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments[core.IDOf(rootDeployment4)] = rootDeployment4
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
@@ -1876,14 +1957,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	wantServiceAccounts[core.IDOf(serviceAccount4)] = serviceAccount4
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName4)
 	crb.ResourceVersion = "4"
 	crb.Generation = 4
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1892,10 +1973,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs5: my-rs-5
-	if err := fakeClient.Create(ctx, rs5); err != nil {
+	if err := cs.Client.Create(ctx, rs5); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret5); err != nil {
+	if err := cs.Client.Create(ctx, secret5); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -1908,7 +1989,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootsync.SetReconciling(wantRs5, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName5))
 	controllerutil.AddFinalizer(wantRs5, metadata.ReconcilerManagerFinalizer)
-	validateRootSyncStatus(t, wantRs5, fakeClient)
+	validateRootSyncStatus(t, wantRs5, cs.Client)
 
 	label5 := map[string]string{
 		metadata.SyncNamespaceLabel: rs5.Namespace,
@@ -1927,7 +2008,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments[core.IDOf(rootDeployment5)] = rootDeployment5
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	serviceAccount5 := fake.ServiceAccountObject(
@@ -1937,14 +2018,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	wantServiceAccounts[core.IDOf(serviceAccount5)] = serviceAccount5
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName5)
 	crb.ResourceVersion = "5"
 	crb.Generation = 5
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1952,12 +2033,12 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs1), rs1); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs1), rs1); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating Deployment resources for rs1: my-root-sync
 	rs1.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs1); err != nil {
+	if err := cs.Client.Update(ctx, rs1); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1966,13 +2047,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	rootsync.SetReconciling(wantRs1, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
-	validateRootSyncStatus(t, wantRs1, fakeClient)
+	validateRootSyncStatus(t, wantRs1, cs.Client)
 
 	rootContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
 	rootDeployment1 = rootSyncDeployment(rootReconcilerName,
@@ -1982,7 +2063,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment1)] = rootDeployment1
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -1990,12 +2071,12 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs2), rs2); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs2), rs2); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating Deployment resources for rs2: root-sync
 	rs2.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs2); err != nil {
+	if err := cs.Client.Update(ctx, rs2); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2003,13 +2084,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	rootsync.SetReconciling(wantRs2, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
-	validateRootSyncStatus(t, wantRs2, fakeClient)
+	validateRootSyncStatus(t, wantRs2, cs.Client)
 
 	rootContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
 	rootDeployment2 = rootSyncDeployment(rootReconcilerName2,
@@ -2019,7 +2100,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment2)] = rootDeployment2
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2027,13 +2108,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs3), rs3); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs3), rs3); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating  Deployment resources for rs3: my-rs-3
 	rs3.Spec.Git.Revision = gitUpdatedRevision
 	rs3.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs3); err != nil {
+	if err := cs.Client.Update(ctx, rs3); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2041,13 +2122,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	rootsync.SetReconciling(wantRs3, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
-	validateRootSyncStatus(t, wantRs3, fakeClient)
+	validateRootSyncStatus(t, wantRs3, cs.Client)
 
 	rootContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
 	rootDeployment3 = rootSyncDeployment(rootReconcilerName3,
@@ -2057,7 +2138,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment3)] = rootDeployment3
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2067,14 +2148,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Test garbage collecting ClusterRoleBinding after all RootSyncs are deleted
 	rs1.ResourceVersion = "" // Skip ResourceVersion validation
-	if err := fakeClient.Delete(ctx, rs1); err != nil {
+	if err := cs.Client.Delete(ctx, rs1); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateResourceDeleted(core.IDOf(rs1), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(rs1), cs.Client); err != nil {
 		t.Error(err)
 	}
 
@@ -2082,24 +2163,24 @@ func TestMultipleRootSyncs(t *testing.T) {
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName)
 	crb.ResourceVersion = "6"
 	crb.Generation = 6
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
-	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName)
+	validateRootGeneratedResourcesDeleted(t, cs.Client, rootReconcilerName)
 	if t.Failed() {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully deleted")
 
 	rs2.ResourceVersion = "" // Skip ResourceVersion validation
-	if err := fakeClient.Delete(ctx, rs2); err != nil {
+	if err := cs.Client.Delete(ctx, rs2); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateResourceDeleted(core.IDOf(rs2), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(rs2), cs.Client); err != nil {
 		t.Error(err)
 	}
 
@@ -2107,24 +2188,24 @@ func TestMultipleRootSyncs(t *testing.T) {
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName2)
 	crb.ResourceVersion = "7"
 	crb.Generation = 7
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
-	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName2)
+	validateRootGeneratedResourcesDeleted(t, cs.Client, rootReconcilerName2)
 	if t.Failed() {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully deleted")
 
 	rs3.ResourceVersion = "" // Skip ResourceVersion validation
-	if err := fakeClient.Delete(ctx, rs3); err != nil {
+	if err := cs.Client.Delete(ctx, rs3); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateResourceDeleted(core.IDOf(rs3), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(rs3), cs.Client); err != nil {
 		t.Error(err)
 	}
 
@@ -2132,24 +2213,24 @@ func TestMultipleRootSyncs(t *testing.T) {
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName3)
 	crb.ResourceVersion = "8"
 	crb.Generation = 8
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
-	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName3)
+	validateRootGeneratedResourcesDeleted(t, cs.Client, rootReconcilerName3)
 	if t.Failed() {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully deleted")
 
 	rs4.ResourceVersion = "" // Skip ResourceVersion validation
-	if err := fakeClient.Delete(ctx, rs4); err != nil {
+	if err := cs.Client.Delete(ctx, rs4); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateResourceDeleted(core.IDOf(rs4), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(rs4), cs.Client); err != nil {
 		t.Error(err)
 	}
 
@@ -2157,32 +2238,32 @@ func TestMultipleRootSyncs(t *testing.T) {
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName4)
 	crb.ResourceVersion = "9"
 	crb.Generation = 9
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb, cs.Client); err != nil {
 		t.Error(err)
 	}
-	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName4)
+	validateRootGeneratedResourcesDeleted(t, cs.Client, rootReconcilerName4)
 	if t.Failed() {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully deleted")
 
 	rs5.ResourceVersion = "" // Skip ResourceVersion validation
-	if err := fakeClient.Delete(ctx, rs5); err != nil {
+	if err := cs.Client.Delete(ctx, rs5); err != nil {
 		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateResourceDeleted(core.IDOf(rs5), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(rs5), cs.Client); err != nil {
 		t.Error(err)
 	}
 
 	// Verify the ClusterRoleBinding of the root-reconciler is deleted
-	if err := validateResourceDeleted(core.IDOf(crb), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb), cs.Client); err != nil {
 		t.Error(err)
 	}
-	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5)
+	validateRootGeneratedResourcesDeleted(t, cs.Client, rootReconcilerName5)
 	if t.Failed() {
 		t.FailNow()
 	}
@@ -2268,9 +2349,15 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 					objs = append(objs, rs)
 				}
 			}
-			_, _, testReconciler := setupRootReconciler(t, objs...)
 
-			result := testReconciler.mapSecretToRootSyncs(tc.secret)
+			ctx := context.Background()
+			cs := syncerFake.NewClientSet(t, core.Scheme)
+			fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+			mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+			reconciler, _ := setupRootReconciler(t, objs...)(mgr, cs)
+			testReconciler := reconciler.(*RootSyncReconciler)
+
+			result := testReconciler.mapSecretToRootSyncs(context.Background(), tc.secret)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}
@@ -2296,7 +2383,13 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
 			Owner: hubv1.MembershipOwner{
@@ -2305,7 +2398,6 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		},
 	}
 	// Test creating Deployment resources with GCPServiceAccount auth type.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2320,7 +2412,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2352,7 +2444,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	wantDeployments = map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2360,13 +2452,13 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	}
 	t.Log("Resources successfully created")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating RootSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: rootsyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -2382,7 +2474,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2390,13 +2482,13 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Test updating RootSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -2413,7 +2505,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2431,10 +2523,15 @@ func TestRootSyncWithHelm(t *testing.T) {
 		rootsyncHelmAuthType(configsync.AuthToken), rootsyncHelmSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	helmSecret := secretObj(t, secretName, configsync.AuthToken, v1beta1.HelmSource, core.Namespace(rs.Namespace))
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, helmSecret)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, helmSecret)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2451,7 +2548,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2462,7 +2559,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	// Test updating RootSync resources with None auth type.
 	rs = rootSyncWithHelm(rootsyncName,
 		rootsyncHelmAuthType(configsync.AuthNone))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2477,7 +2574,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2494,13 +2591,13 @@ func TestRootSyncWithHelm(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideHelmSyncResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -2517,7 +2614,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2532,10 +2629,15 @@ func TestRootSyncWithOCI(t *testing.T) {
 
 	rs := rootSyncWithOCI(rootsyncName, rootsyncOCIAuthType(configsync.AuthNone))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources with GCPServiceAccount auth type.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2565,12 +2667,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 
 	// compare ServiceAccount.
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(wantServiceAccount): wantServiceAccount}
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2579,11 +2681,11 @@ func TestRootSyncWithOCI(t *testing.T) {
 	t.Log("Resources successfully created")
 
 	t.Log("Test updating RootSync resources with gcenode auth type.")
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Oci.Auth = configsync.AuthGCENode
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2591,7 +2693,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 
 	// compare ServiceAccount.
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
@@ -2603,7 +2705,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2612,12 +2714,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	t.Log("Test updating RootSync resources with gcpserviceaccount auth type.")
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Oci.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2633,7 +2735,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	)
 	// compare ServiceAccount.
 	wantServiceAccounts[core.IDOf(wantServiceAccount)] = wantServiceAccount
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -2645,7 +2747,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2665,7 +2767,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+	if err := validateServiceAccounts(wantServiceAccounts, cs.Client); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
@@ -2679,7 +2781,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2696,13 +2798,13 @@ func TestRootSyncWithOCI(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		Resources: overrideOciSyncResources,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -2722,7 +2824,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -2737,23 +2839,28 @@ func TestRootSyncSpecValidation(t *testing.T) {
 
 	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, _, testReconciler := setupRootReconciler(t, rs)
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Verify unsupported source type
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing Git
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.GitSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2761,14 +2868,14 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing Oci
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2776,14 +2883,14 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing Helm
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2791,15 +2898,15 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing OCI image
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2807,15 +2914,15 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify invalid OCI Auth
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2823,16 +2930,16 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing Helm repo
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{}
 	rs.Spec.Oci = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2840,15 +2947,15 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify missing Helm chart
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2856,15 +2963,15 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify invalid Helm Auth
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2872,22 +2979,22 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify valid OCI spec
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Git = nil
 	rs.Spec.Helm = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RootSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := cs.Client.Status().Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2898,22 +3005,22 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	wantRs.Status.Conditions = nil // clear the stalled condition
 	rootsync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 
 	// verify valid Helm spec
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Git = nil
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RootSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := cs.Client.Status().Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -2924,18 +3031,23 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	wantRs.Status.Conditions = nil // clear the stalled condition
 	rootsync.SetReconciling(wantRs, "Deployment",
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
-	validateRootSyncStatus(t, wantRs, fakeClient)
+	validateRootSyncStatus(t, wantRs, cs.Client)
 }
 
 func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, _, testReconciler := setupRootReconciler(t, rs)
+
 	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs)(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	rs.ResourceVersion = "1"
 	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
-	err := fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	err := cs.Client.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	oldRS := rs.DeepCopy()
 
@@ -2945,7 +3057,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 
 	// Expect Stalled condition with True status, because the RootSync is invalid
 	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
-	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	err = cs.Client.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
 	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
@@ -2953,7 +3065,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.Contains(t, reconcilingCondition.Message, "KNV1061: RootSyncs must specify spec.sourceType", "unexpected Stalled condition message")
 
 	// Simulate stale cache (rollback to previous resource version)
-	err = fakeClient.Storage().TestPut(oldRS)
+	err = cs.Client.Storage().TestPut(oldRS)
 	require.NoError(t, err)
 
 	// Expect next Reconcile to succeed but NOT update the RootSync
@@ -2962,7 +3074,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Simulate cache update from watch event (roll forward to the latest resource version)
-	err = fakeClient.Storage().TestPut(rs)
+	err = cs.Client.Storage().TestPut(rs)
 	require.NoError(t, err)
 
 	// Reconcile should succeed but NOT update the RootSync
@@ -2971,7 +3083,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 
 	// Expect the same Stalled condition error message
 	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
-	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	err = cs.Client.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
 	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
@@ -2980,10 +3092,10 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 
 	// Simulate a spec update, with ResourceVersion updated by the apiserver
 	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
-	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	err = cs.Client.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	rs.Spec.SourceType = string(v1beta1.GitSource)
-	err = fakeClient.Update(ctx, rs)
+	err = cs.Client.Update(ctx, rs)
 	require.NoError(t, err, "unexpected Update error")
 
 	// Reconcile should succeed and update the RootSync
@@ -2992,7 +3104,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 
 	// Expect Stalled condition with True status, because the RootSync is differently invalid
 	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
-	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
+	err = cs.Client.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
 	require.NotNilf(t, reconcilingCondition, "status: %+v", rs.Status)
@@ -3102,7 +3214,11 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, testReconciler := setupRootReconciler(t, tc.rootSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.rootSync.Namespace)))
+			cs := syncerFake.NewClientSet(t, core.Scheme)
+			fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+			mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+			reconciler, _ := setupRootReconciler(t, tc.rootSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.rootSync.Namespace)))(mgr, cs)
+			testReconciler := reconciler.(*RootSyncReconciler)
 
 			env := testReconciler.populateContainerEnvs(ctx, tc.rootSync, rootReconcilerName)
 
@@ -3121,10 +3237,15 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	ctx := context.Background()
+	cs := syncerFake.NewClientSet(t, core.Scheme)
+	fakeCache := syncerFake.NewCache(cs.Client, syncerFake.CacheOptions{})
+	mgr := buildControllerManager(ctx, t, cs.Client, fakeCache)
+	reconciler, _ := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))(mgr, cs)
+	testReconciler := reconciler.(*RootSyncReconciler)
 
 	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -3139,7 +3260,7 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -3174,13 +3295,13 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+	if err := cs.Client.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.OverrideSpec{
 		LogLevels: overrideLogLevel,
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := cs.Client.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -3198,7 +3319,7 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, cs.DynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 }

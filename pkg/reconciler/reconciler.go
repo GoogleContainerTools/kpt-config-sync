@@ -16,6 +16,7 @@ package reconciler
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -148,9 +149,14 @@ func Run(opts Options) {
 		klog.Fatalf("Error creating discovery client: %v", err)
 	}
 
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		klog.Fatalf("Error creating HTTP client: %v", err)
+	}
+
 	// Use the DynamicRESTMapper as the default RESTMapper does not detect when
 	// new types become available.
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		klog.Fatalf("Error creating DynamicRESTMapper: %v", err)
 	}
@@ -236,7 +242,7 @@ func Run(opts Options) {
 	ctrl.SetLogger(klogr.New())
 	mgrOptions := ctrl.Options{
 		Scheme: core.Scheme,
-		MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return mapper, nil
 		},
 		BaseContext: func() context.Context {

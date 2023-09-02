@@ -23,7 +23,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	clusterregistry "k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1"
+	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -98,6 +101,88 @@ func roleBinding(name, namespace string, annotations map[string]string) *rbacv1.
 
 func namespaceObject(name string, annotations map[string]string) *corev1.Namespace {
 	return fake.NamespaceObject(name, core.Annotations(annotations))
+}
+
+func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
+	crd := fake.CustomResourceDefinitionObject(core.Name("anvils.acme.com"))
+	crd.Spec.Group = "acme.com"
+	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
+		Plural:   "anvils",
+		Singular: "anvil",
+		Kind:     "Anvil",
+	}
+	crd.Spec.Scope = apiextensionsv1.NamespaceScoped
+	crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{
+		{
+			Name:    "v1",
+			Served:  true,
+			Storage: false,
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:     "object",
+							Required: []string{"lbs"},
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"lbs": {
+									Type:    "integer",
+									Minimum: pointer.Float64(1.0),
+									Maximum: pointer.Float64(9000.0),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:    "v2",
+			Served:  true,
+			Storage: true,
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:     "object",
+							Required: []string{"lbs"},
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"lbs": {
+									Type:    "integer",
+									Minimum: pointer.Float64(1.0),
+									Maximum: pointer.Float64(9000.0),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return crd
+}
+
+func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(anvilGVK(version))
+	if name != "" {
+		u.SetName(name)
+	}
+	if weight != 0 {
+		u.Object["spec"] = map[string]interface{}{
+			"lbs": weight,
+		}
+	}
+	return u
+}
+
+func anvilGVK(version string) schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "acme.com",
+		Version: version,
+		Kind:    "Anvil",
+	}
 }
 
 func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
@@ -904,7 +989,7 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinition(), crd.Name, crd.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -959,7 +1044,7 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	}
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
+	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinition(), crd.Name, crd.Namespace)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -40,7 +40,7 @@ func InvalidCRDNameError(resource client.Object, expected string) status.Error {
 
 // ValidateCRDName returns an error
 func ValidateCRDName(o ast.FileObject) status.Error {
-	if o.GetObjectKind().GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
+	if o.GetObjectKind().GroupVersionKind() != kinds.CustomResourceDefinition() {
 		return nil
 	}
 

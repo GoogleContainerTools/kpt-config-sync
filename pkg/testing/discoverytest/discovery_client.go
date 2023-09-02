@@ -17,7 +17,7 @@
 package discoverytest
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/restmapper"
@@ -93,12 +93,12 @@ func testK8SResources() []*restmapper.APIGroupResources {
 			Group: metav1.APIGroup{
 				Name: "apiextensions.k8s.io",
 				Versions: []metav1.GroupVersionForDiscovery{
-					{Version: "v1beta1"},
+					{Version: "v1"},
 				},
-				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1beta1"},
+				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1"},
 			},
 			VersionedResources: map[string][]metav1.APIResource{
-				"v1beta1": {
+				"v1": {
 					{Name: "customresourcedefinitions", Namespaced: false, Kind: kinds.CustomResourceDefinitionKind},
 				},
 			},
@@ -107,12 +107,12 @@ func testK8SResources() []*restmapper.APIGroupResources {
 			Group: metav1.APIGroup{
 				Name: "extensions",
 				Versions: []metav1.GroupVersionForDiscovery{
-					{Version: "v1beta1"},
+					{Version: "v1"},
 				},
-				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1beta1"},
+				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1"},
 			},
 			VersionedResources: map[string][]metav1.APIResource{
-				"v1beta1": {
+				"v1": {
 					{Name: "customresourcedefinitions", Namespaced: false, Kind: kinds.CustomResourceDefinitionKind},
 				},
 			},
@@ -121,12 +121,12 @@ func testK8SResources() []*restmapper.APIGroupResources {
 			Group: metav1.APIGroup{
 				Name: "policy",
 				Versions: []metav1.GroupVersionForDiscovery{
-					{Version: "v1beta1"},
+					{Version: "v1"},
 				},
-				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1beta1"},
+				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1"},
 			},
 			VersionedResources: map[string][]metav1.APIResource{
-				"v1beta1": {
+				"v1": {
 					{Name: "podsecuritypolicyies", Namespaced: false, Kind: "PodSecurityPolicy"},
 				},
 			},
@@ -192,13 +192,13 @@ func testK8SResources() []*restmapper.APIGroupResources {
 			Group: metav1.APIGroup{
 				Name: "storage.k8s.io",
 				Versions: []metav1.GroupVersionForDiscovery{
-					{Version: "v1beta1"},
+					{Version: "v1"},
 					{Version: "v0"},
 				},
-				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1beta1"},
+				PreferredVersion: metav1.GroupVersionForDiscovery{Version: "v1"},
 			},
 			VersionedResources: map[string][]metav1.APIResource{
-				"v1beta1": {
+				"v1": {
 					{Name: "storageclasses", Namespaced: false, Kind: "StorageClass"},
 				},
 				// bogus version of a known group/version/resource to make sure kubectl falls back to generic object mode
@@ -289,7 +289,7 @@ func testDynamicResources(extraResources ...*restmapper.APIGroupResources) []*re
 //
 // As-is assumes each CRD is a different APIGroup. Don't bother fixing unless you need to test
 // a case where you need to sync multiple CRDs for the same APIGroup.
-func CRDsToAPIGroupResources(crds []*v1beta1.CustomResourceDefinition) []*restmapper.APIGroupResources {
+func CRDsToAPIGroupResources(crds []*v1.CustomResourceDefinition) []*restmapper.APIGroupResources {
 	var result []*restmapper.APIGroupResources
 	for _, syncedCRD := range crds {
 		extraResource := &restmapper.APIGroupResources{
@@ -313,7 +313,7 @@ func CRDsToAPIGroupResources(crds []*v1beta1.CustomResourceDefinition) []*restma
 				{
 					Name:         syncedCRD.Spec.Names.Plural,
 					SingularName: syncedCRD.Spec.Names.Singular,
-					Namespaced:   !(syncedCRD.Spec.Scope == v1beta1.ClusterScoped),
+					Namespaced:   !(syncedCRD.Spec.Scope == v1.ClusterScoped),
 					Group:        syncedCRD.Spec.Group,
 					Version:      version.Name,
 					Kind:         syncedCRD.Spec.Names.Kind,

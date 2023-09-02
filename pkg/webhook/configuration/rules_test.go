@@ -22,9 +22,10 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 )
@@ -87,27 +88,27 @@ func TestToWebhookConfiguration(t *testing.T) {
 		{
 			name: "two GVKs same Group",
 			gvks: []schema.GroupVersionKind{
-				kinds.Role(),
-				kinds.RoleBindingV1Beta1(),
+				kinds.RepoSyncV1Alpha1(),
+				kinds.RepoSyncV1Beta1(),
 			},
 			want: &admissionv1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: Name,
 				},
 				Webhooks: []admissionv1.ValidatingWebhook{{
-					Name:           webhookName(rbacv1.SchemeGroupVersion),
+					Name:           webhookName(v1alpha1.SchemeGroupVersion),
 					MatchPolicy:    &equivalent,
-					ObjectSelector: selectorFor(rbacv1.SchemeGroupVersion.Version),
+					ObjectSelector: selectorFor(v1alpha1.SchemeGroupVersion.Version),
 					Rules: []admissionv1.RuleWithOperations{
-						ruleFor(rbacv1.SchemeGroupVersion),
+						ruleFor(v1alpha1.SchemeGroupVersion),
 					},
 					FailurePolicy: &ignore,
 				}, {
-					Name:           webhookName(rbacv1beta1.SchemeGroupVersion),
+					Name:           webhookName(v1beta1.SchemeGroupVersion),
 					MatchPolicy:    &equivalent,
-					ObjectSelector: selectorFor(rbacv1beta1.SchemeGroupVersion.Version),
+					ObjectSelector: selectorFor(v1beta1.SchemeGroupVersion.Version),
 					Rules: []admissionv1.RuleWithOperations{
-						ruleFor(rbacv1beta1.SchemeGroupVersion),
+						ruleFor(v1beta1.SchemeGroupVersion),
 					},
 					FailurePolicy: &ignore,
 				},

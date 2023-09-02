@@ -18,7 +18,7 @@ import (
 	"errors"
 	"testing"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -29,11 +29,11 @@ import (
 	"kpt.dev/configsync/pkg/validate/objects"
 )
 
-func crd(gvk schema.GroupVersionKind) *v1beta1.CustomResourceDefinition {
-	return &v1beta1.CustomResourceDefinition{
-		Spec: v1beta1.CustomResourceDefinitionSpec{
+func crd(gvk schema.GroupVersionKind) *v1.CustomResourceDefinition {
+	return &v1.CustomResourceDefinition{
+		Spec: v1.CustomResourceDefinitionSpec{
 			Group: gvk.Group,
-			Names: v1beta1.CustomResourceDefinitionNames{
+			Names: v1.CustomResourceDefinitionNames{
 				Kind: gvk.Kind,
 			},
 		},
@@ -42,7 +42,7 @@ func crd(gvk schema.GroupVersionKind) *v1beta1.CustomResourceDefinition {
 
 func crdFileObject(t *testing.T, gvk schema.GroupVersionKind) ast.FileObject {
 	t.Helper()
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := fake.CustomResourceDefinitionUnstructured()
 	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestRemovedCRDs(t *testing.T) {
 		{
 			name: "keep a CRD",
 			objs: &objects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
+				PreviousCRDs: []*v1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{
@@ -90,7 +90,7 @@ func TestRemovedCRDs(t *testing.T) {
 		{
 			name: "remove an unused CRD",
 			objs: &objects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
+				PreviousCRDs: []*v1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{
@@ -101,7 +101,7 @@ func TestRemovedCRDs(t *testing.T) {
 		{
 			name: "remove an in-use CRD",
 			objs: &objects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
+				PreviousCRDs: []*v1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{

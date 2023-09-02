@@ -76,8 +76,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &objects.Raw{
 				Objects: []ast.FileObject{
 					fake.ClusterRole(),
-					fake.CustomResourceDefinitionV1(),
-					fake.CustomResourceDefinitionV1Beta1(),
+					fake.CustomResourceDefinition(),
 				},
 			},
 		},
@@ -86,8 +85,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &objects.Raw{
 				Objects: []ast.FileObject{
 					fake.ClusterRole(legacyClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1(legacyClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1Beta1(legacyClusterSelectorAnnotation),
+					fake.CustomResourceDefinition(legacyClusterSelectorAnnotation),
 				},
 			},
 		},
@@ -96,8 +94,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &objects.Raw{
 				Objects: []ast.FileObject{
 					fake.ClusterRole(inlineClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1(inlineClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1Beta1(inlineClusterSelectorAnnotation),
+					fake.CustomResourceDefinition(inlineClusterSelectorAnnotation),
 				},
 			},
 		},

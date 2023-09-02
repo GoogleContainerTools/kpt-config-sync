@@ -20,7 +20,6 @@ import (
 
 	"github.com/pkg/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
@@ -29,19 +28,8 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
-func crdv1beta1(name string, gvk schema.GroupVersionKind) ast.FileObject {
-	result := fake.CustomResourceDefinitionV1Beta1Object()
-	result.Name = name
-	result.Spec.Group = gvk.Group
-	result.Spec.Names = apiextensionsv1beta1.CustomResourceDefinitionNames{
-		Plural: strings.ToLower(gvk.Kind) + "s",
-		Kind:   gvk.Kind,
-	}
-	return fake.FileObject(result, "crd.yaml")
-}
-
 func crdv1(name string, gvk schema.GroupVersionKind) ast.FileObject {
-	result := fake.CustomResourceDefinitionV1Object()
+	result := fake.CustomResourceDefinitionObject()
 	result.Name = name
 	result.Spec.Group = gvk.Group
 	result.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
@@ -57,22 +45,6 @@ func TestValidCRDName(t *testing.T) {
 		obj  ast.FileObject
 		want status.Error
 	}{
-		// v1beta1 CRDs
-		{
-			name: "v1beta1 valid name",
-			obj:  crdv1beta1("anvils.acme.com", kinds.Anvil()),
-		},
-		{
-			name: "v1beta1 non plural",
-			obj:  crdv1beta1("anvil.acme.com", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
-		},
-		{
-			name: "v1beta1 missing group",
-			obj:  crdv1beta1("anvils", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
-		},
-		// v1 CRDs
 		{
 			name: "v1 valid name",
 			obj:  crdv1("anvils.acme.com", kinds.Anvil()),

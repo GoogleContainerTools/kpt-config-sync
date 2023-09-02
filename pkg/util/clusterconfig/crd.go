@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
@@ -29,7 +28,7 @@ import (
 )
 
 // GetCRDs returns the names and CustomResourceDefinitions of the CRDs in ClusterConfig.
-func GetCRDs(decoder decode.Decoder, clusterConfig *v1.ClusterConfig) ([]*apiextensionsv1beta1.
+func GetCRDs(decoder decode.Decoder, clusterConfig *v1.ClusterConfig) ([]*apiextensionsv1.
 	CustomResourceDefinition, status.Error) {
 	if clusterConfig == nil {
 		return nil, nil
@@ -40,9 +39,9 @@ func GetCRDs(decoder decode.Decoder, clusterConfig *v1.ClusterConfig) ([]*apiext
 		return nil, status.APIServerErrorf(err, "could not deserialize CRD in %s", v1.CRDClusterConfigName)
 	}
 
-	crdMap := make(map[string]*apiextensionsv1beta1.CustomResourceDefinition)
+	crdMap := make(map[string]*apiextensionsv1.CustomResourceDefinition)
 	for gvk, unstructureds := range gvkrs {
-		if gvk.GroupKind() != kinds.CustomResourceDefinition() {
+		if gvk != kinds.CustomResourceDefinition() {
 			return nil, status.APIServerErrorf(err, "%s contains non-CRD resources: %v", v1.CRDClusterConfigName, gvk)
 		}
 		for _, u := range unstructureds {
@@ -54,7 +53,7 @@ func GetCRDs(decoder decode.Decoder, clusterConfig *v1.ClusterConfig) ([]*apiext
 		}
 	}
 
-	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	var crds []*apiextensionsv1.CustomResourceDefinition
 	for _, crd := range crdMap {
 		crds = append(crds, crd)
 	}
@@ -74,40 +73,14 @@ func MalformedCRDError(err error, obj client.Object) status.Error {
 }
 
 // AsCRD returns the typed version of the CustomResourceDefinition passed in.
-func AsCRD(o *unstructured.Unstructured) (*apiextensionsv1beta1.CustomResourceDefinition, status.Error) {
-	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinitionV1Beta1(), core.Scheme)
+func AsCRD(o *unstructured.Unstructured) (*apiextensionsv1.CustomResourceDefinition, status.Error) {
+	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinition(), core.Scheme)
 	if err != nil {
 		return nil, MalformedCRDError(err, o)
 	}
-	crd, ok := obj.(*apiextensionsv1beta1.CustomResourceDefinition)
+	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		return nil, MalformedCRDError(fmt.Errorf("unexpected type produced by converting unstructured CRD to v1beta1 CRD: %T", obj), o)
-	}
-	return crd, nil
-}
-
-// AsV1CRD returns the typed version of the CustomResourceDefinition passed in.
-func AsV1CRD(o *unstructured.Unstructured) (*apiextensionsv1.CustomResourceDefinition, status.Error) {
-	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinitionV1(), core.Scheme)
-	if err != nil {
-		return nil, MalformedCRDError(err, o)
-	}
-	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
-	if !ok {
-		return nil, MalformedCRDError(fmt.Errorf("unexpected type produced by converting unstructured CRD to v1 CRD: %T", obj), o)
-	}
-	return crd, nil
-}
-
-// V1Beta1ToV1CRD converts a v1beta1 CRD to a v1 CRD.
-func V1Beta1ToV1CRD(o *apiextensionsv1beta1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, status.Error) {
-	obj, err := kinds.ToTypedWithVersion(o, kinds.CustomResourceDefinitionV1(), core.Scheme)
-	if err != nil {
-		return nil, MalformedCRDError(err, o)
-	}
-	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
-	if !ok {
-		return nil, MalformedCRDError(fmt.Errorf("unexpected type produced by converting v1beta1 CRD to v1 CRD: %T", obj), o)
 	}
 	return crd, nil
 }

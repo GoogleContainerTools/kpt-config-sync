@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -34,7 +34,7 @@ const timeout = time.Second * 15
 // GetSyncedCRDs returns the CRDs synced to the cluster in the current context.
 //
 // Times out after 15 seconds.
-func GetSyncedCRDs(ctx context.Context, skipAPIServer bool, apiServerTimeout time.Duration) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+func GetSyncedCRDs(ctx context.Context, skipAPIServer bool, apiServerTimeout time.Duration) ([]*v1.CustomResourceDefinition, status.MultiError) {
 	if skipAPIServer {
 		return nil, nil
 	}

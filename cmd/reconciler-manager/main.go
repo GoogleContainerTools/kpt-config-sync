@@ -164,7 +164,7 @@ func main() {
 // It checks the CRD first so that the controller can watch the Membership resource in the startup time.
 func fleetMembershipCRDExists(dc dynamic.Interface, mapper meta.RESTMapper) bool {
 
-	crdRESTMapping, err := mapper.RESTMapping(kinds.CustomResourceDefinition())
+	crdRESTMapping, err := mapper.RESTMapping(kinds.CustomResourceDefinition().GroupKind())
 	if err != nil {
 		setupLog.Error(err, "failed to get mapping of CRD type")
 		os.Exit(1)

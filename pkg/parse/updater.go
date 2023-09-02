@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applier"
@@ -110,11 +110,11 @@ func (u *updater) Updating() bool {
 
 // declaredCRDs returns the list of CRDs which are present in the updater's
 // declared resources.
-func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
-	var crds []*v1beta1.CustomResourceDefinition
+func (u *updater) declaredCRDs() ([]*v1.CustomResourceDefinition, status.MultiError) {
+	var crds []*v1.CustomResourceDefinition
 	declaredObjs, _ := u.resources.DeclaredUnstructureds()
 	for _, obj := range declaredObjs {
-		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
+		if obj.GroupVersionKind() != kinds.CustomResourceDefinition() {
 			continue
 		}
 		crd, err := clusterconfig.AsCRD(obj)

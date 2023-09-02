@@ -102,7 +102,7 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that the CronTab CRD is installed on the cluster")
-	if err := nt.Validate(crdName, "", fake.CustomResourceDefinitionV1Object()); err != nil {
+	if err := nt.Validate(crdName, "", fake.CustomResourceDefinitionObject()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -226,7 +226,7 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", oldCrdFilePath)
 
 	nt.T.Logf("Wait until the old CRD is established")
-	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinition(), crdName, "",
 		[]testpredicates.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -248,7 +248,7 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", newCrdFilePath)
 
 	nt.T.Logf("Wait until the new CRD is established")
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinition(), crdName, "",
 		[]testpredicates.Predicate{nomostest.IsEstablished})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -291,7 +291,7 @@ func TestStress100CRDs(t *testing.T) {
 }
 
 func fakeCRD(name, group string) *apiextensionsv1.CustomResourceDefinition {
-	crd := fake.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%ss.%s", name, group)))
+	crd := fake.CustomResourceDefinitionObject(core.Name(fmt.Sprintf("%ss.%s", name, group)))
 	crd.Spec.Group = group
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural:   name + "s",

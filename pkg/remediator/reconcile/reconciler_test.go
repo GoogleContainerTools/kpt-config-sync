@@ -216,11 +216,11 @@ func TestRemediator_Reconcile(t *testing.T) {
 		// Version difference paths.
 		{
 			name: "update actual object with different version",
-			declared: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
 			actual: fake.ClusterRoleBindingObject(),
 			// Metadata change increments ResourceVersion, but not Generation
-			want: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one")),
 			wantError: nil,

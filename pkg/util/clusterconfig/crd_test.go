@@ -48,28 +48,19 @@ func TestGetCRDs(t *testing.T) {
 	testCases := []struct {
 		name string
 		objs []client.Object
-		want []*apiextensionsv1beta1.CustomResourceDefinition
+		want []*apiextensionsv1.CustomResourceDefinition
 	}{
 		{
 			name: "No CRDs",
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{},
-		},
-		{
-			name: "v1Beta1 CRD",
-			objs: []client.Object{
-				fake.CustomResourceDefinitionV1Beta1Unstructured(),
-			},
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				fake.CustomResourceDefinitionV1Beta1Object(),
-			},
+			want: []*apiextensionsv1.CustomResourceDefinition{},
 		},
 		{
 			name: "v1 CRD",
 			objs: []client.Object{
-				fake.CustomResourceDefinitionV1Object(),
+				fake.CustomResourceDefinitionObject(),
 			},
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				fake.CustomResourceDefinitionV1Beta1Object(preserveUnknownFields(t, false)),
+			want: []*apiextensionsv1.CustomResourceDefinition{
+				fake.CustomResourceDefinitionObject(preserveUnknownFields(t, false)),
 			},
 		},
 	}
@@ -93,7 +84,7 @@ func TestGetCRDs(t *testing.T) {
 }
 
 func generateMalformedCRD(t *testing.T) *unstructured.Unstructured {
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := fake.CustomResourceDefinitionUnstructured()
 
 	// the `spec.group` field should be a string
 	// set it to a bool to construct a malformed CRD
@@ -111,12 +102,12 @@ func TestAsCRD(t *testing.T) {
 	}{
 		{
 			name:    "well-formed v1beta1 CRD",
-			obj:     fake.CustomResourceDefinitionV1Beta1Unstructured(),
+			obj:     fake.CustomResourceDefinitionUnstructured(),
 			wantErr: nil,
 		},
 		{
 			name:    "well-formed v1 CRD",
-			obj:     fake.CustomResourceDefinitionV1Unstructured(),
+			obj:     fake.CustomResourceDefinitionUnstructured(),
 			wantErr: nil,
 		},
 		{

@@ -15,7 +15,7 @@
 package discovery
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/status"
 )
@@ -26,13 +26,13 @@ type AddResourcesFunc func(*Scoper) status.MultiError
 
 // BuildScoperFunc is a function that builds a new Scoper with the given CRDs
 // and attempts verifies it against the given FileObjects.
-type BuildScoperFunc func([]*v1beta1.CustomResourceDefinition, []ast.FileObject) (Scoper, status.MultiError)
+type BuildScoperFunc func([]*v1.CustomResourceDefinition, []ast.FileObject) (Scoper, status.MultiError)
 
 // ScoperBuilder returns a BuildScoperFunc that incorporates the given
 // ServerResourcer (for reading resources from the API server) and other
 // optional functions for adding resources.
 func ScoperBuilder(sr ServerResourcer, addFuncs ...AddResourcesFunc) BuildScoperFunc {
-	return func(crds []*v1beta1.CustomResourceDefinition, objs []ast.FileObject) (Scoper, status.MultiError) {
+	return func(crds []*v1.CustomResourceDefinition, objs []ast.FileObject) (Scoper, status.MultiError) {
 		// Initialize the scoper with the default set of Kubernetes resources and the
 		// declared CRDs.
 		scoper := CoreScoper()

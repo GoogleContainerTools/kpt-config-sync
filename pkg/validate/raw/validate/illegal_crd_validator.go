@@ -32,7 +32,7 @@ var illegalGroups = map[string]bool{
 // IllegalCRD returns an error if the given FileObject is a CRD of a Config Sync
 // type.
 func IllegalCRD(obj ast.FileObject) status.Error {
-	if obj.GetObjectKind().GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
+	if obj.GetObjectKind().GroupVersionKind() != kinds.CustomResourceDefinition() {
 		return nil
 	}
 

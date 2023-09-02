@@ -228,8 +228,7 @@ func Generate() AllExamples {
 	result.add(hierarchyconfig.IllegalHierarchyModeError(fake.HierarchyConfig(), kinds.Role().GroupKind(), "invalid"))
 
 	// 1043
-	result.add(nonhierarchical.UnsupportedObjectError(fake.CustomResourceDefinitionV1Beta1()))
-	result.add(nonhierarchical.UnsupportedObjectError(fake.CustomResourceDefinitionV1()))
+	result.add(nonhierarchical.UnsupportedObjectError(fake.CustomResourceDefinition()))
 
 	// 1044
 	result.add(semantic.UnsyncableResourcesInLeaf(node("namespaces/foo")))
@@ -242,10 +241,10 @@ func Generate() AllExamples {
 	result.add(hierarchyconfig.ClusterScopedResourceInHierarchyConfigError(fake.HierarchyConfig(), kinds.ClusterRole().GroupKind()))
 
 	// 1047
-	result.add(nonhierarchical.UnsupportedCRDRemovalError(fake.CustomResourceDefinitionV1Beta1()))
+	result.add(nonhierarchical.UnsupportedCRDRemovalError(fake.CustomResourceDefinition()))
 
 	// 1048
-	result.add(nonhierarchical.InvalidCRDNameError(fake.CustomResourceDefinitionV1Beta1(), "default-names.apiextensions.k8s.io"))
+	result.add(nonhierarchical.InvalidCRDNameError(fake.CustomResourceDefinition(), "default-names.apiextensions.k8s.io"))
 
 	// 1049 is Deprecated.
 	result.markDeprecated("1049")
@@ -306,7 +305,7 @@ func Generate() AllExamples {
 	// 1065
 	result.add(clusterconfig.MalformedCRDError(
 		fmt.Errorf("spec.names.shortNames accessor error: foo is of the type string, expected []interface{}"),
-		fake.CustomResourceDefinitionV1Object()))
+		fake.CustomResourceDefinitionObject()))
 
 	// 1066
 	result.add(selectors.ClusterSelectorAnnotationConflictError(fake.NamespaceObject("my-namespace")))

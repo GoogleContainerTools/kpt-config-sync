@@ -32,12 +32,12 @@ func TestIllegalCRD(t *testing.T) {
 		wantErr status.Error
 	}{
 		{
-			name: "Anvil v1beta1 CRD",
-			obj:  crdv1beta1("crd", kinds.Anvil()),
+			name: "Anvil v1 CRD",
+			obj:  crdv1("crd", kinds.Anvil()),
 		},
 		{
-			name:    "ClusterConfig v1beta1 CRD",
-			obj:     crdv1beta1("crd", kinds.ClusterConfig()),
+			name:    "ClusterConfig v1 CRD",
+			obj:     crdv1("crd", kinds.ClusterConfig()),
 			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
@@ -46,8 +46,8 @@ func TestIllegalCRD(t *testing.T) {
 			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
-			name:    "RepoSync v1beta1 CRD",
-			obj:     crdv1beta1("crd", kinds.RepoSyncV1Beta1()),
+			name:    "RepoSync v1 CRD",
+			obj:     crdv1("crd", kinds.RepoSyncV1Beta1()),
 			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{

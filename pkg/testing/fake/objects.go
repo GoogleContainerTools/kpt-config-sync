@@ -21,9 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -91,25 +89,6 @@ func RoleBinding(opts ...core.MetaMutator) ast.FileObject {
 	return RoleBindingAtPath("namespaces/foo/rolebinding.yaml", opts...)
 }
 
-// RoleBindingV1Beta1Object initializes a v1beta1 RoleBinding.
-func RoleBindingV1Beta1Object(opts ...core.MetaMutator) *rbacv1beta1.RoleBinding {
-	obj := &rbacv1beta1.RoleBinding{TypeMeta: ToTypeMeta(kinds.RoleBindingV1Beta1())}
-	defaultMutate(obj)
-	mutate(obj, opts...)
-
-	return obj
-}
-
-// RoleBindingV1Beta1AtPath returns a RoleBinding at the specified path.
-func RoleBindingV1Beta1AtPath(path string, opts ...core.MetaMutator) ast.FileObject {
-	return FileObject(RoleBindingV1Beta1Object(opts...), path)
-}
-
-// RoleBindingV1Beta1 returns an rbacv1beta1 RoleBinding.
-func RoleBindingV1Beta1(opts ...core.MetaMutator) ast.FileObject {
-	return RoleBindingV1Beta1AtPath("namespaces/foo/rolebinding.yaml", opts...)
-}
-
 // ClusterRoleObject returns an rbacv1 ClusterRole.
 func ClusterRoleObject(opts ...core.MetaMutator) *rbacv1.ClusterRole {
 	obj := &rbacv1.ClusterRole{TypeMeta: ToTypeMeta(kinds.ClusterRole())}
@@ -136,15 +115,6 @@ func ClusterRoleBindingAtPath(path string, opts ...core.MetaMutator) ast.FileObj
 // ClusterRoleBindingObject initializes a ClusterRoleBinding.
 func ClusterRoleBindingObject(opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
 	obj := &rbacv1.ClusterRoleBinding{TypeMeta: ToTypeMeta(kinds.ClusterRoleBinding())}
-	defaultMutate(obj)
-	mutate(obj, opts...)
-
-	return obj
-}
-
-// ClusterRoleBindingV1Beta1Object initializes a v1beta1 ClusterRoleBinding.
-func ClusterRoleBindingV1Beta1Object(opts ...core.MetaMutator) *rbacv1beta1.ClusterRoleBinding {
-	obj := &rbacv1beta1.ClusterRoleBinding{TypeMeta: ToTypeMeta(kinds.ClusterRoleBindingV1Beta1())}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -209,52 +179,22 @@ func RootSyncV1Beta1(name string, opts ...core.MetaMutator) ast.FileObject {
 	return FileObject(rootSync, fmt.Sprintf("namespaces/%s/%s.yaml", configsync.ControllerNamespace, name))
 }
 
+// RepoSyncV1Alpha1 returns a K8S RepoSync resource in a FileObject.
+func RepoSyncV1Alpha1(ns, name string, opts ...core.MetaMutator) ast.FileObject {
+	repoSync := RepoSyncObjectV1Alpha1(ns, name, opts...)
+	return FileObject(repoSync, fmt.Sprintf("namespaces/%s/%s.yaml", ns, name))
+}
+
 // RepoSyncV1Beta1 returns a K8S RepoSync resource in a FileObject.
 func RepoSyncV1Beta1(ns, name string, opts ...core.MetaMutator) ast.FileObject {
 	repoSync := RepoSyncObjectV1Beta1(ns, name, opts...)
 	return FileObject(repoSync, fmt.Sprintf("namespaces/%s/%s.yaml", ns, name))
 }
 
-// CustomResourceDefinitionV1Beta1Object returns an initialized CustomResourceDefinition.
-func CustomResourceDefinitionV1Beta1Object(opts ...core.MetaMutator) *v1beta1.CustomResourceDefinition {
-	result := &v1beta1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1Beta1()),
-	}
-	defaultMutate(result)
-	mutate(result, opts...)
-
-	return result
-}
-
-// CustomResourceDefinitionV1Beta1 returns a FileObject containing a
-// CustomResourceDefinition at a default path.
-func CustomResourceDefinitionV1Beta1(opts ...core.MetaMutator) ast.FileObject {
-	return FileObject(CustomResourceDefinitionV1Beta1Object(opts...), "cluster/crd.yaml")
-}
-
-// CustomResourceDefinitionV1Beta1Unstructured returns a v1Beta1 CRD as an unstructured
-func CustomResourceDefinitionV1Beta1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Beta1Object(opts...)
-	jsn, err := json.Marshal(o)
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1Beta1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	normalizeUnstructured(u)
-	return u
-}
-
-// CustomResourceDefinitionV1Object returns an initialized CustomResourceDefinition.
-func CustomResourceDefinitionV1Object(opts ...core.MetaMutator) *apiextensionsv1.CustomResourceDefinition {
+// CustomResourceDefinitionObject returns an initialized CustomResourceDefinition.
+func CustomResourceDefinitionObject(opts ...core.MetaMutator) *apiextensionsv1.CustomResourceDefinition {
 	result := &apiextensionsv1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1()),
+		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinition()),
 	}
 	defaultMutate(result)
 	mutate(result, opts...)
@@ -262,15 +202,15 @@ func CustomResourceDefinitionV1Object(opts ...core.MetaMutator) *apiextensionsv1
 	return result
 }
 
-// CustomResourceDefinitionV1 returns a FileObject containing a
+// CustomResourceDefinition returns a FileObject containing a
 // CustomResourceDefinition at a default path.
-func CustomResourceDefinitionV1(opts ...core.MetaMutator) ast.FileObject {
-	return FileObject(CustomResourceDefinitionV1Object(opts...), "cluster/crd.yaml")
+func CustomResourceDefinition(opts ...core.MetaMutator) ast.FileObject {
+	return FileObject(CustomResourceDefinitionObject(opts...), "cluster/crd.yaml")
 }
 
-// CustomResourceDefinitionV1Unstructured returns a v1 CRD as an unstructured
-func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Object(opts...)
+// CustomResourceDefinitionUnstructured returns a v1 CRD as an unstructured
+func CustomResourceDefinitionUnstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
+	o := CustomResourceDefinitionObject(opts...)
 	jsn, err := json.Marshal(o)
 	if err != nil {
 		// Should be impossible, and this is test-only code so it's fine.
@@ -278,7 +218,7 @@ func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructu
 	}
 	u := &unstructured.Unstructured{}
 	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1())
+	u.SetGroupVersionKind(kinds.CustomResourceDefinition())
 	if err != nil {
 		// Should be impossible, and this is test-only code so it's fine.
 		panic(err)
@@ -289,7 +229,7 @@ func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructu
 
 // AnvilAtPath returns an Anvil Custom Resource.
 func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
-	obj := &v1beta1.CustomResourceDefinition{
+	obj := &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: ToTypeMeta(kinds.Anvil()),
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "anvil",

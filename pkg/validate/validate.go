@@ -15,7 +15,7 @@
 package validate
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -47,7 +47,7 @@ type Options struct {
 	// PreviousCRDs is a list of the CRDs that were declared in the previous set
 	// of FileObjects that were validated. This is used to validate that we only
 	// remove a CRD if all of its CRs are gone as well.
-	PreviousCRDs []*v1beta1.CustomResourceDefinition
+	PreviousCRDs []*v1.CustomResourceDefinition
 	// BuildScoper is a function that builds a Scoper to identify which objects
 	// are cluster-scoped or namespace-scoped.
 	BuildScoper discovery.BuildScoperFunc

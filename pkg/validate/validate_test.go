@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -92,7 +92,7 @@ func namespaceSelector(name, key, value string) *v1.NamespaceSelector {
 
 func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.MetaMutator) *unstructured.Unstructured {
 	t.Helper()
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := fake.CustomResourceDefinitionUnstructured()
 	pluralKind := strings.ToLower(gvk.Kind) + "s"
 	u.SetName(pluralKind + "." + gvk.Group)
 	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
@@ -104,7 +104,7 @@ func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.Met
 	if err := unstructured.SetNestedField(u.Object, pluralKind, "spec", "names", "plural"); err != nil {
 		t.Fatal(err)
 	}
-	if err := unstructured.SetNestedField(u.Object, string(apiextensionsv1beta1.NamespaceScoped), "spec", "scope"); err != nil {
+	if err := unstructured.SetNestedField(u.Object, string(apiextensionsv1.NamespaceScoped), "spec", "scope"); err != nil {
 		t.Fatal(err)
 	}
 	versions := []interface{}{
@@ -122,16 +122,16 @@ func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.Met
 	return u
 }
 
-func crdObject(gvk schema.GroupVersionKind, opts ...core.MetaMutator) *apiextensionsv1beta1.CustomResourceDefinition {
-	o := fake.CustomResourceDefinitionV1Beta1Object()
+func crdObject(gvk schema.GroupVersionKind, opts ...core.MetaMutator) *apiextensionsv1.CustomResourceDefinition {
+	o := fake.CustomResourceDefinitionObject()
 	o.Spec.Names.Plural = strings.ToLower(gvk.Kind) + "s"
 	o.SetName(o.Spec.Names.Plural + "." + gvk.Group)
 	o.Spec.Group = gvk.Group
 	o.Spec.Names.Kind = gvk.Kind
 	o.Spec.Versions = append(o.Spec.Versions,
-		apiextensionsv1beta1.CustomResourceDefinitionVersion{Name: gvk.Version, Served: true},
+		apiextensionsv1.CustomResourceDefinitionVersion{Name: gvk.Version, Served: true},
 	)
-	o.Spec.Scope = apiextensionsv1beta1.ClusterScoped
+	o.Spec.Scope = apiextensionsv1.ClusterScoped
 
 	for _, opt := range opts {
 		opt(o)
@@ -143,7 +143,7 @@ func crdObject(gvk schema.GroupVersionKind, opts ...core.MetaMutator) *apiextens
 func TestHierarchical(t *testing.T) {
 	testCases := []struct {
 		name          string
-		discoveryCRDs []*apiextensionsv1beta1.CustomResourceDefinition
+		discoveryCRDs []*apiextensionsv1.CustomResourceDefinition
 		options       Options
 		objs          []ast.FileObject
 		want          []ast.FileObject
@@ -235,7 +235,7 @@ func TestHierarchical(t *testing.T) {
 			},
 			want: []ast.FileObject{
 				fake.FileObject(crdUnstructured(t, kinds.Anvil(),
-					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:group":{},"f:names":{"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{"f:acceptedNames":{"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/crd.yaml")), "cluster/crd.yaml"),
 				fake.Namespace("namespaces/foo",
@@ -247,13 +247,13 @@ func TestHierarchical(t *testing.T) {
 				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml")),
 			},
 		},
 		{
 			name: "CR in repo and CRD on API server",
-			discoveryCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
+			discoveryCRDs: []*apiextensionsv1.CustomResourceDefinition{
 				crdObject(kinds.Anvil()),
 			},
 			objs: []ast.FileObject{
@@ -263,7 +263,7 @@ func TestHierarchical(t *testing.T) {
 			want: []ast.FileObject{
 				fake.AnvilAtPath("cluster/anvil.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/anvil.yaml")),
 			},
 		},
@@ -289,7 +289,7 @@ func TestHierarchical(t *testing.T) {
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.UnknownScopeAnnotationKey, csmetadata.UnknownScopeAnnotationValue),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml")),
 			},
 		},
@@ -634,7 +634,7 @@ func TestHierarchical(t *testing.T) {
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.UnknownScopeAnnotationKey, csmetadata.UnknownScopeAnnotationValue),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml"),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 				),
 			},
 			wantErrs: fake.Errors(status.UnknownKindErrorCode),
@@ -862,7 +862,7 @@ func TestHierarchical(t *testing.T) {
 				fake.Repo(),
 				fake.HierarchyConfig(
 					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
-						kinds.CustomResourceDefinitionV1Beta1().GroupVersion(), kinds.CustomResourceDefinitionV1Beta1().Kind),
+						kinds.CustomResourceDefinition().GroupVersion(), kinds.CustomResourceDefinition().Kind),
 					core.Name("crd-hc")),
 				fake.HierarchyConfig(
 					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
@@ -963,7 +963,7 @@ func TestHierarchical(t *testing.T) {
 func TestUnstructured(t *testing.T) {
 	testCases := []struct {
 		name          string
-		discoveryCRDs []*apiextensionsv1beta1.CustomResourceDefinition
+		discoveryCRDs []*apiextensionsv1.CustomResourceDefinition
 		options       Options
 		objs          []ast.FileObject
 		want          []ast.FileObject
@@ -1013,12 +1013,12 @@ func TestUnstructured(t *testing.T) {
 			},
 			want: []ast.FileObject{
 				fake.FileObject(crdUnstructured(t, kinds.Anvil(),
-					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:group":{},"f:names":{"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{"f:acceptedNames":{"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")), "crd.yaml"),
 				fake.AnvilAtPath("anvil.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/anvil.yaml")),
 			},
 		},
@@ -1222,7 +1222,7 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "removing CRD while in-use fails",
 			options: Options{
-				PreviousCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
+				PreviousCRDs: []*apiextensionsv1.CustomResourceDefinition{
 					crdObject(kinds.Anvil()),
 				},
 			},

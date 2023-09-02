@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	obj1 = fake.CustomResourceDefinitionV1Beta1Object()
+	obj1 = fake.CustomResourceDefinitionObject()
 	obj2 = fake.ResourceQuotaObject()
 
 	testSet = []client.Object{obj1, obj2}

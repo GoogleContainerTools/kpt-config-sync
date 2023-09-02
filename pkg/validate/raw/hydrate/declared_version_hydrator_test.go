@@ -32,28 +32,28 @@ func TestDeclaredVersion(t *testing.T) {
 		want *objects.Raw
 	}{
 		{
-			name: "v1 RoleBinding",
+			name: "v1alpha1 RepoSync",
 			objs: &objects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBinding(),
+					fake.RepoSyncV1Alpha1("test", "rs"),
 				},
 			},
 			want: &objects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBinding(core.Label(metadata.DeclaredVersionLabel, "v1")),
+					fake.RepoSyncV1Alpha1("test", "rs", core.Label(metadata.DeclaredVersionLabel, "v1alpha1")),
 				},
 			},
 		},
 		{
-			name: "v1beta1 RoleBinding",
+			name: "v1beta1 RepoSync",
 			objs: &objects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBindingV1Beta1(),
+					fake.RepoSyncV1Beta1("test", "rs"),
 				},
 			},
 			want: &objects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBindingV1Beta1(core.Label(metadata.DeclaredVersionLabel, "v1beta1")),
+					fake.RepoSyncV1Beta1("test", "rs", core.Label(metadata.DeclaredVersionLabel, "v1beta1")),
 				},
 			},
 		},

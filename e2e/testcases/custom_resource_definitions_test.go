@@ -111,17 +111,6 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		nt.T.Fatal(err)
 	}
 }
-func TestMustRemoveCustomResourceWithDefinitionV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	if support {
-		mustRemoveCustomResourceWithDefinition(nt, anvilV1Beta1CRD())
-	}
-}
-
 func TestMustRemoveCustomResourceWithDefinitionV1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	mustRemoveCustomResourceWithDefinition(nt, anvilV1CRD())
@@ -188,7 +177,7 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -206,17 +195,6 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 func TestAddAndRemoveCustomResourceV1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addAndRemoveCustomResource(nt, "v1_crds", "anvil-crd.yaml")
-}
-
-func TestAddAndRemoveCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	if support {
-		addAndRemoveCustomResource(nt, "v1beta1_crds", "anvil-crd-v1.yaml")
-	}
 }
 
 func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string) {
@@ -246,7 +224,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -266,7 +244,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -283,17 +261,6 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 func TestMustRemoveUnManagedCustomResourceV1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	mustRemoveUnManagedCustomResource(nt, "v1_crds", "anvil-crd.yaml")
-}
-
-func TestMustRemoveUnManagedCustomResourceV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	if support {
-		mustRemoveUnManagedCustomResource(nt, "v1beta1_crds", "anvil-crd-v1.yaml")
-	}
 }
 
 func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
@@ -340,7 +307,7 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), hasTwoVersions)
+	err = nt.Validate("clusteranvils.acme.com", "", fake.CustomResourceDefinitionObject(), hasTwoVersions)
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -364,7 +331,7 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Error(err)
 	}
-	err = nt.ValidateNotFound("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("clusteranvils.acme.com", "", fake.CustomResourceDefinitionObject())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -375,17 +342,6 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 func TestAddUpdateRemoveClusterScopedCRDV1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addUpdateRemoveClusterScopedCRD(nt, "v1_crds", "clusteranvil-crd.yaml")
-}
-
-func TestAddUpdateRemoveClusterScopedCRDV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	if support {
-		addUpdateRemoveClusterScopedCRD(nt, "v1beta1_crds", "clusteranvil-crd-v1.yaml")
-	}
 }
 
 func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
@@ -439,7 +395,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), hasTwoVersions)
+	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionObject(), hasTwoVersions)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -457,7 +413,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished, hasTwoVersions)
+	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionObject(), nomostest.IsEstablished, hasTwoVersions)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -476,7 +432,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Validate the CustomResource is also deleted from cluster.
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -484,17 +440,6 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 func TestAddUpdateNamespaceScopedCRDV1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 	addUpdateNamespaceScopedCRD(nt, "v1_crds", "anvil-crd.yaml")
-}
-
-func TestAddUpdateNamespaceScopedCRDV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	if support {
-		addUpdateNamespaceScopedCRD(nt, "v1beta1_crds", "anvil-crd-v1.yaml")
-	}
 }
 
 func TestLargeCRD(t *testing.T) {
@@ -514,13 +459,13 @@ func TestLargeCRD(t *testing.T) {
 	}
 	nt.RenewClient()
 
-	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "", nil,
+	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinition(), "challenges.acme.cert-manager.io", "", nil,
 		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "solrclouds.solr.apache.org", "", nil,
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinition(), "solrclouds.solr.apache.org", "", nil,
 		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -549,7 +494,7 @@ func TestLargeCRD(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
+	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinition(), "challenges.acme.cert-manager.io", "",
 		[]testpredicates.Predicate{testpredicates.HasLabel("random-key", "random-value")},
 		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {

@@ -42,25 +42,25 @@ func TestFlatten(t *testing.T) {
 			configs: &namespaceconfig.AllConfigs{},
 		},
 		{
-			name: "one v1Beta1 CRD",
+			name: "one v1 CRD",
 			configs: &namespaceconfig.AllConfigs{
 				CRDClusterConfig: testoutput.CRDClusterConfig(
-					fake.CustomResourceDefinitionV1Beta1Object(),
+					fake.CustomResourceDefinitionObject(),
 				),
 			},
 			expected: []client.Object{
-				fake.CustomResourceDefinitionV1Beta1Object(),
+				fake.CustomResourceDefinitionObject(),
 			},
 		},
 		{
 			name: "one v1 CRD",
 			configs: &namespaceconfig.AllConfigs{
 				CRDClusterConfig: testoutput.CRDClusterConfig(
-					fake.CustomResourceDefinitionV1Object(),
+					fake.CustomResourceDefinitionObject(),
 				),
 			},
 			expected: []client.Object{
-				fake.CustomResourceDefinitionV1Object(),
+				fake.CustomResourceDefinitionObject(),
 			},
 		},
 		{
@@ -109,7 +109,7 @@ func TestFlatten(t *testing.T) {
 			name: "one of each",
 			configs: &namespaceconfig.AllConfigs{
 				CRDClusterConfig: testoutput.CRDClusterConfig(
-					fake.CustomResourceDefinitionV1Beta1Object(),
+					fake.CustomResourceDefinitionObject(),
 				),
 				ClusterConfig: testoutput.ClusterConfig(
 					fake.ClusterRoleBindingObject(),
@@ -120,7 +120,7 @@ func TestFlatten(t *testing.T) {
 				)),
 			},
 			expected: []client.Object{
-				fake.CustomResourceDefinitionV1Beta1Object(),
+				fake.CustomResourceDefinitionObject(),
 				fake.ClusterRoleBindingObject(),
 				fake.NamespaceObject("bar"),
 				fake.RoleBindingObject(core.Namespace("bar")),

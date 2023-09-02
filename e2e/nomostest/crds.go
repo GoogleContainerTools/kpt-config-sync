@@ -43,7 +43,7 @@ func WaitForCRDs(nt *NT, crds []string) error {
 	for _, crd := range crds {
 		nn := types.NamespacedName{Name: crd}
 		tg.Go(func() error {
-			return nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(),
+			return nt.Watcher.WatchObject(kinds.CustomResourceDefinition(),
 				nn.Name, nn.Namespace,
 				[]testpredicates.Predicate{IsEstablished})
 		})

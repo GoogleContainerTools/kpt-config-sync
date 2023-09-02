@@ -23,8 +23,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -51,11 +50,6 @@ func Sync() schema.GroupVersionKind {
 // RoleBinding returns the canonical RoleBinding GroupVersionKind.
 func RoleBinding() schema.GroupVersionKind {
 	return rbacv1.SchemeGroupVersion.WithKind("RoleBinding")
-}
-
-// RoleBindingV1Beta1 returns the canonical v1beta1 RoleBinding GroupVersionKind.
-func RoleBindingV1Beta1() schema.GroupVersionKind {
-	return rbacv1beta1.SchemeGroupVersion.WithKind("RoleBinding")
 }
 
 // Role returns the canonical Role GroupVersionKind.
@@ -106,22 +100,9 @@ func Namespace() schema.GroupVersionKind {
 // CustomResourceDefinitionKind is the Kind for CustomResourceDefinitions
 const CustomResourceDefinitionKind = "CustomResourceDefinition"
 
-// CustomResourceDefinitionV1Beta1 returns the v1beta1 CustomResourceDefinition GroupVersionKind.
-func CustomResourceDefinitionV1Beta1() schema.GroupVersionKind {
-	return CustomResourceDefinition().WithVersion(v1beta1.SchemeGroupVersion.Version)
-}
-
-// CustomResourceDefinitionV1 returns the v1 CustomResourceDefinition GroupVersionKind.
-func CustomResourceDefinitionV1() schema.GroupVersionKind {
-	return CustomResourceDefinition().WithVersion("v1")
-}
-
-// CustomResourceDefinition returns the canonical CustomResourceDefinition GroupKind
-func CustomResourceDefinition() schema.GroupKind {
-	return schema.GroupKind{
-		Group: v1beta1.GroupName,
-		Kind:  CustomResourceDefinitionKind,
-	}
+// CustomResourceDefinition returns the v1 CustomResourceDefinition GroupVersionKind.
+func CustomResourceDefinition() schema.GroupVersionKind {
+	return apiextensionsv1.SchemeGroupVersion.WithKind(CustomResourceDefinitionKind)
 }
 
 // ClusterSelector returns the canonical ClusterSelector GroupVersionKind.
@@ -132,11 +113,6 @@ func ClusterSelector() schema.GroupVersionKind {
 // ClusterRoleBinding returns the canonical ClusterRoleBinding GroupVersionKind.
 func ClusterRoleBinding() schema.GroupVersionKind {
 	return rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding")
-}
-
-// ClusterRoleBindingV1Beta1 returns the canonical ClusterRoleBinding GroupVersionKind.
-func ClusterRoleBindingV1Beta1() schema.GroupVersionKind {
-	return rbacv1beta1.SchemeGroupVersion.WithKind("ClusterRoleBinding")
 }
 
 // ClusterRole returns the canonical ClusterRole GroupVersionKind.

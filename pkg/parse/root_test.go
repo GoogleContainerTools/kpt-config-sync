@@ -466,7 +466,7 @@ func TestRoot_Parse(t *testing.T) {
 }
 
 func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
-	crd := fake.CustomResourceDefinitionV1Object(opts...)
+	crd := fake.CustomResourceDefinitionObject(opts...)
 	crd.Spec.Group = "acme.com"
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural:   "anvils",

@@ -19,7 +19,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -95,20 +95,20 @@ var (
 	globalEngineer     = []GroupKindScope{{groupKind, ClusterScope}}
 )
 
-func crd(versions ...v1beta1.CustomResourceDefinitionVersion) *v1beta1.CustomResourceDefinition {
-	return &v1beta1.CustomResourceDefinition{
-		Spec: v1beta1.CustomResourceDefinitionSpec{
+func crd(versions ...v1.CustomResourceDefinitionVersion) *v1.CustomResourceDefinition {
+	return &v1.CustomResourceDefinition{
+		Spec: v1.CustomResourceDefinitionSpec{
 			Group:    group,
 			Versions: versions,
-			Names: v1beta1.CustomResourceDefinitionNames{
+			Names: v1.CustomResourceDefinitionNames{
 				Kind: kind,
 			},
 		},
 	}
 }
 
-func version(name string, served bool) v1beta1.CustomResourceDefinitionVersion {
-	return v1beta1.CustomResourceDefinitionVersion{
+func version(name string, served bool) v1.CustomResourceDefinitionVersion {
+	return v1.CustomResourceDefinitionVersion{
 		Name:   name,
 		Served: served,
 	}
@@ -118,7 +118,7 @@ func TestScopesFromCRD(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		crd      *v1beta1.CustomResourceDefinition
+		crd      *v1.CustomResourceDefinition
 		expected []GroupKindScope
 	}{
 		// Trivial cases.
@@ -129,12 +129,12 @@ func TestScopesFromCRD(t *testing.T) {
 		// Test that scope is set correctly.
 		{
 			name: "with version returns scope",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Scope:   v1beta1.NamespaceScoped,
-					Names: v1beta1.CustomResourceDefinitionNames{
+			crd: &v1.CustomResourceDefinition{
+				Spec: v1.CustomResourceDefinitionSpec{
+					Group:    group,
+					Versions: []v1.CustomResourceDefinitionVersion{version("v1", true)},
+					Scope:    v1.NamespaceScoped,
+					Names: v1.CustomResourceDefinitionNames{
 						Kind: kind,
 					},
 				},
@@ -143,11 +143,11 @@ func TestScopesFromCRD(t *testing.T) {
 		},
 		{
 			name: "without scope defaults to Namespaced",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Names: v1beta1.CustomResourceDefinitionNames{
+			crd: &v1.CustomResourceDefinition{
+				Spec: v1.CustomResourceDefinitionSpec{
+					Group:    group,
+					Versions: []v1.CustomResourceDefinitionVersion{version("v1", true)},
+					Names: v1.CustomResourceDefinitionNames{
 						Kind: kind,
 					},
 				},
@@ -156,12 +156,12 @@ func TestScopesFromCRD(t *testing.T) {
 		},
 		{
 			name: "Cluster scope if specified",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Scope:   v1beta1.ClusterScoped,
-					Names: v1beta1.CustomResourceDefinitionNames{
+			crd: &v1.CustomResourceDefinition{
+				Spec: v1.CustomResourceDefinitionSpec{
+					Group:    group,
+					Versions: []v1.CustomResourceDefinitionVersion{version("v1", true)},
+					Scope:    v1.ClusterScoped,
+					Names: v1.CustomResourceDefinitionNames{
 						Kind: kind,
 					},
 				},
@@ -201,7 +201,7 @@ func TestScopesFromCRD(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := scopesFromCRDs([]*v1beta1.CustomResourceDefinition{tc.crd})
+			actual := scopesFromCRDs([]*v1.CustomResourceDefinition{tc.crd})
 
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Fatal(diff)

@@ -15,7 +15,7 @@
 package validate
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/importer/customresources"
@@ -41,7 +41,7 @@ func RemovedCRDs(objs *objects.Raw) status.MultiError {
 
 type removedGKs map[schema.GroupKind]bool
 
-func removedGroupKinds(previous, current []*v1beta1.CustomResourceDefinition) removedGKs {
+func removedGroupKinds(previous, current []*v1.CustomResourceDefinition) removedGKs {
 	removed := make(map[schema.GroupKind]bool)
 	for _, crd := range previous {
 		gk := schema.GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}

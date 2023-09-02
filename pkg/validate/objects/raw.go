@@ -15,7 +15,7 @@
 package objects
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -38,7 +38,7 @@ type Raw struct {
 	ReconcilerName    string
 	PolicyDir         cmpath.Relative
 	Objects           []ast.FileObject
-	PreviousCRDs      []*v1beta1.CustomResourceDefinition
+	PreviousCRDs      []*v1.CustomResourceDefinition
 	BuildScoper       utildiscovery.BuildScoperFunc
 	Converter         *declared.ValueConverter
 	AllowUnknownKinds bool

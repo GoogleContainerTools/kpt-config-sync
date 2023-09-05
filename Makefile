@@ -39,7 +39,7 @@ KUSTOMIZE_VERSION := v5.1.1-gke.0
 HELM_VERSION := v3.12.3-gke.1
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
-KIND_VERSION := v0.14.0
+KIND_VERSION := v0.20.0
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging

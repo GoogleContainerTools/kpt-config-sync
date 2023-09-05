@@ -225,6 +225,10 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	validateReconcilerResource(nt, kinds.Deployment(), map[string]string{metadata.SyncNameLabel: rr1}, 1)
 	validateReconcilerResource(nt, kinds.Deployment(), map[string]string{metadata.SyncNameLabel: nr1}, 2)
 
+	// Deployments may still be reconciling, wait before checking Pods
+	if err := waitForResourcesCurrent(nt, kinds.Deployment(), map[string]string{"app": "reconciler"}, 10); err != nil {
+		nt.T.Fatal(err)
+	}
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{"app": "reconciler"}, 10)
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{metadata.SyncNamespaceLabel: configsync.ControllerNamespace}, 4)
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
@@ -256,6 +260,25 @@ func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, l
 		nt.T.Fatalf("expected %d reconciler %s(s), got %d:\n%s",
 			expectedCount, gvk.Kind, len(list.Items), log.AsYAML(list))
 	}
+}
+
+func waitForResourcesCurrent(nt *nomostest.NT, gvk schema.GroupVersionKind, labels map[string]string, expectedCount int) error {
+	list := kinds.NewUnstructuredListForItemGVK(gvk)
+	if err := nt.KubeClient.List(list, client.MatchingLabels(labels)); err != nil {
+		return err
+	}
+	if len(list.Items) != expectedCount {
+		return errors.Errorf("expected %d reconciler %s(s), got %d",
+			expectedCount, gvk.Kind, len(list.Items))
+	}
+	tg := taskgroup.New()
+	for _, dep := range list.Items {
+		nn := types.NamespacedName{Name: dep.GetName(), Namespace: dep.GetNamespace()}
+		tg.Go(func() error {
+			return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), nn.Name, nn.Namespace)
+		})
+	}
+	return tg.Wait()
 }
 
 func TestConflictingDefinitions_RootToNamespace(t *testing.T) {

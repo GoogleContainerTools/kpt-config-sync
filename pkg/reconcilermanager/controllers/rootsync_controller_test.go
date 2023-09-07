@@ -2297,6 +2297,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	// The membership doesn't have WorkloadIdentityPool and IdentityProvider specified, so FWI creds won't be injected.
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
 			Owner: hubv1.MembershipOwner{
@@ -2331,6 +2332,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
+			// Configuring WorkloadIdentityPool and IdentityProvider to validate if FWI creds are injected.
 			WorkloadIdentityPool: workloadIdentityPool,
 			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
 		},
@@ -2352,7 +2354,11 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	wantDeployments = map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, fakeDynamicClient,
+		// Validate the credentials are injected in the askpass container
+		validateContainerEnv(reconcilermanager.GCENodeAskpassSidecar, gsaEmailEnvKey, gcpSAEmail),
+		validateContainerEnv(reconcilermanager.GCENodeAskpassSidecar, googleApplicationCredentialsEnvKey, filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile)),
+	); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {

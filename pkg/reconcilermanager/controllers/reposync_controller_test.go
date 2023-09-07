@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -2800,6 +2801,32 @@ func TestMapObjectToRepoSync(t *testing.T) {
 	}
 }
 
+func validateContainerEnv(container, key, expectedValue string) validateFunc {
+	return func(deployment *appsv1.Deployment) error {
+		hasContainer := false
+		var envVars []corev1.EnvVar
+		for _, c := range deployment.Spec.Template.Spec.Containers {
+			if c.Name == container {
+				hasContainer = true
+				envVars = c.Env
+			}
+		}
+		if !hasContainer {
+			return fmt.Errorf("the container %q is not found in the deployment %q/%q", container, deployment.Namespace, deployment.Name)
+		}
+
+		for _, env := range envVars {
+			if env.Name == key {
+				if env.Value == expectedValue {
+					return nil
+				}
+				return fmt.Errorf("the value for ENV %q in the %q container is expected to be %q, but got %q", key, container, expectedValue, env.Value)
+			}
+		}
+		return fmt.Errorf("the ENV %q is not found in the %q container", key, container)
+	}
+}
+
 func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -2807,6 +2834,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	// The membership doesn't have WorkloadIdentityPool and IdentityProvider specified, so FWI creds won't be injected.
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
 			Owner: hubv1.MembershipOwner{
@@ -2842,6 +2870,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
+			// Configuring WorkloadIdentityPool and IdentityProvider to validate if FWI creds are injected.
 			WorkloadIdentityPool: workloadIdentityPool,
 			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
 		},
@@ -2865,7 +2894,11 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	wantDeployments = map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 
 	// compare Deployment.
-	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+	if err := validateDeployments(wantDeployments, fakeDynamicClient,
+		// Validate the credentials are injected in the askpass container
+		validateContainerEnv(reconcilermanager.GCENodeAskpassSidecar, gsaEmailEnvKey, gcpSAEmail),
+		validateContainerEnv(reconcilermanager.GCENodeAskpassSidecar, googleApplicationCredentialsEnvKey, filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile)),
+	); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 	if t.Failed() {
@@ -3808,8 +3841,10 @@ func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syn
 	return nil
 }
 
+type validateFunc func(*appsv1.Deployment) error
+
 // validateDeployments validates that important fields in the `wants` deployments match those same fields in the current deployments found in the unstructured Map
-func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient *syncerFake.DynamicClient) error {
+func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient *syncerFake.DynamicClient, validations ...validateFunc) error {
 	ctx := context.Background()
 	for id, want := range wants {
 		uObj, err := fakeDynamicClient.Resource(kinds.DeploymentResource()).
@@ -3927,6 +3962,12 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 		// Compare Deployment ResourceVersion
 		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
 			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff (- want, + got): %v", id, diff)
+		}
+
+		for _, v := range validations {
+			if err := v(got); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -674,6 +674,9 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 		})
+		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
+			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
+		}
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriodSeconds))
 	case v1beta1.HelmSource:

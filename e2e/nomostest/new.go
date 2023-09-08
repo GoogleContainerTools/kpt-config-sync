@@ -181,23 +181,23 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	nt.detectGKEAutopilot(opts.SkipAutopilot)
 
-	// Print container logs in its own cleanup block to catch fatal errors from
-	// tests and test setup (including resetSyncedRepos).
 	t.Cleanup(func() {
 		if t.Failed() {
 			nt.printTestLogs()
 		}
-	})
-	t.Cleanup(func() {
+		// Reset after `printTestLogs` to catch pods status and logs before resetting.
 		nt.T.Log("[RESET] SharedTestEnv after test")
 		if err := Reset(nt); err != nil {
 			nt.T.Errorf("[RESET] Failed to reset test environment: %v", err)
+			// Print test logs if reset fails.
+			nt.printTestLogs()
 		}
 	})
 
 	nt.T.Log("[RESET] SharedTestEnv before test")
 	if err := Reset(nt); err != nil {
 		nt.T.Fatalf("[RESET] Failed to reset test environment: %v", err)
+		// No need to print test logs here because the cleanup block will print them.
 	}
 	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
 	// with the webhook enabled.

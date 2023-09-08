@@ -467,11 +467,7 @@ func (nt *NT) printTestLogs() {
 	nt.testLogs(true)
 	nt.T.Log("[CLEANUP] Printing test logs for running pods")
 	for _, ns := range CSNamespaces {
-		nt.testPods(ns)
-	}
-	nt.T.Log("[CLEANUP] Describing not-ready pods")
-	for _, ns := range CSNamespaces {
-		nt.describeNotRunningTestPods(ns)
+		nt.listAndDescribePods(ns)
 	}
 }
 
@@ -499,18 +495,27 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	}
 }
 
-// testPods prints the output of `kubectl get pods`, which includes a 'RESTARTS' column
+// listAndDescribePods prints the output of `kubectl get pods`, which includes a 'RESTARTS' column
 // indicating how many times each pod has restarted. If a pod has restarted, the following
 // two commands can be used to get more information:
 //  1. kubectl get pods -n config-management-system -o yaml
 //  2. kubectl logs deployment/<deploy-name> <container-name> -n config-management-system -p
-func (nt *NT) testPods(ns string) {
+//
+// It also prints the output of `kubectl describe pods` for PodSpec.
+func (nt *NT) listAndDescribePods(ns string) {
 	out, err := nt.Shell.Kubectl("get", "pods", "-n", ns)
 	// Print a standardized header before each printed log to make ctrl+F-ing the
 	// log you want easier.
 	nt.T.Logf("kubectl get pods -n %s: \n%s", ns, string(out))
 	if err != nil {
 		nt.T.Log("error running `kubectl get pods`:", err)
+	}
+	out, err = nt.Shell.Kubectl("describe", "pods", "-n", ns)
+	// Print a standardized header before each printed log to make ctrl+F-ing the
+	// log you want easier.
+	nt.T.Logf("kubectl describe pods -n %s: \n%s", ns, string(out))
+	if err != nil {
+		nt.T.Log("error running `kubectl describe pods`:", err)
 	}
 }
 

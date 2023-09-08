@@ -107,6 +107,8 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 			continue
 		}
 
+		UpdateQPS(restCfg)
+
 		if timeout > 0 {
 			restCfg.Timeout = timeout
 		}

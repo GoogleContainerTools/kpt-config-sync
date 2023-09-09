@@ -258,7 +258,7 @@ func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit
 		}
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
-			return WrongTypeErr(dep, &appsv1.Deployment{})
+			return WrongTypeErr(o, &appsv1.Deployment{})
 		}
 		container := ContainerByName(dep, containerName)
 		if container == nil {
@@ -596,6 +596,19 @@ func ResourceVersionNotEquals(scheme *runtime.Scheme, unexpected string) Predica
 		return errors.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
 			gvk.Kind, core.ObjectNamespacedName(obj),
 			unexpected, resourceVersion)
+	}
+}
+
+// GenerationEquals checks that the object's generation equals the specified value.
+func GenerationEquals(generation int64) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		if obj.GetGeneration() != generation {
+			return fmt.Errorf("expected generation: %d, got: %d", generation, obj.GetGeneration())
+		}
+		return nil
 	}
 }
 

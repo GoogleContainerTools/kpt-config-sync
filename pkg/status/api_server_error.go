@@ -54,3 +54,17 @@ func APIServerErrorf(err error, format string, a ...interface{}) Error {
 	}
 	return apiServerErrorBuilder.Sprintf(format, a...).Wrap(err).Build()
 }
+
+// APIServerErrorWrap wraps an error returned by the APIServer with resource objects.
+func APIServerErrorWrap(err error, resources ...client.Object) Error {
+	var errorBuilder ErrorBuilder
+	if apierrors.IsForbidden(err) {
+		errorBuilder = InsufficientPermissionErrorBuilder.Wrap(err)
+	} else {
+		errorBuilder = apiServerErrorBuilder.Wrap(err)
+	}
+	if len(resources) == 0 {
+		return errorBuilder.Build()
+	}
+	return errorBuilder.BuildWithResources(resources...)
+}

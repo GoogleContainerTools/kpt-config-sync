@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,6 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
+	"kpt.dev/configsync/pkg/util/mutate"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -149,21 +151,21 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		return controllerruntime.Result{}, status.APIServerError(err, "failed to get RepoSync")
 	}
 
-	currentRS := rs.DeepCopy()
-
 	if rs.DeletionTimestamp.IsZero() {
 		// Only validate RepoSync if it is not deleting. Otherwise, the validation
 		// error will block the finalizer.
 		if err := r.watchConfigMaps(rs); err != nil {
 			r.logger(ctx).Error(err, "Error watching ConfigMaps")
-			reposync.SetStalled(rs, "ConfigMapWatch", err)
-			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+				reposync.SetStalled(rs, "ConfigMapWatch", err)
+				return nil
+			})
 			if updateErr != nil {
-				r.logger(ctx).Error(updateErr, "Error setting status")
+				r.logger(ctx).Error(updateErr, "Sync status update failed")
 			}
 			// Use the watch setup error for metric tagging.
 			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
-			// the error may be recoverable, so we retry (return the error)
+			// Watch errors may be recoverable, so we retry (return the error)
 			return controllerruntime.Result{}, err
 		}
 
@@ -171,12 +173,14 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// ConfigMaps can be validated.
 		if err := r.validateRepoSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.logger(ctx).Error(err, "Invalid RepoSync Spec")
-			reposync.SetStalled(rs, "Validation", err)
-			// Validation errors should not trigger retry (return error),
-			// unless the status update also fails.
-			_, updateErr := r.updateStatus(ctx, currentRS, rs)
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+				reposync.SetStalled(rs, "Validation", err)
+				return nil
+			})
 			// Use the validation error for metric tagging.
 			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+			// Spec errors are not recoverable without user input.
+			// So only retry if there was an updateErr.
 			return controllerruntime.Result{}, updateErr
 		}
 	} else {
@@ -184,10 +188,10 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	}
 
 	setupFn := func(ctx context.Context) error {
-		return r.setup(ctx, reconcilerRef, rsRef, currentRS, rs)
+		return r.setup(ctx, reconcilerRef, rs)
 	}
 	teardownFn := func(ctx context.Context) error {
-		return r.teardown(ctx, reconcilerRef, rsRef, currentRS, rs)
+		return r.teardown(ctx, reconcilerRef, rs)
 	}
 
 	if err := r.setupOrTeardown(ctx, rs, setupFn, teardownFn); err != nil {
@@ -305,56 +309,61 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 // - Create or update managed objects
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
-func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
+func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync) error {
 	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
-	err = r.handleReconcileError(ctx, err, rs, "Setup")
-	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
-	if updateErr != nil {
-		if err == nil {
-			// If no other errors, return the updateStatus error and retry
-			return updateErr
+	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+		// Modify the sync status,
+		// but keep the upsert error separate from the status update error.
+		err = r.handleReconcileError(ctx, err, syncObj, "Setup")
+		return nil
+	})
+	switch {
+	case updateErr != nil && err == nil:
+		// Return the updateSyncStatus error and re-reconcile
+		return updateErr
+	case err != nil:
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// else - log the updateStatus error and retry
-		r.logger(ctx).Error(updateErr, "Object status update failed",
-			logFieldObjectRef, rsRef.String(),
-			logFieldObjectKind, r.syncKind)
+		// Return the upsertManagedObjects error and re-reconcile
 		return err
+	default: // both nil
+		if updated {
+			r.logger(ctx).Info("Setup successful")
+		}
+		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if updated {
-		r.logger(ctx).Info("Setup successful")
-	}
-	return nil
 }
 
 // teardown performs the following teardown steps:
 // - Delete managed objects
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
-func (r *RepoSyncReconciler) teardown(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, currentRS, rs *v1beta1.RepoSync) error {
+func (r *RepoSyncReconciler) teardown(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync) error {
+	rsRef := client.ObjectKeyFromObject(rs)
 	err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef)
-	err = r.handleReconcileError(ctx, err, rs, "Teardown")
-	updated, updateErr := r.updateStatus(ctx, currentRS, rs)
-	if updateErr != nil {
-		if err == nil {
-			// If no other errors, return the updateStatus error and retry
-			return updateErr
+	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+		// Modify the sync status,
+		// but keep the upsert error separate from the status update error.
+		err = r.handleReconcileError(ctx, err, syncObj, "Teardown")
+		return nil
+	})
+	switch {
+	case updateErr != nil && err == nil:
+		// Return the updateSyncStatus error and re-reconcile
+		return updateErr
+	case err != nil:
+		if updateErr != nil {
+			r.logger(ctx).Error(updateErr, "Sync status update failed")
 		}
-		// else - log the updateStatus error and retry
-		r.logger(ctx).Error(updateErr, "Object status update failed",
-			logFieldObjectRef, rsRef.String(),
-			logFieldObjectKind, r.syncKind)
+		// Return the upsertManagedObjects error and re-reconcile
 		return err
+	default: // both nil
+		if updated {
+			r.logger(ctx).Info("Teardown successful")
+		}
+		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if updated {
-		r.logger(ctx).Info("Teardown successful")
-	}
-	return nil
 }
 
 // handleReconcileError updates the sync object status to reflect the Reconcile
@@ -408,8 +417,7 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 }
 
 // deleteManagedObjects deletes objects managed by the reconciler-manager for
-// this RepoSync. If updateStatus is true, the RepoSync status will be updated
-// to reflect the teardown progress.
+// this RepoSync.
 func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
 
@@ -948,27 +956,48 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRe
 	return rbRef, nil
 }
 
-func (r *RepoSyncReconciler) updateStatus(ctx context.Context, currentRS, rs *v1beta1.RepoSync) (bool, error) {
-	rs.Status.ObservedGeneration = rs.Generation
-
-	// Avoid unnecessary status updates.
-	if cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
-		r.logger(ctx).V(3).Info("Skipping sync status update",
-			logFieldResourceVersion, rs.ResourceVersion)
-		return false, nil
+func (r *RepoSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, updateFn func(*v1beta1.RepoSync) error) (bool, error) {
+	// Always set the reconciler and observedGeneration when updating sync status
+	updateFn2 := func(syncObj *v1beta1.RepoSync) error {
+		err := updateFn(syncObj)
+		syncObj.Status.Reconciler = reconcilerRef.Name
+		syncObj.Status.ObservedGeneration = syncObj.Generation
+		return err
 	}
 
-	if r.logger(ctx).V(5).Enabled() {
-		r.logger(ctx).Info("Updating sync status",
-			logFieldResourceVersion, rs.ResourceVersion,
-			"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s", cmp.Diff(currentRS.Status, rs.Status)))
-	}
-
-	err := r.client.Status().Update(ctx, rs)
+	updated, err := mutate.Status(ctx, r.client, rs, func() error {
+		before := rs.DeepCopy()
+		if err := updateFn2(rs); err != nil {
+			return err
+		}
+		// TODO: Fix the status condition helpers to not update the timestamps if nothing changed.
+		// There's no good way to do a semantic comparison that ignores timestamps.
+		// So we're doing both for now to try to prevent updates whenever possible.
+		if equality.Semantic.DeepEqual(before.Status, rs.Status) {
+			// No update necessary.
+			return &mutate.NoUpdateError{}
+		}
+		if cmp.Equal(before.Status, rs.Status, compare.IgnoreTimestampUpdates) {
+			// No update necessary.
+			return &mutate.NoUpdateError{}
+		}
+		if r.logger(ctx).V(5).Enabled() {
+			r.logger(ctx).Info("Updating sync status",
+				logFieldResourceVersion, rs.ResourceVersion,
+				"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s",
+					cmp.Diff(before.Status, rs.Status)))
+		}
+		return nil
+	})
 	if err != nil {
-		return false, err
+		return updated, errors.Wrapf(err, "Sync status update failed")
 	}
-	return true, nil
+	if updated {
+		r.logger(ctx).Info("Sync status update successful")
+	} else {
+		r.logger(ctx).V(5).Info("Sync status update skipped: no change")
+	}
+	return updated, nil
 }
 
 func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {

@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -251,11 +252,13 @@ func TestRepoSyncFinalize(t *testing.T) {
 			},
 			expectedError: errors.Wrapf(
 				errors.Wrapf(
-					status.APIServerError(
-						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
-							"example/repo-sync-1"),
-						"failed to update object status",
+					status.APIServerErrorWrap(
+						errors.Wrapf(
+							apierrors.NewNotFound(
+								schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+								"example/repo-sync-1"),
+							"failed to update object status: %s",
+							kinds.ObjectSummary(repoSync1)),
 						repoSync1.DeepCopy()),
 					"failed to set ReconcilerFinalizing condition"),
 				"setting Finalizing condition"),
@@ -406,11 +409,13 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
-				status.APIServerError(
-					apierrors.NewNotFound(
-						schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
-						"example/repo-sync-1"),
-					"failed to update object",
+				status.APIServerErrorWrap(
+					errors.Wrapf(
+						apierrors.NewNotFound(
+							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+							"example/repo-sync-1"),
+						"failed to update object: %s",
+						kinds.ObjectSummary(repoSync1)),
 					repoSync1.DeepCopy()),
 				"failed to add finalizer"),
 			expectedUpdated: false,
@@ -548,11 +553,13 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 				return fakeClient.Delete(ctx, rs)
 			},
 			expectedError: errors.Wrapf(
-				status.APIServerError(
-					apierrors.NewNotFound(
-						schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
-						"example/repo-sync-1"),
-					"failed to update object",
+				status.APIServerErrorWrap(
+					errors.Wrapf(
+						apierrors.NewNotFound(
+							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+							"example/repo-sync-1"),
+						"failed to update object: %s",
+						kinds.ObjectSummary(repoSync1)),
 					repoSync1.DeepCopy()),
 				"failed to remove finalizer"),
 			expectedUpdated: false,

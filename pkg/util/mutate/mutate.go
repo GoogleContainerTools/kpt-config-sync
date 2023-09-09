@@ -16,13 +16,12 @@ package mutate
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/retry"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -54,7 +53,35 @@ func RetriableOrConflict(err error) bool {
 	return Retriable(err) || apierrors.IsConflict(err)
 }
 
-// WithRetry attempts to update an object until successful or update becomes
+// Spec attempts to update an object until successful or update becomes
+// unnecessary (`NoUpdateError` from the `mutate.Func`). Retries are quick, with
+// no backoff.
+// Returns an error if the status update fails OR if the mutate func fails.
+func Spec(ctx context.Context, c client.Client, obj client.Object, mutateFn Func) (bool, error) {
+	return withRetry(ctx, &specClient{client: c}, obj, mutateFn)
+}
+
+// Status attempts to update the status of an object until successful or update
+// becomes unnecessary (`NoUpdateError` from the `mutate.Func`). Retries are
+// quick, with no backoff.
+// Returns an error if the status update fails OR if the mutate func fails OR if
+// the generation changes before the status update succeeds.
+func Status(ctx context.Context, c client.Client, obj client.Object, mutateFn Func) (bool, error) {
+	oldGen := obj.GetGeneration()
+	mutateFn2 := func() error {
+		newGen := obj.GetGeneration()
+		if obj.GetGeneration() != oldGen {
+			// If the spec changed, stop trying to update the status.
+			// When this happens, the controller should re-reconcile with the new spec.
+			return errors.Errorf("generation changed while attempting to update status: %d -> %d",
+				oldGen, newGen)
+		}
+		return mutateFn()
+	}
+	return withRetry(ctx, &statusClient{client: c}, obj, mutateFn2)
+}
+
+// withRetry attempts to update an object until successful or update becomes
 // unnecessary (`NoUpdateError` from the `mutate.Func`). Retries are quick, with
 // no backoff.
 //
@@ -66,11 +93,11 @@ func RetriableOrConflict(err error) bool {
 //     been deleted and re-created. So an error will be returned.
 //   - If the mutate.Func returns a *NoUpdateError, the update will be skipped
 //     and retries will be stopped.
-func WithRetry(ctx context.Context, c client.Client, obj client.Object, mutate Func) (bool, error) {
+func withRetry(ctx context.Context, c updater, obj client.Object, mutate Func) (bool, error) {
 	// UID must be set already, so we can error if it changes.
 	uid := obj.GetUID()
 	if uid == "" {
-		return false, fmt.Errorf("failed to update object: %s: metadata.uid is empty", objSummary(obj))
+		return false, c.WrapError(ctx, obj, errors.New("metadata.uid is empty"))
 	}
 	// Mutate the object from the server
 	if err := mutate(); err != nil {
@@ -78,14 +105,13 @@ func WithRetry(ctx context.Context, c client.Client, obj client.Object, mutate F
 			// No change necessary.
 			return false, nil
 		}
-		return false, errors.Wrap(err, "failed to mutate object")
+		return false, c.WrapError(ctx, obj, errors.Wrap(err, "mutating object"))
 	}
-	objKey := client.ObjectKeyFromObject(obj)
 	retryErr := retry.OnError(retry.DefaultRetry, RetriableOrConflict, func() error {
 		// If ResourceVersion is NOT set, request the latest object from the server.
 		// Otherwise, assume the object was previously retrieved.
 		if obj.GetResourceVersion() == "" {
-			if getErr := c.Get(ctx, objKey, obj); getErr != nil {
+			if getErr := c.Get(ctx, obj); getErr != nil {
 				// Return the GET error & retry
 				return errors.Wrap(getErr, "failed to get latest version of object")
 			}
@@ -117,66 +143,66 @@ func WithRetry(ctx context.Context, c client.Client, obj client.Object, mutate F
 			// No change necessary.
 			return false, nil
 		}
+		err := c.WrapError(ctx, obj, retryErr)
 		if statusErr := apierrors.APIStatus(nil); errors.As(retryErr, &statusErr) {
 			// The error (or an error it wraps) is a known status error from K8s
-			return false, status.APIServerError(retryErr, "failed to update object", obj)
+			return false, status.APIServerErrorWrap(err, obj)
 		}
-		return false, errors.Wrapf(retryErr, "failed to update object: %s", objSummary(obj))
+		return false, err
 	}
 	return true, nil
 }
 
-// Status attempts to update an object's status, once.
-//
-//   - If the update errors due to a UID conflict, that means the object has
-//     been deleted and re-created. So an error will be returned.
-//   - If the mutate.Func returns a *NoUpdateError, the update will be skipped.
-func Status(ctx context.Context, c client.Client, obj client.Object, mutate Func) (bool, error) {
-	// UID must be set already, so we can error if it changes.
-	uid := obj.GetUID()
-	if uid == "" {
-		return false, fmt.Errorf("failed to update object: %s: metadata.uid is empty", objSummary(obj))
-	}
-	// Wrap inner part in a closure to simplify consistent error handling.
-	// Errors from `Status`` and `WithRetry` should look similar, even tho
-	// `Status` only makes one attempt.
-	retryErr := func() error {
-		// If ResourceVersion is NOT set, request the latest object from the server.
-		// Otherwise, assume the object was previously retrieved.
-		if obj.GetResourceVersion() == "" {
-			objKey := client.ObjectKeyFromObject(obj)
-			if getErr := c.Get(ctx, objKey, obj); getErr != nil {
-				return errors.Wrap(getErr, "failed to get latest version of object")
-			}
-			if obj.GetUID() != uid {
-				return errors.New("metadata.uid has changed: object may have been re-created")
-			}
-		}
-		if err := mutate(); err != nil {
-			return errors.Wrap(err, "failed to mutate object")
-		}
-		return c.Status().Update(ctx, obj)
-	}()
-	if retryErr != nil {
-		if noUpdateErr := (&NoUpdateError{}); errors.As(retryErr, &noUpdateErr) {
-			// No change necessary.
-			return false, nil
-		}
-		if statusErr := apierrors.APIStatus(nil); errors.As(retryErr, &statusErr) {
-			// The error (or an error it wraps) is a known status error from K8s
-			return false, status.APIServerError(retryErr, "failed to update object status", obj)
-		}
-		return false, errors.Wrapf(retryErr, "failed to update object status: %s", objSummary(obj))
-	}
-	return true, nil
+// updater is a simplified client interface for performing reads and writes on
+// an object, without options.
+type updater interface {
+	// Get the specified object.
+	Get(context.Context, client.Object) error
+
+	// Update the specified object.
+	Update(context.Context, client.Object) error
+
+	// WrapError returns the specified error wrapped with extra context specific
+	// to this updater.
+	WrapError(context.Context, client.Object, error) error
 }
 
-func objSummary(obj client.Object) string {
-	if uObj, ok := obj.(*unstructured.Unstructured); ok {
-		return fmt.Sprintf("%T %s %s/%s", obj,
-			uObj.GetObjectKind().GroupVersionKind(),
-			obj.GetNamespace(), obj.GetName())
-	}
-	return fmt.Sprintf("%T %s/%s", obj,
-		obj.GetNamespace(), obj.GetName())
+type specClient struct {
+	client client.Client
+}
+
+// Get the current spec of the specified object.
+func (c *specClient) Get(ctx context.Context, obj client.Object) error {
+	return c.client.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+}
+
+// Update the spec of the specified object.
+func (c *specClient) Update(ctx context.Context, obj client.Object) error {
+	return c.client.Update(ctx, obj)
+}
+
+// WrapError returns the specified error wrapped with extra context specific
+// to this updater.
+func (c *specClient) WrapError(_ context.Context, obj client.Object, err error) error {
+	return errors.Wrapf(err, "failed to update object: %s", kinds.ObjectSummary(obj))
+}
+
+type statusClient struct {
+	client client.Client
+}
+
+// Get the current status of the specified object.
+func (c *statusClient) Get(ctx context.Context, obj client.Object) error {
+	return c.client.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+}
+
+// Update the status of the specified object.
+func (c *statusClient) Update(ctx context.Context, obj client.Object) error {
+	return c.client.Status().Update(ctx, obj)
+}
+
+// WrapError returns the specified error wrapped with extra context specific
+// to this updater.
+func (c *statusClient) WrapError(_ context.Context, obj client.Object, err error) error {
+	return errors.Wrapf(err, "failed to update object status: %s", kinds.ObjectSummary(obj))
 }

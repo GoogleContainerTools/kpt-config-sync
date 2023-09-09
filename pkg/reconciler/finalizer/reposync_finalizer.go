@@ -90,7 +90,7 @@ func (f *RepoSyncFinalizer) Finalize(ctx context.Context, syncObj client.Object)
 //
 // The specified syncObj must be of type `*v1beta1.RepoSync`.
 func (f *RepoSyncFinalizer) AddFinalizer(ctx context.Context, syncObj client.Object) (bool, error) {
-	updated, err := mutate.WithRetry(ctx, f.Client, syncObj, func() error {
+	updated, err := mutate.Spec(ctx, f.Client, syncObj, func() error {
 		if !addFinalizer(syncObj) {
 			// Already added. No change necessary.
 			return &mutate.NoUpdateError{}
@@ -113,7 +113,7 @@ func (f *RepoSyncFinalizer) AddFinalizer(ctx context.Context, syncObj client.Obj
 //
 // The specified syncObj must be of type `*v1beta1.RepoSync`.
 func (f *RepoSyncFinalizer) RemoveFinalizer(ctx context.Context, syncObj client.Object) (bool, error) {
-	updated, err := mutate.WithRetry(ctx, f.Client, syncObj, func() error {
+	updated, err := mutate.Spec(ctx, f.Client, syncObj, func() error {
 		if !removeFinalizer(syncObj) {
 			// Already removed. No change necessary.
 			return &mutate.NoUpdateError{}

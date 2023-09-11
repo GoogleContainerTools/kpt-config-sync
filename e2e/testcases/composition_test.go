@@ -260,8 +260,9 @@ func TestComposition(t *testing.T) {
 		synedObjs[id] = obj
 	}
 
-	nt.T.Log("Watching for 1m to make sure there's no unnecessary updates...")
+	nt.T.Log("Watching for 1m to make sure there's no unnecessary spec updates...")
 	// Watch the managed objects to log diffs (debug) and fail fast.
+	// Allow status changes, but not spec changes.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tg := taskgroup.New()
@@ -269,15 +270,15 @@ func TestComposition(t *testing.T) {
 		idPtr := id
 		synedObj := synedObjs[id]
 		tg.Go(func() error {
-			// Stop early if the RV changes. Otherwise wait until timeout.
-			rvne := testpredicates.ResourceVersionNotEquals(nt.Scheme, synedObj.GetResourceVersion())
+			// Stop early if the generation changes. Otherwise wait until timeout.
+			gne := testpredicates.GenerationNotEquals(synedObj.GetGeneration())
 			return nt.Watcher.WatchObject(idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace, []testpredicates.Predicate{
 				func(obj client.Object) error {
 					if err := ctx.Err(); err != nil {
 						return err // cancelled
 					}
-					if err := rvne(obj); err != nil {
-						// ResourceVersion changed! Cancel other watches.
+					if err := gne(obj); err != nil {
+						// Generation changed! Cancel other watches.
 						cancel()
 						return err
 					}
@@ -289,13 +290,13 @@ func TestComposition(t *testing.T) {
 	if err := tg.Wait(); err != nil {
 		if me, ok := err.(multiErr); ok {
 			for _, err := range me.Errors() {
-				// Timeout or Cancel expected. Otherwise it probably means the RV changed.
+				// Timeout or Cancel expected. Otherwise it probably means the Generation changed.
 				if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 					nt.T.Fatal(err)
 				}
 			}
 		} else {
-			// Timeout or Cancel expected. Otherwise it probably means the RV changed.
+			// Timeout or Cancel expected. Otherwise it probably means the Generation changed.
 			if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 				nt.T.Fatal(err)
 			}
@@ -304,12 +305,12 @@ func TestComposition(t *testing.T) {
 
 	// Assuming the watches timed out, validate that the objects are still reconciled.
 	for id, synedObj := range synedObjs {
-		nt.T.Logf("Ensure %q exists, is current, and its ResourceVersion has not changed", id)
+		nt.T.Logf("Ensure %q exists, is current, and its Generation has not changed", id)
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(id.GroupVersionKind)
 		err := nt.Validate(id.Name, id.Namespace, obj,
 			testpredicates.StatusEquals(nt.Scheme, status.CurrentStatus),
-			testpredicates.ResourceVersionEquals(nt.Scheme, synedObj.GetResourceVersion()))
+			testpredicates.GenerationEquals(synedObj.GetGeneration()))
 		if err != nil {
 			// Error, not Fatal, so we can see all the diffs when it fails.
 			nt.T.Error(err)

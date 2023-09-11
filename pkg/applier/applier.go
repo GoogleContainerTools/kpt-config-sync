@@ -381,6 +381,7 @@ func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEve
 
 	case event.DeleteFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
+		handleMetrics(ctx, "delete", e.Error)
 		return DeleteErrorForResource(e.Error, id)
 
 	case event.DeleteSkipped:

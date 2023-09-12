@@ -242,6 +242,9 @@ func createGKECluster(t testing.NTB, name string) error {
 		if len(addons) > 0 {
 			args = append(args, "--addons", strings.Join(addons, ","))
 		}
+		if *e2e.VPA {
+			args = append(args, "--enable-vertical-pod-autoscaling")
+		}
 	}
 	if len(scopes) > 0 {
 		args = append(args, "--scopes", strings.Join(scopes, ","))

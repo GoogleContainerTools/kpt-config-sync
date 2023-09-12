@@ -26,9 +26,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -250,34 +250,96 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 	}
 }
 
-// HasCorrectResourceRequestsLimits verify a root/namespace reconciler container has the correct resource requests and limits.
-func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit, memoryRequest, memoryLimit resource.Quantity) Predicate {
+// DeploymentContainerResourcesEqual verifies a reconciler deployment container
+// has the expected resource requests and limits.
+func DeploymentContainerResourcesEqual(expectedSpec v1beta1.ContainerResourcesSpec) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
+		}
+		if uObj, ok := o.(*unstructured.Unstructured); ok {
+			rObj, err := kinds.ToTypedObject(uObj, core.Scheme)
+			if err != nil {
+				return err
+			}
+			o, err = kinds.ObjectAsClientObject(rObj)
+			if err != nil {
+				return err
+			}
 		}
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(o, &appsv1.Deployment{})
 		}
-		container := ContainerByName(dep, containerName)
-		if container == nil {
-			return fmt.Errorf("expected container not found: %s", containerName)
+		container := ContainerByName(dep, expectedSpec.ContainerName)
+		return validateContainerResources(container, expectedSpec)
+	}
+}
+
+// DeploymentContainerResourcesAllEqual verifies all reconciler deployment
+// containers have the expected resource requests and limits.
+func DeploymentContainerResourcesAllEqual(expectedByName map[string]v1beta1.ContainerResourcesSpec) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceCPU], cpuRequest) {
-			return errors.Errorf("The CPU request of the %q container should be %v, got %v", container.Name, cpuRequest, container.Resources.Requests[corev1.ResourceCPU])
+		if uObj, ok := o.(*unstructured.Unstructured); ok {
+			rObj, err := kinds.ToTypedObject(uObj, core.Scheme)
+			if err != nil {
+				return err
+			}
+			o, err = kinds.ObjectAsClientObject(rObj)
+			if err != nil {
+				return err
+			}
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceCPU], cpuLimit) {
-			return errors.Errorf("The CPU limit of the %q container should be %v, got %v", container.Name, cpuLimit, container.Resources.Limits[corev1.ResourceCPU])
+		d, ok := o.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(d, &appsv1.Deployment{})
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceMemory], memoryRequest) {
-			return errors.Errorf("The memory request of the %q container should be %v, got %v", container.Name, memoryRequest, container.Resources.Requests[corev1.ResourceMemory])
-		}
-		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceMemory], memoryLimit) {
-			return errors.Errorf("The memory limit of the %q container should be %v, got %v", container.Name, memoryLimit, container.Resources.Limits[corev1.ResourceMemory])
+		for _, container := range d.Spec.Template.Spec.Containers {
+			expectedSpec, ok := expectedByName[container.Name]
+			if !ok {
+				return fmt.Errorf("found unexpected container: %q",
+					container.Name)
+			}
+			if err := validateContainerResources(&container, expectedSpec); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
+}
+
+func validateContainerResources(container *corev1.Container, expectedSpec v1beta1.ContainerResourcesSpec) error {
+	if container == nil {
+		return fmt.Errorf("expected container not found: %s", expectedSpec.ContainerName)
+	}
+	expected := expectedSpec.CPURequest
+	found := container.Resources.Requests.Cpu()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected CPU request of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.MemoryRequest
+	found = container.Resources.Requests.Memory()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected Memory request of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.CPULimit
+	found = container.Resources.Limits.Cpu()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected CPU limit of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.MemoryLimit
+	found = container.Resources.Limits.Memory()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected Memory limit of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	return nil
 }
 
 // NotPendingDeletion ensures o is not pending deletion.
@@ -638,6 +700,20 @@ func GenerationNotEquals(generation int64) Predicate {
 		if obj.GetGeneration() == generation {
 			return fmt.Errorf("expected generation to not equal %d, but found %d",
 				generation, obj.GetGeneration())
+		}
+		return nil
+	}
+}
+
+// UIDNotEquals checks that the object's UID is NOT the specified value.
+func UIDNotEquals(invalidUID types.UID) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		foundUID := obj.GetUID()
+		if foundUID == invalidUID {
+			return fmt.Errorf("expected UID to not equal %v, but found %v", invalidUID, foundUID)
 		}
 		return nil
 	}
@@ -1034,4 +1110,61 @@ func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1be
 		return fmt.Errorf("unexpected diff: %s", diff)
 	}
 	return nil
+}
+
+// ReconcilerAutoscalingStrategyEquals checks that the object's reconciler
+// autoscaling strategy matches the specified strategy.
+func ReconcilerAutoscalingStrategyEquals(expected metadata.ReconcilerAutoscalingStrategy) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		found := core.GetAnnotation(obj, metadata.ReconcilerAutoscalingStrategyAnnotationKey)
+
+		if found != string(expected) {
+			return errors.Errorf("expected %s to have reconciler-autoscaling-strategy %q, but got %q",
+				kinds.ObjectSummary(obj), expected, found)
+		}
+		return nil
+	}
+}
+
+// MissingReconcilerAutoscalingStrategy checks that the object's reconciler
+// autoscaling strategy is not specified.
+func MissingReconcilerAutoscalingStrategy() Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		annotations := obj.GetAnnotations()
+		if len(annotations) == 0 {
+			return nil
+		}
+		_, found := annotations[metadata.ReconcilerAutoscalingStrategyAnnotationKey]
+		if found {
+			return errors.Errorf("expected %s to not have a specified reconciler-autoscaling-strategy, but got %v",
+				kinds.ObjectSummary(obj), found)
+		}
+		return nil
+	}
+}
+
+// RootSyncSpecOverrideEquals checks that the RootSync's spec.override matches
+// the specified OverrideSpec.
+func RootSyncSpecOverrideEquals(expected *v1beta1.OverrideSpec) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := obj.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(obj, &v1beta1.RootSync{})
+		}
+		found := rs.Spec.Override
+		if !equality.Semantic.DeepEqual(found, expected) {
+			return errors.Errorf("expected %s to have spec.override: %s, but got %s",
+				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
+		}
+		return nil
+	}
 }

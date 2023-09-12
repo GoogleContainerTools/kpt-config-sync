@@ -65,6 +65,10 @@ var Stress = flag.Bool("stress", false,
 var KCC = flag.Bool("kcc", false,
 	"If true, run kcc tests.")
 
+// VPA enables running the e2e tests for vertical pod autoscaling.
+var VPA = flag.Bool("vpa", true,
+	"If true, run VPA tests.")
+
 // GceNode enables running the e2e tests for 'gcenode' auth type
 var GceNode = flag.Bool("gcenode", false,
 	"If true, run test with 'gcenode' auth type.")

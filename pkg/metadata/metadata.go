@@ -48,12 +48,13 @@ func GetNomosAnnotationKeys() []string {
 // in the source repository.
 // These annotations are set by Config Sync users.
 var sourceAnnotations = map[string]bool{
-	NamespaceSelectorAnnotationKey:         true,
-	LegacyClusterSelectorAnnotationKey:     true,
-	ClusterNameSelectorAnnotationKey:       true,
-	ResourceManagementKey:                  true,
-	LifecycleMutationAnnotation:            true,
-	DeletionPropagationPolicyAnnotationKey: true,
+	NamespaceSelectorAnnotationKey:             true,
+	LegacyClusterSelectorAnnotationKey:         true,
+	ClusterNameSelectorAnnotationKey:           true,
+	ResourceManagementKey:                      true,
+	LifecycleMutationAnnotation:                true,
+	DeletionPropagationPolicyAnnotationKey:     true,
+	ReconcilerAutoscalingStrategyAnnotationKey: true,
 }
 
 // IsSourceAnnotation returns true if the annotation is a ConfigSync source
@@ -73,7 +74,8 @@ func IsConfigSyncAnnotationKey(k string) bool {
 	return HasConfigSyncPrefix(k) ||
 		strings.HasPrefix(k, LifecycleMutationAnnotation) ||
 		k == OwningInventoryKey ||
-		k == DeletionPropagationPolicyAnnotationKey
+		k == DeletionPropagationPolicyAnnotationKey ||
+		k == ReconcilerAutoscalingStrategyAnnotationKey
 }
 
 // isConfigSyncAnnotation returns whether an annotation is a Config Sync annotation.

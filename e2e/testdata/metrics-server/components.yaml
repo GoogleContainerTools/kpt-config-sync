@@ -1,0 +1,263 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+# Source: metrics-server/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-metrics-server
+  namespace: default
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: metrics-server/templates/clusterrole-aggregated-reader.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:metrics-server-aggregated-reader
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: metrics-server/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:test-metrics-server
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - nodes/metrics
+    verbs:
+    - get
+  - apiGroups:
+    - ""
+    resources:
+      - pods
+      - nodes
+      - namespaces
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: metrics-server/templates/clusterrolebinding-auth-delegator.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: test-metrics-server:system:auth-delegator
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: test-metrics-server
+    namespace: default
+---
+# Source: metrics-server/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:test-metrics-server
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:test-metrics-server
+subjects:
+  - kind: ServiceAccount
+    name: test-metrics-server
+    namespace: default
+---
+# Source: metrics-server/templates/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: test-metrics-server-auth-reader
+  namespace: kube-system
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: test-metrics-server
+    namespace: default
+---
+# Source: metrics-server/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-metrics-server
+  namespace: default
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: https
+  selector:
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+---
+# Source: metrics-server/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-metrics-server
+  namespace: default
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrics-server
+      app.kubernetes.io/instance: test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metrics-server
+        app.kubernetes.io/instance: test
+    spec:
+      schedulerName: 
+      serviceAccountName: test-metrics-server
+      priorityClassName: "system-cluster-critical"
+      containers:
+        - name: metrics-server
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          image: registry.k8s.io/metrics-server/metrics-server:v0.6.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - --secure-port=10250
+            - --cert-dir=/tmp
+            - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+            - --kubelet-use-node-status-port
+            - --metric-resolution=15s
+            - --kubelet-insecure-tls
+          ports:
+          - name: https
+            protocol: TCP
+            containerPort: 10250
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /livez
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 0
+            periodSeconds: 10
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Source: metrics-server/templates/apiservice.yaml
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io
+  labels:
+    helm.sh/chart: metrics-server-3.10.0
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "0.6.3"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  group: metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: test-metrics-server
+    namespace: default
+    port: 443
+  version: v1beta1
+  versionPriority: 100

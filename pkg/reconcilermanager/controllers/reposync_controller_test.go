@@ -366,11 +366,12 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(overrideReconcilerAndGitSyncResourceLimits, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
-		containerResourcesMutator(overrideReconcilerAndGitSyncResourceLimits),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -423,11 +424,12 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideReconcilerCPUAndGitSyncMemResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
-		containerResourcesMutator(overrideReconcilerCPUAndGitSyncMemResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -460,10 +462,12 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -500,10 +504,12 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -562,11 +568,12 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideReconcilerAndGitSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
-		containerResourcesMutator(overrideReconcilerAndGitSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -617,11 +624,12 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideReconcilerResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
-		containerResourcesMutator(overrideReconcilerResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -664,11 +672,12 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideGitSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
-		containerResourcesMutator(overrideGitSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -700,10 +709,12 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
@@ -740,10 +751,12 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -781,10 +794,12 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -922,6 +937,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(2),
 	)
@@ -1015,6 +1031,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("6"), setGeneration(2),
 	)
@@ -1050,6 +1067,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("7"), setGeneration(3),
 	)
@@ -1084,12 +1102,13 @@ func TestRepoSyncCreateWithCACert(t *testing.T) {
 	}
 
 	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
-
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	nsSecretName := nsReconcilerName + "-" + secretName
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
 	repoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		caCertSecretMutator(nsSecretName, nsCACertSecret),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
@@ -1124,10 +1143,12 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	}
 
 	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	nsSecretName := nsReconcilerName + "-" + secretName
-	repoDeployment := rootSyncDeployment(nsReconcilerName,
+	repoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsSecretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
@@ -1174,9 +1195,10 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 
 	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
-	updatedRepoDeployment := rootSyncDeployment(nsReconcilerName,
+	updatedRepoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		caCertSecretMutator(nsSecretName, nsCACertSecret),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
@@ -1206,6 +1228,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	repoDeployment = repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsSecretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", nsSecretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsSecretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsSecretName, GitSecretConfigKeyToken),
@@ -1298,10 +1321,12 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1331,10 +1356,12 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1367,6 +1394,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1399,6 +1427,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1430,6 +1459,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -1479,10 +1509,12 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1512,10 +1544,12 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1548,6 +1582,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1579,6 +1614,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1628,11 +1664,12 @@ func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
-
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1659,10 +1696,12 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1695,6 +1734,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1726,6 +1766,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1789,10 +1830,12 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1832,6 +1875,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1863,6 +1907,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1900,10 +1945,12 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1950,6 +1997,7 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -2036,10 +2084,12 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantRoleBindings := map[core.ID]*rbacv1.RoleBinding{core.IDOf(roleBinding1): roleBinding1}
 
 	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment1 := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv1),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2084,6 +2134,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv2),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2143,6 +2194,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv3),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2202,6 +2254,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		setServiceAccountName(nsReconcilerName4),
 		secretMutator(nsReconcilerName4+"-"+reposyncCookie),
 		envVarMutator("HTTPS_PROXY", nsReconcilerName4+"-"+reposyncCookie, "https_proxy"),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv4),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2259,6 +2312,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName5,
 		setServiceAccountName(nsReconcilerName5),
 		secretMutator(nsReconcilerName5+"-"+secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", nsReconcilerName5+"-"+secretName, "https_proxy"),
 		envVarMutator(gitSyncName, nsReconcilerName5+"-"+secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, nsReconcilerName5+"-"+secretName, GitSecretConfigKeyToken),
@@ -2310,6 +2364,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv1),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2345,6 +2400,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv2),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2380,6 +2436,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv3),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2848,11 +2905,12 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
-
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2888,6 +2946,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		}),
 		setServiceAccountName(nsReconcilerName),
 		fleetWorkloadIdentityMutator(workloadIdentityPool),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2925,6 +2984,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -2957,6 +3017,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -2988,10 +3049,11 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
-
-	repoDeployment := rootSyncDeployment(nsReconcilerName,
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
+	repoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		helmSecretMutator(nsReconcilerName+"-"+secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator(helmSyncName, nsReconcilerName+"-"+secretName, "username"),
 		envVarMutator(helmSyncPassword, nsReconcilerName+"-"+secretName, "password"),
 		containerEnvMutator(repoContainerEnvs),
@@ -3021,6 +3083,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	repoDeployment = repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -3057,11 +3120,12 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	}
 
 	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
-		containerResourcesMutator(overrideHelmSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -3103,10 +3167,12 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -3149,6 +3215,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -3178,6 +3245,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -3228,6 +3296,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		}),
 		setServiceAccountName(nsReconcilerName),
 		fwiOciMutator(workloadIdentityPool),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -3265,6 +3334,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	}
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideOciSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3272,7 +3342,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		}),
 		setServiceAccountName(nsReconcilerName),
 		fwiOciMutator(workloadIdentityPool),
-		containerResourcesMutator(overrideOciSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
@@ -3688,10 +3758,12 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -3757,6 +3829,7 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerArgsMutator(containerArgs),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -3861,7 +3934,7 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 
 		// Compare Deployment ResourceVersion
 		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
-			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff: %v", id, diff)
+			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Generation
@@ -3871,17 +3944,17 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 
 		// Compare Deployment Annotations
 		if diff := cmp.Diff(want.Annotations, got.Annotations); diff != "" {
-			return errors.Errorf("Unexpected Deployment Annotations found for %q. Diff (- want, + got): %v", id, diff)
+			return errors.Errorf("Unexpected Deployment Annotations found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Template Annotations.
 		if diff := cmp.Diff(want.Spec.Template.Annotations, got.Spec.Template.Annotations); diff != "" {
-			return errors.Errorf("Unexpected Template Annotations found for %q. Diff (- want, + got): %v", id, diff)
+			return errors.Errorf("Unexpected Template Annotations found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare ServiceAccountName.
 		if diff := cmp.Diff(want.Spec.Template.Spec.ServiceAccountName, got.Spec.Template.Spec.ServiceAccountName); diff != "" {
-			return errors.Errorf("Unexpected ServiceAccountName for %q. Diff (- want, + got): %v", id, diff)
+			return errors.Errorf("Unexpected ServiceAccountName for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Replicas
@@ -3908,23 +3981,23 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 					// Compare EnvFrom fields in the container.
 					if diff := cmp.Diff(i.EnvFrom, j.EnvFrom,
 						cmpopts.SortSlices(func(x, y corev1.EnvFromSource) bool { return x.ConfigMapRef.Name < y.ConfigMapRef.Name })); diff != "" {
-						return errors.Errorf("Unexpected configMapRef found for the %q container of %q, diff %s", i.Name, id, diff)
+						return errors.Errorf("Unexpected configMapRef found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 					// Compare VolumeMount fields in the container.
 					if diff := cmp.Diff(i.VolumeMounts, j.VolumeMounts,
 						cmpopts.SortSlices(func(x, y corev1.VolumeMount) bool { return x.Name < y.Name })); diff != "" {
-						return errors.Errorf("Unexpected volumeMount found for the %q container of %q, diff %s", i.Name, id, diff)
+						return errors.Errorf("Unexpected volumeMount found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Env fields in the container.
 					if diff := cmp.Diff(i.Env, j.Env,
 						cmpopts.SortSlices(func(x, y corev1.EnvVar) bool { return x.Name < y.Name })); diff != "" {
-						return errors.Errorf("Unexpected EnvVar found for the %q container of %q, diff %s", i.Name, id, diff)
+						return errors.Errorf("Unexpected EnvVar found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Resources fields in the container.
 					if diff := cmp.Diff(i.Resources, j.Resources); diff != "" {
-						return errors.Errorf("Unexpected resources found for the %q container of %q, diff %s", i.Name, id, diff)
+						return errors.Errorf("Unexpected resources found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Args

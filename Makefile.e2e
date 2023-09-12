@@ -68,7 +68,7 @@ test-e2e-kind-multi-repo: config-sync-manifest-local
 		--share-test-env \
 		--timeout $(KIND_E2E_TIMEOUT) \
 		--test.v -v \
-		--num-clusters 15 \
+		--num-clusters 10 \
 		$(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.

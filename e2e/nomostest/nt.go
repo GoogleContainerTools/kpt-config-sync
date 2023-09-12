@@ -39,8 +39,11 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
+	"kpt.dev/configsync/pkg/util/log"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -121,6 +124,10 @@ type NT struct {
 	// DefaultReconcileTimeout is the default timeout for the applier to wait
 	// for object reconciliation.
 	DefaultReconcileTimeout *time.Duration
+
+	// DefaultReconcilerAutoscalingStrategy is the default strategy to apply to
+	// new RootSyncs/RepoSyncs.
+	DefaultReconcilerAutoscalingStrategy *metadata.ReconcilerAutoscalingStrategy
 
 	// RootRepos is the root repositories the cluster is syncing to.
 	// The key is the RootSync name and the value points to the corresponding Repository object.
@@ -459,6 +466,21 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	nt.T.Logf("%s\n%s", cmd, out)
 }
 
+// LogDeploymentPodResources logs the resources of the deployment's pod's containers
+func (nt *NT) LogDeploymentPodResources(namespace, deployment string) {
+	nt.T.Helper()
+	pod, err := nt.KubeClient.GetDeploymentPod(
+		deployment, namespace, 30*time.Second)
+	if err != nil {
+		nt.T.Error(err)
+		return
+	}
+	nt.T.Logf("Deployment %s/%s pod container resources:", namespace, deployment)
+	for _, container := range pod.Spec.Containers {
+		nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
+	}
+}
+
 // printTestLogs prints test logs and pods information for debugging.
 func (nt *NT) printTestLogs() {
 	nt.T.Log("[CLEANUP] Printing test logs for current container instances")
@@ -487,11 +509,13 @@ func (nt *NT) testLogs(previousPodLog bool) {
 		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
 			reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(name))
 	}
 	for nn := range nt.NonRootRepos {
 		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
 			reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name))
 	}
 }
 
@@ -824,6 +848,95 @@ func (nt *NT) setupConfigConnector() {
 	}
 }
 
+// installMetricsServer applies the metrics-server package.
+func (nt *NT) installMetricsServer() error {
+	nt.T.Log("[SETUP] Installing Metrics Server")
+	sourcePath := filepath.Join(".", "..", "testdata", "metrics-server")
+	absPath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return err
+	}
+	objs, err := parseManifestDir(absPath)
+	if err != nil {
+		return err
+	}
+	objs, err = convertToTypedObjects(nt, objs)
+	if err != nil {
+		return err
+	}
+	return ApplyObjectsAndWait(nt, objs...)
+}
+
+// uninstallMetricsServer deletes the metrics-server package.
+func (nt *NT) uninstallMetricsServer() error {
+	nt.T.Log("[SETUP] Uninstalling Metrics Server")
+	sourcePath := filepath.Join(".", "..", "testdata", "metrics-server")
+	absPath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return err
+	}
+	objs, err := parseManifestDir(absPath)
+	if err != nil {
+		return err
+	}
+	objs, err = convertToTypedObjects(nt, objs)
+	if err != nil {
+		return err
+	}
+	// Delete in reverse order
+	reverseClientObjectList(objs)
+	return DeleteObjectsAndWait(nt, objs...)
+}
+
+// installVerticalPrivateAutoscaler applies the vertical-pod-autoscaler package.
+func (nt *NT) installVerticalPrivateAutoscaler() error {
+	nt.T.Log("[SETUP] Installing Vertical Private Autoscaler")
+	sourcePath := filepath.Join(".", "..", "testdata", "vertical-pod-autoscaler")
+	absPath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return err
+	}
+	objs, err := parseManifestDir(absPath)
+	if err != nil {
+		return err
+	}
+	objs, err = convertToTypedObjects(nt, objs)
+	if err != nil {
+		return err
+	}
+	return ApplyObjectsAndWait(nt, objs...)
+}
+
+// uninstallVerticalPrivateAutoscaler deletes the vertical-pod-autoscaler package.
+func (nt *NT) uninstallVerticalPrivateAutoscaler() error {
+	nt.T.Log("[SETUP] Uninstalling Metrics Server")
+	sourcePath := filepath.Join(".", "..", "testdata", "vertical-pod-autoscaler")
+	absPath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return err
+	}
+	objs, err := parseManifestDir(absPath)
+	if err != nil {
+		return err
+	}
+	objs, err = convertToTypedObjects(nt, objs)
+	if err != nil {
+		return err
+	}
+	// Delete in reverse order
+	reverseClientObjectList(objs)
+	return DeleteObjectsAndWait(nt, objs...)
+}
+
+func reverseClientObjectList(input []client.Object) {
+	if len(input) == 0 {
+		return
+	}
+	for i, j := 0, len(input)-1; i < j; i, j = i+1, j-1 {
+		input[i], input[j] = input[j], input[i]
+	}
+}
+
 // SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are supported
 // in the current testing cluster.
 // v1beta1 APIs for CRD and RBAC resources are deprecated in K8s 1.22.
@@ -955,4 +1068,26 @@ func cloneCloudSourceRepo(nt *NT, repo string) (string, error) {
 		return "", err
 	}
 	return cloneDir, nil
+}
+
+// ApplyObjectsAndWait applies zero or more objects in serial and waits for reconciliation in parallel.
+func ApplyObjectsAndWait(nt *NT, objs ...client.Object) error {
+	tg := taskgroup.New()
+	for _, obj := range objs {
+		nn := client.ObjectKeyFromObject(obj)
+		gvk, err := kinds.Lookup(obj, nt.Scheme)
+		if err != nil {
+			return err
+		}
+		nt.T.Logf("[SETUP] applying %s object %s ...", gvk.Kind, nn)
+		if err := nt.KubeClient.Apply(obj); err != nil {
+			return errors.Wrapf(err, "unable to apply %s object %s",
+				gvk.Kind, nn)
+		}
+		tg.Go(func() error {
+			nt.T.Logf("[SETUP] Waiting for apply of %s object %s to reconcile...", gvk.Kind, nn)
+			return nt.Watcher.WatchForCurrentStatus(gvk, nn.Name, nn.Namespace)
+		})
+	}
+	return tg.Wait()
 }

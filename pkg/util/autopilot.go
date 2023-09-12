@@ -132,3 +132,11 @@ func AutopilotResourceMutation(annotation string) (map[string]corev1.ResourceReq
 	}
 	return input, output, nil
 }
+
+// FakeAutopilotWebhookObject returns a fake empty MutatingWebhookConfiguration
+// that satisfies IsGKEAutopilotCluster, for testing.
+func FakeAutopilotWebhookObject() client.Object {
+	webhook := &admissionregistrationv1.MutatingWebhookConfiguration{}
+	webhook.Name = autopilotWebhooks[0]
+	return webhook
+}

@@ -19,6 +19,7 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/pkg/metadata"
 )
 
 // RepoOpts defines options for a Repository.
@@ -51,6 +52,10 @@ type MultiRepo struct {
 
 	// RepoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	RepoSyncPermissions []rbacv1.PolicyRule
+
+	// ReconcilerAutoscalingStrategy sets the reconciler-autoscaling-strategy
+	// annotation on each R*Sync.
+	ReconcilerAutoscalingStrategy *metadata.ReconcilerAutoscalingStrategy
 }
 
 // NamespaceRepo tells the test case that a Namespace Repo should be configured
@@ -120,4 +125,19 @@ func RepoSyncPermissions(policy ...rbacv1.PolicyRule) Opt {
 	return func(opt *New) {
 		opt.RepoSyncPermissions = append(opt.RepoSyncPermissions, policy...)
 	}
+}
+
+// WithReconcilerAutoscalingStrategy specifies the ReconcilerAutoscalingStrategy
+// to use on all RootSyncs and RepoSyncs  by default.
+func WithReconcilerAutoscalingStrategy(strategy metadata.ReconcilerAutoscalingStrategy) func(opt *New) {
+	return func(opt *New) {
+		strategyCopy := strategy
+		opt.ReconcilerAutoscalingStrategy = &strategyCopy
+	}
+}
+
+// WithoutReconcilerAutoscalingStrategy removes the ReconcilerAutoscalingStrategy
+// on all RootSyncs and RepoSyncs  by default.
+func WithoutReconcilerAutoscalingStrategy(opt *New) {
+	opt.ReconcilerAutoscalingStrategy = nil
 }

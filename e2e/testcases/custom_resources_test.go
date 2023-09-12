@@ -218,6 +218,22 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Wait for remediator to detect the drift (managed Anvil CR was deleted)
+	// and record it as a conflict.
+	// TODO: distinguish between management conflict (spec/generation drift) and concurrent status update conflict (resource version change)
+	err = nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
+			Conflicts: 1,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	// Reset discovery client to invalidate the cached Anvil CRD
 	nt.RenewClient()
 
@@ -230,21 +246,16 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	rootSyncLabels, err = nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
+	// Validate the source error metric was recorded.
+	// No management conflict is expected for this new commit, because the
+	// remediator should be paused waiting for the sync to succeed.
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
-			// Remediator conflict after the first commit, because the declared
-			// Anvil was deleted by another client after successful sync.
-			Conflicts: 1,
-		}),
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, secondCommitHash, metrics.ErrorSummary{
-			// No remediator conflict after the second commit, because the
-			// reconciler hasn't been updated with the latest declared resources,
-			// because there was a source error.
 			Source: 1,
 		}))
 	if err != nil {
@@ -252,7 +263,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	}
 
 	// Remove the CR.
-	// This should fix the error.
+	// This should fix the error and the conflict.
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -262,7 +273,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// CR wasn't added to the inventory, so it won't be deleted.
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	// Validate reconciler error is cleared.
+	// Validate reconciler error and conflict are cleared.
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
 	})

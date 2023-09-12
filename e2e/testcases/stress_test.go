@@ -17,6 +17,7 @@ package e2e
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -64,6 +66,9 @@ func crontabCR(namespace, name string) (*unstructured.Unstructured, error) {
 func TestStressCRD(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := gitproviders.DefaultSyncDir
+
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -78,21 +83,22 @@ func TestStressCRD(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/crontab-crd.yaml", crdContent))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(fmt.Sprintf("%s/crontab-crd.yaml", syncPath), crdContent))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressCRD"
 	for i := 1; i <= 1000; i++ {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%d.yaml", i), fake.NamespaceObject(
-			fmt.Sprintf("foo%d", i), core.Label(labelKey, labelValue))))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
-			core.Name("cm1"), core.Namespace(fmt.Sprintf("foo%d", i)), core.Label(labelKey, labelValue))))
+		ns := fmt.Sprintf("foo%d", i)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%d.yaml", syncPath, i), fake.NamespaceObject(
+			ns, core.Label(labelKey, labelValue))))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), fake.ConfigMapObject(
+			core.Name("cm1"), core.Namespace(ns), core.Label(labelKey, labelValue))))
 
-		cr, err := crontabCR(fmt.Sprintf("foo%d", i), "cr1")
+		cr, err := crontabCR(ns, "cr1")
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/crontab-cr-%d.yaml", i), cr))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/crontab-cr-%d.yaml", syncPath, i), cr))
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)"))
 	err = nt.WatchForAllSyncs(nomostest.WithTimeout(30 * time.Minute))
@@ -140,6 +146,10 @@ func TestStressCRD(t *testing.T) {
 func TestStressLargeNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := gitproviders.DefaultSyncDir
+	ns := "my-ns-1"
+
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
 
@@ -150,13 +160,12 @@ func TestStressLargeNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	ns := "my-ns-1"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressLargeNamespace"
 	for i := 1; i <= 5000; i++ {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cm-%d.yaml", i), fake.ConfigMapObject(
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), fake.ConfigMapObject(
 			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
@@ -180,12 +189,14 @@ func TestStressLargeNamespace(t *testing.T) {
 func TestStressFrequentGitCommits(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := gitproviders.DefaultSyncDir
+	ns := "bookstore"
+
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
 
-	ns := "bookstore"
-	namespace := fake.NamespaceObject(ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -196,7 +207,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	labelValue := "TestStressFrequentGitCommits"
 	for i := 0; i < 100; i++ {
 		cmName := fmt.Sprintf("cm-%v", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/%s.yaml", cmName), fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/%s.yaml", syncPath, cmName),
+			fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add %s", cmName)))
 	}
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
@@ -273,6 +285,9 @@ func TestStress100CRDs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
+	syncPath := gitproviders.DefaultSyncDir
+	ns := "stress-test-ns"
+
 	// Apply 100 small CRDs on the cluster to make sure Config Sync can still work.
 	for i := 1; i <= 100; i++ {
 		crd := fakeCRD("anvil", fmt.Sprintf("acme-%d.com", i))
@@ -285,7 +300,7 @@ func TestStress100CRDs(t *testing.T) {
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
 
 	nt.T.Log("adding a test namespace to the repo to trigger a new sync")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("stress-test-ns.yaml", fake.NamespaceObject("stress-test-ns")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a test namespace to trigger a new sync"))
 
 	nt.T.Logf("waiting for the sync to complete")
@@ -306,13 +321,85 @@ func TestStress100CRDs(t *testing.T) {
 	}
 }
 
-func fakeCRD(name, group string) *apiextensionsv1.CustomResourceDefinition {
-	crd := fake.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%ss.%s", name, group)))
+// TestStressMemoryUsage applies 100 CRDs and then 10 objects for each resource.
+// This stressed both the number of watches and the number of objects,
+// which increases memory usage.
+// TODO: Make the objects larger to increase memory usage even more.
+func TestStressMemoryUsage(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
+	ns := "stress-test-ns"
+	kind := "Anvil"
+
+	crdCount := 100
+	crCount := 50
+
+	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+
+	for i := 1; i <= crdCount; i++ {
+		group := fmt.Sprintf("acme-%d.com", i)
+		crd := fakeCRD(kind, group)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/crd-%s.yaml", syncPath, crd.Name), crd))
+		gvk := schema.GroupVersionKind{
+			Group:   group,
+			Kind:    kind,
+			Version: "v2",
+		}
+		for j := 1; j <= crCount; j++ {
+			cr := fakeCR(fmt.Sprintf("%s-%d", strings.ToLower(kind), j), ns, gvk)
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/namespaces/%s/%s-%s.yaml", syncPath, ns, crd.Name, cr.GetName()), cr))
+		}
+	}
+
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Verify the number of Anvil objects")
+	for i := 1; i <= crdCount; i++ {
+		group := fmt.Sprintf("acme-%d.com", i)
+		gvk := schema.GroupVersionKind{
+			Group:   group,
+			Kind:    kind,
+			Version: "v2",
+		}
+		nsList := &metav1.PartialObjectMetadataList{}
+		nsList.SetGroupVersionKind(gvk)
+		if err := nt.KubeClient.List(nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}, client.InNamespace(ns)); err != nil {
+			nt.T.Error(err)
+		}
+		if len(nsList.Items) != crCount {
+			nt.T.Errorf("The cluster should include %d anvils.%s objects, found %v instead", crCount, group, len(nsList.Items))
+		}
+	}
+
+	nt.T.Log("Removing resources from Git")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func fakeCRD(kind, group string) *apiextensionsv1.CustomResourceDefinition {
+	singular := strings.ToLower(kind)
+	plural := fmt.Sprintf("%ss", singular)
+	crd := fake.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%s.%s", plural, group)))
 	crd.Spec.Group = group
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
-		Plural:   name + "s",
-		Singular: name,
-		Kind:     strings.ToTitle(name),
+		Plural:   plural,
+		Singular: singular,
+		Kind:     kind,
 	}
 	crd.Spec.Scope = apiextensionsv1.NamespaceScoped
 	crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{
@@ -364,6 +451,19 @@ func fakeCRD(name, group string) *apiextensionsv1.CustomResourceDefinition {
 		},
 	}
 	return crd
+}
+
+func fakeCR(name, namespace string, gvk schema.GroupVersionKind) client.Object {
+	cr := &unstructured.Unstructured{}
+	cr.Object = map[string]interface{}{
+		"spec": map[string]interface{}{
+			"lbs": float64(1.0),
+		},
+	}
+	cr.SetGroupVersionKind(gvk)
+	cr.SetName(name)
+	cr.SetNamespace(namespace)
+	return cr
 }
 
 func truncateSourceErrors() testpredicates.Predicate {

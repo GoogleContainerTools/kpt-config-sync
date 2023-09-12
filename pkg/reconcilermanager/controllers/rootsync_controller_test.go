@@ -48,6 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -3297,6 +3298,123 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
+}
+
+func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH),
+		rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, util.FakeAutopilotWebhookObject(), rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatal(err)
+	}
+
+	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
+	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully created")
+
+	// Test overriding the CPU resources of the reconciler and hydration-container and the memory resources of the git-sync container
+	overrideSelectedResources := []v1beta1.ContainerResourcesSpec{
+		{
+			ContainerName: reconcilermanager.Reconciler,
+			CPURequest:    resource.MustParse("1"),
+			CPULimit:      resource.MustParse("1.2"),
+		},
+		{
+			ContainerName: reconcilermanager.HydrationController,
+			CPULimit:      resource.MustParse("0.8"),
+		},
+		{
+			ContainerName: reconcilermanager.GitSync,
+			MemoryRequest: resource.MustParse("800Gi"),
+			MemoryLimit:   resource.MustParse("888Gi"),
+		},
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideSelectedResources,
+		},
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaultsForAutopilot())
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("2"), setGeneration(2),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	rs.Spec.Override = nil
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
 }
 
 func validateRootSyncStatus(t *testing.T, want *v1beta1.RootSync, fakeClient *syncerFake.Client) {

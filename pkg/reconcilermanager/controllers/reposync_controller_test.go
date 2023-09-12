@@ -51,6 +51,7 @@ import (
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -3854,6 +3855,147 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
+}
+
+func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH),
+		reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, util.FakeAutopilotWebhookObject(), rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs.Spec = rs.Spec
+	wantRs.Status.Reconciler = nsReconcilerName
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
+	repoDeployment := repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully created")
+
+	// Test overriding the CPU resources of the reconciler container and the memory resources of the git-sync container
+	overrideReconcilerCPUAndGitSyncMemResources := []v1beta1.ContainerResourcesSpec{
+		{
+			ContainerName: reconcilermanager.Reconciler,
+			CPURequest:    resource.MustParse("0.8"),
+			CPULimit:      resource.MustParse("1.2"),
+		},
+		{
+			ContainerName: reconcilermanager.HydrationController,
+			CPURequest:    resource.MustParse("0.6"),
+			CPULimit:      resource.MustParse("0.8"),
+		},
+		{
+			ContainerName: reconcilermanager.GitSync,
+			MemoryRequest: resource.MustParse("777Gi"),
+			MemoryLimit:   resource.MustParse("888Gi"),
+		},
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideReconcilerCPUAndGitSyncMemResources,
+		},
+	}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantRs.Spec = rs.Spec
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideReconcilerCPUAndGitSyncMemResources, ReconcilerContainerResourceDefaultsForAutopilot())
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("2"), setGeneration(2),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	// Clear rs.Spec.Override
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.Override = nil
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	wantRs.Spec = rs.Spec
+	reposync.SetReconciling(wantRs, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
+	repoDeployment = repoSyncDeployment(
+		nsReconcilerName,
+		setServiceAccountName(nsReconcilerName),
+		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(repoContainerEnv),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
+	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
 }
 
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {

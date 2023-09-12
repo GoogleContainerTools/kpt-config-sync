@@ -68,6 +68,65 @@ func ReconcilerContainerResourceDefaults() map[string]v1beta1.ContainerResources
 	}
 }
 
+// ReconcilerContainerResourceDefaultsForAutopilot are the default resources to
+// use on GKE Autopilot clusters for the reconciler deployment.
+// On Autopilot, limits are set to requests and bursting is not allowed,
+// so requests need to be high enough to work for most users our of the box,
+// with a moderately high number of resource objects (e.g. 1k).
+func ReconcilerContainerResourceDefaultsForAutopilot() map[string]v1beta1.ContainerResourcesSpec {
+	return map[string]v1beta1.ContainerResourcesSpec{
+		reconcilermanager.Reconciler: {
+			ContainerName: reconcilermanager.Reconciler,
+			CPURequest:    resource.MustParse("700m"),
+			CPULimit:      resource.MustParse("700m"),
+			MemoryRequest: resource.MustParse("512Mi"),
+			MemoryLimit:   resource.MustParse("512Mi"),
+		},
+		reconcilermanager.HydrationController: {
+			ContainerName: reconcilermanager.HydrationController,
+			CPURequest:    resource.MustParse("200m"),
+			CPULimit:      resource.MustParse("200m"),
+			MemoryRequest: resource.MustParse("256Mi"),
+			MemoryLimit:   resource.MustParse("256Mi"),
+		},
+		reconcilermanager.OciSync: {
+			ContainerName: reconcilermanager.OciSync,
+			CPURequest:    resource.MustParse("100m"),
+			CPULimit:      resource.MustParse("100m"),
+			MemoryRequest: resource.MustParse("256Mi"),
+			MemoryLimit:   resource.MustParse("256Mi"),
+		},
+		reconcilermanager.HelmSync: {
+			ContainerName: reconcilermanager.HelmSync,
+			CPURequest:    resource.MustParse("100m"),
+			CPULimit:      resource.MustParse("100m"),
+			MemoryRequest: resource.MustParse("256Mi"),
+			MemoryLimit:   resource.MustParse("256Mi"),
+		},
+		reconcilermanager.GitSync: {
+			ContainerName: reconcilermanager.GitSync,
+			CPURequest:    resource.MustParse("20m"),
+			CPULimit:      resource.MustParse("20m"),
+			MemoryRequest: resource.MustParse("32Mi"),
+			MemoryLimit:   resource.MustParse("32Mi"),
+		},
+		reconcilermanager.GCENodeAskpassSidecar: {
+			ContainerName: reconcilermanager.GCENodeAskpassSidecar,
+			CPURequest:    resource.MustParse("50m"),
+			CPULimit:      resource.MustParse("50m"),
+			MemoryRequest: resource.MustParse("64Mi"),
+			MemoryLimit:   resource.MustParse("64Mi"),
+		},
+		metrics.OtelAgentName: {
+			ContainerName: metrics.OtelAgentName,
+			CPURequest:    resource.MustParse("10m"),
+			CPULimit:      resource.MustParse("10m"),
+			MemoryRequest: resource.MustParse("32Mi"),
+			MemoryLimit:   resource.MustParse("32Mi"),
+		},
+	}
+}
+
 // setContainerResourceDefaults sets the defaults when not specified in the
 // overrides.
 func setContainerResourceDefaults(overrides []v1beta1.ContainerResourcesSpec, defaultsMap map[string]v1beta1.ContainerResourcesSpec) []v1beta1.ContainerResourcesSpec {

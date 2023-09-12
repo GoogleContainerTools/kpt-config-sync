@@ -923,9 +923,19 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		// in the RootSync CR.
 		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, caCertSecretRefName, rs.Spec.SourceType, r.membership)
 
+		autopilot, err := r.isAutopilot()
+		if err != nil {
+			return err
+		}
+		var containerResourceDefaults map[string]v1beta1.ContainerResourcesSpec
+		if autopilot {
+			containerResourceDefaults = ReconcilerContainerResourceDefaultsForAutopilot()
+		} else {
+			containerResourceDefaults = ReconcilerContainerResourceDefaults()
+		}
 		overrides := rs.Spec.SafeOverride()
 		containerResources := setContainerResourceDefaults(overrides.Resources,
-			ReconcilerContainerResourceDefaults())
+			containerResourceDefaults)
 
 		var updatedContainers []corev1.Container
 		for _, container := range templateSpec.Containers {

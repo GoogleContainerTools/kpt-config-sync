@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -107,7 +106,8 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 Namespaces managed by Config Sync on the cluster")
-	nsList := &corev1.NamespaceList{}
+	nsList := &metav1.PartialObjectMetadataList{}
+	nsList.SetGroupVersionKind(kinds.Namespace())
 	if err := nt.KubeClient.List(nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
@@ -116,7 +116,8 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 ConfigMaps managed by Config Sync on the cluster")
-	cmList := &corev1.ConfigMapList{}
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
 	if err := nt.KubeClient.List(cmList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
@@ -125,7 +126,7 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 CronTab CRs managed by Config Sync on the cluster")
-	crList := &unstructured.UnstructuredList{}
+	crList := &metav1.PartialObjectMetadataList{}
 	crList.SetGroupVersionKind(crontabGVK)
 	if err := nt.KubeClient.List(crList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}); err != nil {
 		nt.T.Error(err)
@@ -165,8 +166,8 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
-	cmList := &corev1.ConfigMapList{}
-
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
 	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}
@@ -204,7 +205,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
-	cmList := &corev1.ConfigMapList{}
+	cmList := &metav1.PartialObjectMetadataList{}
+	cmList.SetGroupVersionKind(kinds.ConfigMap())
 	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
 		nt.T.Error(err)
 	}

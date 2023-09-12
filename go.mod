@@ -1,6 +1,6 @@
 module kpt.dev/configsync
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/monitoring v1.8.0

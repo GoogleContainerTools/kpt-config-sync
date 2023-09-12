@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build all Config Sync go binaries
-FROM golang:1.19.12 as bins
+FROM golang:1.20.8 as bins
 
 WORKDIR /workspace
 

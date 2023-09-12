@@ -203,12 +203,12 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
 	if _, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
-		return err
+		return errors.Wrap(err, "upserting service account")
 	}
 
 	// Overwrite reconciler clusterrolebinding.
 	if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "upserting cluster role binding")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -217,7 +217,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Upsert Root reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "upserting reconciler deployment")
 	}
 
 	// Get the latest deployment to check the status.
@@ -225,7 +225,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if op == controllerutil.OperationResultNone {
 		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "getting reconciler deployment")
 		}
 	}
 
@@ -240,7 +240,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	result, err := kstatus.Compute(deployObj)
 	if err != nil {
-		return errors.Wrap(err, "computing reconciler Deployment status failed")
+		return errors.Wrap(err, "computing reconciler deployment status")
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -376,7 +376,7 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting reconciler deployment")
 	}
 
 	// Note: ConfigMaps have been replaced by Deployment env vars.
@@ -384,17 +384,21 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// This deletion remains to clean up after users upgrade.
 
 	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting config maps")
 	}
 
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
 	if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting cluster role bindings")
 	}
 
-	return r.deleteServiceAccount(ctx, reconcilerRef)
+	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "deleting service account")
+	}
+
+	return nil
 }
 
 // SetupWithManager registers RootSync controller with reconciler-manager.

@@ -210,13 +210,13 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
 	if _, err := r.upsertAuthSecret(ctx, rs, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "upserting auth secret")
 	}
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
 	if _, err := r.upsertCACertSecret(ctx, rs, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "upserting CA cert secret")
 	}
 
 	labelMap := map[string]string{
@@ -243,16 +243,16 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
 	if _, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
-		return err
+		return errors.Wrap(err, "upserting service account")
 	}
 
 	// Overwrite reconciler rolebinding.
 	if _, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
-		return err
+		return errors.Wrap(err, "upserting role binding")
 	}
 
 	if err := r.upsertHelmConfigMaps(ctx, rs, labelMap); err != nil {
-		return err
+		return errors.Wrap(err, "upserting helm config maps")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -261,7 +261,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Upsert Namespace reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "upserting reconciler deployment")
 	}
 	rs.Status.Reconciler = reconcilerRef.Name
 
@@ -270,7 +270,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if op == controllerutil.OperationResultNone {
 		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "getting reconciler deployment")
 		}
 	}
 
@@ -285,7 +285,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	result, err := kstatus.Compute(deployObj)
 	if err != nil {
-		return errors.Wrap(err, "computing reconciler Deployment status failed")
+		return errors.Wrap(err, "computing reconciler deployment status")
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -422,7 +422,7 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting reconciler deployment")
 	}
 
 	// Note: ConfigMaps have been replaced by Deployment env vars.
@@ -430,22 +430,26 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// This deletion remains to clean up after users upgrade.
 
 	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting config maps")
 	}
 
 	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting secrets")
 	}
 
 	if err := r.deleteRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
-		return err
+		return errors.Wrap(err, "deleting role binding")
 	}
 
 	if err := r.deleteHelmConfigMapCopies(ctx, rsRef, nil); err != nil {
-		return err
+		return errors.Wrap(err, "deleting helm config maps")
 	}
 
-	return r.deleteServiceAccount(ctx, reconcilerRef)
+	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
+		return errors.Wrap(err, "deleting service account")
+	}
+
+	return nil
 }
 
 // SetupWithManager registers RepoSync controller with reconciler-manager.

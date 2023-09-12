@@ -50,7 +50,7 @@ These can be provided on the command line with `go test` or with program argumen
 - `--debug` - If true, do not destroy cluster and clean up temporary directory after test.
 - `--share-test-env` - Specify that the test is using a shared test environment instead of fresh installation per test case.
 - `--test-cluster` - The cluster config used for testing. Allowed values are: `kind` and `gke`.
-- `--num-clusters` - Number of clusters to run tests on in parallel (only available for [kind]). Overrides the `--test.parallel` flag.
+- `--num-clusters` - Number of clusters to run tests on in parallel. Overrides the `--test.parallel` flag.
 - `--create-clusters` - Whether to create clusters in the test framework. Allowed values are [`true`, `lazy`, `false`]. If set to `lazy`, the tests will adopt an existing cluster.
 - `--destroy-clusters` - Whether to destroy clusters after test execution. Allowed values are [`true`, `auto`, `false`]. If set to `auto`, the tests will only destroy the cluster if it was created by the tests.
 

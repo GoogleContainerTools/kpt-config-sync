@@ -1200,3 +1200,29 @@ func TestNomosStatusNameFilter(t *testing.T) {
 		nt.T.Fatalf("Expected to not find bookinfo:crontab-sync component in output:\n%s\n", string(out4))
 	}
 }
+
+func TestApiResourceFormatting(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	// expected column name
+	var columnName = []string{"NAME", "SHORTNAMES", "APIVERSION", "NAMESPACED", "KIND"}
+
+	cmd := nt.Shell.Command("kubectl", "api-resources")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	header := strings.Fields(strings.Split(string(out), "\n")[0])
+
+	if len(header) != len(columnName) {
+		nt.T.Fatalf("Number of column titles doesn't match expected result")
+	}
+
+	for i, column := range header {
+		if column != columnName[i] {
+			nt.T.Fatalf("%s not found in the column titles", column)
+		}
+	}
+}

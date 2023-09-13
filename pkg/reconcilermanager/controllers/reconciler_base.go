@@ -80,8 +80,8 @@ const (
 	defaultGitSyncLogLevel   = 5
 )
 
-// The fields in reconcilerManagerAllowList are the fields that reconciler manager allow
-// users or other controllers to modify.
+// The fields in reconcilerManagerAllowList are the fields that reconciler manager
+// allows users or other controllers to modify on the reconciler Deployment.
 var reconcilerManagerAllowList = []string{
 	"$.spec.template.spec.containers[*].terminationMessagePath",
 	"$.spec.template.spec.containers[*].terminationMessagePolicy",
@@ -470,41 +470,31 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 	}
 }
 
-func mutateContainerResource(c *corev1.Container, override *v1beta1.OverrideSpec) {
-	if override == nil {
+func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLogLevelOverride) {
+	if len(override) == 0 {
 		return
 	}
-
-	for _, override := range override.Resources {
-		if override.ContainerName == c.Name {
-			if !override.CPURequest.IsZero() {
-				if c.Resources.Requests == nil {
-					c.Resources.Requests = corev1.ResourceList{}
-				}
-				c.Resources.Requests[corev1.ResourceCPU] = override.CPURequest
-			}
-			if !override.CPULimit.IsZero() {
-				if c.Resources.Limits == nil {
-					c.Resources.Limits = corev1.ResourceList{}
-				}
-				c.Resources.Limits[corev1.ResourceCPU] = override.CPULimit
-			}
-			if !override.MemoryRequest.IsZero() {
-				if c.Resources.Requests == nil {
-					c.Resources.Requests = corev1.ResourceList{}
-				}
-				c.Resources.Requests[corev1.ResourceMemory] = override.MemoryRequest
-			}
-			if !override.MemoryLimit.IsZero() {
-				if c.Resources.Limits == nil {
-					c.Resources.Limits = corev1.ResourceList{}
-				}
-				c.Resources.Limits[corev1.ResourceMemory] = override.MemoryLimit
-			}
+	for i, arg := range c.Args {
+		if strings.HasPrefix(arg, "-v=") {
+			c.Args = removeArg(c.Args, i)
+			break
 		}
 	}
+	c.Args = append(c.Args, fmt.Sprintf("-v=%d", containerLogLevel(c.Name, override)))
+}
 
-	c.Args = append(c.Args, fmt.Sprintf("-v=%d", containerLogLevel(c.Name, override.LogLevels)))
+func removeArg(args []string, i int) []string {
+	if i == 0 {
+		// remove first arg
+		args = args[i+1:]
+	} else if i == len(args)-1 {
+		// remove last arg
+		args = args[:i]
+	} else {
+		// remove middle arg
+		args = append(args[:i], args[i+1:]...)
+	}
+	return args
 }
 
 // containerLogLevel will determine the log level value for any reconciler deployment container

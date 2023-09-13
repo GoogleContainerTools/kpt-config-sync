@@ -912,14 +912,16 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		// in the RootSync CR.
 		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretRefName, caCertSecretRefName, rs.Spec.SourceType, r.membership)
 
-		var updatedContainers []corev1.Container
+		overrides := rs.Spec.SafeOverride()
+		containerResources := setContainerResourceDefaults(overrides.Resources,
+			ReconcilerContainerResourceDefaults())
 
+		var updatedContainers []corev1.Container
 		for _, container := range templateSpec.Containers {
 			addContainer := true
 			switch container.Name {
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
-				mutateContainerResource(&container, rs.Spec.Override)
 			case reconcilermanager.HydrationController:
 				if !enableRendering(rs.GetAnnotations()) {
 					// if the sync source does not require rendering, omit the hydration controller
@@ -928,7 +930,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					container.Image = updateHydrationControllerImage(container.Image, *rs.Spec.SafeOverride())
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
@@ -937,7 +938,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					injectFWICredsToContainer(&container, injectFWICreds)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.HelmSync:
 				// Don't add the helm-sync container when sourceType is NOT helm.
@@ -951,7 +951,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					}
 					mountConfigMapValuesFiles(templateSpec, &container, r.getReconcilerHelmConfigMapRefs(rs))
 					injectFWICredsToContainer(&container, injectFWICreds)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
@@ -970,7 +969,6 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: secretName}
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
-					mutateContainerResource(&container, rs.Spec.Override)
 				}
 			case reconcilermanager.GCENodeAskpassSidecar:
 				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
@@ -981,12 +979,14 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					// TODO: enable resource/logLevel overrides for gcenode-askpass-sidecar
 				}
 			case metrics.OtelAgentName:
-				// The no-op case to avoid unknown container error after
-				// first-ever reconcile.
+				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			default:
 				return errors.Errorf("unknown container in reconciler deployment template: %q", container.Name)
 			}
 			if addContainer {
+				// Common mutations for all containers
+				mutateContainerResource(&container, containerResources)
+				mutateContainerLogLevel(&container, overrides.LogLevels)
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

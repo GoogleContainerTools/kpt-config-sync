@@ -41,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
+	"kpt.dev/configsync/pkg/util/log"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -459,6 +460,21 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	nt.T.Logf("%s\n%s", cmd, out)
 }
 
+// LogDeploymentPodResources logs the resources of the deployment's pod's containers
+func (nt *NT) LogDeploymentPodResources(namespace, deployment string) {
+	nt.T.Helper()
+	pod, err := nt.KubeClient.GetDeploymentPod(
+		deployment, namespace, 30*time.Second)
+	if err != nil {
+		nt.T.Error(err)
+		return
+	}
+	nt.T.Logf("Deployment %s/%s pod container resources:", namespace, deployment)
+	for _, container := range pod.Spec.Containers {
+		nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
+	}
+}
+
 // printTestLogs prints test logs and pods information for debugging.
 func (nt *NT) printTestLogs() {
 	nt.T.Log("[CLEANUP] Printing test logs for current container instances")
@@ -487,11 +503,13 @@ func (nt *NT) testLogs(previousPodLog bool) {
 		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
 			reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(name))
 	}
 	for nn := range nt.NonRootRepos {
 		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
 			reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name))
 	}
 }
 

@@ -75,10 +75,6 @@ data:
                drop:
                - NET_RAW
              runAsUser: 65533
-           resources:
-             requests:
-               cpu: "10m"
-               memory: "100Mi"
          - name: reconciler
            image: RECONCILER_IMAGE_NAME
            command:
@@ -97,10 +93,6 @@ data:
              readOnly: true
            - name: kube
              mountPath: /.kube
-           resources:
-             requests:
-               cpu: "50m"
-               memory: "200Mi"
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: true
@@ -125,17 +117,9 @@ data:
                drop:
                - NET_RAW
              runAsUser: 65533
-           resources:
-             requests:
-               cpu: "10m"
-               memory: "200Mi"
          - name: gcenode-askpass-sidecar
            image: gcr.io/config-management-release/gcenode-askpass-sidecar:v1.0.4
            args: ["--port=9102", "--logtostderr"]
-           resources:
-             requests:
-               cpu: 10m
-               memory: 20Mi
            imagePullPolicy: IfNotPresent
            terminationMessagePolicy: File
            terminationMessagePath: /dev/termination-log
@@ -159,10 +143,6 @@ data:
                drop:
                - NET_RAW
              runAsUser: 65533
-           resources:
-             requests:
-               cpu: "10m"
-               memory: "200Mi"
          - name: helm-sync
            image: HELM_SYNC_IMAGE_NAME
            args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
@@ -180,23 +160,12 @@ data:
                drop:
                - NET_RAW
              runAsUser: 65533
-           resources:
-             requests:
-               cpu: "50m"
-               memory: "200Mi"
          - name: otel-agent
            image: gcr.io/config-management-release/otelcontribcol:v0.54.0-gke.1
            command:
            - /otelcontribcol
            args:
            - "--config=/conf/otel-agent-config.yaml"
-           resources:
-             limits:
-               cpu: 1
-               memory: 1Gi
-             requests:
-               cpu: 10m
-               memory: 100Mi
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: true

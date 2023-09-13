@@ -371,10 +371,11 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
-		containerResourcesMutator(overrideSelectedResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -400,9 +401,11 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -431,10 +434,12 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -488,10 +493,11 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideAllContainerResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
-		containerResourcesMutator(overrideAllContainerResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -538,10 +544,11 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideReconcilerAndHydrationResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
-		containerResourcesMutator(overrideReconcilerAndHydrationResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -578,10 +585,11 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideGitSyncResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
-		containerResourcesMutator(overrideGitSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -608,9 +616,11 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
@@ -639,10 +649,12 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -672,9 +684,11 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -726,6 +740,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -755,6 +770,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -789,10 +805,11 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
-
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		caCertSecretMutator(secretName, caCertSecret),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -827,9 +844,11 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -878,6 +897,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		caCertSecretMutator(secretName, caCertSecret),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -907,6 +927,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -996,10 +1017,12 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1029,9 +1052,11 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1063,6 +1088,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1094,6 +1120,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	updatedRootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1124,6 +1151,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -1173,10 +1201,12 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1205,9 +1235,11 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1238,6 +1270,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1268,6 +1301,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1317,10 +1351,12 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1346,9 +1382,11 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1379,6 +1417,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1408,6 +1447,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1471,10 +1511,12 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	)
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1513,6 +1555,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -1543,6 +1586,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -1572,9 +1616,11 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1616,6 +1662,7 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setReplicas(1), // Change reverted
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
@@ -1696,9 +1743,11 @@ func TestMultipleRootSyncs(t *testing.T) {
 	)
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)
 	rootContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment1 := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv1),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1744,6 +1793,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment2 := rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv2),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1800,6 +1850,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment3 := rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv3),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -1860,6 +1911,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment4 := rootSyncDeployment(rootReconcilerName4,
 		setServiceAccountName(rootReconcilerName4),
 		secretMutator(reposyncCookie),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", reposyncCookie, "https_proxy"),
 		containerEnvMutator(rootContainerEnvs4),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
@@ -1920,6 +1972,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment5 := rootSyncDeployment(rootReconcilerName5,
 		setServiceAccountName(rootReconcilerName5),
 		secretMutator(secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator("HTTPS_PROXY", secretName, "https_proxy"),
 		envVarMutator(gitSyncName, secretName, GitSecretConfigKeyTokenUsername),
 		envVarMutator(gitSyncPassword, secretName, GitSecretConfigKeyToken),
@@ -1978,6 +2031,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment1 = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv1),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2015,6 +2069,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment2 = rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv2),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2053,6 +2108,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	rootDeployment3 = rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnv3),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2311,10 +2367,12 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		gceNodeMutator(),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2348,6 +2406,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		}),
 		setServiceAccountName(rootReconcilerName),
 		fleetWorkloadIdentityMutator(workloadIdentityPool),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2384,6 +2443,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -2414,6 +2474,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -2446,10 +2507,12 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		helmSecretMutator(secretName),
+		containerResourcesMutator(resourceOverrides),
 		envVarMutator(helmSyncName, secretName, HelmSecretKeyUsername),
 		envVarMutator(helmSyncPassword, secretName, HelmSecretKeyPassword),
 		containerEnvMutator(rootContainerEnvs),
@@ -2479,6 +2542,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2513,12 +2577,13 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
-		containerResourcesMutator(overrideHelmSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -2560,10 +2625,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 	)
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -2605,6 +2672,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -2646,6 +2714,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("3"), setGeneration(3),
 	)
@@ -2680,6 +2749,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		}),
 		setServiceAccountName(rootReconcilerName),
 		fwiOciMutator(workloadIdentityPool),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
 	)
@@ -2717,13 +2787,14 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	resourceOverrides = setContainerResourceDefaults(overrideOciSyncResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		setAnnotations(map[string]string{
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
 		fwiOciMutator(workloadIdentityPool),
-		containerResourcesMutator(overrideOciSyncResources),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("5"), setGeneration(5),
 	)
@@ -3136,10 +3207,11 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
-
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
@@ -3199,6 +3271,7 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
 		containerArgsMutator(containerArgs),
+		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("2"), setGeneration(2),
 	)
@@ -3407,19 +3480,16 @@ func fwiOciMutator(workloadIdentityPool string) depMutator {
 func fwiOciContainers() []corev1.Container {
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.OciSync,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.OciSync,
+			Args: defaultArgs(),
 			Env: []corev1.EnvVar{{
 				Name:  googleApplicationCredentialsEnvKey,
 				Value: filepath.Join(gcpKSATokenDir, googleApplicationCredentialsFile),
@@ -3450,15 +3520,11 @@ func setAnnotations(annotations map[string]string) depMutator {
 
 func containerResourcesMutator(overrides []v1beta1.ContainerResourcesSpec) depMutator {
 	return func(dep *appsv1.Deployment) {
-		for _, container := range dep.Spec.Template.Spec.Containers {
-			switch container.Name {
-			case reconcilermanager.Reconciler, reconcilermanager.GitSync,
-				reconcilermanager.HydrationController, reconcilermanager.OciSync,
-				reconcilermanager.HelmSync:
-				for _, override := range overrides {
-					if override.ContainerName == container.Name {
-						mutateContainerResourceRequestsLimits(&container, override)
-					}
+		for i, container := range dep.Spec.Template.Spec.Containers {
+			for _, override := range overrides {
+				if override.ContainerName == container.Name {
+					mutateContainerResourceRequestsLimits(&container, override)
+					dep.Spec.Template.Spec.Containers[i] = container
 				}
 			}
 		}
@@ -3467,40 +3533,39 @@ func containerResourcesMutator(overrides []v1beta1.ContainerResourcesSpec) depMu
 
 func mutateContainerResourceRequestsLimits(container *corev1.Container, resourcesSpec v1beta1.ContainerResourcesSpec) {
 	if !resourcesSpec.CPURequest.IsZero() {
+		if container.Resources.Requests == nil {
+			container.Resources.Requests = make(corev1.ResourceList)
+		}
 		container.Resources.Requests[corev1.ResourceCPU] = resourcesSpec.CPURequest
 	} else {
-		container.Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+		delete(container.Resources.Requests, corev1.ResourceCPU)
 	}
 
 	if !resourcesSpec.CPULimit.IsZero() {
+		if container.Resources.Limits == nil {
+			container.Resources.Limits = make(corev1.ResourceList)
+		}
 		container.Resources.Limits[corev1.ResourceCPU] = resourcesSpec.CPULimit
 	} else {
-		container.Resources.Limits[corev1.ResourceCPU] = resource.MustParse("100m")
+		delete(container.Resources.Limits, corev1.ResourceCPU)
 	}
 
 	if !resourcesSpec.MemoryRequest.IsZero() {
+		if container.Resources.Requests == nil {
+			container.Resources.Requests = make(corev1.ResourceList)
+		}
 		container.Resources.Requests[corev1.ResourceMemory] = resourcesSpec.MemoryRequest
 	} else {
-		container.Resources.Requests[corev1.ResourceMemory] = resource.MustParse("100Mi")
+		delete(container.Resources.Requests, corev1.ResourceMemory)
 	}
 
 	if !resourcesSpec.MemoryLimit.IsZero() {
+		if container.Resources.Limits == nil {
+			container.Resources.Limits = make(corev1.ResourceList)
+		}
 		container.Resources.Limits[corev1.ResourceMemory] = resourcesSpec.MemoryLimit
 	} else {
-		container.Resources.Limits[corev1.ResourceMemory] = resource.MustParse("100Mi")
-	}
-}
-
-func defaultResourceRequirements() corev1.ResourceRequirements {
-	return corev1.ResourceRequirements{
-		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU:    resource.MustParse("100m"),
-			corev1.ResourceMemory: resource.MustParse("100Mi"),
-		},
-		Requests: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU:    resource.MustParse("100m"),
-			corev1.ResourceMemory: resource.MustParse("100Mi"),
-		},
+		delete(container.Resources.Limits, corev1.ResourceMemory)
 	}
 }
 
@@ -3519,38 +3584,38 @@ func defaultGitSyncArgs() []string {
 func defaultContainers() []corev1.Container {
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.GitSync,
-			Resources: defaultResourceRequirements(),
+			Name: reconcilermanager.GitSync,
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 				{Name: "git-creds", MountPath: "/etc/git-secret", ReadOnly: true},
 			},
+			Args: defaultGitSyncArgs(),
 		},
 		{
 			Name: reconcilermanager.GCENodeAskpassSidecar,
 		},
 		{
-			Name:      reconcilermanager.OciSync,
-			Resources: defaultResourceRequirements(),
+			Name: reconcilermanager.OciSync,
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			},
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HelmSync,
-			Resources: defaultResourceRequirements(),
+			Name: reconcilermanager.HelmSync,
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 				{Name: "helm-creds", MountPath: "/etc/helm-secret", ReadOnly: true},
 			},
+			Args: defaultArgs(),
 		},
 	}
 }
@@ -3567,18 +3632,15 @@ func secretMountContainers(caCertSecret string) []corev1.Container {
 	}
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
 			Name:         reconcilermanager.GitSync,
-			Resources:    defaultResourceRequirements(),
 			VolumeMounts: gitSyncVolumeMounts,
 			Args:         defaultGitSyncArgs(),
 		},
@@ -3592,18 +3654,15 @@ func helmSecretMountContainers() []corev1.Container {
 	}
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
 			Name:         reconcilermanager.HelmSync,
-			Resources:    defaultResourceRequirements(),
 			VolumeMounts: helmSyncVolumeMounts,
 			Args:         defaultArgs(),
 		},
@@ -3613,19 +3672,16 @@ func helmSecretMountContainers() []corev1.Container {
 func noneGitContainers() []corev1.Container {
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.GitSync,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultGitSyncArgs(),
+			Name: reconcilermanager.GitSync,
+			Args: defaultGitSyncArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},
@@ -3635,19 +3691,16 @@ func noneGitContainers() []corev1.Container {
 func noneOciContainers() []corev1.Container {
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.OciSync,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.OciSync,
+			Args: defaultArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},
@@ -3657,19 +3710,16 @@ func noneOciContainers() []corev1.Container {
 func noneHelmContainers() []corev1.Container {
 	return []corev1.Container{
 		{
-			Name:      reconcilermanager.Reconciler,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.Reconciler,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HydrationController,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HydrationController,
+			Args: defaultArgs(),
 		},
 		{
-			Name:      reconcilermanager.HelmSync,
-			Resources: defaultResourceRequirements(),
-			Args:      defaultArgs(),
+			Name: reconcilermanager.HelmSync,
+			Args: defaultArgs(),
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "repo", MountPath: "/repo"},
 			}},

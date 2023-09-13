@@ -41,8 +41,8 @@ the namespace will also fail to be created).
 
 ## Design Overview
 
-The idea is to introduce an annotation that can be set on a `RootSync` which defines how to handle
-creation of namespaces: `configsync.gke.io/namespace-strategy`. The possible values are
+The idea is to introduce a new field on `spec.overrides` for a `RootSync` which defines how to handle
+creation of namespaces. The possible values are
 
 * `implicit` (the default): same behavior as today, including the failure modes triggering this proposal
 * `explicit`: namespaces must either exist in the cluster, or be declared in the configuration managed
@@ -55,22 +55,22 @@ This is **out of scope** for the current proposal.
 
 ## User Guide
 
-To take advantage of this new feature, add the annotaiton `configsync.gke.io/namespace-strategy: explicit`
-to your `RootSync`:
+To take advantage of this new feature, add set `spec.overrides.namespaceStrategy` to `explicit` on
+your `RootSync`:
 
 ```yaml
 apiVersion: configsync.gke.io/v1beta1
 kind: RootSync
 metadata:
-  annotations:
-    configsync.gke.io/namespace-strategy: explicit
   name: root-sync
   namespace: config-management-system
 spec:
+  overrides:
+    namespaceStrategy: explicit
   # ...
 ```
 
-With this annotation applied, the behavior for a `RootSync` `sync-a` can be understand as follows:
+Under the explicit strategy, the behavior for a `RootSync` `sync-a` can be understand as follows:
 
 | Namespace declared in `sync-a` | Namespace managed elsewhere | Behavior                                                                                                      |
 | ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------- |

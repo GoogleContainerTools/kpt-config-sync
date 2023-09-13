@@ -70,7 +70,7 @@ spec:
   # ...
 ```
 
-Under the explicit strategy, the behavior for a `RootSync` `sync-a` can be understand as follows:
+Under the explicit strategy, the behavior for a `RootSync` `sync-a` can be understood as follows:
 
 | Namespace declared in `sync-a` | Namespace managed elsewhere | Behavior                                                                                                      |
 | ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------- |

@@ -93,6 +93,7 @@ TEST_INFRA_PROJECT ?= kpt-config-sync-ci-artifacts
 TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-infra
 
 # Docker image used for build and test. This image does not support CGO.
+# When upgrading this tag, publish the image after the change is submitted.
 BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.2.12
 
 # Nomos docker images containing all binaries.

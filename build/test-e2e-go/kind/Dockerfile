@@ -17,7 +17,7 @@ FROM gcr.io/google.com/cloudsdktool/cloud-sdk:425.0.0-slim as gcloud-install
 RUN apt-get install -y kubectl google-cloud-sdk-gke-gcloud-auth-plugin
 
 # Build e2e image
-FROM golang:1.19-alpine as kpt-config-sync-e2e
+FROM golang:1.20-alpine as kpt-config-sync-e2e
 
 WORKDIR /repo
 

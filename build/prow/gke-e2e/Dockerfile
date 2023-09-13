@@ -16,7 +16,7 @@
 FROM gcr.io/google.com/cloudsdktool/cloud-sdk:425.0.0-slim as gcloud-install
 RUN apt-get install -y kubectl google-cloud-sdk-gke-gcloud-auth-plugin
 
-FROM golang:1.19-alpine as builder
+FROM golang:1.20-alpine as builder
 
 WORKDIR /workspace
 
@@ -33,7 +33,7 @@ RUN go install ./cmd/junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
 
 # Build e2e image
-FROM golang:1.19-alpine as kpt-config-sync-e2e
+FROM golang:1.20-alpine as kpt-config-sync-e2e
 
 # Since go modules isn't enabled by default.
 ENV GO111MODULE=on

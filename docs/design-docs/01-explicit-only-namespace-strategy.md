@@ -36,7 +36,7 @@ the namespace will also fail to be created).
 ### Objective
 
 * The configuration described above should be supported without resource fights or reconciliation errors
-* Users who depend on implicit namespaces without also declaring them explicitly should need ot make
+* Users who depend on implicit namespaces without also declaring them explicitly should need to make
   no changes to their configuration, and see the same behavior as today.
 
 ## Design Overview

@@ -1,7 +1,7 @@
 # Explicit-only Namespace Strategy for `RootSync`s
 
 * Author(s): @tomasaschan
-* Approver: TBD
+* Approver: @sdowell, @janetkuo
 * Status: provisional
 
 ## Summary

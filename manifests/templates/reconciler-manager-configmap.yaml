@@ -101,7 +101,7 @@ data:
                - NET_RAW
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v3.6.9-gke.1__linux_amd64
+           image: gcr.io/config-management-release/git-sync:v3.6.9-gke.2__linux_amd64
            args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
            volumeMounts:
            - name: repo
@@ -118,7 +118,7 @@ data:
                - NET_RAW
              runAsUser: 65533
          - name: gcenode-askpass-sidecar
-           image: gcr.io/config-management-release/gcenode-askpass-sidecar:v1.0.4
+           image: gcr.io/config-management-release/gcenode-askpass-sidecar:v1.0.5
            args: ["--port=9102", "--logtostderr"]
            imagePullPolicy: IfNotPresent
            terminationMessagePolicy: File

@@ -27,7 +27,7 @@
 # when the go1.17 image is released in it.
 # Note that we shouldn't use the -alpine image here
 # since it is not allowed due to busybox for licensing.
-ARG GOLANG_CONTAINER=golang:1.19-buster
+ARG GOLANG_CONTAINER=golang:1.20-buster
 
 # Environment to build the helper binaries from.
 FROM ${GOLANG_CONTAINER} AS tools-base

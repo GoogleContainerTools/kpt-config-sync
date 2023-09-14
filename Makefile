@@ -20,6 +20,9 @@
 
 REPO := kpt.dev/configsync
 
+# Some of our recipes use bash syntax, so explicitly set the shell to bash.
+SHELL := /bin/bash
+
 # List of dirs containing go code owned by Nomos
 NOMOS_CODE_DIRS := pkg cmd e2e
 NOMOS_GO_PKG := $(foreach dir,$(NOMOS_CODE_DIRS),./$(dir)/...)

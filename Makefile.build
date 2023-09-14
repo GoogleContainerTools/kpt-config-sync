@@ -11,7 +11,7 @@ HELM := $(BIN_DIR)/helm
 # Builds the image if it does not exist to enable testing with a new image
 # version before publishing.
 pull-buildenv:
-	@docker image inspect $(BUILDENV_IMAGE) \
+	@docker image inspect $(BUILDENV_IMAGE) &> /dev/null \
 	|| docker pull $(BUILDENV_IMAGE) || $(MAKE) build-buildenv
 
 build-buildenv: build/buildenv/Dockerfile

@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -250,34 +249,119 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 	}
 }
 
-// HasCorrectResourceRequestsLimits verify a root/namespace reconciler container has the correct resource requests and limits.
-func HasCorrectResourceRequestsLimits(containerName string, cpuRequest, cpuLimit, memoryRequest, memoryLimit resource.Quantity) Predicate {
+// DeploymentContainerResourcesEqual verifies a reconciler deployment container
+// has the expected resource requests and limits.
+func DeploymentContainerResourcesEqual(expectedSpec v1beta1.ContainerResourcesSpec) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
+		}
+		if uObj, ok := o.(*unstructured.Unstructured); ok {
+			rObj, err := kinds.ToTypedObject(uObj, core.Scheme)
+			if err != nil {
+				return err
+			}
+			o, err = kinds.ObjectAsClientObject(rObj)
+			if err != nil {
+				return err
+			}
 		}
 		dep, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return WrongTypeErr(o, &appsv1.Deployment{})
 		}
-		container := ContainerByName(dep, containerName)
-		if container == nil {
-			return fmt.Errorf("expected container not found: %s", containerName)
+		container := ContainerByName(dep, expectedSpec.ContainerName)
+		return validateContainerResources(container, expectedSpec)
+	}
+}
+
+// DeploymentContainerResourcesAllEqual verifies all reconciler deployment
+// containers have the expected resource requests and limits.
+func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, expectedByName map[string]v1beta1.ContainerResourcesSpec) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceCPU], cpuRequest) {
-			return errors.Errorf("The CPU request of the %q container should be %v, got %v", container.Name, cpuRequest, container.Resources.Requests[corev1.ResourceCPU])
+		// Convert to a Deployment, if necessary
+		d, err := convertToDeployment(o, scheme)
+		if err != nil {
+			return err
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceCPU], cpuLimit) {
-			return errors.Errorf("The CPU limit of the %q container should be %v, got %v", container.Name, cpuLimit, container.Resources.Limits[corev1.ResourceCPU])
+		// Validate the container resources exactly match expectations
+		var foundContainers []string
+		for _, container := range d.Spec.Template.Spec.Containers {
+			foundContainers = append(foundContainers, container.Name)
+			expectedSpec, ok := expectedByName[container.Name]
+			if !ok {
+				continue // error later when the list doesn't match
+			}
+			if err := validateContainerResources(&container, expectedSpec); err != nil {
+				return err
+			}
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Requests[corev1.ResourceMemory], memoryRequest) {
-			return errors.Errorf("The memory request of the %q container should be %v, got %v", container.Name, memoryRequest, container.Resources.Requests[corev1.ResourceMemory])
+		// Validate the containers names exactly match expectations
+		var expectedContainers []string
+		for containerName := range expectedByName {
+			expectedContainers = append(expectedContainers, containerName)
 		}
-		if !equality.Semantic.DeepEqual(container.Resources.Limits[corev1.ResourceMemory], memoryLimit) {
-			return errors.Errorf("The memory limit of the %q container should be %v, got %v", container.Name, memoryLimit, container.Resources.Limits[corev1.ResourceMemory])
+		sort.Strings(expectedContainers)
+		sort.Strings(foundContainers)
+		if !cmp.Equal(expectedContainers, foundContainers) {
+			return fmt.Errorf("expected containers [%s], but found [%s]",
+				strings.Join(expectedContainers, ","),
+				strings.Join(foundContainers, ","))
 		}
 		return nil
 	}
+}
+
+func convertToDeployment(obj client.Object, scheme *runtime.Scheme) (*appsv1.Deployment, error) {
+	if uObj, ok := obj.(*unstructured.Unstructured); ok {
+		rObj, err := kinds.ToTypedObject(uObj, scheme)
+		if err != nil {
+			return nil, err
+		}
+		obj, err = kinds.ObjectAsClientObject(rObj)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tObj, ok := obj.(*appsv1.Deployment)
+	if !ok {
+		return nil, WrongTypeErr(obj, &appsv1.Deployment{})
+	}
+	return tObj, nil
+}
+
+func validateContainerResources(container *corev1.Container, expectedSpec v1beta1.ContainerResourcesSpec) error {
+	if container == nil {
+		return fmt.Errorf("expected container not found: %s", expectedSpec.ContainerName)
+	}
+	expected := expectedSpec.CPURequest
+	found := container.Resources.Requests.Cpu()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected CPU request of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.MemoryRequest
+	found = container.Resources.Requests.Memory()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected Memory request of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.CPULimit
+	found = container.Resources.Limits.Cpu()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected CPU limit of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	expected = expectedSpec.MemoryLimit
+	found = container.Resources.Limits.Memory()
+	if found.Cmp(expected) != 0 {
+		return fmt.Errorf("expected Memory limit of the %q container: %s, got: %s",
+			container.Name, &expected, found)
+	}
+	return nil
 }
 
 // NotPendingDeletion ensures o is not pending deletion.
@@ -1034,4 +1118,24 @@ func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1be
 		return fmt.Errorf("unexpected diff: %s", diff)
 	}
 	return nil
+}
+
+// RootSyncSpecOverrideEquals checks that the RootSync's spec.override matches
+// the specified OverrideSpec.
+func RootSyncSpecOverrideEquals(expected *v1beta1.OverrideSpec) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := obj.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(obj, &v1beta1.RootSync{})
+		}
+		found := rs.Spec.Override
+		if !equality.Semantic.DeepEqual(found, expected) {
+			return errors.Errorf("expected %s to have spec.override: %s, but got %s",
+				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
+		}
+		return nil
+	}
 }

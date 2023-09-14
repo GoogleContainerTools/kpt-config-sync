@@ -19,7 +19,6 @@ set -euo pipefail
 export CGO_ENABLED=0
 
 echo "Running go tests:"
-go test -i -installsuffix "static" "$@"
 go test -installsuffix "static" "$@"
 
 # "none" is just a dummy value so nomoserrors doesn't actually print out errors.

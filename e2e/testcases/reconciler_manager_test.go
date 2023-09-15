@@ -668,42 +668,6 @@ func templateForSSHAuthType() testpredicates.Predicate {
 	}
 }
 
-func totalContainerMemoryRequestEquals(expected resource.Quantity) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		d, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		total := totalContainerMemoryRequests(d.Spec.Template.Spec.Containers)
-		if total.Cmp(expected) != 0 {
-			return fmt.Errorf("expected total Memory request of all containers: %d, got: %d",
-				expected.Value(), total.Value())
-		}
-		return nil
-	}
-}
-
-func totalContainerCPURequestEquals(expected resource.Quantity) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		d, ok := o.(*appsv1.Deployment)
-		if !ok {
-			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		total := totalContainerCPURequests(d.Spec.Template.Spec.Containers)
-		if total.Cmp(expected) != 0 {
-			return fmt.Errorf("expected total CPU request of all containers: %d, got: %d",
-				expected.MilliValue(), total.MilliValue())
-		}
-		return nil
-	}
-}
-
 func firstContainerNameEquals(expected string) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
@@ -722,20 +686,20 @@ func firstContainerNameEquals(expected string) testpredicates.Predicate {
 	}
 }
 
-func totalContainerCPURequests(containers []corev1.Container) resource.Quantity {
-	total := resource.MustParse("0m")
-	for _, container := range containers {
-		total.Add(*container.Resources.Requests.Cpu())
+func totalExpectedContainerResources(resourceMap map[string]v1beta1.ContainerResourcesSpec) v1beta1.ContainerResourcesSpec {
+	totals := v1beta1.ContainerResourcesSpec{
+		CPURequest:    resource.MustParse("0m"),
+		CPULimit:      resource.MustParse("0m"),
+		MemoryRequest: resource.MustParse("0m"),
+		MemoryLimit:   resource.MustParse("0m"),
 	}
-	return total
-}
-
-func totalContainerMemoryRequests(containers []corev1.Container) resource.Quantity {
-	total := resource.MustParse("0Mi")
-	for _, container := range containers {
-		total.Add(*container.Resources.Requests.Memory())
+	for _, container := range resourceMap {
+		totals.CPURequest.Add(container.CPURequest)
+		totals.CPULimit.Add(container.CPULimit)
+		totals.MemoryRequest.Add(container.MemoryRequest)
+		totals.MemoryLimit.Add(container.MemoryLimit)
 	}
-	return total
+	return totals
 }
 
 func TestAutopilotReconcilerAdjustment(t *testing.T) {
@@ -772,22 +736,19 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		reconcilermanager.Reconciler,
 		reconcilermanager.GitSync,
 		metrics.OtelAgentName)
+	nt.T.Logf("expectedResources: %s", log.AsJSON(expectedResources))
 
 	if _, found := expectedResources[firstContainerName]; !found {
 		nt.T.Fatalf("expected the default resource map to include %q, but it was missing: %+v", firstContainerName, expectedResources)
 	}
 
-	// Compute expected totals from initial values.
-	// This ensures the totals only account for the containers present,
-	// even if expectedResources includes additional containers.
-	expectedTotalResources := v1beta1.ContainerResourcesSpec{
-		CPURequest:    totalContainerCPURequests(reconcilerDeployment.Spec.Template.Spec.Containers),
-		MemoryRequest: totalContainerMemoryRequests(reconcilerDeployment.Spec.Template.Spec.Containers),
-	}
-
-	// Autopilot increases the CPU of the first container,
-	// if the total CPU is less than 250m.
 	if nt.IsGKEAutopilot {
+		// Compute expected totals
+		expectedTotalResources := totalExpectedContainerResources(expectedResources)
+		nt.T.Logf("expectedTotalResources: %s", log.AsJSON(expectedTotalResources))
+
+		// Autopilot increases the CPU of the first container,
+		// if the total CPU is less than 250m.
 		minimumTotalCPURequests := resource.MustParse("250m")
 		if expectedTotalResources.CPURequest.Cmp(minimumTotalCPURequests) < 0 {
 			// Compute difference
@@ -799,29 +760,38 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 			updated := expectedResources[firstContainerName]
 			updated.CPURequest.Add(diff)
 			expectedResources[firstContainerName] = updated
-			// Update total
-			expectedTotalResources.CPURequest = minimumTotalCPURequests
 		}
+
+		// Autopilot increases the Memory of the first container,
+		// if the total CPU is less than 512Mi.
+		minimumTotalMemoryRequests := resource.MustParse("512Mi")
+		if expectedTotalResources.MemoryRequest.Cmp(minimumTotalMemoryRequests) < 0 {
+			// Compute difference
+			diff := minimumTotalMemoryRequests.DeepCopy()
+			diff.Sub(expectedTotalResources.MemoryRequest)
+			// Add difference to first container
+			// Go doesn't allow modifying a struct field in a map directly,
+			// so read, update, and write it back.
+			updated := expectedResources[firstContainerName]
+			updated.MemoryRequest.Add(diff)
+			expectedResources[firstContainerName] = updated
+		}
+
+		// Autopilot sets Limits to Requests
+		setLimitsToRequests(expectedResources)
+		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
+		expectedTotalResources = totalExpectedContainerResources(expectedResources)
+		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
 	}
 
 	nt.T.Log("Validating container resources - 1")
 	reconcilerDeployment = &appsv1.Deployment{}
 	err = nt.Validate(reconcilerNN.Name, reconcilerNN.Namespace, reconcilerDeployment,
 		testpredicates.HasGenerationAtLeast(generation),
-		totalContainerCPURequestEquals(expectedTotalResources.CPURequest),
-		totalContainerMemoryRequestEquals(expectedTotalResources.MemoryRequest),
+		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, nt.Logger, expectedResources),
 		firstContainerNameEquals(firstContainerName),
-		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, expectedResources),
 	)
 	if err != nil {
-		nt.T.Log("Reconciler container specs (expected):")
-		for containerName, containerSpec := range expectedResources {
-			nt.T.Logf("%s: %s", containerName, log.AsJSON(containerSpec))
-		}
-		nt.T.Log("Reconciler container specs (found):")
-		for _, container := range reconcilerDeployment.Spec.Template.Spec.Containers {
-			nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
-		}
 		nt.T.Fatal(err)
 	}
 	generation = reconcilerDeployment.GetGeneration()
@@ -842,14 +812,13 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		updated.CPURequest.Sub(resource.MustParse("10m"))
 		updated.CPURequest.Add(resource.MustParse("250m"))
 		expectedResources[firstContainerName] = updated
-		// Increase the expected total resources
-		expectedTotalResources.CPURequest.Add(resource.MustParse("250m"))
-	} else {
-		// Increase the expected total resources
-		expectedTotalResources.CPURequest.Add(resource.MustParse("10m"))
+
+		// Autopilot sets Limits to Requests
+		setLimitsToRequests(expectedResources)
+		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
+		expectedTotalResources := totalExpectedContainerResources(expectedResources)
+		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
 	}
-	// Autopilot doesn't adjust memory
-	expectedTotalResources.MemoryRequest.Add(resource.MustParse("10Mi"))
 
 	// Wait for overrides to be applied
 	// Note: This depends on the Syncing condition reflecting the current RSync generation.
@@ -870,20 +839,10 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	reconcilerDeployment = &appsv1.Deployment{}
 	err = nt.Validate(reconcilerNN.Name, reconcilerNN.Namespace, reconcilerDeployment,
 		testpredicates.HasGenerationAtLeast(generation),
-		totalContainerCPURequestEquals(expectedTotalResources.CPURequest),
-		totalContainerMemoryRequestEquals(expectedTotalResources.MemoryRequest),
+		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, nt.Logger, expectedResources),
 		firstContainerNameEquals(firstContainerName),
-		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, expectedResources),
 	)
 	if err != nil {
-		nt.T.Log("Reconciler container specs (expected):")
-		for containerName, containerSpec := range expectedResources {
-			nt.T.Logf("%s: %s", containerName, log.AsJSON(containerSpec))
-		}
-		nt.T.Log("Reconciler container specs (found):")
-		for _, container := range reconcilerDeployment.Spec.Template.Spec.Containers {
-			nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
-		}
 		nt.T.Fatal(err)
 	}
 	generation = reconcilerDeployment.GetGeneration()
@@ -915,20 +874,10 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	reconcilerDeployment = &appsv1.Deployment{}
 	err = nt.Validate(reconcilerNN.Name, reconcilerNN.Namespace, reconcilerDeployment,
 		testpredicates.HasGenerationAtLeast(generation),
-		totalContainerCPURequestEquals(expectedTotalResources.CPURequest),
-		totalContainerMemoryRequestEquals(expectedTotalResources.MemoryRequest),
+		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, nt.Logger, expectedResources),
 		firstContainerNameEquals(firstContainerName),
-		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, expectedResources),
 	)
 	if err != nil {
-		nt.T.Log("Reconciler container specs (expected):")
-		for containerName, containerSpec := range expectedResources {
-			nt.T.Logf("%s: %s", containerName, log.AsJSON(containerSpec))
-		}
-		nt.T.Log("Reconciler container specs (found):")
-		for _, container := range reconcilerDeployment.Spec.Template.Spec.Containers {
-			nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
-		}
 		nt.T.Fatal(err)
 	}
 	generation = reconcilerDeployment.GetGeneration()
@@ -942,16 +891,20 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		expected := updated // copy
 		expected.CPURequest.Add(resource.MustParse("10m"))
 		expectedResources[firstContainerName] = expected
-		// No update to total resources
 		// Expect reconciler-manager NOT to update the reconciler Deployment
+
+		// Autopilot sets Limits to Requests
+		setLimitsToRequests(expectedResources)
+		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
+		expectedTotalResources := totalExpectedContainerResources(expectedResources)
+		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
 	} else {
 		// Update expectations to match override change
 		expectedResources[firstContainerName] = updated
-		// Increase the expected total resources
-		expectedTotalResources.CPURequest.Sub(resource.MustParse("10m"))
 		// Expect reconciler-manager to update the reconciler Deployment
 		generation++
 	}
+
 	nt.MustMergePatch(rootSyncObj,
 		fmt.Sprintf(`{"spec":{"override":{"resources":[{"containerName":%q,"memoryRequest":%q, "cpuRequest":%q}]}}}`,
 			firstContainerName, &updated.MemoryRequest, &updated.CPURequest))
@@ -974,21 +927,20 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	reconcilerDeployment = &appsv1.Deployment{}
 	err = nt.Validate(reconcilerNN.Name, reconcilerNN.Namespace, reconcilerDeployment,
 		testpredicates.HasGenerationAtLeast(generation),
-		totalContainerCPURequestEquals(expectedTotalResources.CPURequest),
-		totalContainerMemoryRequestEquals(expectedTotalResources.MemoryRequest),
+		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, nt.Logger, expectedResources),
 		firstContainerNameEquals(firstContainerName),
-		testpredicates.DeploymentContainerResourcesAllEqual(nt.Scheme, expectedResources),
 	)
 	if err != nil {
-		nt.T.Log("Reconciler container specs (expected):")
-		for containerName, containerSpec := range expectedResources {
-			nt.T.Logf("%s: %s", containerName, log.AsJSON(containerSpec))
-		}
-		nt.T.Log("Reconciler container specs (found):")
-		for _, container := range reconcilerDeployment.Spec.Template.Spec.Containers {
-			nt.T.Logf("%s: %s", container.Name, log.AsJSON(container.Resources))
-		}
 		nt.T.Fatal(err)
+	}
+}
+
+func setLimitsToRequests(resourceMap map[string]v1beta1.ContainerResourcesSpec) {
+	for containerName := range resourceMap {
+		updated := resourceMap[containerName]
+		updated.CPULimit = updated.CPURequest
+		updated.MemoryLimit = updated.MemoryRequest
+		resourceMap[containerName] = updated
 	}
 }
 

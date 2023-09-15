@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"go.uber.org/multierr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -277,7 +279,7 @@ func DeploymentContainerResourcesEqual(expectedSpec v1beta1.ContainerResourcesSp
 
 // DeploymentContainerResourcesAllEqual verifies all reconciler deployment
 // containers have the expected resource requests and limits.
-func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, expectedByName map[string]v1beta1.ContainerResourcesSpec) Predicate {
+func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, logger *testlogger.TestLogger, expectedByName map[string]v1beta1.ContainerResourcesSpec) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -289,6 +291,7 @@ func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, expectedByName
 		}
 		// Validate the container resources exactly match expectations
 		var foundContainers []string
+		var errs []error
 		for _, container := range d.Spec.Template.Spec.Containers {
 			foundContainers = append(foundContainers, container.Name)
 			expectedSpec, ok := expectedByName[container.Name]
@@ -296,7 +299,8 @@ func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, expectedByName
 				continue // error later when the list doesn't match
 			}
 			if err := validateContainerResources(&container, expectedSpec); err != nil {
-				return err
+				errs = append(errs, err)
+				continue
 			}
 		}
 		// Validate the containers names exactly match expectations
@@ -307,11 +311,39 @@ func DeploymentContainerResourcesAllEqual(scheme *runtime.Scheme, expectedByName
 		sort.Strings(expectedContainers)
 		sort.Strings(foundContainers)
 		if !cmp.Equal(expectedContainers, foundContainers) {
-			return fmt.Errorf("expected containers [%s], but found [%s]",
+			err := fmt.Errorf("expected containers [%s], but found [%s]",
 				strings.Join(expectedContainers, ","),
 				strings.Join(foundContainers, ","))
+			errs = append(errs, err)
+		}
+		// Combine all errors and log some helpful debug info
+		if len(errs) > 0 {
+			logger.Info("Container resources expected:")
+			for containerName, containerSpec := range expectedByName {
+				logger.Infof("%s: %s", containerName, log.AsJSON(containerResourceSpecToRequirements(containerSpec)))
+			}
+			logger.Info("Container resources found:")
+			for _, container := range d.Spec.Template.Spec.Containers {
+				logger.Infof("%s: %s", container.Name, log.AsJSON(container.Resources))
+			}
+			return multierr.Combine(errs...)
 		}
 		return nil
+	}
+}
+
+// containerResourceSpecToRequirements converts ContainerResourcesSpec to
+// ResourceRequirements
+func containerResourceSpecToRequirements(spec v1beta1.ContainerResourcesSpec) corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    spec.CPURequest,
+			corev1.ResourceMemory: spec.MemoryRequest,
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    spec.CPULimit,
+			corev1.ResourceMemory: spec.MemoryLimit,
+		},
 	}
 }
 

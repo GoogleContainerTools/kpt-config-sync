@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 
@@ -95,25 +96,30 @@ var (
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
 			"Do not use in production.")
 
-	renderingEnabled = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
+	renderingEnabled  = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
+	namespaceStrategy = flag.String(flags.namespaceStrategy, util.EnvString(reconcilermanager.NamespaceStrategy, ""),
+		fmt.Sprintf("Set the namespace strategy for the reconciler. Must be %s or %s.",
+			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit))
 )
 
 var flags = struct {
-	sourceDir        string
-	repoRootDir      string
-	hydratedRootDir  string
-	clusterName      string
-	sourceFormat     string
-	statusMode       string
-	reconcileTimeout string
+	sourceDir         string
+	repoRootDir       string
+	hydratedRootDir   string
+	clusterName       string
+	sourceFormat      string
+	statusMode        string
+	reconcileTimeout  string
+	namespaceStrategy string
 }{
-	repoRootDir:      "repo-root",
-	sourceDir:        "source-dir",
-	hydratedRootDir:  "hydrated-root",
-	clusterName:      "cluster-name",
-	sourceFormat:     reconcilermanager.SourceFormat,
-	statusMode:       "status-mode",
-	reconcileTimeout: "reconcile-timeout",
+	repoRootDir:       "repo-root",
+	sourceDir:         "source-dir",
+	hydratedRootDir:   "hydrated-root",
+	clusterName:       "cluster-name",
+	sourceFormat:      reconcilermanager.SourceFormat,
+	statusMode:        "status-mode",
+	reconcileTimeout:  "reconcile-timeout",
+	namespaceStrategy: "namespace-strategy",
 }
 
 func main() {
@@ -195,10 +201,16 @@ func main() {
 		if format == "" {
 			format = filesystem.SourceFormatHierarchy
 		}
+		// Default to "implicit" if unset.
+		nsStrat := configsync.NamespaceStrategy(*namespaceStrategy)
+		if nsStrat == "" {
+			nsStrat = configsync.NamespaceStrategyImplicit
+		}
 
 		klog.Info("Starting reconciler for: root")
 		opts.RootOptions = &reconciler.RootOptions{
-			SourceFormat: format,
+			SourceFormat:      format,
+			NamespaceStrategy: nsStrat,
 		}
 	} else {
 		klog.Infof("Starting reconciler for: %s", *scope)
@@ -206,6 +218,10 @@ func main() {
 		if *sourceFormat != "" {
 			klog.Fatalf("Flag %s and Environment variable%q must not be passed to a Namespace reconciler",
 				flags.sourceFormat, filesystem.SourceFormatKey)
+		}
+		if *namespaceStrategy != "" {
+			klog.Fatalf("Flag %s and Environment variable%q must not be passed to a Namespace reconciler",
+				flags.namespaceStrategy, reconcilermanager.NamespaceStrategy)
 		}
 	}
 	reconciler.Run(opts)

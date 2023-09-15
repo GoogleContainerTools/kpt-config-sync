@@ -374,6 +374,18 @@ spec:
                     x-kubernetes-list-map-keys:
                     - containerName
                     x-kubernetes-list-type: map
+                  namespaceStrategy:
+                    description: namespaceStrategy controls how the reconciler handles
+                      Namespaces which are used by resources in the source but not
+                      declared. Must be "implicit" or "explicit" "implicit" means
+                      that the reconciler will implicitly create Namespaces if they
+                      do not exist, even if they are not declared in the source. "explicit"
+                      means that the reconciler will not create Namespaces which are
+                      not declared in the source.
+                    enum:
+                    - implicit
+                    - explicit
+                    type: string
                   reconcileTimeout:
                     description: 'reconcileTimeout allows one to override the threshold
                       for how long to wait for all resources to reconcile before giving
@@ -1427,6 +1439,18 @@ spec:
                     x-kubernetes-list-map-keys:
                     - containerName
                     x-kubernetes-list-type: map
+                  namespaceStrategy:
+                    description: namespaceStrategy controls how the reconciler handles
+                      Namespaces which are used by resources in the source but not
+                      declared. Must be "implicit" or "explicit" "implicit" means
+                      that the reconciler will implicitly create Namespaces if they
+                      do not exist, even if they are not declared in the source. "explicit"
+                      means that the reconciler will not create Namespaces which are
+                      not declared in the source.
+                    enum:
+                    - implicit
+                    - explicit
+                    type: string
                   reconcileTimeout:
                     description: 'reconcileTimeout allows one to override the threshold
                       for how long to wait for all resources to reconcile before giving

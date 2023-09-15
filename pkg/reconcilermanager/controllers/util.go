@@ -204,6 +204,17 @@ func sourceFormatEnv(format string) corev1.EnvVar {
 	}
 }
 
+// namespaceStrategyEnv returns the environment variable for NAMESPACE_STRATEGY in the reconciler container.
+func namespaceStrategyEnv(strategy configsync.NamespaceStrategy) corev1.EnvVar {
+	if strategy == "" {
+		strategy = configsync.NamespaceStrategyImplicit
+	}
+	return corev1.EnvVar{
+		Name:  reconcilermanager.NamespaceStrategy,
+		Value: string(strategy),
+	}
+}
+
 // ociSyncEnvs returns the environment variables for the oci-sync container.
 func ociSyncEnvs(image string, auth configsync.AuthType, period float64) []corev1.EnvVar {
 	var result []corev1.EnvVar

@@ -191,8 +191,10 @@ func rootsyncGCPSAEmail(email string) func(sync *v1beta1.RootSync) {
 
 func rootsyncOverrideResources(containers []v1beta1.ContainerResourcesSpec) func(sync *v1beta1.RootSync) {
 	return func(sync *v1beta1.RootSync) {
-		sync.Spec.Override = &v1beta1.OverrideSpec{
-			Resources: containers,
+		sync.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+			OverrideSpec: v1beta1.OverrideSpec{
+				Resources: containers,
+			},
 		}
 	}
 }
@@ -359,8 +361,10 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideSelectedResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideSelectedResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -481,8 +485,10 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideAllContainerResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideAllContainerResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -532,8 +538,10 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideReconcilerAndHydrationResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideReconcilerAndHydrationResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -573,8 +581,10 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideGitSyncResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideGitSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -606,7 +616,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1168,7 +1178,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1319,7 +1329,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -1465,7 +1475,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	// Clear rs.Spec.Override
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -2567,8 +2577,10 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideHelmSyncResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideHelmSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -2775,8 +2787,10 @@ func TestRootSyncWithOCI(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideOciSyncResources,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideOciSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
@@ -3098,6 +3112,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			reconcilermanager.SourceRepoKey:           rootsyncRepo,
 			reconcilermanager.SourceTypeKey:           string(gitSource),
 			filesystem.SourceFormatKey:                "",
+			reconcilermanager.NamespaceStrategy:       string(configsync.NamespaceStrategyImplicit),
 			reconcilermanager.StatusMode:              "enabled",
 			reconcilermanager.SourceBranchKey:         "master",
 			reconcilermanager.SourceRevKey:            "HEAD",
@@ -3255,8 +3270,10 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		LogLevels: overrideLogLevel,
+	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			LogLevels: overrideLogLevel,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)

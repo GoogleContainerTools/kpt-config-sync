@@ -712,9 +712,13 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	rootSyncObj := &v1beta1.RootSync{}
 	err := nt.Validate(rootSyncNN.Name, rootSyncNN.Namespace, rootSyncObj,
 		// Confirm there are no resource overrides
-		testpredicates.RootSyncSpecOverrideEquals(&v1beta1.OverrideSpec{
-			ReconcileTimeout: &metav1.Duration{Duration: *nt.DefaultReconcileTimeout},
-		}),
+		testpredicates.RootSyncSpecOverrideEquals(
+			&v1beta1.RootSyncOverrideSpec{
+				OverrideSpec: v1beta1.OverrideSpec{
+					ReconcileTimeout: &metav1.Duration{Duration: *nt.DefaultReconcileTimeout},
+				},
+			},
+		),
 	)
 	if err != nil {
 		nt.T.Fatal(err)

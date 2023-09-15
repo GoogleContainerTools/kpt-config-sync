@@ -17,6 +17,7 @@ package v1beta1
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // OverrideSpec allows to override the settings for a reconciler pod
@@ -73,6 +74,28 @@ type OverrideSpec struct {
 	// +listMapKey=containerName
 	// +optional
 	LogLevels []ContainerLogLevelOverride `json:"logLevels,omitempty"`
+}
+
+// RootSyncOverrideSpec allows to override the settings for a RootSync reconciler pod
+type RootSyncOverrideSpec struct {
+	OverrideSpec `json:",inline"`
+
+	// namespaceStrategy controls how the reconciler handles Namespaces
+	// which are used by resources in the source but not declared.
+	// Must be "implicit" or "explicit"
+	// "implicit" means that the reconciler will implicitly create Namespaces
+	// if they do not exist, even if they are not declared in the source.
+	// "explicit" means that the reconciler will not create Namespaces which
+	// are not declared in the source.
+	//
+	// +kubebuilder:validation:Enum=implicit;explicit
+	// +optional
+	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
+}
+
+// RepoSyncOverrideSpec allows to override the settings for a RepoSync reconciler pod
+type RepoSyncOverrideSpec struct {
+	OverrideSpec `json:",inline"`
 }
 
 // ContainerResourcesSpec allows to override the resource requirements for a container

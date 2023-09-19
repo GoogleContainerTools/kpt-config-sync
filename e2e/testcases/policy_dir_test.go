@@ -67,7 +67,7 @@ func TestInvalidPolicyDir(t *testing.T) {
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "some-nonexistent-policydir")
 
 	nt.T.Log("Expect an error to be present in status.source.errors")
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.PathErrorCode, "")
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
 	nt.T.Log("Fix the policydir in the repo")
 	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "acme")

@@ -88,6 +88,10 @@ const (
 	// RenderingEnabled tells the reconciler container whether the hydration-controller
 	// container is running in the Pod.
 	RenderingEnabled = "RENDERING_ENABLED"
+
+	// NamespaceStrategy tells the reconciler container which NamespaceStrategy to
+	// use
+	NamespaceStrategy = "NAMESPACE_STRATEGY"
 )
 
 const (

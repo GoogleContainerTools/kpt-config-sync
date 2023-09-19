@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/client/restconfig"
@@ -119,6 +120,8 @@ type Options struct {
 type RootOptions struct {
 	// SourceFormat is how the Root repository is structured.
 	SourceFormat filesystem.SourceFormat
+	// NamespaceStrategy indicates the NamespaceStrategy used by this reconciler.
+	NamespaceStrategy configsync.NamespaceStrategy
 }
 
 // Run configures and starts the various components of a reconciler process.
@@ -217,7 +220,8 @@ func Run(opts Options) {
 	}
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled)
+			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled,
+			opts.NamespaceStrategy)
 		if err != nil {
 			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
 		}

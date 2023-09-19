@@ -1153,8 +1153,8 @@ func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1be
 }
 
 // RootSyncSpecOverrideEquals checks that the RootSync's spec.override matches
-// the specified OverrideSpec.
-func RootSyncSpecOverrideEquals(expected *v1beta1.OverrideSpec) Predicate {
+// the specified RootSyncOverrideSpec.
+func RootSyncSpecOverrideEquals(expected *v1beta1.RootSyncOverrideSpec) Predicate {
 	return func(obj client.Object) error {
 		if obj == nil {
 			return ErrObjectNotFound

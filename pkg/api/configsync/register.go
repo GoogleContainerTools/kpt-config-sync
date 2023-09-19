@@ -107,3 +107,16 @@ const (
 	// Git or OCI or Helm, when GKE Workload Identity or Fleet Workload Identity is enabled.
 	AuthGCPServiceAccount AuthType = "gcpserviceaccount"
 )
+
+// NamespaceStrategy specifies the strategy used by the reconciler for undeclared
+// namespaces.
+type NamespaceStrategy string
+
+const (
+	// NamespaceStrategyImplicit indicates that the reconciler should create
+	// "implicit" namespaces if they are not declared. Default
+	NamespaceStrategyImplicit NamespaceStrategy = "implicit"
+	// NamespaceStrategyExplicit indicates that namespaces must be explicitly
+	// declared to be created by the reconciler.
+	NamespaceStrategyExplicit NamespaceStrategy = "explicit"
+)

@@ -75,7 +75,7 @@ type RepoSyncSpec struct {
 	// override allows to override the settings for a reconciler.
 	// +nullable
 	// +optional
-	Override *OverrideSpec `json:"override,omitempty"`
+	Override *RepoSyncOverrideSpec `json:"override,omitempty"`
 }
 
 // RepoSyncStatus defines the observed state of a RepoSync.

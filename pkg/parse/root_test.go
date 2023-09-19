@@ -106,19 +106,21 @@ func gitSpec(repo string, auth configsync.AuthType) core.MetaMutator {
 
 func TestRoot_Parse(t *testing.T) {
 	testCases := []struct {
-		name            string
-		format          filesystem.SourceFormat
-		existingObjects []client.Object
-		parsed          []ast.FileObject
-		want            []ast.FileObject
+		name              string
+		format            filesystem.SourceFormat
+		namespaceStrategy configsync.NamespaceStrategy
+		existingObjects   []client.Object
+		parsed            []ast.FileObject
+		want              []ast.FileObject
 	}{
 		{
 			name:   "no objects",
 			format: filesystem.SourceFormatUnstructured,
 		},
 		{
-			name:   "implicit namespace if unstructured and not present",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "implicit namespace if unstructured and not present",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
 			},
@@ -150,8 +152,31 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:   "implicit namespace if unstructured, present and self-managed",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "no implicit namespace if namespaceStrategy is explicit",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyExplicit,
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+		{
+			name:              "implicit namespace if unstructured, present and self-managed",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
@@ -192,8 +217,9 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:   "no implicit namespace if unstructured, present, but managed by others",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "no implicit namespace if unstructured, present, but managed by others",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
@@ -222,9 +248,10 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:            "no implicit namespace if unstructured, present, but unmanaged",
-			format:          filesystem.SourceFormatUnstructured,
-			existingObjects: []client.Object{fake.NamespaceObject("foo")},
+			name:              "no implicit namespace if unstructured, present, but unmanaged",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
+			existingObjects:   []client.Object{fake.NamespaceObject("foo")},
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
 			},
@@ -244,8 +271,9 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:   "no implicit namespace if unstructured and namespace is config-management-system",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "no implicit namespace if unstructured and namespace is config-management-system",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parsed: []ast.FileObject{
 				fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(v1beta1.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
 			},
@@ -266,8 +294,9 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:   "multiple objects share a single implicit namespace",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "multiple objects share a single implicit namespace",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("bar")),
 				fake.ConfigMap(core.Namespace("bar")),
@@ -312,8 +341,9 @@ func TestRoot_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:   "multiple implicit namespaces",
-			format: filesystem.SourceFormatUnstructured,
+			name:              "multiple implicit namespaces",
+			format:            filesystem.SourceFormatUnstructured,
+			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{
 				fake.NamespaceObject("foo"), // foo exists but not managed, should NOT be added as an implicit namespace
 				// bar not exists, should be added as an implicit namespace
@@ -431,7 +461,8 @@ func TestRoot_Parse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
-				sourceFormat: tc.format,
+				sourceFormat:      tc.format,
+				namespaceStrategy: tc.namespaceStrategy,
 				opts: opts{
 					parser:             &fakeParser{parse: tc.parsed},
 					syncName:           rootSyncName,
@@ -676,7 +707,8 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
-				sourceFormat: filesystem.SourceFormatUnstructured,
+				sourceFormat:      filesystem.SourceFormatUnstructured,
+				namespaceStrategy: configsync.NamespaceStrategyImplicit,
 				opts: opts{
 					parser:             &fakeParser{parse: tc.parsed},
 					syncName:           rootSyncName,

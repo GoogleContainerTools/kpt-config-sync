@@ -55,7 +55,7 @@ import (
 )
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool) (Parser, error) {
+func NewRootRunner(clusterName, syncName, reconcilerName string, format filesystem.SourceFormat, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool, namespaceStrategy configsync.NamespaceStrategy) (Parser, error) {
 	converter, err := declared.NewValueConverter(dc)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,8 @@ func NewRootRunner(clusterName, syncName, reconcilerName string, format filesyst
 			mux:                &sync.Mutex{},
 			renderingEnabled:   renderingEnabled,
 		},
-		sourceFormat: format,
+		sourceFormat:      format,
+		namespaceStrategy: namespaceStrategy,
 	}, nil
 }
 
@@ -95,6 +96,10 @@ type root struct {
 	// repository may be SourceFormatHierarchy; all others are implicitly
 	// SourceFormatUnstructured.
 	sourceFormat filesystem.SourceFormat
+
+	// namespaceStrategy indicates the NamespaceStrategy to be used by this
+	// reconciler.
+	namespaceStrategy configsync.NamespaceStrategy
 }
 
 var _ Parser = &root{}
@@ -141,7 +146,9 @@ func (p *root) parseSource(_ context.Context, state sourceState) ([]ast.FileObje
 	options = OptionsForScope(options, p.scope)
 
 	if p.sourceFormat == filesystem.SourceFormatUnstructured {
-		options.Visitors = append(options.Visitors, p.addImplicitNamespaces)
+		if p.namespaceStrategy == configsync.NamespaceStrategyImplicit {
+			options.Visitors = append(options.Visitors, p.addImplicitNamespaces)
+		}
 		objs, err = validate.Unstructured(objs, options)
 	} else {
 		objs, err = validate.Hierarchical(objs, options)

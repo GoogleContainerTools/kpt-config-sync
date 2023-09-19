@@ -76,7 +76,7 @@ type RootSyncSpec struct {
 	// override allows to override the settings for a root reconciler.
 	// +nullable
 	// +optional
-	Override *OverrideSpec `json:"override,omitempty"`
+	Override *RootSyncOverrideSpec `json:"override,omitempty"`
 }
 
 // RootSyncStatus defines the observed state of RootSync

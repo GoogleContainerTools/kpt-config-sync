@@ -17,8 +17,8 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ConfigmanagementV1() configmanagementv1.ConfigmanagementV1Interface
-	ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Interface
 	ConfigsyncV1alpha1() configsyncv1alpha1.ConfigsyncV1alpha1Interface
+	ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Interface
 	HubV1() hubv1.HubV1Interface
 }
 
@@ -27,8 +27,8 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	configmanagementV1 *configmanagementv1.ConfigmanagementV1Client
-	configsyncV1beta1  *configsyncv1beta1.ConfigsyncV1beta1Client
 	configsyncV1alpha1 *configsyncv1alpha1.ConfigsyncV1alpha1Client
+	configsyncV1beta1  *configsyncv1beta1.ConfigsyncV1beta1Client
 	hubV1              *hubv1.HubV1Client
 }
 
@@ -37,14 +37,14 @@ func (c *Clientset) ConfigmanagementV1() configmanagementv1.ConfigmanagementV1In
 	return c.configmanagementV1
 }
 
-// ConfigsyncV1beta1 retrieves the ConfigsyncV1beta1Client
-func (c *Clientset) ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Interface {
-	return c.configsyncV1beta1
-}
-
 // ConfigsyncV1alpha1 retrieves the ConfigsyncV1alpha1Client
 func (c *Clientset) ConfigsyncV1alpha1() configsyncv1alpha1.ConfigsyncV1alpha1Interface {
 	return c.configsyncV1alpha1
+}
+
+// ConfigsyncV1beta1 retrieves the ConfigsyncV1beta1Client
+func (c *Clientset) ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Interface {
+	return c.configsyncV1beta1
 }
 
 // HubV1 retrieves the HubV1Client
@@ -77,11 +77,11 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	cs.configsyncV1beta1, err = configsyncv1beta1.NewForConfig(&configShallowCopy)
+	cs.configsyncV1alpha1, err = configsyncv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
-	cs.configsyncV1alpha1, err = configsyncv1alpha1.NewForConfig(&configShallowCopy)
+	cs.configsyncV1beta1, err = configsyncv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +102,8 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.configmanagementV1 = configmanagementv1.NewForConfigOrDie(c)
-	cs.configsyncV1beta1 = configsyncv1beta1.NewForConfigOrDie(c)
 	cs.configsyncV1alpha1 = configsyncv1alpha1.NewForConfigOrDie(c)
+	cs.configsyncV1beta1 = configsyncv1beta1.NewForConfigOrDie(c)
 	cs.hubV1 = hubv1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -114,8 +114,8 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.configmanagementV1 = configmanagementv1.New(c)
-	cs.configsyncV1beta1 = configsyncv1beta1.New(c)
 	cs.configsyncV1alpha1 = configsyncv1alpha1.New(c)
+	cs.configsyncV1beta1 = configsyncv1beta1.New(c)
 	cs.hubV1 = hubv1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)

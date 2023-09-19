@@ -188,8 +188,10 @@ func reposyncGCPSAEmail(email string) func(sync *v1beta1.RepoSync) {
 
 func reposyncOverrideResources(containers []v1beta1.ContainerResourcesSpec) func(sync *v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
-		sync.Spec.Override = &v1beta1.OverrideSpec{
-			Resources: containers,
+		sync.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+			OverrideSpec: v1beta1.OverrideSpec{
+				Resources: containers,
+			},
 		}
 	}
 }
@@ -407,8 +409,10 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideReconcilerCPUAndGitSyncMemResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideReconcilerCPUAndGitSyncMemResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -447,7 +451,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -551,8 +555,10 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideReconcilerAndGitSyncResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideReconcilerAndGitSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -607,8 +613,10 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideReconcilerResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideReconcilerResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -655,8 +663,10 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideGitSyncResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideGitSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -694,7 +704,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -1476,7 +1486,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
@@ -1631,7 +1641,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
@@ -1783,7 +1793,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{}
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
@@ -3108,8 +3118,10 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideHelmSyncResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideHelmSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
@@ -3322,8 +3334,10 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: overrideOciSyncResources,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: overrideOciSyncResources,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -3807,8 +3821,10 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.Override = &v1beta1.OverrideSpec{
-		LogLevels: overrideLogLevel,
+	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			LogLevels: overrideLogLevel,
+		},
 	}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)

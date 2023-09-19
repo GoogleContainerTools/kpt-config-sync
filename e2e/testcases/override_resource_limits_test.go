@@ -145,42 +145,46 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-backend
-	repoSyncBackend.Spec.Override = &v1alpha1.OverrideSpec{
-		Resources: []v1alpha1.ContainerResourcesSpec{
-			{
-				ContainerName: "reconciler",
-				CPURequest:    resource.MustParse("500m"),
-				CPULimit:      resource.MustParse("1000m"),
-				MemoryRequest: resource.MustParse("500Mi"),
-				MemoryLimit:   resource.MustParse("555Mi"),
-			},
-			{
-				ContainerName: "git-sync",
-				CPURequest:    resource.MustParse("600m"),
-				CPULimit:      resource.MustParse("1"),
-				MemoryRequest: resource.MustParse("600Mi"),
-				MemoryLimit:   resource.MustParse("666Mi"),
+	repoSyncBackend.Spec.Override = &v1alpha1.RepoSyncOverrideSpec{
+		OverrideSpec: v1alpha1.OverrideSpec{
+			Resources: []v1alpha1.ContainerResourcesSpec{
+				{
+					ContainerName: "reconciler",
+					CPURequest:    resource.MustParse("500m"),
+					CPULimit:      resource.MustParse("1000m"),
+					MemoryRequest: resource.MustParse("500Mi"),
+					MemoryLimit:   resource.MustParse("555Mi"),
+				},
+				{
+					ContainerName: "git-sync",
+					CPURequest:    resource.MustParse("600m"),
+					CPULimit:      resource.MustParse("1"),
+					MemoryRequest: resource.MustParse("600Mi"),
+					MemoryLimit:   resource.MustParse("666Mi"),
+				},
 			},
 		},
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-frontend
-	repoSyncFrontend.Spec.Override = &v1alpha1.OverrideSpec{
-		Resources: []v1alpha1.ContainerResourcesSpec{
-			{
-				ContainerName: "reconciler",
-				CPURequest:    resource.MustParse("511m"),
-				CPULimit:      resource.MustParse("2000m"),
-				MemoryRequest: resource.MustParse("511Mi"),
-				MemoryLimit:   resource.MustParse("544Mi"),
-			},
-			{
-				ContainerName: "git-sync",
-				CPURequest:    resource.MustParse("611m"),
-				CPULimit:      resource.MustParse("2"),
-				MemoryRequest: resource.MustParse("611Mi"),
-				MemoryLimit:   resource.MustParse("644Mi"),
+	repoSyncFrontend.Spec.Override = &v1alpha1.RepoSyncOverrideSpec{
+		OverrideSpec: v1alpha1.OverrideSpec{
+			Resources: []v1alpha1.ContainerResourcesSpec{
+				{
+					ContainerName: "reconciler",
+					CPURequest:    resource.MustParse("511m"),
+					CPULimit:      resource.MustParse("2000m"),
+					MemoryRequest: resource.MustParse("511Mi"),
+					MemoryLimit:   resource.MustParse("544Mi"),
+				},
+				{
+					ContainerName: "git-sync",
+					CPURequest:    resource.MustParse("611m"),
+					CPULimit:      resource.MustParse("2"),
+					MemoryRequest: resource.MustParse("611Mi"),
+					MemoryLimit:   resource.MustParse("644Mi"),
+				},
 			},
 		},
 	}
@@ -504,42 +508,46 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-backend
-	repoSyncBackend.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: []v1beta1.ContainerResourcesSpec{
-			{
-				ContainerName: "reconciler",
-				CPURequest:    resource.MustParse("500m"),
-				CPULimit:      resource.MustParse("1000m"),
-				MemoryRequest: resource.MustParse("500Mi"),
-				MemoryLimit:   resource.MustParse("555Mi"),
-			},
-			{
-				ContainerName: "git-sync",
-				CPURequest:    resource.MustParse("600m"),
-				CPULimit:      resource.MustParse("1"),
-				MemoryRequest: resource.MustParse("600Mi"),
-				MemoryLimit:   resource.MustParse("666Mi"),
+	repoSyncBackend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: []v1beta1.ContainerResourcesSpec{
+				{
+					ContainerName: "reconciler",
+					CPURequest:    resource.MustParse("500m"),
+					CPULimit:      resource.MustParse("1000m"),
+					MemoryRequest: resource.MustParse("500Mi"),
+					MemoryLimit:   resource.MustParse("555Mi"),
+				},
+				{
+					ContainerName: "git-sync",
+					CPURequest:    resource.MustParse("600m"),
+					CPULimit:      resource.MustParse("1"),
+					MemoryRequest: resource.MustParse("600Mi"),
+					MemoryLimit:   resource.MustParse("666Mi"),
+				},
 			},
 		},
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-frontend
-	repoSyncFrontend.Spec.Override = &v1beta1.OverrideSpec{
-		Resources: []v1beta1.ContainerResourcesSpec{
-			{
-				ContainerName: "reconciler",
-				CPURequest:    resource.MustParse("511m"),
-				CPULimit:      resource.MustParse("2000m"),
-				MemoryRequest: resource.MustParse("511Mi"),
-				MemoryLimit:   resource.MustParse("544Mi"),
-			},
-			{
-				ContainerName: "git-sync",
-				CPURequest:    resource.MustParse("611m"),
-				CPULimit:      resource.MustParse("2"),
-				MemoryRequest: resource.MustParse("611Mi"),
-				MemoryLimit:   resource.MustParse("644Mi"),
+	repoSyncFrontend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			Resources: []v1beta1.ContainerResourcesSpec{
+				{
+					ContainerName: "reconciler",
+					CPURequest:    resource.MustParse("511m"),
+					CPULimit:      resource.MustParse("2000m"),
+					MemoryRequest: resource.MustParse("511Mi"),
+					MemoryLimit:   resource.MustParse("544Mi"),
+				},
+				{
+					ContainerName: "git-sync",
+					CPURequest:    resource.MustParse("611m"),
+					CPULimit:      resource.MustParse("2"),
+					MemoryRequest: resource.MustParse("611Mi"),
+					MemoryLimit:   resource.MustParse("644Mi"),
+				},
 			},
 		},
 	}

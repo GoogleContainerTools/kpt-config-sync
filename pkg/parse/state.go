@@ -163,9 +163,6 @@ func (s *reconcilerState) resetPartialCache() {
 
 // needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
 func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
-	if status.HasTransientErrors(newStatus.errs) {
-		return false
-	}
 	// Update if not initialized
 	if s.sourceStatus.lastUpdate.IsZero() {
 		return true
@@ -180,9 +177,6 @@ func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
 
 // needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
 func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
-	if status.HasTransientErrors(newStatus.errs) {
-		return false
-	}
 	// Update if not initialized
 	if s.syncStatus.lastUpdate.IsZero() {
 		return true

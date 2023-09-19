@@ -296,14 +296,6 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 				status.InternalHydrationError(err, "error setting %s annotation", metadata.RequiresRenderingAnnotationKey))
 		}
 	}
-	// Return the transient errors here to avoid surfacing them to the R*Sync status field.
-	// The transient errors might be auto-resolved in the next retry loop, so no need to expose to users.
-	if status.HasTransientErrors(hydrationStatus.errs) {
-		return hydrationStatus.errs
-	}
-	if status.HasTransientErrors(sourceStatus.errs) {
-		return sourceStatus.errs
-	}
 	hydrationStatus.lastUpdate = metav1.Now()
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.

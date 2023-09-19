@@ -747,45 +747,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	}
 
 	if nt.IsGKEAutopilot {
-		// Compute expected totals
-		expectedTotalResources := totalExpectedContainerResources(expectedResources)
-		nt.T.Logf("expectedTotalResources: %s", log.AsJSON(expectedTotalResources))
-
-		// Autopilot increases the CPU of the first container,
-		// if the total CPU is less than 250m.
-		minimumTotalCPURequests := resource.MustParse("250m")
-		if expectedTotalResources.CPURequest.Cmp(minimumTotalCPURequests) < 0 {
-			// Compute difference
-			diff := minimumTotalCPURequests.DeepCopy()
-			diff.Sub(expectedTotalResources.CPURequest)
-			// Add difference to first container
-			// Go doesn't allow modifying a struct field in a map directly,
-			// so read, update, and write it back.
-			updated := expectedResources[firstContainerName]
-			updated.CPURequest.Add(diff)
-			expectedResources[firstContainerName] = updated
-		}
-
-		// Autopilot increases the Memory of the first container,
-		// if the total CPU is less than 512Mi.
-		minimumTotalMemoryRequests := resource.MustParse("512Mi")
-		if expectedTotalResources.MemoryRequest.Cmp(minimumTotalMemoryRequests) < 0 {
-			// Compute difference
-			diff := minimumTotalMemoryRequests.DeepCopy()
-			diff.Sub(expectedTotalResources.MemoryRequest)
-			// Add difference to first container
-			// Go doesn't allow modifying a struct field in a map directly,
-			// so read, update, and write it back.
-			updated := expectedResources[firstContainerName]
-			updated.MemoryRequest.Add(diff)
-			expectedResources[firstContainerName] = updated
-		}
-
-		// Autopilot sets Limits to Requests
-		setLimitsToRequests(expectedResources)
-		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
-		expectedTotalResources = totalExpectedContainerResources(expectedResources)
-		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
+		simulateAutopilotResourceAdjustment(nt, expectedResources, firstContainerName)
 	}
 
 	nt.T.Log("Validating container resources - 1")
@@ -811,17 +773,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	// Update expectations
 	expectedResources[firstContainerName] = updated
 	if nt.IsGKEAutopilot {
-		// Round up to the nearest multiple of 250m.
-		updated := expectedResources[firstContainerName]
-		updated.CPURequest.Sub(resource.MustParse("10m"))
-		updated.CPURequest.Add(resource.MustParse("250m"))
-		expectedResources[firstContainerName] = updated
-
-		// Autopilot sets Limits to Requests
-		setLimitsToRequests(expectedResources)
-		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
-		expectedTotalResources := totalExpectedContainerResources(expectedResources)
-		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
+		simulateAutopilotResourceAdjustment(nt, expectedResources, firstContainerName)
 	}
 
 	// Wait for overrides to be applied
@@ -890,21 +842,11 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	updated = expectedResources[firstContainerName]
 	// Reduce CPU, but not by enough to change the value when rounded up.
 	updated.CPURequest.Sub(resource.MustParse("10m"))
+	expectedResources[firstContainerName] = updated
 	if nt.IsGKEAutopilot {
-		// Update expectations to ignore override change (round up)
-		expected := updated // copy
-		expected.CPURequest.Add(resource.MustParse("10m"))
-		expectedResources[firstContainerName] = expected
-		// Expect reconciler-manager NOT to update the reconciler Deployment
-
-		// Autopilot sets Limits to Requests
-		setLimitsToRequests(expectedResources)
-		nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
-		expectedTotalResources := totalExpectedContainerResources(expectedResources)
-		nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
+		simulateAutopilotResourceAdjustment(nt, expectedResources, firstContainerName)
+		// Expect reconciler-manager NOT to update the reconciler Deployment (no change after adjustment)
 	} else {
-		// Update expectations to match override change
-		expectedResources[firstContainerName] = updated
 		// Expect reconciler-manager to update the reconciler Deployment
 		generation++
 	}
@@ -937,6 +879,57 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func simulateAutopilotResourceAdjustment(nt *nomostest.NT, expectedResources map[string]v1beta1.ContainerResourcesSpec, firstContainerName string) {
+	// Compute expected totals
+	expectedTotalResources := totalExpectedContainerResources(expectedResources)
+	nt.T.Logf("expectedTotalResources: %s", log.AsJSON(expectedTotalResources))
+
+	// https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests#autopilot-resource-management
+
+	// Autopilot increases the CPU of the first container,
+	// until the total CPU is a multiple of 250m.
+	minimumTotalCPURequests := resource.MustParse("250m")
+	remainder := expectedTotalResources.CPURequest.MilliValue() % minimumTotalCPURequests.MilliValue()
+	if remainder > 0 {
+		// Compute difference
+		diff := minimumTotalCPURequests.DeepCopy()
+		diff.Sub(*resource.NewMilliQuantity(remainder, minimumTotalCPURequests.Format))
+		// Add difference to first container
+		// Go doesn't allow modifying a struct field in a map directly,
+		// so read, update, and write it back.
+		updated := expectedResources[firstContainerName]
+		updated.CPURequest.Add(diff)
+		expectedResources[firstContainerName] = updated
+	}
+
+	// Re-compute expected totals
+	expectedTotalResources = totalExpectedContainerResources(expectedResources)
+
+	// Autopilot increases the Memory of the first container,
+	// until the total Memory is at least 1CPU:1Gi ratio (1000m:1024Mi).
+	// Note: This math assumes the values are too low to overflow.
+	minimumTotalMemory := int64(float64(expectedTotalResources.CPURequest.MilliValue()) / float64(1000.0) * 1024)
+	// TODO: Figure out how to build a Quantity in Mebibytes without parsing
+	minimumTotalMemoryRequests := resource.MustParse(fmt.Sprintf("%dMi", minimumTotalMemory))
+	if expectedTotalResources.MemoryRequest.Cmp(minimumTotalMemoryRequests) < 0 {
+		// Compute difference
+		diff := minimumTotalMemoryRequests.DeepCopy()
+		diff.Sub(expectedTotalResources.MemoryRequest)
+		// Add difference to first container
+		// Go doesn't allow modifying a struct field in a map directly,
+		// so read, update, and write it back.
+		updated := expectedResources[firstContainerName]
+		updated.MemoryRequest.Add(diff)
+		expectedResources[firstContainerName] = updated
+	}
+
+	// Autopilot sets Limits to Requests
+	setLimitsToRequests(expectedResources)
+	nt.T.Logf("expectedResources (adjusted for autopilot): %s", log.AsJSON(expectedResources))
+	expectedTotalResources = totalExpectedContainerResources(expectedResources)
+	nt.T.Logf("expectedTotalResources (adjusted for autopilot): %s", log.AsJSON(expectedTotalResources))
 }
 
 func setLimitsToRequests(resourceMap map[string]v1beta1.ContainerResourcesSpec) {

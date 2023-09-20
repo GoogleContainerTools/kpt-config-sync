@@ -77,29 +77,28 @@ func (h *Hydrator) Run(ctx context.Context) {
 	rehydrateTimer := time.NewTimer(h.RehydratePeriod)
 	defer rehydrateTimer.Stop()
 	absSourceDir := h.absSourceDir()
+	var hydrateErr HydrationError
+	var srcCommit string
+	var syncDir cmpath.Absolute
+	var err error
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-rehydrateTimer.C:
-			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
-			if err != nil {
-				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
-			} else {
-				h.rehydrateOnError(commit, syncDir.OSPath())
-			}
+			hydrateErr = h.rehydrateOnError(hydrateErr, srcCommit, syncDir)
 			rehydrateTimer.Reset(h.RehydratePeriod) // Schedule rehydrate attempt
 		case <-runTimer.C:
-			commit, syncDir, err := SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
+			srcCommit, syncDir, err = SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
 				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
-			} else if DoneCommit(h.DonePath.OSPath()) != commit {
+			} else if DoneCommit(h.DonePath.OSPath()) != srcCommit {
 				// If the commit has been processed before, regardless of success or failure,
 				// skip the hydration to avoid repeated execution.
 				// The rehydrate ticker will retry on the failed commit.
-				hydrateErr := h.hydrate(commit, syncDir.OSPath())
-				if err := h.complete(commit, hydrateErr); err != nil {
-					klog.Errorf("failed to complete the rendering execution for commit %q: %v", commit, err)
+				hydrateErr = h.hydrate(srcCommit, syncDir)
+				if err := h.complete(srcCommit, hydrateErr); err != nil {
+					klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
@@ -108,11 +107,11 @@ func (h *Hydrator) Run(ctx context.Context) {
 }
 
 // runHydrate runs `kustomize build` on the source configs.
-func (h *Hydrator) runHydrate(sourceCommit, syncDir string) HydrationError {
+func (h *Hydrator) runHydrate(sourceCommit string, syncDir cmpath.Absolute) HydrationError {
 	newHydratedDir := h.HydratedRoot.Join(cmpath.RelativeOS(sourceCommit))
 	dest := newHydratedDir.Join(h.SyncDir).OSPath()
 
-	if err := kustomizeBuild(syncDir, dest, true); err != nil {
+	if err := kustomizeBuild(syncDir.OSPath(), dest, true); err != nil {
 		return err
 	}
 
@@ -126,7 +125,7 @@ func (h *Hydrator) runHydrate(sourceCommit, syncDir string) HydrationError {
 	if err := updateSymlink(h.HydratedRoot.OSPath(), h.HydratedLink, newHydratedDir.OSPath()); err != nil {
 		return NewInternalError(errors.Wrapf(err, "unable to update the symbolic link to %s", newHydratedDir.OSPath()))
 	}
-	klog.Infof("Successfully rendered %s for commit %s", syncDir, sourceCommit)
+	klog.Infof("Successfully rendered %s for commit %s", syncDir.OSPath(), sourceCommit)
 	return nil
 }
 
@@ -148,7 +147,8 @@ func (h *Hydrator) absSourceDir() cmpath.Absolute {
 }
 
 // hydrate renders the source git repo to hydrated configs.
-func (h *Hydrator) hydrate(sourceCommit, syncDir string) HydrationError {
+func (h *Hydrator) hydrate(sourceCommit string, syncDirPath cmpath.Absolute) HydrationError {
+	syncDir := syncDirPath.OSPath()
 	hydrate, err := needsKustomize(syncDir)
 	if err != nil {
 		return NewInternalError(errors.Wrapf(err, "unable to check if rendering is needed for the source directory: %s", syncDir))
@@ -174,23 +174,27 @@ func (h *Hydrator) hydrate(sourceCommit, syncDir string) HydrationError {
 	if err := os.RemoveAll(h.DonePath.OSPath()); err != nil {
 		return NewInternalError(errors.Wrapf(err, "unable to remove the done file: %s", h.DonePath.OSPath()))
 	}
-	return h.runHydrate(sourceCommit, syncDir)
+	return h.runHydrate(sourceCommit, syncDirPath)
 }
 
-// rehydrateOnError retries the hydration on errors.
-func (h *Hydrator) rehydrateOnError(sourceCommit, syncDir string) {
-	errorFile := h.HydratedRoot.Join(cmpath.RelativeSlash(ErrorFile))
-	if _, err := os.Stat(errorFile.OSPath()); err != nil {
-		if !os.IsNotExist(err) {
-			klog.Warningf("unable to check the error file %s: %v", errorFile, err)
-		}
-		return
+// rehydrateOnError is triggered by the rehydrateTimer (every 30 mins)
+// It re-runs the rendering process when there is a previous error.
+func (h *Hydrator) rehydrateOnError(prevErr HydrationError, prevSrcCommit string, prevSyncDir cmpath.Absolute) HydrationError {
+	if prevErr == nil {
+		// Return directly if the previous hydration succeeded.
+		return nil
 	}
-	klog.Infof("retry rendering commit %s", sourceCommit)
-	hydrationErr := h.runHydrate(sourceCommit, syncDir)
-	if err := h.complete(sourceCommit, hydrationErr); err != nil {
-		klog.Errorf("failed to complete the re-rendering execution for commit %q: %v", sourceCommit, err)
+	if len(prevSrcCommit) == 0 || len(prevSyncDir) == 0 {
+		// If source commit and directory isn't available, skip rehydrating because
+		// rehydrateOnError is supposed to run after h.hydrate processes the commit.
+		return prevErr
 	}
+	klog.Infof("retry rendering commit %s", prevSrcCommit)
+	hydrationErr := h.runHydrate(prevSrcCommit, prevSyncDir)
+	if err := h.complete(prevSrcCommit, hydrationErr); err != nil {
+		klog.Errorf("failed to complete the re-rendering execution for commit %q: %v", prevSrcCommit, err)
+	}
+	return hydrationErr
 }
 
 // updateSymlink updates the symbolic link to the hydrated directory.

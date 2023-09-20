@@ -110,7 +110,7 @@ func TestRunHydrate(t *testing.T) {
 				t.Fatal(fmt.Errorf("failed to get commit and sync directory from the source directory %s: %v", commitDir, err))
 			}
 
-			err = hydrator.runHydrate(originCommit, syncDir.OSPath())
+			err = hydrator.runHydrate(originCommit, syncDir)
 			testutil.AssertEqual(t, tc.wantedErr, err)
 		})
 	}

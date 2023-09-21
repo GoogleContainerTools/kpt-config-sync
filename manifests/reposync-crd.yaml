@@ -346,7 +346,7 @@ spec:
                             deployment container for which log level will be overridden.
                             Must be one of the following: "reconciler", "git-sync",
                             "hydration-controller", "oci-sync", or "helm-sync".'
-                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
                           type: string
                         logLevel:
                           description: logLevel specifies the log level override value
@@ -383,7 +383,7 @@ spec:
                             whose resource requirements will be overridden. Must be
                             "reconciler", "git-sync", "hydration-controller", "oci-sync",
                             or "helm-sync".
-                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
                           type: string
                         cpuLimit:
                           anyOf:
@@ -1389,7 +1389,7 @@ spec:
                             deployment container for which log level will be overridden.
                             Must be one of the following: "reconciler", "git-sync",
                             "hydration-controller", "oci-sync", or "helm-sync".'
-                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
                           type: string
                         logLevel:
                           description: logLevel specifies the log level override value
@@ -1426,7 +1426,7 @@ spec:
                             whose resource requirements will be overridden. Must be
                             "reconciler", "git-sync", "hydration-controller", "oci-sync",
                             or "helm-sync".
-                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync)$
+                          pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
                           type: string
                         cpuLimit:
                           anyOf:

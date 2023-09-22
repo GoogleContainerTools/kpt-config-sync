@@ -1107,6 +1107,18 @@ func SetGitBranch(nt *NT, syncName, branch string) {
 	}
 }
 
+// SetGitRepo updates the root-sync object with the provided source repo URL
+func SetGitRepo(nt *NT, syncName, repoURL string) {
+	nt.T.Logf("Change source repo to %q", repoURL)
+	rs := fake.RootSyncObjectV1Beta1(syncName)
+	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	if rs.Spec.Git.Repo != repoURL {
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"repo": "%s"}}}`, repoURL))
+	}
+}
+
 func toMetav1Duration(t time.Duration) *metav1.Duration {
 	return &metav1.Duration{
 		Duration: t,

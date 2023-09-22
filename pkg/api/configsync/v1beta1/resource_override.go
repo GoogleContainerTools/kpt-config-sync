@@ -103,7 +103,7 @@ type ContainerResourcesSpec struct {
 	// containerName specifies the name of a container whose resource requirements will be overridden.
 	// Must be "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
 	//
-	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
+	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
 	// +optional
 	ContainerName string `json:"containerName,omitempty"`
 	// cpuRequest allows one to override the CPU request of a container
@@ -126,7 +126,7 @@ type ContainerLogLevelOverride struct {
 	// Must be one of the following: "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
 	//
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar)$
+	// +kubebuilder:validation:Pattern=^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
 	ContainerName string `json:"containerName"`
 
 	// logLevel specifies the log level override value for the container.

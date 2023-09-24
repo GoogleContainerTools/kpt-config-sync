@@ -27,14 +27,15 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type AskPassServer struct {
+// Server contains server wide state and settings for the askpass sidecar
+type Server struct {
 	Email string
 	token *oauth2.Token
 }
 
 // GitAskPassHandler is the main method for clients to ask us for
 // credentials
-func (aps *AskPassServer) GitAskPassHandler(w http.ResponseWriter, r *http.Request) {
+func (aps *Server) GitAskPassHandler(w http.ResponseWriter, r *http.Request) {
 	klog.Infof("handling new askpass request from host: %s", r.Host)
 
 	if aps.NeedNewToken() {
@@ -61,7 +62,7 @@ func (aps *AskPassServer) GitAskPassHandler(w http.ResponseWriter, r *http.Reque
 
 // NeedNewToken will tell us if we have an Oauth2 token that is
 // has not expired yet.
-func (aps *AskPassServer) NeedNewToken() bool {
+func (aps *Server) NeedNewToken() bool {
 	if aps.token == nil {
 		return true
 	}
@@ -73,9 +74,10 @@ func (aps *AskPassServer) NeedNewToken() bool {
 	return false
 }
 
-// getDefaultToken will use the default credentials in order to
-// fetch to fetch a new token.
-func (aps *AskPassServer) RetrieveNewToken(ctx context.Context) error {
+// RetrieveNewToken will use the default credentials in order to
+// fetch to fetch a new token.  Note the side effect that the
+// server token will be replaced in case of a successful retrieval.
+func (aps *Server) RetrieveNewToken(ctx context.Context) error {
 	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("error calling google.FindDefaultCredentials: %w", err)

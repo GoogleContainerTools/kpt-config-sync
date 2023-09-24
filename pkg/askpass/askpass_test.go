@@ -40,7 +40,7 @@ func TestCachedToken(t *testing.T) {
 		Expiry:       time.Now().Add(time.Second * 30),
 	}
 
-	aps := &AskPassServer{
+	aps := &Server{
 		Email: "foo@bar.com",
 		token: token,
 	}

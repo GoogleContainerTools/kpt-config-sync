@@ -91,7 +91,7 @@ func main() {
 			"ERROR: GSA email can not be empty")
 	}
 
-	aps := &askpass.AskPassServer{
+	aps := &askpass.Server{
 		Email: gsaEmail,
 	}
 	http.HandleFunc("/git_askpass", aps.GitAskPassHandler)

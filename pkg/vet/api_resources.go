@@ -57,13 +57,13 @@ func AddCachedAPIResources(file cmpath.Absolute) discovery.AddResourcesFunc {
 // the provided GKs their assigned scopes in the passed Scoper.
 //
 // data must begin with the header line, looking similar to:
-// NAME   SHORTNAMES   APIGROUP   NAMESPACED   KIND
+// NAME   SHORTNAMES   APIVERSION   NAMESPACED   KIND
 func addLines(scoper *discovery.Scoper, path cmpath.Absolute, data string) status.MultiError {
 	lines := strings.Split(data, "\n")
 
-	apiGroup := strings.Index(lines[0], "APIGROUP")
-	if apiGroup == -1 {
-		return MissingAPIGroup(path)
+	apiVersion := strings.Index(lines[0], "APIVERSION")
+	if apiVersion == -1 {
+		return MissingAPIVersion(path)
 	}
 	lines = lines[1:]
 	for _, line := range lines {
@@ -71,7 +71,7 @@ func addLines(scoper *discovery.Scoper, path cmpath.Absolute, data string) statu
 			// Ignore empty lines.
 			continue
 		}
-		err := addLine(scoper, path, line[apiGroup:])
+		err := addLine(scoper, path, line[apiVersion:])
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func addLines(scoper *discovery.Scoper, path cmpath.Absolute, data string) statu
 	return nil
 }
 
-// addLine parses a line of `kubectl api-resources` which only has the APIGROUP,
+// addLine parses a line of `kubectl api-resources` which only has the APIVERSION,
 // NAMESPACED, and KIND columns. The resulting GK are assigned the designated
 // scope in the passed Scoper.
 //
@@ -91,8 +91,10 @@ func addLine(scoper *discovery.Scoper, path cmpath.Absolute, line string) status
 	kind := fields[len(fields)-1]
 	namespaced := fields[len(fields)-2]
 	group := ""
-	if len(fields) > 2 {
-		group = fields[0]
+	// check whether APIVERSION contains group
+	field := strings.Split(fields[0], "/")
+	if len(field) == 2 {
+		group = field[0]
 	}
 
 	switch namespaced {
@@ -124,8 +126,8 @@ func InvalidScopeValue(path cmpath.Absolute, line, value string) status.Error {
 	return invalidAPIResourcesBuilder.Sprintf("invalid NAMESPACED column value %q in line:\n%s\n\nRe-run %q in the root policy directory", value, line, APIResourcesCommand).BuildWithPaths(path)
 }
 
-// MissingAPIGroup means that the api-resources.txt is either missing the header
-// row, or was generated with an option that omitted the APIGROUP column.
-func MissingAPIGroup(path cmpath.Absolute) status.Error {
-	return invalidAPIResourcesBuilder.Sprintf("unable to find APIGROUP column. Re-run %q in the root policy directory", APIResourcesCommand).BuildWithPaths(path)
+// MissingAPIVersion means that the api-resources.txt is either missing the header
+// row, or was generated with an option that omitted the APIVERSION column.
+func MissingAPIVersion(path cmpath.Absolute) status.Error {
+	return invalidAPIResourcesBuilder.Sprintf("unable to find APIVERSION column. Re-run %q in the root policy directory", APIResourcesCommand).BuildWithPaths(path)
 }

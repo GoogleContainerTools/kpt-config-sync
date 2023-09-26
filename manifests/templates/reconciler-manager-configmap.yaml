@@ -101,8 +101,8 @@ data:
                - NET_RAW
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v3.6.9-gke.2__linux_amd64
-           args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
+           image: gcr.io/config-management-release/git-sync:v4.0.0-gke.1__linux_amd64
+           args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
            volumeMounts:
            - name: repo
              mountPath: /repo

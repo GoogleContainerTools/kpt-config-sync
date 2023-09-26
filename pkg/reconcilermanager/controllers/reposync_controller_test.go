@@ -3667,7 +3667,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 			gitSyncKnownHosts: "false",
 			GitSyncRepo:       reposyncRepo,
 			GitSyncDepth:      "1",
-			gitSyncPeriod:     "15.000000",
+			gitSyncPeriod:     "15s",
 		},
 	}
 

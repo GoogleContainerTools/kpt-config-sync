@@ -3125,7 +3125,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			gitSyncKnownHosts: "false",
 			GitSyncRepo:       rootsyncRepo,
 			GitSyncDepth:      "1",
-			gitSyncPeriod:     "15.000000",
+			gitSyncPeriod:     "15s",
 		},
 	}
 

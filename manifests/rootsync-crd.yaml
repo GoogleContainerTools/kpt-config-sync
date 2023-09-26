@@ -87,7 +87,9 @@ spec:
                     - none
                     type: string
                   branch:
-                    description: 'branch is the git branch to checkout. Default: "master".'
+                    description: branch is the git branch to checkout. The field is
+                      deprecated. Use `revision` instead. If both `branch` and `revision`
+                      are defined, `revision` takes precedence over `branch`.
                     type: string
                   caCertSecretRef:
                     description: caCertSecretRef specifies the name of the secret
@@ -144,8 +146,8 @@ spec:
                     description: repo is the git repository URL to sync from. Required.
                     type: string
                   revision:
-                    description: 'revision is the git revision (tag, ref or commit)
-                      to fetch. Default: "HEAD".'
+                    description: 'revision is the git revision (branch, tag, ref or
+                      commit) to fetch. Default: "HEAD".'
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
@@ -1152,7 +1154,9 @@ spec:
                     - none
                     type: string
                   branch:
-                    description: 'branch is the git branch to checkout. Default: "master".'
+                    description: branch is the git branch to checkout. The field is
+                      deprecated. Use `revision` instead. If both `branch` and `revision`
+                      are defined, `revision` takes precedence over `branch`.
                     type: string
                   caCertSecretRef:
                     description: caCertSecretRef specifies the name of the secret
@@ -1208,8 +1212,8 @@ spec:
                     description: repo is the git repository URL to sync from. Required.
                     type: string
                   revision:
-                    description: 'revision is the git revision (tag, ref or commit)
-                      to fetch. Default: "HEAD".'
+                    description: 'revision is the git revision (branch, tag, ref or
+                      commit) to fetch. Default: "HEAD".'
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git

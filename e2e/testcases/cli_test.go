@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -1199,4 +1200,22 @@ func TestNomosStatusNameFilter(t *testing.T) {
 	if strings.Contains(string(out4), "bookinfo:crontab-sync") {
 		nt.T.Fatalf("Expected to not find bookinfo:crontab-sync component in output:\n%s\n", string(out4))
 	}
+}
+
+func TestApiResourceFormatting(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	// expected column name
+	var columnName = []string{"NAME", "SHORTNAMES", "APIVERSION", "NAMESPACED", "KIND"}
+
+	cmd := nt.Shell.Command("kubectl", "api-resources")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	header := strings.Fields(strings.Split(string(out), "\n")[0])
+
+	assert.Equal(t, columnName, header)
 }

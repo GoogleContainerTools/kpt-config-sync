@@ -301,7 +301,7 @@ func Generate() AllExamples {
 	p, _ := cmpath.AbsoluteSlash("/api-resources.txt")
 	result.add(vet.InvalidScopeValue(p, "rbac      other     Role", "other"))
 	result.add(vet.UnableToReadAPIResources(p, errors.New("missing file permissions")))
-	result.add(vet.MissingAPIGroup(p))
+	result.add(vet.MissingAPIVersion(p))
 
 	// 1065
 	result.add(clusterconfig.MalformedCRDError(

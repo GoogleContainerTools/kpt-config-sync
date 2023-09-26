@@ -32,38 +32,65 @@ func TestAddLines(t *testing.T) {
 	}{
 		{
 			name: "standard case",
-			lines: `NAME                              SHORTNAMES   APIGROUP                       NAMESPACED   KIND
-namespaces                        ns                                          false        Namespace
-deployments                       deploy       apps                           true         Deployment
-clusterroles                                   rbac.authorization.k8s.io      false        ClusterRole
-rolebindings                                   rbac.authorization.k8s.io      true         RoleBinding
+			lines: `NAME                              SHORTNAMES   APIVERSION                       NAMESPACED   KIND
+namespaces                        ns           v1                                     false        Namespace
+deployments                       deploy       apps/v1                                true         Deployment
+clusterroles                                   rbac.authorization.k8s.io/v1           false        ClusterRole
+rolebindings                                   rbac.authorization.k8s.io/v1           true         RoleBinding
+configmaps                        cm           v1                                     true         ConfigMap
+apiservices                                    apiregistration.k8s.io/v1              false        APIService
 `,
 			wantScopes: map[schema.GroupKind]discovery.ScopeType{
 				kinds.Namespace().GroupKind():   discovery.ClusterScope,
 				kinds.Deployment().GroupKind():  discovery.NamespaceScope,
 				kinds.ClusterRole().GroupKind(): discovery.ClusterScope,
 				kinds.RoleBinding().GroupKind(): discovery.NamespaceScope,
+				kinds.ConfigMap().GroupKind():   discovery.NamespaceScope,
+				kinds.APIService().GroupKind():  discovery.ClusterScope,
 			},
 			wantErr: nil,
 		},
 		{
-			name: "invalid line",
+			name: "incorrect column name",
 			lines: `NAME                              SHORTNAMES   APIGROUP                       NAMESPACED   KIND
-namespaces                        ns                                          other        Namespace
-deployments                       deploy       apps                           true         Deployment
-clusterroles                                   rbac.authorization.k8s.io      false        ClusterRole
-rolebindings                                   rbac.authorization.k8s.io      true         RoleBinding
+configmaps                        cm           v1                                     true         ConfigMap
+namespaces                        ns           v1                                     false        Namespace
+apiservices                                    apiregistration.k8s.io/v1              false        APIService
+deployments                       deploy       apps/v1                                true         Deployment
+namespaceselectors                             configmanagement.gke.io/v1             false        NamespaceSelector
+rootsyncs                                      configsync.gke.io/v1beta1              true         RootSync
+clusterroles                                   rbac.authorization.k8s.io/v1           false        ClusterRole
+poddisruptionbudgets              pdb          policy/v1                              true         PodDisruptionBudget
+`,
+			wantErr: MissingAPIVersion(""),
+		},
+		{
+			name: "invalid line",
+			lines: `NAME                              SHORTNAMES   APIVERSION                       NAMESPACED   KIND
+configmaps                        cm           v1                                     other         ConfigMap
+namespaces                        ns           v1                                     false        Namespace
+apiservices                                    apiregistration.k8s.io/v1              false        APIService
+deployments                       deploy       apps/v1                                true         Deployment
+namespaceselectors                             configmanagement.gke.io/v1             false        NamespaceSelector
+rootsyncs                                      configsync.gke.io/v1beta1              true         RootSync
+clusterroles                                   rbac.authorization.k8s.io/v1           false        ClusterRole
+poddisruptionbudgets              pdb          policy/v1                              true         PodDisruptionBudget 
 `,
 			wantErr: InvalidScopeValue("", "", "other"),
 		},
 		{
 			name: "missing first line",
 			lines: `namespaces                        ns                                          false        Namespace
-deployments                       deploy       apps                           true         Deployment
-clusterroles                                   rbac.authorization.k8s.io      false        ClusterRole
-rolebindings                                   rbac.authorization.k8s.io      true         RoleBinding
+configmaps                        cm           v1                                     true         ConfigMap
+namespaces                        ns           v1                                     false        Namespace
+apiservices                                    apiregistration.k8s.io/v1              false        APIService
+deployments                       deploy       apps/v1                                true         Deployment
+namespaceselectors                             configmanagement.gke.io/v1             false        NamespaceSelector
+rootsyncs                                      configsync.gke.io/v1beta1              true         RootSync
+clusterroles                                   rbac.authorization.k8s.io/v1           false        ClusterRole
+poddisruptionbudgets              pdb          policy/v1                              true         PodDisruptionBudget 
 `,
-			wantErr: MissingAPIGroup(""),
+			wantErr: MissingAPIVersion(""),
 		},
 	}
 
@@ -100,28 +127,28 @@ func TestAddLine(t *testing.T) {
 	}{
 		{
 			name:      "cluster-scoped type",
-			line:      "rbac.authorization.k8s.io      false        ClusterRole",
+			line:      "rbac.authorization.k8s.io/v1      false        ClusterRole",
 			wantErr:   nil,
 			groupKind: kinds.ClusterRole().GroupKind(),
 			wantScope: discovery.ClusterScope,
 		},
 		{
 			name:      "namespace-scoped type",
-			line:      "apps                           true         Deployment",
+			line:      "apps/v1                        true         Deployment",
 			wantErr:   nil,
 			groupKind: kinds.Deployment().GroupKind(),
 			wantScope: discovery.NamespaceScope,
 		},
 		{
 			name:      "core API group",
-			line:      "                               false        Namespace",
+			line:      "v1                             false        Namespace",
 			wantErr:   nil,
 			groupKind: kinds.Namespace().GroupKind(),
 			wantScope: discovery.ClusterScope,
 		},
 		{
 			name:      "invalid scope",
-			line:      "                               other        Namespace",
+			line:      "v1                             other        Namespace",
 			wantErr:   InvalidScopeValue("", "", "other"),
 			groupKind: kinds.Namespace().GroupKind(),
 			wantScope: discovery.UnknownScope,

@@ -1217,10 +1217,5 @@ func TestApiResourceFormatting(t *testing.T) {
 
 	header := strings.Fields(strings.Split(string(out), "\n")[0])
 
-	assert.Equal(t, len(columnName), len(header))
-
-	for i, column := range header {
-		assert.Equal(t, columnName[i], column)
-
-	}
+	assert.Equal(t, columnName, header)
 }

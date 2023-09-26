@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -1216,13 +1217,10 @@ func TestApiResourceFormatting(t *testing.T) {
 
 	header := strings.Fields(strings.Split(string(out), "\n")[0])
 
-	if len(header) != len(columnName) {
-		nt.T.Fatalf("Number of column titles doesn't match expected result")
-	}
+	assert.Equal(t, len(columnName), len(header))
 
 	for i, column := range header {
-		if column != columnName[i] {
-			nt.T.Fatalf("%s not found in the column titles", column)
-		}
+		assert.Equal(t, columnName[i], column)
+
 	}
 }

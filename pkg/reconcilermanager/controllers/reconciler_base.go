@@ -293,13 +293,14 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 
 // deleteDeploymentFields delete all the fields in allowlist from unstructured object and convert the unstructured object to Deployment object
 func deleteDeploymentFields(allowList []string, unstructuredDeployment *unstructured.Unstructured) (*appsv1.Deployment, error) {
+	deploymentDeepCopy := unstructuredDeployment.DeepCopy()
 	for _, path := range allowList {
-		if err := deleteFields(unstructuredDeployment.Object, path); err != nil {
+		if err := deleteFields(deploymentDeepCopy.Object, path); err != nil {
 			return nil, err
 		}
 	}
 	var resultDeployment appsv1.Deployment
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredDeployment.Object, &resultDeployment); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(deploymentDeepCopy.Object, &resultDeployment); err != nil {
 		return nil, fmt.Errorf("failed to convert from current reconciler unstructured object to deployment object: %w", err)
 	}
 	return &resultDeployment, nil

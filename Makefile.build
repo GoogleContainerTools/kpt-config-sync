@@ -106,6 +106,13 @@ build-images: install-helm install-kustomize
 		-f build/all/Dockerfile \
 		--build-arg VERSION=${VERSION} \
 		.
+	@echo "+++ Building the Askpass image: $(ASKPASS_TAG)"
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
+		--target $(ASKPASS_IMAGE) \
+		-t $(ASKPASS_TAG) \
+		-f build/all/Dockerfile \
+		--build-arg VERSION=${VERSION} \
+		.
 	@echo "+++ Building the Nomos image: $(NOMOS_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(NOMOS_IMAGE) \
@@ -133,6 +140,7 @@ push-images:
 	docker push $(OCI_SYNC_TAG)
 	docker push $(HELM_SYNC_TAG)
 	docker push $(NOMOS_TAG)
+	docker push $(ASKPASS_TAG)
 
 # Deprecated alias of push-images. Remove this once unused.
 .PHONY: push-images-multirepo
@@ -150,6 +158,7 @@ pull-images:
 	docker pull $(OCI_SYNC_TAG)
 	docker pull $(HELM_SYNC_TAG)
 	docker pull $(NOMOS_TAG)
+	docker pull $(ASKPASS_TAG)
 
 # Deprecated alias of pull-images. Remove this once unused.
 .PHONY: pull-images-multirepo
@@ -167,6 +176,7 @@ retag-images:
 	docker tag $(OLD_REGISTRY)/$(OCI_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(OCI_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(HELM_SYNC_IMAGE):$(OLD_IMAGE_TAG) $(HELM_SYNC_TAG)
 	docker tag $(OLD_REGISTRY)/$(NOMOS_IMAGE):$(OLD_IMAGE_TAG) $(NOMOS_TAG)
+	docker tag $(OLD_REGISTRY)/$(ASKPASS_IMAGE):$(OLD_IMAGE_TAG) $(ASKPASS_TAG)
 
 # Deprecated alias of retag-images. Remove this once unused.
 .PHONY: retag-images-multirepo
@@ -192,6 +202,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
+	@ echo "    $(ASKPASS_IMAGE): $(ASKPASS_TAG)"
 	@ rm -f $(OSS_MANIFEST_STAGING_DIR)/*
 	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
 		| sed \
@@ -200,6 +211,7 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 			-e "s|HELM_SYNC_IMAGE_NAME|$(HELM_SYNC_TAG)|g" \
 			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
+			-e "s|ASKPASS_IMAGE_NAME|$(ASKPASS_TAG)|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 
@@ -224,6 +236,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_
 	@ echo "    $(ADMISSION_WEBHOOK_IMAGE): $(ADMISSION_WEBHOOK_TAG)"
 	@ echo "    $(OCI_SYNC_IMAGE): $(OCI_SYNC_TAG)"
 	@ echo "    $(HELM_SYNC_IMAGE): $(HELM_SYNC_TAG)"
+	@ echo "    $(ASKPASS_IMAGE): $(ASKPASS_TAG)"
 	@ rm -f $(NOMOS_MANIFEST_STAGING_DIR)/*
 	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
 		| sed \
@@ -233,6 +246,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_
 			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
 			-e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
+			-e "s|ASKPASS_IMAGE_NAME|$(ASKPASS_TAG)|g" \
 		> $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 

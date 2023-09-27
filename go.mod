@@ -3,6 +3,7 @@ module kpt.dev/configsync
 go 1.20
 
 require (
+	cloud.google.com/go/compute/metadata v0.2.3
 	cloud.google.com/go/monitoring v1.8.0
 	cloud.google.com/go/trace v1.4.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
@@ -62,7 +63,6 @@ require (
 
 require (
 	cloud.google.com/go/compute v1.18.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/BurntSushi/toml v1.0.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect

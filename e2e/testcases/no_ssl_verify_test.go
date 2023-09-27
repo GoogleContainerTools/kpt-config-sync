@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -39,7 +40,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	key := "GIT_SSL_NO_VERIFY"
+	key := controllers.GitSSLNoVerify
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
 		Namespace: v1.NSConfigManagementSystem,
@@ -118,7 +119,7 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	key := "GIT_SSL_NO_VERIFY"
+	key := controllers.GitSSLNoVerify
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
 		Namespace: v1.NSConfigManagementSystem,

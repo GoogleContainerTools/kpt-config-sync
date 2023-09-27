@@ -42,7 +42,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	key := "GIT_SYNC_DEPTH"
+	key := controllers.GitSyncDepth
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
 		Namespace: v1.NSConfigManagementSystem,
@@ -140,7 +140,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	key := "GIT_SYNC_DEPTH"
+	key := controllers.GitSyncDepth
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
 		Namespace: v1.NSConfigManagementSystem,

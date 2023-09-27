@@ -246,6 +246,7 @@ build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_
 			-e "s|HYDRATION_CONTROLLER_IMAGE_NAME|$(HYDRATION_CONTROLLER_TAG)|g" \
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(RECONCILER_MANAGER_TAG)|g" \
 			-e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
+			-e "s|ASKPASS_IMAGE_NAME|$(ASKPASS_TAG)|g" \
 		> $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(GOBIN)/addlicense" $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 

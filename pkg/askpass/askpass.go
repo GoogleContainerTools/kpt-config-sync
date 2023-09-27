@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package askpass is designed ot be used in the askpass sidecar
+// Package askpass is designed to be used in the askpass sidecar
 // to provide GSA authentication services.
 package askpass
 
@@ -38,8 +38,8 @@ type Server struct {
 func (aps *Server) GitAskPassHandler(w http.ResponseWriter, r *http.Request) {
 	klog.Infof("handling new askpass request from host: %s", r.Host)
 
-	if aps.NeedNewToken() {
-		err := aps.RetrieveNewToken(r.Context())
+	if aps.needNewToken() {
+		err := aps.retrieveNewToken(r.Context())
 		if err != nil {
 			klog.Error(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -60,9 +60,9 @@ func (aps *Server) GitAskPassHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// NeedNewToken will tell us if we have an Oauth2 token that is
+// needNewToken will tell us if we have an Oauth2 token that is
 // has not expired yet.
-func (aps *Server) NeedNewToken() bool {
+func (aps *Server) needNewToken() bool {
 	if aps.token == nil {
 		return true
 	}
@@ -74,10 +74,10 @@ func (aps *Server) NeedNewToken() bool {
 	return false
 }
 
-// RetrieveNewToken will use the default credentials in order to
+// retrieveNewToken will use the default credentials in order to
 // fetch to fetch a new token.  Note the side effect that the
 // server token will be replaced in case of a successful retrieval.
-func (aps *Server) RetrieveNewToken(ctx context.Context) error {
+func (aps *Server) retrieveNewToken(ctx context.Context) error {
 	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("error calling google.FindDefaultCredentials: %w", err)

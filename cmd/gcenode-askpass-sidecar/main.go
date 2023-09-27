@@ -75,7 +75,7 @@ func main() {
 
 	var gsaEmail string
 	var err error
-	// for getting the GSA email we have several sceanarios
+	// for getting the GSA email we have several scenarios
 	// the first one is that the user provides it to us.
 	// the second scenario is that it's not provided but we can get the
 	// Compute Engine default service account from the metadata server.

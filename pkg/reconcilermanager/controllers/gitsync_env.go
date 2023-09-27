@@ -26,9 +26,39 @@ import (
 
 const (
 	// git-sync container specific environment variables.
-	gitSyncName       = "GIT_SYNC_USERNAME"
-	gitSyncPassword   = "GIT_SYNC_PASSWORD"
+
+	// gitSyncUsername represents the environment variable key for specifying the username to use for git auth.
+	gitSyncUsername = "GIT_SYNC_USERNAME"
+	// gitSyncPassword represents the environment variable key for specifying the password to use for git auth.
+	gitSyncPassword = "GIT_SYNC_PASSWORD"
+	// gitSyncHTTPSProxy represents the environment variable key for setting `HTTPS_PROXY` in git-sync.
 	gitSyncHTTPSProxy = "HTTPS_PROXY"
+	// GitSyncRepo represents the environment variable key for specifying the Git repository to sync.
+	GitSyncRepo = "GIT_SYNC_REPO"
+	// gitSyncBranch represents the environment variable key for specifying the Git branch to sync.
+	gitSyncBranch = "GIT_SYNC_BRANCH"
+	// gitSyncRev represents the environment variable key for specifying the Git revision to sync.
+	gitSyncRev = "GIT_SYNC_REV"
+	// GitSyncDepth represents the environment variable key for setting the depth of the Git clone, truncating history to a specific number of commits.
+	GitSyncDepth = "GIT_SYNC_DEPTH"
+	// gitSyncPeriod represents the environment variable key for specifying the sync interval duration.
+	gitSyncPeriod = "GIT_SYNC_WAIT"
+
+	// gitSyncSSH represents the environment variable key for specifying the SSH key to use.
+	gitSyncSSH = "GIT_SYNC_SSH"
+	// gitSyncAskpassURL represents the environment variable key for the URL used to query git credentials.
+	gitSyncAskpassURL = "GIT_ASKPASS_URL"
+
+	// gitSyncCookieFile represents the environment variable key for specifying the use of a git cookiefile.
+	gitSyncCookieFile = "GIT_COOKIE_FILE"
+
+	// GitSSLCAInfo represents the environment variable key for SSL certificates.
+	GitSSLCAInfo = "GIT_SSL_CAINFO"
+
+	// gitSyncKnownHosts represents the environment variable key for GIT_KNOWN_HOSTS.
+	gitSyncKnownHosts = "GIT_KNOWN_HOSTS"
+	// GitSSLNoVerify represents the environment variable key for GIT_SSL_NO_VERIFY.
+	GitSSLNoVerify = "GIT_SSL_NO_VERIFY"
 
 	// DefaultSyncRev is the default git revision.
 	DefaultSyncRev = "HEAD"
@@ -69,7 +99,7 @@ type options struct {
 
 // gitSyncTokenAuthEnv returns environment variables for git-sync container for 'token' Auth.
 func gitSyncTokenAuthEnv(secretRef string) []corev1.EnvVar {
-	gitSyncUsername := &corev1.EnvVarSource{
+	username := &corev1.EnvVarSource{
 		SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: secretRef,
@@ -78,7 +108,7 @@ func gitSyncTokenAuthEnv(secretRef string) []corev1.EnvVar {
 		},
 	}
 
-	gitSyncPswd := &corev1.EnvVarSource{
+	passwd := &corev1.EnvVarSource{
 		SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: secretRef,
@@ -89,12 +119,12 @@ func gitSyncTokenAuthEnv(secretRef string) []corev1.EnvVar {
 
 	return []corev1.EnvVar{
 		{
-			Name:      gitSyncName,
-			ValueFrom: gitSyncUsername,
+			Name:      gitSyncUsername,
+			ValueFrom: username,
 		},
 		{
 			Name:      gitSyncPassword,
-			ValueFrom: gitSyncPswd,
+			ValueFrom: passwd,
 		},
 	}
 }
@@ -131,23 +161,23 @@ func useCACert(caCertSecretRef string) bool {
 func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	result = append(result, corev1.EnvVar{
-		Name:  "GIT_SYNC_REPO",
+		Name:  GitSyncRepo,
 		Value: opts.repo,
 	})
 	// disable known_hosts checking because it provides no benefit for our use case.
 	result = append(result, corev1.EnvVar{
-		Name:  "GIT_KNOWN_HOSTS",
+		Name:  gitSyncKnownHosts,
 		Value: "false",
 	})
 	if opts.noSSLVerify {
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SSL_NO_VERIFY",
+			Name:  GitSSLNoVerify,
 			Value: "true",
 		})
 	}
 	if useCACert(opts.caCertSecretRef) {
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SSL_CAINFO",
+			Name:  GitSSLCAInfo,
 			Value: fmt.Sprintf("%s/%s", CACertPath, CACertSecretKey),
 		})
 	}
@@ -155,7 +185,7 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 		// git-sync would do a shallow clone if *opts.depth > 0;
 		// git-sync would do a full clone if *opts.depth == 0.
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SYNC_DEPTH",
+			Name:  GitSyncDepth,
 			Value: strconv.FormatInt(*opts.depth, 10),
 		})
 	} else {
@@ -170,48 +200,48 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 		// See b/175088702 and b/158988143
 		if opts.ref == "" || opts.ref == DefaultSyncRev {
 			result = append(result, corev1.EnvVar{
-				Name:  "GIT_SYNC_DEPTH",
+				Name:  GitSyncDepth,
 				Value: SyncDepthNoRev,
 			})
 		} else {
 			result = append(result, corev1.EnvVar{
-				Name:  "GIT_SYNC_DEPTH",
+				Name:  GitSyncDepth,
 				Value: SyncDepthRev,
 			})
 		}
 	}
 	result = append(result, corev1.EnvVar{
-		Name:  "GIT_SYNC_WAIT",
+		Name:  gitSyncPeriod,
 		Value: fmt.Sprintf("%f", opts.period),
 	})
 	// When branch and ref not set in RootSync/RepoSync then dont set GIT_SYNC_BRANCH
 	// and GIT_SYNC_REV, git-sync will use the default values for them.
 	if opts.branch != "" {
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SYNC_BRANCH",
+			Name:  gitSyncBranch,
 			Value: opts.branch,
 		})
 	}
 	if opts.ref != "" {
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SYNC_REV",
+			Name:  gitSyncRev,
 			Value: opts.ref,
 		})
 	}
 	switch opts.secretType {
 	case configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_ASKPASS_URL",
+			Name:  gitSyncAskpassURL,
 			Value: gceNodeAskpassURL,
 		})
 	case configsync.AuthSSH:
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_SYNC_SSH",
+			Name:  gitSyncSSH,
 			Value: "true",
 		})
 	case configsync.AuthCookieFile:
 		result = append(result, corev1.EnvVar{
-			Name:  "GIT_COOKIE_FILE",
+			Name:  gitSyncCookieFile,
 			Value: "true",
 		})
 
@@ -219,7 +249,7 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 	case GitSecretConfigKeyToken, "", configsync.AuthNone:
 		if opts.proxy != "" {
 			result = append(result, corev1.EnvVar{
-				Name:  "HTTPS_PROXY",
+				Name:  gitSyncHTTPSProxy,
 				Value: opts.proxy,
 			})
 		}

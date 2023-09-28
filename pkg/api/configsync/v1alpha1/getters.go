@@ -14,19 +14,6 @@
 
 package v1alpha1
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
-)
-
-// GetPeriodSecs returns the sync period defaulting to 15 if empty.
-func GetPeriodSecs(g *Git) float64 {
-	if g.Period.Duration == 0 {
-		return configsync.DefaultReconcilerPollingPeriodSeconds
-	}
-	return g.Period.Duration.Seconds()
-}
-
 // SafeOverride creates an override or returns an existing one
 // use it if you need to ensure that you are assigning
 // to an object, but not to test for nil (current existence)
@@ -45,12 +32,4 @@ func (rs *RootSyncSpec) SafeOverride() *RootSyncOverrideSpec {
 		rs.Override = &RootSyncOverrideSpec{}
 	}
 	return rs.Override
-}
-
-// GetReconcileTimeout returns reconcile timeout in string, defaulting to 5m if empty
-func GetReconcileTimeout(d *metav1.Duration) string {
-	if d == nil || d.Duration == 0 {
-		return configsync.DefaultReconcileTimeout.String()
-	}
-	return d.Duration.String()
 }

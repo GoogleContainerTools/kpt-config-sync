@@ -683,7 +683,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			branch:          rs.Spec.Git.Branch,
 			repo:            rs.Spec.Git.Repo,
 			secretType:      rs.Spec.Git.Auth,
-			period:          v1beta1.GetPeriodSecs(rs.Spec.Git.Period, configsync.DefaultReconcilerPollingPeriodSeconds),
+			period:          v1beta1.GetPeriod(rs.Spec.Git.Period, configsync.DefaultReconcilerPollingPeriod),
 			proxy:           rs.Spec.Proxy,
 			depth:           rs.Spec.SafeOverride().GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
@@ -693,7 +693,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
 	case v1beta1.OciSource:
-		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriodSecs(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriodSeconds))
+		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds())
 	case v1beta1.HelmSource:
 		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Spec.Helm.Namespace, rs.Spec.Helm.DeployNamespace)
 	}

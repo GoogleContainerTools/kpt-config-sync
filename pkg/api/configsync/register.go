@@ -52,17 +52,13 @@ const (
 	// TODO: replace with retry-backoff strategy
 	DefaultHydrationRetryPeriod = 30 * time.Minute
 
-	// DefaultReconcilerPollingPeriodSeconds is time delay between polling the
-	// filesystem for source updates to sync, in seconds.
-	DefaultReconcilerPollingPeriodSeconds = 15
-
 	// DefaultHelmSyncVersionPollingPeriod is time delay between polling for
 	// helm chart version updates in helm-sync.
 	DefaultHelmSyncVersionPollingPeriod = 1 * time.Hour
 
 	// DefaultReconcilerPollingPeriod is the time delay between polling the
 	// filesystem for source updates to sync.
-	DefaultReconcilerPollingPeriod = DefaultReconcilerPollingPeriodSeconds * time.Second
+	DefaultReconcilerPollingPeriod = 15 * time.Second
 
 	// DefaultReconcilerResyncPeriod is the time delay between forced re-syncs
 	// from source (even without a new commit).

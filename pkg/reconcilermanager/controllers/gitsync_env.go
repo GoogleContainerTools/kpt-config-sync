@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -28,35 +29,33 @@ const (
 	// git-sync container specific environment variables.
 
 	// gitSyncUsername represents the environment variable key for specifying the username to use for git auth.
-	gitSyncUsername = "GIT_SYNC_USERNAME"
+	gitSyncUsername = "GITSYNC_USERNAME"
 	// gitSyncPassword represents the environment variable key for specifying the password to use for git auth.
-	gitSyncPassword = "GIT_SYNC_PASSWORD"
+	gitSyncPassword = "GITSYNC_PASSWORD"
 	// gitSyncHTTPSProxy represents the environment variable key for setting `HTTPS_PROXY` in git-sync.
 	gitSyncHTTPSProxy = "HTTPS_PROXY"
 	// GitSyncRepo represents the environment variable key for specifying the Git repository to sync.
-	GitSyncRepo = "GIT_SYNC_REPO"
-	// gitSyncBranch represents the environment variable key for specifying the Git branch to sync.
-	gitSyncBranch = "GIT_SYNC_BRANCH"
-	// gitSyncRev represents the environment variable key for specifying the Git revision to sync.
-	gitSyncRev = "GIT_SYNC_REV"
+	GitSyncRepo = "GITSYNC_REPO"
+	// gitSyncRef represents the environment variable key for specifying the Git revision to sync.
+	gitSyncRef = "GITSYNC_REF"
 	// GitSyncDepth represents the environment variable key for setting the depth of the Git clone, truncating history to a specific number of commits.
-	GitSyncDepth = "GIT_SYNC_DEPTH"
+	GitSyncDepth = "GITSYNC_DEPTH"
 	// gitSyncPeriod represents the environment variable key for specifying the sync interval duration.
-	gitSyncPeriod = "GIT_SYNC_WAIT"
+	gitSyncPeriod = "GITSYNC_PERIOD"
 
 	// gitSyncSSH represents the environment variable key for specifying the SSH key to use.
-	gitSyncSSH = "GIT_SYNC_SSH"
+	gitSyncSSH = "GITSYNC_SSH"
 	// gitSyncAskpassURL represents the environment variable key for the URL used to query git credentials.
-	gitSyncAskpassURL = "GIT_ASKPASS_URL"
+	gitSyncAskpassURL = "GITSYNC_ASKPASS_URL"
 
 	// gitSyncCookieFile represents the environment variable key for specifying the use of a git cookiefile.
-	gitSyncCookieFile = "GIT_COOKIE_FILE"
+	gitSyncCookieFile = "GITSYNC_COOKIE_FILE"
 
 	// GitSSLCAInfo represents the environment variable key for SSL certificates.
 	GitSSLCAInfo = "GIT_SSL_CAINFO"
 
 	// gitSyncKnownHosts represents the environment variable key for GIT_KNOWN_HOSTS.
-	gitSyncKnownHosts = "GIT_KNOWN_HOSTS"
+	gitSyncKnownHosts = "GITSYNC_SSH_KNOWN_HOSTS"
 	// GitSSLNoVerify represents the environment variable key for GIT_SSL_NO_VERIFY.
 	GitSSLNoVerify = "GIT_SSL_NO_VERIFY"
 
@@ -87,8 +86,8 @@ type options struct {
 	secretType configsync.AuthType
 	// proxy used to connect to the repo.
 	proxy string
-	// period is the time in seconds between consecutive syncs.
-	period float64
+	// period is the time duration between consecutive syncs.
+	period time.Duration
 	// depth is the number of git commits to sync.
 	depth *int64
 	// noSSLVerify specifies whether to skip the SSL certificate verification in Git.
@@ -212,20 +211,20 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 	}
 	result = append(result, corev1.EnvVar{
 		Name:  gitSyncPeriod,
-		Value: fmt.Sprintf("%f", opts.period),
+		Value: opts.period.String(),
 	})
-	// When branch and ref not set in RootSync/RepoSync then dont set GIT_SYNC_BRANCH
-	// and GIT_SYNC_REV, git-sync will use the default values for them.
-	if opts.branch != "" {
-		result = append(result, corev1.EnvVar{
-			Name:  gitSyncBranch,
-			Value: opts.branch,
-		})
-	}
+	// When branch and ref not set in RootSync/RepoSync then dont set GITSYNC_REF,
+	// git-sync will use the default values for them.
+	// Both opts.ref and opts.branch map to GITSYNC_REF, but opts.ref takes precedence over opts.branch.
 	if opts.ref != "" {
 		result = append(result, corev1.EnvVar{
-			Name:  gitSyncRev,
+			Name:  gitSyncRef,
 			Value: opts.ref,
+		})
+	} else if opts.branch != "" {
+		result = append(result, corev1.EnvVar{
+			Name:  gitSyncRef,
+			Value: opts.branch,
 		})
 	}
 	switch opts.secretType {

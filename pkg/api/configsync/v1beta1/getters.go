@@ -15,17 +15,19 @@
 package v1beta1
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// GetPeriodSecs returns the sync period defaulting to the provided defaultPeriod if empty.
-func GetPeriodSecs(period metav1.Duration, defaultPeriod float64) float64 {
+// GetPeriod returns the sync period defaulting to the provided defaultPeriod if empty.
+func GetPeriod(period metav1.Duration, defaultPeriod time.Duration) time.Duration {
 	if period.Duration == 0 {
 		return defaultPeriod
 	}
-	return period.Duration.Seconds()
+	return period.Duration
 }
 
 // GetSecretName will return an empty string if the secretRef.name is

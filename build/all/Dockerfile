@@ -33,7 +33,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/hydration-controller \
     ./cmd/admission-webhook \
     ./cmd/oci-sync \
-    ./cmd/helm-sync
+    ./cmd/helm-sync \
+    ./cmd/gcenode-askpass-sidecar
 
 # Concatenate vendored licenses into LICENSES.txt
 # Built in the container to include binary licenses (helm & kustomize)
@@ -128,6 +129,15 @@ COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
 ENTRYPOINT ["/admission-webhook"]
+
+# Askpass image
+FROM gcr.io/distroless/static:nonroot as gcenode-askpass-sidecar
+WORKDIR /
+COPY --from=bins /go/bin/gcenode-askpass-sidecar gcenode-askpass-sidecar
+COPY --from=bins /workspace/LICENSE LICENSE
+COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
+USER nonroot:nonroot
+ENTRYPOINT ["/gcenode-askpass-sidecar"]
 
 # Nomos image
 # Not used by Config Sync backend components. Intended for use cases with the

@@ -514,6 +514,74 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 	declared := yamlToDeployment(t, declaredDeployment)
 	currentDeploymentUnstructured := yamlToUnstructured(t, currentDeployment)
 	testCases := map[string]struct {
+		declared      *appsv1.Deployment
+		current       *unstructured.Unstructured
+		isAutopilot   bool
+		expectedSame  bool
+		expectedPatch string
+	}{
+		"Deployment should preserve custom tolerations for non-Autopilot": {
+			declared: func() *appsv1.Deployment {
+				deploymentCopy := declared.DeepCopy()
+				// tolerations are ignored in the equality check to allow drift.
+				// Set a non-ignored field to assert dataToPatch (label)
+				deploymentCopy.Labels["test-data"] = "true"
+				// This test case ensures that custom tolerations are persisted in the
+				// Deployment patch. Tolerations are not set in the default deployment,
+				// but can be set by users by patching the reconciler-manager-cm ConfigMap.
+				// A previous bug in the allowList logic caused tolerations to be dropped.
+				deploymentCopy.Spec.Template.Spec.Tolerations = []corev1.Toleration{
+					{
+						Key: "foo",
+					},
+				}
+				return deploymentCopy
+			}(),
+			current:       currentDeploymentUnstructured,
+			isAutopilot:   false,
+			expectedSame:  false,
+			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","livenessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"readinessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
+		},
+		"Deployment should preserve custom tolerations for Autopilot": {
+			declared: func() *appsv1.Deployment {
+				deploymentCopy := declared.DeepCopy()
+				// tolerations are ignored in the equality check to allow drift.
+				// Set a non-ignored field to assert dataToPatch (label)
+				deploymentCopy.Labels["test-data"] = "true"
+				// This test case ensures that custom tolerations are persisted in the
+				// Deployment patch. Tolerations are not set in the default deployment,
+				// but can be set by users by patching the reconciler-manager-cm ConfigMap.
+				// A previous bug in the allowList logic caused tolerations to be dropped.
+				deploymentCopy.Spec.Template.Spec.Tolerations = []corev1.Toleration{
+					{
+						Key: "foo",
+					},
+				}
+				return deploymentCopy
+			}(),
+			current:       currentDeploymentUnstructured,
+			isAutopilot:   true,
+			expectedSame:  false,
+			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","livenessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"readinessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			testDeclared := tc.declared.DeepCopy()
+			testCurrent := tc.current.DeepCopy()
+			dep, err := compareDeploymentsToCreatePatchData(tc.isAutopilot, testDeclared, testCurrent, reconcilerManagerAllowList, core.Scheme)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedSame, dep.same)
+			require.Equal(t, tc.expectedPatch, string(dep.dataToPatch))
+		})
+	}
+}
+
+func TestCompareDeploymentsToCreatePatchDataResourceLimits(t *testing.T) {
+	declared := yamlToDeployment(t, declaredDeployment)
+	currentDeploymentUnstructured := yamlToUnstructured(t, currentDeployment)
+	testCases := map[string]struct {
 		declared          *appsv1.Deployment
 		current           *unstructured.Unstructured
 		isAutopilot       bool

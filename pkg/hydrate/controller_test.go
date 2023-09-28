@@ -16,12 +16,14 @@ package hydrate
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
@@ -34,6 +36,160 @@ const (
 	// kustomization is a minimal kustomization.yaml file that passes validation
 	kustomization = "namespace: test-ns"
 )
+
+func TestSourceCommitAndDirWithRetry(t *testing.T) {
+	commit := "abcd123"
+	syncDir := "configs"
+	testCases := []struct {
+		name                 string
+		retryCap             time.Duration
+		srcRootCreateLatency time.Duration
+		symlinkCreateLatency time.Duration
+		syncDir              string
+		errFileExists        bool
+		errFileContent       string
+		expectedSourceCommit string
+		expectedErrMsg       string
+	}{
+		{
+			name:                 "source root directory isn't created within the retry cap",
+			retryCap:             5 * time.Millisecond,
+			srcRootCreateLatency: 10 * time.Millisecond,
+			expectedErrMsg:       "failed to check the status of the source root directory",
+		},
+		{
+			name:                 "source root directory created within the retry cap",
+			retryCap:             10 * time.Millisecond,
+			srcRootCreateLatency: time.Millisecond,
+			expectedSourceCommit: commit,
+		},
+		{
+			name:                 "symlink isn't created within the retry cap",
+			retryCap:             5 * time.Millisecond,
+			symlinkCreateLatency: 10 * time.Millisecond,
+			expectedErrMsg:       "failed to evaluate the source rev directory",
+		},
+		{
+			name:                 "symlink created within the retry cap",
+			retryCap:             10 * time.Millisecond,
+			symlinkCreateLatency: 5 * time.Millisecond,
+			expectedSourceCommit: commit,
+		},
+		{
+			name:           "error file exists with empty content",
+			retryCap:       10 * time.Millisecond,
+			errFileExists:  true,
+			expectedErrMsg: "is empty. Please check git-sync logs for more info",
+		},
+		{
+			name:           "error file exists with non-empty content",
+			retryCap:       10 * time.Millisecond,
+			errFileExists:  true,
+			errFileContent: "git-sync error",
+			expectedErrMsg: "git-sync error",
+		},
+		{
+			name:           "sync directory doesn't exist",
+			retryCap:       10 * time.Millisecond,
+			syncDir:        "unknown",
+			expectedErrMsg: "failed to evaluate the config directory",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			backoff := wait.Backoff{
+				Duration: time.Millisecond,
+				Factor:   2,
+				Steps:    10,
+				Cap:      tc.retryCap,
+				Jitter:   0.1,
+			}
+
+			srcRootDir := filepath.Join(os.TempDir(), "test-srcCommit-syncDir", rand.String(10))
+			commitDir := filepath.Join(srcRootDir, commit)
+			if len(tc.syncDir) == 0 {
+				tc.syncDir = syncDir
+			}
+			t.Cleanup(func() {
+				if err := os.RemoveAll(srcRootDir); err != nil {
+					t.Errorf("failed to remove source root directory: %v", err)
+				}
+			})
+
+			// Simulating the creation of source configs and errors in the background
+			doneCh := make(chan struct{})
+			go func() {
+				defer close(doneCh)
+				err := func() error {
+					srcRootDirCreated := false
+					// Create the source root directory conditionally with latency
+					if tc.srcRootCreateLatency > 0 {
+						t.Logf("sleeping for %q before creating source root directory %q", tc.srcRootCreateLatency, srcRootDir)
+						time.Sleep(tc.srcRootCreateLatency)
+					}
+					if tc.srcRootCreateLatency <= tc.retryCap {
+						if err := os.MkdirAll(srcRootDir, 0700); err != nil {
+							return fmt.Errorf("failed to create source root directory %q: %v", srcRootDir, err)
+						}
+						srcRootDirCreated = true
+						t.Logf("source root directory %q created at %v", srcRootDir, time.Now())
+					}
+
+					// Create the error file based on the test condition
+					if srcRootDirCreated && tc.errFileExists {
+						errFilePath := filepath.Join(srcRootDir, ErrorFile)
+						if err := os.WriteFile(errFilePath, []byte(tc.errFileContent), 0644); err != nil {
+							return fmt.Errorf("failed to write to error file %q: %v", errFilePath, err)
+						}
+					}
+
+					// Create the symlink conditionally with latency
+					if tc.symlinkCreateLatency > 0 {
+						t.Logf("sleeping for %q before creating the symlink %q", tc.symlinkCreateLatency, srcRootDir)
+						time.Sleep(tc.symlinkCreateLatency)
+					}
+					if srcRootDirCreated && tc.symlinkCreateLatency <= tc.retryCap {
+						if err := os.Mkdir(commitDir, os.ModePerm); err != nil {
+							return fmt.Errorf("failed to create the commit directory %q: %v", commitDir, err)
+						}
+						// Create the sync directory if syncDir is the same as tc.syncDir
+						if tc.syncDir == syncDir {
+							syncDirPath := filepath.Join(commitDir, syncDir)
+							if err := os.Mkdir(syncDirPath, os.ModePerm); err != nil {
+								return fmt.Errorf("failed to create the sync directory %q: %v", syncDirPath, err)
+							}
+							t.Logf("sync directory %q created at %v", syncDirPath, time.Now())
+						}
+						symDir := filepath.Join(srcRootDir, "rev")
+						if err := os.Symlink(commitDir, symDir); err != nil {
+							return fmt.Errorf("failed to create the symlink %q: %v", symDir, err)
+						}
+						t.Logf("symlink %q created and linked to %q at %v", symDir, commitDir, time.Now())
+					}
+					return nil
+				}()
+				if err != nil {
+					t.Log(err)
+				}
+			}()
+
+			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, v1beta1.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
+			if tc.expectedErrMsg == "" {
+				assert.Nil(t, err, "got unexpected error %v", err)
+				assert.Equal(t, tc.expectedSourceCommit, srcCommit)
+				assert.Equal(t, filepath.Join(commitDir, syncDir), srcSyncDir.OSPath())
+			} else {
+				assert.NotNil(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+			}
+
+			// Block and wait for the goroutine to complete.
+			<-doneCh
+		})
+	}
+
+}
 
 func TestRunHydrate(t *testing.T) {
 	testCases := []struct {
@@ -56,7 +212,7 @@ func TestRunHydrate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// create a temporary directory with a commit hash
-			tempDir, err := ioutil.TempDir(os.TempDir(), "run-hydrate-test")
+			tempDir, err := os.MkdirTemp(os.TempDir(), "run-hydrate-test")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +286,7 @@ func TestComputeCommit(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// create a temporary directory with a commit hash
-			tempDir, err := ioutil.TempDir(os.TempDir(), "compute-commit-test")
+			tempDir, err := os.MkdirTemp(os.TempDir(), "compute-commit-test")
 			if err != nil {
 				t.Fatal(err)
 			}

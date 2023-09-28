@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -29,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 )
 
 // FileSource includes all settings to configure where a Parser reads files from.
@@ -115,33 +117,62 @@ func (o *files) sourceContext() sourceContext {
 	}
 }
 
+// readHydratedDirWithRetry returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded with retries.
+func (o *files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
+	result := sourceState{}
+	err := util.RetryWithBackoff(backoff, func() error {
+		var err error
+		result, err = o.readHydratedDir(hydratedRoot, reconciler, srcState)
+		return err
+	})
+	if err == nil {
+		return result, nil
+	}
+	hydrationErr, ok := err.(hydrate.HydrationError)
+	if ok {
+		return result, hydrationErr
+	}
+	return result, hydrate.NewInternalError(err)
+}
+
 // readHydratedDir returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded.
-func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
+func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, error) {
 	result := sourceState{}
 	errorFile := hydratedRoot.Join(cmpath.RelativeSlash(hydrate.ErrorFile))
-	if _, err := os.Stat(errorFile.OSPath()); err == nil {
+	_, err := os.Stat(errorFile.OSPath())
+	switch {
+	case err == nil:
+		// hydration error file exist, return the error
 		return result, hydratedError(errorFile.OSPath(),
 			fmt.Sprintf("%s=%s", metadata.ReconcilerLabel, reconciler))
-	} else if !os.IsNotExist(err) {
-		return result, hydrate.NewTransientError(errors.Wrapf(err, "failed to check the error file: %s", errorFile.OSPath()))
-	}
-	hydratedDir, err := hydratedRoot.Join(cmpath.RelativeSlash(o.HydratedLink)).EvalSymlinks()
-	if err != nil {
-		return result, hydrate.NewInternalError(errors.Wrapf(err, "unable to load the hydrated configs under %s", hydratedRoot.OSPath()))
-	}
+	case !os.IsNotExist(err):
+		// failed to check the hydration error file, retry
+		return result, util.NewRetriableError(fmt.Errorf("failed to check the error file %s: %v", errorFile.OSPath(), err))
+	default:
+		// the hydration error file doesn't exist
+		hydratedDir, err := hydratedRoot.Join(cmpath.RelativeSlash(o.HydratedLink)).EvalSymlinks()
+		if err != nil {
+			// Retry if failed to load the hydrated directory
+			return result, util.NewRetriableError(fmt.Errorf("failed to load the hydrated configs under %s", hydratedRoot.OSPath()))
+		}
+		result.commit = filepath.Base(hydratedDir.OSPath())
+		if result.commit != srcState.commit {
+			// It is not always retriable locally, so return a transient error for the reconciler's retryTime to trigger a retry.
+			// - If the source commit is newer than the hydrated commit, it is
+			//   retriable because the hydrated commit will be re-evaluated.
+			// - If the hydrated commit is newer than the source commit, retry won't
+			//   help because srcState.commit remains unchanged.
+			return result, hydrate.NewTransientError(fmt.Errorf("source commit changed while listing hydrated files, was %s, now %s. It will be retried in the next sync", srcState.commit, result.commit))
+		}
 
-	result.commit = filepath.Base(hydratedDir.OSPath())
-	// assert that the commit has not changed during this parse
-	if result.commit != srcState.commit {
-		return result, status.TransientError(fmt.Errorf("source commit changed while listing hydrated files, was %s, now %s. It will be retried in the next sync", srcState.commit, result.commit))
+		relSyncDir := hydratedDir.Join(o.SyncDir)
+		syncDir, err := relSyncDir.EvalSymlinks()
+		if err != nil {
+			// Retry if the symlink failed to be evaluated.
+			return result, util.NewRetriableError(fmt.Errorf("failed to evaluate symbolic link to the hydrated sync directory %s: %v", relSyncDir.OSPath(), err))
+		}
+		result.syncDir = syncDir
 	}
-
-	relSyncDir := hydratedDir.Join(o.SyncDir)
-	syncDir, err := relSyncDir.EvalSymlinks()
-	if err != nil {
-		return result, hydrate.NewInternalError(errors.Wrapf(err, "unable to evaluate symbolic link to the hydrated sync directory: %s", relSyncDir.OSPath()))
-	}
-	result.syncDir = syncDir
 	return result, nil
 }
 

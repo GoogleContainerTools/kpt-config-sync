@@ -265,6 +265,8 @@ func TestStressLargeRequest(t *testing.T) {
 	}
 }
 
+// TestStress100CRDs would apply 100 CRDs and validate them as part of the stress test
+// the same scenario is used for nomos CLI throttling validation
 func TestStress100CRDs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
@@ -287,6 +289,18 @@ func TestStress100CRDs(t *testing.T) {
 	nt.T.Logf("waiting for the sync to complete")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
+	}
+
+	// Validate client-side throttling is disabled for nomos status
+	cmd := nt.Shell.Command("nomos", "status")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	if strings.Contains(string(out), "due to client-side throttling") {
+		nt.T.Fatalf("Nomos status should not perform client-side throttling: %s", string(out))
 	}
 }
 

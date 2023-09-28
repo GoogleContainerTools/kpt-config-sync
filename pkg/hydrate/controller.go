@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -32,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 )
 
 const (
@@ -89,9 +91,16 @@ func (h *Hydrator) Run(ctx context.Context) {
 			hydrateErr = h.rehydrateOnError(hydrateErr, srcCommit, syncDir)
 			rehydrateTimer.Reset(h.RehydratePeriod) // Schedule rehydrate attempt
 		case <-runTimer.C:
-			srcCommit, syncDir, err = SourceCommitAndDir(h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
+			// pull the source commit and directory with retries within 5 minutes.
+			srcCommit, syncDir, err = SourceCommitAndDirWithRetry(util.SourceRetryBackoff, h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
-				klog.Errorf("failed to get the commit hash and sync directory from the source directory %s: %v", absSourceDir.OSPath(), err)
+				hydrateErr = NewInternalError(errors.Wrapf(err,
+					"failed to get the commit hash and sync directory from the source directory %s",
+					absSourceDir.OSPath()))
+				if err := h.complete(srcCommit, hydrateErr); err != nil {
+					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
+						srcCommit, err)
+				}
 			} else if DoneCommit(h.DonePath.OSPath()) != srcCommit {
 				// If the commit has been processed before, regardless of success or failure,
 				// skip the hydration to avoid repeated execution.
@@ -326,14 +335,34 @@ func deleteErrorFile(file string) error {
 	return nil
 }
 
-// SourceCommitAndDir returns the source hash (a git commit hash or an OCI image digest or a helm chart version), the absolute path of the sync directory, and source errors.
-func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, status.Error) {
-	// Check if the source root directory is mounted
+// SourceCommitAndDirWithRetry returns the source hash (a git commit hash or an
+// OCI image digest or a helm chart version), the absolute path of the sync
+// directory, and source errors.
+// It retries with the provided backoff.
+func SourceCommitAndDirWithRetry(backoff wait.Backoff, sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (commit string, sourceDir cmpath.Absolute, _ status.Error) {
+	err := util.RetryWithBackoff(backoff, func() error {
+		var err error
+		commit, sourceDir, err = SourceCommitAndDir(sourceType, sourceRevDir, syncDir, reconcilerName)
+		return err
+	})
+	// If a retriable error can't be addressed with retry, it is identified as a
+	// source error, and will be exposed in the R*Sync status.
+	return commit, sourceDir, status.SourceError.Wrap(err).Build()
+}
+
+// SourceCommitAndDir returns the source hash (a git commit hash or an OCI image
+// digest or a helm chart version), the absolute path of the sync directory,
+// and source errors.
+func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, error) {
 	sourceRoot := path.Dir(sourceRevDir.OSPath())
-	if _, err := os.Stat(sourceRoot); err != nil && os.IsNotExist(err) {
-		return "", "", status.TransientError(err)
+	if _, err := os.Stat(sourceRoot); err != nil {
+		// It fails to check the source root directory status, either because of
+		// the path doesn't exist, or other OS failures. The root cause is
+		// probably because the *-sync container is not ready yet, so retry until
+		// it becomes ready.
+		return "", "", util.NewRetriableError(fmt.Errorf("failed to check the status of the source root directory %q: %v", sourceRoot, err))
 	}
-	// Check if the source configs are synced successfully.
+	// Check if the source configs are pulled successfully.
 	errFilePath := filepath.Join(sourceRoot, ErrorFile)
 
 	var containerName string
@@ -347,24 +376,34 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 	}
 
 	content, err := os.ReadFile(errFilePath)
-	if err != nil && !os.IsNotExist(err) {
-		return "", "", status.TransientError(
-			fmt.Errorf("unable to load %s: %v. Please "+
-				"check %s logs for more info: kubectl logs -n %s -l %s -c %s",
-				errFilePath, err, containerName, configsync.ControllerNamespace,
-				metadata.ReconcilerLabel, reconcilerName))
-	} else if err == nil && len(content) == 0 {
-		return "", "", status.SourceError.Sprintf("%s is "+
-			"empty. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
+	switch {
+	case err != nil && !os.IsNotExist(err):
+		// It fails to get the status of the source error file, probably because
+		// the *-sync container is not ready yet, so retry until it becomes ready.
+		return "", "", util.NewRetriableError(fmt.Errorf("failed to check the status of the source error file %q: %v", errFilePath, err))
+	case err == nil && len(content) == 0:
+		// The source error file exists, which indicates the *-sync container is
+		// ready. The file is empty probably because *-sync fails to write to the
+		// error file. Hence, no need to retry.
+		return "", "", fmt.Errorf("%s is empty. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
 			errFilePath, containerName, configsync.ControllerNamespace,
-			metadata.ReconcilerLabel, reconcilerName).Build()
-	} else if err == nil {
-		return "", "", status.SourceError.Sprintf("error in the %s container: %s", containerName, string(content)).Build()
+			metadata.ReconcilerLabel, reconcilerName)
+	case err == nil && len(content) != 0:
+		// The source error file exists, which indicates the *-sync container is
+		// ready, so return the error directly without retry.
+		return "", "", fmt.Errorf("error in the %s container: %s", containerName, string(content))
+	default:
+		// The sourceRoot directory exists, but the source error file doesn't exist.
+		// It indicates that *-sync is ready, but no errors so far.
 	}
 
 	gitDir, err := sourceRevDir.EvalSymlinks()
 	if err != nil {
-		return "", "", status.SourceError.Sprintf("unable to evaluate the source link %s", sourceRevDir).Wrap(err).Build()
+		// `sourceRevDir` points to the directory with commit SHA that holds the
+		// checked-out files. It can't be evaluated probably because *-sync
+		// container is ready, but hasn't finished creating the symlink yet, so
+		// retry until the symlink is created.
+		return "", "", util.NewRetriableError(fmt.Errorf("failed to evaluate the source rev directory %q: %v", sourceRevDir, err))
 	}
 
 	commit := filepath.Base(gitDir.OSPath())
@@ -379,8 +418,11 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 	relSyncDir := gitDir.Join(syncDir)
 	sourceDir, err := relSyncDir.EvalSymlinks()
 	if err != nil {
-		return commit, "", status.PathWrapError(
-			errors.Wrap(err, "evaluating symbolic link to policy sourceRoot"), relSyncDir.OSPath())
+		// `relSyncDir` points to the source config directory. Now the commit SHA
+		// has been checked out, but it fails to evaluate the symlink with the
+		// config directory, which indicates a misconfiguration of `spec.git.dir`,
+		// `spec.oci.dir`, or `spec.helm.dir`, so return the error without retry.
+		return "", "", fmt.Errorf("failed to evaluate the config directory %q: %w", relSyncDir.OSPath(), err)
 	}
 	return commit, sourceDir, nil
 }

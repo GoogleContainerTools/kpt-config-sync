@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -40,6 +42,7 @@ import (
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
+	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
@@ -80,7 +83,7 @@ func createRootDir(rootDir, commit string) error {
 		return err
 	}
 	commitDir := filepath.Join(rootDir, commit)
-	if err := os.MkdirAll(commitDir, os.ModePerm); err != nil {
+	if err := os.Mkdir(commitDir, os.ModePerm); err != nil {
 		return err
 	}
 	symLinkPath := filepath.Join(rootDir, symLink)
@@ -149,21 +152,21 @@ func TestRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func(path string) {
-		err = os.RemoveAll(path)
-		if err != nil {
-			t.Fatal(err)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Error(err)
 		}
-	}(tempDir)
+	})
 
 	testCases := []struct {
 		id                         string
 		name                       string
 		commit                     string
-		sourceRootExist            bool
 		renderingEnabled           bool
 		hasKustomization           bool
 		hydratedRootExist          bool
+		retryCap                   time.Duration
+		srcRootCreateLatency       time.Duration
 		sourceError                string
 		hydratedError              string
 		hydrationDone              bool
@@ -173,42 +176,48 @@ func TestRun(t *testing.T) {
 		expectedErrors             string
 		expectedStateSourceErrs    status.MultiError
 		expectedStateRenderingErrs status.MultiError
-		expectedRSSourceErrs       []v1beta1.ConfigSyncError
-		expectedRSRenderingErrs    []v1beta1.ConfigSyncError
 	}{
 		{
-			id:             "0",
-			name:           "transient error when no sourceRoot",
-			needRetry:      true,
-			expectedErrors: fmt.Sprintf("1 error(s)\n\n\n[1] KNV2016: stat %s/0/source: no such file or directory\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016\n", tempDir),
-			// transient error is not exposed to the RootSync status
+			id:                      "0",
+			name:                    "source commit directory isn't created within the retry cap",
+			retryCap:                5 * time.Millisecond,
+			srcRootCreateLatency:    10 * time.Millisecond,
+			needRetry:               true,
+			expectedMsg:             "Source",
+			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.SourceError},
+			expectedErrors:          fmt.Sprintf("1 error(s)\n\n\n[1] KNV2004: failed to check the status of the source root directory \"%s/0/source\": stat %s/0/source: no such file or directory\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n", tempDir, tempDir),
+			expectedStateSourceErrs: status.SourceError.Sprintf("KNV2004: failed to check the status of the source root directory \"%s/0/source\": stat %s/0/source: no such file or directory\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n", tempDir, tempDir).Build(),
 		},
 		{
-			id:                      "1",
+			id:                   "1",
+			name:                 "source commit directory created within the retry cap",
+			retryCap:             110 * time.Millisecond,
+			srcRootCreateLatency: 100 * time.Millisecond,
+			needRetry:            false,
+			expectedMsg:          "Sync Completed",
+		},
+		{
+			id:                      "2",
 			name:                    "source error",
-			sourceRootExist:         true,
 			sourceError:             "git sync permission issue",
 			needRetry:               true,
 			expectedErrors:          "1 error(s)\n\n\n[1] KNV2004: error in the git-sync container: git sync permission issue\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n",
 			expectedStateSourceErrs: status.SourceError.Sprint("error in the git-sync container: git sync permission issue").Build(),
 			// source error is exposed to the RootSync status
-			expectedRSSourceErrs:    status.ToCSE(status.SourceError.Sprint("error in the git-sync container: git sync permission issue").Build()),
 			expectedMsg:             "Source",
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.SourceError},
 		},
 		{
-			id:                "2",
+			id:                "3",
 			name:              "rendering in progress",
-			sourceRootExist:   true,
 			renderingEnabled:  true,
 			hydratedRootExist: true,
 			needRetry:         true,
 			expectedMsg:       "Rendering is still in progress",
 		},
 		{
-			id:                         "3",
+			id:                         "4",
 			name:                       "hydration error",
-			sourceRootExist:            true,
 			renderingEnabled:           true,
 			hasKustomization:           true,
 			hydratedRootExist:          true,
@@ -219,13 +228,11 @@ func TestRun(t *testing.T) {
 			expectedErrors:             "1 error(s)\n\n\n[1] KNV1068: rendering error\n\nFor more information, see https://g.co/cloud/acm-errors#knv1068\n",
 			expectedStateRenderingErrs: status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 			// rendering error is exposed to the RootSync status
-			expectedRSRenderingErrs: status.ToCSE(status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error"))),
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.RenderingError},
 		},
 		{
-			id:                "4",
+			id:                "5",
 			name:              "successful read",
-			sourceRootExist:   true,
 			renderingEnabled:  true,
 			hasKustomization:  true,
 			hydratedRootExist: true,
@@ -234,18 +241,16 @@ func TestRun(t *testing.T) {
 			expectedMsg:       "Sync Completed",
 		},
 		{
-			id:                "5",
+			id:                "6",
 			name:              "successful read without hydration",
-			sourceRootExist:   true,
 			hydratedRootExist: false,
 			hydrationDone:     false,
 			needRetry:         false,
 			expectedMsg:       "Sync Completed",
 		},
 		{
-			id:                "6",
+			id:                "7",
 			name:              "error because hydration enabled with wet source",
-			sourceRootExist:   true,
 			renderingEnabled:  true,
 			hasKustomization:  false,
 			hydratedRootExist: false,
@@ -255,9 +260,8 @@ func TestRun(t *testing.T) {
 			expectedErrors:    "KNV2016: sync source contains only wet configs and hydration-controller is running\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016",
 		},
 		{
-			id:                "7",
+			id:                "8",
 			name:              "error because hydration disabled with dry source",
-			sourceRootExist:   true,
 			renderingEnabled:  false,
 			hasKustomization:  true,
 			hydratedRootExist: true,
@@ -271,45 +275,76 @@ func TestRun(t *testing.T) {
 	sourceCommit := "abcd123"
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			util.SourceRetryBackoff = wait.Backoff{
+				Duration: time.Millisecond,
+				Factor:   2,
+				Steps:    20,
+				Cap:      tc.retryCap,
+				Jitter:   0.1,
+			}
+			util.HydratedRetryBackoff = util.SourceRetryBackoff
 
 			rootDir := filepath.Join(tempDir, tc.id)
-			if err = os.Mkdir(rootDir, os.ModePerm); err != nil {
-				t.Fatal(err)
-			}
 			sourceRoot := filepath.Join(rootDir, "source")     // /repo/source
 			hydratedRoot := filepath.Join(rootDir, "hydrated") // /repo/hydrated
 			sourceDir := filepath.Join(sourceRoot, symLink)
 
-			if tc.sourceRootExist {
-				if err = createRootDir(sourceRoot, sourceCommit); err != nil {
-					t.Fatal(err)
-				}
-				if tc.hasKustomization {
-					if err = writeFile(sourceDir, "kustomization.yaml", ""); err != nil {
-						t.Fatal(err)
+			// Simulating the creation of source configs and errors in the background
+			doneCh := make(chan struct{})
+			go func() {
+				defer close(doneCh)
+				err := func() error {
+					// Create the source root directory conditionally with latency
+					srcRootDirCreated := false
+					if tc.srcRootCreateLatency > 0 {
+						t.Logf("sleeping for %q before creating source root directory %q", tc.srcRootCreateLatency, rootDir)
+						time.Sleep(tc.srcRootCreateLatency)
 					}
+					if tc.srcRootCreateLatency <= tc.retryCap {
+						if err = os.Mkdir(rootDir, os.ModePerm); err != nil {
+							return fmt.Errorf("failed to create source root directory %q: %v", rootDir, err)
+						}
+						srcRootDirCreated = true
+						t.Logf("source root directory %q created at %v", rootDir, time.Now())
+					}
+
+					if srcRootDirCreated {
+						if err = createRootDir(sourceRoot, sourceCommit); err != nil {
+							return fmt.Errorf("failed to create source commit directory: %v", err)
+						}
+						if tc.hasKustomization {
+							if err = writeFile(sourceDir, "kustomization.yaml", ""); err != nil {
+								return fmt.Errorf("failed to write kustomization file: %v", err)
+							}
+						}
+
+						if tc.sourceError != "" {
+							if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.sourceError); err != nil {
+								return fmt.Errorf("failed to write source error file: %v", err)
+							}
+						}
+						if tc.hydratedRootExist {
+							if err = createRootDir(hydratedRoot, sourceCommit); err != nil {
+								return fmt.Errorf("failed to create hydrated commit directory: %v", err)
+							}
+						}
+						if tc.hydrationDone {
+							if err = writeFile(rootDir, hydrate.DoneFile, sourceCommit); err != nil {
+								return fmt.Errorf("failed to write done file: %v", err)
+							}
+						}
+						if tc.hydratedError != "" {
+							if err = writeFile(hydratedRoot, hydrate.ErrorFile, tc.hydratedError); err != nil {
+								return fmt.Errorf("failed to write hydrated error file: %v", err)
+							}
+						}
+					}
+					return nil
+				}()
+				if err != nil {
+					t.Log(err)
 				}
-			}
-			if tc.sourceError != "" {
-				if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.sourceError); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tc.hydratedRootExist {
-				if err = createRootDir(hydratedRoot, sourceCommit); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tc.hydrationDone {
-				if err = writeFile(rootDir, hydrate.DoneFile, sourceCommit); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tc.hydratedError != "" {
-				if err = writeFile(hydratedRoot, hydrate.ErrorFile, tc.hydratedError); err != nil {
-					t.Fatal(err)
-				}
-			}
+			}()
 
 			fs := FileSource{
 				SourceDir:    cmpath.Absolute(sourceDir),
@@ -326,14 +361,16 @@ func TestRun(t *testing.T) {
 				retryTimer:  time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
 				retryPeriod: configsync.DefaultReconcilerRetryPeriod,
 			}
+			t.Logf("start running test at %v", time.Now())
 			run(context.Background(), parser, triggerReimport, state)
 
-			testutil.AssertEqual(t, tc.needRetry, state.cache.needToRetry, "[%s] unexpected state.cache.needToRetry return", tc.name)
-			actualErrs := ""
-			if state.cache.errs != nil {
-				actualErrs = state.cache.errs.Error()
+			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
+			if tc.expectedErrors == "" {
+				assert.Nil(t, state.cache.errs)
+			} else {
+				assert.Equal(t, tc.expectedErrors, state.cache.errs.Error())
 			}
-			testutil.AssertEqual(t, tc.expectedErrors, actualErrs, "[%s] unexpected state.cache.errs return", tc.name)
+
 			testutil.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
 			testutil.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
 
@@ -341,8 +378,10 @@ func TestRun(t *testing.T) {
 			if err = parser.options().client.Get(context.Background(), rootsync.ObjectKey(parser.options().syncName), rs); err != nil {
 				t.Fatal(err)
 			}
-			testutil.AssertEqual(t, tc.expectedRSSourceErrs, rs.Status.Source.Errors, "[%s] unexpected source errors in RootSync return", tc.name)
-			testutil.AssertEqual(t, tc.expectedRSRenderingErrs, rs.Status.Rendering.Errors, "[%s] unexpected rendering errors in RootSync return", tc.name)
+			expectedRSSourceErrs := status.ToCSE(state.sourceStatus.errs)
+			expectedRSRenderingErrs := status.ToCSE(state.renderingStatus.errs)
+			testutil.AssertEqual(t, expectedRSSourceErrs, rs.Status.Source.Errors, "[%s] unexpected source errors in RootSync return", tc.name)
+			testutil.AssertEqual(t, expectedRSRenderingErrs, rs.Status.Rendering.Errors, "[%s] unexpected rendering errors in RootSync return", tc.name)
 
 			for _, c := range rs.Status.Conditions {
 				if c.Type == v1beta1.RootSyncSyncing {
@@ -350,6 +389,9 @@ func TestRun(t *testing.T) {
 					testutil.AssertEqual(t, tc.expectedErrorSourceRefs, c.ErrorSourceRefs, "[%s] unexpected error source refs return", tc.name)
 				}
 			}
+
+			// Block and wait for the goroutine to complete.
+			<-doneCh
 		})
 	}
 }

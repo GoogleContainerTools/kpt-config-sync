@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -185,7 +186,8 @@ func Run(ctx context.Context, p Parser) {
 func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
-	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDir(p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
+	// pull the source commit and directory with retries within 5 minutes.
+	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
 
 	// If failed to fetch the source commit and directory, set `.status.source` to fail early.
 	// Otherwise, set `.status.rendering` before `.status.source` because the parser needs to
@@ -356,7 +358,8 @@ func parseHydrationState(p Parser, srcState sourceState, hydrationStatus renderi
 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
-		srcState, hydrationErr = options.readHydratedDir(absHydratedRoot, options.reconcilerName, srcState)
+		// pull the hydrated commit and directory with retries within 1 minute.
+		srcState, hydrationErr = options.readHydratedDirWithRetry(util.HydratedRetryBackoff, absHydratedRoot, options.reconcilerName, srcState)
 		if hydrationErr != nil {
 			hydrationStatus.message = RenderingFailed
 			hydrationStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)

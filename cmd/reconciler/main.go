@@ -98,8 +98,8 @@ var (
 
 	renderingEnabled  = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
 	namespaceStrategy = flag.String(flags.namespaceStrategy, util.EnvString(reconcilermanager.NamespaceStrategy, ""),
-		fmt.Sprintf("Set the namespace strategy for the reconciler. Must be %s or %s.",
-			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit))
+		fmt.Sprintf("Set the namespace strategy for the reconciler. Must be %s or %s. Default: %s.",
+			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit, configsync.NamespaceStrategyImplicit))
 )
 
 var flags = struct {
@@ -216,11 +216,11 @@ func main() {
 		klog.Infof("Starting reconciler for: %s", *scope)
 
 		if *sourceFormat != "" {
-			klog.Fatalf("Flag %s and Environment variable%q must not be passed to a Namespace reconciler",
+			klog.Fatalf("Flag %s and environment variable %s must not be passed to a Namespace reconciler",
 				flags.sourceFormat, filesystem.SourceFormatKey)
 		}
 		if *namespaceStrategy != "" {
-			klog.Fatalf("Flag %s and Environment variable%q must not be passed to a Namespace reconciler",
+			klog.Fatalf("Flag %s and environment variable %s must not be passed to a Namespace reconciler",
 				flags.namespaceStrategy, reconcilermanager.NamespaceStrategy)
 		}
 	}

@@ -81,8 +81,9 @@ type RootSyncOverrideSpec struct {
 	OverrideSpec `json:",inline"`
 
 	// namespaceStrategy controls how the reconciler handles Namespaces
-	// which are used by resources in the source but not declared.
-	// Must be "implicit" or "explicit"
+	// which are used by resources in the source but not declared. Only applies
+	// when using the unstructured sourceFormat.
+	// Must be "implicit" or "explicit". Default: "implicit".
 	// "implicit" means that the reconciler will implicitly create Namespaces
 	// if they do not exist, even if they are not declared in the source.
 	// "explicit" means that the reconciler will not create Namespaces which

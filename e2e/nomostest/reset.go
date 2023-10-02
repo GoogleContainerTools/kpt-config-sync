@@ -304,24 +304,6 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		return err
 	}
 
-	// Delete any ClusterRoleBindings left behind.
-	// CRBs are usually only applied if PSP was enabled, but clean them up regardless.
-	nt.T.Log("[RESET] Deleting test ClusterRoleBindings")
-	var crbs []client.Object
-	for _, item := range rsList {
-		rs := &item
-		rsNN := client.ObjectKeyFromObject(rs)
-		crbs = append(crbs, repoSyncClusterRoleBinding(rsNN))
-	}
-	// Skip deleting managed ClusterRoleBindings
-	crbs, err = findUnmanaged(nt, crbs...)
-	if err != nil {
-		return err
-	}
-	if err := DeleteObjectsAndWait(nt, crbs...); err != nil {
-		return err
-	}
-
 	return deleteRepoSyncClusterRole(nt)
 }
 

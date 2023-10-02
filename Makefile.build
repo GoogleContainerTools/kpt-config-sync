@@ -216,8 +216,6 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 	@ "$(GOBIN)/addlicense" $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 
 	@ # Additional optional OSS manifests
-	@ rsync \
-		manifests/acm-psp.yaml $(OSS_MANIFEST_STAGING_DIR)/acm-psp.yaml
 	@ cat "manifests/templates/admission-webhook.yaml" \
 		| sed -e "s|WEBHOOK_IMAGE_NAME|$(ADMISSION_WEBHOOK_TAG)|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/admission-webhook.yaml

@@ -865,14 +865,6 @@ func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
 	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
 	cr.Rules = append(cr.Rules, nt.repoSyncPermissions...)
-	if isPSPCluster() {
-		cr.Rules = append(cr.Rules, rbacv1.PolicyRule{
-			APIGroups:     []string{"policy"},
-			Resources:     []string{"podsecuritypolicies"},
-			ResourceNames: []string{"acm-psp"},
-			Verbs:         []string{"use"},
-		})
-	}
 	return cr
 }
 

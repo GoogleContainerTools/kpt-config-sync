@@ -32,11 +32,3 @@ rules:
 - apiGroups: ["kpt.dev"]
   resources: ["resourcegroups/status"]
   verbs: ["*"]
-- apiGroups:
-  - policy
-  resources:
-  - podsecuritypolicies
-  resourceNames:
-  - acm-psp
-  verbs:
-  - use

@@ -398,14 +398,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - policy
-  resourceNames:
-  - acm-psp
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

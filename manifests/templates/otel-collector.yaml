@@ -44,43 +44,6 @@ data:
           processors: [batch]
           exporters: [prometheus]
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: configmanagement.gke.io:otel-collector-psp
-  namespace: config-management-monitoring
-  labels:
-    component: otel-collector
-    configmanagement.gke.io/system: "true"
-    configmanagement.gke.io/arch: "csmr"
-rules:
-- apiGroups:
-  - policy
-  resources:
-  - podsecuritypolicies
-  resourceNames:
-  - acm-psp
-  verbs:
-  - use
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: configmanagement.gke.io:otel-collector-psp
-  namespace: config-management-monitoring
-  labels:
-    component: otel-collector
-    configmanagement.gke.io/system: "true"
-    configmanagement.gke.io/arch: "csmr"
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: configmanagement.gke.io:otel-collector-psp
-subjects:
-- kind: ServiceAccount
-  name: default
-  namespace: config-management-monitoring
----
 apiVersion: v1
 kind: Service
 metadata:

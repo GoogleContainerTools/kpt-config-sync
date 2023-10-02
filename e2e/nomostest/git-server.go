@@ -19,10 +19,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/policy/v1beta1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -75,73 +72,11 @@ func gitServer() []client.Object {
 		gitService(),
 		gitDeployment(),
 	}
-	if isPSPCluster() {
-		objs = append(objs, []client.Object{
-			gitPodSecurityPolicy(),
-			gitRole(),
-			gitRoleBinding(),
-		}...)
-	}
 	return objs
 }
 
 func gitNamespace() *corev1.Namespace {
 	return fake.NamespaceObject(testGitNamespace)
-}
-
-func gitPodSecurityPolicy() *v1beta1.PodSecurityPolicy {
-	psp := &v1beta1.PodSecurityPolicy{}
-	psp.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "policy",
-		Version: "v1beta1",
-		Kind:    "PodSecurityPolicy",
-	})
-	psp.SetName(testGitServer)
-	psp.Spec.Privileged = false
-	psp.Spec.Volumes = []v1beta1.FSType{
-		"*",
-	}
-	psp.Spec.RunAsUser.Rule = v1beta1.RunAsUserStrategyRunAsAny
-	psp.Spec.SELinux.Rule = v1beta1.SELinuxStrategyRunAsAny
-	psp.Spec.SupplementalGroups.Rule = v1beta1.SupplementalGroupsStrategyRunAsAny
-	psp.Spec.FSGroup.Rule = v1beta1.FSGroupStrategyRunAsAny
-	return psp
-}
-
-func gitRole() *rbacv1.Role {
-	role := fake.RoleObject(
-		core.Name(testGitServer),
-		core.Namespace(testGitNamespace),
-	)
-	role.Rules = []rbacv1.PolicyRule{
-		{
-			APIGroups:     []string{"policy"},
-			Resources:     []string{"podsecuritypolicies"},
-			ResourceNames: []string{testGitServer},
-			Verbs:         []string{"use"},
-		},
-	}
-	return role
-}
-
-func gitRoleBinding() *rbacv1.RoleBinding {
-	rolebinding := fake.RoleBindingObject(
-		core.Name(testGitServer),
-		core.Namespace(testGitNamespace),
-	)
-	rolebinding.RoleRef = rbacv1.RoleRef{
-		APIGroup: "rbac.authorization.k8s.io",
-		Kind:     "Role",
-		Name:     testGitServer,
-	}
-	rolebinding.Subjects = []rbacv1.Subject{
-		{
-			Kind:      "ServiceAccount",
-			Namespace: testGitNamespace,
-			Name:      "default",
-		},
-	}
-	return rolebinding
 }
 
 func gitService() *corev1.Service {

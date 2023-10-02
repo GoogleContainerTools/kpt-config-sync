@@ -188,10 +188,6 @@ func uninstallConfigSync(nt *NT) error {
 	return DeleteObjectsAndWait(nt, objs...)
 }
 
-func isPSPCluster() bool {
-	return strings.Contains(*e2e.GCPCluster, "psp")
-}
-
 // convertToTypedObjects converts objects to their literal types. We can do this as
 // we should have all required types in the Scheme anyway. This keeps us from
 // having to do ugly Unstructured operations.
@@ -305,9 +301,6 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 	var filtered []client.Object
 	found := false
 	for _, obj := range objects {
-		if !isPSPCluster() && obj.GetName() == "acm-psp" {
-			continue
-		}
 		if IsReconcilerTemplateConfigMap(obj) {
 			// Mark that we've found the ReconcilerManager ConfigMap.
 			// This way we know we've enabled debug mode.
@@ -476,27 +469,6 @@ func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
 	return rb
 }
 
-// repoSyncClusterRoleBinding returns clusterrolebinding that grants service account
-// permission to manage resources in the namespace.
-func repoSyncClusterRoleBinding(nn types.NamespacedName) *rbacv1.ClusterRoleBinding {
-	rb := fake.ClusterRoleBindingObject(core.Name(nn.Name + "-" + nn.Namespace))
-	sb := []rbacv1.Subject{
-		{
-			Kind:      "ServiceAccount",
-			Name:      core.NsReconcilerName(nn.Namespace, nn.Name),
-			Namespace: configmanagement.ControllerNamespace,
-		},
-	}
-	rf := rbacv1.RoleRef{
-		APIGroup: "rbac.authorization.k8s.io",
-		Kind:     "ClusterRole",
-		Name:     clusterRoleName,
-	}
-	rb.Subjects = sb
-	rb.RoleRef = rf
-	return rb
-}
-
 func setupRepoSyncRoleBinding(nt *NT, nn types.NamespacedName) error {
 	if err := nt.KubeClient.Create(RepoSyncRoleBinding(nn)); err != nil {
 		nt.T.Fatal(err)
@@ -617,18 +589,6 @@ func setupDelegatedControl(nt *NT) {
 	}
 
 	for nn := range nt.NonRootRepos {
-		// Add a ClusterRoleBinding so that the pods can be created
-		// when the cluster has PodSecurityPolicy enabled.
-		// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
-		// it will only grant usage for pods being run in the same namespace as the binding.
-		// TODO: Remove the psp related change when Kubernetes 1.25 is
-		// available on GKE.
-		if isPSPCluster() {
-			if err := nt.KubeClient.Create(repoSyncClusterRoleBinding(nn)); err != nil {
-				nt.T.Fatal(err)
-			}
-		}
-
 		// create namespace for namespace reconciler.
 		err := nt.KubeClient.Create(fake.NamespaceObject(nn.Namespace))
 		if err != nil {
@@ -910,18 +870,6 @@ func setupCentralizedControl(nt *NT) {
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
-		if isPSPCluster() {
-			// Add a ClusterRoleBinding so that the pods can be created
-			// when the cluster has PodSecurityPolicy enabled.
-			// Background: If a RoleBinding (not a ClusterRoleBinding) is used,
-			// it will only grant usage for pods being run in the same namespace as the binding.
-			// TODO: Remove the psp related change when Kubernetes 1.25 is
-			// available on GKE.
-			crb := repoSyncClusterRoleBinding(rsNN)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/crb-%s-%s.yaml", ns, rsNN.Name), crb))
-			nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crb)
-		}
-
 		// Add RepoSync pointing to the Git repo specified in nt.NonRootRepos[rsNN]
 		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, rsNN)
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs))
@@ -988,10 +936,6 @@ func SetRepoSyncDependencies(nt *NT, rs client.Object) error {
 	dependencies := []client.Object{
 		nt.RepoSyncClusterRole(),
 		RepoSyncRoleBinding(rsNN),
-	}
-	if isPSPCluster() {
-		crb := repoSyncClusterRoleBinding(rsNN)
-		dependencies = append(dependencies, crb)
 	}
 	return SetDependencies(rs, dependencies...)
 }

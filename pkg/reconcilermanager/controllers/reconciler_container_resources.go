@@ -55,7 +55,7 @@ func ReconcilerContainerResourceDefaults() map[string]v1beta1.ContainerResources
 		},
 		reconcilermanager.GCENodeAskpassSidecar: {
 			ContainerName: reconcilermanager.GCENodeAskpassSidecar,
-			CPURequest:    resource.MustParse("50m"),
+			CPURequest:    resource.MustParse("10m"),
 			MemoryRequest: resource.MustParse("20Mi"),
 		},
 		metrics.OtelAgentName: {

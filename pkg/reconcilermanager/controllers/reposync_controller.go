@@ -1061,9 +1061,19 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		}
 		templateSpec.Volumes = filterVolumes(templateSpec.Volumes, auth, secretName, caCertSecretRefName, rs.Spec.SourceType, r.membership)
 
+		autopilot, err := r.isAutopilot()
+		if err != nil {
+			return err
+		}
+		var containerResourceDefaults map[string]v1beta1.ContainerResourcesSpec
+		if autopilot {
+			containerResourceDefaults = ReconcilerContainerResourceDefaultsForAutopilot()
+		} else {
+			containerResourceDefaults = ReconcilerContainerResourceDefaults()
+		}
 		overrides := rs.Spec.SafeOverride()
 		containerResources := setContainerResourceDefaults(overrides.Resources,
-			ReconcilerContainerResourceDefaults())
+			containerResourceDefaults)
 
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.

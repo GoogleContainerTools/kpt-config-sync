@@ -734,7 +734,12 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	// default container resource requests defined in code:
 	// pkg/reconcilermanager/controllers/reconciler_container_resources.go
-	expectedResources := controllers.ReconcilerContainerResourceDefaults()
+	var expectedResources map[string]v1beta1.ContainerResourcesSpec
+	if nt.IsGKEAutopilot {
+		expectedResources = controllers.ReconcilerContainerResourceDefaultsForAutopilot()
+	} else {
+		expectedResources = controllers.ReconcilerContainerResourceDefaults()
+	}
 	// Filter container map down to just expected containers
 	expectedResources = filterResourceMap(expectedResources,
 		reconcilermanager.Reconciler,

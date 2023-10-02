@@ -108,7 +108,7 @@ type reconcilerBase struct {
 	watcher                 client.WithWatch // non-caching
 	dynamicClient           dynamic.Interface
 	scheme                  *runtime.Scheme
-	isAutopilotCluster      *bool
+	autopilot               *bool
 	reconcilerPollingPeriod time.Duration
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
@@ -196,7 +196,7 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	if err := mutateObject(reconcilerDeployment); err != nil {
 		return nil, controllerutil.OperationResultNone, err
 	}
-	appliedObj, op, err := r.createOrPatchDeployment(ctx, reconcilerDeployment)
+	appliedObj, op, err := r.applyDeployment(ctx, reconcilerDeployment)
 
 	if op != controllerutil.OperationResultNone {
 		r.logger(ctx).Info("Managed object upsert successful",
@@ -207,29 +207,30 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	return appliedObj, op, err
 }
 
-// createOrPatchDeployment() first call Get() on the object. If the
-// object does not exist, Create() will be called. If it does exist, Patch()
-// will be called.
-func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *appsv1.Deployment) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
+// applyDeployment applies the declared deployment.
+// If it exists before apply, and has the GKE Autopilot adjustment annotation,
+// then the declared deployment is modified to match the resource adjustments,
+// to avoid fighting with the autopilot mutating webhook.
+func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.Deployment) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
 	id := core.ID{
 		ObjectKey: client.ObjectKeyFromObject(declared),
 		GroupKind: kinds.Deployment().GroupKind(),
 	}
-	forcePatch := true
+	patchOpts := metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: pointer.Bool(true)}
 	deploymentClient := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(id.Namespace)
 	currentDeploymentUnstructured, err := deploymentClient.Get(ctx, id.Name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationGet)
 		}
-		r.logger(ctx).V(3).Info("Managed object not found, creating",
+		r.logger(ctx).Info("Managed object not found, creating",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind)
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, patchOpts)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
@@ -238,31 +239,28 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 	currentGeneration := currentDeploymentUnstructured.GetGeneration()
 	currentUID := currentDeploymentUnstructured.GetUID()
 
-	if r.isAutopilotCluster == nil {
-		isAutopilot, err := util.IsGKEAutopilotCluster(r.client)
-		if err != nil {
-			return nil, controllerutil.OperationResultNone, fmt.Errorf("unable to determine if it is an Autopilot cluster: %w", err)
-		}
-		r.isAutopilotCluster = &isAutopilot
-	}
-	dep, err := compareDeploymentsToCreatePatchData(*r.isAutopilotCluster, declared, currentDeploymentUnstructured, reconcilerManagerAllowList, r.scheme)
+	dep, err := r.compareDeploymentsToCreatePatchData(declared, currentDeploymentUnstructured, reconcilerManagerAllowList)
 	if err != nil {
 		return nil, controllerutil.OperationResultNone, err
 	}
 	if dep.adjusted {
 		mutator := "Autopilot"
-		r.logger(ctx).V(3).Info("Managed object container resources updated",
+		r.logger(ctx).Info("Managed object container resources adjusted by autopilot",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind,
 			"mutator", mutator)
 	}
 	if dep.same {
+		r.logger(ctx).Info("Managed object apply skipped, no diff",
+			logFieldObjectRef, id.ObjectKey.String(),
+			logFieldObjectKind, id.Kind)
 		return nil, controllerutil.OperationResultNone, nil
 	}
-	r.logger(ctx).V(3).Info("Managed object found, patching",
+	r.logger(ctx).Info("Managed object found, patching",
 		logFieldObjectRef, id.ObjectKey.String(),
-		logFieldObjectKind, id.Kind)
-	appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, dep.dataToPatch, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		logFieldObjectKind, id.Kind,
+		"patchJSON", string(dep.dataToPatch))
+	appliedObj, err := deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, dep.dataToPatch, patchOpts)
 	if err != nil {
 		// Let the next reconciliation retry the patch operation for valid request.
 		if !apierrors.IsInvalid(err) {
@@ -280,7 +278,7 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
 		}
-		appliedObj, err = deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: &forcePatch})
+		appliedObj, err = deploymentClient.Patch(ctx, id.Name, types.ApplyPatchType, data, patchOpts)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
@@ -289,6 +287,18 @@ func (r *reconcilerBase) createOrPatchDeployment(ctx context.Context, declared *
 		return appliedObj, controllerutil.OperationResultNone, nil
 	}
 	return appliedObj, controllerutil.OperationResultUpdated, nil
+}
+
+func (r *reconcilerBase) isAutopilot() (bool, error) {
+	if r.autopilot != nil {
+		return *r.autopilot, nil
+	}
+	autopilot, err := util.IsGKEAutopilotCluster(r.client)
+	if err != nil {
+		return false, fmt.Errorf("unable to determine if it is an Autopilot cluster: %w", err)
+	}
+	r.autopilot = &autopilot
+	return autopilot, nil
 }
 
 // deleteDeploymentFields delete all the fields in allowlist from unstructured object and convert the unstructured object to Deployment object
@@ -313,30 +323,33 @@ type deploymentProcessResult struct {
 }
 
 // compareDeploymentsToCreatePatchData checks if current deployment is same with declared deployment when ignore the fields in allowlist. If not, it creates a byte array used for PATCH later
-func compareDeploymentsToCreatePatchData(isAutopilot bool, declared *appsv1.Deployment, currentDeploymentUnstructured *unstructured.Unstructured, allowList []string, scheme *runtime.Scheme) (*deploymentProcessResult, error) {
+func (r *reconcilerBase) compareDeploymentsToCreatePatchData(declared *appsv1.Deployment, currentDeploymentUnstructured *unstructured.Unstructured, allowList []string) (*deploymentProcessResult, error) {
+	isAutopilot, err := r.isAutopilot()
+	if err != nil {
+		return nil, err
+	}
 	processedCurrent, err := deleteDeploymentFields(allowList, currentDeploymentUnstructured)
 	if err != nil {
-		return &deploymentProcessResult{}, err
+		return nil, err
 	}
 	adjusted, err := adjustContainerResources(isAutopilot, declared, processedCurrent)
 	if err != nil {
-		return &deploymentProcessResult{}, err
+		return nil, err
 	}
-
-	unObjDeclared, err := kinds.ToUnstructured(declared, scheme)
+	uObjDeclared, err := kinds.ToUnstructured(declared, r.scheme)
 	if err != nil {
-		return &deploymentProcessResult{}, err
+		return nil, err
 	}
-	processedDeclared, err := deleteDeploymentFields(allowList, unObjDeclared)
+	processedDeclared, err := deleteDeploymentFields(allowList, uObjDeclared)
 	if err != nil {
-		return &deploymentProcessResult{}, err
+		return nil, err
 	}
 	if equality.Semantic.DeepEqual(processedCurrent.Labels, processedDeclared.Labels) && equality.Semantic.DeepEqual(processedCurrent.Spec, processedDeclared.Spec) {
 		return &deploymentProcessResult{true, adjusted, nil}, nil
 	}
-	data, err := json.Marshal(unObjDeclared)
+	data, err := json.Marshal(uObjDeclared)
 	if err != nil {
-		return &deploymentProcessResult{}, err
+		return nil, err
 	}
 	return &deploymentProcessResult{false, adjusted, data}, nil
 }
@@ -582,7 +595,7 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 			return errors.Wrapf(err, "Secret %s get failed", caCertSecretRefName)
 		}
 		if _, ok := secret.Data[CACertSecretKey]; !ok {
-			return fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
+			return errors.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
 		}
 	}
 	return nil
@@ -592,7 +605,7 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
 	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
-		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
+		return errors.Wrap(err, "missing apiVersion or kind and cannot assign it")
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 	return nil

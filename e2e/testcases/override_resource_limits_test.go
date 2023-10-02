@@ -55,7 +55,12 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Get the default CPU/memory requests and limits of the reconciler container and the git-sync container
-	defaultResources := controllers.ReconcilerContainerResourceDefaults()
+	var defaultResources map[string]v1beta1.ContainerResourcesSpec
+	if nt.IsGKEAutopilot {
+		defaultResources = controllers.ReconcilerContainerResourceDefaultsForAutopilot()
+	} else {
+		defaultResources = controllers.ReconcilerContainerResourceDefaults()
+	}
 
 	// Verify root-reconciler uses the default resource requests and limits
 	rootReconcilerDeployment := &appsv1.Deployment{}
@@ -418,7 +423,12 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Get the default CPU/memory requests and limits of the reconciler container and the git-sync container
-	defaultResources := controllers.ReconcilerContainerResourceDefaults()
+	var defaultResources map[string]v1beta1.ContainerResourcesSpec
+	if nt.IsGKEAutopilot {
+		defaultResources = controllers.ReconcilerContainerResourceDefaultsForAutopilot()
+	} else {
+		defaultResources = controllers.ReconcilerContainerResourceDefaults()
+	}
 
 	// Verify root-reconciler uses the default resource requests and limits
 	rootReconcilerDeployment := &appsv1.Deployment{}

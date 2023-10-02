@@ -46,7 +46,7 @@ func ReconcilerContainerResourceDefaults() map[string]v1beta1.ContainerResources
 		reconcilermanager.HelmSync: {
 			ContainerName: reconcilermanager.HelmSync,
 			CPURequest:    resource.MustParse("50m"),
-			MemoryRequest: resource.MustParse("256Mi"),
+			MemoryRequest: resource.MustParse("200Mi"),
 		},
 		reconcilermanager.GitSync: {
 			ContainerName: reconcilermanager.GitSync,

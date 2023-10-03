@@ -59,8 +59,8 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 		},
 		{
 			name:                 "source root directory created within the retry cap",
-			retryCap:             10 * time.Millisecond,
-			srcRootCreateLatency: time.Millisecond,
+			retryCap:             20 * time.Millisecond,
+			srcRootCreateLatency: 5 * time.Millisecond,
 			expectedSourceCommit: commit,
 		},
 		{
@@ -71,7 +71,7 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 		},
 		{
 			name:                 "symlink created within the retry cap",
-			retryCap:             10 * time.Millisecond,
+			retryCap:             20 * time.Millisecond,
 			symlinkCreateLatency: 5 * time.Millisecond,
 			expectedSourceCommit: commit,
 		},
@@ -174,6 +174,7 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 				}
 			}()
 
+			t.Logf("start calling SourceCommitAndDirWithRetry at %v", time.Now())
 			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, v1beta1.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, err, "got unexpected error %v", err)

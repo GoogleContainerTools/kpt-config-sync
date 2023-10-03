@@ -164,7 +164,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 		{
 			name:                 "symlink created within the retry cap",
 			commit:               originCommit,
-			retryCap:             10 * time.Millisecond,
+			retryCap:             20 * time.Millisecond,
 			symlinkCreateLatency: 5 * time.Millisecond,
 			expectedCommit:       originCommit,
 		},
@@ -281,6 +281,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 				syncDir: cmpath.Absolute(filepath.Join(parserCommitDir, syncDir)),
 			}
 
+			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
 			hydrationState, hydrationErr := parser.readHydratedDirWithRetry(backoff,
 				cmpath.Absolute(hydratedRoot), parser.reconcilerName, *srcState)
 

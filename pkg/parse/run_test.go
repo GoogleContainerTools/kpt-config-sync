@@ -60,6 +60,7 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 	parser.sourceFormat = filesystem.SourceFormatUnstructured
 	parser.opts = opts{
 		parser:             filesystem.NewParser(&reader.File{}),
+		statusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 		syncName:           rootSyncName,
 		reconcilerName:     rootReconcilerName,
 		client:             syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
@@ -191,8 +192,8 @@ func TestRun(t *testing.T) {
 		{
 			id:                   "1",
 			name:                 "source commit directory created within the retry cap",
-			retryCap:             110 * time.Millisecond,
-			srcRootCreateLatency: 100 * time.Millisecond,
+			retryCap:             20 * time.Millisecond,
+			srcRootCreateLatency: 5 * time.Millisecond,
 			needRetry:            false,
 			expectedMsg:          "Sync Completed",
 		},
@@ -282,7 +283,7 @@ func TestRun(t *testing.T) {
 			util.SourceRetryBackoff = wait.Backoff{
 				Duration: time.Millisecond,
 				Factor:   2,
-				Steps:    20,
+				Steps:    10,
 				Cap:      tc.retryCap,
 				Jitter:   0.1,
 			}

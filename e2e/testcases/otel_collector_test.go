@@ -17,7 +17,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -33,9 +32,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -209,7 +210,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 }
 
 func setupMetricsServiceAccount(nt *nomostest.NT) {
-	workloadPool, err := getWorkloadPool(nt)
+	workloadPool, err := workloadidentity.GetWorkloadPool(nt)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -217,10 +218,8 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 	// Otherwise, the node identity is used.
 	if workloadPool != "" {
 		gsaEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", MonitorGSA, *e2e.GCPProject)
-		// Validate that the GCP Service Account exists
-		_, err := describeGCPServiceAccount(nt, gsaEmail, *e2e.GCPProject)
-		if err != nil {
-			nt.T.Fatalf("failed to get service account for workload identity: %v", err)
+		if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
+			nt.T.Fatal(err)
 		}
 
 		nt.T.Cleanup(func() {
@@ -250,17 +249,6 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 			nt.T.Fatal(err)
 		}
 	}
-}
-
-func describeGCPServiceAccount(nt *nomostest.NT, gsaEmail, projectID string) ([]byte, error) {
-	args := []string{"iam", "service-accounts", "describe", gsaEmail, "--project", projectID}
-	nt.T.Logf("gcloud %s", strings.Join(args, " "))
-	cmd := exec.Command("gcloud", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, errors.Errorf("failed to describe GCP service account: %s: %v\nstdout/stderr:\n%s", gsaEmail, err, string(out))
-	}
-	return out, nil
 }
 
 func validateDeploymentLogHasFailure(nt *nomostest.NT, deployment, namespace, errorString string) error {

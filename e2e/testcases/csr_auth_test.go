@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -26,9 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/helm"
+	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -71,10 +71,8 @@ func TestGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
-	if workloadPool, err := getWorkloadPool(nt); err != nil {
+	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
-	} else if workloadPool != "" {
-		nt.T.Fatal("expected workload identity to be disabled")
 	}
 
 	tenant := "tenant-a"
@@ -255,12 +253,8 @@ func truncateStringByLength(s string, l int) string {
 func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 
-	// Verify workload identity is enabled on the cluster
-	expectedPool := fmt.Sprintf("%s.svc.id.goog", *e2e.GCPProject)
-	if workloadPool, err := getWorkloadPool(nt); err != nil {
+	if err := workloadidentity.ValidateEnabled(nt); err != nil {
 		nt.T.Fatal(err)
-	} else if workloadPool != expectedPool {
-		nt.T.Fatalf("expected workloadPool %s but got %s", expectedPool, workloadPool)
 	}
 
 	// Truncate the fleetMembership length to be at most 63 characters.
@@ -314,15 +308,15 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 
 	// For helm charts, we need to push the chart to the AR before configuring the RootSync
 	if testSpec.sourceType == v1beta1.HelmSource {
-		chart, err := helm.PushHelmChart(nt, testSpec.sourceChart, testSpec.sourceVersion)
+		chart, err := artifactregistry.PushHelmChart(nt, testSpec.sourceChart, testSpec.sourceVersion)
 		if err != nil {
 			nt.T.Fatalf("failed to push helm chart: %v", err)
 		}
 
-		testSpec.sourceRepo = chart.RepositoryOCI()
-		testSpec.sourceChart = chart.ChartName
-		testSpec.sourceVersion = chart.ChartVersion
-		testSpec.rootCommitFn = helmChartVersion(chart.ChartVersion)
+		testSpec.sourceRepo = chart.Image.RepositoryOCI()
+		testSpec.sourceChart = chart.Image.Name
+		testSpec.sourceVersion = chart.Image.Version
+		testSpec.rootCommitFn = helmChartVersion(chart.Image.Version)
 	}
 
 	// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
@@ -361,43 +355,6 @@ func testWorkloadIdentity(t *testing.T, testSpec workloadIdentityTestSpec) {
 		}
 		validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 	}
-}
-
-// clusterDescribe represents the output format of gcloud container clusters describe
-// this struct contains the field we are interested in
-type clusterDescribe struct {
-	// WorkloadIdentityConfig is the workload identity config
-	WorkloadIdentityConfig workloadIdentityConfig `json:"workloadIdentityConfig"`
-}
-
-type workloadIdentityConfig struct {
-	// WorkloadPool is the workload pool
-	WorkloadPool string `json:"workloadPool"`
-}
-
-// getWorkloadPool verifies that the target cluster has workload identity enabled
-func getWorkloadPool(nt *nomostest.NT) (string, error) {
-	args := []string{
-		"container", "clusters", "describe", nt.ClusterName,
-		"--project", *e2e.GCPProject,
-		"--format", "json",
-	}
-	if *e2e.GCPZone != "" {
-		args = append(args, "--zone", *e2e.GCPZone)
-	}
-	if *e2e.GCPRegion != "" {
-		args = append(args, "--region", *e2e.GCPRegion)
-	}
-	cmd := nt.Shell.Command("gcloud", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-	clusterConfig := &clusterDescribe{}
-	if err := json.Unmarshal(out, clusterConfig); err != nil {
-		return "", err
-	}
-	return clusterConfig.WorkloadIdentityConfig.WorkloadPool, nil
 }
 
 // validateFWICredentials validates whether the reconciler Pod manifests includes

@@ -25,6 +25,7 @@ import (
 
 	"github.com/pkg/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -279,40 +280,50 @@ func TestStressLargeRequest(t *testing.T) {
 	}
 }
 
-// TestStress100CRDs would apply 100 CRDs and validate them as part of the stress test
-// the same scenario is used for nomos CLI throttling validation
+// TestStress100CRDs applies 100 CRDs and validates that syncing still works.
+// This simulates a scenario similar to using Config Connector or Crossplane.
+// This test also validates that nomos status does not use client-side throttling.
 func TestStress100CRDs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "stress-test-ns"
+	crdCount := 100
 
-	// Apply 100 small CRDs on the cluster to make sure Config Sync can still work.
-	for i := 1; i <= 100; i++ {
-		crd := fakeCRD("anvil", fmt.Sprintf("acme-%d.com", i))
+	nt.T.Cleanup(func() {
+		for i := 1; i <= crdCount; i++ {
+			crd := fakeCRD("Anvil", fmt.Sprintf("acme-%d.com", i))
+			if err := nt.KubeClient.Delete(crd); err != nil {
+				if !apierrors.IsNotFound(err) {
+					nt.T.Error(err)
+				}
+			}
+		}
+	})
+
+	for i := 1; i <= crdCount; i++ {
+		crd := fakeCRD("Anvil", fmt.Sprintf("acme-%d.com", i))
 		if err := nt.KubeClient.Create(crd); err != nil {
 			nt.T.Fatal(err)
 		}
 	}
 
-	nt.T.Log("restarting the reconciler Pod to discovery the new 100 CRDs in the controller startup time")
+	nt.T.Log("Replacing the reconciler Pod to ensure the new CRDs are discovered")
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
 
-	nt.T.Log("adding a test namespace to the repo to trigger a new sync")
+	nt.T.Log("Adding a test namespace to the repo to trigger a new sync")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a test namespace to trigger a new sync"))
 
-	nt.T.Logf("waiting for the sync to complete")
+	nt.T.Logf("Waiting for the sync to complete")
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Validate client-side throttling is disabled for nomos status
-	cmd := nt.Shell.Command("nomos", "status")
-	out, err := cmd.CombinedOutput()
+	out, err := nt.Shell.ExecWithDebug("nomos", "status")
 	if err != nil {
-		nt.T.Log(string(out))
 		nt.T.Fatal(err)
 	}
 

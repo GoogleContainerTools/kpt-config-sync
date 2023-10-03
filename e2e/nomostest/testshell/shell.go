@@ -99,41 +99,29 @@ func isSignalExitError(err error, sig syscall.Signal) bool {
 // Git is a convenience method for calling git.
 // Returns STDOUT & STDERR combined, and an error if git exited abnormally.
 func (tc *TestShell) Git(args ...string) ([]byte, error) {
-	tc.Logger.Debugf("git %s", strings.Join(args, " "))
-	out, err := exec.Command("git", args...).CombinedOutput()
-	if err != nil {
-		if !tc.Logger.IsDebugEnabled() {
-			tc.Logger.Infof("git %s", strings.Join(args, " "))
-		}
-		tc.Logger.Info(string(out))
-		return out, err
-	}
-	return out, nil
+	return tc.ExecWithDebug("git", args...)
 }
 
 // Docker is a convenience method for calling docker.
 // Returns STDOUT & STDERR combined, and an error if docker exited abnormally.
 func (tc *TestShell) Docker(args ...string) ([]byte, error) {
-	tc.Logger.Debugf("docker %s", strings.Join(args, " "))
-	out, err := exec.Command("docker", args...).CombinedOutput()
-	if err != nil {
-		if !tc.Logger.IsDebugEnabled() {
-			tc.Logger.Infof("docker %s", strings.Join(args, " "))
-		}
-		tc.Logger.Info(string(out))
-		return out, err
-	}
-	return out, nil
+	return tc.ExecWithDebug("docker", args...)
 }
 
 // Helm is a convenience method for calling helm.
 // Returns STDOUT & STDERR combined, and an error if helm exited abnormally.
 func (tc *TestShell) Helm(args ...string) ([]byte, error) {
-	tc.Logger.Debugf("helm %s", strings.Join(args, " "))
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	return tc.ExecWithDebug("helm", args...)
+}
+
+// ExecWithDebug is a convenience method for invoking a subprocess with the
+// KUBECONFIG environment variable and debug logging.
+func (tc *TestShell) ExecWithDebug(name string, args ...string) ([]byte, error) {
+	tc.Logger.Debugf("%s %s", name, strings.Join(args, " "))
+	out, err := exec.Command(name, args...).CombinedOutput()
 	if err != nil {
 		if !tc.Logger.IsDebugEnabled() {
-			tc.Logger.Infof("helm %s", strings.Join(args, " "))
+			tc.Logger.Infof("%s %s", name, strings.Join(args, " "))
 		}
 		tc.Logger.Info(string(out))
 		return out, err

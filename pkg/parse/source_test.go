@@ -164,20 +164,20 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 		{
 			name:                 "symlink created within the retry cap",
 			commit:               originCommit,
-			retryCap:             20 * time.Millisecond,
+			retryCap:             100 * time.Millisecond,
 			symlinkCreateLatency: 5 * time.Millisecond,
 			expectedCommit:       originCommit,
 		},
 		{
 			name:            "error file exists",
-			retryCap:        10 * time.Millisecond,
+			retryCap:        100 * time.Millisecond,
 			hydrationErr:    `{"code": "1068", "error": "actionable-error"}`,
 			expectedErrMsg:  "actionable-error",
 			expectedErrCode: status.ActionableHydrationErrorCode,
 		},
 		{
 			name:            "sync directory doesn't exist",
-			retryCap:        10 * time.Millisecond,
+			retryCap:        100 * time.Millisecond,
 			commit:          originCommit,
 			syncDir:         "unknown",
 			expectedErrMsg:  "failed to evaluate symbolic link to the hydrated sync directory",

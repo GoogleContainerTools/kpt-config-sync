@@ -67,8 +67,6 @@ exporters:
         - prefix: "host.name"
         - prefix: "k8s.deployment.name"
         - prefix: "k8s.node.name"
-    retry_on_failure:
-      enabled: false
     sending_queue:
       enabled: false
   googlecloud/kubernetes:
@@ -88,8 +86,6 @@ exporters:
       # will not break this ingestion pipeline
       create_service_timeseries: true
       service_resource_labels: false
-    retry_on_failure:
-      enabled: false
     sending_queue:
       enabled: false
 processors:

@@ -27,8 +27,10 @@ GKE_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(GKE_E2E_TAG)
 build-gke-e2e:
 	@echo "+++ Building $(GKE_E2E_IMAGE)"
 	docker buildx build \
+		--target gke-e2e \
 		-t $(GKE_E2E_IMAGE) \
-		-f build/prow/gke-e2e/Dockerfile \
+		-f build/prow/e2e/Dockerfile \
+		$(DOCKER_BUILD_ARGS) \
 		.
 
 .PHONY: push-gke-e2e

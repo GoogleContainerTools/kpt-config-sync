@@ -25,12 +25,10 @@
 
 # TODO: Change the image to be from gcr.io
 # when the go1.17 image is released in it.
-# Note that we shouldn't use the -alpine image here
-# since it is not allowed due to busybox for licensing.
-ARG GOLANG_CONTAINER=golang:1.20-buster
+ARG GOLANG_IMAGE
 
 # Environment to build the helper binaries from.
-FROM ${GOLANG_CONTAINER} AS tools-base
+FROM ${GOLANG_IMAGE} AS tools-base
 
 # Set GOPATH since it is not already set.
 ENV GOPATH=/go
@@ -59,7 +57,7 @@ ARG GOTOPT2_REPO="github.com/filmil/gotopt2"
 RUN go install ${GOTOPT2_REPO}/cmd/gotopt2@v0.1.2
 
 # The build environment docker file.
-FROM ${GOLANG_CONTAINER}
+FROM ${GOLANG_IMAGE}
 
 # Set GOPATH since it is not already set.
 ENV GOPATH=/go
@@ -74,7 +72,6 @@ RUN apt-get update \
   gcc \
   git \
   musl-dev \
-  python-pip \
   upx \
   wget
 

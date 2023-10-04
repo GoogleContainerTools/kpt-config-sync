@@ -16,7 +16,10 @@ pull-buildenv:
 
 build-buildenv: build/buildenv/Dockerfile
 	@echo "+++ Creating the docker container for $(BUILDENV_IMAGE)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) build/buildenv -t $(BUILDENV_IMAGE)
+	@docker buildx build $(DOCKER_BUILD_QUIET) \
+		build/buildenv \
+		-t $(BUILDENV_IMAGE) \
+		$(DOCKER_BUILD_ARGS)
 
 push-buildenv: build-buildenv
 	@gcloud $(GCLOUD_QUIET) auth configure-docker
@@ -62,63 +65,63 @@ build-images: install-helm install-kustomize
 		--target $(RECONCILER_IMAGE) \
 		-t $(RECONCILER_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Reconciler Manager image: $(RECONCILER_MANAGER_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(RECONCILER_MANAGER_IMAGE) \
 		-t $(RECONCILER_MANAGER_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Admission Webhook image: $(ADMISSION_WEBHOOK_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(ADMISSION_WEBHOOK_IMAGE) \
 		-t $(ADMISSION_WEBHOOK_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Hydration Controller image: $(HYDRATION_CONTROLLER_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Hydration Controller image with shell: $(HYDRATION_CONTROLLER_WITH_SHELL_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE) \
 		-t $(HYDRATION_CONTROLLER_WITH_SHELL_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the OCI-sync image: $(OCI_SYNC_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(OCI_SYNC_IMAGE) \
 		-t $(OCI_SYNC_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Helm-sync image: $(HELM_SYNC_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(HELM_SYNC_IMAGE) \
 		-t $(HELM_SYNC_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Askpass image: $(ASKPASS_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(ASKPASS_IMAGE) \
 		-t $(ASKPASS_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 	@echo "+++ Building the Nomos image: $(NOMOS_TAG)"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(NOMOS_IMAGE) \
 		-t $(NOMOS_TAG) \
 		-f build/all/Dockerfile \
-		--build-arg VERSION=${VERSION} \
+		$(DOCKER_BUILD_ARGS) \
 		.
 
 # Deprecated alias of build-images. Remove this once unused.
@@ -258,14 +261,15 @@ config-sync-manifest-no-push: $(OUTPUT_DIR) build-images build-manifests
 .PHONY: config-sync-manifest
 config-sync-manifest: config-sync-manifest-no-push push-images
 
+.PHONY: docker-registry
+docker-registry: install-kind
+	@KIND_VERSION=$(KIND_VERSION) bash scripts/docker-registry.sh
+
 # config-sync-manifest-local builds config sync for local testing in kind.
 # starts local docker registry and pushes images to the local registry
 .PHONY: config-sync-manifest-local
-config-sync-manifest-local: install-kind
-	@KIND_VERSION=$(KIND_VERSION) bash scripts/docker-registry.sh
-	$(MAKE) config-sync-manifest \
-		REGISTRY=localhost:5000 \
-		IMAGE_TAG=$(IMAGE_TAG)
+config-sync-manifest-local: REGISTRY := localhost:5000
+config-sync-manifest-local: docker-registry config-sync-manifest
 
 ###################################
 # E2E Git Server
@@ -320,6 +324,7 @@ build-vulnerability-scanner:
 	@echo "+++ Building $(VULNERABILITY_SCANNER_IMAGE_TAG)"
 	docker buildx build \
 		-t $(VULNERABILITY_SCANNER_IMAGE_TAG) \
+		$(DOCKER_BUILD_ARGS) \
 		build/prow/vulnerability-scanner/
 
 # Push vulnerability-scanner image to registry. For now this is done manually.

@@ -47,7 +47,7 @@ import (
 const (
 	DefaultMonitorKSA     = "default"
 	MonitorGSA            = "e2e-test-metric-writer"
-	GCMExportErrorCaption = "failed to export time series to GCM"
+	GCMExportErrorCaption = "One or more TimeSeries could not be written"
 	GCMMetricPrefix       = "custom.googleapis.com/opencensus/config_sync"
 )
 

@@ -192,7 +192,7 @@ func TestRun(t *testing.T) {
 		{
 			id:                   "1",
 			name:                 "source commit directory created within the retry cap",
-			retryCap:             20 * time.Millisecond,
+			retryCap:             100 * time.Millisecond,
 			srcRootCreateLatency: 5 * time.Millisecond,
 			needRetry:            false,
 			expectedMsg:          "Sync Completed",

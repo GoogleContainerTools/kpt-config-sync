@@ -118,7 +118,8 @@ func (tc *TestShell) Helm(args ...string) ([]byte, error) {
 // KUBECONFIG environment variable and debug logging.
 func (tc *TestShell) ExecWithDebug(name string, args ...string) ([]byte, error) {
 	tc.Logger.Debugf("%s %s", name, strings.Join(args, " "))
-	out, err := exec.Command(name, args...).CombinedOutput()
+	cmd := tc.Command(name, args...)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if !tc.Logger.IsDebugEnabled() {
 			tc.Logger.Infof("%s %s", name, strings.Join(args, " "))

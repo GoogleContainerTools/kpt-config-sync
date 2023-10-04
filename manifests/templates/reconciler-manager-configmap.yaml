@@ -181,7 +181,7 @@ data:
                cpu: "50m"
                memory: "200Mi"
          - name: otel-agent
-           image: gcr.io/config-management-release/otelcontribcol:v0.54.0-gke.1
+           image: gcr.io/config-management-release/otelcontribcol:v0.86.0-gke.1
            command:
            - /otelcontribcol
            args:

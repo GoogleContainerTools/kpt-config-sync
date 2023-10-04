@@ -130,11 +130,14 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: gcr.io/config-management-release/otelcontribcol:v0.54.0-gke.1
+        image: gcr.io/config-management-release/otelcontribcol:v0.86.0-gke.1
         command:
         - /otelcontribcol
         args:
         - "--config=/conf/otel-collector-config.yaml"
+        # The prometheus transformer appends `_ratio` to gauge metrics: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.86.0/pkg/translator/prometheus/normalize_name.go#L149
+        # Add the feature gate to enable metric suffix trimming.
+        - "--feature-gates=-pkg.translator.prometheus.NormalizeName"
         resources:
           limits:
             cpu: 1

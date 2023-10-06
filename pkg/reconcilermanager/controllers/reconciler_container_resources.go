@@ -121,8 +121,8 @@ func ReconcilerContainerResourceDefaultsForAutopilot() map[string]v1beta1.Contai
 			ContainerName: metrics.OtelAgentName,
 			CPURequest:    resource.MustParse("10m"),
 			CPULimit:      resource.MustParse("10m"),
-			MemoryRequest: resource.MustParse("32Mi"),
-			MemoryLimit:   resource.MustParse("32Mi"),
+			MemoryRequest: resource.MustParse("64Mi"),
+			MemoryLimit:   resource.MustParse("64Mi"),
 		},
 	}
 }

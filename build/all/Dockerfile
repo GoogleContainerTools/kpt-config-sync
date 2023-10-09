@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG GOLANG_IMAGE
+ARG DEBIAN_BASE_IMAGE
+
 # Build all Config Sync go binaries
-FROM golang:1.20.8 as bins
+FROM ${GOLANG_IMAGE} as bins
 
 WORKDIR /workspace
 
@@ -42,7 +45,7 @@ RUN scripts/prepare-licenses.sh
 
 # Debian non-root base image
 # Uses the same nonroot UID as distroless
-FROM gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.1 as debian-nonroot
+FROM ${DEBIAN_BASE_IMAGE} as debian-nonroot
 WORKDIR /
 ARG USERNAME=nonroot
 ARG USER_UID=65532

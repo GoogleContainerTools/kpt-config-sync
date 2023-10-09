@@ -36,6 +36,17 @@ OUTPUT_DIR := $(abspath .output)
 # Self-contained GOPATH dir.
 GO_DIR := $(OUTPUT_DIR)/go
 
+# Base image used for all golang containers
+GOLANG_IMAGE := golang:1.20.8-bullseye
+# Base image used for debian containers
+DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.1
+# Base image used for gcloud install, primarily for test images.
+# We use -slim for a smaller base image where we can choose which components to install.
+# https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
+GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:449.0.0-slim
+# Base image used for docker cli install, primarily used for test images.
+DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
+
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
 KUSTOMIZE_VERSION := v5.1.1-gke.1
@@ -97,7 +108,7 @@ TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-inf
 
 # Docker image used for build and test. This image does not support CGO.
 # When upgrading this tag, publish the image after the change is submitted.
-BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.2.13
+BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.2.14
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler
@@ -139,25 +150,25 @@ endif
 OLD_IMAGE_TAG ?= $(IMAGE_TAG)
 
 # Base image names as given on gcr.io
-RECONCILER_GCR := $(REGISTRY)/$(RECONCILER_IMAGE)
-RECONCILER_MANAGER_GCR := $(REGISTRY)/$(RECONCILER_MANAGER_IMAGE)
-ADMISSION_WEBHOOK_GCR := $(REGISTRY)/$(ADMISSION_WEBHOOK_IMAGE)
-HYDRATION_CONTROLLER_GCR := $(REGISTRY)/$(HYDRATION_CONTROLLER_IMAGE)
-HYDRATION_CONTROLLER_WITH_SHELL_GCR := $(REGISTRY)/$(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE)
-OCI_SYNC_GCR := $(REGISTRY)/$(OCI_SYNC_IMAGE)
-HELM_SYNC_GCR := $(REGISTRY)/$(HELM_SYNC_IMAGE)
-NOMOS_GCR := $(REGISTRY)/$(NOMOS_IMAGE)
-ASKPASS_GCR := $(REGISTRY)/$(ASKPASS_IMAGE)
+RECONCILER_GCR = $(REGISTRY)/$(RECONCILER_IMAGE)
+RECONCILER_MANAGER_GCR = $(REGISTRY)/$(RECONCILER_MANAGER_IMAGE)
+ADMISSION_WEBHOOK_GCR = $(REGISTRY)/$(ADMISSION_WEBHOOK_IMAGE)
+HYDRATION_CONTROLLER_GCR = $(REGISTRY)/$(HYDRATION_CONTROLLER_IMAGE)
+HYDRATION_CONTROLLER_WITH_SHELL_GCR = $(REGISTRY)/$(HYDRATION_CONTROLLER_WITH_SHELL_IMAGE)
+OCI_SYNC_GCR = $(REGISTRY)/$(OCI_SYNC_IMAGE)
+HELM_SYNC_GCR = $(REGISTRY)/$(HELM_SYNC_IMAGE)
+NOMOS_GCR = $(REGISTRY)/$(NOMOS_IMAGE)
+ASKPASS_GCR = $(REGISTRY)/$(ASKPASS_IMAGE)
 # Full image tags as given on gcr.io
-RECONCILER_TAG := $(RECONCILER_GCR):$(IMAGE_TAG)
-RECONCILER_MANAGER_TAG := $(RECONCILER_MANAGER_GCR):$(IMAGE_TAG)
-ADMISSION_WEBHOOK_TAG := $(ADMISSION_WEBHOOK_GCR):$(IMAGE_TAG)
-HYDRATION_CONTROLLER_TAG := $(HYDRATION_CONTROLLER_GCR):$(IMAGE_TAG)
-HYDRATION_CONTROLLER_WITH_SHELL_TAG := $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(IMAGE_TAG)
-OCI_SYNC_TAG := $(OCI_SYNC_GCR):$(IMAGE_TAG)
-HELM_SYNC_TAG := $(HELM_SYNC_GCR):$(IMAGE_TAG)
-NOMOS_TAG := $(NOMOS_GCR):$(IMAGE_TAG)
-ASKPASS_TAG := $(ASKPASS_GCR):$(IMAGE_TAG)
+RECONCILER_TAG = $(RECONCILER_GCR):$(IMAGE_TAG)
+RECONCILER_MANAGER_TAG = $(RECONCILER_MANAGER_GCR):$(IMAGE_TAG)
+ADMISSION_WEBHOOK_TAG = $(ADMISSION_WEBHOOK_GCR):$(IMAGE_TAG)
+HYDRATION_CONTROLLER_TAG = $(HYDRATION_CONTROLLER_GCR):$(IMAGE_TAG)
+HYDRATION_CONTROLLER_WITH_SHELL_TAG = $(HYDRATION_CONTROLLER_WITH_SHELL_GCR):$(IMAGE_TAG)
+OCI_SYNC_TAG = $(OCI_SYNC_GCR):$(IMAGE_TAG)
+HELM_SYNC_TAG = $(HELM_SYNC_GCR):$(IMAGE_TAG)
+NOMOS_TAG = $(NOMOS_GCR):$(IMAGE_TAG)
+ASKPASS_TAG = $(ASKPASS_GCR):$(IMAGE_TAG)
 
 DOCKER_RUN_ARGS = \
 	$(DOCKER_INTERACTIVE)                                              \
@@ -173,6 +184,15 @@ DOCKER_RUN_ARGS = \
 	-w /go/src/$(REPO)                                                 \
 	--rm                                                               \
 	$(BUILDENV_IMAGE)                                                  \
+
+# Common build-arg defaults to define in one place
+DOCKER_BUILD_ARGS = \
+	--build-arg VERSION=$(VERSION) \
+	--build-arg KIND_VERSION=$(KIND_VERSION) \
+	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
+	--build-arg DEBIAN_BASE_IMAGE=$(DEBIAN_BASE_IMAGE) \
+	--build-arg GCLOUD_IMAGE=$(GCLOUD_IMAGE) \
+	--build-arg DOCKER_CLI_IMAGE=$(DOCKER_CLI_IMAGE)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

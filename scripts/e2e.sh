@@ -15,7 +15,8 @@
 
 
 #
-# golang e2e test launcher. Do not run directly, this is intended to be executed by the prow job inside a container.
+# golang e2e test launcher.
+# This wraps the e2e test execution and creates a junit report.
 
 set -eo pipefail
 
@@ -39,7 +40,7 @@ if [[ -n "${ARTIFACTS}" && -d "${ARTIFACTS}" ]]; then
   # proper parsing.
   # TODO: revert when fixed https://github.com/jstemmer/go-junit-report/issues/169
   sed -i -e 's/=== NAME/=== CONT/g' test_results.txt
-  cat test_results.txt | go-junit-report --subtest-mode=exclude-parents > "${ARTIFACTS}/junit_report.xml"
+  go-junit-report --subtest-mode=exclude-parents < test_results.txt > "${ARTIFACTS}/junit_report.xml"
   if [ "$exit_code" -eq 0 ]; then
     junit-report reset-failure --path="${ARTIFACTS}/junit_report.xml"
   fi

@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e"
@@ -34,8 +36,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kind/pkg/errors"
 )
 
 // fileMode is the file mode to use for all operations.
@@ -269,6 +274,14 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	// init the Client & WatchClient
 	nt.RenewClient()
 
+	// Create workload to disable scale-to-zero.
+	// Scale-to-zero breaks API discovery on GKE Autopilot: b/209800496S
+	if *e2e.GKEAutopilot {
+		if err := applyAutoPilotKeepAlive(nt); err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+
 	if opts.SkipConfigSyncInstall {
 		return nt
 	}
@@ -367,6 +380,26 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	}
 
 	return nt
+}
+
+func applyAutoPilotKeepAlive(nt *NT) error {
+	yamlPath := "../testdata/autopilot-keepalive/deployment.yaml"
+	yamlBytes, err := os.ReadFile(yamlPath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read file %q", yamlPath)
+	}
+	uObj := &unstructured.Unstructured{}
+	if err := yaml.Unmarshal(yamlBytes, uObj); err != nil {
+		return errors.Wrapf(err, "failed to decode %q as yaml", yamlPath)
+	}
+	// Apply with nt.KubeClient.Client directly, not nt.KubeClient.Apply
+	// to avoid adding the test label, to avoid deletion during cleanup
+	nt.Logger.Infof("applying %s", yamlPath)
+	patchOpts := []client.PatchOption{client.FieldOwner(FieldManager), client.ForceOwnership}
+	if err := nt.KubeClient.Client.Patch(nt.Context, uObj, client.Apply, patchOpts...); err != nil {
+		return errors.Wrapf(err, "failed to apply %s", kinds.ObjectSummary(uObj))
+	}
+	return nil
 }
 
 func setupTestCase(nt *NT, opts *ntopts.New) {

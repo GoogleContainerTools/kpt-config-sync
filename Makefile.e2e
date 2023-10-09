@@ -41,7 +41,7 @@ test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 # Useful for modifying test code and rerunning tests without rebuilding images.
 .PHONY: test-e2e-go-nobuild
 test-e2e-nobuild: install-kustomize install-helm
-	./build/test-e2e-go/e2e.sh $(E2E_ARGS)
+	./scripts/e2e.sh $(E2E_ARGS)
 
 # Run the Go e2e tests on GKE without building images/manifests.
 # The test framework will create/teardown the GKE clusters.
@@ -59,17 +59,35 @@ test-e2e-gke-nobuild:
 .PHONY: test-e2e-gke
 test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 
+KIND_IMAGE := "kind-image"
+
+.PHONY: build-kind-e2e
+build-kind-e2e: install-kind install-kustomize install-helm
+	@echo "+++ Building $(KIND_IMAGE)"
+	docker buildx build . \
+		--target kind-e2e \
+		-f build/prow/e2e/Dockerfile \
+		-t $(KIND_IMAGE) \
+		$(DOCKER_BUILD_ARGS)
+
 # This target runs all the e2e tests with the multi-repo mode.
 # This is the target used by the presubmits.
 .PHONY: test-e2e-kind-multi-repo
-test-e2e-kind-multi-repo: config-sync-manifest-local
+test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 	kind delete clusters --all
-	GCP_PROJECT=$(GCP_PROJECT) KIND_VERSION=$(KIND_VERSION) ./scripts/e2e-kind.sh \
-		--share-test-env \
-		--timeout $(KIND_E2E_TIMEOUT) \
-		--test.v -v \
-		--num-clusters 15 \
-		$(E2E_ARGS)
+	docker run \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(ARTIFACTS):/logs/artifacts \
+		--env ARTIFACTS="/logs/artifacts" \
+		--env GCP_PROJECT=$(GCP_PROJECT) \
+		--network="host" \
+		$(KIND_IMAGE) \
+		./scripts/e2e.sh \
+			--share-test-env \
+			--timeout $(KIND_E2E_TIMEOUT) \
+			--test.v -v \
+			--num-clusters 15 \
+			$(E2E_ARGS)
 
 # This target runs the first group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group1

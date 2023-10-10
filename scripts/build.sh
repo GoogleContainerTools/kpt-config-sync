@@ -61,10 +61,4 @@ for PLATFORM in "${PLATFORMS[@]}"; do
   if [[ "${GOOS}" == "windows" ]]; then
     bin="$bin.exe"
   fi
-  # Use upx to reduce binary size.
-  if [[ "${GOOS}" != "darwin" ]]; then
-    # upx doesn't play nice with Darwin 16 for Go Binaries.
-    # We don't care to debug this since the file size difference is ~20MB.
-    upx "${GOPATH}/bin/${PLATFORM}/${bin}"
-  fi
 done

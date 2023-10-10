@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -41,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kind/pkg/errors"
+	"sigs.k8s.io/yaml"
 )
 
 // fileMode is the file mode to use for all operations.
@@ -392,7 +392,6 @@ func applyAutoPilotKeepAlive(nt *NT) error {
 	if err := yaml.Unmarshal(yamlBytes, uObj); err != nil {
 		return errors.Wrapf(err, "failed to decode %q as yaml", yamlPath)
 	}
-	uObj.SetGroupVersionKind(kinds.Deployment())
 	// Apply with nt.KubeClient.Client directly, not nt.KubeClient.Apply
 	// to avoid adding the test label, to avoid deletion during cleanup
 	nt.Logger.Infof("applying %s", yamlPath)

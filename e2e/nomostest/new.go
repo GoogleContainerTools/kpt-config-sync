@@ -392,6 +392,7 @@ func applyAutoPilotKeepAlive(nt *NT) error {
 	if err := yaml.Unmarshal(yamlBytes, uObj); err != nil {
 		return errors.Wrapf(err, "failed to decode %q as yaml", yamlPath)
 	}
+	uObj.SetGroupVersionKind(kinds.Deployment())
 	// Apply with nt.KubeClient.Client directly, not nt.KubeClient.Apply
 	// to avoid adding the test label, to avoid deletion during cleanup
 	nt.Logger.Infof("applying %s", yamlPath)

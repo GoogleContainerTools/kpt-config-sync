@@ -1080,9 +1080,21 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
-# kpt.dev/resourcegroup v0.0.0-20221109031828-db4c3d2c630f
-## explicit; go 1.17
+# kpt.dev/resourcegroup v0.0.0-20231023223236-7ca71815022b
+## explicit; go 1.20
 kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1
+kpt.dev/resourcegroup/controllers/handler
+kpt.dev/resourcegroup/controllers/log
+kpt.dev/resourcegroup/controllers/metrics
+kpt.dev/resourcegroup/controllers/profiler
+kpt.dev/resourcegroup/controllers/resourcegroup
+kpt.dev/resourcegroup/controllers/resourcemap
+kpt.dev/resourcegroup/controllers/root
+kpt.dev/resourcegroup/controllers/runner
+kpt.dev/resourcegroup/controllers/status
+kpt.dev/resourcegroup/controllers/typeresolver
+kpt.dev/resourcegroup/controllers/watch
+kpt.dev/resourcegroup/third_party/k8s.io/client-go/tools/cache
 # sigs.k8s.io/cli-utils v0.35.0
 ## explicit; go 1.18
 sigs.k8s.io/cli-utils/pkg/apis/actuation

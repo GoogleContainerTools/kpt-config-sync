@@ -22,7 +22,7 @@ build-buildenv: build/buildenv/Dockerfile
 		$(DOCKER_BUILD_ARGS)
 
 push-buildenv: build-buildenv
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(BUILDENV_IMAGE)))
 	@docker push $(BUILDENV_IMAGE)
 
 ###################################
@@ -82,7 +82,7 @@ build-images-multirepo: build-images
 auth-docker:
 	@echo "+++ Using account:"
 	gcloud config get-value account
-	@gcloud $(GCLOUD_QUIET) auth configure-docker
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(REGISTRY)))
 
 # Targets for pushing individual images
 PUSH_IMAGE_TARGETS := $(patsubst %,__push-image-%,$(IMAGES))

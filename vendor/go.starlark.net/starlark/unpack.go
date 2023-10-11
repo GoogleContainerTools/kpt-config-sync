@@ -8,6 +8,8 @@ import (
 	"log"
 	"reflect"
 	"strings"
+
+	"go.starlark.net/internal/spell"
 )
 
 // An Unpacker defines custom argument unpacking behavior.
@@ -149,7 +151,16 @@ kwloop:
 				continue kwloop
 			}
 		}
-		return fmt.Errorf("%s: unexpected keyword argument %s", fnname, name)
+		err := fmt.Errorf("%s: unexpected keyword argument %s", fnname, name)
+		names := make([]string, 0, nparams)
+		for i := 0; i < nparams; i += 2 {
+			param, _ := paramName(pairs[i])
+			names = append(names, param)
+		}
+		if n := spell.Nearest(string(name), names); n != "" {
+			err = fmt.Errorf("%s (did you mean %s?)", err.Error(), n)
+		}
+		return err
 	}
 
 	// Check that all non-optional parameters are defined.
@@ -289,7 +300,9 @@ func unpackOneArg(v Value, ptr interface{}) error {
 			// Attempt to call Value.Type method.
 			func() {
 				defer func() { recover() }()
-				paramType = paramVar.MethodByName("Type").Call(nil)[0].String()
+				if typer, _ := paramVar.Interface().(interface{ Type() string }); typer != nil {
+					paramType = typer.Type()
+				}
 			}()
 			return fmt.Errorf("got %s, want %s", v.Type(), paramType)
 		}

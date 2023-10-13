@@ -1,13 +1,13 @@
 module kpt.dev/configsync
 
-go 1.20
+go 1.21
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
 	cloud.google.com/go/monitoring v1.8.0
 	cloud.google.com/go/trace v1.4.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
-	github.com/GoogleContainerTools/kpt v1.0.0-beta.39
+	github.com/GoogleContainerTools/kpt v1.0.0-beta.46
 	github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20220706221933-7181f451a663
 	github.com/Masterminds/semver v1.5.0
@@ -39,17 +39,17 @@ require (
 	google.golang.org/api v0.108.0
 	google.golang.org/genproto v0.0.0-20230124163310-31e0e69b6fc2
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.26.7
-	k8s.io/apiextensions-apiserver v0.26.7
-	k8s.io/apimachinery v0.26.7
-	k8s.io/cli-runtime v0.26.7
-	k8s.io/client-go v0.26.7
+	k8s.io/api v0.26.9
+	k8s.io/apiextensions-apiserver v0.26.9
+	k8s.io/apimachinery v0.26.9
+	k8s.io/cli-runtime v0.26.9
+	k8s.io/client-go v0.26.9
 	k8s.io/cluster-registry v0.0.6
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kube-aggregator v0.26.7
 	k8s.io/kube-openapi v0.0.0-20230109183929-3758b55a6596
-	k8s.io/kubectl v0.26.7
-	k8s.io/kubernetes v1.26.7
+	k8s.io/kubectl v0.26.9
+	k8s.io/kubernetes v1.26.9
 	k8s.io/utils v0.0.0-20230115233650-391b47cb4029
 	kpt.dev/resourcegroup v0.0.0-20221109031828-db4c3d2c630f
 	sigs.k8s.io/cli-utils v0.35.0
@@ -141,7 +141,7 @@ require (
 	google.golang.org/protobuf v1.29.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiserver v0.26.7 // indirect
-	k8s.io/component-base v0.26.7 // indirect
+	k8s.io/apiserver v0.26.9 // indirect
+	k8s.io/component-base v0.26.9 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 )

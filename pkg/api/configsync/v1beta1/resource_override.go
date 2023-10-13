@@ -92,6 +92,18 @@ type RootSyncOverrideSpec struct {
 	// +kubebuilder:validation:Enum=implicit;explicit
 	// +optional
 	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
+
+	// ClusterRole controls which role to bind the service account for this RootSync's
+	// reconciler to. Defaults to 'cluster-admin'.
+	//
+	// The specified ClusterRole needs to be created manually.
+	//
+	// You can use the special sentinel value '%none%' to disable binding to a ClusterRole
+	// entirely; it is then your responsibility to bind any roles to the relevant service
+	// account.
+	//
+	// +optional
+	ClusterRole string `json:"clusterRole,omitempty"`
 }
 
 // RepoSyncOverrideSpec allows to override the settings for a RepoSync reconciler pod

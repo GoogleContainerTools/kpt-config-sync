@@ -207,8 +207,20 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "upserting cluster role binding")
+	roleName := rs.Spec.SafeOverride().ClusterRole
+	if roleName == "" {
+		roleName = "cluster-admin"
+	}
+	if roleName != "%none%" {
+		if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleName); err != nil {
+			return errors.Wrap(err, "upserting cluster role binding")
+		}
+	} else {
+		// override might have been updated to %none% on an existing sync
+		// ensure that any existing binding is removed
+		if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+			return errors.Wrap(err, "ensuring clusterrolebinding does not exist")
+		}
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -779,14 +791,14 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, clusterRole string) (client.ObjectKey, error) {
 	crbRef := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
 		childCRB.OwnerReferences = nil
-		childCRB.RoleRef = rolereference("cluster-admin", "ClusterRole")
+		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
 		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		// Remove existing OwnerReferences, now that we're using finalizers.
 		childCRB.OwnerReferences = nil

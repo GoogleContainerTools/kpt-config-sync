@@ -21,10 +21,10 @@
 # clusters rather than kind, so we don't need docker in docker.
 # Note: nothing builds this, if you update the version, you will need to rebuild manually.
 # TODO: setup postsubmit job to build this image
-GKE_E2E_TAG := v1.0.0-$(shell git rev-parse --short HEAD)
+GKE_E2E_TAG := v1.1.0-$(shell git rev-parse --short HEAD)
 GKE_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(GKE_E2E_TAG)
 .PHONY: build-gke-e2e
-build-gke-e2e:
+build-gke-e2e: install-helm install-kustomize install-kind
 	@echo "+++ Building $(GKE_E2E_IMAGE)"
 	docker buildx build \
 		--target gke-e2e \
@@ -36,38 +36,6 @@ build-gke-e2e:
 .PHONY: push-gke-e2e
 push-gke-e2e:
 	@docker push $(GKE_E2E_IMAGE)
-
-###################################
-# Helpers
-###################################
-
-.PHONY: install-crane
-# install crane binary to publish the image
-install-crane:
-	go install github.com/google/go-containerregistry/cmd/crane@latest
-
-.PHONY: clean-helm
-# remove any existing helm directory/binary. The install-helm target was previously
-# creating a directory at this path rather than the binary/file.
-clean-helm:
-	@rm -rf $(HELM_STAGING_DIR)
-	@rm -rf $(HELM)
-
-HELM_URL := gs://config-management-release/config-sync/helm/tag/$(HELM_VERSION)/helm-$(HELM_VERSION)-linux-amd64.tar.gz
-HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
-HELM_TARBALL := /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
-
-.PHONY: install-helm
-# install helm binary to publish the image
-install-helm: clean-helm buildenv-dirs
-	@gsutil cp $(HELM_URL).sha256 $(HELM_TARBALL).sha256
-	@gsutil cp $(HELM_URL) $(HELM_TARBALL)
-	@echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum -c
-	@mkdir -p $(HELM_STAGING_DIR)
-	@tar -zxvf $(HELM_TARBALL) -C $(HELM_STAGING_DIR)
-	@cp $(HELM_STAGING_DIR)/helm $(HELM)
-	@rm $(HELM_TARBALL)
-	@rm $(HELM_TARBALL).sha256
 
 ###################################
 # Prow environment provisioning
@@ -87,11 +55,10 @@ BOOKINFO_REPO_PUBLIC_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT
 # This target is run as a singleton against the ci-artifacts project, since
 # these require for the registries to be public.
 .PHONY: push-test-oci-images-public
-push-test-oci-images-public: install-crane
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
-	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE)
-	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE)
-	cd $(BOOKINFO_REPO_DIR) && crane append -f <(tar -f - -c .) -t $(BOOKINFO_REPO_PUBLIC_AR_IMAGE)
+push-test-oci-images-public: install-krane
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && krane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE)
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && krane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE)
+	cd $(BOOKINFO_REPO_DIR) && krane append -f <(tar -f - -c .) -t $(BOOKINFO_REPO_PUBLIC_AR_IMAGE)
 
 # The following targets are used to provision test resources in a prow environment
 
@@ -101,10 +68,9 @@ KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test
 
 .PHONY: push-test-oci-images-private
 # push-test-oci-images-private pushes the test images to the Artifact Registry and Container Registry repositories.
-push-test-oci-images-private: install-crane
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
-	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
-	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE)
+push-test-oci-images-private: install-krane
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && krane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
+	cd $(KUSTOMIZE_COMPONENTS_DIR) && krane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE)
 
 .PHONY: push-to-test-csr-repos
 push-to-test-csr-repos:

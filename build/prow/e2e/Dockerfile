@@ -27,7 +27,12 @@ FROM ${GOLANG_IMAGE} as builder
 
 WORKDIR /workspace
 
-COPY . .
+# Copy only what we need to build the commands (much faster than `COPY . .`)
+COPY ./cmd ./cmd
+COPY ./clientgen ./clientgen
+COPY ./pkg ./pkg
+COPY ./vendor ./vendor
+COPY ./go.* ./
 
 # Since go modules isn't enabled by default.
 ENV GO111MODULE=on
@@ -38,6 +43,10 @@ ENV CGO_ENABLED=0
 RUN go install ./cmd/junit-report
 # Get go-junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
+# Install the nomos CLI, used by e2e tests
+RUN go install ./cmd/nomos
+# Install the krane CLI, used by e2e tests
+RUN go install ./vendor/github.com/google/go-containerregistry/cmd/krane
 
 # Build e2e image
 FROM ${DOCKER_CLI_IMAGE} as gke-e2e
@@ -61,6 +70,13 @@ COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=builder /go /go
 COPY --from=builder /go/bin/junit-report /go/bin/junit-report
 COPY --from=builder /go/bin/go-junit-report /go/bin/go-junit-report
+COPY --from=builder /go/bin/krane /go/bin/krane
+COPY --from=builder /go/bin/nomos /go/bin/nomos
+# Install helm and kustomize built on the host.
+# This is required in order to securely authenticate with GCS.
+COPY .output/go/bin/helm /usr/local/bin/helm
+COPY .output/go/bin/kustomize /usr/local/bin/kustomize
+# Add go and gcloud binaries to the PATH
 ENV PATH /go/bin:/usr/local/go/bin:/opt/gcloud/google-cloud-sdk/bin:$PATH
 
 ENTRYPOINT ["/usr/bin/bash"]
@@ -69,15 +85,9 @@ ENTRYPOINT ["/usr/bin/bash"]
 FROM gke-e2e as kind-e2e
 
 WORKDIR /repo
-# Steps after here can't be cached since they touch the local filesystem.
-# Just copy everything in the nomos repository so we have whatever we might need.
-COPY . .
 
-# install the nomos CLI, which is used in several e2e tests.
-RUN go install ./cmd/nomos
-
-# add the binaries in the local build directory to PATH (e.g. helm, kustomize, kind)
-ENV PATH /repo/.output/go/bin:$PATH
+# Install Kind
+COPY .output/go/bin/kind /usr/local/bin/kind
 
 # Set Kubernetes environment.
 ENV KUBERNETES_ENV=KIND

@@ -315,14 +315,14 @@ lint-license: pull-buildenv buildenv-dirs
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0
 
+KUSTOMIZE_URL := gs://config-management-release/config-sync/kustomize/tag/$(KUSTOMIZE_VERSION)/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
+KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
+KUSTOMIZE_TARBALL := /tmp/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
+
 .PHONY: clean-kustomize
 clean-kustomize:
 	@rm -rf $(KUSTOMIZE_STAGING_DIR)
 	@rm -rf $(BIN_DIR)/kustomize
-
-KUSTOMIZE_URL := gs://config-management-release/config-sync/kustomize/tag/$(KUSTOMIZE_VERSION)/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
-KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
-KUSTOMIZE_TARBALL := /tmp/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
 
 "$(BIN_DIR)/kustomize": clean-kustomize buildenv-dirs
 	@gsutil cp $(KUSTOMIZE_URL).sha256 $(KUSTOMIZE_TARBALL).sha256
@@ -336,6 +336,35 @@ KUSTOMIZE_TARBALL := /tmp/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
 
 .PHONY: install-kustomize
 install-kustomize: "$(BIN_DIR)/kustomize"
+
+HELM_URL := gs://config-management-release/config-sync/helm/tag/$(HELM_VERSION)/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
+HELM_TARBALL := /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
+
+.PHONY: clean-helm
+clean-helm:
+	@rm -rf $(HELM_STAGING_DIR)
+	@rm -rf $(BIN_DIR)/helm
+
+.PHONY: install-helm
+install-helm: clean-helm buildenv-dirs
+	@gsutil cp $(HELM_URL).sha256 $(HELM_TARBALL).sha256
+	@gsutil cp $(HELM_URL) $(HELM_TARBALL)
+	@echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum -c
+	@mkdir -p $(HELM_STAGING_DIR)
+	@tar -zxvf $(HELM_TARBALL) -C $(HELM_STAGING_DIR)
+	@cp $(HELM_STAGING_DIR)/helm $(BIN_DIR)/helm
+	@rm $(HELM_TARBALL)
+	@rm $(HELM_TARBALL).sha256
+
+"$(GOBIN)/krane":
+	go install ./vendor/github.com/google/go-containerregistry/cmd/krane
+
+"$(BIN_DIR)/krane": "$(GOBIN)/krane" buildenv-dirs
+	cp $(GOBIN)/krane $(BIN_DIR)/krane
+
+.PHONY: install-krane
+install-krane: "$(BIN_DIR)/krane"
 
 "$(GOBIN)/kind":
 	go install sigs.k8s.io/kind@$(KIND_VERSION)

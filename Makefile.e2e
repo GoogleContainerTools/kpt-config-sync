@@ -78,6 +78,7 @@ test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 	docker run \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
+		-v $$(pwd):/repo \
 		--env ARTIFACTS="/logs/artifacts" \
 		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--network="host" \

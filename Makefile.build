@@ -1,8 +1,6 @@
 # Included by Makefile.
 # Rules related to building nomos and docker images.
 
-HELM := $(BIN_DIR)/helm
-
 ###################################
 # Build environment
 ###################################

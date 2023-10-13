@@ -16,6 +16,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,6 +36,17 @@ func RootReconcilerName(name string) string {
 		return RootReconcilerPrefix
 	}
 	return fmt.Sprintf("%s-%s", RootReconcilerPrefix, name)
+}
+
+// RootSyncName returns the RootSync's name given the name of its reconciler.
+// It is the inverse of RootReconcilerName
+func RootSyncName(reconcilerName string) string {
+	if reconcilerName == RootReconcilerPrefix {
+		return configsync.RootSyncName
+	}
+
+	syncName, _ := strings.CutPrefix(reconcilerName, fmt.Sprintf("%s-", RootReconcilerPrefix))
+	return syncName
 }
 
 // NsReconcilerName returns the namespace reconciler's name in the format:

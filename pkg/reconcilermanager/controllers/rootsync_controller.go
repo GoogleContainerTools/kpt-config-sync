@@ -544,8 +544,8 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 
 	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
 	// because all the generated resources have the prefix.
-	roleBindingName := RootSyncPermissionsName()
-	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) && objRef.Name != roleBindingName {
+	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) &&
+		!strings.HasPrefix(objRef.Name, fmt.Sprintf("%s:%s", configsync.GroupName, core.RootReconcilerPrefix)) {
 		return nil
 	}
 
@@ -571,7 +571,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 		reconcilerName := core.RootReconcilerName(rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.ClusterRoleBinding:
-			if objRef.Name == roleBindingName {
+			if objRef.Name == RootSyncPermissionsName(reconcilerName) {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKeyFromObject(&rs)})
 				attachedRSNames = append(attachedRSNames, rs.GetName())
@@ -780,7 +780,7 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 }
 
 func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
-	crbRef := client.ObjectKey{Name: RootSyncPermissionsName()}
+	crbRef := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 

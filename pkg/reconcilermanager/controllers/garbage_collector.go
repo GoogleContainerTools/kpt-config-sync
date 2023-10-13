@@ -233,7 +233,7 @@ func (r *reconcilerBase) deleteDeployment(ctx context.Context, reconcilerRef typ
 }
 
 func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) error {
-	crbKey := client.ObjectKey{Name: RootSyncPermissionsName()}
+	crbKey := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
 	// Update the CRB to delete the subject for the deleted RootSync's reconciler
 	crb := &rbacv1.ClusterRoleBinding{}
 	if err := r.client.Get(ctx, crbKey, crb); err != nil {

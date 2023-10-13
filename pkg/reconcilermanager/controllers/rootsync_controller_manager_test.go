@@ -406,9 +406,9 @@ func TestRootSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 // reverted if changed by another client.
 func TestRootSyncReconcilerClusterRoleBindingDriftProtection(t *testing.T) {
 	exampleObj := &rbacv1.ClusterRoleBinding{}
-	objKeyFunc := func(_ client.ObjectKey) client.ObjectKey {
+	objKeyFunc := func(rsKey client.ObjectKey) client.ObjectKey {
 		// reconciler-manager managed cluster role binding
-		return client.ObjectKey{Name: RootSyncPermissionsName()}
+		return client.ObjectKey{Name: RootSyncPermissionsName(core.RootReconcilerName(rsKey.Name))}
 	}
 	var oldObj *rbacv1.ClusterRoleBinding
 	var oldValue string

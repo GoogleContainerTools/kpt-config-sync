@@ -37,7 +37,7 @@ OUTPUT_DIR := $(abspath .output)
 GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
-GOLANG_IMAGE := golang:1.20.8-bullseye
+GOLANG_IMAGE := golang:1.21.3-bullseye
 # Base image used for debian containers
 DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.1
 # Base image used for gcloud install, primarily for test images.

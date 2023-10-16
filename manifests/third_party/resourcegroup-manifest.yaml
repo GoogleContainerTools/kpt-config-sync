@@ -507,7 +507,7 @@ spec:
         env:
         - name: OC_RESOURCE_LABELS
           value: k8s.container.name="manager"
-        image: gcr.io/config-management-release/resource-group-controller:v1.0.19
+        image: gcr.io/config-management-release/resource-group-controller:v1.0.20
         name: manager
         resources:
           requests:
@@ -555,7 +555,7 @@ spec:
               fieldPath: metadata.labels['configsync.gke.io/deployment-name']
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
-        image: gcr.io/config-management-release/otelcontribcol:v0.86.0-gke.1
+        image: gcr.io/config-management-release/otelcontribcol:v0.87.0-gke.0
         name: otel-agent
         ports:
         - containerPort: 55678

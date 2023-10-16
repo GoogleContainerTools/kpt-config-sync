@@ -35,7 +35,6 @@ func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) 
 // AsUnstructuredSanitized converts o to an Unstructured and removes problematic
 // fields:
 // - metadata.creationTimestamp
-// - metadata.finalizers
 // - status
 //
 // These fields must not be set in the source, so we can safely drop them from
@@ -56,7 +55,6 @@ func AsUnstructuredSanitized(o client.Object) (*unstructured.Unstructured, statu
 	}
 
 	unstructured.RemoveNestedField(u.Object, "metadata", "creationTimestamp")
-	unstructured.RemoveNestedField(u.Object, "metadata", "finalizers")
 	unstructured.RemoveNestedField(u.Object, "status")
 	return u, nil
 }

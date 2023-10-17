@@ -54,6 +54,9 @@ HELM_VERSION := v3.13.1-gke.0
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
 KIND_VERSION := v0.20.0
+# crane cli version used for publishing OCI images
+# used by tests or local make targets
+CRANE_VERSION := v0.16.1
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging
@@ -345,6 +348,16 @@ install-kustomize: "$(BIN_DIR)/kustomize"
 
 .PHONY: install-kind
 install-kind: "$(BIN_DIR)/kind"
+
+"$(GOBIN)/crane":
+	go install github.com/google/go-containerregistry/cmd/crane@$(CRANE_VERSION)
+
+"$(BIN_DIR)/crane": "$(GOBIN)/crane" buildenv-dirs
+	cp $(GOBIN)/crane $(BIN_DIR)/crane
+
+.PHONY: install-crane
+# install crane binary to publish OCI images
+install-crane: "$(BIN_DIR)/crane"
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"

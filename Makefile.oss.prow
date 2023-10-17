@@ -41,11 +41,6 @@ push-gke-e2e:
 # Helpers
 ###################################
 
-.PHONY: install-crane
-# install crane binary to publish the image
-install-crane:
-	go install github.com/google/go-containerregistry/cmd/crane@latest
-
 .PHONY: clean-helm
 # remove any existing helm directory/binary. The install-helm target was previously
 # creating a directory at this path rather than the binary/file.

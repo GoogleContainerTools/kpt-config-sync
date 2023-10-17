@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,9 +30,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 )
-
-// yamlWhitespace records the two valid YAML whitespace characters.
-const yamlWhitespace = " \t"
 
 func parseFile(path string) ([]*unstructured.Unstructured, error) {
 	if !filepath.IsAbs(path) {
@@ -63,7 +61,7 @@ func parseFile(path string) ([]*unstructured.Unstructured, error) {
 func isEmptyYAMLDocument(document string) bool {
 	lines := strings.Split(document, "\n")
 	for _, line := range lines {
-		trimmed := strings.TrimLeft(line, yamlWhitespace)
+		trimmed := strings.TrimLeftFunc(line, unicode.IsSpace)
 		if len(trimmed) == 0 || strings.HasPrefix(trimmed, "#") {
 			// Ignore empty/whitespace-only/comment lines.
 			continue
@@ -73,16 +71,34 @@ func isEmptyYAMLDocument(document string) bool {
 	return true
 }
 
+// parseYAMLFile parses a byte array as a YAML document stream.
+// Each document, if not empty, is decoded into an Unstructured object.
+//
+// According to the YAML spec, `---` is the directive end marker, indicating the
+// end of directives and the beginning of a document. Kubernetes does not
+// support YAML directives, so we're not supporting them here either. But we do
+// support directive end markers (`---`) and document end markers (`...`).
+//
+// Since the yaml decoder handles stopping at document end markers, we only need
+// to explicitly handle directive end markers as delimiters here.
+//
+// While not technically to spec, this parser also ignores empty documents, to
+// avoid erroring in cases where kubectl apply would work. This also helps
+// avoid errors when using Helm to produce YAML using loops and conditionals.
+//
+// YAML Spec for document streams:
+// https://yaml.org/spec/1.2.2/#document-stream-productions
 func parseYAMLFile(contents []byte) ([]*unstructured.Unstructured, error) {
 	// We have to manually split documents with the YAML separator since by default
 	// yaml.Unmarshal only unmarshalls the first document, but a file may contain multiple.
 	var result []*unstructured.Unstructured
 
-	// A newline followed by triple-dash begins a new YAML document, so this is safe.
-	documents := strings.Split(string(contents), "\n---")
+	// Split on directive end markers.
+	// Prepend line break to ensure leading directive end markers are handled.
+	documents := strings.Split("\n"+string(contents), "\n---")
 	for _, document := range documents {
+		// Ignore empty documents
 		if isEmptyYAMLDocument(document) {
-			// Kubernetes ignores empty documents.
 			continue
 		}
 

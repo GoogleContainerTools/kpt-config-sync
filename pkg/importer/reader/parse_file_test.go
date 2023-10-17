@@ -37,7 +37,33 @@ func TestParseYAMLFile(t *testing.T) {
 			name: "empty file",
 		},
 		{
-			name: "empty documents",
+			name: "empty document with leading separator",
+			contents: `---
+`,
+		},
+		{
+			name: "multiple empty documents",
+			contents: `---
+---
+`,
+		},
+		{
+			name: "empty document with no separator",
+			contents: `
+`,
+		},
+		{
+			name:     "empty document with leading comment",
+			contents: `# comment`,
+		},
+		{
+			name: "empty document with comment",
+			contents: `
+# comment
+`,
+		},
+		{
+			name: "empty document with comment and separator",
 			contents: `
 
 ---

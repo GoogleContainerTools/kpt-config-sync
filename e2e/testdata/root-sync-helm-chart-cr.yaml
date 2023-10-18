@@ -18,6 +18,13 @@ metadata:
   name: root-sync
   namespace: config-management-system
 spec:
+  # This is to fix the test flakiness on the v1.16 branch.
+  # The main branch does not have the flakiness.
+  override:
+    resources:
+    - containerName: helm-sync
+      cpuRequest: "200m"
+      memoryRequest: "600Mi"
   sourceFormat: unstructured
   sourceType: helm
   helm:

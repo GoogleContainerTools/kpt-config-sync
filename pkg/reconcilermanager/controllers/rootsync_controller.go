@@ -557,7 +557,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
 	// because all the generated resources have the prefix.
 	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) &&
-		!strings.HasPrefix(objRef.Name, fmt.Sprintf("%s:%s", configsync.GroupName, core.RootReconcilerPrefix)) {
+		!strings.HasPrefix(objRef.Name, RootSyncPermissionsName(core.RootReconcilerPrefix)) {
 		return nil
 	}
 

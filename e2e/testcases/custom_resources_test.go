@@ -175,7 +175,6 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	anvilObj := anvilCR("v1", "heavy", 10)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR"))
-	firstCommitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -218,21 +217,46 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Wait for remediator to detect the drift (managed Anvil CR was deleted)
-	// and record it as a conflict.
-	// TODO: distinguish between management conflict (spec/generation drift) and concurrent status update conflict (resource version change)
-	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
-			Conflicts: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	// No conflicts anymore. There was one before the reconciler refactor, because
+	// the CR was re-created after the CRD was deleted.
+	// The remediator considered it as an update event. When it sent the update
+	// call, it failed with a ConflictUpdateDoesNotExist error, so a conflict
+	// metric was recorded.
+	// Logs from previous implementation:
+	// I1030 07:05:19.420371       1 filteredwatcher.go:426] Handling watch event DELETED acme.com/v1, Kind=Anvil
+	// I1030 07:05:19.420400       1 filteredwatcher.go:466] Received watch event for object: "Anvil.acme.com, foo/heavy" (rv: 60430537)
+	// I1030 07:05:19.420439       1 filteredwatcher.go:478] Received watch event for deleted object "Anvil.acme.com, foo/heavy" (rv: 60430537)
+	// I1030 07:05:19.420458       1 queue.go:136] ObjectQueue.Add: Anvil.acme.com, foo/heavy (rv: 60430537)
+	// I1030 07:05:19.421500       1 queue.go:224] ObjectQueue.Get: returning object: Anvil.acme.com, foo/heavy (rv: 60430537)
+	// I1030 07:05:19.421542       1 worker.go:93] Worker processing object "Anvil.acme.com, foo/heavy" (rv: 60430537)
+	// I1030 07:05:19.421587       1 reconciler.go:121] Remediator creating object: Anvil.acme.com, foo/heavy
+	// I1030 07:05:19.440319       1 filteredwatcher.go:426] Handling watch event ADDED acme.com/v1, Kind=Anvil
+	// I1030 07:05:19.440376       1 filteredwatcher.go:466] Received watch event for object: "Anvil.acme.com, foo/heavy" (rv: 60430539)
+	// I1030 07:05:19.440419       1 filteredwatcher.go:482] Received watch event for created/updated object "Anvil.acme.com, foo/heavy" (rv: 60430539)
+	// I1030 07:05:19.440442       1 queue.go:136] ObjectQueue.Add: Anvil.acme.com, foo/heavy (rv: 60430539): apiVersion: acme.com/v1
+	// I1030 07:05:19.441679       1 apply.go:130] Created object acme.com_anvil_foo_heavy
+	// I1030 07:05:19.441738       1 worker.go:125] Worker reconciled "Anvil.acme.com, foo/heavy", rv 60430537
+	// I1030 07:05:19.441765       1 queue.go:255] ObjectQueue.Forget: forget object from queue: Anvil.acme.com, foo/heavy (rv: 60430537)
+	// I1030 07:05:19.441792       1 queue.go:240] ObjectQueue.Done: retaining object for retry: Anvil.acme.com, foo/heavy (rv: 60430537)
+	// I1030 07:05:19.441806       1 worker.go:84] Worker waiting for new object...
+	// I1030 07:05:19.441835       1 queue.go:224] ObjectQueue.Get: returning object: Anvil.acme.com, foo/heavy (rv: 60430539)
+	// I1030 07:05:19.441874       1 worker.go:93] Worker processing object "Anvil.acme.com, foo/heavy" (rv: 60430539)
+	// I1030 07:05:19.441984       1 reconciler.go:132] Remediator updating object: Anvil.acme.com, foo/heavy (declared: , actual: 60430539)
+	// I1030 07:05:19.445236       1 reconciler.go:97] KNV2008: tried to update resource which does not exist: the server could not find the requested resource (patch anvils.acme.com heavy)
+	//
+	// After the refactor, the first remediation for the DELETE event failed with
+	// a KNV2010 error, so the deleted object was never created successfully, so
+	// there is no update conflict.
+	// Logs from the new implementation:
+	// I1030 07:24:58.079209       1 filteredwatcher.go:425] Handling watch event DELETED acme.com/v1, Kind=Anvil
+	// I1030 07:24:58.079248       1 filteredwatcher.go:465] Received watch event for object: "Anvil.acme.com, foo/heavy" (generation: 1)
+	// I1030 07:24:58.079326       1 filteredwatcher.go:477] Received watch event for deleted object "Anvil.acme.com, foo/heavy" (generation: 1)
+	// I1030 07:24:58.079345       1 remediate_resources.go:85] ObjectQueue.Add: Anvil.acme.com, foo/heavy (generation: 1)
+	// I1030 07:24:58.989343       1 remediate_resources.go:116] ObjectQueue.Enqueue: Anvil.acme.com, foo/heavy
+	// I1030 07:24:58.989468       1 remediator.go:79] New remediator reconciliation for "Anvil.acme.com, foo/heavy"
+	// I1030 07:24:58.989537       1 remediator.go:141] Remediator processing object "Anvil.acme.com, foo/heavy" (generation: 1)
+	// I1030 07:24:58.989652       1 remediator.go:273] Remediator creating object: Anvil.acme.com, foo/heavy
+	// I1030 07:24:58.992243       1 apply.go:124] Failed to create object acme.com_anvil_foo_heavy: KNV2010: unable to apply resource: the server could not find the requested resource (patch anvils.acme.com heavy)
 
 	// Reset discovery client to invalidate the cached Anvil CRD
 	nt.RenewClient()
@@ -246,7 +270,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
 
-	rootSyncLabels, err = nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

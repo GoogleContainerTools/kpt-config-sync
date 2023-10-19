@@ -15,27 +15,46 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/importer/reader"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/profiler"
-	"kpt.dev/configsync/pkg/reconciler"
+	"kpt.dev/configsync/pkg/reconciler/controllers"
+	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	rmcontrollers "kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/remediator"
+	"kpt.dev/configsync/pkg/remediator/cache"
+	"kpt.dev/configsync/pkg/remediator/watch"
 	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
+	"kpt.dev/configsync/pkg/syncer/metrics"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 var (
@@ -75,10 +94,8 @@ var (
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
 	resyncPeriod = flag.Duration("resync-period", configsync.DefaultReconcilerResyncPeriod,
 		"Period of time between forced re-syncs from source (even without a new commit).")
-	workers = flag.Int("workers", 1,
-		"Number of concurrent remediator workers to run at once.")
 	pollingPeriod = flag.Duration("filesystem-polling-period",
-		controllers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
+		rmcontrollers.PollingPeriod(reconcilermanager.ReconcilerPollingPeriod, configsync.DefaultReconcilerPollingPeriod),
 		"Period of time between checking the filesystem for source updates to sync.")
 
 	// Root-Repo-only flags. If set for a Namespace-scoped Reconciler, causes the Reconciler to fail immediately.
@@ -122,6 +139,17 @@ var flags = struct {
 	namespaceStrategy: "namespace-strategy",
 }
 
+func timeStringToDuration(t string) (time.Duration, error) {
+	duration, err := time.ParseDuration(t)
+	if err != nil {
+		return 0, fmt.Errorf("parsing time duration %s: %v", t, err)
+	}
+	if duration < 0 {
+		return 0, fmt.Errorf("invalid time duration: %v, should not be negative", duration)
+	}
+	return duration, nil
+}
+
 func main() {
 	log.Setup()
 	profiler.Service()
@@ -129,6 +157,122 @@ func main() {
 
 	if *debug {
 		status.EnablePanicOnMisuse()
+	}
+
+	reconcilerScope := declared.Scope(*scope)
+	fight.SetFightThreshold(*fightDetectionThreshold)
+
+	cl, discoveryClient, baseApplier, supervisor, err := configureClients(reconcilerScope)
+	if err != nil {
+		klog.Error(err)
+	}
+
+	// Start listening to signals
+	signalCtx := signals.SetupSignalHandler()
+	mgrOptions := ctrl.Options{
+		Scheme: core.Scheme,
+		BaseContext: func() context.Context {
+			return signalCtx
+		},
+	}
+	// For Namespaced Reconcilers, set the default namespace to watch.
+	// Otherwise, all namespaced informers will watch at the cluster-scope.
+	// This prevents Namespaced Reconcilers from needing cluster-scoped read
+	// permissions.
+	if reconcilerScope != declared.RootReconciler {
+		mgrOptions.Namespace = string(reconcilerScope)
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOptions)
+	if err != nil {
+		klog.Fatalf("Error starting manager: %v", err)
+	}
+
+	// This cancelFunc will be used by the Finalizer to stop all the other
+	// controllers (Syncer & Remediator).
+	controllerCtx, stopControllers := context.WithCancel(signalCtx)
+
+	// These channels will be closed when the corresponding controllers have exited,
+	// signalling for the finalizer to continue.
+	doneChannelForSyncer := make(chan struct{})
+	doneChannelForRemediator := make(chan struct{})
+
+	// Create the Finalizer
+	// The caching client built by the controller-manager doesn't update
+	// the GET reconcilerState on UPDATE/PATCH. So we need to use the non-caching client
+	// for the finalizer, which does GET/LIST after UPDATE/PATCH.
+	f := finalizer.New(reconcilerScope, supervisor, cl, // non-caching client
+		stopControllers, doneChannelForSyncer, doneChannelForRemediator)
+
+	// Create the Finalizer Controller
+	finalizerController := &finalizer.Controller{
+		SyncScope: reconcilerScope,
+		SyncName:  *syncName,
+		Client:    mgr.GetClient(), // caching client
+		Scheme:    mgr.GetScheme(),
+		Mapper:    mgr.GetRESTMapper(),
+		Finalizer: f,
+	}
+
+	// Register the Finalizer Controller
+	if err = finalizerController.SetupWithManager(mgr); err != nil {
+		klog.Fatalf("Instantiating Finalizer: %v", err)
+	}
+
+	// Configure Syncer and Remediator.
+
+	// Get a separate config for the remediator to talk to the apiserver since
+	// we want a longer REST config timeout for the remediator to avoid restarting
+	// idle watches too frequently.
+	cfgForWatch, err := restconfig.NewRestConfig(watch.RESTConfigTimeout)
+	if err != nil {
+		klog.Fatalf("Error creating rest config for the remediator: %v", err)
+	}
+
+	// Instantiate the cache shared by both the Syncer and Remediator
+	decls := &declared.Resources{}
+	remResources := cache.NewRemediateResources()
+
+	// Create the Remediator actor.
+	// The Syncer uses it to send pause/resume signals to the Remediator, and to start watches for declared resources.
+	// The Remediator uses it to receive the signal to perform remediation and to handle the remediate errors.
+	remInterface, err := remediator.New(reconcilerScope, *syncName, cfgForWatch, decls, remResources)
+	if err != nil {
+		klog.Fatalf("Error creating remediator interface: %v", err)
+	}
+	// reconcilerState is the cache shared across all Syncer reconciliation loops.
+	reconcilerState := parse.NewReconcilerState()
+	parser, err := configureParser(cl, discoveryClient, decls, supervisor, remInterface)
+	if err != nil {
+		klog.Fatalf("Error creating parser: %v", err)
+	}
+
+	// Create the Syncer controller
+	syncer := controllers.NewSyncer(
+		controllerCtx, reconcilerScope, parser, reconcilerState, *pollingPeriod, *resyncPeriod,
+		configsync.DefaultReconcilerRetryPeriod,
+		configsync.DefaultReconcilerSyncStatusUpdatePeriod, doneChannelForSyncer)
+
+	// Register the Syncer controller
+	if err = syncer.SetupWithManager(mgr); err != nil {
+		klog.Fatalf("Error creating controller %q: %v", controllers.SyncerController, err)
+	}
+
+	// Create the Remediator controller
+	rem := controllers.Remediator{
+		ControllerCtx:      controllerCtx,
+		DoneCh:             doneChannelForRemediator,
+		SyncScope:          reconcilerScope,
+		SyncName:           *syncName,
+		Applier:            baseApplier,
+		Resources:          decls,
+		RemediateResources: remResources,
+		Remediator:         remInterface,
+	}
+
+	// Register the Remediator controller
+	if err = rem.SetupWithManager(mgr); err != nil {
+		klog.Fatalf("Error creating controller %q: %v", controllers.RemediatorController, err)
 	}
 
 	// Register the OpenCensus views
@@ -148,9 +292,103 @@ func main() {
 		}
 	}()
 
+	klog.Info("Starting manager")
+	defer func() {
+		// If the manager returned, there was either an error or a term/kill
+		// signal. So stop the other controllers, if not already stopped.
+		stopControllers()
+	}()
+	if err = mgr.Start(signalCtx); err != nil {
+		klog.Errorf("Error running manager: %v", err)
+		// os.Exit(1) does not run deferred functions so explicitly stopping the OC Agent exporter.
+		if err := oce.Stop(); err != nil {
+			klog.Errorf("Error stopping the OC Agent exporter: %v", err)
+		}
+		os.Exit(1)
+	}
+
+	// Wait for exit signal, if not already received.
+	// This avoids unnecessary restarts after the finalizer has completed.
+	<-signalCtx.Done()
+	klog.Info("All controllers exited")
+}
+
+// configureClients configures the set of clients used by Syncer, Remediator and Finalizer.
+//   - client.Client is used by the Finalizer to add/remove metadata.finalizer and set/remove finalizing condition
+//     It is also used by the Syncer to set the RSync status field.
+//   - DiscoveryInterface is used by the Syncer to build the scope of a resource.
+//   - Applier is used by the Remediator to correct any drift.
+//   - Supervisor is used by the Finalizer to finalize managed resources. It is also
+//     used by the Syncer to apply/prune declared resources.
+func configureClients(scope declared.Scope) (client.Client, discovery.DiscoveryInterface, reconcile.Applier, applier.Supervisor, error) {
+	reconcileTimeoutDuration, err := timeStringToDuration(*reconcileTimeout)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("reconcileTimeout format error: %v", err)
+	}
+
+	// Get a config to talk to the apiserver.
+	apiServerTimeoutDuration, err := time.ParseDuration(*apiServerTimeout)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("apiServerTimeout format error: %v", err)
+	}
+
+	cfg, err := restconfig.NewRestConfig(apiServerTimeoutDuration)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create rest config: %v", err)
+	}
+
+	configFlags, err := restconfig.NewConfigFlags(cfg)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create config flags from rest config: %v", err)
+	}
+
+	discoveryClient, err := configFlags.ToDiscoveryClient()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create discovery client: %v", err)
+	}
+
+	// Use the DynamicRESTMapper as the default RESTMapper does not detect when
+	// new types become available.
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create DynamicRESTMapper: %v", err)
+	}
+
+	cl, err := client.New(cfg, client.Options{
+		Scheme: core.Scheme,
+		Mapper: mapper,
+	})
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create client: %v", err)
+	}
+
+	// Configure the Applier.
+	genericClient := syncerclient.New(cl, metrics.APICallDuration)
+	baseApplier, err := reconcile.NewApplierForMultiRepo(cfg, genericClient)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create applier for the remediator: %v", err)
+	}
+
+	clientSet, err := applier.NewClientSet(cl, configFlags, *statusMode)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create clients: %v", err)
+	}
+	supervisor, err := applier.NewSupervisor(clientSet, scope, *syncName, reconcileTimeoutDuration)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create supervisor for the syncer: %v", err)
+	}
+
+	return cl, discoveryClient, baseApplier, supervisor, nil
+}
+
+// configureParser configures the Parser actor for the Syncer controller.
+// The Parser parses the source configs from file format to unstructured Kubernetes objects,
+// and sends K8s API calls to set the status field. It also contains an updater
+// that applies the declared resources to the cluster, and update watches for drift correction.
+func configureParser(cl client.Client, dc discovery.DiscoveryInterface, decls *declared.Resources, supervisor applier.Supervisor, rem *remediator.Remediator) (parse.Parser, error) {
 	absRepoRoot, err := cmpath.AbsoluteOS(*repoRootDir)
 	if err != nil {
-		klog.Fatalf("%s must be an absolute path: %v", flags.repoRootDir, err)
+		return nil, fmt.Errorf("%s must be an absolute path: %v", flags.repoRootDir, err)
 	}
 
 	// Normalize syncDirRelative.
@@ -161,68 +399,97 @@ func main() {
 	relSyncDir := cmpath.RelativeOS(dir)
 	absSourceDir, err := cmpath.AbsoluteOS(*sourceDir)
 	if err != nil {
-		klog.Fatalf("%s must be an absolute path: %v", flags.sourceDir, err)
+		return nil, fmt.Errorf("%s must be an absolute path: %v", flags.sourceDir, err)
 	}
 
-	err = declared.ValidateScope(*scope)
-	if err != nil {
-		klog.Fatal(err)
+	if err = declared.ValidateScope(*scope); err != nil {
+		return nil, err
 	}
 
-	opts := reconciler.Options{
-		ClusterName:             *clusterName,
-		FightDetectionThreshold: *fightDetectionThreshold,
-		NumWorkers:              *workers,
-		ReconcilerScope:         declared.Scope(*scope),
-		ResyncPeriod:            *resyncPeriod,
-		PollingPeriod:           *pollingPeriod,
-		RetryPeriod:             configsync.DefaultReconcilerRetryPeriod,
-		StatusUpdatePeriod:      configsync.DefaultReconcilerSyncStatusUpdatePeriod,
-		SourceRoot:              absSourceDir,
-		RepoRoot:                absRepoRoot,
-		HydratedRoot:            *hydratedRootDir,
-		HydratedLink:            *hydratedLinkDir,
-		SourceRev:               *sourceRev,
-		SourceBranch:            *sourceBranch,
-		SourceType:              v1beta1.SourceType(*sourceType),
-		SourceRepo:              *sourceRepo,
-		SyncDir:                 relSyncDir,
-		SyncName:                *syncName,
-		ReconcilerName:          *reconcilerName,
-		StatusMode:              *statusMode,
-		ReconcileTimeout:        *reconcileTimeout,
-		APIServerTimeout:        *apiServerTimeout,
-		RenderingEnabled:        *renderingEnabled,
-	}
-
-	if declared.Scope(*scope) == declared.RootReconciler {
+	var format filesystem.SourceFormat
+	var nsStrat configsync.NamespaceStrategy
+	switch declared.Scope(*scope) {
+	case declared.RootReconciler:
+		klog.Info("Starting reconciler for: root")
 		// Default to "hierarchy" if unset.
-		format := filesystem.SourceFormat(*sourceFormat)
+		format = filesystem.SourceFormat(*sourceFormat)
 		if format == "" {
 			format = filesystem.SourceFormatHierarchy
 		}
 		// Default to "implicit" if unset.
-		nsStrat := configsync.NamespaceStrategy(*namespaceStrategy)
+		nsStrat = configsync.NamespaceStrategy(*namespaceStrategy)
 		if nsStrat == "" {
 			nsStrat = configsync.NamespaceStrategyImplicit
 		}
-
-		klog.Info("Starting reconciler for: root")
-		opts.RootOptions = &reconciler.RootOptions{
-			SourceFormat:      format,
-			NamespaceStrategy: nsStrat,
-		}
-	} else {
+	default:
 		klog.Infof("Starting reconciler for: %s", *scope)
-
 		if *sourceFormat != "" {
-			klog.Fatalf("Flag %s and environment variable %s must not be passed to a Namespace reconciler",
+			return nil, fmt.Errorf("flag %s and environment variable %s must not be passed to a Namespace reconciler",
 				flags.sourceFormat, filesystem.SourceFormatKey)
 		}
 		if *namespaceStrategy != "" {
-			klog.Fatalf("Flag %s and environment variable %s must not be passed to a Namespace reconciler",
+			return nil, fmt.Errorf("flag %s and environment variable %s must not be passed to a Namespace reconciler",
 				flags.namespaceStrategy, reconcilermanager.NamespaceStrategy)
 		}
 	}
-	reconciler.Run(opts)
+
+	var parser parse.Parser
+	fs := parse.FileSource{
+		SourceDir:    absSourceDir,
+		RepoRoot:     absRepoRoot,
+		HydratedRoot: *hydratedRootDir,
+		HydratedLink: *hydratedLinkDir,
+		SyncDir:      relSyncDir,
+		SourceType:   v1beta1.SourceType(*sourceType),
+		SourceRepo:   *sourceRepo,
+		SourceBranch: *sourceBranch,
+		SourceRev:    *sourceRev,
+	}
+	ds := declared.Scope(*scope)
+	if ds == declared.RootReconciler {
+		parser, err = parse.NewRootRunner(
+			*clusterName,
+			*syncName,
+			*reconcilerName,
+			format,
+			&reader.File{},
+			cl,
+			*pollingPeriod,
+			*resyncPeriod,
+			configsync.DefaultReconcilerRetryPeriod,
+			configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+			fs,
+			dc,
+			decls,
+			supervisor,
+			rem,
+			*renderingEnabled,
+			nsStrat)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating Root Repository Parser: %v", err)
+		}
+	} else {
+		parser, err = parse.NewNamespaceRunner(
+			*clusterName,
+			*syncName,
+			*reconcilerName,
+			ds,
+			&reader.File{},
+			cl,
+			*pollingPeriod,
+			*resyncPeriod,
+			configsync.DefaultReconcilerRetryPeriod,
+			configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+			fs,
+			dc,
+			decls,
+			supervisor,
+			rem,
+			*renderingEnabled)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating Namespace Repository Parser: %v", err)
+		}
+	}
+
+	return parser, nil
 }

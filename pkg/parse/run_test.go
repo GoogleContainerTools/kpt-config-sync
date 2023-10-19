@@ -361,13 +361,13 @@ func TestRun(t *testing.T) {
 				SourceBranch: "main",
 			}
 			parser := newParser(t, fs, tc.renderingEnabled)
-			state := &reconcilerState{
-				backoff:     defaultBackoff(),
-				retryTimer:  time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
-				retryPeriod: configsync.DefaultReconcilerRetryPeriod,
+			state := &ReconcilerState{
+				retryBackoff: defaultBackoff(),
+				retryTimer:   time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
+				retryPeriod:  configsync.DefaultReconcilerRetryPeriod,
 			}
 			t.Logf("start running test at %v", time.Now())
-			run(context.Background(), parser, triggerReimport, state)
+			Run(context.Background(), parser, Reimport, state)
 
 			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
 			if tc.expectedErrors == "" {

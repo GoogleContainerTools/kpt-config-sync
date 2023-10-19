@@ -42,6 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/status"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -61,8 +62,11 @@ const (
 )
 
 type noOpRemediator struct {
-	needsUpdate bool
+	needsUpdate  bool
+	canRemediate bool
 }
+
+var _ remediator.Interface = &noOpRemediator{}
 
 func (r *noOpRemediator) Pause() {}
 
@@ -91,6 +95,29 @@ func (r *noOpRemediator) UpdateWatches(_ context.Context, _ map[schema.GroupVers
 
 func (r *noOpRemediator) Errors() status.MultiError {
 	return nil
+}
+
+func (r *noOpRemediator) CanRemediate() bool {
+	return r.canRemediate
+}
+
+func (r *noOpRemediator) StartRemediating() bool {
+	return r.canRemediate
+}
+
+func (r *noOpRemediator) WaitRemediating() {
+}
+
+func (r *noOpRemediator) DoneRemediating() {
+}
+
+func (r *noOpRemediator) ClearCache() {
+
+}
+func (r *noOpRemediator) AddFightError(core.ID, status.Error) {
+}
+
+func (r *noOpRemediator) RemoveFightError(core.ID) {
 }
 
 func gitSpec(repo string, auth configsync.AuthType) core.MetaMutator {
@@ -484,8 +511,8 @@ func TestRoot_Parse(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			state := reconcilerState{}
-			if err := parseAndUpdate(context.Background(), parser, triggerReimport, &state); err != nil {
+			state := ReconcilerState{}
+			if err := parseAndUpdate(context.Background(), parser, Reimport, &state); err != nil {
 				t.Fatal(err)
 			}
 
@@ -725,8 +752,8 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					mux: &sync.Mutex{},
 				},
 			}
-			state := reconcilerState{}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &state)
+			state := ReconcilerState{}
+			err := parseAndUpdate(context.Background(), parser, Reimport, &state)
 			testutil.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := cmp.Diff(tc.want, state.cache.objsToApply, cmpopts.EquateEmpty(), ast.CompareFileObject, cmpopts.SortSlices(sortObjects)); diff != "" {
@@ -782,7 +809,7 @@ func TestRoot_ParseErrorsMetricValidation(t *testing.T) {
 					mux: &sync.Mutex{},
 				},
 			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
+			err := parseAndUpdate(context.Background(), parser, Reimport, &ReconcilerState{})
 			if err == nil {
 				t.Errorf("parse() should return errors")
 			}
@@ -840,7 +867,7 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					mux: &sync.Mutex{},
 				},
 			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
+			err := parseAndUpdate(context.Background(), parser, Reimport, &ReconcilerState{})
 			if err == nil {
 				t.Errorf("parse() should return errors")
 			}
@@ -909,7 +936,7 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					mux:                &sync.Mutex{},
 				},
 			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
+			err := parseAndUpdate(context.Background(), parser, Reimport, &ReconcilerState{})
 			if err == nil {
 				t.Errorf("update() should return errors")
 			}

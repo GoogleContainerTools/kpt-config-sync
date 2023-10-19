@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package queue
+package controllers
 
-import (
-	"os"
-	"testing"
-
-	"k8s.io/klog/v2"
+// reconciler controller names
+const (
+	// SyncerController is the name of the syncer controller running in the reconciler container.
+	// It is named syncer instead of parser because it includes parsing, validating and applying.
+	// Also, there is already a Parser struct declared in pkg/parse/opts.go.
+	SyncerController = "Syncer"
+	// RemediatorController is the name of the remediator controller running in the reconciler container.
+	RemediatorController = "Remediator"
 )
-
-// TestMain executes the tests for this package, with optional logging.
-// To see all logs, use:
-// go test kpt.dev/configsync/pkg/remediator/queue -v -args -v=5
-func TestMain(m *testing.M) {
-	klog.InitFlags(nil)
-	os.Exit(m.Run())
-}

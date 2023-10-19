@@ -20,14 +20,14 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/remediator/queue"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 )
 
 // Handler is the generic interface of the conflict handler.
 type Handler interface {
-	AddConflictError(queue.GVKNN, status.ManagementConflictError)
-	RemoveConflictError(queue.GVKNN)
+	AddConflictError(core.GVKNN, status.ManagementConflictError)
+	RemoveConflictError(core.GVKNN)
 	RemoveAllConflictErrors(gvk schema.GroupVersionKind)
 
 	// ConflictErrors returns the management conflict errors (KNV1060) the remediator encounters.
@@ -52,14 +52,14 @@ func NewHandler() Handler {
 	}
 }
 
-func (h *handler) AddConflictError(gvknn queue.GVKNN, e status.ManagementConflictError) {
+func (h *handler) AddConflictError(gvknn core.GVKNN, e status.ManagementConflictError) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
 	h.conflictErrs.Set(gvknn, e)
 }
 
-func (h *handler) RemoveConflictError(gvknn queue.GVKNN) {
+func (h *handler) RemoveConflictError(gvknn core.GVKNN) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
@@ -74,7 +74,7 @@ func (h *handler) RemoveAllConflictErrors(gvk schema.GroupVersionKind) {
 	defer h.mux.Unlock()
 
 	for pair := h.conflictErrs.Oldest(); pair != nil; pair = pair.Next() {
-		gvknn := pair.Key.(queue.GVKNN)
+		gvknn := pair.Key.(core.GVKNN)
 		if gvknn.GroupVersionKind() == gvk {
 			h.conflictErrs.Delete(gvknn)
 		}

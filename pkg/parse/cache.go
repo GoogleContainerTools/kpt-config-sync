@@ -24,14 +24,14 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-// cacheForCommit tracks the progress made by the reconciler for a source commit (a source commit or an oci image digest).
+// CacheForCommit tracks the progress made by the reconciler for a source commit (a source commit or an oci image digest).
 //
 // The reconciler resets the whole cache when a new commit is detected.
 //
 // The reconciler resets the whole cache except for the cached sourceState when:
 //   - a force-resync happens, or
 //   - one of the watchers noticed a management conflict.
-type cacheForCommit struct {
+type CacheForCommit struct {
 	// source tracks the state of the source repo.
 	// This field is only set after the reconciler successfully reads all the source files.
 	source sourceState
@@ -69,7 +69,7 @@ type cacheForCommit struct {
 	errs status.MultiError
 }
 
-func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs status.MultiError) {
+func (c *CacheForCommit) setParserResult(objs []ast.FileObject, parserErrs status.MultiError) {
 	knownScopeObjs, unknownScopeObjs := splitObjects(objs)
 	c.objsSkipped = unknownScopeObjs
 	c.objsToApply = knownScopeObjs
@@ -77,7 +77,7 @@ func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs statu
 	c.hasParserResult = true
 }
 
-func (c *cacheForCommit) parserResultUpToDate() bool {
+func (c *CacheForCommit) parserResultUpToDate() bool {
 	// If len(c.objsSkipped) > 0, it mean that some objects were skipped to be sent to
 	// the kpt applier. For example, the objects whose scope is unknown will not be sent
 	// to the applier since the kpt applier cannot handle unknown-scoped objects.

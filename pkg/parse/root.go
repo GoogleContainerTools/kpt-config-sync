@@ -569,6 +569,17 @@ func (p *root) K8sClient() client.Client {
 	return p.client
 }
 
+// HasManagementConflict returns true if one of the watchers noticed a management conflict.
+func (p *root) HasManagementConflict() bool {
+	return p.updater.managementConflict()
+}
+
+// NeedWatchUpdate returns true if the Remediator needs its watches to be updated
+// (typically due to some asynchronous error that occurred).
+func (p *root) NeedWatchUpdate() bool {
+	return p.updater.needToUpdateWatch()
+}
+
 // prependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.
 func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, syncName string, conflictErrs []status.ManagementConflictError, denominator int) error {
 	if denominator <= 0 {

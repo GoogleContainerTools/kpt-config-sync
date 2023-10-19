@@ -79,7 +79,23 @@ func (d *Detector) DetectFight(now time.Time, obj client.Object) (bool, status.R
 	if d.fights[id] == nil {
 		d.fights[id] = &fight{}
 	}
-	if frequency := d.fights[id].refreshUpdateFrequency(now); frequency >= fightThreshold {
+	if frequency := d.fights[id].refreshUpdateFrequency(now, true); frequency >= fightThreshold {
+		fightErr := status.FightError(frequency, obj)
+		return d.fLogger.logFight(now, fightErr), fightErr
+	}
+	return false, nil
+}
+
+// ResolveFight cools down the fight, and checks if the fight still exists.
+func (d *Detector) ResolveFight(now time.Time, obj client.Object) (bool, status.ResourceError) {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+	id := core.IDOf(obj)
+
+	if d.fights[id] == nil {
+		return false, nil
+	}
+	if frequency := d.fights[id].refreshUpdateFrequency(now, false); frequency >= fightThreshold {
 		fightErr := status.FightError(frequency, obj)
 		return d.fLogger.logFight(now, fightErr), fightErr
 	}
@@ -112,10 +128,14 @@ type fight struct {
 //
 // The implementation below uses an approximation to the above as updates are
 // quantized (there is no such thing as 0.5 of an update).
-func (f *fight) refreshUpdateFrequency(now time.Time) float64 {
+func (f *fight) refreshUpdateFrequency(now time.Time, update bool) float64 {
 	// How long to let the existing heat decay.
 	d := now.Sub(f.last).Minutes()
-	f.last = now
+	// Only update `last` when it is update.
+	// If no update, keep `last` unchanged for longer duration to cool down the heat.
+	if update {
+		f.last = now
+	}
 	// Don't let d be a negative number of minutes to keep heat from increasing.
 	d = math.Max(0.0, d)
 

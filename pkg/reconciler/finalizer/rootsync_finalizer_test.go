@@ -301,7 +301,7 @@ func TestRootSyncFinalize(t *testing.T) {
 				Destroyer:          fakeDestroyer,
 				Client:             fakeClient,
 				StopControllers:    stopFunc,
-				ControllersStopped: continueCh,
+				ControllersStopped: []<-chan struct{}{continueCh},
 			}
 
 			if tc.setup != nil {

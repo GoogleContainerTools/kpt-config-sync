@@ -35,8 +35,8 @@ import (
 	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/remediator/conflict"
-	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -94,12 +94,12 @@ const errorLoggingInterval = time.Second
 // - either present in the declared resources,
 // - or managed by the same reconciler.
 type filteredWatcher struct {
-	gvk        string
-	startWatch WatchFunc
-	resources  *declared.Resources
-	queue      *queue.ObjectQueue
-	scope      declared.Scope
-	syncName   string
+	gvk          string
+	startWatch   WatchFunc
+	resources    *declared.Resources
+	remResources *cache.RemediateResources
+	scope        declared.Scope
+	syncName     string
 	// errorTracker maps an error to the time when the same error happened last time.
 	errorTracker map[string]time.Time
 
@@ -120,7 +120,7 @@ func NewFiltered(cfg watcherConfig) Runnable {
 		gvk:             cfg.gvk.String(),
 		startWatch:      cfg.startWatch,
 		resources:       cfg.resources,
-		queue:           cfg.queue,
+		remResources:    cfg.remResources,
 		scope:           cfg.scope,
 		syncName:        cfg.syncName,
 		base:            watch.NewEmptyWatch(),
@@ -156,12 +156,16 @@ func (w *filteredWatcher) addError(errorID string) bool {
 	return false
 }
 
+// ManagementConflict returns whether the watcher receives a conflict that has
+// not been cleared yet.
 func (w *filteredWatcher) ManagementConflict() bool {
 	w.mux.Lock()
 	defer w.mux.Unlock()
 	return w.managementConflict
 }
 
+// SetManagementConflict sets the managementConflict flag when the remediator
+// cannot manage the received event object.
 func (w *filteredWatcher) SetManagementConflict(object client.Object, commit string) {
 	w.mux.Lock()
 	defer w.mux.Unlock()
@@ -199,11 +203,14 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 	newManager := declared.ResourceManager(w.scope, w.syncName)
 	klog.Warningf("The remediator detects a management conflict for object %q between root reconcilers: %q and %q",
 		core.GKNN(object), newManager, manager)
-	gvknn := queue.GVKNNOf(object)
+	gvknn := core.GVKNNOf(object)
 	w.conflictHandler.AddConflictError(gvknn, status.ManagementConflictErrorWrap(object, newManager))
 	metrics.RecordResourceConflict(context.Background(), commit)
 }
 
+// ClearManagementConflict resets the managementConflict flag when the remediator
+// can manage the received event object. Before the flag is cleared, the object'
+// watcher status should stay in the conflicting state.
 func (w *filteredWatcher) ClearManagementConflict() {
 	w.mux.Lock()
 	w.managementConflict = false
@@ -422,7 +429,7 @@ func errorID(err error) string {
 // and an error indicating that a watch.Error event type is encountered and the
 // watch should be restarted.
 func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string, bool, error) {
-	klog.Infof("Handling watch event %v %v", event.Type, w.gvk)
+	klog.V(3).Infof("Handling watch event %v %v", event.Type, w.gvk)
 	var deleted bool
 	switch event.Type {
 	case watch.Added, watch.Modified:
@@ -459,39 +466,40 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Received watch event for object: %q (generation: %d): %s",
-			core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
+		klog.V(5).Infof("Received watch event for object: %q (generation: %d, resourceversion: %s): %s",
+			core.IDOf(object), object.GetGeneration(), object.GetResourceVersion(), log.AsJSON(object))
 	} else {
-		klog.V(3).Infof("Received watch event for object: %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+		klog.V(3).Infof("Received watch event for object: %q (generation: %d, resourceversion: %s)",
+			core.IDOf(object), object.GetGeneration(), object.GetResourceVersion())
 	}
 
 	// filter objects.
 	if !w.shouldProcess(object) {
-		klog.V(4).Infof("Ignoring event for object: %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+		klog.V(4).Infof("Ignoring event for object: %q (generation: %d, resourceversion: %s)",
+			core.IDOf(object), object.GetGeneration(), object.GetResourceVersion())
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
-		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
-		object = queue.MarkDeleted(ctx, object)
+		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d, resourceversion: %s)",
+			core.IDOf(object), object.GetGeneration(), object.GetResourceVersion())
+		object = cache.MarkDeleted(ctx, object)
 	} else {
-		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d, resourceversion: %s)",
+			core.IDOf(object), object.GetGeneration(), object.GetResourceVersion())
 	}
 
-	w.queue.Add(object)
+	w.remResources.AddObj(object)
 	return object.GetResourceVersion(), false, nil
 }
 
 // shouldProcess returns true if the given object should be enqueued by the
 // watcher for processing.
 func (w *filteredWatcher) shouldProcess(object client.Object) bool {
-	gvknn := queue.GVKNNOf(object)
+	gvknn := core.GVKNNOf(object)
 	// Process the resource if we are the manager regardless if it is declared or not.
 	if diff.IsManager(w.scope, w.syncName, object) {
+		w.ClearManagementConflict()
 		w.conflictHandler.RemoveConflictError(gvknn)
 		return true
 	}
@@ -514,6 +522,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		w.SetManagementConflict(object, commit)
 		return false
 	}
+	w.ClearManagementConflict()
 	w.conflictHandler.RemoveConflictError(gvknn)
 	return true
 }

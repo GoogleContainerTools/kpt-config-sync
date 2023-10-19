@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reconcile
+package cache
 
 import (
 	"os"
@@ -23,7 +23,7 @@ import (
 
 // TestMain executes the tests for this package, with optional logging.
 // To see all logs, use:
-// go test kpt.dev/configsync/pkg/remediator/reconcile -v -args -v=5
+// go test kpt.dev/configsync/pkg/remediator/queue -v -args -v=5
 func TestMain(m *testing.M) {
 	klog.InitFlags(nil)
 	os.Exit(m.Run())

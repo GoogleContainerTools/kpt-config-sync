@@ -22,8 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/remediator/conflict"
-	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -33,7 +33,7 @@ type watcherConfig struct {
 	gvk             schema.GroupVersionKind
 	config          *rest.Config
 	resources       *declared.Resources
-	queue           *queue.ObjectQueue
+	remResources    *cache.RemediateResources
 	scope           declared.Scope
 	syncName        string
 	startWatch      WatchFunc

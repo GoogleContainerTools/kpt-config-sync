@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reconcile
+package controllers
 
 import (
 	"context"
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,10 +28,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/diff"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/policycontroller"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
@@ -40,7 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestRemediator_Reconcile(t *testing.T) {
+func TestRemediateDiff(t *testing.T) {
 	testCases := []struct {
 		name string
 		// version is Version (from GVK) of the object to try to remediate.
@@ -55,6 +58,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 		// wantError is the desired error resulting from calling Reconcile, if there
 		// is one.
 		wantError error
+		// wantRemediatedRV is the remediated resourceVersion of the object.
+		wantRemediatedRV string
 	}{
 		// Happy Paths.
 		{
@@ -65,7 +70,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "1",
 		},
 		{
 			name:    "update declared object",
@@ -77,7 +83,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one"),
 			),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "2",
 		},
 		{
 			name:     "delete removed object",
@@ -85,8 +92,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			declared: nil,
 			actual: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_default-name")),
-			want:      nil,
-			wantError: nil,
+			want:             nil,
+			wantError:        nil,
+			wantRemediatedRV: cache.DeletedResourceVersion,
 		},
 		// Unmanaged paths.
 		{
@@ -94,9 +102,10 @@ func TestRemediator_Reconcile(t *testing.T) {
 			version: "v1",
 			declared: fake.ClusterRoleBindingObject(syncertest.ManagementDisabled,
 				core.Label("declared-label", "foo")),
-			actual:    nil,
-			want:      nil,
-			wantError: nil,
+			actual:           nil,
+			want:             nil,
+			wantError:        nil,
+			wantRemediatedRV: cache.DeletedResourceVersion, // unmanaged object is treated as deleted
 		},
 		{
 			name:    "don't update unmanaged object",
@@ -107,7 +116,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "1", // no update to the unmanaged object
 		},
 		{
 			name:     "don't delete unmanaged object",
@@ -117,7 +127,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "1", // no update to the unmanaged object
 		},
 		{
 			name:     "don't delete unmanaged object (the configsync.gke.io/resource-id annotation is incorrect)",
@@ -128,16 +139,18 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_wrong-name")),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "1", // no update to the unmanaged object
 		},
 		// Bad declared management annotation paths.
 		{
-			name:      "don't create, and error on bad declared management annotation",
-			version:   "v1",
-			declared:  fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
-			actual:    nil,
-			want:      nil,
-			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			name:             "don't create, and error on bad declared management annotation",
+			version:          "v1",
+			declared:         fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			actual:           nil,
+			want:             nil,
+			wantError:        nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			wantRemediatedRV: "", // no remediatedRV because of remediate error
 		},
 		{
 			name:     "don't update, and error on bad declared management annotation",
@@ -147,7 +160,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			wantError:        nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			wantRemediatedRV: "", // no remediatedRV because of remediate error
 		},
 		// bad in-cluster management annotation paths.
 		{
@@ -160,7 +174,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("declared-label", "foo")),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "2", // object is updated with the bad management annotation being fixed
 		},
 		{
 			name:     "don't update non-Config-Sync-managed-objects with invalid management annotation",
@@ -170,7 +185,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "1", // no update to the object because it is not managed
 		},
 		// system namespaces
 		{
@@ -182,6 +198,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.NamespaceObject(metav1.NamespaceSystem,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
+			wantRemediatedRV: "2", // previously managed kube-system Namespace is updated with the management annotations being removed because it is not managed anymore
 		},
 		{
 			name:     "don't delete kube-public Namespace",
@@ -192,6 +209,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.NamespaceObject(metav1.NamespacePublic,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
+			wantRemediatedRV: "2", // previously managed kube-public Namespace is updated with the management annotations being removed because it is not managed anymore
 		},
 		{
 			name:     "don't delete default Namespace",
@@ -202,6 +220,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.NamespaceObject(metav1.NamespaceDefault,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
+			wantRemediatedRV: "2", // previously managed default Namespace is updated with the management annotations being removed because it is not managed anymore
 		},
 		{
 			name:     "don't delete gatekeeper-system Namespace",
@@ -212,6 +231,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.NamespaceObject(policycontroller.NamespaceSystem,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
+			wantRemediatedRV: "2", // previously managed gatekeeper-system Namespace is updated with the management annotations being removed because it is not managed anymore
 		},
 		// Version difference paths.
 		{
@@ -223,7 +243,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one")),
-			wantError: nil,
+			wantError:        nil,
+			wantRemediatedRV: "2", // apiVersion gets updated
 		},
 	}
 
@@ -235,25 +256,39 @@ func TestRemediator_Reconcile(t *testing.T) {
 				existingObjs = append(existingObjs, tc.actual)
 			}
 			c := testingfake.NewClient(t, core.Scheme, existingObjs...)
-			// Simulate the Parser having already parsed the resource and recorded it.
-			d := makeDeclared(t, "unused", tc.declared)
 
-			r := newReconciler(declared.RootReconciler, configsync.RootSyncName, c.Applier(), d, testingfake.NewFightHandler())
-
-			// Get the triggering object for the reconcile event.
-			var obj client.Object
-			switch {
-			case tc.declared != nil:
-				obj = tc.declared
-			case tc.actual != nil:
-				obj = tc.actual
-			default:
-				t.Fatal("at least one of actual or declared must be specified for a test")
+			r := &Remediator{
+				SyncScope: declared.RootReconciler,
+				SyncName:  configsync.RootSyncName,
+				Applier:   c.Applier(),
 			}
 
-			err := r.Remediate(context.Background(), core.IDOf(obj), tc.actual)
+			// Build the diff for the reconcile event.
+			var decl, actl client.Object
+			var id core.ID
+			switch {
+			case tc.declared != nil && tc.actual != nil:
+				decl = tc.declared
+				actl = tc.actual
+				// Use the actual ID to remediate
+				id = core.IDOf(actl)
+			case tc.declared == nil && tc.actual == nil:
+				t.Fatal("at least one of actual or declared must be specified for a test")
+			case tc.declared != nil:
+				decl = tc.declared
+				id = core.IDOf(decl)
+			case tc.actual != nil:
+				actl = tc.actual
+				id = core.IDOf(actl)
+			}
+
+			objDiff := diff.Diff{
+				Declared: decl,
+				Actual:   actl,
+			}
+			remediatedRV, err := r.remediateDiff(context.Background(), id, objDiff)
 			if !errors.Is(err, tc.wantError) {
-				t.Errorf("got Reconcile() = %v, want matching %v",
+				t.Errorf("got remediateDiff error %v, want matching %v",
 					err, tc.wantError)
 			}
 
@@ -262,11 +297,13 @@ func TestRemediator_Reconcile(t *testing.T) {
 			} else {
 				c.Check(t, tc.want)
 			}
+			assert.Equal(t, tc.wantRemediatedRV, remediatedRV)
 		})
 	}
+
 }
 
-func TestRemediator_Reconcile_Metrics(t *testing.T) {
+func TestRemediate(t *testing.T) {
 	testCases := []struct {
 		name string
 		// version is Version (from GVK) of the object to try to remediate.
@@ -363,7 +400,13 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			fakeApplier.UpdateError = tc.updateError
 			fakeApplier.DeleteError = tc.deleteError
 
-			reconciler := newReconciler(declared.RootReconciler, configsync.RootSyncName, fakeApplier, d, testingfake.NewFightHandler())
+			r := &Remediator{
+				SyncScope:          declared.RootReconciler,
+				SyncName:           configsync.RootSyncName,
+				Applier:            fakeApplier,
+				Resources:          d,
+				RemediateResources: cache.NewRemediateResources(),
+			}
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object
@@ -377,12 +420,12 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			}
 
 			var views []*view.View
-			for view := range tc.wantMetrics {
-				views = append(views, view)
+			for v := range tc.wantMetrics {
+				views = append(views, v)
 			}
 			m := testmetrics.RegisterMetrics(views...)
 
-			err := reconciler.Remediate(context.Background(), core.IDOf(obj), tc.actual)
+			_, err := r.remediate(context.Background(), core.IDOf(obj), tc.actual)
 			if !errors.Is(err, tc.wantError) {
 				t.Errorf("Unexpected error: want:\n%v\ngot:\n%v", tc.wantError, err)
 			}
@@ -393,9 +436,9 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 				fakeClient.Check(t, tc.want)
 			}
 
-			for view, rows := range tc.wantMetrics {
-				if diff := m.ValidateMetrics(view, rows); diff != "" {
-					t.Errorf("Unexpected metrics recorded (%s): %v", view.Name, diff)
+			for v, rows := range tc.wantMetrics {
+				if diff := m.ValidateMetrics(v, rows); diff != "" {
+					t.Errorf("Unexpected metrics recorded (%s): %v", v.Name, diff)
 				}
 			}
 		})

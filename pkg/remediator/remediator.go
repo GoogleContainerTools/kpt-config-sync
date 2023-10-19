@@ -22,41 +22,32 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/remediator/conflict"
-	"kpt.dev/configsync/pkg/remediator/queue"
-	"kpt.dev/configsync/pkg/remediator/reconcile"
 	"kpt.dev/configsync/pkg/remediator/watch"
 	"kpt.dev/configsync/pkg/status"
-	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 )
 
 // Remediator knows how to keep the state of a Kubernetes cluster in sync with
-// a set of declared resources. It processes a work queue of items, and ensures
+// a set of declared resources. It processes a queue of items, and ensures
 // each matches the set of declarations passed on instantiation.
 //
-// The exposed Queue operations are threadsafe - multiple callers may safely
+// The exposed cache is threadsafe - multiple callers may safely
 // synchronously add and consume work items.
 type Remediator struct {
 	watchMgr *watch.Manager
+	// remResources is the cache of drifted resources to be corrected by remediator.
+	remResources *cache.RemediateResources
 
-	// lifecycleMux guards start/stop/add/remove of the workers, as well as
-	// updates to queue, parentContext, doneCh, and stopFn.
+	// lifecycleMux guards live status of the Remediator.
 	lifecycleMux sync.Mutex
-	// workers pull objects from the queue and remediate them
-	workers []*reconcile.Worker
-	// objectQueue is a queue of objects that have received watch events and
-	// need to be processed by the workers.
-	objectQueue *queue.ObjectQueue
-	// parentContext is set by Start and should be cancelled by the caller when
-	// the Remediator should stop.
-	parentContext context.Context
-	// doneCh indicates that the workers have fully stopped after parentContext
-	// is cancelled.
-	doneCh chan struct{}
-	// stopFn cancels the internal context, stopping the workers.
-	stopFn context.CancelFunc
+	// canRemediate indicates whether the Remediator can start processing requests.
+	canRemediate bool
+	// wg is the WaitGroup for the Remediator.
+	wg sync.WaitGroup
 
 	conflictHandler conflict.Handler
 	fightHandler    fight.Handler
@@ -71,6 +62,16 @@ type Interface interface {
 	Pause()
 	// Resume the Remediator by starting the workers.
 	Resume()
+	// CanRemediate returns whether the Remediator can start remediating.
+	CanRemediate() bool
+	// StartRemediating indicates the Remediator starts processing the remediate requests if it can remediate.
+	StartRemediating() bool
+	// DoneRemediating marks the Remediator as done when it finishes remediation.
+	DoneRemediating()
+	// WaitRemediating blocks until the Remediator finishes remediating the requests.
+	WaitRemediating()
+	// ClearCache resets the remediate cache to empty.
+	ClearCache()
 	// NeedsUpdate returns true if the Remediator needs its watches to be updated
 	// (typically due to some asynchronous error that occurred).
 	NeedsUpdate() bool
@@ -83,6 +84,8 @@ type Interface interface {
 	ConflictErrors() []status.ManagementConflictError
 	// FightErrors returns the fight errors (KNV2005) the remediator encounters.
 	FightErrors() []status.Error
+	AddFightError(core.ID, status.Error)
+	RemoveFightError(core.ID)
 }
 
 var _ Interface = &Remediator{}
@@ -92,81 +95,20 @@ var _ Interface = &Remediator{}
 //
 // It is safe for decls to be modified after they have been passed into the
 // Remediator.
-func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncerreconcile.Applier, decls *declared.Resources, numWorkers int) (*Remediator, error) {
-	q := queue.New(string(scope))
-	workers := make([]*reconcile.Worker, numWorkers)
+func New(scope declared.Scope, syncName string, cfg *rest.Config, decls *declared.Resources, remResources *cache.RemediateResources) (*Remediator, error) {
 	fightHandler := fight.NewHandler()
 	conflictHandler := conflict.NewHandler()
-	for i := 0; i < numWorkers; i++ {
-		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
-	}
-
-	remediator := &Remediator{
-		workers:         workers,
-		objectQueue:     q,
-		fightHandler:    fightHandler,
-		conflictHandler: conflictHandler,
-	}
-
-	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler)
+	watchMgr, err := watch.NewManager(scope, syncName, cfg, decls, nil, remResources, conflictHandler)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating watch manager")
 	}
+	return &Remediator{
+		watchMgr:        watchMgr,
+		remResources:    remResources,
+		fightHandler:    fightHandler,
+		conflictHandler: conflictHandler,
+	}, nil
 
-	remediator.watchMgr = watchMgr
-	return remediator, nil
-}
-
-// Start the Remediator's asynchronous reconcile workers.
-// Returns a done channel that will be closed after the context is cancelled and
-// all the workers have exited.
-func (r *Remediator) Start(ctx context.Context) <-chan struct{} {
-	r.lifecycleMux.Lock()
-	defer r.lifecycleMux.Unlock()
-
-	if r.parentContext != nil {
-		panic("Remediator must only be started once!")
-	}
-
-	klog.V(1).Info("Remediator starting...")
-	r.parentContext = ctx
-	r.startWorkers()
-	klog.V(3).Info("Remediator started")
-
-	doneCh := make(chan struct{})
-	go func() {
-		defer close(doneCh) // inform caller the workers are done
-		<-ctx.Done()        // wait until cancelled
-		klog.V(1).Info("Remediator stopping...")
-		r.objectQueue.ShutDown()
-		<-r.doneCh // wait until workers are done (if running)
-		klog.V(3).Info("Remediator stopped")
-	}()
-	return doneCh
-}
-
-// startWorkers starts the workers and sets doneCh & stopFn.
-// This should always be called while lifecycleMux is locked.
-func (r *Remediator) startWorkers() {
-	ctx, cancel := context.WithCancel(r.parentContext)
-
-	doneCh := make(chan struct{})
-	var wg sync.WaitGroup
-	for i := range r.workers {
-		worker := r.workers[i]
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			worker.Run(ctx)
-		}()
-	}
-	go func() {
-		defer close(doneCh)
-		wg.Wait()
-	}()
-
-	r.doneCh = doneCh
-	r.stopFn = cancel
 }
 
 // Pause the Remediator by stopping the workers and waiting for them to be done.
@@ -174,10 +116,9 @@ func (r *Remediator) Pause() {
 	r.lifecycleMux.Lock()
 	defer r.lifecycleMux.Unlock()
 
-	klog.V(1).Info("Remediator pausing...")
-	r.stopFn() // tell the workers to stop
-	<-r.doneCh // wait until workers are done (if running)
-	klog.V(3).Info("Remediator paused")
+	klog.V(1).Info("Remediator pausing processing new request...")
+	r.canRemediate = false
+	klog.V(3).Info("Remediator paused processing new request")
 }
 
 // Resume the Remediator by starting the workers.
@@ -185,9 +126,49 @@ func (r *Remediator) Resume() {
 	r.lifecycleMux.Lock()
 	defer r.lifecycleMux.Unlock()
 
-	klog.V(1).Info("Remediator resuming...")
-	r.startWorkers()
-	klog.V(3).Info("Remediator resumed")
+	klog.V(1).Info("Remediator resuming processing new request...")
+	r.canRemediate = true
+	klog.V(3).Info("Remediator resumed processing new request")
+}
+
+// CanRemediate returns whether the Remediator can start remediating.
+func (r *Remediator) CanRemediate() bool {
+	r.lifecycleMux.Lock()
+	defer r.lifecycleMux.Unlock()
+
+	return r.canRemediate
+}
+
+// StartRemediating marks the Remediator is working to block the Applier if it can
+// remediate.
+func (r *Remediator) StartRemediating() bool {
+	r.lifecycleMux.Lock()
+	defer r.lifecycleMux.Unlock()
+
+	if r.canRemediate {
+		klog.V(1).Infof("Start remediating...")
+		r.wg.Add(1)
+	}
+	return r.canRemediate
+}
+
+// WaitRemediating blocks until the Remediator finishes remediating the requests.
+func (r *Remediator) WaitRemediating() {
+	klog.V(1).Info("Waiting for the Remediator to complete...")
+	r.wg.Wait()
+}
+
+// DoneRemediating marks the Remediator as done when it finishes remediation.
+func (r *Remediator) DoneRemediating() {
+	klog.V(1).Info("Remediator completes...")
+	r.wg.Done()
+}
+
+// ClearCache resets the remediate cache to empty.
+func (r *Remediator) ClearCache() {
+	klog.V(1).Info("Clearing cache of the remediate resources...")
+	r.remResources.ClearAll()
+	klog.V(1).Info("Remediate cache cleared")
 }
 
 // NeedsUpdate implements Interface.
@@ -213,4 +194,14 @@ func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
 // FightErrors implements Interface.
 func (r *Remediator) FightErrors() []status.Error {
 	return r.fightHandler.FightErrors()
+}
+
+// AddFightError implements Interface.
+func (r *Remediator) AddFightError(id core.ID, err status.Error) {
+	r.fightHandler.AddFightError(id, err)
+}
+
+// RemoveFightError implements Interface.
+func (r *Remediator) RemoveFightError(id core.ID) {
+	r.fightHandler.RemoveFightError(id)
 }

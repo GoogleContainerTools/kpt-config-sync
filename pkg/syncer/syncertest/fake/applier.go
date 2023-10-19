@@ -16,9 +16,11 @@ package fake
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,56 +39,61 @@ type Applier struct {
 var _ reconcile.Applier = &Applier{}
 
 // Create implements reconcile.Applier.
-func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) status.Error {
+func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) (string, status.Error) {
 	if a.CreateError != nil {
-		return a.CreateError
+		return "", a.CreateError
 	}
 	err := a.Client.Create(ctx, obj)
 	if err != nil {
-		return status.APIServerError(err, "creating")
+		return "", status.APIServerError(err, "creating")
 	}
-	return nil
+	return obj.GetResourceVersion(), nil
 }
 
 // Update implements reconcile.Applier.
-func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) status.Error {
+func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Unstructured) (string, status.Error) {
 	if a.UpdateError != nil {
-		return a.UpdateError
+		return "", a.UpdateError
 	}
 	err := a.Client.Update(ctx, intendedState)
 	if err != nil {
-		return status.APIServerError(err, "updating")
+		return "", status.APIServerError(err, "updating")
 	}
-	return nil
+	return intendedState.GetResourceVersion(), nil
 }
 
 // RemoveNomosMeta implements reconcile.Applier.
-func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, _ string) status.Error {
+func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, _ string) (string, status.Error) {
 	updated := metadata.RemoveConfigSyncMetadata(intent)
 	if !updated {
-		return nil
+		return intent.GetResourceVersion(), nil
 	}
 
 	err := a.Client.Update(ctx, intent)
 	if err != nil {
-		return status.APIServerError(err, "removing meta")
+		return "", status.APIServerError(err, "removing meta")
 	}
-	return nil
+	return intent.GetResourceVersion(), nil
 }
 
 // Delete implements reconcile.Applier.
-func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
+func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) (string, status.Error) {
 	if a.DeleteError != nil {
-		return a.DeleteError
+		return "", a.DeleteError
 	}
 	err := a.Client.Delete(ctx, obj)
 	if err != nil {
-		return status.APIServerError(err, "deleting")
+		return "", status.APIServerError(err, "deleting")
 	}
-	return nil
+	return cache.DeletedResourceVersion, nil
 }
 
 // GetClient implements reconcile.Applier.
 func (a *Applier) GetClient() client.Client {
 	return a.Client
+}
+
+// ResolveFight implements reconcile.Applier.
+func (a *Applier) ResolveFight(time.Time, client.Object) (bool, status.Error) {
+	return false, nil
 }

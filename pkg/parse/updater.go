@@ -137,7 +137,7 @@ func (u *updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.Mu
 // Any errors returned will be prepended with any known conflict errors from the
 // remediator. This is required to preserve errors that have been reported by
 // another reconciler.
-func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+func (u *updater) Update(ctx context.Context, cache *CacheForCommit) status.MultiError {
 	u.updateMux.Lock()
 	u.updating = true
 	defer func() {
@@ -157,12 +157,18 @@ func (u *updater) Update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 // update performs most of the work for `Update`, making it easier to
 // consistently prepend the conflict errors.
-func (u *updater) update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+func (u *updater) update(ctx context.Context, cache *CacheForCommit) status.MultiError {
 	// Stop remediator workers.
 	// This prevents objects been updated in the wrong order (dependencies).
 	// Continue watching previously declared objects and updating the queue.
 	// Queued objects will be remediated when the workers are started again.
 	u.remediator.Pause()
+
+	// block and wait until the current remediation is done.
+	u.remediator.WaitRemediating()
+
+	// clear remediate cache to abandon obsolete remediate requests.
+	u.remediator.ClearCache()
 
 	// Update the declared resources (source of truth for the Remediator).
 	// After this, any objects removed from the declared resources will no
@@ -226,7 +232,7 @@ func (u *updater) declare(ctx context.Context, objs []client.Object, commit stri
 		klog.Warningf("Failed to validate declared resources: %v", err)
 		return nil, err
 	}
-	klog.V(3).Info("Declared resources updated...")
+	klog.V(3).Info("Declared resources updated")
 	return objs, nil
 }
 

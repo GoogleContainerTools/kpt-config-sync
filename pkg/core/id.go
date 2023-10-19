@@ -42,6 +42,27 @@ func (i ID) String() string {
 	return fmt.Sprintf("%s, %s/%s", i.GroupKind.String(), i.Namespace, i.Name)
 }
 
+// FromID returns a GKNN representing the provided ID string.
+func FromID(id string) (ID, error) {
+	parts := strings.Split(id, ",")
+	if len(parts) != 2 {
+		return ID{}, fmt.Errorf("invalid ID format: %q", id)
+	}
+	gk := schema.ParseGroupKind(parts[0])
+	nn := strings.TrimSpace(parts[1])
+	parts = strings.Split(nn, "/")
+	if len(parts) != 2 {
+		return ID{}, fmt.Errorf("invalid namespace and name format: %q", nn)
+	}
+	return ID{
+		GroupKind: gk,
+		ObjectKey: client.ObjectKey{
+			Namespace: parts[0],
+			Name:      parts[1],
+		},
+	}, nil
+}
+
 // GKNN is used to set and verify the `configsync.gke.io/resource-id` annotation.
 // Changing this function should be avoided, since it may
 // introduce incompability across different Config Sync versions.
@@ -67,4 +88,24 @@ func GKNNs(objs []client.Object) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// GVKNN adds Version to core.ID to make it suitable for getting an object from
+// a cluster into an *unstructured.Unstructured.
+type GVKNN struct {
+	ID
+	Version string
+}
+
+// GroupVersionKind returns the GVK contained in this GVKNN.
+func (gvknn GVKNN) GroupVersionKind() schema.GroupVersionKind {
+	return gvknn.GroupKind.WithVersion(gvknn.Version)
+}
+
+// GVKNNOf converts an Object to its GVKNN.
+func GVKNNOf(obj client.Object) GVKNN {
+	return GVKNN{
+		ID:      IDOf(obj),
+		Version: obj.GetObjectKind().GroupVersionKind().Version,
+	}
 }

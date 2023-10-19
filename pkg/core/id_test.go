@@ -53,3 +53,37 @@ func TestGKNN(t *testing.T) {
 		})
 	}
 }
+
+func TestFromID(t *testing.T) {
+	testcases := []struct {
+		name string
+		obj  client.Object
+	}{
+		{
+			name: "id without group",
+			obj:  fake.NamespaceObject("test-ns"),
+		},
+		{
+			name: "id without namespace",
+			obj:  fake.CustomResourceDefinitionV1Object(core.Name("test-crd")),
+		},
+		{
+			name: "normal id",
+			obj:  fake.DeploymentObject(core.Namespace("test-ns"), core.Name("test-dep")),
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			id := core.IDOf(tc.obj)
+			parsedID, err := core.FromID(id.String())
+			if err != nil {
+				t.Errorf("got unexpected error: %v", err)
+			}
+			if parsedID != id {
+				t.Errorf("unexpected parse result %v, expected %v", parsedID, id)
+			}
+		})
+	}
+
+}

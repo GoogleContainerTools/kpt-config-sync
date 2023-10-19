@@ -48,6 +48,8 @@ func TestFight(t *testing.T) {
 		// deltas are a monotonically nondecreasing sequence of update times,
 		// as durations measured from the beginning of the simulation.
 		deltas []time.Duration
+		// update indicates whether this function is invoked with an update or a simple cooldown check.
+		update bool
 		// whether we want the estimated updates per minute at the end of the
 		// test to be above or equal to our threshold.
 		wantAboveThreshold bool
@@ -56,22 +58,26 @@ func TestFight(t *testing.T) {
 		{
 			name:               "one is below threshold",
 			deltas:             durations(0, 1),
+			update:             true,
 			wantAboveThreshold: false,
 		},
 		{
 			name:               "four at once is below threshold",
 			deltas:             durations(0, 4),
+			update:             true,
 			wantAboveThreshold: false,
 		},
 		{
 			name:               "six at once is at threshold",
 			deltas:             sixUpdatesAtOnce,
+			update:             true,
 			wantAboveThreshold: true,
 		},
 		// Evenly spread updates takes more time to adjust to.
 		{
 			name:               "seven over a minute is below threshold",
 			deltas:             durations(time.Minute/6.0, 7),
+			update:             true,
 			wantAboveThreshold: false,
 		},
 		{
@@ -79,12 +85,14 @@ func TestFight(t *testing.T) {
 			// This is sufficient to prove that *any* pattern of eight updates in 1 minute
 			// will exceed the heat threshold.
 			deltas:             durations(time.Minute/7.0, 8),
+			update:             true,
 			wantAboveThreshold: true,
 		},
 		// Five updates per minute eventually triggers threshold, but not immediately.
 		{
 			name:               "five per minute over two minutes is below threshold",
 			deltas:             durations(time.Minute/5.0, 10),
+			update:             true,
 			wantAboveThreshold: false,
 		},
 		{
@@ -92,19 +100,36 @@ func TestFight(t *testing.T) {
 			// As above, this proves that *any* pattern of sixteen updates in 3 minutes
 			// will exceed the heat threshold.
 			deltas:             durations(time.Minute/5.0, 16),
+			update:             true,
 			wantAboveThreshold: true,
 		},
 		{
 			name:               "starting from high heat does not immediately adjust to lower frequency",
 			startHeat:          60.0,
 			deltas:             durations(time.Minute/200.0, 4),
+			update:             true,
 			wantAboveThreshold: true,
 		},
 		{
 			name:               "high heat eventually adjusts to new lower frequency",
 			startHeat:          60.0,
 			deltas:             durations(time.Minute/2.0, 8),
+			update:             true,
 			wantAboveThreshold: false,
+		},
+		// Heat decays much faster when no updates.
+		{
+			name:               "high heat may never decay with update",
+			startHeat:          60.0,
+			deltas:             durations(time.Minute/6.0, 50),
+			update:             true,
+			wantAboveThreshold: true,
+		}, {
+			name:               "high heat decays much faster without updates",
+			startHeat:          60.0,
+			deltas:             durations(time.Minute/6.0, 6),
+			update:             false,
+			wantAboveThreshold: true,
 		},
 	}
 
@@ -118,7 +143,7 @@ func TestFight(t *testing.T) {
 
 			heat := tc.startHeat
 			for _, d := range tc.deltas {
-				heat = f.refreshUpdateFrequency(now.Add(d))
+				heat = f.refreshUpdateFrequency(now.Add(d), tc.update)
 			}
 
 			if heat < fightThreshold && tc.wantAboveThreshold {

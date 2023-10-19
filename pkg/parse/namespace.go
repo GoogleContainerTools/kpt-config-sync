@@ -364,3 +364,14 @@ func (p *namespace) Syncing() bool {
 func (p *namespace) K8sClient() client.Client {
 	return p.client
 }
+
+// HasManagementConflict returns true if one of the watchers noticed a management conflict.
+func (p *namespace) HasManagementConflict() bool {
+	return p.updater.managementConflict()
+}
+
+// NeedWatchUpdate returns true if the Remediator needs its watches to be updated
+// (typically due to some asynchronous error that occurred).
+func (p *namespace) NeedWatchUpdate() bool {
+	return p.updater.needToUpdateWatch()
+}

@@ -42,6 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	m "kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
@@ -54,12 +55,13 @@ const rmCreationTimestampPatch = "{\"metadata\":{\"creationTimestamp\":null}}"
 
 // Applier updates a resource from its current state to its intended state using apply operations.
 type Applier interface {
-	Create(ctx context.Context, obj *unstructured.Unstructured) status.Error
-	Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error
+	Create(ctx context.Context, obj *unstructured.Unstructured) (string, status.Error)
+	Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (string, status.Error)
 	// RemoveNomosMeta performs a PUT (rather than a PATCH) to ensure that labels and annotations are removed.
-	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) status.Error
-	Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error
+	RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, controller string) (string, status.Error)
+	Delete(ctx context.Context, obj *unstructured.Unstructured) (string, status.Error)
 	GetClient() client.Client
+	ResolveFight(time.Time, client.Object) (bool, status.Error)
 }
 
 // clientApplier does apply operations on resources, client-side, using the same approach as running `kubectl apply`.
@@ -104,7 +106,7 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) 
 }
 
 // Create implements Applier.
-func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.Unstructured) status.Error {
+func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.Unstructured) (string, status.Error) {
 	var err status.Error
 	// APIService is handled specially by client-side apply due to
 	// https://github.com/kubernetes/kubernetes/issues/89264
@@ -120,7 +122,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 
 	if err != nil {
 		klog.V(3).Infof("Failed to create object %v: %v", core.GKNN(intendedState), err)
-		return err
+		return "", err
 	}
 	logErr, err := c.fights.DetectFight(time.Now(), intendedState)
 	if logErr {
@@ -129,22 +131,22 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 	if err == nil {
 		klog.V(3).Infof("Created object %v", core.GKNN(intendedState))
 	}
-	return err
+	return intendedState.GetResourceVersion(), err
 }
 
 // Update implements Applier.
-func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) status.Error {
+func (c *clientApplier) Update(ctx context.Context, intendedState, currentState *unstructured.Unstructured) (string, status.Error) {
 	patch, err := c.update(ctx, intendedState, currentState)
 	metrics.Operations.WithLabelValues("update", metrics.StatusLabel(err)).Inc()
 	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err))
 
 	switch {
 	case apierrors.IsConflict(err):
-		return syncerclient.ConflictUpdateOldVersion(err, intendedState)
+		return "", syncerclient.ConflictUpdateOldVersion(err, intendedState)
 	case apierrors.IsNotFound(err):
-		return syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
+		return "", syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
 	case err != nil:
-		return status.ResourceWrap(err, "unable to update resource", intendedState)
+		return "", status.ResourceWrap(err, "unable to update resource", intendedState)
 	}
 
 	updated := !isNoOpPatch(patch)
@@ -157,15 +159,15 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 		if err == nil {
 			klog.V(3).Infof("The object %v was updated with the patch %v", core.GKNN(currentState), string(patch))
 		}
-		return err
+		return intendedState.GetResourceVersion(), err
 	}
 
 	klog.V(3).Infof("The object %v is up to date.", core.GKNN(currentState))
-	return nil
+	return currentState.GetResourceVersion(), nil
 }
 
 // RemoveNomosMeta implements Applier.
-func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) status.Error {
+func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) (string, status.Error) {
 	var changed bool
 	_, err := c.client.Apply(ctx, u, func(obj client.Object) (client.Object, error) {
 		changed = metadata.RemoveConfigSyncMetadata(obj)
@@ -182,18 +184,18 @@ func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Uns
 	} else {
 		klog.V(3).Infof("RemoveNomosMeta did not change the object %v", core.GKNN(u))
 	}
-	return err
+	return u.GetResourceVersion(), err
 }
 
 // Delete implements Applier.
-func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) status.Error {
+func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructured) (string, status.Error) {
 	err := c.client.Delete(ctx, obj)
 	metrics.Operations.WithLabelValues("delete", metrics.StatusLabel(err)).Inc()
 	m.RecordApplyOperation(ctx, m.RemediatorController, "delete", m.StatusTagKey(err))
 
 	if err != nil {
 		klog.V(3).Infof("Failed to delete object %v: %v", core.GKNN(obj), err)
-		return err
+		return "", err
 	}
 	logFight, err := c.fights.DetectFight(time.Now(), obj)
 	if logFight {
@@ -202,7 +204,7 @@ func (c *clientApplier) Delete(ctx context.Context, obj *unstructured.Unstructur
 	if err == nil {
 		klog.V(3).Infof("Deleted object %v", core.GKNN(obj))
 	}
-	return err
+	return cache.DeletedResourceVersion, err
 }
 
 // create creates the resource with the declared-config annotation set.
@@ -433,4 +435,9 @@ func equal(dryrunState, currentState *unstructured.Unstructured) bool {
 	cleanFields(obj1)
 	cleanFields(obj2)
 	return equality.Semantic.DeepEqual(obj1.Object, obj2.Object)
+}
+
+// ResolveFight implements Applier.
+func (c *clientApplier) ResolveFight(now time.Time, obj client.Object) (bool, status.Error) {
+	return c.fights.ResolveFight(now, obj)
 }

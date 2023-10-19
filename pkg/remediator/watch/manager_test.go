@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
@@ -142,7 +143,7 @@ func TestManager_Update(t *testing.T) {
 			options := &Options{
 				watcherFactory: testRunnables(tc.failedWatchers),
 			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
+			m, err := NewManager(":test", "rs", nil, &declared.Resources{}, options, cache.NewRemediateResources(), fake.NewConflictHandler())
 			if err != nil {
 				t.Fatal(err)
 			}

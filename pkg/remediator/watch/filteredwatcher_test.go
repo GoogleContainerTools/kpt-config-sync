@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/remediator/queue"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -323,6 +324,7 @@ func TestFilteredWatcher(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dr := &declared.Resources{}
+			rr := cache.NewRemediateResources()
 			ctx := context.Background()
 			var cancel context.CancelFunc
 			if tc.timeout != nil {
@@ -335,13 +337,12 @@ func TestFilteredWatcher(t *testing.T) {
 			}
 
 			watches := make(chan watch.Interface) // TODO: test startWatch errors
-			q := queue.New("test")
 			cfg := watcherConfig{
-				gvk:       kinds.Deployment(),
-				scope:     scope,
-				syncName:  syncName,
-				resources: dr,
-				queue:     q,
+				gvk:          kinds.Deployment(),
+				scope:        scope,
+				syncName:     syncName,
+				resources:    dr,
+				remResources: rr,
 				startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
 					return <-watches, nil
 				},
@@ -374,15 +375,12 @@ func TestFilteredWatcher(t *testing.T) {
 			require.Equal(t, tc.wantErr, err)
 
 			var got []core.ID
-			for q.Len() > 0 {
-				obj, err := q.Get(context.Background())
-				if err != nil {
-					t.Fatalf("Object queue was shut down unexpectedly: %v", err)
-				}
-				got = append(got, core.IDOf(obj))
+			for id := range rr.GetObjs() {
+				got = append(got, id)
 			}
 
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			if diff := cmp.Diff(tc.want, got, cmpopts.SortSlices(
+				func(x, y core.ID) bool { return x.String() < y.String() })); diff != "" {
 				t.Errorf("did not get desired object IDs: %v", diff)
 			}
 		})

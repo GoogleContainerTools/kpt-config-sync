@@ -23,8 +23,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/remediator/cache"
 	"kpt.dev/configsync/pkg/remediator/conflict"
-	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -43,8 +43,8 @@ type Manager struct {
 	// resources is the declared resources that are parsed from Git.
 	resources *declared.Resources
 
-	// queue is the work queue for remediator.
-	queue *queue.ObjectQueue
+	// remResources is the cache of drifted resources to be corrected by remediator.
+	remResources *cache.RemediateResources
 
 	// watcherFactory is the function to create a watcher.
 	watcherFactory watcherFactory
@@ -77,8 +77,7 @@ func DefaultOptions(cfg *rest.Config) (*Options, error) {
 }
 
 // NewManager starts a new watch manager
-func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
-	q *queue.ObjectQueue, decls *declared.Resources, options *Options, ch conflict.Handler) (*Manager, error) {
+func NewManager(scope declared.Scope, syncName string, cfg *rest.Config, decls *declared.Resources, options *Options, remResources *cache.RemediateResources, ch conflict.Handler) (*Manager, error) {
 	if options == nil {
 		var err error
 		options, err = DefaultOptions(cfg)
@@ -94,7 +93,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		resources:       decls,
 		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
 		watcherFactory:  options.watcherFactory,
-		queue:           q,
+		remResources:    remResources,
 		conflictHandler: ch,
 	}, nil
 }
@@ -118,7 +117,6 @@ func (m *Manager) ManagementConflict() bool {
 	for _, watcher := range m.watcherMap {
 		if watcher.ManagementConflict() {
 			managementConflict = true
-			watcher.ClearManagementConflict()
 		}
 	}
 	return managementConflict
@@ -192,7 +190,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		gvk:             gvk,
 		config:          m.cfg,
 		resources:       m.resources,
-		queue:           m.queue,
+		remResources:    m.remResources,
 		scope:           m.scope,
 		syncName:        m.syncName,
 		conflictHandler: m.conflictHandler,

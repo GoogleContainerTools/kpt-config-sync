@@ -29,18 +29,18 @@ import (
 
 // RepoSyncFinalizer handles finalizing RepoSync objects, using the Destroyer
 // to destroy all managed user objects previously applied from source.
-// Impliments the Finalizer interface.
+// Implements the Finalizer interface.
 type RepoSyncFinalizer struct {
 	Destroyer applier.Destroyer
 	Client    client.Client
 
-	// StopControllers will be called by the Finalize() method to stop the Parser and Remediator.
+	// StopControllers will be called by the Finalize() method to stop the Syncer and Remediator.
 	StopControllers context.CancelFunc
 
-	// ControllersStopped will be closed by the caller when the parser and
+	// ControllersStopped will be closed by the caller when the syncer and
 	// remediator have fully stopped. This unblocks Finalize() to destroy
 	// managed resource objects.
-	ControllersStopped <-chan struct{}
+	ControllersStopped []<-chan struct{}
 }
 
 // Finalize performs the following actions on the syncObj (RepoSync):
@@ -58,13 +58,15 @@ func (f *RepoSyncFinalizer) Finalize(ctx context.Context, syncObj client.Object)
 		return errors.Errorf("invalid syncObj type: expected *v1beta1.RepoSync, but got %T", syncObj)
 	}
 
-	// Stop the parser & remediator
-	klog.Info("Finalizer scheduled: Parser & Remediator stopping")
+	// Stop the syncer & remediator
+	klog.Info("Finalizer scheduled: Syncer & Remediator stopping")
 	f.StopControllers()
 
-	// Wait for parser & remediator to stop
-	<-f.ControllersStopped
-	klog.Info("Finalizer executing: Parser & Remediator stopped")
+	// Wait for syncer & remediator to stop
+	for _, stopped := range f.ControllersStopped {
+		<-stopped
+	}
+	klog.Info("Finalizer executing: Syncer & Remediator stopped")
 
 	if _, err := f.setFinalizingCondition(ctx, rs); err != nil {
 		return errors.Wrap(err, "setting Finalizing condition")

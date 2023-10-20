@@ -41,18 +41,25 @@ on `spec.overrides` for a `RootSync`:
 ```yaml
 spec:
   overrides:
-    clusterRole: my-custom-role
+    clusterRole:
+      name: my-custom-role
 ```
 
 This role is defaulted to `cluster-admin` in order to stay backwards compatible.
 
 For the case where a single `ClusterRole` is not expressive enough to configure the
-permissions a user want, we also allow the special sentinel value `%none%`, which
-disables creating the `ClusterRoleBinding` entirely. The value is chosen so that it can
-never coincide with the name of an existing `ClusterRole`, since they [do not allow `%`
-signs in their names].
+permissions a user want, you can instead set `disabled: true` on the override object:
 
-[do not allow `%` signs in their names]: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#path-segment-names
+```yaml
+spec:
+  overrides:
+    clusterRole:
+      disabled: true
+```
+This disables creating the `ClusterRoleBinding` entirely.
+
+If both `disabled: true` and a custom name is specified, `disabled` "wins" and no binding
+is created.
 
 ## User Guide
 
@@ -68,7 +75,8 @@ metadata:
   namespace: config-management-system
 spec:
   overrides:
-    clusterRole: my-cluster-role
+    clusterRole:
+      name: my-cluster-role
   # ...
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -79,7 +87,21 @@ rules:
 # ...
 ```
 
-You can also use the special value `%none%` and disable automatic binding to any role.
+You can also disable automatic binding to any role.
+
+```yaml
+apiVersion: configsync.gke.io/v1beta1
+kind: RootSync
+metadata:
+  name: root-sync
+  namespace: config-management-system
+spec:
+  overrides:
+    clusterRole:
+      name: my-cluster-role
+  # ...
+```
+
 The reconciler will then run with effectively no permissions, until you manually create
 some role or cluster role bindings for it.
 

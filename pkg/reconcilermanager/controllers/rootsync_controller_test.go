@@ -229,7 +229,7 @@ func rootsyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1b
 
 func rootsyncOverrideClusterRole(clusterRole string) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
-		rs.Spec.SafeOverride().ClusterRole = clusterRole
+		rs.Spec.SafeOverride().ClusterRole.Name = clusterRole
 	}
 }
 
@@ -1544,7 +1544,7 @@ func TestRootSyncCreateWithOverrideClusterRole(t *testing.T) {
 		t.Fatalf("Failed to get RootSync: %q", err)
 	}
 
-	rs.Spec.SafeOverride().ClusterRole = ""
+	rs.Spec.SafeOverride().ClusterRole.Name = ""
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("Failed to update RootSync: %q", err)
 	}
@@ -1568,7 +1568,7 @@ func TestRootSyncCreateWithOverrideClusterRole(t *testing.T) {
 		t.Fatalf("Failed to get RootSync: %q", err)
 	}
 
-	rs.Spec.SafeOverride().ClusterRole = "%none%"
+	rs.Spec.SafeOverride().ClusterRole.Disabled = true
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("Failed to update RootSync: %q", err)
 	}

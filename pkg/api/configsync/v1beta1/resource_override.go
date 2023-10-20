@@ -93,17 +93,29 @@ type RootSyncOverrideSpec struct {
 	// +optional
 	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
 
-	// ClusterRole controls which role to bind the service account for this RootSync's
-	// reconciler to. Defaults to 'cluster-admin'.
+	// clusterRole controls which role to bind the service account for this RootSync's
+	// reconciler to.
 	//
-	// The specified ClusterRole needs to be created manually.
+	// +optional
+	ClusterRole ClusterRoleOverrideSpec `json:"clusterRole,omitempty"`
+}
+
+// ClusterRoleOverrideSpec allows to override settings for the root reconciler permissions
+type ClusterRoleOverrideSpec struct {
+	// name is the name of the ClusterRole to bind to; defaults to "cluster-admin".
 	//
-	// You can use the special sentinel value '%none%' to disable binding to a ClusterRole
-	// entirely; it is then your responsibility to bind any roles to the relevant service
+	// If you specify a different name, the ClusterRole needs to be created manually.
+	//
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// disabled turns off binding to a ClusterRole entirely.
+	//
+	// It is then your responsibility to bind any roles to the relevant service
 	// account.
 	//
 	// +optional
-	ClusterRole string `json:"clusterRole,omitempty"`
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // RepoSyncOverrideSpec allows to override the settings for a RepoSync reconciler pod

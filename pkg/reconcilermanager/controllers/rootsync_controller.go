@@ -779,7 +779,7 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, roleName string) error {
+func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, roleConfig v1beta1.ClusterRoleOverrideSpec) error {
 	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
 	// we delete any ClusterRoleBinding that uses the old name.
 	// This ensures smooth migrations for users upgrading past that version boundary.
@@ -787,21 +787,19 @@ func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, re
 		return errors.Wrap(err, "deleting old binding")
 	}
 
-	if roleName == "" {
-		roleName = "cluster-admin"
+	if roleConfig.Disabled {
+		return errors.Wrap( // wrap returns nil if err is nil
+			r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)),
+			"ensuring clusterrolebinding does not exist",
+		)
 	}
-	if roleName != "%none%" {
-		if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleName); err != nil {
-			return errors.Wrap(err, "upserting cluster role binding")
-		}
-	} else {
-		// override might have been updated to %none% on an existing sync
-		// ensure that any existing binding is removed
-		if err := r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)); err != nil {
-			return errors.Wrap(err, "ensuring clusterrolebinding does not exist")
-		}
+
+	if roleConfig.Name == "" {
+		roleConfig.Name = "cluster-admin"
 	}
-	return nil
+
+	_, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleConfig.Name)
+	return errors.Wrap(err, "upserting cluster role binding")
 }
 
 func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, clusterRole string) (client.ObjectKey, error) {

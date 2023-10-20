@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -232,32 +233,8 @@ func (r *reconcilerBase) deleteDeployment(ctx context.Context, reconcilerRef typ
 	return r.cleanup(ctx, d)
 }
 
-func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) error {
-	crbKey := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
-	// Update the CRB to delete the subject for the deleted RootSync's reconciler
-	crb := &rbacv1.ClusterRoleBinding{}
-	if err := r.client.Get(ctx, crbKey, crb); err != nil {
-		if apierrors.IsNotFound(err) {
-			// already deleted
-			r.logger(ctx).Info("Managed object already deleted",
-				logFieldObjectRef, crbKey.String(),
-				logFieldObjectKind, "ClusterRoleBinding")
-			return nil
-		}
-		return NewObjectOperationErrorWithKey(err, crb, OperationGet, crbKey)
-	}
-	count := len(crb.Subjects)
-	crb.Subjects = removeSubject(crb.Subjects, r.serviceAccountSubject(reconcilerRef))
-	if count == len(crb.Subjects) {
-		// No change
-		return nil
-	}
-	if len(crb.Subjects) == 0 {
-		// Delete the whole CRB
-		return r.cleanup(ctx, crb)
-	}
-	if err := r.client.Update(ctx, crb); err != nil {
-		return NewObjectOperationError(err, crb, OperationUpdate)
-	}
-	return nil
+func (r *RootSyncReconciler) deleteClusterRoleBinding(ctx context.Context, name string) error {
+	crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name}}
+
+	return r.cleanup(ctx, crb)
 }

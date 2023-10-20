@@ -30,7 +30,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -391,7 +390,7 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
-	if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+	if err := r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)); err != nil {
 		return errors.Wrap(err, "deleting cluster role bindings")
 	}
 
@@ -784,12 +783,7 @@ func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, re
 	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
 	// we delete any ClusterRoleBinding that uses the old name.
 	// This ensures smooth migrations for users upgrading past that version boundary.
-	oldBinding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName),
-		},
-	}
-	if err := r.client.Delete(ctx, oldBinding); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.deleteClusterRoleBinding(ctx, fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName)); err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrap(err, "deleting old binding")
 	}
 
@@ -803,7 +797,7 @@ func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, re
 	} else {
 		// override might have been updated to %none% on an existing sync
 		// ensure that any existing binding is removed
-		if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+		if err := r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)); err != nil {
 			return errors.Wrap(err, "ensuring clusterrolebinding does not exist")
 		}
 	}

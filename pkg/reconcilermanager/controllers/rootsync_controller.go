@@ -30,6 +30,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -207,20 +208,8 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	roleName := rs.Spec.SafeOverride().ClusterRole
-	if roleName == "" {
-		roleName = "cluster-admin"
-	}
-	if roleName != "%none%" {
-		if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleName); err != nil {
-			return errors.Wrap(err, "upserting cluster role binding")
-		}
-	} else {
-		// override might have been updated to %none% on an existing sync
-		// ensure that any existing binding is removed
-		if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
-			return errors.Wrap(err, "ensuring clusterrolebinding does not exist")
-		}
+	if err := r.configureClusterRoleBinding(ctx, reconcilerRef, rs.Spec.SafeOverride().ClusterRole); err != nil {
+		return errors.Wrap(err, "configuring cluster role binding")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -557,7 +546,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
 	// because all the generated resources have the prefix.
 	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) &&
-		!strings.HasPrefix(objRef.Name, RootSyncPermissionsName(core.RootReconcilerPrefix)) {
+		!strings.HasPrefix(objRef.Name, core.RootSyncPermissionsPrefix) {
 		return nil
 	}
 
@@ -789,6 +778,36 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		return errors.Wrapf(err, "Secret %s get failed", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
 	}
 	return validateSecretData(rootSync.Spec.Auth, secret)
+}
+
+func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, roleName string) error {
+	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
+	// we delete any ClusterRoleBinding that uses the old name.
+	// This ensures smooth migrations for users upgrading past that version boundary.
+	oldBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName),
+		},
+	}
+	if err := r.client.Delete(ctx, oldBinding); err != nil && !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "deleting old binding")
+	}
+
+	if roleName == "" {
+		roleName = "cluster-admin"
+	}
+	if roleName != "%none%" {
+		if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleName); err != nil {
+			return errors.Wrap(err, "upserting cluster role binding")
+		}
+	} else {
+		// override might have been updated to %none% on an existing sync
+		// ensure that any existing binding is removed
+		if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+			return errors.Wrap(err, "ensuring clusterrolebinding does not exist")
+		}
+	}
+	return nil
 }
 
 func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, clusterRole string) (client.ObjectKey, error) {

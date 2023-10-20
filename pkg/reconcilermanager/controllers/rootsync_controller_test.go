@@ -1583,6 +1583,55 @@ func TestRootSyncCreateWithOverrideClusterRole(t *testing.T) {
 	}
 }
 
+func TestMigrationToIndividualClusterRoleBindingsWhenDefaultRootSyncExists(t *testing.T) {
+	parseDeployment = parsedDeployment
+
+	// set up a situation as it was before syncs had individual clusterrolebindings
+	// (i.e. before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938)
+	// two syncs: root-sync and my-custom-sync
+	rs1 := rootSyncWithOCI(configsync.RootSyncName,
+		rootsyncOCIAuthType(configsync.AuthGCENode))
+
+	rs2 := rootSyncWithOCI("my-custom-sync",
+		rootsyncOCIAuthType(configsync.AuthGCENode))
+
+	oldBinding := clusterrolebinding(
+		fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName),
+		"cluster-admin",
+	)
+	oldBinding.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs1.Name))
+	oldBinding.Subjects = addSubjectByName(oldBinding.Subjects, core.RootReconcilerName(rs2.Name))
+
+	fakeClient, _, testReconciler := setupRootReconciler(t, rs1, rs2, oldBinding)
+
+	ctx := context.Background()
+
+	if _, err := testReconciler.Reconcile(ctx, namespacedName(rs1.Name, rs1.Namespace)); err != nil {
+		t.Fatalf("unexpected reconciler error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, namespacedName(rs2.Name, rs2.Namespace)); err != nil {
+		t.Fatalf("unexpected reconciler error: %v", err)
+	}
+
+	if err := validateResourceDeleted(core.IDOf(oldBinding), fakeClient); err != nil {
+		t.Errorf("validating deletion of old binding: %v", err)
+	}
+
+	want1 := clusterrolebinding(RootSyncPermissionsName(rs1.Name), "cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1))
+	want1.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs1.Name))
+	if err := validateClusterRoleBinding(want1, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+
+	want2 := clusterrolebinding(RootSyncPermissionsName(rs2.Name), "cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1))
+	want2.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs2.Name))
+	if err := validateClusterRoleBinding(want2, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+}
+
 func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment

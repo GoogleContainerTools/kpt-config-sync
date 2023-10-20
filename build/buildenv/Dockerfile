@@ -79,6 +79,7 @@ RUN apt-get update \
   gcc \
   git \
   musl-dev \
+  shellcheck \
   wget
 
 # Starting from go 1.10, build and test results are cached, which speeds up

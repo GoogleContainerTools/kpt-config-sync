@@ -26,28 +26,6 @@ mapfile -t check_files < <(
     uniq -u
 )
 
-# Handle bats tests
-bats_tmp="$(mktemp -d lint-bash-XXXXXX)"
-function cleanup() {
-  rm -rf "${bats_tmp}"
-}
-trap cleanup EXIT
-
-readonly linter=koalaman/shellcheck:v0.6.0
-
-if ! docker image inspect "$linter" &>/dev/null; then
-  docker pull "$linter"
-fi
-
-cmd=(docker run -v "$(pwd):/mnt")
-if [ -t 1 ]; then
-  cmd+=(--tty)
-fi
-cmd+=(
-  --rm
-  "$linter" "${check_files[@]}"
-)
-
 echo "Linting scripts..."
-"${cmd[@]}"
+shellcheck "${check_files[@]}"
 echo "PASS"

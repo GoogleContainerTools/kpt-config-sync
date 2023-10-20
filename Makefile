@@ -111,7 +111,7 @@ TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-inf
 
 # Docker image used for build and test. This image does not support CGO.
 # When upgrading this tag, publish the image after the change is submitted.
-BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.0
+BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.1
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler
@@ -258,9 +258,9 @@ build-status:
 	@./scripts/build-status.sh
 
 .PHONY: test-unit
-test-unit: pull-buildenv buildenv-dirs install-kustomize
+test-unit: buildenv-dirs install-kustomize
 	@echo "+++ Running unit tests in a docker container"
-	@docker run $(DOCKER_RUN_ARGS) ./scripts/test-unit.sh $(NOMOS_GO_PKG)
+	@./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
 # Runs unit tests and linter.
 .PHONY: test
@@ -269,9 +269,14 @@ test: test-unit lint
 # The presubmits have made side-effects in the past, which makes their
 # validation suspect (as the repository they are validating is different
 # than what is checked in).  Run `test` but verify that repository is clean.
-.PHONY: test-presubmit
-test-presubmit: all
+.PHONY: __test-presubmit
+__test-presubmit: all
 	@./scripts/fail-if-dirty-repo.sh
+
+# This is the entrypoint used by the ProwJob - runs using docker-in-docker.
+.PHONY: test-presubmit
+test-presubmit: pull-buildenv
+	@docker run $(DOCKER_RUN_ARGS) make __test-presubmit
 
 # Runs all tests.
 # This only runs on local dev environment not CI environment.
@@ -306,16 +311,16 @@ deps: tidy vendor
 lint: lint-go lint-bash lint-yaml lint-license lint-license-headers
 
 .PHONY: lint-go
-lint-go: pull-buildenv buildenv-dirs
-	@docker run $(DOCKER_RUN_ARGS) ./scripts/lint-go.sh $(NOMOS_GO_PKG)
+lint-go: buildenv-dirs
+	./scripts/lint-go.sh $(NOMOS_GO_PKG)
 
 .PHONY: lint-bash
 lint-bash:
 	@./scripts/lint-bash.sh
 
 .PHONY: lint-license
-lint-license: pull-buildenv buildenv-dirs
-	@docker run $(DOCKER_RUN_ARGS) ./scripts/lint-license.sh
+lint-license: buildenv-dirs
+	./scripts/lint-license.sh
 
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0

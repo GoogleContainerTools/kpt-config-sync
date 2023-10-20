@@ -29,6 +29,11 @@ const (
 	RootReconcilerPrefix = "root-reconciler"
 )
 
+var (
+	// RootSyncPermissionsPrefix is the prefix used for all ClusterRoleBindings granting access to Root Reconcilers
+	RootSyncPermissionsPrefix = fmt.Sprintf("%s:%s", configsync.RootSyncKind, RootReconcilerPrefix)
+)
+
 // RootReconcilerName returns the root reconciler's name in the format root-reconciler-<name>.
 // If the RootSync name is "root-sync", it returns "root-reconciler" for backward compatibility.
 func RootReconcilerName(name string) string {

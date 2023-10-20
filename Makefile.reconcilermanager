@@ -14,21 +14,20 @@ generate: install-controller-gen
 .PHONY: configsync-crds
 # Generate configsync CRDs
 configsync-crds: install-controller-gen "$(BIN_DIR)/kustomize" "$(GOBIN)/addlicense"
-	$(CONTROLLER_GEN) \
-		crd \
+	$(CONTROLLER_GEN) crd \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
-		output:artifacts:config=manifests \
-		&& mv manifests/configsync.gke.io_reposyncs.yaml manifests/patch/reposync-crd.yaml \
-		&& mv manifests/configsync.gke.io_rootsyncs.yaml manifests/patch/rootsync-crd.yaml; \
-	"$(BIN_DIR)/kustomize" build ./manifests/patch -o ./manifests;  \
-	mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml; \
-	mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml; \
-	rm ./manifests/patch/reposync-crd.yaml; \
-	rm ./manifests/patch/rootsync-crd.yaml; \
-	"$(GOBIN)/addlicense" ./manifests; \
+		output:artifacts:config=./manifests \
+	&& mv ./manifests/configsync.gke.io_reposyncs.yaml ./manifests/patch/reposync-crd.yaml \
+	&& mv ./manifests/configsync.gke.io_rootsyncs.yaml ./manifests/patch/rootsync-crd.yaml \
+	&& "$(BIN_DIR)/kustomize" build ./manifests/patch -o ./manifests \
+	&& mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml \
+	&& mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml \
+	&& rm ./manifests/patch/reposync-crd.yaml \
+	&& rm ./manifests/patch/rootsync-crd.yaml \
+	&& "$(GOBIN)/addlicense" ./manifests
 
 .PHONY: install-controller-gen
 # install controller-gen from source
 install-controller-gen:
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0

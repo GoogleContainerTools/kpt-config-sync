@@ -12,7 +12,7 @@ generate: install-controller-gen
 		paths="./pkg/api/configmanagement/v1"
 
 .PHONY: configsync-crds
-# Generate configsync CRDs
+# Generate configsync CRDs and then patch them with kustomize
 configsync-crds: install-controller-gen "$(BIN_DIR)/kustomize" "$(GOBIN)/addlicense"
 	$(CONTROLLER_GEN) crd \
 		paths="./pkg/api/configsync/v1alpha1" \
@@ -31,3 +31,15 @@ configsync-crds: install-controller-gen "$(BIN_DIR)/kustomize" "$(GOBIN)/addlice
 # install controller-gen from source
 install-controller-gen:
 	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
+
+.PHONY: generate-in-docker
+# Run make generate-in-docker in the docker buildenv container
+generate-in-docker: buildenv-dirs
+	@docker run $(DOCKER_RUN_ARGS) \
+		make generate
+
+.PHONY: configsync-crds-in-docker
+# Run make configsync-crds in the docker buildenv container
+configsync-crds-in-docker: buildenv-dirs
+	@docker run $(DOCKER_RUN_ARGS) \
+		make configsync-crds

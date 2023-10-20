@@ -18,36 +18,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/ettle/strcase"
+	"github.com/google/uuid"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
+	"sigs.k8s.io/yaml"
 )
-
-// PrivateARHelmRegistry is the registry URL to the private AR used for testing.
-// Cannot be assigned as a global variable due to GCPProject pointer, which gets
-// evaluated after initialization.
-func PrivateARHelmRegistry() string {
-	return fmt.Sprintf("oci://us-docker.pkg.dev/%s/config-sync-test-ar-helm", *e2e.GCPProject)
-}
-
-// PrivateARHelmHost is the host name of the private AR used for testing
-var PrivateARHelmHost = "https://us-docker.pkg.dev"
 
 // RemoteHelmChart represents a remote OCI-based helm chart
 type RemoteHelmChart struct {
 	// Shell is a helper utility to execute shell commands in a test.
 	Shell *testshell.TestShell
 
-	// Host is the host URL, e.g. https://us-docker.pkg.dev
-	Host string
+	// Logger to write logs to
+	Logger *testlogger.TestLogger
 
-	// Registry is the registry URL, e.g. oci://us-docker.pkg.dev/oss-prow-build-kpt-config-sync/config-sync-test-ar-helm
-	Registry string
+	// Project in which to store the chart image
+	Project string
+
+	// Location to store the chart image
+	Location string
+
+	// RepositoryName in which to store the chart imageS
+	RepositoryName string
 
 	// ChartName is the name of the helm chart
 	ChartName string
@@ -55,59 +53,146 @@ type RemoteHelmChart struct {
 	// ChartVersion is the version of the helm chart
 	ChartVersion string
 
-	// Dir is a local directory from which RemoteHelmChart will read, package, and push the chart from
-	Dir string
+	// LocalChartPath is a local directory from which RemoteHelmChart will read, package, and push the chart from
+	LocalChartPath string
 }
 
-// NewRemoteHelmChart creates a RemoteHelmChart
-func NewRemoteHelmChart(shell *testshell.TestShell, host, registry, dir, chartName, version string) *RemoteHelmChart {
-	return &RemoteHelmChart{
-		Shell:        shell,
-		Host:         host,
-		Registry:     registry,
-		Dir:          dir,
-		ChartName:    chartName,
-		ChartVersion: version,
+// CreateRepository uses gcloud to create the repository, if it doesn't exist.
+func (r *RemoteHelmChart) CreateRepository() error {
+	out, err := r.Shell.ExecWithDebug("gcloud", "artifacts", "repositories",
+		"describe", r.RepositoryName,
+		"--location", r.Location)
+	if err != nil {
+		if !strings.Contains(string(out), "NOT_FOUND") {
+			return fmt.Errorf("failed to describe image repository: %w", err)
+		}
+		// repository does not exist, continue with creation
+	} else {
+		// repository already exists, skip creation
+		return nil
 	}
+
+	r.Logger.Info("Creating image repository")
+	_, err = r.Shell.ExecWithDebug("gcloud", "artifacts", "repositories",
+		"create", r.RepositoryName,
+		"--repository-format", "docker",
+		"--location", r.Location)
+	if err != nil {
+		return fmt.Errorf("failed to create image repository: %w", err)
+	}
+	return nil
 }
 
 // RegistryLogin will log into the registry host specified by r.Host using local gcloud credentials
 func (r *RemoteHelmChart) RegistryLogin() error {
 	var err error
 	authCmd := r.Shell.Command("gcloud", "auth", "print-access-token")
-	loginCmd := r.Shell.Command("helm", "registry", "login", "-uoauth2accesstoken", "--password-stdin", r.Host)
+	loginCmd := r.Shell.Command("helm", "registry", "login",
+		"-uoauth2accesstoken", "--password-stdin",
+		fmt.Sprintf("https://%s", r.RegistryHost()))
 	loginCmd.Stdin, err = authCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to setup command pipe: %v", err)
+		return fmt.Errorf("creating STDOUT pipe: %w", err)
 	}
 	if err := loginCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start login command: %v", err)
+		return fmt.Errorf("starting login command: %w", err)
 	}
 	if err := authCmd.Run(); err != nil {
-		return fmt.Errorf("failed to run auth command: %v", err)
+		return fmt.Errorf("running print-access-token command: %w", err)
 	}
 	if err := loginCmd.Wait(); err != nil {
-		return fmt.Errorf("failed to wait for login command: %v", err)
+		return fmt.Errorf("waiting for login command: %w", err)
 	}
 	return nil
+}
+
+// ConfigureAuthHelper configures the local docker client to use gcloud for
+// image registry authorization. Helm uses the docker config.
+func (r *RemoteHelmChart) ConfigureAuthHelper() error {
+	r.Logger.Info("Updating Docker config to use gcloud for auth")
+	if _, err := r.Shell.ExecWithDebug("gcloud", "auth", "configure-docker", r.RegistryHost()); err != nil {
+		return fmt.Errorf("failed to configure docker auth: %w", err)
+	}
+	return nil
+}
+
+// RegistryHost returns the domain of the artifact registry
+func (r *RemoteHelmChart) RegistryHost() string {
+	return fmt.Sprintf("%s-docker.pkg.dev", r.Location)
+}
+
+// RepositoryAddress returns the domain and path to the chart repository
+func (r *RemoteHelmChart) RepositoryAddress() string {
+	return fmt.Sprintf("%s/%s/%s", r.RegistryHost(), r.Project, r.RepositoryName)
+}
+
+// RepositoryOCI returns the repository address with the oci:// scheme prefix.
+func (r *RemoteHelmChart) RepositoryOCI() string {
+	return fmt.Sprintf("oci://%s", r.RepositoryAddress())
+}
+
+// ChartAddress returns the domain and path to the chart image
+func (r *RemoteHelmChart) ChartAddress() string {
+	return fmt.Sprintf("%s/%s", r.RepositoryAddress(), r.ChartName)
 }
 
 // CopyChartFromLocal accepts a local path to a helm chart and recursively copies it to r.Dir, modifying
 // the name of the copied chart from its original name to r.ChartName
-func (r *RemoteHelmChart) CopyChartFromLocal(chartPath, originalChartName string) error {
-	if err := copyutil.CopyDir(chartPath, r.Dir); err != nil {
-		return fmt.Errorf("failed to copy helm chart: %v", err)
+func (r *RemoteHelmChart) CopyChartFromLocal(chartPath string) error {
+	r.Logger.Infof("Copying helm chart from test artifacts: %s", chartPath)
+	if err := os.MkdirAll(r.LocalChartPath, os.ModePerm); err != nil {
+		return fmt.Errorf("creating helm chart directory: %v", err)
 	}
-	if err := findAndReplaceInFile(filepath.Join(r.Dir, "Chart.yaml"), fmt.Sprintf("name: %s", originalChartName), fmt.Sprintf("name: %s", r.ChartName)); err != nil {
-		return fmt.Errorf("failed to rename helm chart: %v", err)
+	if err := copyutil.CopyDir(chartPath, r.LocalChartPath); err != nil {
+		return fmt.Errorf("copying helm chart: %v", err)
+	}
+	r.Logger.Infof("Updating helm chart name & version: %s:%s", r.ChartName, r.ChartVersion)
+	chartFilePath := filepath.Join(r.LocalChartPath, "Chart.yaml")
+	err := updateYAMLFile(chartFilePath, func(chartMap map[string]interface{}) error {
+		chartMap["name"] = r.ChartName
+		chartMap["version"] = r.ChartVersion
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("updating Chart.yaml: %v", err)
 	}
 	return nil
 }
 
-// UpdateVersion updates the local version of the helm chart to version
+func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) error {
+	chartBytes, err := os.ReadFile(name)
+	if err != nil {
+		return fmt.Errorf("reading file: %s: %w", name, err)
+	}
+	var chartManifest map[string]interface{}
+	if err := yaml.Unmarshal(chartBytes, &chartManifest); err != nil {
+		return fmt.Errorf("parsing yaml file: %s: %w", name, err)
+	}
+	if err := updateFn(chartManifest); err != nil {
+		return fmt.Errorf("updating yaml map for %s: %w", name, err)
+	}
+	chartBytes, err = yaml.Marshal(chartManifest)
+	if err != nil {
+		return fmt.Errorf("formatting yaml for %s: %w", name, err)
+	}
+	if err := os.WriteFile(name, chartBytes, os.ModePerm); err != nil {
+		return fmt.Errorf("writing file: %s: %w", name, err)
+	}
+	return nil
+}
+
+// UpdateVersion updates the local version of the helm chart to the specified
+// version with a timestamp suffix
 func (r *RemoteHelmChart) UpdateVersion(version string) error {
-	if err := findAndReplaceInFile(filepath.Join(r.Dir, "Chart.yaml"), fmt.Sprintf("version: %s", r.ChartVersion), fmt.Sprintf("version: %s", version)); err != nil {
-		return fmt.Errorf("failed to update helm chart version: %v", err)
+	version = generateChartVersion(version)
+	r.Logger.Infof("Updating helm chart version to %q", version)
+	chartFilePath := filepath.Join(r.LocalChartPath, "Chart.yaml")
+	err := updateYAMLFile(chartFilePath, func(chartMap map[string]interface{}) error {
+		chartMap["version"] = version
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("updating Chart.yaml: %v", err)
 	}
 	r.ChartVersion = version
 	return nil
@@ -115,77 +200,102 @@ func (r *RemoteHelmChart) UpdateVersion(version string) error {
 
 // Push will package and push the helm chart located at r.Dir to the remote registry.
 func (r *RemoteHelmChart) Push() error {
-	if _, err := r.Shell.Helm("package", r.Dir, "--destination", r.Dir); err != nil {
-		return fmt.Errorf("failed to package helm chart: %v", err)
+	r.Logger.Infof("Packaging helm chart: %s:%s", r.ChartName, r.ChartVersion)
+	parentPath := filepath.Dir(r.LocalChartPath)
+	if _, err := r.Shell.Helm("package", r.LocalChartPath, "--destination", parentPath+string(filepath.Separator)); err != nil {
+		return fmt.Errorf("packaging helm chart: %w", err)
 	}
-	chartFile := filepath.Join(r.Dir, fmt.Sprintf("%s-%s.tgz", r.ChartName, r.ChartVersion))
-	if out, err := r.Shell.Helm("push", chartFile, r.Registry); err != nil {
-		return fmt.Errorf("failed to run `helm push`: %s; %v", string(out), err)
+	r.Logger.Infof("Pushing helm chart: %s:%s", r.ChartName, r.ChartVersion)
+	chartFile := filepath.Join(parentPath, fmt.Sprintf("%s-%s.tgz", r.ChartName, r.ChartVersion))
+	if _, err := r.Shell.Helm("push", chartFile, r.RepositoryOCI()); err != nil {
+		return fmt.Errorf("pushing helm chart: %w", err)
+	}
+	if err := os.Remove(chartFile); err != nil {
+		return fmt.Errorf("deleting local helm chart package: %w", err)
 	}
 	return nil
 }
 
-// PushHelmChart pushes a new helm chart for use during an e2e test. Returns a reference to the RemoteHelmChart object
-// and any errors that are encountered.
-func PushHelmChart(nt *nomostest.NT, helmchart, version string) (*RemoteHelmChart, error) {
-	nt.T.Log("Push helm chart to the artifact registry")
+// Delete the package from the remote registry, including all versions and tags.
+func (r *RemoteHelmChart) Delete() error {
+	r.Logger.Infof("Deleting helm chart: %s", r.ChartName)
+	if _, err := r.Shell.ExecWithDebug("gcloud", "artifacts", "docker", "images", "delete", r.ChartAddress(), "--delete-tags"); err != nil {
+		return fmt.Errorf("deleting helm chart image from registry: %w", err)
+	}
+	return nil
+}
 
-	chartName := generateChartName(helmchart, nt.ClusterName)
+// PushHelmChart pushes a new helm chart for use during an e2e test.
+// Returns a reference to the RemoteHelmChart object and any errors.
+func PushHelmChart(nt *nomostest.NT, chartName, chartVersion string) (*RemoteHelmChart, error) {
+	if chartName == "" {
+		return nil, fmt.Errorf("chart name must not be empty")
+	}
+	if chartVersion == "" {
+		return nil, fmt.Errorf("chart version must not be empty")
+	}
+	chart := &RemoteHelmChart{
+		Shell:    nt.Shell,
+		Logger:   nt.Logger,
+		Project:  *e2e.GCPProject,
+		Location: "us", // store redundantly across regions in the US.
+		// Use cluster name to avoid overlap between images in parallel test runs.
+		RepositoryName: fmt.Sprintf("config-sync-e2e-test--%s", nt.ClusterName),
+		// Use chart name to avoid overlap between multiple charts in the same test.
+		LocalChartPath: filepath.Join(nt.TmpDir, chartName),
+		// Use test name and timestamp to avoid overlap between sequential test runs.
+		ChartName:    generateChartName(chartName, strcase.ToKebab(nt.T.Name())),
+		ChartVersion: generateChartVersion(chartVersion),
+	}
 	nt.T.Cleanup(func() {
-		if err := cleanHelmImages(nt, chartName); err != nil {
+		if err := chart.Delete(); err != nil {
 			nt.T.Errorf(err.Error())
 		}
 	})
-
-	remoteHelmChart := NewRemoteHelmChart(nt.Shell, PrivateARHelmHost, PrivateARHelmRegistry(), nt.TmpDir, chartName, version)
-	err := remoteHelmChart.CopyChartFromLocal(fmt.Sprintf("../testdata/helm-charts/%s", helmchart), helmchart)
-	if err != nil {
+	artifactPath := fmt.Sprintf("../testdata/helm-charts/%s", chartName)
+	if err := chart.CopyChartFromLocal(artifactPath); err != nil {
 		return nil, err
 	}
-	if err := remoteHelmChart.RegistryLogin(); err != nil {
-		return nil, fmt.Errorf("failed to login to the helm registry: %v", err)
-	}
-	if err := remoteHelmChart.Push(); err != nil {
+	if err := chart.CreateRepository(); err != nil {
 		return nil, err
 	}
-
-	return remoteHelmChart, nil
+	// TODO: Figure out why gcloud auth doesn't always work with helm push (401 Unauthorized) on new repositories
+	// if err := chart.ConfigureAuthHelper(); err != nil {
+	// 	return nil, err
+	// }
+	if err := chart.RegistryLogin(); err != nil {
+		return nil, err
+	}
+	if err := chart.Push(); err != nil {
+		return nil, err
+	}
+	return chart, nil
 }
 
-// creates a chart name from current project id, cluster name, and timestamp
-func generateChartName(helmchart, clusterName string) string {
-	chartName := fmt.Sprintf("%s-%s-%s", helmchart, clusterName, timestampAsString())
-	if len(chartName) > 50 {
-		// the chartName + releaseName is used as the metadata.name of resources in the coredns helm chart, so we must trim this down
-		// to keep it under the k8s length limit
-		chartName = chartName[len(chartName)-50:]
+// creates a chart name from the chart name, test name, and timestamp.
+// Result will be no more than 40 characters and can function as a k8s metadata.name.
+// Chart name and version must be less than 63 characters combined.
+func generateChartName(chartName, testName string) string {
+	if len(chartName) > 20 {
+		chartName = chartName[:20]
+		chartName = strings.Trim(chartName, "-")
+	}
+	chartName = fmt.Sprintf("%s-%s", chartName, testName)
+	if len(chartName) > 40 {
+		chartName = chartName[:40]
 		chartName = strings.Trim(chartName, "-")
 	}
 	return chartName
 }
 
-// removes helm charts created during e2e testing
-func cleanHelmImages(nt *nomostest.NT, chartName string) error {
-	if out, err := nt.Shell.Command("gcloud", "artifacts", "docker", "images", "delete", fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-ar-helm/%s", *e2e.GCPProject, chartName), "--delete-tags").CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to cleanup helm chart image from registry: %s; %v", string(out), err)
+// generateChartVersion returns the version with a random 8 character suffix.
+// Result will be no more than 20 characters and can function as a k8s metadata.name.
+// Chart name and version must be less than 63 characters combined.
+func generateChartVersion(chartVersion string) string {
+	if len(chartVersion) > 12 {
+		chartVersion = chartVersion[:12]
+		chartVersion = strings.Trim(strings.Trim(chartVersion, "-"), ".")
 	}
-	return nil
-}
-
-// finds and replaces particular text string in a file
-func findAndReplaceInFile(path, old, new string) error {
-	oldFile, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("could not read file: %v", err)
-	}
-	err = os.WriteFile(path, []byte(strings.ReplaceAll(string(oldFile), old, new)), 0644)
-	if err != nil {
-		return fmt.Errorf("could not write to file: %v", err)
-	}
-	return nil
-}
-
-// returns the current unix timestamp as a string
-func timestampAsString() string {
-	return strconv.FormatInt(time.Now().Unix(), 10)
+	return fmt.Sprintf("%s-%s", chartVersion,
+		strings.ReplaceAll(uuid.NewString(), "-", "")[:7])
 }

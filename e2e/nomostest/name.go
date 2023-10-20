@@ -18,16 +18,12 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/ettle/strcase"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 )
-
-// re splits strings at word boundaries. Test names always begin with "Test",
-// so we know we aren't missing any of the text.
-var re = regexp.MustCompile(`[A-Z][^A-Z]*`)
 
 // TestClusterName returns the name of the test cluster.
 func TestClusterName(t testing.NTB) string {
@@ -58,14 +54,9 @@ func testDirName(t testing.NTB) string {
 	t.Helper()
 
 	n := t.Name()
-	// Capital letters are forbidden in Kind cluster names, so convert to
-	// kebab-case.
-	words := re.FindAllString(n, -1)
-	for i, w := range words {
-		words[i] = strings.ToLower(w)
-	}
-
-	n = strings.Join(words, "-")
+	// Capital letters are forbidden in Kind cluster names
+	n = strcase.ToKebab(n)
+	// Slashes are forbidden in file paths.
 	n = strings.ReplaceAll(n, "/", "--")
 	return n
 }

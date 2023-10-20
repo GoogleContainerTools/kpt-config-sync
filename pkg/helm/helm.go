@@ -182,7 +182,7 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	if err := os.RemoveAll(helmCacheHome); err != nil {
 		// we don't necessarily need to exit on error here, as it is possible that the later rendering
 		// step could still succeed, so we just log the error and continue
-		klog.Infof("failed to clear helm cache: %w\n", err)
+		klog.Infof("failed to clear helm cache: %v", err)
 	}
 	klog.Infoln("using chart version: ", h.Version)
 	return nil
@@ -302,6 +302,11 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
+	}
+
+	// Create the repo/chart directory, in case the chart is empty.
+	if err := os.MkdirAll(filepath.Join(destDir, h.Chart), os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create chart directory: %w", err)
 	}
 
 	if err := h.setDeployNamespace(destDir); err != nil {

@@ -32,10 +32,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -113,34 +116,16 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 Namespaces managed by Config Sync on the cluster")
-	nsList := &metav1.PartialObjectMetadataList{}
-	nsList.SetGroupVersionKind(kinds.Namespace())
-	if err := nt.KubeClient.List(nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
-		nt.T.Error(err)
-	}
-	if len(nsList.Items) != 1000 {
-		nt.T.Errorf("The cluster should include 1000 Namespaces managed by Config Sync and having the `%s: %s` label exactly, found %v instead", labelKey, labelValue, len(nsList.Items))
-	}
+	validateNumberOfObjectsEquals(nt, kinds.Namespace(), 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue})
 
 	nt.T.Logf("Verify that there are exactly 1000 ConfigMaps managed by Config Sync on the cluster")
-	cmList := &metav1.PartialObjectMetadataList{}
-	cmList.SetGroupVersionKind(kinds.ConfigMap())
-	if err := nt.KubeClient.List(cmList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}); err != nil {
-		nt.T.Error(err)
-	}
-	if len(cmList.Items) != 1000 {
-		nt.T.Errorf("The cluster should include 1000 ConfigMaps managed by Config Sync and having the `%s: %s` label exactly, found %v instead", labelKey, labelValue, len(cmList.Items))
-	}
+	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue})
 
 	nt.T.Logf("Verify that there are exactly 1000 CronTab CRs managed by Config Sync on the cluster")
-	crList := &metav1.PartialObjectMetadataList{}
-	crList.SetGroupVersionKind(crontabGVK)
-	if err := nt.KubeClient.List(crList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}); err != nil {
-		nt.T.Error(err)
-	}
-	if len(crList.Items) != 1000 {
-		nt.T.Errorf("The cluster should include 1000 CronTab managed by Config Sync exactly, found %v instead", len(crList.Items))
-	}
+	validateNumberOfObjectsEquals(nt, crontabGVK, 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue})
 }
 
 // TestStressLargeNamespace tests that Config Sync can sync a namespace including 5000 resources successfully.
@@ -176,14 +161,9 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
-	cmList := &metav1.PartialObjectMetadataList{}
-	cmList.SetGroupVersionKind(kinds.ConfigMap())
-	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
-		nt.T.Error(err)
-	}
-	if len(cmList.Items) != 5000 {
-		nt.T.Errorf("The %s namespace should include 5000 ConfigMaps having the `%s: %s` label exactly, found %v instead", ns, labelKey, labelValue, len(cmList.Items))
-	}
+	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 5000,
+		client.MatchingLabels{labelKey: labelValue},
+		client.InNamespace(ns))
 }
 
 // TestStressFrequentGitCommits adds 100 Git commits, and verifies that Config Sync can sync the changes in these commits successfully.
@@ -218,14 +198,9 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
-	cmList := &metav1.PartialObjectMetadataList{}
-	cmList.SetGroupVersionKind(kinds.ConfigMap())
-	if err := nt.KubeClient.List(cmList, &client.ListOptions{Namespace: ns}, client.MatchingLabels{labelKey: labelValue}); err != nil {
-		nt.T.Error(err)
-	}
-	if len(cmList.Items) != 100 {
-		nt.T.Errorf("The %s namespace should include 100 ConfigMaps having the `%s: %s` label exactly, found %v instead", ns, labelKey, labelValue, len(cmList.Items))
-	}
+	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 100,
+		client.MatchingLabels{labelKey: labelValue},
+		client.InNamespace(ns))
 }
 
 // This test creates a RootSync pointed at https://github.com/config-sync-examples/crontab-crs
@@ -332,11 +307,89 @@ func TestStress100CRDs(t *testing.T) {
 	}
 }
 
-// TestStressMemoryUsage applies 100 CRDs and then 10 objects for each resource.
-// This stressed both the number of watches and the number of objects,
+// TestStressManyDeployments applies 1000 Deployments with 1 replica each.
+// This ensures that Config Sync can apply resources while the cluster control
+// plane is autoscaling up to meet demand. This requires cluster autoscaling to
+// be enabled.
+func TestStressManyDeployments(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
+	ns := "stress-test-ns"
+
+	deployCount := 1000
+
+	nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+
+	for i := 1; i <= deployCount; i++ {
+		name := fmt.Sprintf("pause-%d", i)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+			fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
+			[]byte(fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: %s
+    nomos-test: enabled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.7
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+`, name, ns, name, name, name))))
+	}
+
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Verify the number of Deployment objects")
+	validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+		client.InNamespace(ns))
+
+	nt.T.Log("Removing resources from Git")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestStressMemoryUsageGit applies 100 CRDs and then 50 objects for each
+// resource. This stressed both the number of watches and the number of objects,
 // which increases memory usage.
-// TODO: Make the objects larger to increase memory usage even more.
-func TestStressMemoryUsage(t *testing.T) {
+func TestStressMemoryUsageGit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
@@ -381,14 +434,9 @@ func TestStressMemoryUsage(t *testing.T) {
 			Kind:    kind,
 			Version: "v2",
 		}
-		nsList := &metav1.PartialObjectMetadataList{}
-		nsList.SetGroupVersionKind(gvk)
-		if err := nt.KubeClient.List(nsList, client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}, client.InNamespace(ns)); err != nil {
-			nt.T.Error(err)
-		}
-		if len(nsList.Items) != crCount {
-			nt.T.Errorf("The cluster should include %d anvils.%s objects, found %v instead", crCount, group, len(nsList.Items))
-		}
+		validateNumberOfObjectsEquals(nt, gvk, crCount,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
 	}
 
 	nt.T.Log("Removing resources from Git")
@@ -398,6 +446,238 @@ func TestStressMemoryUsage(t *testing.T) {
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestStressMemoryUsageOCI applies 100 CRDs and then 50 objects for each
+// resource. This stressed both the number of watches and the number of objects,
+// which increases memory usage.
+//
+// Requirements:
+// 1. crane https://github.com/google/go-containerregistry/tree/main/cmd/crane
+// 2. gcloud auth login OR gcloud auth activate-service-account ACCOUNT --key-file=KEY-FILE
+// 3. Artifact Registry repo: us-docker.pkg.dev/${GCP_PROJECT}/config-sync-test-private
+// 4. GKE cluster with Workload Identity
+// 5. Google Service Account: e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
+// 6. IAM for the GSA to read from the Artifact Registry repo
+// 7. IAM for the test runner to write to Artifact Registry repo
+func TestStressMemoryUsageOCI(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
+		ntopts.StressTest, ntopts.RequireGKE(t),
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	if err := workloadidentity.ValidateEnabled(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
+	if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	image, err := artifactregistry.SetupCraneImage(nt, "anvil-set", "v1.0.0")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	ns := "stress-test-ns"
+	kind := "Anvil"
+
+	crdCount := 100
+	crCount := 50
+
+	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
+	nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/ns-%s.yaml", image.BuildPath, ns), fake.NamespaceObject(ns)))
+
+	for i := 1; i <= crdCount; i++ {
+		group := fmt.Sprintf("acme-%d.com", i)
+		crd := fakeCRD(kind, group)
+		nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/crd-%s.yaml", image.BuildPath, crd.Name), crd))
+		gvk := schema.GroupVersionKind{
+			Group:   group,
+			Kind:    kind,
+			Version: "v2",
+		}
+		for j := 1; j <= crCount; j++ {
+			cr := fakeCR(fmt.Sprintf("%s-%d", strings.ToLower(kind), j), ns, gvk)
+			nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/namespaces/%s/%s-%s.yaml", image.BuildPath, ns, crd.Name, cr.GetName()), cr))
+		}
+	}
+
+	if err := image.Push(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	imageURL := image.AddressWithTag()
+
+	nt.T.Log("Update RootSync to sync from the OCI image in Artifact Registry")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": ".", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
+		v1beta1.OciSource, imageURL, gsaEmail))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(imageURL)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: ".",
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Verify the number of Anvil objects")
+	for i := 1; i <= crdCount; i++ {
+		group := fmt.Sprintf("acme-%d.com", i)
+		gvk := schema.GroupVersionKind{
+			Group:   group,
+			Kind:    kind,
+			Version: "v2",
+		}
+		validateNumberOfObjectsEquals(nt, gvk, crCount,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
+	}
+
+	emptyImage, err := artifactregistry.SetupCraneImage(nt, "empty", "v1.0.0")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := emptyImage.Push(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	emptyImageURL := emptyImage.AddressWithTag()
+
+	nt.T.Log("Removing resources from OCI")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s"}}}`,
+		emptyImageURL))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFunc(emptyImageURL)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: ".",
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestStressMemoryUsageHelm applies 100 CRDs and then 50 objects for each
+// resource. This stresses both the number of watches and the number of objects,
+// which increases memory usage.
+//
+// Requirements:
+// 1. Helm auth https://cloud.google.com/artifact-registry/docs/helm/authentication
+// 2. gcloud auth login OR gcloud auth activate-service-account ACCOUNT --key-file=KEY-FILE
+// 3. Artifact Registry repo: us-docker.pkg.dev/${GCP_PROJECT}/config-sync-test-private
+// 4. GKE cluster with Workload Identity
+// 5. Google Service Account: e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
+// 6. IAM for the GSA to read from the Artifact Registry repo
+// 7. IAM for the test runner to write to Artifact Registry repo
+// 8. gcloud & helm
+func TestStressMemoryUsageHelm(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
+		ntopts.StressTest, ntopts.RequireGKE(t),
+		ntopts.WithReconcileTimeout(30*time.Second))
+
+	if err := workloadidentity.ValidateEnabled(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
+	if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	chart, err := artifactregistry.PushHelmChart(nt, "anvil-set", "v1.0.0")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	ns := "stress-test-ns"
+
+	crdCount := 100
+	crCount := 50
+	kind := "Anvil"
+
+	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Image.Name, chart.Image.Version)
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{
+		"spec": {
+			"sourceType": %q, 
+			"helm": {
+				"repo": %q, 
+				"chart": %q, 
+				"version": %q, 
+				"namespace": %q,  
+				"auth": "gcpserviceaccount", 
+				"gcpServiceAccountEmail": %q, 
+				"values": {
+					"resources": %d, 
+					"replicas": %d
+				}
+			},
+			"git": null,
+			"override": {
+				"apiServerTimeout": "30s"
+			}
+		}
+	}`,
+		v1beta1.HelmSource,
+		chart.Image.RepositoryOCI(),
+		chart.Image.Name,
+		chart.Image.Version,
+		ns,
+		gsaEmail,
+		crdCount,
+		crCount))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	err = nt.WatchForAllSyncs(
+		nomostest.WithTimeout(5*time.Minute),
+		nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: chart.Image.Name,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Verify the number of Anvil objects")
+	for i := 1; i <= crdCount; i++ {
+		group := fmt.Sprintf("acme-%d.com", i)
+		gvk := schema.GroupVersionKind{
+			Group:   group,
+			Kind:    kind,
+			Version: "v1",
+		}
+		validateNumberOfObjectsEquals(nt, gvk, crCount,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
+	}
+
+	emptyChart, err := artifactregistry.PushHelmChart(nt, "empty", "v1.0.0")
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", emptyChart.Image.Name, emptyChart.Image.Version)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"chart": %q, "version": %q, "namespace": null, "values": null}}}`,
+		emptyChart.Image.Name, emptyChart.Image.Version))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	err = nt.WatchForAllSyncs(
+		nomostest.WithTimeout(5*time.Minute),
+		nomostest.WithRootSha1Func(helmChartVersion(emptyChart.Image.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: emptyChart.Image.Name,
+		}))
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -493,5 +773,16 @@ func truncateSourceErrors() testpredicates.Predicate {
 			}
 		}
 		return errors.Errorf("the source errors should be truncated")
+	}
+}
+
+func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind, count int, opts ...client.ListOption) {
+	nsList := &metav1.PartialObjectMetadataList{}
+	nsList.SetGroupVersionKind(gvk)
+	if err := nt.KubeClient.List(nsList, opts...); err != nil {
+		nt.T.Error(err)
+	}
+	if len(nsList.Items) != count {
+		nt.T.Errorf("Expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
 	}
 }

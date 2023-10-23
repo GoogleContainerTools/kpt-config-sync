@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
@@ -120,10 +121,8 @@ func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest)
 
-	if workloadPool, err := getWorkloadPool(nt); err != nil {
+	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
-	} else if workloadPool != "" {
-		nt.T.Fatal("expected workload identity to be disabled")
 	}
 
 	tenant := "tenant-a"

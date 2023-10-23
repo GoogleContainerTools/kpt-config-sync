@@ -14,6 +14,13 @@ POSTSUBMIT_REGISTRY ?= us-docker.pkg.dev/kpt-config-sync-ci-artifacts/postsubmit
 postsubmit: build-cli
 	$(MAKE) config-sync-manifest REGISTRY=$(POSTSUBMIT_REGISTRY)
 	$(MAKE) publish-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
+	$(MAKE) publish-buildenv
+
+# publish-buildenv checks if the buildenv image tag exists in the remote registry.
+# if it does not exist, the image will be built and published.
+.PHONY: publish-buildenv
+publish-buildenv:
+	docker manifest inspect $(BUILDENV_IMAGE) &> /dev/null || $(MAKE) build-buildenv push-buildenv
 
 .PHONY: publish-gcs
 publish-gcs:

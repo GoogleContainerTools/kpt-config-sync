@@ -206,9 +206,6 @@ func sourceFormatEnv(format string) corev1.EnvVar {
 
 // namespaceStrategyEnv returns the environment variable for NAMESPACE_STRATEGY in the reconciler container.
 func namespaceStrategyEnv(strategy configsync.NamespaceStrategy) corev1.EnvVar {
-	if strategy == "" {
-		strategy = configsync.NamespaceStrategyImplicit
-	}
 	return corev1.EnvVar{
 		Name:  reconcilermanager.NamespaceStrategy,
 		Value: string(strategy),

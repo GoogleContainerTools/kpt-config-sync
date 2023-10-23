@@ -1445,6 +1445,7 @@ spec:
                     - containerName
                     x-kubernetes-list-type: map
                   namespaceStrategy:
+                    default: implicit
                     description: 'namespaceStrategy controls how the reconciler handles
                       Namespaces which are used by resources in the source but not
                       declared. Only applies when using the unstructured sourceFormat.

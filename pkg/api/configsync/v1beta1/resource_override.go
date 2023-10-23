@@ -90,6 +90,7 @@ type RootSyncOverrideSpec struct {
 	// are not declared in the source.
 	//
 	// +kubebuilder:validation:Enum=implicit;explicit
+	// +kubebuilder:default:=implicit
 	// +optional
 	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
 }

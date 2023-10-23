@@ -31,6 +31,11 @@ clientgen: symlink-gopath
 	@echo "+++ Generating clientgen directory"
 	./scripts/generate-clientset.sh
 
+.PHONY: clientgen-in-docker
+# Run make clientgen in the docker buildenv container
+clientgen-in-docker: buildenv-dirs
+	@docker run $(DOCKER_RUN_ARGS) \
+		make clientgen
 
 # To regenerate api_resources_1_15.txt:
 # 1) Create a fresh 1.15 cluster that DOES NOT have ACM installed.

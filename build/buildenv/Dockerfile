@@ -26,6 +26,13 @@
 # TODO: Change the image to be from gcr.io
 # when the go1.17 image is released in it.
 ARG GOLANG_IMAGE
+ARG GCLOUD_IMAGE
+
+# Build intermediate image for gcloud / kubectl
+FROM ${GCLOUD_IMAGE} as gcloud-install
+
+RUN apt-get update && apt-get install -y \
+  kubectl google-cloud-sdk-gke-gcloud-auth-plugin
 
 # Environment to build the helper binaries from.
 FROM ${GOLANG_IMAGE} AS tools-base
@@ -79,6 +86,11 @@ RUN apt-get update \
 ENV GOCACHE=/go/cache
 
 COPY --from=tools-base /go/bin/* /bin/
+
+# Install gcloud & gsutil
+# Requires /.config/ & /.gsutil/ volumes mounted for authentication
+COPY --from=gcloud-install /usr/lib/google-cloud-sdk /usr/lib/google-cloud-sdk
+ENV PATH "$PATH:/usr/lib/google-cloud-sdk/bin"
 
 # To disable an existing ENTRYPOINT, set an empty array. This allows arguments
 # to 'docker run' to exec as normal.

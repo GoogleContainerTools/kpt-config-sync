@@ -810,7 +810,7 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, recon
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
 		childCRB.OwnerReferences = nil
 		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
-		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		childCRB.Subjects = []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
 		// Remove existing OwnerReferences, now that we're using finalizers.
 		childCRB.OwnerReferences = nil
 		return nil

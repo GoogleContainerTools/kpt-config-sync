@@ -495,11 +495,11 @@ spec:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
         command:
-        - /manager
+        - /resource-group
         env:
         - name: OC_RESOURCE_LABELS
           value: k8s.container.name="manager"
-        image: gcr.io/config-management-release/resource-group-controller:v1.0.20
+        image: RESOURCE_GROUP_CONTROLLER_IMAGE_NAME
         name: manager
         resources:
           requests:

@@ -125,6 +125,7 @@ OCI_SYNC_IMAGE := oci-sync
 HELM_SYNC_IMAGE := helm-sync
 NOMOS_IMAGE := nomos
 ASKPASS_IMAGE := gcenode-askpass-sidecar
+RESOURCE_GROUP_IMAGE := resource-group-controller
 # List of Config Sync images. Used to generate image-related variables/targets.
 IMAGES := \
 	$(RECONCILER_IMAGE) \
@@ -135,7 +136,8 @@ IMAGES := \
 	$(OCI_SYNC_IMAGE) \
 	$(HELM_SYNC_IMAGE) \
 	$(NOMOS_IMAGE) \
-	$(ASKPASS_IMAGE)
+	$(ASKPASS_IMAGE) \
+	$(RESOURCE_GROUP_IMAGE)
 
 # nomos binary for local run.
 NOMOS_LOCAL := $(BIN_DIR)/linux_amd64/nomos

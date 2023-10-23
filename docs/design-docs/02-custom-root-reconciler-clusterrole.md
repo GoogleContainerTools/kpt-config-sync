@@ -98,7 +98,7 @@ metadata:
 spec:
   overrides:
     clusterRole:
-      name: my-cluster-role
+      disabled: true
   # ...
 ```
 

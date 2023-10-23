@@ -25,6 +25,8 @@ ignores=(
   "-ignore=e2e/testdata/helm-charts/**"
   "-ignore=.output/**"
   "-ignore=e2e/testdata/*.xml"
+  "-ignore=.idea/**"
+  "-ignore=.vscode/**"
 )
 
 case "$1" in

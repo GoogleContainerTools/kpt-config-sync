@@ -109,7 +109,7 @@ done
 
 echo "informer"
 "${GOBASE}/bin/informer-gen" \
-  ${LOGGING_FLAGS} \
+  "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --versioned-clientset-package="${OUTPUT_CLIENT}/apis" \
   --listers-package="${OUTPUT_CLIENT}/listers" \
@@ -121,7 +121,7 @@ echo "informer"
 echo "deepcopy"
 # Creates types.generated.go
 "${GOBASE}/bin/deepcopy-gen" \
-  ${LOGGING_FLAGS} \
+  "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-file-base zz_generated.deepcopy \
   --output-base="${OUTPUT_BASE}" \
@@ -129,7 +129,7 @@ echo "deepcopy"
 
 echo "lister"
 "${GOBASE}/bin/lister-gen" \
-  ${LOGGING_FLAGS} \
+  "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-base="$GOWORK/src" \
   --output-package="${OUTPUT_CLIENT}/listers" \
@@ -137,7 +137,7 @@ echo "lister"
 
 echo "conversion"
 "${GOBASE}/bin/conversion-gen" \
-  ${LOGGING_FLAGS} \
+  "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-base="$GOWORK/src" \
   --output-file-base zz_generated.conversion \

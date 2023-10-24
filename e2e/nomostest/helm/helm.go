@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/ettle/strcase"
-	"github.com/google/uuid"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -186,7 +185,6 @@ func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) er
 // UpdateVersion updates the local version of the helm chart to the specified
 // version with a timestamp suffix
 func (r *RemoteHelmChart) UpdateVersion(version string) error {
-	version = generateChartVersion(version)
 	r.Logger.Infof("Updating helm chart version to %q", version)
 	chartFilePath := filepath.Join(r.LocalChartPath, "Chart.yaml")
 	err := updateYAMLFile(chartFilePath, func(chartMap map[string]interface{}) error {
@@ -247,7 +245,7 @@ func PushHelmChart(nt *nomostest.NT, chartName, chartVersion string) (*RemoteHel
 		LocalChartPath: filepath.Join(nt.TmpDir, chartName),
 		// Use test name and timestamp to avoid overlap between sequential test runs.
 		ChartName:    generateChartName(chartName, strcase.ToKebab(nt.T.Name())),
-		ChartVersion: generateChartVersion(chartVersion),
+		ChartVersion: chartVersion,
 	}
 	nt.T.Cleanup(func() {
 		if err := chart.Delete(); err != nil {
@@ -288,16 +286,4 @@ func generateChartName(chartName, testName string) string {
 		chartName = strings.Trim(chartName, "-")
 	}
 	return chartName
-}
-
-// generateChartVersion returns the version with a random 8 character suffix.
-// Result will be no more than 20 characters and can function as a k8s metadata.name.
-// Chart name and version must be less than 63 characters combined.
-func generateChartVersion(chartVersion string) string {
-	if len(chartVersion) > 12 {
-		chartVersion = chartVersion[:12]
-		chartVersion = strings.Trim(strings.Trim(chartVersion, "-"), ".")
-	}
-	return fmt.Sprintf("%s-%s", chartVersion,
-		strings.ReplaceAll(uuid.NewString(), "-", "")[:7])
 }

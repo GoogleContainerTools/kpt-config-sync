@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/ettle/strcase"
-	"github.com/google/uuid"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -51,6 +50,11 @@ func SetupImage(nt *nomostest.NT, name, version string) (*Image, error) {
 	if version == "" {
 		return nil, fmt.Errorf("image version must not be empty")
 	}
+
+	// Version will error out if it's longer than 20 characters
+	if err := validateImageVersion(version); err != nil {
+		return nil, err
+	}
 	chart := &Image{
 		Shell:   nt.Shell,
 		Logger:  nt.Logger,
@@ -62,9 +66,8 @@ func SetupImage(nt *nomostest.NT, name, version string) (*Image, error) {
 		// Use chart name to avoid overlap.
 		BuildPath: filepath.Join(nt.TmpDir, name),
 		// Use test name to avoid overlap. Truncate to 40 characters.
-		Name: generateImageName(nt, name),
-		// Use random suffix to avoid overlap. Truncate to 20 characters.
-		Version: generateImageVersion(version),
+		Name:    generateImageName(nt, name),
+		Version: version,
 	}
 	nt.T.Cleanup(func() {
 		if err := chart.Delete(); err != nil {
@@ -216,10 +219,12 @@ func (r *Image) SetName(nt *nomostest.NT, name string) {
 
 // SetVersion updates the local version of the image to the specified tag with a
 // random suffix
-func (r *Image) SetVersion(version string) {
-	version = generateImageVersion(version)
-	r.Logger.Infof("Updating image version to %q", version)
+func (r *Image) SetVersion(version string) error {
+	if err := validateImageVersion(version); err != nil {
+		return err
+	}
 	r.Version = version
+	return nil
 }
 
 // Delete the package from the remote registry, including all versions and tags.
@@ -248,14 +253,12 @@ func generateImageName(nt *nomostest.NT, chartName string) string {
 	return chartName
 }
 
-// generateImageVersion returns the version with a random 8 character suffix.
-// Result will be no more than 20 characters and can function as a k8s metadata.name.
+// validateImageVersion will validate if chart version string
+// is 20 characters or less and can function as a k8s metadata.name.
 // Chart name and version must be less than 63 characters combined.
-func generateImageVersion(chartVersion string) string {
-	if len(chartVersion) > 12 {
-		chartVersion = chartVersion[:12]
-		chartVersion = strings.Trim(strings.Trim(chartVersion, "-"), ".")
+func validateImageVersion(chartVersion string) error {
+	if len(chartVersion) > 20 {
+		return fmt.Errorf("chart version string %q should not exceed 20 characters", chartVersion)
 	}
-	return fmt.Sprintf("%s-%s", chartVersion,
-		strings.ReplaceAll(uuid.NewString(), "-", "")[:7])
+	return nil
 }

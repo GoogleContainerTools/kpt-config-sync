@@ -130,7 +130,9 @@ func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) er
 // SetVersion updates the local version of the helm chart to the specified
 // version with a random suffix
 func (r *HelmChart) SetVersion(version string) error {
-	r.Image.SetVersion(version)
+	if err := r.Image.SetVersion(version); err != nil {
+		return err
+	}
 	version = r.Image.Version
 	chartFilePath := filepath.Join(r.Image.BuildPath, "Chart.yaml")
 	err := updateYAMLFile(chartFilePath, func(chartMap map[string]interface{}) error {

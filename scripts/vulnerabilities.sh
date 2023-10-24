@@ -37,6 +37,7 @@ source "${scripts_dir}/lib/manifests.sh"
 read -r -a images <<< "$(config_sync_images)"
 [[ ${#images[@]} -eq 0 ]] && exit 1
 fixable_total=0
+scan_failure_total=0
 declare -A vuln_map
 
 echo -n "Scanning" >&2
@@ -44,12 +45,18 @@ echo -n "Scanning" >&2
 # Sum the fixable vulnerabilities with severity CRITICAL, HIGH, or MEDIUM
 for image in "${images[@]}"; do
   echo -n "."
-  vulnerabilities=$(gcloud beta container images describe --show-package-vulnerability --format json --verbosity error "${image}" |
-    jq -r '.package_vulnerability_summary.vulnerabilities')
-  fixable=$(echo "${vulnerabilities}" |
-    jq -r 'select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
-  vuln_map[${image}]=${fixable}
-  fixable_total=$((fixable_total + fixable))
+  results=$(gcloud beta container images describe --show-package-vulnerability --format json --verbosity error "${image}")
+  status=$(echo "${results}" | jq -r '.discovery_summary.discovery[].discovery.analysisStatus')
+  if [[ "${status}" != "FINISHED_SUCCESS" ]]; then
+    vuln_map[${image}]="${status}"
+    scan_failure_total=$((scan_failure_total + 1))
+  else
+    vulnerabilities=$(echo "${results}" | jq -r '.package_vulnerability_summary.vulnerabilities')
+    fixable=$(echo "${vulnerabilities}" |
+      jq -r 'select(.vulnerability != {}) | map(map(select(.vulnerability.packageIssue[].fixAvailable == true)) | length) + [0] | add')
+    vuln_map[${image}]=${fixable}
+    fixable_total=$((fixable_total + fixable))
+  fi
 done
 
 echo # done scanning
@@ -62,7 +69,16 @@ echo # done scanning
   ) | sort
 ) | column -ts $'\t'
 
+exit_code=0
+
 if [[ "${fixable_total}" != "0" ]]; then
   echo "ERROR: ${fixable_total} vulnerabilities are fixable" >&2
-  exit 1
+  exit_code=1
 fi
+
+if [[ "${scan_failure_total}" != "0" ]]; then
+  echo "ERROR: ${scan_failure_total} images failed to be scanned" >&2
+  exit_code=1
+fi
+
+exit "${exit_code}"

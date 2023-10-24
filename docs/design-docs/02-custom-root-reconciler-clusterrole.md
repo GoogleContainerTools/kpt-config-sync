@@ -129,5 +129,5 @@ boolean for turning the `ClusterRoleBinding` off, or a setting to change what se
 account the reconciler is running with. However, these both put a bigger burden on the
 user in order to utilize them even for the simple use cases, which is why changing which
 role to bind to is probably the most user-friendly knob to expose. With the inclusion of
-a sentinel value to create no binding, the first of these alternatives is effectively
-supported, if through a slightly worse API. 
+a switch to turn off creating the binding entirely, the first of these alternatives is effectively
+supported as well, and the API supports extending for other use cases in the future. 

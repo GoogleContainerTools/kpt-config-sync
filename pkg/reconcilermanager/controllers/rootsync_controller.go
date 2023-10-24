@@ -207,8 +207,8 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	if _, err := r.upsertClusterRoleBinding(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "upserting cluster role binding")
+	if err := r.configureClusterRoleBinding(ctx, reconcilerRef, rs.Spec.SafeOverride().ClusterRole); err != nil {
+		return errors.Wrap(err, "configuring cluster role binding")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -390,7 +390,7 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
-	if err := r.deleteClusterRoleBinding(ctx, reconcilerRef); err != nil {
+	if err := r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)); err != nil {
 		return errors.Wrap(err, "deleting cluster role bindings")
 	}
 
@@ -544,8 +544,8 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 
 	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
 	// because all the generated resources have the prefix.
-	roleBindingName := RootSyncPermissionsName()
-	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) && objRef.Name != roleBindingName {
+	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) &&
+		!strings.HasPrefix(objRef.Name, core.RootSyncPermissionsPrefix) {
 		return nil
 	}
 
@@ -571,7 +571,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 		reconcilerName := core.RootReconcilerName(rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.ClusterRoleBinding:
-			if objRef.Name == roleBindingName {
+			if objRef.Name == RootSyncPermissionsName(reconcilerName) {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKeyFromObject(&rs)})
 				attachedRSNames = append(attachedRSNames, rs.GetName())
@@ -779,15 +779,38 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
-	crbRef := client.ObjectKey{Name: RootSyncPermissionsName()}
+func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, roleConfig v1beta1.ClusterRoleOverrideSpec) error {
+	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
+	// we delete any ClusterRoleBinding that uses the old name.
+	// This ensures smooth migrations for users upgrading past that version boundary.
+	if err := r.deleteClusterRoleBinding(ctx, fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName)); err != nil && !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "deleting old binding")
+	}
+
+	if roleConfig.Disabled {
+		return errors.Wrap( // wrap returns nil if err is nil
+			r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)),
+			"ensuring clusterrolebinding does not exist",
+		)
+	}
+
+	if roleConfig.Name == "" {
+		roleConfig.Name = "cluster-admin"
+	}
+
+	_, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleConfig.Name)
+	return errors.Wrap(err, "upserting cluster role binding")
+}
+
+func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, clusterRole string) (client.ObjectKey, error) {
+	crbRef := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
 		childCRB.OwnerReferences = nil
-		childCRB.RoleRef = rolereference("cluster-admin", "ClusterRole")
-		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
+		childCRB.Subjects = []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
 		// Remove existing OwnerReferences, now that we're using finalizers.
 		childCRB.OwnerReferences = nil
 		return nil

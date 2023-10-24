@@ -71,11 +71,20 @@ const (
 
 var rootReconcilerName = core.RootReconcilerName(rootsyncName)
 
-func clusterrolebinding(name string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
+func clusterrole(t *testing.T, name string, opts ...core.MetaMutator) *rbacv1.ClusterRole {
+	t.Helper()
+
+	result := fake.ClusterRoleObject(opts...)
+	result.Name = name
+
+	return result
+}
+
+func clusterrolebinding(name string, role string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
 	result := fake.ClusterRoleBindingObject(opts...)
 	result.Name = name
 
-	result.RoleRef.Name = "cluster-admin"
+	result.RoleRef.Name = role
 	result.RoleRef.Kind = "ClusterRole"
 	result.RoleRef.APIGroup = "rbac.authorization.k8s.io"
 
@@ -215,6 +224,12 @@ func rootsyncOverrideReconcileTimeout(reconcileTimeout metav1.Duration) func(*v1
 func rootsyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1beta1.RootSync) {
 	return func(rs *v1beta1.RootSync) {
 		rs.Spec.SafeOverride().APIServerTimeout = &apiServerTimout
+	}
+}
+
+func rootsyncOverrideClusterRole(clusterRole string) func(*v1beta1.RootSync) {
+	return func(rs *v1beta1.RootSync) {
+		rs.Spec.SafeOverride().ClusterRole.Name = clusterRole
 	}
 }
 
@@ -1493,6 +1508,130 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	t.Log("No need to update Deployment.")
 }
 
+func TestRootSyncCreateWithOverrideClusterRole(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	clusterRoleName := "my-custom-role"
+
+	rs := rootSyncWithOCI(rootsyncName,
+		rootsyncOverrideClusterRole(clusterRoleName),
+		rootsyncOCIAuthType(configsync.AuthGCENode))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, _, testReconciler := setupRootReconciler(t, rs, clusterrole(t, clusterRoleName))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	want := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName),
+		clusterRoleName,
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1))
+	want.Subjects = addSubjectByName(nil, rootReconcilerName)
+
+	if err := validateClusterRoleBinding(want, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("ClusterRoleBinding successfully created")
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("Failed to get RootSync: %q", err)
+	}
+
+	rs.Spec.SafeOverride().ClusterRole.Name = ""
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("Failed to update RootSync: %q", err)
+	}
+	t.Log("RootSync updated to remove ClusteRole override")
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	// clusterrolebinding is updated in-place
+	want = clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName),
+		"cluster-admin",
+		core.UID("1"), core.ResourceVersion("2"), core.Generation(2))
+	want.Subjects = addSubjectByName(nil, rootReconcilerName)
+	if err := validateClusterRoleBinding(want, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("Failed to get RootSync: %q", err)
+	}
+
+	rs.Spec.SafeOverride().ClusterRole.Disabled = true
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("Failed to update RootSync: %q", err)
+	}
+	t.Log("RootSync updated to remove ClusteRole entirely")
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	if err := validateResourceDeleted(core.IDOf(want), fakeClient); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestMigrationToIndividualClusterRoleBindingsWhenDefaultRootSyncExists(t *testing.T) {
+	parseDeployment = parsedDeployment
+
+	// set up a situation as it was before syncs had individual clusterrolebindings
+	// (i.e. before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938)
+	// two syncs: root-sync and my-custom-sync
+	rs1 := rootSyncWithOCI(configsync.RootSyncName,
+		rootsyncOCIAuthType(configsync.AuthGCENode))
+
+	rs2 := rootSyncWithOCI("my-custom-sync",
+		rootsyncOCIAuthType(configsync.AuthGCENode))
+
+	oldBinding := clusterrolebinding(
+		fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName),
+		"cluster-admin",
+	)
+	oldBinding.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs1.Name))
+	oldBinding.Subjects = addSubjectByName(oldBinding.Subjects, core.RootReconcilerName(rs2.Name))
+
+	fakeClient, _, testReconciler := setupRootReconciler(t, rs1, rs2, oldBinding)
+
+	ctx := context.Background()
+
+	if _, err := testReconciler.Reconcile(ctx, namespacedName(rs1.Name, rs1.Namespace)); err != nil {
+		t.Fatalf("unexpected reconciler error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, namespacedName(rs2.Name, rs2.Namespace)); err != nil {
+		t.Fatalf("unexpected reconciler error: %v", err)
+	}
+
+	if err := validateResourceDeleted(core.IDOf(oldBinding), fakeClient); err != nil {
+		t.Errorf("validating deletion of old binding: %v", err)
+	}
+
+	want1 := clusterrolebinding(RootSyncPermissionsName(rs1.Name), "cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1))
+	want1.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs1.Name))
+	if err := validateClusterRoleBinding(want1, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+
+	want2 := clusterrolebinding(RootSyncPermissionsName(rs2.Name), "cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1))
+	want2.Subjects = addSubjectByName(nil, core.RootReconcilerName(rs2.Name))
+	if err := validateClusterRoleBinding(want2, fakeClient); err != nil {
+		t.Errorf("ClusterRoleBinding validation failed. err: %v", err)
+	}
+}
+
 func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -1748,11 +1887,12 @@ func TestMultipleRootSyncs(t *testing.T) {
 	)
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
 
-	crb := clusterrolebinding(
-		RootSyncPermissionsName(),
+	crb1 := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName),
+		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
-	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)
+	crb1.Subjects = addSubjectByName(nil, rootReconcilerName)
 	rootContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment1 := rootSyncDeployment(rootReconcilerName,
@@ -1767,7 +1907,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Error(err)
 	}
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb1, fakeClient); err != nil {
 		t.Error(err)
 	}
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -1824,10 +1964,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName2)
-	crb.ResourceVersion = "2"
-	crb.Generation = 2
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	crb2 := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName2),
+		"cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	crb2.Subjects = addSubjectByName(nil, rootReconcilerName2)
+	if err := validateClusterRoleBinding(crb2, fakeClient); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1882,10 +2025,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName3)
-	crb.ResourceVersion = "3"
-	crb.Generation = 3
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	crb3 := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName3),
+		"cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	crb3.Subjects = addSubjectByName(nil, rootReconcilerName2)
+	if err := validateClusterRoleBinding(crb3, fakeClient); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -1943,10 +2089,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName4)
-	crb.ResourceVersion = "4"
-	crb.Generation = 4
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	crb4 := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName4),
+		"cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	crb4.Subjects = addSubjectByName(nil, rootReconcilerName2)
+	if err := validateClusterRoleBinding(crb4, fakeClient); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -2005,10 +2154,13 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName5)
-	crb.ResourceVersion = "5"
-	crb.Generation = 5
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	crb5 := clusterrolebinding(
+		RootSyncPermissionsName(rootReconcilerName5),
+		"cluster-admin",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	crb5.Subjects = addSubjectByName(nil, rootReconcilerName2)
+	if err := validateClusterRoleBinding(crb5, fakeClient); err != nil {
 		t.Error(err)
 	}
 	if t.Failed() {
@@ -2030,7 +2182,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb1, fakeClient); err != nil {
 		t.Error(err)
 	}
 
@@ -2068,7 +2220,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb2, fakeClient); err != nil {
 		t.Error(err)
 	}
 
@@ -2107,7 +2259,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	// No changes to the CRB
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateClusterRoleBinding(crb3, fakeClient); err != nil {
 		t.Error(err)
 	}
 
@@ -2145,11 +2297,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Subject for rs1 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName)
-	crb.ResourceVersion = "6"
-	crb.Generation = 6
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb1), fakeClient); err != nil {
 		t.Error(err)
 	}
 	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName)
@@ -2170,11 +2318,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Subject for rs2 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName2)
-	crb.ResourceVersion = "7"
-	crb.Generation = 7
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb2), fakeClient); err != nil {
 		t.Error(err)
 	}
 	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName2)
@@ -2195,11 +2339,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Subject for rs3 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName3)
-	crb.ResourceVersion = "8"
-	crb.Generation = 8
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb3), fakeClient); err != nil {
 		t.Error(err)
 	}
 	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName3)
@@ -2220,11 +2360,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Subject for rs4 is removed from ClusterRoleBinding.Subjects
-	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName4)
-	crb.ResourceVersion = "9"
-	crb.Generation = 9
-	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb4), fakeClient); err != nil {
 		t.Error(err)
 	}
 	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName4)
@@ -2245,8 +2381,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Verify the ClusterRoleBinding of the root-reconciler is deleted
-	if err := validateResourceDeleted(core.IDOf(crb), fakeClient); err != nil {
+	if err := validateResourceDeleted(core.IDOf(crb5), fakeClient); err != nil {
 		t.Error(err)
 	}
 	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5)

@@ -2,7 +2,7 @@
 
 * Author(s): @tomasaschan
 * Approver: @sdowell, @janetkuo
-* Status: provisional
+* Status: approved
 
 ## Summary
 

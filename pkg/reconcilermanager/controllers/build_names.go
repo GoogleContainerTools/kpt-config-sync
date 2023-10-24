@@ -32,8 +32,8 @@ func RepoSyncPermissionsName() string {
 	return fmt.Sprintf("%s:%s", configsync.GroupName, core.NsReconcilerPrefix)
 }
 
-// RootSyncPermissionsName returns root reconciler permissions name.
-// e.g. configsync.gke.io:root-reconciler
-func RootSyncPermissionsName() string {
-	return fmt.Sprintf("%s:%s", configsync.GroupName, core.RootReconcilerPrefix)
+// RootSyncPermissionsName returns root reconciler ClusterRoleBinding name.
+// e.g. configsync.gke.io:root-reconciler:my-root-sync
+func RootSyncPermissionsName(reconcilerName string) string {
+	return fmt.Sprintf("%s:%s", core.RootSyncPermissionsPrefix, core.RootSyncName(reconcilerName))
 }

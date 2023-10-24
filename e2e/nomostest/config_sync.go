@@ -110,7 +110,7 @@ func IsReconcilerManagerConfigMap(obj client.Object) bool {
 // otel-collector Deployment in the config-management-monitoring namespace.
 func isOtelCollectorDeployment(obj client.Object) bool {
 	return obj.GetName() == ocmetrics.OtelCollectorName &&
-		obj.GetNamespace() == ocmetrics.MonitoringNamespace &&
+		obj.GetNamespace() == configmanagement.MonitoringNamespace &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.Deployment()
 }
 
@@ -346,7 +346,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 			predicates = append(predicates, testpredicates.HasGenerationAtLeast(2))
 		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, predicates)
+			ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, predicates)
 	})
 	tg.Go(func() error {
 		// The root-reconciler is created after the reconciler-manager is ready.

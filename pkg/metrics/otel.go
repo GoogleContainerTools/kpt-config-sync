@@ -30,9 +30,6 @@ const (
 	// OtelCollectorCustomCM is the name of the custom OpenTelemetry Collector ConfigMap.
 	OtelCollectorCustomCM = "otel-collector-custom"
 
-	// MonitoringNamespace is the Namespace used for OpenTelemetry Collector deployment.
-	MonitoringNamespace = "config-management-monitoring"
-
 	// CollectorConfigGooglecloud is the OpenTelemetry Collector configuration with
 	// the googlecloud exporter.
 	CollectorConfigGooglecloud = `receivers:

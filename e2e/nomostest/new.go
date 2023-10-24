@@ -36,7 +36,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kind/pkg/errors"
@@ -343,7 +342,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.KubeClient.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
+	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	if *e2e.GitProvider == e2e.Local {

@@ -717,7 +717,7 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 	ctx := context.Background()
 	repoSyncList := &v1beta1.RepoSyncList{}
 	if err := r.client.List(ctx, repoSyncList, &client.ListOptions{Namespace: objRef.Namespace}); err != nil {
-		klog.Error("failed to list RepoSyncs for %s (%s): %v",
+		klog.Errorf("failed to list RepoSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
 		return nil
 	}

@@ -47,11 +47,8 @@ func SetupImage(nt *nomostest.NT, name, version string) (*Image, error) {
 	if name == "" {
 		return nil, fmt.Errorf("image name must not be empty")
 	}
-	if version == "" {
-		return nil, fmt.Errorf("image version must not be empty")
-	}
 
-	// Version will error out if it's longer than 20 characters
+	// Version will error out if it's empty or longer than 20 characters
 	if err := validateImageVersion(version); err != nil {
 		return nil, err
 	}
@@ -253,10 +250,13 @@ func generateImageName(nt *nomostest.NT, chartName string) string {
 	return chartName
 }
 
-// validateImageVersion will validate if chart version string
-// is 20 characters or less and can function as a k8s metadata.name.
+// validateImageVersion will validate if chart version string is not empty and
+// is 20 characters maximum and can function as a k8s metadata.name.
 // Chart name and version must be less than 63 characters combined.
 func validateImageVersion(chartVersion string) error {
+	if chartVersion == "" {
+		return fmt.Errorf("image version must not be empty")
+	}
 	if len(chartVersion) > 20 {
 		return fmt.Errorf("chart version string %q should not exceed 20 characters", chartVersion)
 	}

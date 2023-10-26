@@ -494,7 +494,7 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 	ctx := context.Background()
 	rootSyncList := &v1beta1.RootSyncList{}
 	if err := r.client.List(ctx, rootSyncList, &client.ListOptions{Namespace: objRef.Namespace}); err != nil {
-		klog.Error("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
+		klog.Errorf("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
 		return nil
 	}
 	var requests []reconcile.Request
@@ -557,7 +557,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 
 	allRootSyncs := &v1beta1.RootSyncList{}
 	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
-		klog.Error("failed to list all RootSyncs for %s (%s): %v",
+		klog.Errorf("failed to list all RootSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
 		return nil
 	}

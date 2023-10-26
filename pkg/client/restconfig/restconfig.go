@@ -117,7 +117,7 @@ func UpdateQPS(config *rest.Config) {
 
 	flowControlEnabled, err := flowcontrol.IsEnabled(ctx, config)
 	if err != nil {
-		klog.Warning("Failed to query apiserver to check for flow control enablement: %v", err)
+		klog.Warningf("Failed to query apiserver to check for flow control enablement: %v", err)
 		// Default to the lower QPS limits.
 	}
 	if flowControlEnabled {

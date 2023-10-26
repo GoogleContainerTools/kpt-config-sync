@@ -124,7 +124,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 	}
 	logErr, err := c.fights.DetectFight(time.Now(), intendedState)
 	if logErr {
-		klog.Error("Fight detected on create of %s.", description(intendedState))
+		klog.Errorf("Fight detected on create of %s.", description(intendedState))
 	}
 	if err == nil {
 		klog.V(3).Infof("Created object %v", core.GKNN(intendedState))

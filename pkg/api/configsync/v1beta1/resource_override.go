@@ -93,34 +93,51 @@ type RootSyncOverrideSpec struct {
 	// +optional
 	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
 
-	// clusterRole controls which role to bind the service account for this RootSync's
-	// reconciler to.
+	// roleRefs is a list of Roles or ClusterRoles to create bindings.
+	// If unset, a binding to cluster-admin will be created.
 	//
 	// +optional
-	ClusterRole ClusterRoleOverrideSpec `json:"clusterRole,omitempty"`
+	RoleRefs []RootSyncRoleRef `json:"roleRefs,omitempty"`
 }
 
-// ClusterRoleOverrideSpec allows to override settings for the root reconciler permissions
-type ClusterRoleOverrideSpec struct {
-	// name is the name of the ClusterRole to bind to; defaults to "cluster-admin".
-	//
-	// If you specify a different name, the ClusterRole needs to be created manually.
-	//
-	// +optional
-	Name string `json:"name,omitempty"`
+// RootSyncRoleRef indicates references for Roles and ClusterRoles to create
+// bindings to for this reconciler. It supports a namespace field that can be used
+// to create RoleBindings rather than ClusterRoleBindings.
+type RootSyncRoleRef struct {
+	RoleRefBase `json:",inline"`
 
-	// disabled turns off binding to a ClusterRole entirely.
-	//
-	// It is then your responsibility to bind any roles to the relevant service
-	// account.
+	// namespace indicates the Namespace in which a RoleBinding should be created.
+	// For ClusterRole objects, will determine whether a RoleBinding or ClusterRoleBinding
+	// is created.
+	// For Role objects, must be set to the same namespace as the Role.
 	//
 	// +optional
-	Disabled bool `json:"disabled,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// RoleRefBase is the base struct for references to Roles and ClusterRoles. These
+// references are used to create bindings for both RootSyncs and RepoSyncs.
+type RoleRefBase struct {
+	// kind refers to the Kind of the RBAC resource.
+	// Accepted values are Role and ClusterRole.
+	//
+	// +kubebuilder:validation:Pattern=^(Role|ClusterRole)$
+	Kind string `json:"kind,omitempty"`
+
+	// name is the name of the Role or ClusterRole resource.
+	Name string `json:"name,omitempty"`
 }
 
 // RepoSyncOverrideSpec allows to override the settings for a RepoSync reconciler pod
 type RepoSyncOverrideSpec struct {
 	OverrideSpec `json:",inline"`
+
+	// roleRefs is a list of Roles or ClusterRoles to create RoleBindings to.
+	// Roles must be declared in the same namespace as the RepoSync.
+	// If unset, no bindings will be created.
+	//
+	// +optional
+	RoleRefs []RoleRefBase `json:"roleRefs,omitempty"`
 }
 
 // ContainerResourcesSpec allows to override the resource requirements for a container

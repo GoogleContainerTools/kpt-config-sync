@@ -27,8 +27,6 @@ const (
 	NsReconcilerPrefix = "ns-reconciler"
 	// RootReconcilerPrefix is the prefix usef for all Root reconcilers.
 	RootReconcilerPrefix = "root-reconciler"
-	// RootSyncPermissionsPrefix is the prefix used for all ClusterRoleBindings granting access to Root Reconcilers
-	RootSyncPermissionsPrefix = configsync.RootSyncKind + ":" + RootReconcilerPrefix
 )
 
 // RootReconcilerName returns the root reconciler's name in the format root-reconciler-<name>.

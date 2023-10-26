@@ -1171,3 +1171,51 @@ func RootSyncSpecOverrideEquals(expected *v1beta1.RootSyncOverrideSpec) Predicat
 		return nil
 	}
 }
+
+func subjectsEqual(want []string, got []rbacv1.Subject) error {
+	if len(got) != len(want) {
+		return errors.Wrapf(ErrFailedPredicate, "want %v subjects; got %v", want, got)
+	}
+
+	found := make(map[string]bool)
+	for _, subj := range got {
+		found[subj.Name] = true
+	}
+	for _, name := range want {
+		if !found[name] {
+			return errors.Wrapf(ErrFailedPredicate, "missing subject %q", name)
+		}
+	}
+
+	return nil
+}
+
+// RoleBindingHasSubjects checks that the RoleBinding has a list
+// of subjects whose names match the specified list of names.
+func RoleBindingHasSubjects(subjects ...string) func(o client.Object) error {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		r, ok := o.(*rbacv1.RoleBinding)
+		if !ok {
+			return WrongTypeErr(o, r)
+		}
+		return subjectsEqual(subjects, r.Subjects)
+	}
+}
+
+// ClusterRoleBindingHasSubjects checks that the ClusterRoleBinding has a list
+// of subjects whose names match the specified list of names.
+func ClusterRoleBindingHasSubjects(subjects ...string) func(o client.Object) error {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		r, ok := o.(*rbacv1.ClusterRoleBinding)
+		if !ok {
+			return WrongTypeErr(o, r)
+		}
+		return subjectsEqual(subjects, r.Subjects)
+	}
+}

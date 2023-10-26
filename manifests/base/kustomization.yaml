@@ -17,7 +17,8 @@ resources:
 - ../cluster-registry-crd.yaml
 - ../container-default-limits.yaml
 - ../namespace-selector-crd.yaml
-- ../ns-reconciler-cluster-role.yaml
+- ../ns-reconciler-base-cluster-role.yaml
+- ../root-reconciler-base-cluster-role.yaml
 - ../otel-agent-cm.yaml
 - ../reconciler-manager-service-account.yaml
 - ../reposync-crd.yaml

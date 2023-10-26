@@ -38,6 +38,13 @@ func Name(name string) MetaMutator {
 	}
 }
 
+// GenerateName replaces the metadata.generateName of the Object under test.
+func GenerateName(generateName string) MetaMutator {
+	return func(o client.Object) {
+		o.SetGenerateName(generateName)
+	}
+}
+
 // UID replaces the metadata.uid of the Object under test.
 func UID(uid types.UID) MetaMutator {
 	return func(o client.Object) {

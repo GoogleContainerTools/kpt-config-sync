@@ -208,7 +208,7 @@ func validateRootSyncDependencies(nt *nomostest.NT, rsName string) []client.Obje
 	// only happens when upgrading from a very old unsupported version.
 
 	rootSyncCRB := &rbacv1.ClusterRoleBinding{}
-	setNN(rootSyncCRB, client.ObjectKey{Name: controllers.RootSyncPermissionsName(rootSyncReconciler.Name)})
+	setNN(rootSyncCRB, client.ObjectKey{Name: controllers.RootSyncLegacyClusterRoleBindingName})
 	rootSyncDependencies = append(rootSyncDependencies, rootSyncCRB)
 
 	rootSyncSA := &corev1.ServiceAccount{}
@@ -235,7 +235,7 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 
 	repoSyncRB := &rbacv1.RoleBinding{}
 	setNN(repoSyncRB, client.ObjectKey{
-		Name:      controllers.RepoSyncPermissionsName(),
+		Name:      controllers.RepoSyncBaseRoleBindingName,
 		Namespace: ns,
 	})
 	repoSyncDependencies = append(repoSyncDependencies, repoSyncRB)
@@ -269,6 +269,7 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj)
 		require.NoError(nt.T, err)
 	}
+
 	return repoSyncDependencies
 }
 

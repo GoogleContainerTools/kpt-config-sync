@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -215,6 +216,12 @@ func reposyncOverrideAPIServerTimeout(apiServerTimout metav1.Duration) func(*v1b
 	}
 }
 
+func reposyncOverrideRoleRefs(roleRefs ...v1beta1.RoleRefBase) func(*v1beta1.RepoSync) {
+	return func(rs *v1beta1.RepoSync) {
+		rs.Spec.SafeOverride().RoleRefs = roleRefs
+	}
+}
+
 func reposyncNoSSLVerify() func(*v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		rs.Spec.NoSSLVerify = true
@@ -281,12 +288,12 @@ func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1
 	return repoSync(ns, name, opts...)
 }
 
-func rolebinding(name string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
+func rolebinding(name, roleName, roleKind string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
 	result := fake.RoleBindingObject(opts...)
 	result.Name = name
 
-	result.RoleRef.Name = RepoSyncPermissionsName()
-	result.RoleRef.Kind = "ClusterRole"
+	result.RoleRef.Name = roleName
+	result.RoleRef.Kind = roleKind
 	result.RoleRef.APIGroup = "rbac.authorization.k8s.io"
 
 	return result
@@ -2087,7 +2094,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
 
 	roleBinding1 := rolebinding(
-		RepoSyncPermissionsName(),
+		RepoSyncBaseClusterRoleName,
+		RepoSyncBaseClusterRoleName,
+		"ClusterRole",
 		core.Namespace(rs1.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2166,7 +2175,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	roleBinding2 := rolebinding(
-		RepoSyncPermissionsName(),
+		RepoSyncBaseClusterRoleName,
+		RepoSyncBaseClusterRoleName,
+		"ClusterRole",
 		core.Namespace(rs2.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2751,7 +2762,6 @@ func TestMapObjectToRepoSync(t *testing.T) {
 	rs1 := repoSyncWithGit("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	rs2 := repoSyncWithGit("ns2", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
-	rsRoleBindingName := RepoSyncPermissionsName()
 
 	testCases := []struct {
 		name   string
@@ -2821,13 +2831,13 @@ func TestMapObjectToRepoSync(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A rolebinding from the %s namespace, different from %s", rs1.Namespace, rsRoleBindingName),
+			name:   fmt.Sprintf("A rolebinding from the %s namespace, different from %s", rs1.Namespace, RepoSyncBaseRoleBindingName),
 			object: fake.RoleBindingObject(core.Name("any"), core.Namespace(rs1.Namespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A rolebinding from the %s namespace, same as %s", rs1.Namespace, rsRoleBindingName),
-			object: fake.RoleBindingObject(core.Name(rsRoleBindingName), core.Namespace(rs1.Namespace)),
+			name:   fmt.Sprintf("A rolebinding from the %s namespace, same as %s", rs1.Namespace, RepoSyncBaseRoleBindingName),
+			object: fake.RoleBindingObject(core.Name(RepoSyncBaseRoleBindingName), core.Namespace(rs1.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -3992,6 +4002,84 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 	t.Log("Deployment successfully updated")
 }
 
+func TestRepoSyncCreateWithOverrideRoleRefs(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	clusterRoleRef := v1beta1.RoleRefBase{
+		Kind: "ClusterRole",
+		Name: "my-cluster-role",
+	}
+	roleRef := v1beta1.RoleRefBase{
+		Kind: "Role",
+		Name: "my-cluster-role",
+	}
+	repoSyncNN := types.NamespacedName{
+		Name:      reposyncName,
+		Namespace: reposyncNs,
+	}
+	rs := repoSyncWithOCI(reposyncNs, reposyncName,
+		reposyncOverrideRoleRefs(clusterRoleRef, roleRef),
+		reposyncOCIAuthType(configsync.AuthNone))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	fakeClient, _, testReconciler := setupNSReconciler(t, rs,
+		clusterrole(t, clusterRoleRef.Name), role(t, roleRef.Name))
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantRoleBindings := make(map[v1beta1.RootSyncRoleRef]rbacv1.RoleBinding)
+	wantRoleBindings[v1beta1.RootSyncRoleRef{
+		RoleRefBase: clusterRoleRef,
+		Namespace:   reposyncNs,
+	}] = *nsReconcilerRoleBinding(repoSyncNN, clusterRoleRef)
+	wantRoleBindings[v1beta1.RootSyncRoleRef{
+		RoleRefBase: roleRef,
+		Namespace:   reposyncNs,
+	}] = *nsReconcilerRoleBinding(repoSyncNN, roleRef)
+
+	if err := validateReconcilerRoleBindings(fakeClient, configsync.RepoSyncKind, repoSyncNN, wantRoleBindings); err != nil {
+		t.Fatalf("RoleBinding validation failed. err: %v", err)
+	}
+	defaultRb := rolebinding(
+		RepoSyncBaseRoleBindingName,
+		RepoSyncBaseClusterRoleName,
+		"ClusterRole",
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		core.Namespace(reposyncNs),
+	)
+	defaultRb.Subjects = addSubjectByName(nil, nsReconcilerName)
+
+	if err := validateRoleBinding(defaultRb, fakeClient); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("RoleBindings successfully created")
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("Failed to get RepoSync: %q", err)
+	}
+
+	rs.Spec.SafeOverride().RoleRefs = nil
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("Failed to update RepoSync: %q", err)
+	}
+	t.Log("RepoSync updated to remove RoleRefs override")
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	if err := validateReconcilerRoleBindings(fakeClient, configsync.RepoSyncKind, repoSyncNN, nil); err != nil {
+		t.Fatalf("RoleBinding validation failed. err: %v", err)
+	}
+	if err := validateRoleBinding(defaultRb, fakeClient); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 
@@ -4024,6 +4112,68 @@ func validateServiceAccounts(wants map[core.ID]*corev1.ServiceAccount, fakeClien
 	return nil
 }
 
+func validateReconcilerClusterRoleBindings(fakeClient *syncerFake.Client, rootSyncName string, want map[v1beta1.RootSyncRoleRef]rbacv1.ClusterRoleBinding) error {
+	got := &rbacv1.ClusterRoleBindingList{}
+	ctx := context.Background()
+
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(map[string]string{
+			metadata.SyncKindLabel:      configsync.RootSyncKind,
+			metadata.SyncNameLabel:      rootSyncName,
+			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+		}),
+	}
+	err := fakeClient.List(ctx, got, opts)
+	if err != nil {
+		return err
+	}
+	if len(want) != len(got.Items) {
+		return errors.Errorf("want %d ClusterRoleBindings, got %d", len(want), len(got.Items))
+	}
+	gotCRBMap := make(map[v1beta1.RootSyncRoleRef]rbacv1.ClusterRoleBinding)
+	for idx, crb := range got.Items {
+		roleRef := v1beta1.RootSyncRoleRef{
+			RoleRefBase: v1beta1.RoleRefBase{
+				Kind: crb.RoleRef.Kind,
+				Name: crb.RoleRef.Name,
+			},
+		}
+		gotCRBMap[roleRef] = got.Items[idx]
+	}
+	for roleRef, wantCRB := range want {
+		gotCRB, ok := gotCRBMap[roleRef]
+		if !ok {
+			return errors.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
+		}
+		wantCRB.Name = gotCRB.Name
+		if diff := cmp.Diff(wantCRB, gotCRB, cmpopts.EquateEmpty()); diff != "" {
+			return errors.Errorf("ClusterRoleBinding[%s] diff: %s", wantCRB.Name, diff)
+		}
+	}
+	return nil
+}
+
+func nsReconcilerRoleBinding(repoSyncNN types.NamespacedName, roleRef v1beta1.RoleRefBase, opts ...core.MetaMutator) *rbacv1.RoleBinding {
+	reconcilerName := core.NsReconcilerName(repoSyncNN.Namespace, repoSyncNN.Name)
+	defaultOpts := []core.MetaMutator{
+		core.Labels(map[string]string{
+			metadata.SyncKindLabel:      configsync.RepoSyncKind,
+			metadata.SyncNameLabel:      repoSyncNN.Name,
+			metadata.SyncNamespaceLabel: repoSyncNN.Namespace,
+		}),
+		core.GenerateName(reconcilerName + "-"),
+		core.Namespace(repoSyncNN.Namespace),
+		core.Generation(1),
+		core.UID("1"),
+		core.ResourceVersion("1"),
+	}
+	opts = append(defaultOpts, opts...)
+	result := rolebinding("", roleRef.Name, roleRef.Kind, opts...)
+	result.Subjects = addSubjectByName(nil, reconcilerName)
+	return result
+}
+
 func validateRoleBindings(t *testing.T, wants map[core.ID]*rbacv1.RoleBinding, fakeClient *syncerFake.Client) {
 	t.Helper()
 
@@ -4036,6 +4186,49 @@ func validateRoleBindings(t *testing.T, wants map[core.ID]*rbacv1.RoleBinding, f
 
 		testutil.AssertEqual(t, want.Subjects, got.Subjects, "RoleBinding[%s] unexpected subjects", key)
 	}
+}
+
+func validateReconcilerRoleBindings(fakeClient *syncerFake.Client, syncKind string, rsRef types.NamespacedName, want map[v1beta1.RootSyncRoleRef]rbacv1.RoleBinding) error {
+	got := &rbacv1.RoleBindingList{}
+	ctx := context.Background()
+
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(map[string]string{
+			metadata.SyncKindLabel:      syncKind,
+			metadata.SyncNameLabel:      rsRef.Name,
+			metadata.SyncNamespaceLabel: rsRef.Namespace,
+		}),
+	}
+	err := fakeClient.List(ctx, got, opts)
+	if err != nil {
+		return err
+	}
+	if len(want) != len(got.Items) {
+		return errors.Errorf("want %d RoleBindings, got %d", len(want), len(got.Items))
+	}
+	gotRBMap := make(map[v1beta1.RootSyncRoleRef]rbacv1.RoleBinding)
+	for idx, rb := range got.Items {
+		roleRef := v1beta1.RootSyncRoleRef{
+			RoleRefBase: v1beta1.RoleRefBase{
+				Kind: rb.RoleRef.Kind,
+				Name: rb.RoleRef.Name,
+			},
+			Namespace: rb.Namespace,
+		}
+		gotRBMap[roleRef] = got.Items[idx]
+	}
+	for roleRef, wantRB := range want {
+		gotRB, ok := gotRBMap[roleRef]
+		if !ok {
+			return errors.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
+		}
+		wantRB.Name = gotRB.Name
+		if diff := cmp.Diff(wantRB, gotRB, cmpopts.EquateEmpty()); diff != "" {
+			return errors.Errorf("ClusterRoleBinding[%s] diff: %s", wantRB.Name, diff)
+		}
+	}
+	return nil
 }
 
 func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syncerFake.Client) error {
@@ -4062,6 +4255,34 @@ func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syn
 	got.Subjects = want.Subjects
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
 		return errors.Errorf("ClusterRoleBinding[%s] diff: %s", key, diff)
+	}
+	return nil
+}
+
+func validateRoleBinding(want *rbacv1.RoleBinding, fakeClient *syncerFake.Client) error {
+	key := client.ObjectKeyFromObject(want)
+	got := &rbacv1.RoleBinding{}
+	ctx := context.Background()
+	err := fakeClient.Get(ctx, key, got)
+	if err != nil {
+		return errors.Errorf("RoleBinding[%s] not found", key)
+	}
+	if len(want.Subjects) != len(got.Subjects) {
+		return errors.Errorf("RoleBinding[%s] has unexpected number of subjects, expected %d, got %d",
+			key, len(want.Subjects), len(got.Subjects))
+	}
+	for _, ws := range want.Subjects {
+		for _, gs := range got.Subjects {
+			if ws.Namespace == gs.Namespace && ws.Name == gs.Name {
+				if !reflect.DeepEqual(ws, gs) {
+					return errors.Errorf("RoleBinding[%s] has unexpected subject, expected %v, got %v", key, ws, gs)
+				}
+			}
+		}
+	}
+	got.Subjects = want.Subjects
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		return errors.Errorf("RoleBinding[%s] diff: %s", key, diff)
 	}
 	return nil
 }

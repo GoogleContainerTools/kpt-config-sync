@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -121,7 +122,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			// This code path is unlikely, because the custom finalizer should
 			// have already deleted the managed resources and removed the
 			// rootSyncs cache entry. But if we get here, clean up anyway.
-			if err := r.deleteManagedObjects(ctx, reconcilerRef); err != nil {
+			if err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef); err != nil {
 				r.logger(ctx).Error(err, "Failed to delete managed objects")
 				// Failed to delete a managed object.
 				// Return an error to trigger retry.
@@ -179,11 +180,8 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// This is because it's in the same namespace as the Deployment, so we don't
 	// need to copy it to the config-management-system namespace.
 
-	labelMap := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      r.syncKind,
-	}
+	rsRef := client.ObjectKeyFromObject(rs)
+	labelMap := r.managedObjectLabelMap(rsRef)
 
 	// Overwrite reconciler pod ServiceAccount.
 	var auth configsync.AuthType
@@ -207,8 +205,8 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler clusterrolebinding.
-	if err := r.configureClusterRoleBinding(ctx, reconcilerRef, rs.Spec.SafeOverride().ClusterRole); err != nil {
-		return errors.Wrap(err, "configuring cluster role binding")
+	if err := r.configureClusterRoleBinding(ctx, reconcilerRef, rsRef, rs.Spec.SafeOverride().RoleRefs); err != nil {
+		return errors.Wrap(err, "configuring RBAC bindings")
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -295,7 +293,8 @@ func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef types.Name
 // - Convert any error into RootSync status conditions
 // - Update the RootSync status
 func (r *RootSyncReconciler) teardown(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RootSync) error {
-	err := r.deleteManagedObjects(ctx, reconcilerRef)
+	rsRef := client.ObjectKeyFromObject(rs)
+	err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef)
 	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
 		// Modify the sync status,
 		// but keep the upsert error separate from the status update error.
@@ -372,7 +371,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 
 // deleteManagedObjects deletes objects managed by the reconciler-manager for
 // this RootSync.
-func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName) error {
+func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
@@ -390,8 +389,8 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
-	if err := r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)); err != nil {
-		return errors.Wrap(err, "deleting cluster role bindings")
+	if err := r.cleanRBACBindings(ctx, reconcilerRef, rsRef); err != nil {
+		return errors.Wrap(err, "deleting RBAC bindings")
 	}
 
 	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
@@ -437,6 +436,10 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Watches(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		// TODO: is it possible to watch with a label filter?
+		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
@@ -542,10 +545,9 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 		return nil
 	}
 
-	// Ignore changes from resources without the root-reconciler prefix or configsync.gke.io:root-reconciler
+	// Ignore changes from resources without the root-reconciler prefix
 	// because all the generated resources have the prefix.
-	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) &&
-		!strings.HasPrefix(objRef.Name, core.RootSyncPermissionsPrefix) {
+	if !strings.HasPrefix(objRef.Name, core.RootReconcilerPrefix) {
 		return nil
 	}
 
@@ -569,15 +571,26 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	var attachedRSNames []string
 	for _, rs := range allRootSyncs.Items {
 		reconcilerName := core.RootReconcilerName(rs.GetName())
+		// For RoleBindings/ClusterRoleBindings, the reconciler name is a prefix for generateName.
+		// For all other resources, the reconciler name is an exact match.
+		if strings.HasPrefix(objRef.Name, reconcilerName) {
+			return requeueRootSyncRequest(obj, &rs)
+		}
 		switch obj.(type) {
 		case *rbacv1.ClusterRoleBinding:
-			if objRef.Name == RootSyncPermissionsName(reconcilerName) {
+			if objRef.Name == RootSyncLegacyClusterRoleBindingName || objRef.Name == RootSyncBaseClusterRoleBindingName {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKeyFromObject(&rs)})
 				attachedRSNames = append(attachedRSNames, rs.GetName())
+			} else if strings.HasPrefix(objRef.Name, reconcilerName) {
+				return requeueRootSyncRequest(obj, &rs)
 			}
-		default: // Deployment and ServiceAccount
-			if objRef.Name == reconcilerName {
+		case *rbacv1.RoleBinding: // RoleBinding can be in any namespace
+			if strings.HasPrefix(objRef.Name, reconcilerName) {
+				return requeueRootSyncRequest(obj, &rs)
+			}
+		default: // Deployment and ServiceAccount are in the controller Namespace
+			if objRef.Name == reconcilerName && objRef.Namespace == configsync.ControllerNamespace {
 				return requeueRootSyncRequest(obj, &rs)
 			}
 		}
@@ -713,6 +726,10 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 		return err
 	}
 
+	if err := r.validateRoleRefs(rs.Spec.SafeOverride().RoleRefs); err != nil {
+		return err
+	}
+
 	return r.validateValuesFileSourcesRefs(ctx, rs)
 }
 
@@ -733,6 +750,15 @@ func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 	default:
 		return validate.InvalidSourceType(rs)
 	}
+}
+
+func (r *RootSyncReconciler) validateRoleRefs(roleRefs []v1beta1.RootSyncRoleRef) error {
+	for _, roleRef := range roleRefs {
+		if roleRef.Kind == "Role" && roleRef.Namespace == "" {
+			return errors.Errorf("namespace must be provided for roleRef with kind Role.")
+		}
+	}
+	return nil
 }
 
 // validateValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist, are immutable, and have the
@@ -779,44 +805,141 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 	return validateSecretData(rootSync.Spec.Auth, secret)
 }
 
-func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, roleConfig v1beta1.ClusterRoleOverrideSpec) error {
-	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
-	// we delete any ClusterRoleBinding that uses the old name.
-	// This ensures smooth migrations for users upgrading past that version boundary.
-	if err := r.deleteClusterRoleBinding(ctx, fmt.Sprintf("%s:%s", core.RootReconcilerPrefix, configsync.RootSyncName)); err != nil && !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "deleting old binding")
+func (r *RootSyncReconciler) listCurrentRoleRefs(ctx context.Context, rsRef types.NamespacedName) (map[v1beta1.RootSyncRoleRef]client.Object, error) {
+	currentRoleMap := make(map[v1beta1.RootSyncRoleRef]client.Object)
+	labelMap := r.managedObjectLabelMap(rsRef)
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(labelMap),
 	}
-
-	if roleConfig.Disabled {
-		return errors.Wrap( // wrap returns nil if err is nil
-			r.deleteClusterRoleBinding(ctx, RootSyncPermissionsName(reconcilerRef.Name)),
-			"ensuring clusterrolebinding does not exist",
-		)
+	rbList := rbacv1.RoleBindingList{}
+	if err := r.client.List(ctx, &rbList, opts); err != nil {
+		return nil, errors.Wrap(err, "listing RoleBindings")
 	}
-
-	if roleConfig.Name == "" {
-		roleConfig.Name = "cluster-admin"
+	for idx, rb := range rbList.Items {
+		roleRef := v1beta1.RootSyncRoleRef{
+			RoleRefBase: v1beta1.RoleRefBase{
+				Kind: rb.RoleRef.Kind,
+				Name: rb.RoleRef.Name,
+			},
+			Namespace: rb.Namespace,
+		}
+		currentRoleMap[roleRef] = &rbList.Items[idx]
 	}
-
-	_, err := r.upsertClusterRoleBinding(ctx, reconcilerRef, roleConfig.Name)
-	return errors.Wrap(err, "upserting cluster role binding")
+	crbList := rbacv1.ClusterRoleBindingList{}
+	if err := r.client.List(ctx, &crbList, opts); err != nil {
+		return nil, errors.Wrap(err, "listing ClusterRoleBindings")
+	}
+	for idx, crb := range crbList.Items {
+		roleRef := v1beta1.RootSyncRoleRef{
+			RoleRefBase: v1beta1.RoleRefBase{
+				Kind: crb.RoleRef.Kind,
+				Name: crb.RoleRef.Name,
+			},
+		}
+		currentRoleMap[roleRef] = &crbList.Items[idx]
+	}
+	return currentRoleMap, nil
 }
 
-func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, reconcilerRef types.NamespacedName, clusterRole string) (client.ObjectKey, error) {
-	crbRef := client.ObjectKey{Name: RootSyncPermissionsName(reconcilerRef.Name)}
+func (r *RootSyncReconciler) cleanRBACBindings(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
+	currentRefMap, err := r.listCurrentRoleRefs(ctx, rsRef)
+	if err != nil {
+		return err
+	}
+	for _, binding := range currentRefMap {
+		if err := r.cleanup(ctx, binding); err != nil {
+			return errors.Wrap(err, "deleting RBAC Binding")
+		}
+	}
+	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "deleting legacy binding")
+	}
+	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "deleting base binding")
+	}
+	return nil
+}
+
+func (r *RootSyncReconciler) configureClusterRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, roleRefs []v1beta1.RootSyncRoleRef) error {
+	currentRefMap, err := r.listCurrentRoleRefs(ctx, rsRef)
+	if err != nil {
+		return err
+	}
+	if len(roleRefs) == 0 {
+		// Backwards compatible behavior to default to cluster-admin
+		if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, "cluster-admin", reconcilerRef); err != nil {
+			return err
+		}
+		// Clean up any RoleRefs created previously that are no longer declared
+		for _, binding := range currentRefMap {
+			if err := r.cleanup(ctx, binding); err != nil {
+				return errors.Wrap(err, "deleting RBAC Binding")
+			}
+		}
+		if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
+			return errors.Wrap(err, "deleting base binding")
+		}
+		return nil
+	}
+	// Add the base ClusterRole for basic root reconciler functionality
+	if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, RootSyncBaseClusterRoleName, reconcilerRef); err != nil {
+		return err
+	}
+	declaredRoleRefs := roleRefs
+	// Create RoleBindings which are declared but do not exist on the cluster
+	for _, roleRef := range declaredRoleRefs {
+		if _, ok := currentRefMap[roleRef]; !ok {
+			// we need to call a separate create method here for generateName
+			if _, err := r.createRBACBinding(ctx, reconcilerRef, rsRef, roleRef.RoleRefBase, roleRef.Namespace); err != nil {
+				return errors.Wrap(err, "creating RBAC Binding")
+			}
+		}
+	}
+	// convert to map for lookup
+	declaredRefMap := make(map[v1beta1.RootSyncRoleRef]bool)
+	for _, roleRef := range declaredRoleRefs {
+		declaredRefMap[roleRef] = true
+	}
+	// For existing RoleBindings:
+	// - if they are declared in roleRefs, update
+	// - if they are no longer declared in roleRefs, delete
+	for roleRef, binding := range currentRefMap {
+		if _, ok := declaredRefMap[roleRef]; ok { // update
+			if err := r.updateRBACBinding(ctx, reconcilerRef, binding); err != nil {
+				return errors.Wrap(err, "upserting RBAC Binding")
+			}
+		} else { // Clean up any RoleRefs created previously that are no longer declared
+			if err := r.cleanup(ctx, binding); err != nil {
+				return errors.Wrap(err, "deleting RBAC Binding")
+			}
+		}
+	}
+	// in order to be backwards compatible with behavior before https://github.com/GoogleContainerTools/kpt-config-sync/pull/938
+	// we delete any ClusterRoleBinding that uses the old name (configsync.gke.io:root-reconciler).
+	// In older versions, this ClusterRoleBinding was always bound to cluster-admin.
+	// This ensures smooth migrations for users upgrading past that version boundary.
+	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "deleting legacy binding")
+	}
+	return nil
+}
+
+func (r *RootSyncReconciler) upsertSharedClusterRoleBinding(ctx context.Context, name, clusterRole string, reconcilerRef types.NamespacedName) error {
+	crbRef := client.ObjectKey{Name: name}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
 		childCRB.OwnerReferences = nil
 		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
-		childCRB.Subjects = []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		// Remove existing OwnerReferences, now that we're using finalizers.
 		childCRB.OwnerReferences = nil
 		return nil
 	})
 	if err != nil {
-		return crbRef, err
+		return err
 	}
 	if op != controllerutil.OperationResultNone {
 		r.logger(ctx).Info("Managed object upsert successful",
@@ -824,7 +947,7 @@ func (r *RootSyncReconciler) upsertClusterRoleBinding(ctx context.Context, recon
 			logFieldObjectKind, "ClusterRoleBinding",
 			logFieldOperation, op)
 	}
-	return crbRef, nil
+	return nil
 }
 
 func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.RootSync, reconcilerRef types.NamespacedName, updateFn func(*v1beta1.RootSync) error) (bool, error) {

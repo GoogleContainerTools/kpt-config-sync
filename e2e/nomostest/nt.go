@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
@@ -39,6 +40,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
@@ -965,4 +967,40 @@ func cloneCloudSourceRepo(nt *NT, repo string) (string, error) {
 		return "", err
 	}
 	return cloneDir, nil
+}
+
+// ListReconcilerRoleBindings is a convenience method for listing all RoleBindings
+// associated with a reconciler.
+func (nt *NT) ListReconcilerRoleBindings(syncKind string, rsRef types.NamespacedName) ([]rbacv1.RoleBinding, error) {
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(map[string]string{
+			metadata.SyncKindLabel:      syncKind,
+			metadata.SyncNameLabel:      rsRef.Name,
+			metadata.SyncNamespaceLabel: rsRef.Namespace,
+		}),
+	}
+	rbList := rbacv1.RoleBindingList{}
+	if err := nt.KubeClient.List(&rbList, opts); err != nil {
+		return nil, errors.Wrap(err, "listing RoleBindings")
+	}
+	return rbList.Items, nil
+}
+
+// ListReconcilerClusterRoleBindings is a convenience method for listing all
+// ClusterRoleBindings associated with a reconciler.
+func (nt *NT) ListReconcilerClusterRoleBindings(syncKind string, rsRef types.NamespacedName) ([]rbacv1.ClusterRoleBinding, error) {
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(map[string]string{
+			metadata.SyncKindLabel:      syncKind,
+			metadata.SyncNameLabel:      rsRef.Name,
+			metadata.SyncNamespaceLabel: rsRef.Namespace,
+		}),
+	}
+	crbList := rbacv1.ClusterRoleBindingList{}
+	if err := nt.KubeClient.List(&crbList, opts); err != nil {
+		return nil, errors.Wrap(err, "listing ClusterRoleBindings")
+	}
+	return crbList.Items, nil
 }

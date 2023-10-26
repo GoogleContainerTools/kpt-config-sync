@@ -421,6 +421,26 @@ spec:
                           x-kubernetes-int-or-string: true
                       type: object
                     type: array
+                  roleRefs:
+                    description: roleRefs is a list of Roles or ClusterRoles to create
+                      bindings. Roles must be declared in the same namespace as the
+                      RepoSync. If unset, no bindings will be created.
+                    items:
+                      description: RoleRefBase is the base struct for references to
+                        Roles and ClusterRoles. These references are used to create
+                        bindings for both RootSyncs and RepoSyncs.
+                      properties:
+                        kind:
+                          description: kind refers to the Kind of the RBAC resource.
+                            Accepted values are Role and ClusterRole.
+                          pattern: ^(Role|ClusterRole)$
+                          type: string
+                        name:
+                          description: name is the name of the Role or ClusterRole
+                            resource.
+                          type: string
+                      type: object
+                    type: array
                   statusMode:
                     description: statusMode controls whether the actuation status
                       such as apply failed or not should be embedded into the ResourceGroup
@@ -1464,6 +1484,26 @@ spec:
                             request of a container
                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                           x-kubernetes-int-or-string: true
+                      type: object
+                    type: array
+                  roleRefs:
+                    description: roleRefs is a list of Roles or ClusterRoles to create
+                      RoleBindings to. Roles must be declared in the same namespace
+                      as the RepoSync. If unset, no bindings will be created.
+                    items:
+                      description: RoleRefBase is the base struct for references to
+                        Roles and ClusterRoles. These references are used to create
+                        bindings for both RootSyncs and RepoSyncs.
+                      properties:
+                        kind:
+                          description: kind refers to the Kind of the RBAC resource.
+                            Accepted values are Role and ClusterRole.
+                          pattern: ^(Role|ClusterRole)$
+                          type: string
+                        name:
+                          description: name is the name of the Role or ClusterRole
+                            resource.
+                          type: string
                       type: object
                     type: array
                   statusMode:

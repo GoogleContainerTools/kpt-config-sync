@@ -637,3 +637,68 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 
 	return nil
 }
+
+func (r *reconcilerBase) managedObjectLabelMap(rsRef types.NamespacedName) map[string]string {
+	return map[string]string{
+		metadata.SyncNamespaceLabel: rsRef.Namespace,
+		metadata.SyncNameLabel:      rsRef.Name,
+		metadata.SyncKindLabel:      r.syncKind,
+	}
+}
+
+func (r *reconcilerBase) createRBACBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, roleRef v1beta1.RoleRefBase, bindingNamespace string) (client.ObjectKey, error) {
+	var binding client.Object
+	if bindingNamespace == "" {
+		crb := rbacv1.ClusterRoleBinding{}
+		crb.RoleRef = rolereference(roleRef.Name, roleRef.Kind)
+		crb.Subjects = []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+		binding = &crb
+	} else {
+		rb := rbacv1.RoleBinding{}
+		rb.Namespace = bindingNamespace
+		rb.RoleRef = rolereference(roleRef.Name, roleRef.Kind)
+		rb.Subjects = []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+		binding = &rb
+	}
+	// use generateName to produce a unique name. A predictable unique name
+	// is not feasible, since it would risk hitting length constraints.
+	// e.g. reconciler.name + roleRef.kind + roleRef.name
+	binding.SetGenerateName(fmt.Sprintf("%s-", reconcilerRef.Name))
+	binding.SetLabels(r.managedObjectLabelMap(rsRef))
+
+	if err := r.client.Create(ctx, binding); err != nil {
+		return client.ObjectKey{}, err
+	}
+	rbRef := client.ObjectKey{
+		Name:      binding.GetName(),
+		Namespace: binding.GetNamespace(),
+	}
+	r.logger(ctx).Info("Managed object create successful",
+		logFieldObjectRef, rbRef.String(),
+		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
+	return rbRef, nil
+}
+
+func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef types.NamespacedName, binding client.Object) error {
+	existingBinding := binding.DeepCopyObject()
+	subjects := []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+	if crb, ok := binding.(*rbacv1.ClusterRoleBinding); ok {
+		crb.Subjects = subjects
+	} else if rb, ok := binding.(*rbacv1.RoleBinding); ok {
+		rb.Subjects = subjects
+	}
+	if equality.Semantic.DeepEqual(existingBinding, binding) {
+		return nil
+	}
+	if err := r.client.Update(ctx, binding); err != nil {
+		return err
+	}
+	bindingNN := types.NamespacedName{
+		Name:      binding.GetName(),
+		Namespace: binding.GetNamespace(),
+	}
+	r.logger(ctx).Info("Managed object update successful",
+		logFieldObjectRef, bindingNN.String(),
+		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
+	return nil
+}

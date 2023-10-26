@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -219,11 +220,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return errors.Wrap(err, "upserting CA cert secret")
 	}
 
-	labelMap := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      r.syncKind,
-	}
+	labelMap := r.managedObjectLabelMap(rsRef)
 
 	// Overwrite reconciler pod ServiceAccount.
 	var auth configsync.AuthType
@@ -247,7 +244,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler rolebinding.
-	if _, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+	if err := r.configureRoleBindings(ctx, reconcilerRef, rsRef, rs.Spec.SafeOverride().RoleRefs); err != nil {
 		return errors.Wrap(err, "upserting role binding")
 	}
 
@@ -437,7 +434,7 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 		return errors.Wrap(err, "deleting secrets")
 	}
 
-	if err := r.deleteRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+	if err := r.cleanRoleBindings(ctx, reconcilerRef, rsRef); err != nil {
 		return errors.Wrap(err, "deleting role binding")
 	}
 
@@ -763,8 +760,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 
 	// Ignore changes from resources without the ns-reconciler prefix or configsync.gke.io:ns-reconciler
 	// because all the generated resources have the prefix.
-	nsRoleBindingName := RepoSyncPermissionsName()
-	if !strings.HasPrefix(objRef.Name, core.NsReconcilerPrefix) && objRef.Name != nsRoleBindingName {
+	if !strings.HasPrefix(objRef.Name, core.NsReconcilerPrefix) && objRef.Name != RepoSyncBaseRoleBindingName {
 		return nil
 	}
 
@@ -798,11 +794,14 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.RoleBinding:
-			if objRef.Name == nsRoleBindingName && objRef.Namespace == rs.Namespace {
+			if objRef.Name == RepoSyncBaseRoleBindingName && objRef.Namespace == rs.Namespace {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKeyFromObject(&rs),
 				})
 				attachedRSNames = append(attachedRSNames, rs.GetName())
+			} else if strings.HasPrefix(objRef.Name, reconcilerName) && objRef.Namespace == rs.Namespace {
+				// custom roleRef RoleBinding
+				return requeueRepoSyncRequest(obj, client.ObjectKeyFromObject(&rs))
 			}
 		default: // Deployment and ServiceAccount
 			if objRef.Name == reconcilerName {
@@ -938,22 +937,104 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	return validateSecretData(authType, secret)
 }
 
-func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *RepoSyncReconciler) listCurrentRoleRefs(ctx context.Context, rsRef types.NamespacedName) (map[v1beta1.RoleRefBase]client.Object, error) {
+	rbList := rbacv1.RoleBindingList{}
+	labelMap := r.managedObjectLabelMap(rsRef)
+	opts := &client.ListOptions{}
+	opts.Namespace = rsRef.Namespace
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(labelMap),
+	}
+	if err := r.client.List(ctx, &rbList, opts); err != nil {
+		return nil, errors.Wrap(err, "listing RoleBindings")
+	}
+	currentRoleMap := make(map[v1beta1.RoleRefBase]client.Object)
+	for idx, rb := range rbList.Items {
+		roleRef := v1beta1.RoleRefBase{
+			Kind: rb.RoleRef.Kind,
+			Name: rb.RoleRef.Name,
+		}
+		currentRoleMap[roleRef] = &rbList.Items[idx]
+	}
+	return currentRoleMap, nil
+}
+
+func (r *RepoSyncReconciler) cleanRoleBindings(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
+	currentRefMap, err := r.listCurrentRoleRefs(ctx, rsRef)
+	if err != nil {
+		return err
+	}
+	for _, roleBinding := range currentRefMap {
+		if err := r.deleteRoleBinding(ctx, roleBinding.GetName(), roleBinding.GetNamespace()); err != nil {
+			return errors.Wrap(err, "deleting RoleBinding")
+		}
+	}
+	if err := r.deleteSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+		return errors.Wrap(err, "deleting base RoleBinding")
+	}
+	return nil
+}
+
+// configures RoleBindings for the RepoSync reconciler based on the RoleRefs
+// provided by the RepoSync spec. Always creates a RoleBinding to the base
+// ClusterRole for RepoSyncs to enable basic functionality.
+func (r *RepoSyncReconciler) configureRoleBindings(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, roleRefs []v1beta1.RoleRefBase) error {
+	currentRefMap, err := r.listCurrentRoleRefs(ctx, rsRef)
+	if err != nil {
+		return err
+	}
+	// Add the base ClusterRole for basic ns reconciler functionality
+	if err := r.upsertSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+		return err
+	}
+	declaredRoleRefs := roleRefs
+	// Create RoleBindings which are declared but do not exist on the cluster
+	for _, roleRef := range declaredRoleRefs {
+		if _, ok := currentRefMap[roleRef]; !ok {
+			// we need to call a separate create method here for generateName
+			if _, err := r.createRBACBinding(ctx, reconcilerRef, rsRef, roleRef, rsRef.Namespace); err != nil {
+				return errors.Wrap(err, "creating RoleBinding")
+			}
+		}
+	}
+	// convert to map for lookup
+	declaredRefMap := make(map[v1beta1.RoleRefBase]bool)
+	for _, roleRef := range declaredRoleRefs {
+		declaredRefMap[roleRef] = true
+	}
+	// For existing RoleBindings:
+	// - if they are declared in roleRefs, update
+	// - if they are no longer declared in roleRefs, delete
+	for roleRef, roleBinding := range currentRefMap {
+		if _, ok := declaredRefMap[roleRef]; ok { // update
+			if err := r.updateRBACBinding(ctx, reconcilerRef, roleBinding); err != nil {
+				return errors.Wrap(err, "updating RoleBinding")
+			}
+		} else { // Clean up any RoleRefs created previously that are no longer declared
+			if err := r.cleanup(ctx, roleBinding); err != nil {
+				return errors.Wrap(err, "deleting RoleBinding")
+			}
+		}
+	}
+	return nil
+}
+
+func (r *RepoSyncReconciler) upsertSharedRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
 	rbRef := client.ObjectKey{
 		Namespace: rsRef.Namespace,
-		Name:      RepoSyncPermissionsName(),
+		Name:      RepoSyncBaseClusterRoleName,
 	}
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
-		childRB.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
+		childRB.RoleRef = rolereference(RepoSyncBaseClusterRoleName, "ClusterRole")
 		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		return nil
 	})
 	if err != nil {
-		return rbRef, err
+		return err
 	}
 	if op != controllerutil.OperationResultNone {
 		r.logger(ctx).Info("Managed object upsert successful",
@@ -961,7 +1042,7 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRe
 			logFieldObjectKind, "RoleBinding",
 			logFieldOperation, op)
 	}
-	return rbRef, nil
+	return nil
 }
 
 func (r *RepoSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, updateFn func(*v1beta1.RepoSync) error) (bool, error) {

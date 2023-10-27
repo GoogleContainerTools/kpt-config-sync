@@ -16,7 +16,7 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -83,7 +83,7 @@ func TestStressCRD(t *testing.T) {
 	nt.T.Logf("Delete the %q CRD if needed", crdName)
 	nt.MustKubectl("delete", "crd", crdName, "--ignore-not-found")
 
-	crdContent, err := ioutil.ReadFile("../testdata/customresources/changed_schema_crds/old_schema_crd.yaml")
+	crdContent, err := os.ReadFile("../testdata/customresources/changed_schema_crds/old_schema_crd.yaml")
 	if err != nil {
 		nt.T.Fatal(err)
 	}

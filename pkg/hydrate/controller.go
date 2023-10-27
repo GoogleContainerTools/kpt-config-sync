@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -271,7 +270,7 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 // and wait for the next hydration loop to retry the hydration.
 func DoneCommit(donePath string) string {
 	if _, err := os.Stat(donePath); err == nil {
-		commit, err := ioutil.ReadFile(donePath)
+		commit, err := os.ReadFile(donePath)
 		if err != nil {
 			klog.Warningf("unable to read the done file %s: %v", donePath, err)
 			return ""
@@ -293,7 +292,7 @@ func exportError(commit, root, errorFile string, hydrationError HydrationError) 
 		}
 	}
 
-	tmpFile, err := ioutil.TempFile(root, "tmp-err-")
+	tmpFile, err := os.CreateTemp(root, "tmp-err-")
 	if err != nil {
 		return errors.Wrapf(err, "unable to create temporary error-file under directory %s", root)
 	}

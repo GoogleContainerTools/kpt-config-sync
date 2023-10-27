@@ -620,7 +620,7 @@ func archiveAndPushOCIImage(imageName string, dir string, options ...remote.Opti
 	}
 
 	// Make new layer
-	tarFile, err := ioutil.TempFile("", "tar")
+	tarFile, err := os.CreateTemp("", "tar")
 	if err != nil {
 		return "", err
 	}

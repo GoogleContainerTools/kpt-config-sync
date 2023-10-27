@@ -22,7 +22,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -249,7 +248,7 @@ func downloadSSHKey(nt *NT) string {
 		nt.T.Fatal("downloading SSH key:", err)
 	}
 
-	if err := ioutil.WriteFile(privateKeyPath(nt), []byte(out), 0600); err != nil {
+	if err := os.WriteFile(privateKeyPath(nt), []byte(out), 0600); err != nil {
 		nt.T.Fatal("saving SSH key:", err)
 	}
 

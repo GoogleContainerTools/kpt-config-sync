@@ -15,7 +15,6 @@
 package initialize
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,7 +116,7 @@ func Initialize(root string, force bool) error {
 }
 
 func checkEmpty(dir cmpath.Absolute) error {
-	files, err := ioutil.ReadDir(dir.OSPath())
+	files, err := os.ReadDir(dir.OSPath())
 	if err != nil {
 		return errors.Wrapf(err, "error reading %q", dir)
 	}

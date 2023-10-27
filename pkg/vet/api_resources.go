@@ -16,7 +16,6 @@ package vet
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -40,7 +39,7 @@ var APIResourcesCommand = fmt.Sprintf("kubectl api-resources > %s", APIResources
 // file is the file to read API Resources from.
 func AddCachedAPIResources(file cmpath.Absolute) discovery.AddResourcesFunc {
 	return func(scoper *discovery.Scoper) status.MultiError {
-		data, err := ioutil.ReadFile(file.OSPath())
+		data, err := os.ReadFile(file.OSPath())
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil

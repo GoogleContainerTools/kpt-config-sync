@@ -17,7 +17,6 @@ package nomostest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -215,15 +214,15 @@ func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error
 }
 
 func copyFile(src, dst string) error {
-	bytes, err := ioutil.ReadFile(src)
+	bytes, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dst, bytes, fileMode)
+	return os.WriteFile(dst, bytes, fileMode)
 }
 
 func copyDirContents(src, dest string) error {
-	files, err := ioutil.ReadDir(src)
+	files, err := os.ReadDir(src)
 	if err != nil {
 		return err
 	}
@@ -271,7 +270,7 @@ func parseManifestDir(dirPath string) ([]client.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := ioutil.ReadDir(dirPath)
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}

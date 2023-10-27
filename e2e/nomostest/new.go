@@ -16,7 +16,6 @@ package nomostest
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -501,7 +500,7 @@ func TestDir(t nomostesting.NTB) string {
 	if err != nil {
 		t.Fatalf("creating nomos-e2e tmp directory: %v", err)
 	}
-	tmpDir, err := ioutil.TempDir(filepath.Join(os.TempDir(), NomosE2E), name)
+	tmpDir, err := os.MkdirTemp(filepath.Join(os.TempDir(), NomosE2E), name)
 	if err != nil {
 		t.Fatalf("creating nomos-e2e tmp test subdirectory %s: %v", tmpDir, err)
 	}

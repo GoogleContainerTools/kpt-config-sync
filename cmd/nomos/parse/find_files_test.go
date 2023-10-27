@@ -15,7 +15,6 @@
 package parse
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"sort"
@@ -51,7 +50,7 @@ func TestListPolicyFiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			dirP, err := ioutil.TempDir(os.TempDir(), "nomos-git-test")
+			dirP, err := os.MkdirTemp(os.TempDir(), "nomos-git-test")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -15,7 +15,6 @@
 package filesystemtest
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -44,7 +43,7 @@ type TestDir struct {
 // The test directory is automatically cleaned at the end of the test.
 func NewTestDir(t *testing.T, opts ...TestDirOpt) *TestDir {
 	t.Helper()
-	tmp, err := ioutil.TempDir("", "nomos-test-")
+	tmp, err := os.MkdirTemp("", "nomos-test-")
 	if err != nil {
 		t.Fatalf("Failed to create test directory %v", err)
 	}
@@ -104,7 +103,7 @@ func FileContents(file string, contents string) TestDirOpt {
 	return func(t *testing.T, testDir cmpath.Absolute) {
 		Dir(path.Dir(file))(t, testDir)
 		p := testDir.Join(cmpath.RelativeSlash(file))
-		if err := ioutil.WriteFile(p.OSPath(), []byte(contents), os.ModePerm); err != nil {
+		if err := os.WriteFile(p.OSPath(), []byte(contents), os.ModePerm); err != nil {
 			t.Fatalf("writing contents to file %q: %v", p.OSPath(), err)
 		}
 	}

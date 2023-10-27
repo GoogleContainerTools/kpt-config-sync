@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -62,7 +61,7 @@ func GetVersionReadCloser(ctx context.Context, contexts []string) (io.ReadCloser
 		return nil, errors.Wrap(err, "failed to close version file writer with error: %v")
 	}
 
-	return ioutil.NopCloser(r), nil
+	return io.NopCloser(r), nil
 }
 
 var (

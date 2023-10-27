@@ -15,7 +15,7 @@
 package e2e
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -98,7 +98,7 @@ metadata:
   name: test-ns
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -125,7 +125,7 @@ metadata:
   name: test-ns
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -161,7 +161,7 @@ metadata:
 		nt.T.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "webhook.yaml"), webhook, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "webhook.yaml"), webhook, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 

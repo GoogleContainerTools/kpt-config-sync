@@ -16,7 +16,7 @@ package openapitest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 
@@ -36,7 +36,7 @@ func Doc() (*openapiv2.Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

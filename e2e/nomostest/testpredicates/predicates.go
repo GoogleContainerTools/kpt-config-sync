@@ -1171,3 +1171,31 @@ func RootSyncSpecOverrideEquals(expected *v1beta1.RootSyncOverrideSpec) Predicat
 		return nil
 	}
 }
+
+// DeploymentContainerArgsContains verifies a container
+// in reconciler deployment has the expected arg
+func DeploymentContainerArgsContains(containerName, args string) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		dep, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(obj, &appsv1.Deployment{})
+		}
+		container := ContainerByName(dep, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		return containerArgsContains(container, args)
+	}
+}
+
+func containerArgsContains(container *corev1.Container, expectedArg string) error {
+	for _, actualArg := range container.Args {
+		if actualArg == expectedArg {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected arg not found: %s", expectedArg)
+}

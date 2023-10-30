@@ -462,6 +462,16 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 	}
 	configs = filterConfigs(contexts, configs)
 
+	if klog.V(4).Enabled() {
+		// Sort contexts for consistent ordering in the log
+		var contexts []string
+		for ctxName := range configs {
+			contexts = append(contexts, ctxName)
+		}
+		sort.Strings(contexts)
+		klog.V(4).Infof("Config contexts after filtering: %s", strings.Join(contexts, ", "))
+	}
+
 	var mapMutex sync.Mutex
 	var wg sync.WaitGroup
 	clientMap := make(map[string]*ClusterClient)

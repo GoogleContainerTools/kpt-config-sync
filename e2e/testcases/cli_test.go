@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -981,7 +980,7 @@ func TestNomosImage(t *testing.T) {
 // getBugReportZipName find and returns the zip name of bugreport under test dir
 // or error if no bugreport zip found
 func getBugReportZipName(dir string, nt *nomostest.NT) (string, error) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

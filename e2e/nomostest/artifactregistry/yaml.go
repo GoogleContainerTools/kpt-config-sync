@@ -15,7 +15,6 @@
 package artifactregistry
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -48,7 +47,7 @@ func WriteObjectYAMLFile(nt *nomostest.NT, path string, obj client.Object) error
 			return errors.Wrapf(err, "making parent directories: %s", dirPath)
 		}
 	}
-	if err := ioutil.WriteFile(path, bytes, fileMode); err != nil {
+	if err := os.WriteFile(path, bytes, fileMode); err != nil {
 		return errors.Wrapf(err, "writing file: %s", path)
 	}
 	return nil

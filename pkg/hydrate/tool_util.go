@@ -17,7 +17,6 @@ package hydrate
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,7 +60,7 @@ var (
 
 // needsKustomize checks if there is a Kustomization config file under the directory.
 func needsKustomize(dir string) (bool, error) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return false, errors.Wrapf(err, "unable to traverse the directory: %s", dir)
 	}
@@ -233,7 +232,7 @@ func ValidateAndRunKustomize(sourcePath string) (cmpath.Absolute, error) {
 
 	// Save the 'kustomize build' output to a temp directory for further
 	// parsing or validation.
-	tmpHydratedDir, err := ioutil.TempDir(os.TempDir(), "hydrated-")
+	tmpHydratedDir, err := os.MkdirTemp(os.TempDir(), "hydrated-")
 	if err != nil {
 		return output, err
 	}

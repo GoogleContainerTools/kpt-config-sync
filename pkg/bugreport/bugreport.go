@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -610,7 +609,7 @@ func (b *BugReporter) appendPrettyJSON(rd []Readable, pathName string, object in
 		b.ErrorList = append(b.ErrorList, fmt.Errorf("invalid json response from resources %s: %v", pathName, err))
 	} else {
 		rd = append(rd, Readable{
-			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+			ReadCloser: io.NopCloser(bytes.NewReader(data)),
 			Name:       fmt.Sprintf("%s.json", pathName),
 		})
 	}
@@ -619,7 +618,7 @@ func (b *BugReporter) appendPrettyJSON(rd []Readable, pathName string, object in
 		b.ErrorList = append(b.ErrorList, fmt.Errorf("invalid yaml response from resources %s: %v", pathName, err))
 	} else {
 		rd = append(rd, Readable{
-			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+			ReadCloser: io.NopCloser(bytes.NewReader(data)),
 			Name:       fmt.Sprintf("%s.yaml", pathName),
 		})
 	}

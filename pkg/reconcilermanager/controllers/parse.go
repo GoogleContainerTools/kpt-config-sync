@@ -15,7 +15,7 @@
 package controllers
 
 import (
-	"io/ioutil"
+	"os"
 
 	"sigs.k8s.io/yaml"
 
@@ -41,7 +41,7 @@ var parseDeployment = func(de *appsv1.Deployment) error {
 }
 
 func parseFromDeploymentConfig(config string, obj *appsv1.Deployment) error {
-	yamlDep, err := ioutil.ReadFile(config)
+	yamlDep, err := os.ReadFile(config)
 	if err != nil {
 		return err
 	}

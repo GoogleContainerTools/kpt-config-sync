@@ -16,7 +16,7 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -134,7 +134,7 @@ func TestMustRemoveCustomResourceWithDefinitionV1(t *testing.T) {
 
 func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
-	crdContent, err := ioutil.ReadFile(crdFile)
+	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestAddAndRemoveCustomResourceV1Beta1(t *testing.T) {
 
 func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string) {
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
-	crdContent, err := ioutil.ReadFile(crdFile)
+	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestMustRemoveUnManagedCustomResourceV1Beta1(t *testing.T) {
 
 func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
-	crdContent, err := ioutil.ReadFile(crdFile)
+	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 
 	// Update the CRD from version v1 to version v2.
 	crdFile = filepath.Join(".", "..", "testdata", "customresources", dir, "clusteranvil-crd-v2.yaml")
-	crdContent, err = ioutil.ReadFile(crdFile)
+	crdContent, err = os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func TestAddUpdateRemoveClusterScopedCRDV1Beta1(t *testing.T) {
 
 func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
-	crdContent, err := ioutil.ReadFile(crdFile)
+	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 
 	// Update the CRD from version v1 to version v2.
 	crdFile = filepath.Join(".", "..", "testdata", "customresources", dir, "anvil-crd-v2.yaml")
-	crdContent, err = ioutil.ReadFile(crdFile)
+	crdContent, err = os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -451,7 +451,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 
 	// Update CRD and CR to only support V2
 	crdFile = filepath.Join(".", "..", "testdata", "customresources", dir, "anvil-crd-only-v2.yaml")
-	crdContent, err = ioutil.ReadFile(crdFile)
+	crdContent, err = os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -507,7 +507,7 @@ func TestLargeCRD(t *testing.T) {
 
 	for _, file := range []string{"challenges-acme-cert-manager-io.yaml", "solrclouds-solr-apache-org.yaml"} {
 		crdFile := filepath.Join(".", "..", "testdata", "customresources", file)
-		crdContent, err := ioutil.ReadFile(crdFile)
+		crdContent, err := os.ReadFile(crdFile)
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -544,7 +544,7 @@ func TestLargeCRD(t *testing.T) {
 
 	// update one CRD
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "challenges-acme-cert-manager-io_with_new_label.yaml")
-	crdContent, err := ioutil.ReadFile(crdFile)
+	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

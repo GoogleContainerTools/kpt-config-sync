@@ -934,7 +934,7 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	return validateSecretData(authType, secret)
 }
 
-func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, labelMap map[string]string) (client.ObjectKey, error) {
 	rbRef := client.ObjectKey{
 		Namespace: rsRef.Namespace,
 		Name:      RepoSyncPermissionsName(),
@@ -944,6 +944,7 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRe
 	childRB.Namespace = rbRef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
+		core.AddLabels(childRB, labelMap)
 		childRB.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
 		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		return nil

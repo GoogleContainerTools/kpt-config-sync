@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -520,7 +521,10 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	// Update object to apply unwanted drift
 	err = modify(obj)
 	require.NoError(t, err)
-	err = fakeClient.Update(ctx, obj)
+	// reconciler-manager makes async changes, so retry on conflict
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return fakeClient.Update(ctx, obj)
+	})
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout

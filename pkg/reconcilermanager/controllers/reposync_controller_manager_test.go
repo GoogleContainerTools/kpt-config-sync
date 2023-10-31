@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -262,7 +263,10 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 
 	t.Log("updating RepoSync to make it invalid")
 	rs.Spec.Auth = configsync.AuthToken
-	err = fakeClient.Update(ctx, rs)
+	// reconciler-manager makes async changes, so retry on conflict
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return fakeClient.Update(ctx, rs)
+	})
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync

@@ -128,9 +128,9 @@ func (r *reconcilerBase) upsertServiceAccount(
 		// Update annotation when Workload Identity is enabled on a GKE cluster.
 		// In case, Workload Identity is not enabled on a cluster and spec.git.auth: gcpserviceaccount,
 		// the added annotation will be a no-op.
-		if auth == configsync.AuthGCPServiceAccount {
-			core.SetAnnotation(childSA, GCPSAAnnotationKey, email)
-		}
+		// if auth == configsync.AuthGCPServiceAccount {
+		// 	core.SetAnnotation(childSA, GCPSAAnnotationKey, email)
+		// }
 		return nil
 	})
 	if err != nil {

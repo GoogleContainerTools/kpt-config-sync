@@ -143,12 +143,12 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	switch oci.Auth {
 	case configsync.AuthGCENode, configsync.AuthNone:
 	case configsync.AuthGCPServiceAccount:
-		if oci.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(rs)
-		}
-		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(rs)
-		}
+		// if oci.GCPServiceAccountEmail == "" {
+		// 	return MissingGCPSAEmail(rs)
+		// }
+		// if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
+		// 	return InvalidGCPSAEmail(rs)
+		// }
 	default:
 		return InvalidOciAuthType(rs)
 	}

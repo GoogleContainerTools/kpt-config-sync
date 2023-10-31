@@ -33,7 +33,6 @@ import (
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/policycontroller"
 
 	corev1 "k8s.io/api/core/v1"
@@ -439,7 +438,7 @@ func (b *BugReporter) FetchCMSystemPods(ctx context.Context) (rd []Readable) {
 		configmanagement.ControllerNamespace,
 		metav1.NamespaceSystem,
 		configmanagement.RGControllerNamespace,
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		policycontroller.NamespaceSystem,
 	}
 

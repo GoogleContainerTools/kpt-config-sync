@@ -36,7 +36,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/util/log"
@@ -50,7 +49,7 @@ import (
 var sharedTestNamespaces = []string{
 	configsync.ControllerNamespace,
 	configmanagement.RGControllerNamespace,
-	metrics.MonitoringNamespace,
+	configmanagement.MonitoringNamespace,
 	testGitNamespace,
 	prometheusNamespace,
 }

@@ -206,7 +206,7 @@ func (nt *NT) Must(args ...interface{}) {
 // CSNamespaces is the namespaces of the Config Sync components.
 var CSNamespaces = []string{
 	configmanagement.ControllerNamespace,
-	ocmetrics.MonitoringNamespace,
+	configmanagement.MonitoringNamespace,
 	configmanagement.RGControllerNamespace,
 }
 
@@ -675,12 +675,12 @@ func (nt *NT) portForwardOtelCollector() {
 		nt.T.Fatal("otel collector port forward already initialized")
 	}
 	nt.otelCollectorPortForwarder = nt.newPortForwarder(
-		ocmetrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		ocmetrics.OtelCollectorName,
 		fmt.Sprintf(":%d", testmetrics.OtelCollectorMetricsPort),
 	)
 	nt.startPortForwarder(
-		ocmetrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		ocmetrics.OtelCollectorName,
 		nt.otelCollectorPortForwarder,
 	)

@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -98,7 +99,7 @@ func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 func otelCollectorDeploymentRef() client.ObjectKey {
 	return client.ObjectKey{
 		Name:      metrics.OtelCollectorName,
-		Namespace: metrics.MonitoringNamespace,
+		Namespace: configmanagement.MonitoringNamespace,
 	}
 }
 
@@ -143,7 +144,7 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 
 	cm := &corev1.ConfigMap{}
 	cm.Name = metrics.OtelCollectorGooglecloud
-	cm.Namespace = metrics.MonitoringNamespace
+	cm.Namespace = configmanagement.MonitoringNamespace
 	op, err := CreateOrUpdate(ctx, r.client, cm, func() error {
 		cm.Labels = map[string]string{
 			"app":                metrics.OpenTelemetry,
@@ -198,13 +199,13 @@ func (r *OtelReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	// Process create / update events for resources in the `config-management-monitoring` namespace.
 	p := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return e.Object.GetNamespace() == metrics.MonitoringNamespace
+			return e.Object.GetNamespace() == configmanagement.MonitoringNamespace
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.ObjectNew.GetNamespace() == metrics.MonitoringNamespace
+			return e.ObjectNew.GetNamespace() == configmanagement.MonitoringNamespace
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			return e.Object.GetNamespace() == metrics.MonitoringNamespace
+			return e.Object.GetNamespace() == configmanagement.MonitoringNamespace
 		},
 	}
 	return controllerruntime.NewControllerManagedBy(mgr).

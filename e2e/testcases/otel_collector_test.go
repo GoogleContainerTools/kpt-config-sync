@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -82,14 +83,14 @@ func TestOtelCollectorDeployment(t *testing.T) {
 		nt.MustKubectl("delete", "-f", "../testdata/otel-collector/otel-cm-monarch-rejected-labels.yaml", "--ignore-not-found")
 		nt.T.Log("Restart otel-collector pod to reset the ConfigMap and log")
 		nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
-		if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
+		if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
 			nt.T.Errorf("otel-collector pod failed to come up after a restart: %v", err)
 		}
 	})
 
 	nt.T.Log("Restart otel-collector pod to refresh the ConfigMap, log and IAM")
 	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -123,7 +124,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	}
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
-	err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, GCMExportErrorCaption)
+	err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, GCMExportErrorCaption)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -136,13 +137,13 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/otel-collector/otel-cm-monarch-rejected-labels.yaml")
 	nt.T.Log("Restart otel-collector pod to refresh the ConfigMap and log")
 	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Checking the otel-collector log contains failure...")
 	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, GCMExportErrorCaption)
+		return validateDeploymentLogHasFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, GCMExportErrorCaption)
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -166,7 +167,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 
 	nt.T.Log("Restarting the otel-collector pod to refresh the service account")
 	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace); err != nil {
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -224,7 +225,7 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 
 		nt.T.Cleanup(func() {
 			ksa := &corev1.ServiceAccount{}
-			if err := nt.KubeClient.Get(DefaultMonitorKSA, ocmetrics.MonitoringNamespace, ksa); err != nil {
+			if err := nt.KubeClient.Get(DefaultMonitorKSA, configmanagement.MonitoringNamespace, ksa); err != nil {
 				if apierrors.IsNotFound(err) {
 					return // no need to remove annotation
 				}
@@ -238,7 +239,7 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 
 		nt.T.Log(fmt.Sprintf("Workload identity enabled, adding KSA annotation to use %s service account", MonitorGSA))
 		ksa := &corev1.ServiceAccount{}
-		if err := nt.KubeClient.Get(DefaultMonitorKSA, ocmetrics.MonitoringNamespace, ksa); err != nil {
+		if err := nt.KubeClient.Get(DefaultMonitorKSA, configmanagement.MonitoringNamespace, ksa); err != nil {
 			nt.T.Fatalf("failed to get service account: %v", err)
 		}
 		core.SetAnnotation(ksa, "iam.gke.io/gcp-service-account", gsaEmail)

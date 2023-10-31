@@ -15,7 +15,6 @@
 package nonhierarchical
 
 import (
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,9 +24,9 @@ const IllegalNamespaceErrorCode = "1034"
 
 var illegalNamespaceError = status.NewErrorBuilder(IllegalNamespaceErrorCode)
 
-// IllegalNamespace reports that the config-management-system Namespace MUST NOT be declared.
+// IllegalNamespace reports that the controller Namespaces MUST NOT be declared.
 func IllegalNamespace(resource client.Object) status.Error {
 	return illegalNamespaceError.
-		Sprintf("The %q Namespace must not be declared", configmanagement.ControllerNamespace).
+		Sprintf("The %q Namespace must not be declared", resource.GetName()).
 		BuildWithResources(resource)
 }

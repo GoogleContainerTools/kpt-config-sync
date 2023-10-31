@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	// kubectl auth provider plugins
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"kpt.dev/configsync/pkg/util"
 )
 

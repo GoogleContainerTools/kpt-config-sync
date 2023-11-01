@@ -1071,9 +1071,12 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		} else {
 			containerResourceDefaults = ReconcilerContainerResourceDefaults()
 		}
+		var containerLogLevelDefaults = ReconcilerContainerLogLevelDefaults()
+
 		overrides := rs.Spec.SafeOverride()
 		containerResources := setContainerResourceDefaults(overrides.Resources,
 			containerResourceDefaults)
+		containerLogLevels := setContainerLogLevelDefaults(overrides.LogLevels, containerLogLevelDefaults)
 
 		var updatedContainers []corev1.Container
 		// Mutate spec.Containers to update name, configmap references and volumemounts.
@@ -1145,7 +1148,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			if addContainer {
 				// Common mutations for all added containers
 				mutateContainerResource(&container, containerResources)
-				mutateContainerLogLevel(&container, overrides.LogLevels)
+				mutateContainerLogLevel(&container, containerLogLevels)
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

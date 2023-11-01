@@ -26,18 +26,27 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	clientdiscovery "k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
-	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/decode"
+	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"kpt.dev/configsync/pkg/util/discovery"
+	"kpt.dev/configsync/pkg/util/namespaceconfig"
 	"kpt.dev/configsync/pkg/validate"
 	"kpt.dev/configsync/pkg/vet"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 const (
@@ -282,44 +291,91 @@ func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute
 
 // ValidateOptions returns the validate options for nomos hydrate and vet commands.
 func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTimeout time.Duration) (validate.Options, error) {
-	var options = validate.Options{}
-	syncedCRDs, err := nomosparse.GetSyncedCRDs(ctx, flags.SkipAPIServer, apiServerTimeout)
-	if err != nil {
-		return options, err
-	}
+	options := validate.Options{}
 
 	var serverResourcer discovery.ServerResourcer = discovery.NoOpServerResourcer{}
-	var converter *declared.ValueConverter
+
 	if !flags.SkipAPIServer {
 		cfg, err := restconfig.NewRestConfig(apiServerTimeout)
 		if err != nil {
-			return options, fmt.Errorf("failed to create rest config: %w", err)
+			return options, apiServerCheckError(err, "failed to create rest config")
 		}
-
-		cf, err := restconfig.NewConfigFlags(cfg)
+		c, err := newClientClient(cfg)
 		if err != nil {
-			return options, fmt.Errorf("failed to create config flags from rest config: %w", err)
+			return options, err
 		}
-
-		dc, err := cf.ToDiscoveryClient()
+		options.PreviousCRDs, err = getSyncedCRDs(ctx, c)
 		if err != nil {
-			return options, fmt.Errorf("failed to create discovery client: %w", err)
+			return options, err
 		}
-
+		dc, err := newDiscoveryClient(cfg)
+		if err != nil {
+			return options, err
+		}
 		serverResourcer = dc
-
-		converter, err = declared.NewValueConverter(dc)
+		options.Converter, err = declared.NewValueConverter(dc)
 		if err != nil {
 			return options, err
 		}
 	}
 
-	addFunc := vet.AddCachedAPIResources(rootDir.Join(vet.APIResourcesPath))
-
 	options.PolicyDir = cmpath.RelativeOS(rootDir.OSPath())
-	options.PreviousCRDs = syncedCRDs
-	options.BuildScoper = discovery.ScoperBuilder(serverResourcer, addFunc)
-	options.Converter = converter
+	options.BuildScoper = discovery.ScoperBuilder(serverResourcer,
+		vet.AddCachedAPIResources(rootDir.Join(vet.APIResourcesPath)))
 	options.AllowUnknownKinds = flags.SkipAPIServer
 	return options, nil
+}
+
+func newClientClient(cfg *rest.Config) (client.Client, error) {
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create mapper")
+	}
+	c, err := client.New(cfg, client.Options{
+		Scheme: core.Scheme,
+		Mapper: mapper,
+	})
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create client")
+	}
+	return c, nil
+}
+
+func newDiscoveryClient(cfg *rest.Config) (clientdiscovery.CachedDiscoveryInterface, error) {
+	cf, err := restconfig.NewConfigFlags(cfg)
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create config flags from rest config")
+	}
+	dc, err := cf.ToDiscoveryClient()
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create discovery client")
+	}
+	return dc, nil
+}
+
+func apiServerCheckError(err error, message string) status.Error {
+	return status.APIServerError(err, message+". Did you mean to run with --no-api-server-check?")
+}
+
+// getSyncedCRDs returns the CRDs synced to the cluster in the current context.
+//
+// Times out after 15 seconds.
+func getSyncedCRDs(ctx context.Context, c client.Client) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	configs := &namespaceconfig.AllConfigs{}
+	decorateErr := namespaceconfig.DecorateWithClusterConfigs(ctx, c, configs)
+	if decorateErr != nil {
+		return nil, decorateErr
+	}
+
+	decoder := decode.NewGenericResourceDecoder(core.Scheme)
+	syncedCRDs, crdErr := clusterconfig.GetCRDs(decoder, configs.ClusterConfig)
+	if crdErr != nil {
+		// We were unable to parse the CRDs from the current ClusterConfig, so bail out.
+		// TODO: Make error message more user-friendly when this happens.
+		return nil, crdErr
+	}
+	return syncedCRDs, nil
 }

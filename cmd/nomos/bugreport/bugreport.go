@@ -20,11 +20,13 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/bugreport"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func init() {
@@ -50,8 +52,16 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			return errors.Wrapf(err, "failed to create rest config")
 		}
+		cs, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create kubernetes client set")
+		}
+		c, err := client.New(cfg, client.Options{})
+		if err != nil {
+			return errors.Wrapf(err, "failed to create kubernetes client")
+		}
 
-		report, err := bugreport.New(cmd.Context(), cfg)
+		report, err := bugreport.New(cmd.Context(), c, cs)
 		if err != nil {
 			return errors.Wrap(err, "failed to initialize bug reporter")
 		}

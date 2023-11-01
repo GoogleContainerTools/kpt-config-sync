@@ -16,9 +16,7 @@ package restconfig
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -38,36 +36,28 @@ const DefaultTimeout = 15 * time.Second
 // is enabled or not. If server-side flow control is enabled, then client-side
 // throttling is disabled, vice versa.
 func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
-	var errorStrs []string
-
-	// Build from k8s downward API
-	config, err := NewFromInClusterConfig()
+	var cfg *rest.Config
+	// Detect kubectl config file
+	path, err := newConfigPath()
 	if err != nil {
-		errorStrs = append(errorStrs, fmt.Sprintf("reading in-cluster config: %s", err))
-
-		// Detect path from env var
-		path, err := newConfigPath()
+		// Build from k8s downward API
+		cfg, err = NewFromInClusterConfig()
 		if err != nil {
-			errorStrs = append(errorStrs, fmt.Sprintf("finding local kubeconfig: %s", err))
-		} else {
-			// Build from local config file
-			config, err = NewFromConfigFile(path)
-			if err != nil {
-				errorStrs = append(errorStrs, fmt.Sprintf("reading local kubeconfig: %s", err))
-			} else {
-				errorStrs = nil
-			}
+			return nil, errors.Wrapf(err, "failed to build rest config: kubeconfig not found: reading in-cluster config")
 		}
-	}
-	if len(errorStrs) > 0 {
-		return nil, fmt.Errorf("failed to build rest config:\n%s", strings.Join(errorStrs, "\n"))
+	} else {
+		// Build from local config file
+		cfg, err = NewFromConfigFile(path)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to build rest config: reading local kubeconfig")
+		}
 	}
 	// Set timeout, if specified.
 	if timeout != 0 {
-		config.Timeout = timeout
+		cfg.Timeout = timeout
 	}
-	klog.V(7).Infof("Config: %#v", *config)
-	return config, nil
+	klog.V(7).Infof("Config: %#v", *cfg)
+	return cfg, nil
 }
 
 // NewFromConfigFile returns a REST config built from the kube config file at

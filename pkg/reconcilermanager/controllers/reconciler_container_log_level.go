@@ -63,17 +63,26 @@ func ReconcilerContainerLogLevelDefaults() map[string]v1beta1.ContainerLogLevelO
 // setContainerLogLevelDefaults will compile the default and override value of container log level
 func setContainerLogLevelDefaults(overrides []v1beta1.ContainerLogLevelOverride, defaultsMap map[string]v1beta1.ContainerLogLevelOverride) []v1beta1.ContainerLogLevelOverride {
 
-	// replace defaultsMap value with values from overrides
+	// copy defaultsMap to local overrideMap
+	overrideMap := make(map[string]v1beta1.ContainerLogLevelOverride)
+	for containerName, logLevelOverride := range defaultsMap {
+		overrideMap[containerName] = v1beta1.ContainerLogLevelOverride{
+			ContainerName: logLevelOverride.ContainerName,
+			LogLevel:      logLevelOverride.LogLevel,
+		}
+	}
+
+	// replace overrideMap value with values from overrides
 	for _, override := range overrides {
-		defaultsMap[override.ContainerName] = v1beta1.ContainerLogLevelOverride{
+		overrideMap[override.ContainerName] = v1beta1.ContainerLogLevelOverride{
 			ContainerName: override.ContainerName,
 			LogLevel:      override.LogLevel,
 		}
 	}
 
-	// convert defaultsMap back to list
-	overrideList := make([]v1beta1.ContainerLogLevelOverride, 0, len(defaultsMap))
-	for _, override := range defaultsMap {
+	// convert overrideMap back to list
+	overrideList := make([]v1beta1.ContainerLogLevelOverride, 0, len(overrideMap))
+	for _, override := range overrideMap {
 		overrideList = append(overrideList, override)
 	}
 

@@ -2821,24 +2821,18 @@ func TestMapObjectToRepoSync(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A rolebinding from the %s namespace, different from %s", nsReconcilerKey.Namespace, rsRoleBindingName),
-			object: fake.RoleBindingObject(core.Name("any"), core.Namespace(nsReconcilerKey.Namespace)),
+			name:   fmt.Sprintf("A rolebinding from the %s namespace, different from %s", rs1.Namespace, rsRoleBindingName),
+			object: fake.RoleBindingObject(core.Name("any"), core.Namespace(rs1.Namespace)),
 			want:   nil,
 		},
 		{
-			name:   fmt.Sprintf("A rolebinding from the %s namespace, same as %s", nsReconcilerKey.Namespace, rsRoleBindingName),
-			object: fake.RoleBindingObject(core.Name(rsRoleBindingName), core.Namespace(nsReconcilerKey.Namespace)),
+			name:   fmt.Sprintf("A rolebinding from the %s namespace, same as %s", rs1.Namespace, rsRoleBindingName),
+			object: fake.RoleBindingObject(core.Name(rsRoleBindingName), core.Namespace(rs1.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
 						Name:      "rs1",
 						Namespace: "ns1",
-					},
-				},
-				{
-					NamespacedName: types.NamespacedName{
-						Name:      "rs2",
-						Namespace: "ns2",
 					},
 				},
 			},

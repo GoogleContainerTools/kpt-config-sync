@@ -512,7 +512,9 @@ func (r *RepoSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		Watches(&source.Kind{Type: withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace)},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&rbacv1.RoleBinding{}, configsync.ControllerNamespace)},
+		// Watch RoleBindings in all namespaces, because RoleBindings are created
+		// in the namespace of the RepoSync. Only maps to existing RepoSyncs.
+		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
@@ -759,12 +761,6 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconc
 func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
-	// Ignore changes from other namespaces because all the generated resources
-	// exist in the config-management-system namespace.
-	if objRef.Namespace != configsync.ControllerNamespace {
-		return nil
-	}
-
 	// Ignore changes from resources without the ns-reconciler prefix or configsync.gke.io:ns-reconciler
 	// because all the generated resources have the prefix.
 	nsRoleBindingName := RepoSyncPermissionsName()
@@ -776,6 +772,14 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		klog.Errorf("failed to lookup resource of object %T (%s): %v",
 			obj, objRef, err)
 		return nil
+	}
+
+	if objRef.Namespace != configsync.ControllerNamespace {
+		switch obj.(type) {
+		case *corev1.ServiceAccount, *appsv1.Deployment:
+			// All Deployments and ServiceAccounts are in config-management-system
+			return nil
+		}
 	}
 
 	allRepoSyncs := &v1beta1.RepoSyncList{}
@@ -794,7 +798,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 		switch obj.(type) {
 		case *rbacv1.RoleBinding:
-			if objRef.Name == nsRoleBindingName {
+			if objRef.Name == nsRoleBindingName && objRef.Namespace == rs.Namespace {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKeyFromObject(&rs),
 				})

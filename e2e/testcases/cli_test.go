@@ -843,22 +843,19 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 	}
 }
 
-// TestCLIBugreportNomosRunningCorrectly
+// TestNomosBugreport
 //
 // tests the `nomos bugreport` by running it against a
 // cluster and making sure that the right minimum set of files
 // is output.  Changing the contents of the archive will make
 // this test fail.
-func TestCLIBugreportNomosRunningCorrectly(t *testing.T) {
+func TestNomosBugreport(t *testing.T) {
 	var bugReportZipName, bugReportDirName string
 	nt := nomostest.New(t, nomostesting.NomosCLI)
 
 	// get bugreport
 	cmd := nt.Shell.Command("nomos", "bugreport")
 	cmd.Dir = nt.TmpDir
-	// Hack to work around the nomos bugreport workload identity auth issue
-	// TODO(b/280652816): remove this once nomos bugreport WI auth is fixed.
-	cmd.Env = append(cmd.Env, "KUBERNETES_SERVICE_HOST=")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		nt.T.Log(string(out))

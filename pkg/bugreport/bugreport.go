@@ -45,7 +45,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	corev1Client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/cmd/nomos/version"
@@ -93,15 +92,7 @@ type BugReporter struct {
 }
 
 // New creates a new BugReport
-func New(ctx context.Context, cfg *rest.Config) (*BugReporter, error) {
-	cs, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	c, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return nil, err
-	}
+func New(ctx context.Context, c client.Client, cs *kubernetes.Clientset) (*BugReporter, error) {
 	cm := &unstructured.Unstructured{}
 	cm.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: configmanagement.GroupName,
@@ -215,7 +206,6 @@ func (b *BugReporter) FetchLogSources(ctx context.Context) []Readable {
 	if len(toBeLogged) == 0 {
 		return nil
 	}
-
 	// Convert logSources to Readables
 	toBeRead, errs := toBeLogged.convertLogSourcesToReadables(ctx, b.clientSet)
 	b.ErrorList = append(b.ErrorList, errs...)

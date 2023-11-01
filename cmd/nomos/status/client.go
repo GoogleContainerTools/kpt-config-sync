@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -514,9 +513,7 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 		wg.Add(1)
 
 		go func(pcs *apis.Clientset, kcs *kubernetes.Clientset, cmc *util.ConfigManagementClient, cfgName string) {
-			// We need to explicitly check if this code is currently executing
-			// on-cluster since the reachability check fails in that case.
-			if isOnCluster() || isReachable(ctx, pcs, cfgName) {
+			if isReachable(ctx, pcs, cfgName) {
 				mapMutex.Lock()
 				clientMap[cfgName] = &ClusterClient{
 					cl,
@@ -560,14 +557,6 @@ func filterConfigs(contexts []string, all map[string]*rest.Config) map[string]*r
 		}
 	}
 	return cfgs
-}
-
-// isOnCluster returns true if the nomos status command is currently being
-// executed on a kubernetes cluster. The strategy is based upon
-// https://kubernetes.io/docs/concepts/services-networking/connect-applications-service/#environment-variables
-func isOnCluster() bool {
-	_, onCluster := os.LookupEnv("KUBERNETES_SERVICE_HOST")
-	return onCluster
 }
 
 // isReachable returns true if the given ClientSet points to a reachable cluster.

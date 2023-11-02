@@ -212,8 +212,8 @@ func FetchCloudSecret(name string) (string, error) {
 func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int) (int, error) {
 	out, err := exec.Command("curl", "-sX", "GET",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
-		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s?page=%d",
-			GitUser, page)).CombinedOutput()
+		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
+			GitUser, bitbucketProject, page)).CombinedOutput()
 	if err != nil {
 		return -1, errors.Wrap(err, string(out))
 	}

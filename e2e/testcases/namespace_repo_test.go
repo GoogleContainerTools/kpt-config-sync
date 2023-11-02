@@ -328,7 +328,7 @@ func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secret
 		return nt.Watcher.WatchForNotFound(kinds.ServiceAccount(), core.NsReconcilerName(namespace, configsync.RepoSyncName), configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(kinds.ServiceAccount(), controllers.RepoSyncPermissionsName(), configsync.ControllerNamespace)
+		return nt.Watcher.WatchForNotFound(kinds.ServiceAccount(), controllers.RepoSyncBaseClusterRoleName, configsync.ControllerNamespace)
 	})
 	for _, sName := range secretNames {
 		nn := types.NamespacedName{Name: sName, Namespace: configsync.ControllerNamespace}

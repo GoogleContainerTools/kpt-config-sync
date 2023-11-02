@@ -401,7 +401,7 @@ func TestRepoSyncReconcilerRoleBindingDriftProtection(t *testing.T) {
 		// reconciler-manager managed robe binding
 		return client.ObjectKey{
 			Namespace: syncRef.Namespace,
-			Name:      RepoSyncPermissionsName(),
+			Name:      RepoSyncBaseRoleBindingName,
 		}
 	}
 	var oldObj *rbacv1.RoleBinding

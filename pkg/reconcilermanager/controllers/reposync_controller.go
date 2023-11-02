@@ -246,7 +246,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler rolebinding.
-	if _, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+	if _, err := r.upsertSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
 		return errors.Wrap(err, "upserting role binding")
 	}
 
@@ -436,7 +436,7 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 		return errors.Wrap(err, "deleting secrets")
 	}
 
-	if err := r.deleteRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+	if err := r.deleteSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
 		return errors.Wrap(err, "deleting role binding")
 	}
 
@@ -762,7 +762,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 
 	// Ignore changes from resources without the ns-reconciler prefix or configsync.gke.io:ns-reconciler
 	// because all the generated resources have the prefix.
-	nsRoleBindingName := RepoSyncPermissionsName()
+	nsRoleBindingName := RepoSyncBaseRoleBindingName
 	if !strings.HasPrefix(objRef.Name, core.NsReconcilerPrefix) && objRef.Name != nsRoleBindingName {
 		return nil
 	}
@@ -937,17 +937,17 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	return validateSecretData(authType, secret)
 }
 
-func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *RepoSyncReconciler) upsertSharedRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) (client.ObjectKey, error) {
 	rbRef := client.ObjectKey{
 		Namespace: rsRef.Namespace,
-		Name:      RepoSyncPermissionsName(),
+		Name:      RepoSyncBaseRoleBindingName,
 	}
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
-		childRB.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
+		childRB.RoleRef = rolereference(RepoSyncBaseClusterRoleName, "ClusterRole")
 		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		return nil
 	})

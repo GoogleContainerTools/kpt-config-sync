@@ -1240,3 +1240,36 @@ func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate 
 		return nil
 	}
 }
+
+func subjectNamesEqual(want []string, got []rbacv1.Subject) error {
+	if len(got) != len(want) {
+		return errors.Errorf("want %v subjects; got %v", want, got)
+	}
+
+	found := make(map[string]bool)
+	for _, subj := range got {
+		found[subj.Name] = true
+	}
+	for _, name := range want {
+		if !found[name] {
+			return errors.Errorf("missing subject %q", name)
+		}
+	}
+
+	return nil
+}
+
+// ClusterRoleBindingSubjectNamesEqual checks that the ClusterRoleBinding has a list
+// of subjects whose names match the specified list of names.
+func ClusterRoleBindingSubjectNamesEqual(subjects ...string) func(o client.Object) error {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		r, ok := o.(*rbacv1.ClusterRoleBinding)
+		if !ok {
+			return WrongTypeErr(o, r)
+		}
+		return subjectNamesEqual(subjects, r.Subjects)
+	}
+}

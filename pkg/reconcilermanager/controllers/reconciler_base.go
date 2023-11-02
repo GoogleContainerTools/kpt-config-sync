@@ -637,3 +637,37 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 
 	return nil
 }
+
+// ManagedObjectLabelMap returns the standard labels applied to objects related
+// to a RootSync/RepoSync that are created by reconciler-manager.
+func ManagedObjectLabelMap(syncKind string, rsRef types.NamespacedName) map[string]string {
+	return map[string]string{
+		metadata.SyncNamespaceLabel: rsRef.Namespace,
+		metadata.SyncNameLabel:      rsRef.Name,
+		metadata.SyncKindLabel:      syncKind,
+	}
+}
+
+func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef types.NamespacedName, binding client.Object) error {
+	existingBinding := binding.DeepCopyObject()
+	subjects := []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+	if crb, ok := binding.(*rbacv1.ClusterRoleBinding); ok {
+		crb.Subjects = subjects
+	} else if rb, ok := binding.(*rbacv1.RoleBinding); ok {
+		rb.Subjects = subjects
+	}
+	if equality.Semantic.DeepEqual(existingBinding, binding) {
+		return nil
+	}
+	if err := r.client.Update(ctx, binding); err != nil {
+		return err
+	}
+	bindingNN := types.NamespacedName{
+		Name:      binding.GetName(),
+		Namespace: binding.GetNamespace(),
+	}
+	r.logger(ctx).Info("Managed object update successful",
+		logFieldObjectRef, bindingNN.String(),
+		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
+	return nil
+}

@@ -280,12 +280,12 @@ func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1
 	return repoSync(ns, name, opts...)
 }
 
-func rolebinding(name string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
+func rolebinding(name, roleName, roleKind string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
 	result := fake.RoleBindingObject(opts...)
 	result.Name = name
 
-	result.RoleRef.Name = RepoSyncPermissionsName()
-	result.RoleRef.Kind = "ClusterRole"
+	result.RoleRef.Name = roleName
+	result.RoleRef.Kind = roleKind
 	result.RoleRef.APIGroup = "rbac.authorization.k8s.io"
 
 	return result
@@ -2086,7 +2086,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(serviceAccount1): serviceAccount1}
 
 	roleBinding1 := rolebinding(
-		RepoSyncPermissionsName(),
+		RepoSyncBaseRoleBindingName, RepoSyncBaseClusterRoleName, "ClusterRole",
 		core.Namespace(rs1.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2165,7 +2165,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	roleBinding2 := rolebinding(
-		RepoSyncPermissionsName(),
+		RepoSyncBaseRoleBindingName, RepoSyncBaseClusterRoleName, "ClusterRole",
 		core.Namespace(rs2.Namespace),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2750,7 +2750,7 @@ func TestMapObjectToRepoSync(t *testing.T) {
 	rs1 := repoSyncWithGit("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	rs2 := repoSyncWithGit("ns2", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
-	rsRoleBindingName := RepoSyncPermissionsName()
+	rsRoleBindingName := RepoSyncBaseRoleBindingName
 
 	testCases := []struct {
 		name   string

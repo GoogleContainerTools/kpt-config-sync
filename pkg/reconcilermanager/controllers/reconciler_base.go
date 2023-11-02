@@ -75,9 +75,6 @@ const (
 	logFieldObjectStatus    = "objectStatus"
 	logFieldReconciler      = "reconciler"
 	logFieldResourceVersion = "resourceVersion"
-
-	defaultContainerLogLevel = 0
-	defaultGitSyncLogLevel   = 5
 )
 
 // The fields in reconcilerManagerAllowList are the fields that reconciler manager
@@ -484,19 +481,6 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 	}
 }
 
-func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLogLevelOverride) {
-	if len(override) == 0 {
-		return
-	}
-	for i, arg := range c.Args {
-		if strings.HasPrefix(arg, "-v=") {
-			c.Args = removeArg(c.Args, i)
-			break
-		}
-	}
-	c.Args = append(c.Args, fmt.Sprintf("-v=%d", containerLogLevel(c.Name, override)))
-}
-
 func removeArg(args []string, i int) []string {
 	if i == 0 {
 		// remove first arg
@@ -509,29 +493,6 @@ func removeArg(args []string, i int) []string {
 		args = append(args[:i], args[i+1:]...)
 	}
 	return args
-}
-
-// containerLogLevel will determine the log level value for any reconciler deployment container
-func containerLogLevel(containerName string, override []v1beta1.ContainerLogLevelOverride) int {
-	for _, logLevel := range override {
-		if logLevel.ContainerName == containerName {
-			return logLevel.LogLevel
-		}
-	}
-
-	return containerLogLevelDefault(containerName)
-}
-
-// containerLogLevelDefault will return the default log level value for any reconciler deployment container
-// when override is not specified
-func containerLogLevelDefault(containerName string) int {
-	switch containerName {
-	// git-sync container's default is 5
-	case reconcilermanager.GitSync:
-		return defaultGitSyncLogLevel
-	default:
-		return defaultContainerLogLevel
-	}
 }
 
 func (r *reconcilerBase) injectFleetWorkloadIdentityCredentials(podTemplate *corev1.PodTemplateSpec, gsaEmail string) error {

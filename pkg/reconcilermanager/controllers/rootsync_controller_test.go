@@ -3733,6 +3733,7 @@ func fleetWorkloadIdentityContainers() []corev1.Container {
 			ReadOnly:  true,
 			MountPath: gcpKSATokenDir,
 		}},
+		Args: defaultArgs(),
 	})
 	return containers
 }
@@ -3871,6 +3872,7 @@ func defaultContainers() []corev1.Container {
 		},
 		{
 			Name: reconcilermanager.GCENodeAskpassSidecar,
+			Args: defaultArgs(),
 		},
 		{
 			Name: reconcilermanager.OciSync,
@@ -4000,6 +4002,7 @@ func gceNodeContainers() []corev1.Container {
 	containers := noneGitContainers()
 	containers = append(containers, corev1.Container{
 		Name: reconcilermanager.GCENodeAskpassSidecar,
+		Args: defaultArgs(),
 	})
 	return containers
 }

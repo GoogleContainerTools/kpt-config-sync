@@ -1,0 +1,13 @@
+# The e2e image has a custom dockerignore to copy e2e test files
+/**
+!/.output/go/bin
+!/.output/staging/oss
+!/LICENSE
+!/go.*
+!/cmd
+!/clientgen
+!/pkg
+!/vendor
+!/scripts
+!/e2e
+!/examples

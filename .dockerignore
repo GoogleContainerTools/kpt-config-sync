@@ -1,2 +1,9 @@
-.idea/
-.vscode/
+/**
+!/.output/third_party
+!/LICENSE
+!/go.*
+!/cmd
+!/clientgen
+!/pkg
+!/vendor
+!/scripts

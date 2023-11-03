@@ -13,14 +13,14 @@ generate: install-controller-gen
 
 .PHONY: configsync-crds
 # Generate configsync CRDs and then patch them with kustomize
-configsync-crds: install-controller-gen "$(BIN_DIR)/kustomize" "$(GOBIN)/addlicense"
+configsync-crds: install-controller-gen "$(KUSTOMIZE)" "$(GOBIN)/addlicense"
 	$(CONTROLLER_GEN) crd \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
 		output:artifacts:config=./manifests \
 	&& mv ./manifests/configsync.gke.io_reposyncs.yaml ./manifests/patch/reposync-crd.yaml \
 	&& mv ./manifests/configsync.gke.io_rootsyncs.yaml ./manifests/patch/rootsync-crd.yaml \
-	&& "$(BIN_DIR)/kustomize" build ./manifests/patch -o ./manifests \
+	&& "$(KUSTOMIZE)" build ./manifests/patch -o ./manifests \
 	&& mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml \
 	&& mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml \
 	&& rm ./manifests/patch/reposync-crd.yaml \

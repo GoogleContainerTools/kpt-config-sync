@@ -1,8 +1,6 @@
 # Included by Makefile.
 # Rules related to building nomos and docker images.
 
-HELM := $(BIN_DIR)/helm
-
 ###################################
 # Build environment
 ###################################
@@ -61,7 +59,7 @@ build-junit-report-cli: pull-buildenv buildenv-dirs
 BUILD_IMAGE_TARGETS := $(patsubst %,__build-image-%,$(IMAGES))
 
 .PHONY: $(BUILD_IMAGE_TARGETS)
-$(BUILD_IMAGE_TARGETS): install-helm install-kustomize
+$(BUILD_IMAGE_TARGETS): "$(HELM)" "$(KUSTOMIZE)"
 	@echo "+++ Building the $(subst __build-image-,,$@) image: $(call gen_image_tag,$(subst __build-image-,,$@))"
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 		--target $(subst __build-image-,,$@) \
@@ -139,11 +137,11 @@ build-manifests: build-manifests-operator build-manifests-oss
 
 # Build Config Sync manifests for OSS installations
 .PHONY: build-manifests-oss
-build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
+build-manifests-oss: "$(GOBIN)/addlicense" "$(KUSTOMIZE)" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(OSS_MANIFEST_STAGING_DIR)"
 	@ echo " Using tags: $(REGISTRY)/*:$(IMAGE_TAG)"
 	@ rm -f $(OSS_MANIFEST_STAGING_DIR)/*
-	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/oss \
+	@ "$(KUSTOMIZE)" build --load-restrictor=LoadRestrictionsNone manifests/oss \
 		| sed \
 			-e "s|RECONCILER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_IMAGE))|g" \
 			-e "s|OCI_SYNC_IMAGE_NAME|$(call gen_image_tag,$(OCI_SYNC_IMAGE))|g" \
@@ -164,11 +162,11 @@ build-manifests-oss: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
 
 # Build Config Sync manifests for ACM operator
 .PHONY: build-manifests-operator
-build-manifests-operator: "$(GOBIN)/addlicense" "$(BIN_DIR)/kustomize" $(OUTPUT_DIR)
+build-manifests-operator: "$(GOBIN)/addlicense" "$(KUSTOMIZE)" $(OUTPUT_DIR)
 	@ echo "+++ Generating manifests in $(NOMOS_MANIFEST_STAGING_DIR)"
 	@ echo " Using tags: $(REGISTRY)/*:$(IMAGE_TAG)"
 	@ rm -f $(NOMOS_MANIFEST_STAGING_DIR)/*
-	@ "$(BIN_DIR)/kustomize" build --load-restrictor=LoadRestrictionsNone manifests/operator \
+	@ "$(KUSTOMIZE)" build --load-restrictor=LoadRestrictionsNone manifests/operator \
 		| sed \
 			-e "s|RECONCILER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_IMAGE))|g" \
 			-e "s|OCI_SYNC_IMAGE_NAME|$(call gen_image_tag,$(OCI_SYNC_IMAGE))|g" \
@@ -192,7 +190,7 @@ config-sync-manifest-no-push: $(OUTPUT_DIR) build-images build-manifests
 config-sync-manifest: config-sync-manifest-no-push push-images
 
 .PHONY: docker-registry
-docker-registry: install-kind
+docker-registry: "$(KIND)"
 	@KIND_VERSION=$(KIND_VERSION) bash scripts/docker-registry.sh
 
 # config-sync-manifest-local builds config sync for local testing in kind.

@@ -42,6 +42,8 @@ if [[ -n "${ARTIFACTS}" && -d "${ARTIFACTS}" ]]; then
   sed -i -e 's/=== NAME/=== CONT/g' test_results.txt
   go-junit-report --subtest-mode=exclude-parents < test_results.txt > "${ARTIFACTS}/junit_report.xml"
   if [ "$exit_code" -eq 0 ]; then
+    # build our in-repo junit report post-processor binary
+    go install ./cmd/junit-report
     junit-report reset-failure --path="${ARTIFACTS}/junit_report.xml"
   fi
 fi

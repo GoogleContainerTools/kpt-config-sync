@@ -35,7 +35,6 @@ import (
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcemap"
 	"kpt.dev/resourcegroup/controllers/status"
-	"kpt.dev/resourcegroup/third_party/k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -178,7 +177,7 @@ func (w *filteredWatcher) Run(context.Context) error {
 				ignoredEventCount++
 			}
 			if err != nil {
-				if cache.IsExpiredError(err) {
+				if apierrors.IsResourceExpired(err) {
 					klog.Infof("Watch for %s at resource version %q closed with: %v", w.gvk, resourceVersion, err)
 					// `w.handle` may fail because we try to watch an old resource version, setting
 					// a watch on an old resource version will always fail.

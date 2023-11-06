@@ -1,13 +1,13 @@
-# Custom RBAC assignments for `RootSync` and `RepoSync`
+# Custom RBAC assignments for `RootSync`
 
 * Author(s): @tomasaschan, @sdowell
-* Approver: @mortent, @karlkfi
+* Approver: @janetkuo, @karlkfi
 * Status: approved
 
 ## Summary
 
-This proposal introduces a way to manage the lifecycle of RBAC bindings for both
-`RootSync` and `RepoSync` objects.
+This proposal introduces a way to manage the lifecycle of RBAC bindings for
+`RootSync` objects.
 
 ### Historical Behavior
 
@@ -24,14 +24,14 @@ reconciler to function, but it's up to users to manage additional `RoleBinding`s
 ### Proposed Behavior
 
 The proposed behavior will allow full configuration of which bindings are
-created for a `RootSync` or `RepoSync` reconciler. Config Sync will manage the
+created for a `RootSync` reconciler. Config Sync will manage the
 lifecycle of all `RoleBinding` and `ClusterRoleBinding` objects declared using
 this new API.
 
 ## Motivation
 
 There are several common use cases where a platform admin may want to limit the
-scope of what a `RootSync` or `RepoSync` can manage in the cluster. For example,
+scope of what a `RootSync` can manage in the cluster. For example,
 a platform admin may want to allow a tenant to use a `RootSync` to manage a
 subset of cluster-scoped resources.
 
@@ -42,10 +42,6 @@ _anything_ regardless.
 
 To follow the [principle of least privilege], one should ensure the reconciler only has
 access to deploy the expected resources.
-
-Additionally, the `RepoSync` API currently requires for users to manage the lifecycle
-of `RoleBinding` objects themselves. The proposed API here is intended to also
-simplify the management of `RoleBinding`s for `RepoSync`s.
 
 See also [#935].
 
@@ -87,27 +83,6 @@ be comparable to the pre-existing base ClusterRole for `RepoSync` reconcilers,
 which includes permissions such as status writing on `RepoSync` objects. Leaving
 this permission to the user to manage would create unneeded toil.
 
-### `RepoSync`s
-
-For `RepoSync` objects, `roleRefs` entries will not need or allow specifying a namespace.
-Instead, the `namespace` will always be derived from the `RepoSync` object itself.
-This follows the assumption that `RepoSync` objects are always scoped to a single
-Namespace.
-
-```yaml
-kind: RepoSync
-metadata:
-  name: my-repo-sync
-  namespace: example-ns
-spec:
-  overrides:
-    roleRefs:
-    - kind: ClusterRole # Creates a RoleBinding in example-ns bound to ClusterRole my-cluster-role
-      name: my-cluster-role
-    - kind: Role # Creates a RoleBinding in example-ns bound to Role my-tenant-role
-      name: my-tenant-role
-```
-
 ### Lifecycle management
 
 Given this API provides configuration for a list of RoleRefs, it requires some form
@@ -116,7 +91,7 @@ one roleRef from the list of roleRefs, they would reasonably expect that the
 binding will be garbage collected.
 
 This essentially requires for the `reconciler-manager` to be able to track an
-inventory of bindings that were previously created for a given `RootSync` or `RepoSync`.
+inventory of bindings that were previously created for a given `RootSync`.
 This can be accomplished by applying a label whenever a new binding is created,
 and then querying using a label selector on subsequent reconciliation loops.
 
@@ -131,6 +106,11 @@ metadata:
 
 These are the standard labels applied to other objects managed by the `reconciler-manager`
 which are associated with a `RootSync` or `RepoSync`.
+
+When a `RootSync` is deleted, the managed `RoleBindings` and `ClusterRoleBindings`
+will not be deleted until the reconciler finalizer completes. This ensures that
+the `RootSync` reconciler should have the permissions that it needs to run its
+finalizer.
 
 ## User Guide
 
@@ -185,47 +165,6 @@ rules:
 # ...
 ```
 
-### `RepoSync`
-
-To use this feature for a `RepoSync`, set `spec.overrides.roleRefs` to reference
-any number of `ClusterRole` or `Role` objects you wish this `RepoSync` to be bound
-to. Config Sync will only create `RoleBinding`s for `RepoSync`s in the same
-Namespace as the `RepoSync`. `ClusterRoleBinding` objects will not be created
-for `RepoSync`s, as they are scoped to a single Namespace.
-You must create the `ClusterRole`/`Role` yourself, but Config Sync will create the
-`RoleBinding` for you.
-
-```yaml
-apiVersion: configsync.gke.io/v1beta1
-kind: RepoSync
-metadata:
-  name: my-repo-sync
-  namespace: my-ns
-spec:
-  overrides:
-    roleRefs:
-    - kind: ClusterRole # Create RoleBinding to my-tenant-role
-      name: my-tenant-role
-    - kind: Role # Create RoleBinding to my-role
-      name: my-role
-  # ...
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: my-tenant-role
-rules:
-# ...
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: my-role
-  namespace: my-ns
-rules:
-# ...
-```
-
 **Note** that while the name of the relevant service account will _often_ be predictable
 as `root-reconciler-<root-reconciler-name>`, this is not guaranteed by Config Sync. You
 can always find the service account by its labels; in particular, the labels
@@ -237,7 +176,7 @@ This feature is entirely backwards-compatible, by means of being opt-in.
 
 ## Test Plan
 
-Implementation of this feature can includes automated tests that verify the behavior.
+Implementation of this feature will include automated tests that verify the behavior.
 
 ## Open Issues/Questions
 
@@ -254,3 +193,17 @@ API which binds to a single `ClusterRole` was also considered, but this was deci
 against due to lack of flexibility. The proposed solution allows for binding to
 an arbitrary number of `Role`/`ClusterRole` objects, and should fit most expected
 use cases for users.
+
+### `RepoSync`
+
+Consideration was also made to extend a similar API for `RepoSync` objects. While
+this sort of API would be compatible with the [centralized control pattern], it
+would be a breaking change for the [delegated control pattern]. In delegated
+control scenarios, a tenant is given permission to create/update RepoSyncs and
+create RoleBindings to RepoSync reconcilers. The tenant should only be able to
+grant permissions to a RepoSync reconciler for which the tenant has the same
+permissions. If the API is surfaced on the RepoSync itself, this makes privilege
+escalation possible for tenants using delegated control.
+
+[centralized control pattern]: https://cloud.google.com/anthos-config-management/docs/how-to/multiple-repositories#managed-control
+[delegated control pattern]: https://cloud.google.com/anthos-config-management/docs/how-to/multiple-repositories#kubernetes-api

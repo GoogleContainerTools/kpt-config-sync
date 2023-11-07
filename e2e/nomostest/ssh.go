@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -37,9 +38,9 @@ import (
 )
 
 const (
-	// rootAuthSecretName is the name of the Auth secret required by the
+	// RootAuthSecretName is the name of the Auth secret required by the
 	// RootSync reconciler to authenticate with the git-server.
-	rootAuthSecretName = controllers.GitCredentialVolume
+	RootAuthSecretName = controllers.GitCredentialVolume
 
 	// rootCACertSecretName is the name of the CACert secret required by
 	// the RootSync reconciler.
@@ -88,6 +89,30 @@ func certPath(nt *NT) string {
 
 func certPrivateKeyPath(nt *NT) string {
 	return filepath.Join(sslDir(nt), "key.pem")
+}
+
+// GetKnownHosts will generate and format the key to be used for
+// known_hosts authentication with local git provider
+func GetKnownHosts(nt *NT) (string, error) {
+	provider := nt.GitProvider.(*gitproviders.LocalProvider)
+	port, err := provider.PortForwarder.LocalPort()
+	if err != nil {
+		return "", err
+	}
+	out, err := nt.Shell.ExecWithDebug("ssh-keyscan",
+		"-t", "rsa",
+		"-p", fmt.Sprintf("%d", port),
+		"localhost")
+	if err != nil {
+		return "", err
+	}
+	output := string(out)
+	// Replace the port-forwarded address at localhost with the in-cluster Service.
+	// The git-sync container runs in cluster and communicates with the Service.
+	knownHost := strings.Replace(output,
+		fmt.Sprintf("[localhost]:%d", port),
+		fmt.Sprintf("%s.%s", testGitServer, testGitNamespace), 1)
+	return knownHost, nil
 }
 
 // createSSHKeySecret generates a public/public key pair for the test.
@@ -206,7 +231,7 @@ func generateSSHKeys(nt *NT) (string, error) {
 		return "", err
 	}
 
-	if err := createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
+	if err := createSecret(nt, configmanagement.ControllerNamespace, RootAuthSecretName,
 		fmt.Sprintf("ssh=%s", privateKeyPath(nt))); err != nil {
 		return "", err
 	}
@@ -260,7 +285,7 @@ func downloadSSHKey(nt *NT) (string, error) {
 		return "", fmt.Errorf("saving SSH key: %w", err)
 	}
 
-	if err := createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
+	if err := createSecret(nt, configmanagement.ControllerNamespace, RootAuthSecretName,
 		fmt.Sprintf("ssh=%s", privateKeyPath(nt))); err != nil {
 		return "", err
 	}

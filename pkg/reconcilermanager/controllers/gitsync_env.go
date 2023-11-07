@@ -54,8 +54,8 @@ const (
 	// GitSSLCAInfo represents the environment variable key for SSL certificates.
 	GitSSLCAInfo = "GIT_SSL_CAINFO"
 
-	// gitSyncKnownHosts represents the environment variable key for GIT_KNOWN_HOSTS.
-	gitSyncKnownHosts = "GITSYNC_SSH_KNOWN_HOSTS"
+	// GitSyncKnownHosts represents the environment variable key for GIT_KNOWN_HOSTS.
+	GitSyncKnownHosts = "GITSYNC_SSH_KNOWN_HOSTS"
 	// GitSSLNoVerify represents the environment variable key for GIT_SSL_NO_VERIFY.
 	GitSSLNoVerify = "GIT_SSL_NO_VERIFY"
 
@@ -71,6 +71,8 @@ const (
 	SyncDepthNoRev = "1"
 	// SyncDepthRev is the default git depth if syncing with a specific sync revision (tag or hash).
 	SyncDepthRev = "500"
+	// KnownHostsKey is the key for known_hosts information
+	KnownHostsKey = "known_hosts"
 )
 
 var gceNodeAskpassURL = fmt.Sprintf("http://localhost:%v/git_askpass", gceNodeAskpassPort)
@@ -94,6 +96,8 @@ type options struct {
 	noSSLVerify bool
 	// caCertSecretRef specifies the name of a secret containing a CA certificate
 	caCertSecretRef string
+	// knownHost specifies whether known_hosts configuration is included
+	knownHost bool
 }
 
 // gitSyncTokenAuthEnv returns environment variables for git-sync container for 'token' Auth.
@@ -163,11 +167,19 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 		Name:  GitSyncRepo,
 		Value: opts.repo,
 	})
-	// disable known_hosts checking because it provides no benefit for our use case.
-	result = append(result, corev1.EnvVar{
-		Name:  gitSyncKnownHosts,
-		Value: "false",
-	})
+
+	// GitSyncKnownHosts must default to false for backwards compatibility
+	if opts.knownHost {
+		result = append(result, corev1.EnvVar{
+			Name:  GitSyncKnownHosts,
+			Value: "true",
+		})
+	} else {
+		result = append(result, corev1.EnvVar{
+			Name:  GitSyncKnownHosts,
+			Value: "false",
+		})
+	}
 	if opts.noSSLVerify {
 		result = append(result, corev1.EnvVar{
 			Name:  GitSSLNoVerify,

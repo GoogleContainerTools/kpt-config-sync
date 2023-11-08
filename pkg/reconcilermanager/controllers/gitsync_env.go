@@ -213,20 +213,24 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 		Name:  gitSyncPeriod,
 		Value: opts.period.String(),
 	})
-	// When branch and ref not set in RootSync/RepoSync then dont set GITSYNC_REF,
-	// git-sync will use the default values for them.
-	// Both opts.ref and opts.branch map to GITSYNC_REF, but opts.ref takes precedence over opts.branch.
-	if opts.ref != "" {
-		result = append(result, corev1.EnvVar{
-			Name:  gitSyncRef,
-			Value: opts.ref,
-		})
+	// We can't use default values in git-sync because of the breaking change: https://github.com/kubernetes/git-sync/issues/841.
+	// For backward compatibility, we set gitSyncRef to branch when ref is HEAD.
+	// If ref is HEAD or empty,
+	// - If branch is not set, set gitSyncRef to master (same behavior in git-sync v3).
+	// - If branch is set, set gitSyncRef to user-specified branch.
+	// If ref is neither HEAD nor empty, set gitSyncRef to ref regardless whether branch is set or not.
+	adjustedRef := opts.ref
+	if adjustedRef != "" && adjustedRef != "HEAD" {
+		adjustedRef = opts.ref // sync from a commit or a tag if ref is not HEAD
 	} else if opts.branch != "" {
-		result = append(result, corev1.EnvVar{
-			Name:  gitSyncRef,
-			Value: opts.branch,
-		})
+		adjustedRef = opts.branch // sync from the HEAD of the user-provided branch
+	} else {
+		adjustedRef = "master" // sync from the HEAD of master for backward compatibility
 	}
+	result = append(result, corev1.EnvVar{
+		Name:  gitSyncRef,
+		Value: adjustedRef,
+	})
 	switch opts.secretType {
 	case configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		result = append(result, corev1.EnvVar{

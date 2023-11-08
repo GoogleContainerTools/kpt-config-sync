@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -47,6 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -678,6 +681,110 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 			nomostest.DefaultRootRepoNamespacedName: emptyChart.Image.Name,
 		}))
 	if err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func TestResourceGroupStress(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.StressTest)
+
+	namespace := "resourcegroup-e2e"
+	nt.T.Cleanup(func() {
+		// all test resources are created in this namespace
+		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+			nt.T.Error(err)
+		}
+	})
+	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+		nt.T.Fatal(err)
+	}
+	rgNN := types.NamespacedName{
+		Name:      "group-a",
+		Namespace: namespace,
+	}
+	resourceID := rgNN.Name
+	rg := testresourcegroup.New(rgNN, resourceID)
+	if err := nt.KubeClient.Create(rg); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	numConfigMaps := 1000
+	var resources []v1alpha1.ObjMetadata
+	for i := 0; i < numConfigMaps; i++ {
+		resources = append(resources, v1alpha1.ObjMetadata{
+			Name:      fmt.Sprintf("example-%d", i),
+			Namespace: namespace,
+			GroupKind: v1alpha1.GroupKind{
+				Group: "",
+				Kind:  "ConfigMap",
+			},
+		})
+	}
+
+	err := testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+		rg.Spec.Resources = resources
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	expectedStatus := testresourcegroup.EmptyStatus()
+	expectedStatus.ObservedGeneration = 2
+	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.NotFound, "")
+
+	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
+		testpredicates.ResourceGroupStatusEquals(expectedStatus),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	expectedStatus.ObservedGeneration = 2
+	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.Current, "1234567")
+
+	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
+		testpredicates.ResourceGroupStatusEquals(expectedStatus),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	index := 995
+	arbitraryConfigMapToDelete := v1.ConfigMap{}
+	arbitraryConfigMapToDelete.Name = resources[index].Name
+	arbitraryConfigMapToDelete.Namespace = resources[index].Namespace
+	if err := nt.KubeClient.Delete(&arbitraryConfigMapToDelete); err != nil {
+		nt.T.Fatal(err)
+	}
+	expectedStatus.ResourceStatuses[index] = v1alpha1.ResourceStatus{
+		Status:      v1alpha1.NotFound,
+		ObjMetadata: resources[index],
+		Conditions: []v1alpha1.Condition{
+			{
+				Message: testresourcegroup.NotOwnedMessage,
+				Reason:  v1alpha1.OwnershipEmpty,
+				Status:  v1alpha1.UnknownConditionStatus,
+				Type:    v1alpha1.Ownership,
+			},
+		},
+	}
+
+	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
+		testpredicates.ResourceGroupStatusEquals(expectedStatus),
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Delete the ResourceGroup")
+	if err := nt.KubeClient.Delete(rg); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Assert that the controller pods did not restart")
+	if err := testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient); err != nil {
 		nt.T.Fatal(err)
 	}
 }

@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -40,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/util/log"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -1198,4 +1200,43 @@ func containerArgsContains(container *corev1.Container, expectedArg string) erro
 		}
 	}
 	return fmt.Errorf("expected arg not found: %s", expectedArg)
+}
+
+// ResourceGroupStatusEquals checks that the RootSync's spec.override matches
+// the specified RootSyncOverrideSpec.
+func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate {
+	return func(obj client.Object) error {
+		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+		}
+		found := rg.DeepCopy().Status
+		// Set LastTransitionTime to nil value for comparisons
+		for x := range found.Conditions {
+			found.Conditions[x].LastTransitionTime = metav1.Time{}
+		}
+		for x := range found.ResourceStatuses {
+			for y := range found.ResourceStatuses[x].Conditions {
+				found.ResourceStatuses[x].Conditions[y].LastTransitionTime = metav1.Time{}
+				// Allow substring matching for ResourceStatus messages
+				if x < len(expected.ResourceStatuses) && y < len(expected.ResourceStatuses[x].Conditions) {
+					foundMsg := found.ResourceStatuses[x].Conditions[y].Message
+					expectedMsg := expected.ResourceStatuses[x].Conditions[y].Message
+					if strings.Contains(foundMsg, expectedMsg) {
+						expected.ResourceStatuses[x].Conditions[y].Message = foundMsg
+					}
+				}
+			}
+		}
+		for x := range found.SubgroupStatuses {
+			for y := range found.SubgroupStatuses[x].Conditions {
+				found.SubgroupStatuses[x].Conditions[y].LastTransitionTime = metav1.Time{}
+			}
+		}
+		if !equality.Semantic.DeepEqual(found, expected) {
+			return errors.Errorf("expected %s to have status: %s, but got %s",
+				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
+		}
+		return nil
+	}
 }

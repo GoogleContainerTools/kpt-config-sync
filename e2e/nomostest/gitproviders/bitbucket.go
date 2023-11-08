@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	bitbucketProject = "CSCI"
+	bitbucketWorkspace = "config-sync-ci"
+	bitbucketProject   = "CSCI"
 
 	// PrivateSSHKey is secret name of the private SSH key stored in the Cloud Secret Manager.
 	PrivateSSHKey = "config-sync-ci-ssh-private-key"
@@ -82,7 +83,7 @@ func (b *BitbucketClient) RemoteURL(name string) (string, error) {
 // name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
 // The Bitbucket Rest API doesn't allow slash in the repository name, so slash has to be replaced with dash in the name.
 func (b *BitbucketClient) SyncURL(name string) string {
-	return fmt.Sprintf("git@bitbucket.org:%s/%s", GitUser, strings.ReplaceAll(name, "/", "-"))
+	return fmt.Sprintf("git@bitbucket.org:%s/%s", bitbucketWorkspace, strings.ReplaceAll(name, "/", "-"))
 }
 
 // CreateRepository calls the POST API to create a remote repository on Bitbucket.
@@ -117,7 +118,7 @@ func (b *BitbucketClient) CreateRepository(localName string) (string, error) {
 		"-H", "Content-Type: application/json",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		"-d", fmt.Sprintf("{\"scm\": \"git\",\"project\": {\"key\": \"%s\"},\"is_private\": \"true\"}", bitbucketProject),
-		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", GitUser, repoName)).CombinedOutput()
+		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", bitbucketWorkspace, repoName)).CombinedOutput()
 
 	if err != nil {
 		return "", errors.Wrap(err, string(out))
@@ -145,7 +146,7 @@ func deleteRepos(accessToken string, names ...string) error {
 		out, err := exec.Command("curl", "-sX", "DELETE",
 			"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 			fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s",
-				GitUser, name)).CombinedOutput()
+				bitbucketWorkspace, name)).CombinedOutput()
 
 		if err != nil {
 			errs = multierr.Append(errs, errors.Wrap(err, string(out)))
@@ -213,7 +214,7 @@ func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int
 	out, err := exec.Command("curl", "-sX", "GET",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
-			GitUser, bitbucketProject, page)).CombinedOutput()
+			bitbucketWorkspace, bitbucketProject, page)).CombinedOutput()
 	if err != nil {
 		return -1, errors.Wrap(err, string(out))
 	}

@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcegroup"
+	"kpt.dev/resourcegroup/controllers/status"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -109,8 +110,8 @@ func CreateOrUpdateResources(kubeClient *testkubeclient.KubeClient, resources []
 			Kind:    r.Kind,
 		})
 		u.SetAnnotations(map[string]string{
-			"config.k8s.io/owning-inventory":      id,
-			resourcegroup.SourceHashAnnotationKey: "1234567890",
+			"config.k8s.io/owning-inventory": id,
+			status.SourceHashAnnotationKey:   "1234567890",
 		})
 
 		err := kubeClient.Get(r.Name, r.Namespace, u.DeepCopy())

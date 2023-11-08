@@ -38,6 +38,7 @@ type TypeResolver struct {
 	typeMapping map[schema.GroupKind]schema.GroupVersionKind
 }
 
+// Refresh refreshes the type mapping by querying the api server
 func (r *TypeResolver) Refresh() {
 	mapping := make(map[schema.GroupKind]schema.GroupVersionKind)
 	apiResourcesList, err := discovery.ServerPreferredResources(r.dc)
@@ -64,6 +65,7 @@ func (r *TypeResolver) Refresh() {
 	r.typeMapping = mapping
 }
 
+// Resolve maps the provided GroupKind to a GroupVersionKind
 func (r *TypeResolver) Resolve(gk schema.GroupKind) (schema.GroupVersionKind, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -71,8 +73,9 @@ func (r *TypeResolver) Resolve(gk schema.GroupKind) (schema.GroupVersionKind, bo
 	return item, found
 }
 
+// Reconcile implements reconciler.Reconciler. This function handles reconciliation
+// for the type mapping.
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
-
 func (r *TypeResolver) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
 	logger.Info("refreshing type resolver")
@@ -80,6 +83,7 @@ func (r *TypeResolver) Reconcile(context.Context, ctrl.Request) (ctrl.Result, er
 	return ctrl.Result{}, nil
 }
 
+// NewTypeResolver creates a new TypeResolver
 func NewTypeResolver(mgr ctrl.Manager, logger logr.Logger) (*TypeResolver, error) {
 	dc := discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig())
 	r := &TypeResolver{

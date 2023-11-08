@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	owningInventoryKey      = "config.k8s.io/owning-inventory"
+	owningInventoryKey = "config.k8s.io/owning-inventory"
+	// SourceHashAnnotationKey is the name of the annotation which contains the source hash
 	SourceHashAnnotationKey = "configmanagement.gke.io/token"
 )
 

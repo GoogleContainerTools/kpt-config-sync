@@ -51,19 +51,19 @@ type EnqueueEventToChannel struct {
 
 var _ cache.ResourceEventHandler = &EnqueueEventToChannel{}
 
-// Create implements EventHandler
+// OnAdd implements EventHandler
 func (e *EnqueueEventToChannel) OnAdd(obj interface{}) {
 	e.Log.V(5).Info("received an add event")
 	e.enqueueEvent(obj)
 }
 
-// Update implements EventHandler
+// OnUpdate implements EventHandler
 func (e *EnqueueEventToChannel) OnUpdate(_, newObj interface{}) {
 	e.Log.V(5).Info("received an update event")
 	e.enqueueEvent(newObj)
 }
 
-// Delete implements EventHandler
+// OnDelete implements EventHandler
 func (e *EnqueueEventToChannel) OnDelete(obj interface{}) {
 	e.Log.V(5).Info("received a delete event")
 	e.enqueueEvent(obj)

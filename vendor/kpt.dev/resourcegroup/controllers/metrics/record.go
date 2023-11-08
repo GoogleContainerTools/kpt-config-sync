@@ -110,7 +110,7 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 		PipelineErrorView.Name, component, nn.Namespace, reconcilerName, nn.Name, metricVal)
 }
 
-// ComputeReconcilerName computes the reconciler name from the ResourceGroup CR name
+// ComputeReconcilerNameType computes the reconciler name from the ResourceGroup CR name
 func ComputeReconcilerNameType(nn types.NamespacedName) (reconcilerName, reconcilerType string) {
 	if nn.Namespace == CMSNamespace {
 		if nn.Name == RootSyncName {

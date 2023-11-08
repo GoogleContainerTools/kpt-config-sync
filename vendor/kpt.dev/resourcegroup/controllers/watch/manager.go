@@ -217,6 +217,7 @@ func (m *Manager) Len() int {
 	return len(m.watcherMap)
 }
 
+// IsWatched returns whether the given GVK is being watched
 func (m *Manager) IsWatched(gvk schema.GroupVersionKind) bool {
 	_, found := m.watcherMap[gvk]
 	return found

@@ -685,7 +685,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	}
 }
 
-func TestResourceGroupStress(t *testing.T) {
+func TestStressResourceGroup(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController, ntopts.StressTest)
 
 	namespace := "resourcegroup-e2e"

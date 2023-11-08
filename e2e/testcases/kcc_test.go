@@ -135,7 +135,7 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	}
 }
 
-func TestResourceGroupKCC(t *testing.T) {
+func TestKCCResourceGroup(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController, ntopts.KCCTest)
 
 	namespace := "resourcegroup-e2e"

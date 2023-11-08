@@ -563,6 +563,9 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
 			return fakeClient.RESTMapper(), nil
 		},
+		// The underlying library uses a fixed port for serving metrics, which can
+		// cause conflicts when running tests concurrently. This disables the metrics server.
+		MetricsBindAddress: "0",
 	})
 	require.NoError(t, err)
 

@@ -17,7 +17,7 @@ package main
 import (
 	"os"
 
-	"kpt.dev/resourcegroup/controllers/runner"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/runner"
 )
 
 func main() {

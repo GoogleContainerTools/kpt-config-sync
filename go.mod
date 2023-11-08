@@ -52,7 +52,6 @@ require (
 	k8s.io/kubectl v0.26.9
 	k8s.io/kubernetes v1.26.9
 	k8s.io/utils v0.0.0-20230115233650-391b47cb4029
-	kpt.dev/resourcegroup v0.0.0-20231108205639-81988f63570b
 	sigs.k8s.io/cli-utils v0.35.0
 	sigs.k8s.io/controller-runtime v0.14.1
 	sigs.k8s.io/kind v0.20.0

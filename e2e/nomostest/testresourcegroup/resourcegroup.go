@@ -24,9 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
-	"kpt.dev/resourcegroup/controllers/resourcegroup"
-	"kpt.dev/resourcegroup/controllers/status"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/status"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

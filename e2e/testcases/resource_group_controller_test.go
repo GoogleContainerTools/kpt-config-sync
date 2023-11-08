@@ -29,12 +29,12 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
 func TestResourceGroupController(t *testing.T) {

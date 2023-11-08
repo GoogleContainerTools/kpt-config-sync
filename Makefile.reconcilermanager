@@ -9,6 +9,7 @@ generate: install-controller-gen
 		object:headerFile="hack/boilerplate.txt" \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
+		paths="./pkg/api/kpt.dev/v1alpha1" \
 		paths="./pkg/api/configmanagement/v1"
 
 .PHONY: configsync-crds
@@ -17,14 +18,18 @@ configsync-crds: install-controller-gen "$(KUSTOMIZE)" "$(GOBIN)/addlicense"
 	$(CONTROLLER_GEN) crd \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
+		paths="./pkg/api/kpt.dev/v1alpha1" \
 		output:artifacts:config=./manifests \
 	&& mv ./manifests/configsync.gke.io_reposyncs.yaml ./manifests/patch/reposync-crd.yaml \
 	&& mv ./manifests/configsync.gke.io_rootsyncs.yaml ./manifests/patch/rootsync-crd.yaml \
+	&& mv ./manifests/kpt.dev_resourcegroups.yaml ./manifests/patch/resourcegroup-crd.yaml \
 	&& "$(KUSTOMIZE)" build ./manifests/patch -o ./manifests \
 	&& mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml \
 	&& mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml \
+	&& mv ./manifests/*customresourcedefinition_resourcegroups* ./manifests/resourcegroup-crd.yaml \
 	&& rm ./manifests/patch/reposync-crd.yaml \
 	&& rm ./manifests/patch/rootsync-crd.yaml \
+	&& rm ./manifests/patch/resourcegroup-crd.yaml \
 	&& "$(GOBIN)/addlicense" ./manifests
 
 .PHONY: install-controller-gen

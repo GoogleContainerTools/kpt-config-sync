@@ -247,7 +247,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	}
 
 	// Overwrite reconciler rolebinding.
-	if _, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+	if _, err := r.upsertRoleBinding(ctx, reconcilerRef, rsRef, labelMap); err != nil {
 		return errors.Wrap(err, "upserting role binding")
 	}
 
@@ -942,6 +942,7 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRe
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
+	delete(labelMap, metadata.SyncNameLabel)
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
 		core.AddLabels(childRB, labelMap)

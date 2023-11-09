@@ -16,36 +16,94 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
   name: namespaceselectors.configmanagement.gke.io
   labels:
     configmanagement.gke.io/system: "true"
 spec:
   preserveUnknownFields: false
   group: configmanagement.gke.io
-  scope: Cluster
   names:
+    kind: NamespaceSelector
+    listKind: NamespaceSelectorList
     plural: namespaceselectors
     singular: namespaceselector
-    kind: NamespaceSelector
+  scope: Cluster
   versions:
-    - name: v1
-      served: true
-      storage: true
-      schema:
-        # openAPIV3Schema is the schema for validating custom objects.
-        # TODO: Complete and tests this once 1.11 beta is out.
-        openAPIV3Schema:
-          type: object
-          required:
-          - spec
-          properties:
-            spec:
-              # NamespaceSelectorSpec
-              type: object
-              required:
-              - selector
-              properties:
-                selector:
-                  type: object # metav1.LabelSelector
-                  x-kubernetes-preserve-unknown-fields: true
-              # /NamespaceSelectorSpec
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: NamespaceSelector specifies a LabelSelector applied to namespaces
+          that exist within a NamespaceConfig hierarchy.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: The actual object definition, per K8S object definition style.
+            properties:
+              selector:
+                description: Selects namespaces. This field is NOT optional and follows
+                  standard label selector semantics. An empty selector matches all
+                  namespaces.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: A label selector requirement is a selector that
+                        contains values, a key, and an operator that relates the key
+                        and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: operator represents a key's relationship to
+                            a set of values. Valid operators are In, NotIn, Exists
+                            and DoesNotExist.
+                          type: string
+                        values:
+                          description: values is an array of string values. If the
+                            operator is In or NotIn, the values array must be non-empty.
+                            If the operator is Exists or DoesNotExist, the values
+                            array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: matchLabels is a map of {key,value} pairs. A single
+                      {key,value} in the matchLabels map is equivalent to an element
+                      of matchExpressions, whose key field is "key", the operator
+                      is "In", and the values array contains only "value". The requirements
+                      are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - selector
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true

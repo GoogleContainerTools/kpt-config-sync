@@ -16,12 +16,7 @@
 set -euo pipefail
 
 
-./scripts/test-with-junit.sh -installsuffix "static" "$@"
-
-echo "Running nomoserrors"
-# "none" is just a dummy value so nomoserrors doesn't actually print out errors.
-# "none" isn't a special value; any non-numeric non-empty string will do.
-go run cmd/nomoserrors/main.go --id=none
+./scripts/test-with-junit.sh ./e2e/... --p 1 --e2e "$@"
 
 echo "PASS"
 

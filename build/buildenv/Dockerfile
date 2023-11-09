@@ -63,6 +63,8 @@ RUN go install golang.org/x/tools/cmd/goimports@v0.7.0
 ARG GOTOPT2_REPO="github.com/filmil/gotopt2"
 RUN go install ${GOTOPT2_REPO}/cmd/gotopt2@v0.1.2
 
+RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
+
 # The build environment docker file.
 FROM ${GOLANG_IMAGE}
 

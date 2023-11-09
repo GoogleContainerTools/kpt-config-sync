@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,16 +15,17 @@
 
 
 #
-# golang e2e test launcher.
-# This wraps the e2e test execution and creates a junit report.
+# golang test launcher.
+# This wraps the go test execution and creates a junit report.
 
 set -eo pipefail
 
 set +e
 
-echo "Starting e2e tests"
+test_results=".output/test_results.txt"
+echo "Starting tests"
 start_time=$(date +%s)
-go test ./e2e/... --p 1 --e2e --test.v "$@" | tee test_results.txt
+go test --test.v "$@" | tee "${test_results}"
 exit_code=$?
 end_time=$(date +%s)
 echo "Tests took $(( end_time - start_time )) seconds"
@@ -39,8 +40,8 @@ if [[ -n "${ARTIFACTS}" && -d "${ARTIFACTS}" ]]; then
   # go-junit-report does not yet properly parse "=== NAME", so this hack enables
   # proper parsing.
   # TODO: revert when fixed https://github.com/jstemmer/go-junit-report/issues/169
-  sed -i -e 's/=== NAME/=== CONT/g' test_results.txt
-  go-junit-report --subtest-mode=exclude-parents < test_results.txt > "${ARTIFACTS}/junit_report.xml"
+  sed -i -e 's/=== NAME/=== CONT/g' "${test_results}"
+  go-junit-report --subtest-mode=exclude-parents < "${test_results}" > "${ARTIFACTS}/junit_report.xml"
   if [ "$exit_code" -eq 0 ]; then
     # build our in-repo junit report post-processor binary
     go install ./cmd/junit-report

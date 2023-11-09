@@ -41,7 +41,7 @@ test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 # Useful for modifying test code and rerunning tests without rebuilding images.
 .PHONY: test-e2e-go-nobuild
 test-e2e-nobuild: "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)"
-	./scripts/e2e.sh $(E2E_ARGS)
+	./scripts/test-e2e.sh $(E2E_ARGS)
 
 # Run the Go e2e tests on GKE without building images/manifests.
 # The test framework will create/teardown the GKE clusters.
@@ -84,7 +84,7 @@ test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 		--network="host" \
 		--rm \
 		$(KIND_IMAGE) \
-		./scripts/e2e.sh \
+		./scripts/test-e2e.sh \
 			--share-test-env \
 			--timeout $(KIND_E2E_TIMEOUT) \
 			--test.v -v \

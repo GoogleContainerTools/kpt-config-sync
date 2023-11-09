@@ -123,7 +123,7 @@ TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-inf
 # When upgrading this tag, the image will be rebuilt locally during presubmits.
 # After the change is submitted, a postsubmit job will publish the new tag.
 # There is no need to manually publish this image.
-BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.1
+BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.2
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler
@@ -186,6 +186,8 @@ DOCKER_RUN_ARGS = \
 	-u $(UID):$(GID)                                                   \
 	-v $(GO_DIR):/go                                                   \
 	-v $$(pwd):/go/src/$(REPO)                                         \
+	-v $(ARTIFACTS):/logs/artifacts \
+	--env ARTIFACTS=/logs/artifacts \
 	-v $(GO_DIR)/std/linux_amd64_static:/usr/local/go/pkg/linux_amd64_static    \
 	-v $(GO_DIR)/std/linux_arm64_static:/usr/local/go/pkg/linux_arm64_static    \
 	-v $(GO_DIR)/std/darwin_amd64_static:/usr/local/go/pkg/darwin_amd64_static   \

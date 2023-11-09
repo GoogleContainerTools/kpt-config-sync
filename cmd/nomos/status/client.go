@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/clientgen/apis"
-	typedv1 "kpt.dev/configsync/clientgen/apis/typed/configmanagement/v1"
+	typedv1 "kpt.dev/configsync/clientgen/apis/typed/monorepo/v1"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -517,7 +517,7 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 				mapMutex.Lock()
 				clientMap[cfgName] = &ClusterClient{
 					cl,
-					pcs.ConfigmanagementV1().Repos(),
+					pcs.MonorepoV1().Repos(),
 					kcs,
 					cmc,
 				}

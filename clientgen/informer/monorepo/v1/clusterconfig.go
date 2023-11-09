@@ -12,8 +12,8 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 	apis "kpt.dev/configsync/clientgen/apis"
 	internalinterfaces "kpt.dev/configsync/clientgen/informer/internalinterfaces"
-	v1 "kpt.dev/configsync/clientgen/listers/configmanagement/v1"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/clientgen/listers/monorepo/v1"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // ClusterConfigInformer provides access to a shared informer and lister for
@@ -45,16 +45,16 @@ func NewFilteredClusterConfigInformer(client apis.Interface, resyncPeriod time.D
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().ClusterConfigs().List(context.TODO(), options)
+				return client.MonorepoV1().ClusterConfigs().List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().ClusterConfigs().Watch(context.TODO(), options)
+				return client.MonorepoV1().ClusterConfigs().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.ClusterConfig{},
+		&monorepov1.ClusterConfig{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,7 +65,7 @@ func (f *clusterConfigInformer) defaultInformer(client apis.Interface, resyncPer
 }
 
 func (f *clusterConfigInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.ClusterConfig{}, f.defaultInformer)
+	return f.factory.InformerFor(&monorepov1.ClusterConfig{}, f.defaultInformer)
 }
 
 func (f *clusterConfigInformer) Lister() v1.ClusterConfigLister {

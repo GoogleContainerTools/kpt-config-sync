@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // RepoLister helps list Repos.

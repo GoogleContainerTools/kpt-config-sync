@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/status"
 )
 

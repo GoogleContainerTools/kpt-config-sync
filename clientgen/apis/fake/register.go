@@ -12,6 +12,7 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 var scheme = runtime.NewScheme()
@@ -22,6 +23,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	configsyncv1alpha1.AddToScheme,
 	configsyncv1beta1.AddToScheme,
 	hubv1.AddToScheme,
+	monorepov1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

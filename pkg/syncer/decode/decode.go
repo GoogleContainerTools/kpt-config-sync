@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // Decoder decodes GenericResources from NamespaceConfigs / ClusterConfigs to

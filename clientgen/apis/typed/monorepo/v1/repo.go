@@ -11,7 +11,7 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 	scheme "kpt.dev/configsync/clientgen/apis/scheme"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // ReposGetter has a method to return a RepoInterface.
@@ -40,7 +40,7 @@ type repos struct {
 }
 
 // newRepos returns a Repos
-func newRepos(c *ConfigmanagementV1Client) *repos {
+func newRepos(c *MonorepoV1Client) *repos {
 	return &repos{
 		client: c.RESTClient(),
 	}

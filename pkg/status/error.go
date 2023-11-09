@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/importer/id"
 	"sigs.k8s.io/cli-utils/pkg/multierror"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -171,7 +171,7 @@ func CodeRegistry() []string {
 	return codes
 }
 
-// toErrorResource converts a Resource into a v1.ErrorResource.
+// toErrorResource converts a Resource into a monorepo.ErrorResource.
 func toErrorResource(r client.Object) v1.ErrorResource {
 	return v1.ErrorResource{
 		SourcePath:        GetSourceAnnotation(r),

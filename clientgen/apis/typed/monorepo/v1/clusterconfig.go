@@ -11,7 +11,7 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 	scheme "kpt.dev/configsync/clientgen/apis/scheme"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // ClusterConfigsGetter has a method to return a ClusterConfigInterface.
@@ -40,7 +40,7 @@ type clusterConfigs struct {
 }
 
 // newClusterConfigs returns a ClusterConfigs
-func newClusterConfigs(c *ConfigmanagementV1Client) *clusterConfigs {
+func newClusterConfigs(c *MonorepoV1Client) *clusterConfigs {
 	return &clusterConfigs{
 		client: c.RESTClient(),
 	}

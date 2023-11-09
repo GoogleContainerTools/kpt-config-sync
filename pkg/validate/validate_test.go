@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1common "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -78,13 +78,13 @@ func validRepoSync(ns, name, path string, opts ...core.MetaMutator) ast.FileObje
 	return fake.FileObject(rs, path)
 }
 
-func clusterSelector(name, key, value string) *v1.ClusterSelector {
+func clusterSelector(name, key, value string) *v1common.ClusterSelector {
 	cs := fake.ClusterSelectorObject(core.Name(name))
 	cs.Spec.Selector.MatchLabels = map[string]string{key: value}
 	return cs
 }
 
-func namespaceSelector(name, key, value string) *v1.NamespaceSelector {
+func namespaceSelector(name, key, value string) *v1common.NamespaceSelector {
 	ns := fake.NamespaceSelectorObject(core.Name(name))
 	ns.Spec.Selector.MatchLabels = map[string]string{key: value}
 	return ns
@@ -665,7 +665,7 @@ func TestHierarchical(t *testing.T) {
 			name: "abstract resource with hierarchy mode none fails",
 			objs: []ast.FileObject{
 				fake.Repo(),
-				fake.HierarchyConfig(fake.HierarchyConfigResource(v1.HierarchyModeNone,
+				fake.HierarchyConfig(fake.HierarchyConfigResource(v1common.HierarchyModeNone,
 					kinds.RoleBinding().GroupVersion(),
 					kinds.RoleBinding().Kind)),
 				fake.RoleBindingAtPath("namespaces/rb.yaml"),
@@ -861,15 +861,15 @@ func TestHierarchical(t *testing.T) {
 			objs: []ast.FileObject{
 				fake.Repo(),
 				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+					fake.HierarchyConfigResource(v1common.HierarchyModeInherit,
 						kinds.CustomResourceDefinitionV1Beta1().GroupVersion(), kinds.CustomResourceDefinitionV1Beta1().Kind),
 					core.Name("crd-hc")),
 				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+					fake.HierarchyConfigResource(v1common.HierarchyModeInherit,
 						kinds.Namespace().GroupVersion(), kinds.Namespace().Kind),
 					core.Name("namespace-hc")),
 				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+					fake.HierarchyConfigResource(v1common.HierarchyModeInherit,
 						kinds.Sync().GroupVersion(), kinds.Sync().Kind),
 					core.Name("sync-hc")),
 				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),

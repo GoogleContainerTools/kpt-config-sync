@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/testing/fake"

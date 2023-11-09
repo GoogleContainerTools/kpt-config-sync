@@ -12,6 +12,7 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/clientgen/apis/typed/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/clientgen/apis/typed/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/clientgen/apis/typed/hub/v1"
+	monorepov1 "kpt.dev/configsync/clientgen/apis/typed/monorepo/v1"
 )
 
 type Interface interface {
@@ -20,6 +21,7 @@ type Interface interface {
 	ConfigsyncV1alpha1() configsyncv1alpha1.ConfigsyncV1alpha1Interface
 	ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Interface
 	HubV1() hubv1.HubV1Interface
+	MonorepoV1() monorepov1.MonorepoV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -30,6 +32,7 @@ type Clientset struct {
 	configsyncV1alpha1 *configsyncv1alpha1.ConfigsyncV1alpha1Client
 	configsyncV1beta1  *configsyncv1beta1.ConfigsyncV1beta1Client
 	hubV1              *hubv1.HubV1Client
+	monorepoV1         *monorepov1.MonorepoV1Client
 }
 
 // ConfigmanagementV1 retrieves the ConfigmanagementV1Client
@@ -50,6 +53,11 @@ func (c *Clientset) ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Inter
 // HubV1 retrieves the HubV1Client
 func (c *Clientset) HubV1() hubv1.HubV1Interface {
 	return c.hubV1
+}
+
+// MonorepoV1 retrieves the MonorepoV1Client
+func (c *Clientset) MonorepoV1() monorepov1.MonorepoV1Interface {
+	return c.monorepoV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -89,6 +97,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.monorepoV1, err = monorepov1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -105,6 +117,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs.configsyncV1alpha1 = configsyncv1alpha1.NewForConfigOrDie(c)
 	cs.configsyncV1beta1 = configsyncv1beta1.NewForConfigOrDie(c)
 	cs.hubV1 = hubv1.NewForConfigOrDie(c)
+	cs.monorepoV1 = monorepov1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -117,6 +130,7 @@ func New(c rest.Interface) *Clientset {
 	cs.configsyncV1alpha1 = configsyncv1alpha1.New(c)
 	cs.configsyncV1beta1 = configsyncv1beta1.New(c)
 	cs.hubV1 = hubv1.New(c)
+	cs.monorepoV1 = monorepov1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

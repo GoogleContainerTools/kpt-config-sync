@@ -16,7 +16,7 @@ package repo
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/kinds"
 )
 

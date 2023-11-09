@@ -21,8 +21,8 @@ import (
 
 	"github.com/pkg/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // MultiError represents a collection of errors.

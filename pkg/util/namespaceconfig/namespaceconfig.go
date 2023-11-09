@@ -18,7 +18,7 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

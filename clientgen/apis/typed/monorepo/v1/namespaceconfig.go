@@ -11,7 +11,7 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 	scheme "kpt.dev/configsync/clientgen/apis/scheme"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // NamespaceConfigsGetter has a method to return a NamespaceConfigInterface.
@@ -40,7 +40,7 @@ type namespaceConfigs struct {
 }
 
 // newNamespaceConfigs returns a NamespaceConfigs
-func newNamespaceConfigs(c *ConfigmanagementV1Client) *namespaceConfigs {
+func newNamespaceConfigs(c *MonorepoV1Client) *namespaceConfigs {
 	return &namespaceConfigs{
 		client: c.RESTClient(),
 	}

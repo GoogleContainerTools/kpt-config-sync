@@ -12,8 +12,8 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 	apis "kpt.dev/configsync/clientgen/apis"
 	internalinterfaces "kpt.dev/configsync/clientgen/informer/internalinterfaces"
-	v1 "kpt.dev/configsync/clientgen/listers/configmanagement/v1"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/clientgen/listers/monorepo/v1"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // NamespaceConfigInformer provides access to a shared informer and lister for
@@ -45,16 +45,16 @@ func NewFilteredNamespaceConfigInformer(client apis.Interface, resyncPeriod time
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().NamespaceConfigs().List(context.TODO(), options)
+				return client.MonorepoV1().NamespaceConfigs().List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().NamespaceConfigs().Watch(context.TODO(), options)
+				return client.MonorepoV1().NamespaceConfigs().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.NamespaceConfig{},
+		&monorepov1.NamespaceConfig{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,7 +65,7 @@ func (f *namespaceConfigInformer) defaultInformer(client apis.Interface, resyncP
 }
 
 func (f *namespaceConfigInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.NamespaceConfig{}, f.defaultInformer)
+	return f.factory.InformerFor(&monorepov1.NamespaceConfig{}, f.defaultInformer)
 }
 
 func (f *namespaceConfigInformer) Lister() v1.NamespaceConfigLister {

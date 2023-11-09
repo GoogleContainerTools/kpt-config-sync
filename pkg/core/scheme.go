@@ -40,6 +40,7 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // Scheme is a reference to the global scheme.
@@ -65,6 +66,7 @@ func init() {
 	utilruntime.Must(clusterregistry.AddToScheme(scheme.Scheme))
 
 	utilruntime.Must(configmanagementv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(monorepov1.AddToScheme(scheme.Scheme))
 
 	utilruntime.Must(configsyncv1beta1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(configsyncv1alpha1.AddToScheme(scheme.Scheme))

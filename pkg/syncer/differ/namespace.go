@@ -15,9 +15,9 @@
 package differ
 
 import (
-	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/lifecycle"
 	"kpt.dev/configsync/pkg/metadata"
 )
@@ -25,8 +25,8 @@ import (
 // NamespaceDiff represents a diff between a Namespace config and the one on the cluster.
 type NamespaceDiff struct {
 	Name     string
-	Declared *v1.NamespaceConfig
-	Actual   *corev1.Namespace
+	Declared *monorepov1.NamespaceConfig
+	Actual   *v1.Namespace
 }
 
 // Type returns the type of the NamespaceDiff.

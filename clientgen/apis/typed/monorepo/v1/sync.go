@@ -11,7 +11,7 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 	scheme "kpt.dev/configsync/clientgen/apis/scheme"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // SyncsGetter has a method to return a SyncInterface.
@@ -40,7 +40,7 @@ type syncs struct {
 }
 
 // newSyncs returns a Syncs
-func newSyncs(c *ConfigmanagementV1Client) *syncs {
+func newSyncs(c *MonorepoV1Client) *syncs {
 	return &syncs{
 		client: c.RESTClient(),
 	}

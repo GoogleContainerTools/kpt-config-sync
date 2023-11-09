@@ -17,6 +17,8 @@ import (
 	fakeconfigsyncv1beta1 "kpt.dev/configsync/clientgen/apis/typed/configsync/v1beta1/fake"
 	hubv1 "kpt.dev/configsync/clientgen/apis/typed/hub/v1"
 	fakehubv1 "kpt.dev/configsync/clientgen/apis/typed/hub/v1/fake"
+	monorepov1 "kpt.dev/configsync/clientgen/apis/typed/monorepo/v1"
+	fakemonorepov1 "kpt.dev/configsync/clientgen/apis/typed/monorepo/v1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.
@@ -87,4 +89,9 @@ func (c *Clientset) ConfigsyncV1beta1() configsyncv1beta1.ConfigsyncV1beta1Inter
 // HubV1 retrieves the HubV1Client
 func (c *Clientset) HubV1() hubv1.HubV1Interface {
 	return &fakehubv1.FakeHubV1{Fake: &c.Fake}
+}
+
+// MonorepoV1 retrieves the MonorepoV1Client
+func (c *Clientset) MonorepoV1() monorepov1.MonorepoV1Interface {
+	return &fakemonorepov1.FakeMonorepoV1{Fake: &c.Fake}
 }

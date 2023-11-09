@@ -15,8 +15,8 @@
 package status
 
 import (
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // baseErrorImpl represents a root error around which more complex errors are built.

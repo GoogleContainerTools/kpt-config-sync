@@ -28,16 +28,17 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	clusterregistry "k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	monorepov1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
 )
 
 // NamespaceSelectorObject returns an initialized NamespaceSelector.
-func NamespaceSelectorObject(opts ...core.MetaMutator) *v1.NamespaceSelector {
-	result := &v1.NamespaceSelector{
+func NamespaceSelectorObject(opts ...core.MetaMutator) *configmanagementv1.NamespaceSelector {
+	result := &configmanagementv1.NamespaceSelector{
 		TypeMeta: ToTypeMeta(kinds.NamespaceSelector()),
 	}
 	defaultMutate(result)
@@ -166,8 +167,8 @@ func ClusterRoleAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 }
 
 // ClusterSelectorObject initializes a ClusterSelector object.
-func ClusterSelectorObject(opts ...core.MetaMutator) *v1.ClusterSelector {
-	obj := &v1.ClusterSelector{TypeMeta: ToTypeMeta(kinds.ClusterSelector())}
+func ClusterSelectorObject(opts ...core.MetaMutator) *configmanagementv1.ClusterSelector {
+	obj := &configmanagementv1.ClusterSelector{TypeMeta: ToTypeMeta(kinds.ClusterSelector())}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -268,7 +269,7 @@ func CustomResourceDefinitionV1(opts ...core.MetaMutator) ast.FileObject {
 	return FileObject(CustomResourceDefinitionV1Object(opts...), "cluster/crd.yaml")
 }
 
-// CustomResourceDefinitionV1Unstructured returns a v1 CRD as an unstructured
+// CustomResourceDefinitionV1Unstructured returns a monorepov1 CRD as an unstructured
 func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
 	o := CustomResourceDefinitionV1Object(opts...)
 	jsn, err := json.Marshal(o)
@@ -302,10 +303,10 @@ func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 }
 
 // SyncObject returns a Sync configured for a particular
-func SyncObject(gk schema.GroupKind, opts ...core.MetaMutator) *v1.Sync {
-	obj := &v1.Sync{TypeMeta: ToTypeMeta(kinds.Sync())}
+func SyncObject(gk schema.GroupKind, opts ...core.MetaMutator) *monorepov1.Sync {
+	obj := &monorepov1.Sync{TypeMeta: ToTypeMeta(kinds.Sync())}
 	obj.Name = strings.ToLower(gk.String())
-	obj.ObjectMeta.Finalizers = append(obj.ObjectMeta.Finalizers, v1.SyncFinalizer)
+	obj.ObjectMeta.Finalizers = append(obj.ObjectMeta.Finalizers, monorepov1.SyncFinalizer)
 	obj.Spec.Group = gk.Group
 	obj.Spec.Kind = gk.Kind
 

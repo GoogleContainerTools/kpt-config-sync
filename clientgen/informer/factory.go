@@ -14,6 +14,7 @@ import (
 	apis "kpt.dev/configsync/clientgen/apis"
 	configmanagement "kpt.dev/configsync/clientgen/informer/configmanagement"
 	internalinterfaces "kpt.dev/configsync/clientgen/informer/internalinterfaces"
+	monorepo "kpt.dev/configsync/clientgen/informer/monorepo"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.
@@ -157,8 +158,13 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Configmanagement() configmanagement.Interface
+	Monorepo() monorepo.Interface
 }
 
 func (f *sharedInformerFactory) Configmanagement() configmanagement.Interface {
 	return configmanagement.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Monorepo() monorepo.Interface {
+	return monorepo.New(f, f.namespace, f.tweakListOptions)
 }

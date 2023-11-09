@@ -15,7 +15,7 @@
 package namespaceconfig
 
 import (
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/monorepo/v1"
 )
 
 // AllConfigs holds things that Importer wants to sync. It is only used in-process, not written

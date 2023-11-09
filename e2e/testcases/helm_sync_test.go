@@ -32,7 +32,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -785,12 +784,12 @@ func TestHelmARTokenAuth(t *testing.T) {
 	}
 
 	nt.T.Log("Create secret for authentication")
-	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", v1.NSConfigManagementSystem), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", configsync.ControllerNamespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
 	if err != nil {
 		nt.T.Fatalf("failed to create secret, err: %v", err)
 	}
 	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "secret", "foo", "-n", v1.NSConfigManagementSystem, "--ignore-not-found")
+		nt.MustKubectl("delete", "secret", "foo", "-n", configsync.ControllerNamespace, "--ignore-not-found")
 	})
 
 	chart, err := artifactregistry.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)

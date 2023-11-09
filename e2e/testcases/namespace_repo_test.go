@@ -31,7 +31,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -314,7 +313,7 @@ func checkRepoSyncResourcesNotPresent(nt *nomostest.NT, namespace string, secret
 		return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace)
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(kinds.Deployment(), core.NsReconcilerName(namespace, configsync.RepoSyncName), v1.NSConfigManagementSystem)
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(), core.NsReconcilerName(namespace, configsync.RepoSyncName), configsync.ControllerNamespace)
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "ns-reconciler-bookstore-git-sync", configsync.ControllerNamespace)

@@ -32,7 +32,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -344,7 +343,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	// hydration-controller disabled by default, check for existing of container
 	// after sync source contains DRY configs
 	nt.T.Log("Check hydration controller default image name")
-	err := nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	err := nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -356,7 +355,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -403,7 +402,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
 		nt.T.Fatal(err)

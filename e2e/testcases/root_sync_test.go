@@ -31,7 +31,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -48,7 +47,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
 
 	rs := &v1beta1.RootSync{}
-	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, rs)
+	err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -60,17 +59,17 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	// Verify Root Reconciler deployment no longer present.
 	_, err = retry.Retry(40*time.Second, func() error {
 		var errs error
-		errs = multierr.Append(errs, nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, v1.NSConfigManagementSystem, fake.DeploymentObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, fake.DeploymentObject()))
 		// validate Root Reconciler configmaps are no longer present.
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-git-sync", v1.NSConfigManagementSystem, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-reconciler", v1.NSConfigManagementSystem, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-hydration-controller", v1.NSConfigManagementSystem, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-source-format", v1.NSConfigManagementSystem, fake.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-git-sync", configsync.ControllerNamespace, fake.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-reconciler", configsync.ControllerNamespace, fake.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-hydration-controller", configsync.ControllerNamespace, fake.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-source-format", configsync.ControllerNamespace, fake.ConfigMapObject()))
 		// validate Root Reconciler ServiceAccount is no longer present.
 		saName := core.RootReconcilerName(rs.Name)
-		errs = multierr.Append(errs, nt.ValidateNotFound(saName, v1.NSConfigManagementSystem, fake.ServiceAccountObject(saName)))
+		errs = multierr.Append(errs, nt.ValidateNotFound(saName, configsync.ControllerNamespace, fake.ServiceAccountObject(saName)))
 		// validate Root Reconciler ClusterRoleBinding is no longer present.
-		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncPermissionsName(nomostest.DefaultRootReconcilerName), v1.NSConfigManagementSystem, fake.ClusterRoleBindingObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncPermissionsName(nomostest.DefaultRootReconcilerName), configsync.ControllerNamespace, fake.ClusterRoleBindingObject()))
 		return errs
 	})
 	if err != nil {
@@ -93,7 +92,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 
 	// Validate RootSync is present.
 	var rs v1beta1.RootSync
-	err := nt.Validate(configsync.RootSyncName, v1.NSConfigManagementSystem, &rs)
+	err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &rs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -352,7 +351,7 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 	// Deployment is successfully created.
 	// Log error if the Reconciling condition does not progress to False before the timeout
 	// expires.
-	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, v1.NSConfigManagementSystem,
+	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
 			hasRootSyncReconcilingStatus(metav1.ConditionFalse),
 			hasRootSyncStalledStatus(metav1.ConditionFalse),

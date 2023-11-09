@@ -3661,6 +3661,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 		reconcilermanager.GitSync: {
 			gitSyncKnownHosts: "false",
 			GitSyncRepo:       reposyncRepo,
+			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
 			gitSyncPeriod:     "15s",
 		},

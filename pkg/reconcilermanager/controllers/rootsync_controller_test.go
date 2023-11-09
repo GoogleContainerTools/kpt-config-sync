@@ -3260,6 +3260,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 		reconcilermanager.GitSync: {
 			gitSyncKnownHosts: "false",
 			GitSyncRepo:       rootsyncRepo,
+			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
 			gitSyncPeriod:     "15s",
 		},

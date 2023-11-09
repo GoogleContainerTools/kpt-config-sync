@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func FakeResolver() *TypeResolver {
+func fakeResolver() *TypeResolver {
 	return &TypeResolver{
 		typeMapping: map[schema.GroupKind]schema.GroupVersionKind{
 			{

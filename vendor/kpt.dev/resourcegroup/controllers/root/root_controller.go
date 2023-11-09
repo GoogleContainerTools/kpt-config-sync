@@ -41,8 +41,8 @@ import (
 	"kpt.dev/resourcegroup/controllers/watch"
 )
 
+//nolint:revive // TODO: add comments for public constants and enable linting
 const (
-	ConfigSyncGroup    = "configsync"
 	KptGroup           = "kpt"
 	DisableStatusKey   = "configsync.gke.io/status"
 	DisableStatusValue = "disabled"
@@ -86,10 +86,11 @@ type Reconciler struct {
 	watches *watch.Manager
 }
 
+// Reconcile implements reconcile.Reconciler. This function handles reconciliation
+// for ResourceGroup objects.
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch
-
 func (r *Reconciler) Reconcile(rootCtx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
 	ctx := context.WithValue(rootCtx, contextLoggerKey, logger)
@@ -181,6 +182,7 @@ func isStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 	return found && val == DisableStatusValue
 }
 
+// NewController creates a new Reconciler and registers it with the provided manager
 func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 	logger logr.Logger, resolver *typeresolver.TypeResolver, group string, resMap *resourcemap.ResourceMap) error {
 	cfg := mgr.GetConfig()

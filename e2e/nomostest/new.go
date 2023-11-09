@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
@@ -329,10 +330,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	}
 
-	if *e2e.KCC {
-		nt.setupConfigConnector()
-	}
-
 	t.Cleanup(func() {
 		DeleteRemoteRepos(nt)
 	})
@@ -369,11 +366,19 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		}
 	})
 
-	if err := installConfigSync(nt, opts.Nomos); err != nil {
-		nt.T.Fatal(err)
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return installConfigSync(nt, opts.Nomos)
+	})
+	tg.Go(func() error {
+		return installPrometheus(nt)
+	})
+	if *e2e.KCC {
+		tg.Go(func() error {
+			return setupConfigConnector(nt)
+		})
 	}
-
-	if err := installPrometheus(nt); err != nil {
+	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 

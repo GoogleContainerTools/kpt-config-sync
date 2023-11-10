@@ -51,6 +51,17 @@ spec:
           spec:
             description: The actual object definition, per K8S object definition style.
             properties:
+              mode:
+                default: static
+                description: mode specifies the selection mode of the NamespaceSelector.
+                  It must be set to either "static" or "dynamic" and is optional.
+                  If not specified, it defaults to "static." In static mode, only
+                  resources with labels matching Namespaces statically declared in
+                  the source of truth are selected. In dynamic mode, selection includes
+                  both statically declared Namespaces and Namespaces present on the
+                  cluster.
+                pattern: ^(static|dynamic)$
+                type: string
               selector:
                 description: Selects namespaces. This field is NOT optional and follows
                   standard label selector semantics. An empty selector matches all

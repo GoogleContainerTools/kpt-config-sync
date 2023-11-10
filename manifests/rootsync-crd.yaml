@@ -328,6 +328,21 @@ spec:
                       about valid inputs: https://pkg.go.dev/time#ParseDuration. Recommended
                       apiServerTimeout range is from "3s" to "1m".'
                     type: string
+                  clusterRole:
+                    description: clusterRole controls which role to bind the service
+                      account for this RootSync's reconciler to.
+                    properties:
+                      disabled:
+                        description: "disabled turns off binding to a ClusterRole
+                          entirely. \n It is then your responsibility to bind any
+                          roles to the relevant service account."
+                        type: boolean
+                      name:
+                        description: "name is the name of the ClusterRole to bind
+                          to; defaults to \"cluster-admin\". \n If you specify a different
+                          name, the ClusterRole needs to be created manually."
+                        type: string
+                    type: object
                   enableShellInRendering:
                     description: 'enableShellInRendering specifies whether to enable
                       or disable the shell access in rendering process. Default: false.

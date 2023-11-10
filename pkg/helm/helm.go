@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	// valuesFile is the name of the file created to override defualt chart values.
+	// valuesFile is the name of the file created to override default chart values.
 	valuesFile = "chart-values.yaml"
 )
 

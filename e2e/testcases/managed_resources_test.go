@@ -41,7 +41,7 @@ import (
 //  * configmanagement.gke.io/managed
 //  * configsync.gke.io/resource-id
 //
-// The drift correction in the multi-repo mode utilizes the follwoing three annotations:
+// The drift correction in the multi-repo mode utilizes the following three annotations:
 //  * configmanagement.gke.io/managed
 //  * configsync.gke.io/resource-id
 //  * configsync.gke.io/manager
@@ -49,7 +49,7 @@ import (
 // The drift prevention is only supported in the multi-repo mode, and utilizes the following Config Sync metadata:
 //  * the configmanagement.gke.io/managed annotation
 //  * the configsync.gke.io/resource-id annotation
-//  * the configsync.gke.io/delcared-version label
+//  * the configsync.gke.io/declared-version label
 
 // The reason we have both TestKubectlCreatesManagedNamespaceResourceMonoRepo and
 // TestKubectlCreatesManagedNamespaceResourceMultiRepo is that the mono-repo mode and
@@ -430,7 +430,7 @@ func TestDeleteManagedResources(t *testing.T) {
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
 	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
-		nt.T.Fatalf("got `kubectl delete configmap cm-1` successs, want err")
+		nt.T.Fatalf("got `kubectl delete configmap cm-1` success, want err")
 	}
 
 	_, err = nt.Shell.Kubectl("delete", "ns", "bookstore")
@@ -492,7 +492,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
 	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
-		nt.T.Fatalf("got `kubectl delete configmap cm-1` successs, want err")
+		nt.T.Fatalf("got `kubectl delete configmap cm-1` success, want err")
 	}
 
 	_, err = nt.Shell.Kubectl("delete", "ns", "bookstore")

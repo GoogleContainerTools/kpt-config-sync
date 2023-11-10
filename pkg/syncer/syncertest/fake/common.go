@@ -75,7 +75,7 @@ func lookupObjectID(obj client.Object, scheme *runtime.Scheme) (core.ID, error) 
 	return id, nil
 }
 
-// matchesListFilters returns true if the object matches the constaints
+// matchesListFilters returns true if the object matches the constraints
 // specified by the ListOptions: Namespace, LabelSelector, and FieldSelector.
 func matchesListFilters(obj runtime.Object, opts *client.ListOptions, scheme *runtime.Scheme) (bool, error) {
 	labels, fields, accessor, err := getAttrs(obj, scheme)
@@ -99,7 +99,7 @@ func matchesListFilters(obj runtime.Object, opts *client.ListOptions, scheme *ru
 }
 
 // getAttrs returns the label set and field set from an object that can be used
-// for query filtering. This is roughly equivelent to what's in the apiserver,
+// for query filtering. This is roughly equivalent to what's in the apiserver,
 // except only supporting the few metadata fields that are supported by CRDs.
 func getAttrs(obj runtime.Object, scheme *runtime.Scheme) (labels.Set, fields.Fields, metav1.Object, error) {
 	accessor, err := meta.Accessor(obj)

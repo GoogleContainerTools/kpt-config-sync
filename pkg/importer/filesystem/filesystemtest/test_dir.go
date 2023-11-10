@@ -125,7 +125,7 @@ func Chmod(file string, perm os.FileMode) TestDirOpt {
 
 		err := os.Chmod(p.OSPath(), perm)
 		if err != nil {
-			t.Fatalf("changing permisisons on %q: %v", p.OSPath(), err)
+			t.Fatalf("changing permissions on %q: %v", p.OSPath(), err)
 		}
 	}
 }

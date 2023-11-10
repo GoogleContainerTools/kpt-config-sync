@@ -55,7 +55,7 @@ func isUnsupported(gk schema.GroupKind) bool {
 // isHiearachical returns true if the given GK matches a resource type that is
 // only used for hierarchical repos:
 //   - HierarchyConfig specifies the inheritance strategy for a resource type
-//   - Repo specifies the version/format of a hierachical repo
+//   - Repo specifies the version/format of a hierarchical repo
 func isHierarchical(gk schema.GroupKind) bool {
 	return gk == kinds.Repo().GroupKind() || gk == kinds.HierarchyConfig().GroupKind()
 }

@@ -31,7 +31,7 @@ import (
 // The drift prevention is only supported in the multi-repo mode, and utilizes the following Config Sync metadata:
 //  * the configmanagement.gke.io/managed annotation
 //  * the configsync.gke.io/resource-id annotation
-//  * the configsync.gke.io/delcared-version label
+//  * the configsync.gke.io/declared-version label
 
 func TestAdmission(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)

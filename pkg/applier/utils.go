@@ -173,7 +173,7 @@ const (
 // joinIDs joins the object IDs (GKNN) using ResourceReference string format
 // and the specified delimiter.
 //
-// ResourceReference string format is used becasue the normal ID string format,
+// ResourceReference string format is used because the normal ID string format,
 // includes commas and spaces that make it harder to parse in a list delimited
 // by commas.
 //

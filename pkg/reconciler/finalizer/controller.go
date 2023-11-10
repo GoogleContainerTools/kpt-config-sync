@@ -141,7 +141,7 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 }
 
 // reconcileFinalizer adds or removes the `configsync.gke.io/reconciler`
-// finalizer, depending on the existance and value of the
+// finalizer, depending on the existence and value of the
 // `configsync.gke.io/deletion-propagation-policy` annotation.
 func (c *Controller) reconcileFinalizer(ctx context.Context, obj client.Object) error {
 	policyStr, found := obj.GetAnnotations()[metadata.DeletionPropagationPolicyAnnotationKey]

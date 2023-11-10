@@ -29,7 +29,7 @@ type Task func() error
 type Filter func(error) error
 
 // ErrorGroup is an error that contains a list of errors.
-// This interface is implimented by `multierr.multiError`
+// This interface is implemented by `multierr.multiError`
 type ErrorGroup interface {
 	Errors() []error
 	Error() string

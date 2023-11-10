@@ -256,7 +256,7 @@ func TestOtelReconcilerDeleteCustom(t *testing.T) {
 
 	err := fakeClient.Delete(ctx, cmCustom)
 	if err != nil {
-		t.Fatalf("error deleteing custom config map, got error: %q, want error: nil", err)
+		t.Fatalf("error deleting custom config map, got error: %q, want error: nil", err)
 	}
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {

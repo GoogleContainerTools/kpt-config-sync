@@ -75,7 +75,7 @@ type Applier interface {
 	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
 	// Errors returns the errors encountered during apply.
 	// This method may be called while Destroy is running, to get the set of
-	// errors encounted so far.
+	// errors encountered so far.
 	Errors() status.MultiError
 }
 
@@ -83,13 +83,13 @@ type Applier interface {
 // tracked in a single ResourceGroup inventory.
 type Destroyer interface {
 	// Destroy deletes all managed resources.
-	// Returns any errors encountered while destorying.
+	// Returns any errors encountered while destroying.
 	// This is called by the reconciler finalizer when deletion propagation is
 	// enabled.
 	Destroy(ctx context.Context) status.MultiError
 	// Errors returns the errors encountered during destroy.
 	// This method may be called while Destroy is running, to get the set of
-	// errors encounted so far.
+	// errors encountered so far.
 	Errors() status.MultiError
 }
 
@@ -107,7 +107,7 @@ type Supervisor interface {
 	Destroyer
 }
 
-// supervisor is the default implimentation of the Supervisor interface.
+// supervisor is the default implementation of the Supervisor interface.
 type supervisor struct {
 	// inventory policy for configuring the inventory status
 	policy inventory.Policy
@@ -128,7 +128,7 @@ type supervisor struct {
 	execMux sync.Mutex
 	// errorMux prevents concurrent modifications to the cached set of errors
 	errorMux sync.RWMutex
-	// errs recieved from the current (if running) or previous Apply/Destroy.
+	// errs received from the current (if running) or previous Apply/Destroy.
 	// These errors is cleared at the start of the Apply/Destroy methods.
 	errs status.MultiError
 }

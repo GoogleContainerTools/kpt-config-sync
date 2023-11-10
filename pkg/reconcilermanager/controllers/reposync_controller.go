@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -120,7 +119,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	rsRef := req.NamespacedName
 	start := time.Now()
 	reconcilerRef := types.NamespacedName{
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 		Name:      core.NsReconcilerName(rsRef.Namespace, rsRef.Name),
 	}
 	ctx = r.setLoggerValues(ctx,

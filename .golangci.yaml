@@ -40,8 +40,3 @@ issues:
         - revive
       # Config Sync uses errors for human-readable status messages.
       text: "error strings should not be capitalized"
-    # ResourceGroup apis currently don't conform to linter
-    # TODO: Refactor ResourceGroup api comments and remove this exception
-    - path: 'pkg/api/kpt.dev/(.+)'
-      linters:
-      - revive

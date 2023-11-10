@@ -40,6 +40,8 @@ type ResourceGroup struct {
 }
 
 // spec defines the desired state of ResourceGroup
+//
+//nolint:revive
 type ResourceGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -58,6 +60,8 @@ type ResourceGroupSpec struct {
 }
 
 // status defines the observed state of ResourceGroup
+//
+//nolint:revive
 type ResourceGroupStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -82,6 +86,8 @@ type ResourceGroupStatus struct {
 // each item organizes and stores the identifying information
 // for an object. This struct (as a string) is stored in a
 // grouping object to keep track of sets of applied objects.
+//
+//nolint:revive
 type ObjMetadata struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
@@ -90,16 +96,21 @@ type ObjMetadata struct {
 
 // Each item organizes and stores the identifying information
 // for a ResourceGroup object. It includes name and namespace.
+//
+//nolint:revive
 type GroupMetadata struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 }
 
+// GroupKind organizes and stores the identifying information
+// for a ResourceGroup object. It includes group and kind.
 type GroupKind struct {
 	Group string `json:"group"`
 	Kind  string `json:"kind"`
 }
 
+// Descriptor regroups the information and metadata about a resource group
 type Descriptor struct {
 	// type can contain prefix, such as Application/WordPress or Service/Spanner
 	// +optional
@@ -119,6 +130,7 @@ type Descriptor struct {
 	Links []Link `json:"links,omitempty"`
 }
 
+//nolint:revive
 type Link struct {
 	// description explains the purpose of the link
 	Description string `json:"description"`
@@ -127,6 +139,7 @@ type Link struct {
 	URL string `json:"url"`
 }
 
+//nolint:revive
 type Condition struct {
 	// type of the condition
 	Type ConditionType `json:"type"`
@@ -152,11 +165,15 @@ func (cond Condition) IsEmpty() bool {
 	return reflect.DeepEqual(cond, Condition{})
 }
 
+// ConditionType is the go-type used for resource group condition types
 type ConditionType string
 
 const (
+	// Reconciling condition means that the resource group is still being reconciled
+	// by the controller
 	Reconciling ConditionType = "Reconciling"
-	Stalled     ConditionType = "Stalled"
+	// Stalled condition means that the resource group controller is stalled
+	Stalled ConditionType = "Stalled"
 	// Ownership reflects if the current resource
 	// reflects the status for the specification in the current inventory object.
 	// Since two ResourceGroup CRs may contain the same resource in the inventory list.
@@ -167,21 +184,29 @@ const (
 	Ownership ConditionType = "OwnershipOverlap"
 )
 
+// ConditionStatus is the go-type used for resource group condition status
 type ConditionStatus string
 
 const (
-	TrueConditionStatus    ConditionStatus = "True"
-	FalseConditionStatus   ConditionStatus = "False"
+	// TrueConditionStatus means the group is in the condition
+	TrueConditionStatus ConditionStatus = "True"
+	// FalseConditionStatus means the group is not in the condition
+	FalseConditionStatus ConditionStatus = "False"
+	// UnknownConditionStatus means it is not known whether the group is in the condition
 	UnknownConditionStatus ConditionStatus = "Unknown"
 )
 
 const (
+	// OwnershipUnmatch means that the resource belongs to a different group
 	OwnershipUnmatch = "Overlap"
-	OwnershipEmpty   = "Unknown"
+	// OwnershipEmpty means that the resource does not belong to any group
+	OwnershipEmpty = "Unknown"
 )
 
 // each item contains the status of a given resource uniquely identified by
 // its group, kind, name and namespace.
+//
+//nolint:revive
 type ResourceStatus struct {
 	ObjMetadata `json:",inline"`
 	Status      Status      `json:"status"`
@@ -194,6 +219,8 @@ type ResourceStatus struct {
 
 // Each item contains the status of a given group uniquely identified by
 // its name and namespace.
+//
+//nolint:revive
 type GroupStatus struct {
 	GroupMetadata `json:",inline"`
 	Status        Status      `json:"status"`
@@ -201,8 +228,11 @@ type GroupStatus struct {
 }
 
 // status describes the status of a resource.
+//
+//nolint:revive
 type Status string
 
+//nolint:revive
 const (
 	InProgress  Status = "InProgress"
 	Failed      Status = "Failed"
@@ -213,16 +243,22 @@ const (
 )
 
 // strategy indicates the method of actuation (apply or delete) used or planned to be used.
+//
+//nolint:revive
 type Strategy string
 
+//nolint:revive
 const (
 	Apply  Strategy = "Apply"
 	Delete Strategy = "Delete"
 )
 
 // actuation indicates whether actuation has been performed yet and how it went.
+//
+//nolint:revive
 type Actuation string
 
+//nolint:revive
 const (
 	ActuationPending   Actuation = "Pending"
 	ActuationSucceeded Actuation = "Succeeded"
@@ -231,8 +267,11 @@ const (
 )
 
 // reconcile indicates whether reconciliation has been performed yet and how it went.
+//
+//nolint:revive
 type Reconcile string
 
+//nolint:revive
 const (
 	ReconcilePending   Reconcile = "Pending"
 	ReconcileSucceeded Reconcile = "Succeeded"
@@ -249,6 +288,7 @@ func (m ObjMetadata) GK() schema.GroupKind {
 	}
 }
 
+// ToObjMetadata maps a list of GroupMetadata to ObjMetadata
 func ToObjMetadata(groups []GroupMetadata) []ObjMetadata {
 	metas := make([]ObjMetadata, len(groups))
 	for i, meta := range groups {
@@ -261,6 +301,7 @@ func ToObjMetadata(groups []GroupMetadata) []ObjMetadata {
 	return metas
 }
 
+// ToGroupStatuses maps a list of ResourceStatus to GroupStatus
 func ToGroupStatuses(statuses []ResourceStatus) []GroupStatus {
 	groupStatuses := make([]GroupStatus, len(statuses))
 	for i, status := range statuses {

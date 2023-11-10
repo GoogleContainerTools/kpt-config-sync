@@ -341,24 +341,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if *e2e.GitProvider == e2e.Local {
-		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
-			nt.T.Fatal(err)
-		}
-		// Pods don't always restart if the secrets don't exist, so we have to
-		// create the Namespaces + Secrets before anything else.
-		nt.gitPrivateKeyPath = generateSSHKeys(nt)
-
-		nt.caCertPath = generateSSLKeys(nt)
-
-		waitForGit := installGitServer(nt)
-		if err := waitForGit(); err != nil {
-			nt.describeNotRunningTestPods(testGitNamespace)
-			t.Fatalf("waiting for git-server Deployment to become available: %v", err)
-		}
-	} else {
-		nt.gitPrivateKeyPath = downloadSSHKey(nt)
-	}
 
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -367,6 +349,9 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	})
 
 	tg := taskgroup.New()
+	tg.Go(func() error {
+		return setupGit(nt)
+	})
 	tg.Go(func() error {
 		return installConfigSync(nt, opts.Nomos)
 	})

@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -64,78 +63,68 @@ const (
 )
 
 func sshDir(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(nt.TmpDir, "ssh")
 }
 
 func sslDir(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(nt.TmpDir, "ssl")
 }
 
 func privateKeyPath(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(sshDir(nt), "id_rsa.nomos")
 }
 
 func publicKeyPath(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(sshDir(nt), "id_rsa.nomos.pub")
 }
 
 func caCertPath(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(sslDir(nt), "ca_cert.pem")
 }
 
 func certPath(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(sslDir(nt), "cert.pem")
 }
 
 func certPrivateKeyPath(nt *NT) string {
-	nt.T.Helper()
 	return filepath.Join(sslDir(nt), "key.pem")
 }
 
 // createSSHKeySecret generates a public/public key pair for the test.
-func createSSHKeyPair(nt *NT) {
-	err := os.MkdirAll(sshDir(nt), fileMode)
-	if err != nil {
-		nt.T.Fatal("creating ssh directory:", err)
+func createSSHKeyPair(nt *NT) error {
+	if err := os.MkdirAll(sshDir(nt), fileMode); err != nil {
+		return fmt.Errorf("creating ssh directory: %w", err)
 	}
-
 	// ssh-keygen -t rsa -b 4096 -N "" \
 	//   -f /opt/testing/nomos/id_rsa.nomos
 	//   -C "key generated for use in e2e tests"
-	out, err := exec.Command("ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "",
+	_, err := nt.Shell.ExecWithDebug("ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "",
 		"-f", privateKeyPath(nt),
-		"-C", "key generated for use in e2e tests").Output()
+		"-C", "key generated for use in e2e tests")
 	if err != nil {
-		nt.T.Log(string(out))
-		nt.T.Fatal("generating rsa key for ssh:", err)
+		return fmt.Errorf("generating rsa key for ssh: %w", err)
 	}
+	return nil
 }
 
-func writePEMToFile(nt *NT, path, pemType string, data []byte) {
+func writePEMToFile(path, pemType string, data []byte) error {
 	pemBuffer := new(bytes.Buffer)
 	err := pem.Encode(pemBuffer, &pem.Block{
 		Type:  pemType,
 		Bytes: data,
 	})
 	if err != nil {
-		nt.T.Fatal("encoding pem: ", err)
+		return fmt.Errorf("encoding pem: %w", err)
 	}
-	err = os.WriteFile(path, pemBuffer.Bytes(), 0644)
-	if err != nil {
-		nt.T.Fatal("writing pem file: ", path, err)
+	if err = os.WriteFile(path, pemBuffer.Bytes(), 0644); err != nil {
+		return fmt.Errorf("writing pem file: %s: %w", path, err)
 	}
+	return nil
 }
 
-func createCAWithCerts(nt *NT) {
-	err := os.MkdirAll(sslDir(nt), fileMode)
-	if err != nil {
-		nt.T.Fatal("creating ssl directory:", err)
+func createCAWithCerts(nt *NT) error {
+	if err := os.MkdirAll(sslDir(nt), fileMode); err != nil {
+		return fmt.Errorf("creating ssl directory: %w", err)
 	}
 	ca := &x509.Certificate{
 		SerialNumber:          big.NewInt(1984),
@@ -149,11 +138,11 @@ func createCAWithCerts(nt *NT) {
 	}
 	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		nt.T.Fatal("creating ca private key:", err)
+		return fmt.Errorf("creating ca private key: %w", err)
 	}
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
-		nt.T.Fatal("creating ca cert:", err)
+		return fmt.Errorf("creating ca cert: %w", err)
 	}
 
 	cert := &x509.Certificate{
@@ -168,29 +157,42 @@ func createCAWithCerts(nt *NT) {
 	}
 	certPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		nt.T.Fatal("creating server private key:", err)
+		return fmt.Errorf("creating server private key: %w", err)
 	}
 	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
-		nt.T.Fatal("creating server cert:", err)
+		return fmt.Errorf("creating server cert: %w", err)
 	}
 
-	writePEMToFile(nt, caCertPath(nt), "CERTIFICATE", caBytes)
-	writePEMToFile(nt, certPath(nt), "CERTIFICATE", certBytes)
-	writePEMToFile(nt, certPrivateKeyPath(nt), "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(certPrivateKey))
+	if err := writePEMToFile(caCertPath(nt), "CERTIFICATE", caBytes); err != nil {
+		return err
+	}
+	if err := writePEMToFile(certPath(nt), "CERTIFICATE", certBytes); err != nil {
+		return err
+	}
+	return writePEMToFile(certPrivateKeyPath(nt), "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(certPrivateKey))
 }
 
 // createSecret creates secret in the given namespace using 'keypath'.
-func createSecret(nt *NT, namespace, name string, keyPaths ...string) {
-	args := []string{
-		"create", "secret", "generic", name, "-n", namespace,
+func createSecret(nt *NT, namespace, name string, keyPaths ...string) error {
+	if err := nt.KubeClient.Get(name, namespace, &corev1.Secret{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("getting secret: %w", err)
+		}
+		// not found -> create
+		args := []string{
+			"create", "secret", "generic", name, "-n", namespace,
+		}
+		for _, kp := range keyPaths {
+			args = append(args, "--from-file", kp)
+		}
+		_, err := nt.Shell.Kubectl(args...)
+		if err != nil {
+			return fmt.Errorf("creating secret: %w", err)
+		}
 	}
-	for _, kp := range keyPaths {
-		args = append(args, "--from-file", kp)
-	}
-	if err := nt.KubeClient.Get(name, namespace, &corev1.Secret{}); apierrors.IsNotFound(err) {
-		nt.MustKubectl(args...)
-	}
+	// else found, don't re-create
+	return nil
 }
 
 // generateSSHKeys generates a public/public key pair for the test.
@@ -199,18 +201,22 @@ func createSecret(nt *NT, namespace, name string, keyPaths ...string) {
 // expose the inner logic to outside consumers. So instead of trying to do it
 // ourselves, we're shelling out to kubectl to ensure we create a valid set of
 // secrets.
-func generateSSHKeys(nt *NT) string {
-	nt.T.Helper()
+func generateSSHKeys(nt *NT) (string, error) {
+	if err := createSSHKeyPair(nt); err != nil {
+		return "", err
+	}
 
-	createSSHKeyPair(nt)
+	if err := createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
+		fmt.Sprintf("ssh=%s", privateKeyPath(nt))); err != nil {
+		return "", err
+	}
 
-	createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
-		fmt.Sprintf("ssh=%s", privateKeyPath(nt)))
+	if err := createSecret(nt, testGitNamespace, gitServerSecretName,
+		publicKeyPath(nt)); err != nil {
+		return "", err
+	}
 
-	createSecret(nt, testGitNamespace, gitServerSecretName,
-		filepath.Join(publicKeyPath(nt)))
-
-	return privateKeyPath(nt)
+	return privateKeyPath(nt), nil
 }
 
 // generateSSLKeys generates a self signed certificate for the test
@@ -219,58 +225,66 @@ func generateSSHKeys(nt *NT) string {
 // expose the inner logic to outside consumers. So instead of trying to do it
 // ourselves, we're shelling out to kubectl to ensure we create a valid set of
 // secrets.
-func generateSSLKeys(nt *NT) string {
-	nt.T.Helper()
+func generateSSLKeys(nt *NT) (string, error) {
+	if err := createCAWithCerts(nt); err != nil {
+		return "", err
+	}
 
-	createCAWithCerts(nt)
+	if err := createSecret(nt, configmanagement.ControllerNamespace, rootCACertSecretName,
+		fmt.Sprintf("cert=%s", caCertPath(nt))); err != nil {
+		return "", err
+	}
 
-	createSecret(nt, configmanagement.ControllerNamespace, rootCACertSecretName,
-		fmt.Sprintf("cert=%s", caCertPath(nt)))
-
-	createSecret(nt, testGitNamespace, gitServerCertSecretName,
+	if err := createSecret(nt, testGitNamespace, gitServerCertSecretName,
 		fmt.Sprintf("server.crt=%s", certPath(nt)),
-		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt)))
+		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt))); err != nil {
+		return "", err
+	}
 
-	return caCertPath(nt)
+	return caCertPath(nt), nil
 }
 
 // downloadSSHKey downloads the private SSH key from Cloud Secret Manager.
-func downloadSSHKey(nt *NT) string {
+func downloadSSHKey(nt *NT) (string, error) {
 	dir := sshDir(nt)
-	err := os.MkdirAll(dir, fileMode)
-	if err != nil {
-		nt.T.Fatal("creating ssh directory:", err)
+	if err := os.MkdirAll(dir, fileMode); err != nil {
+		return "", fmt.Errorf("creating ssh directory: %w", err)
 	}
 
 	out, err := gitproviders.FetchCloudSecret(gitproviders.PrivateSSHKey)
 	if err != nil {
-		nt.T.Log(out)
-		nt.T.Fatal("downloading SSH key:", err)
+		return "", fmt.Errorf("downloading SSH key: %w", err)
 	}
 
 	if err := os.WriteFile(privateKeyPath(nt), []byte(out), 0600); err != nil {
-		nt.T.Fatal("saving SSH key:", err)
+		return "", fmt.Errorf("saving SSH key: %w", err)
 	}
 
-	createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
-		fmt.Sprintf("ssh=%s", privateKeyPath(nt)))
+	if err := createSecret(nt, configmanagement.ControllerNamespace, rootAuthSecretName,
+		fmt.Sprintf("ssh=%s", privateKeyPath(nt))); err != nil {
+		return "", err
+	}
 
-	return privateKeyPath(nt)
+	return privateKeyPath(nt), nil
 }
 
 // CreateNamespaceSecret creates secrets in a given namespace using local paths.
-func CreateNamespaceSecret(nt *NT, ns string) {
-	nt.T.Helper()
+func CreateNamespaceSecret(nt *NT, ns string) error {
 	privateKeypath := nt.gitPrivateKeyPath
 	if len(privateKeypath) == 0 {
 		privateKeypath = privateKeyPath(nt)
 	}
-	createSecret(nt, ns, NamespaceAuthSecretName, fmt.Sprintf("ssh=%s", privateKeypath))
+	if err := createSecret(nt, ns, NamespaceAuthSecretName, fmt.Sprintf("ssh=%s", privateKeypath)); err != nil {
+		return err
+	}
 	if nt.GitProvider.Type() == e2e.Local {
 		caCertPathVal := nt.caCertPath
 		if len(caCertPathVal) == 0 {
 			caCertPathVal = caCertPath(nt)
 		}
-		createSecret(nt, ns, NamespaceCACertSecretName, fmt.Sprintf("cert=%s", caCertPathVal))
+		if err := createSecret(nt, ns, NamespaceCACertSecretName, fmt.Sprintf("cert=%s", caCertPathVal)); err != nil {
+			return err
+		}
 	}
+	return nil
 }

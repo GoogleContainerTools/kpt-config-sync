@@ -595,7 +595,7 @@ func setupDelegatedControl(nt *NT) {
 		}
 
 		// create secret for the namespace reconciler.
-		CreateNamespaceSecret(nt, nn.Namespace)
+		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
 
 		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
 			nt.T.Fatal(err)
@@ -889,7 +889,7 @@ func setupCentralizedControl(nt *NT) {
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
 	for nn := range nt.NonRootRepos {
-		CreateNamespaceSecret(nt, nn.Namespace)
+		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
 	}
 }
 

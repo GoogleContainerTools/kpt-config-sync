@@ -34,7 +34,7 @@ __install-nomos-local:
 
 # Run the Go e2e tests after building images/manifests.
 # Useful for when you're actively modifying code between runs.
-.PHONY: test-e2e-go
+.PHONY: test-e2e
 test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 
 # Run the Go e2e tests without building images/manifests.
@@ -76,11 +76,13 @@ build-kind-e2e: "$(KIND)" "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)"
 test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 	kind delete clusters --all
 	docker run \
+		$(DOCKER_INTERACTIVE) \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
 		--env ARTIFACTS="/logs/artifacts" \
 		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--network="host" \
+		--rm \
 		$(KIND_IMAGE) \
 		./scripts/e2e.sh \
 			--share-test-env \

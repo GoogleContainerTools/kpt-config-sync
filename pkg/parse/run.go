@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -41,6 +42,7 @@ const (
 	triggerRetry              = "retry"
 	triggerManagementConflict = "managementConflict"
 	triggerWatchUpdate        = "watchUpdate"
+	namespaceEvent            = "namespaceEvent"
 )
 
 const (
@@ -65,7 +67,7 @@ const (
 )
 
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
-func Run(ctx context.Context, p Parser) {
+func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State) {
 	opts := p.options()
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
@@ -81,6 +83,10 @@ func Run(ctx context.Context, p Parser) {
 
 	statusUpdateTimer := time.NewTimer(opts.statusUpdatePeriod)
 	defer statusUpdateTimer.Stop()
+
+	nsEventPeriod := time.Second
+	nsEventTimer := time.NewTimer(nsEventPeriod)
+	defer nsEventTimer.Stop()
 
 	state := &reconcilerState{
 		backoff:     defaultBackoff(),
@@ -179,6 +185,26 @@ func Run(ctx context.Context, p Parser) {
 			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.
+
+		// Execute the entire parse-apply-watch loop for a namespace event.
+		case <-nsEventTimer.C:
+			if nsControllerState == nil {
+				// If the Namespace Controller is not running, stop the timer without
+				// closing the channel.
+				nsEventTimer.Stop()
+				continue
+			}
+			if nsControllerState.ScheduleSync() {
+				klog.Infof("A new sync is triggered by a Namespace event")
+				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
+				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
+				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
+				state.resetPartialCache()
+				run(ctx, p, namespaceEvent, state)
+			}
+			// we should not reset retryTimer under this `case` since it is not aware of the
+			// state of backoff retry.
+			nsEventTimer.Reset(nsEventPeriod) // Schedule namespace event check attempt
 		}
 	}
 }

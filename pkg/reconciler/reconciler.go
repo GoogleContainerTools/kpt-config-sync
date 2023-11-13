@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/remediator/watch"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
@@ -114,6 +115,9 @@ type Options struct {
 	// Root reconciler.
 	// Unset for Namespace repositories.
 	*RootOptions
+	// NSControllerEnabled indicates whether a separate Namespace controller is
+	// running to watch Namespace events.
+	NSControllerEnabled bool
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -288,6 +292,21 @@ func Run(opts Options) {
 		klog.Fatalf("Instantiating Finalizer: %v", err)
 	}
 
+	// Only create and register the Namespace Controller when the flag is enabled.
+	// If the flag is disabled, no need to watch the Namespace events.
+	// The NamespaceSelector will dis-select those dynamic/on-cluster Namespaces.
+	var nsControllerState *namespacecontroller.State
+	if opts.NSControllerEnabled {
+		nsControllerState = namespacecontroller.NewState()
+		nsController := namespacecontroller.New(cl, nsControllerState)
+
+		// Register the Namespace Controller
+		// The controller will stop when the controller-manager shuts down.
+		if err := nsController.SetupWithManager(mgr); err != nil {
+			klog.Fatalf("Instantiating Namespace Controller: %v", err)
+		}
+	}
+
 	klog.Info("Starting ControllerManager")
 	// TODO: Once everything is using the controller-manager, move mgr.Start to the top level.
 	doneChanForManager := make(chan struct{})
@@ -313,7 +332,7 @@ func Run(opts Options) {
 
 	klog.Info("Starting Parser")
 	// TODO: Convert the Parser to use the controller-manager framework.
-	parse.Run(ctx, parser) // blocks until ctx.Done()
+	parse.Run(ctx, parser, nsControllerState) // blocks until ctx.Done()
 	klog.Info("Parser exited")
 
 	// Wait for Remediator to exit

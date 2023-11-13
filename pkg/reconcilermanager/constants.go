@@ -92,6 +92,10 @@ const (
 	// NamespaceStrategy tells the reconciler container which NamespaceStrategy to
 	// use
 	NamespaceStrategy = "NAMESPACE_STRATEGY"
+
+	// NSControllerEnabled tells the reconciler container whether the namespace
+	// controller in running.
+	NSControllerEnabled = "NS_CONTROLLER_ENABLED"
 )
 
 const (

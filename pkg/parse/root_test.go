@@ -461,8 +461,6 @@ func TestRoot_Parse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
-				sourceFormat:      tc.format,
-				namespaceStrategy: tc.namespaceStrategy,
 				Options: &Options{
 					Parser:             &fakeParser{parse: tc.parsed},
 					SyncName:           rootSyncName,
@@ -477,6 +475,10 @@ func TestRoot_Parse(t *testing.T) {
 						Applier:    &fakeApplier{},
 					},
 					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat:      tc.format,
+					NamespaceStrategy: tc.namespaceStrategy,
 				},
 			}
 			for _, o := range tc.existingObjects {
@@ -707,8 +709,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
-				sourceFormat:      filesystem.SourceFormatUnstructured,
-				namespaceStrategy: configsync.NamespaceStrategyImplicit,
 				Options: &Options{
 					Parser:             &fakeParser{parse: tc.parsed},
 					SyncName:           rootSyncName,
@@ -723,6 +723,10 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 						Applier:    &fakeApplier{},
 					},
 					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat:      filesystem.SourceFormatUnstructured,
+					NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 				},
 			}
 			state := reconcilerState{}
@@ -768,7 +772,6 @@ func TestRoot_ParseErrorsMetricValidation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
-				sourceFormat: filesystem.SourceFormatUnstructured,
 				Options: &Options{
 					Parser:             &fakeParser{errors: tc.errors},
 					SyncName:           rootSyncName,
@@ -780,6 +783,9 @@ func TestRoot_ParseErrorsMetricValidation(t *testing.T) {
 						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
@@ -826,7 +832,6 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 			m := testmetrics.RegisterMetrics(metrics.ReconcilerErrorsView)
 
 			parser := &root{
-				sourceFormat: filesystem.SourceFormatUnstructured,
 				Options: &Options{
 					Parser:             &fakeParser{errors: tc.parseErrors},
 					SyncName:           rootSyncName,
@@ -838,6 +843,9 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
@@ -893,7 +901,6 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 			m := testmetrics.RegisterMetrics(metrics.ReconcilerErrorsView)
 
 			parser := &root{
-				sourceFormat: filesystem.SourceFormatUnstructured,
 				Options: &Options{
 					Parser: &fakeParser{},
 					Updater: Updater{
@@ -907,6 +914,9 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					mux:                &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})

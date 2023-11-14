@@ -15,6 +15,8 @@
 package hydrate
 
 import (
+	"context"
+
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -61,7 +63,7 @@ type ClusterFilterFunc func(clusterName string, fileObjects []ast.FileObject, er
 // - err, the MultiError which Parser.Parse returned, if there was one.
 //
 // Per standard ForEach conventions, ForEachCluster has no return value.
-func ForEachCluster(parseOpts ParseOptions, validateOpts validate.Options, f ClusterFilterFunc) {
+func ForEachCluster(ctx context.Context, parseOpts ParseOptions, validateOpts validate.Options, f ClusterFilterFunc) {
 	var errs status.MultiError
 	clusterRegistry, err := parseOpts.Parser.ReadClusterRegistryResources(parseOpts.FilePaths, parseOpts.SourceFormat)
 	errs = status.Append(errs, err)
@@ -78,7 +80,7 @@ func ForEachCluster(parseOpts ParseOptions, validateOpts validate.Options, f Clu
 	if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
 		defaultFileObjects, err = validate.Hierarchical(defaultFileObjects, validateOpts)
 	} else {
-		defaultFileObjects, err = validate.Unstructured(defaultFileObjects, validateOpts)
+		defaultFileObjects, err = validate.Unstructured(ctx, nil, defaultFileObjects, validateOpts)
 	}
 	errs = status.Append(errs, err)
 
@@ -105,7 +107,7 @@ func ForEachCluster(parseOpts ParseOptions, validateOpts validate.Options, f Clu
 		if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
 			fileObjects, err = validate.Hierarchical(fileObjects, validateOpts)
 		} else {
-			fileObjects, err = validate.Unstructured(fileObjects, validateOpts)
+			fileObjects, err = validate.Unstructured(ctx, nil, fileObjects, validateOpts)
 		}
 
 		errs = status.Append(errs, err)

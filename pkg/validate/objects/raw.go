@@ -21,6 +21,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/customresources"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	utildiscovery "kpt.dev/configsync/pkg/util/discovery"
 )
@@ -35,13 +36,24 @@ type ObjectVisitor func(obj ast.FileObject) status.Error
 // Git repo for a cluster.
 type Raw struct {
 	ClusterName       string
-	ReconcilerName    string
+	Scope             declared.Scope
+	SyncName          string
 	PolicyDir         cmpath.Relative
 	Objects           []ast.FileObject
 	PreviousCRDs      []*v1beta1.CustomResourceDefinition
 	BuildScoper       utildiscovery.BuildScoperFunc
 	Converter         *declared.ValueConverter
 	AllowUnknownKinds bool
+	// AllowAPICall indicates whether the hydration process can send k8s API
+	// calls. Currently, only dynamic NamespaceSelector requires talking to
+	// k8s-api-server.
+	AllowAPICall bool
+	// DynamicNSSelectorEnabled indicates whether the dynamic mode of
+	// NamespaceSelector is enabled.
+	DynamicNSSelectorEnabled bool
+	// NSControllerState caches the NamespaceSelectors and selected Namespaces
+	// in the namespace controller.
+	NSControllerState *namespacecontroller.State
 }
 
 // Scoped builds a Scoped collection of objects from the Raw objects.
@@ -55,7 +67,13 @@ func (r *Raw) Scoped() (*Scoped, status.MultiError) {
 		return nil, errs
 	}
 
-	scoped := &Scoped{}
+	scoped := &Scoped{
+		Scope:                    r.Scope,
+		SyncName:                 r.SyncName,
+		AllowAPICall:             r.AllowAPICall,
+		DynamicNSSelectorEnabled: r.DynamicNSSelectorEnabled,
+		NSControllerState:        r.NSControllerState,
+	}
 	for _, obj := range r.Objects {
 		s, err := scoper.GetObjectScope(obj)
 		if err != nil {

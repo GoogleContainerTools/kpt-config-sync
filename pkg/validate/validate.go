@@ -15,10 +15,13 @@
 package validate
 
 import (
+	"context"
+
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate/final"
@@ -26,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/validate/raw"
 	"kpt.dev/configsync/pkg/validate/scoped"
 	"kpt.dev/configsync/pkg/validate/tree"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // VisitorFunc is a function that validates and/or hydrates the given set of
@@ -39,8 +43,12 @@ type Options struct {
 	// ClusterName is the spec.clusterName of the cluster's ConfigManagement. This
 	// is used when hydrating cluster selectors.
 	ClusterName string
-	// ReconcilerName is the name of the reconciler.
-	ReconcilerName string
+	// Scope is the scope of the reconciler.
+	// `:root` represents the root-reconciler.
+	// The scope of the namespace reconciler is its namespace name.
+	Scope declared.Scope
+	// SyncName is the name of the RootSync or RepoSync that owns the reconciler.
+	SyncName string
 	// PolicyDir is the relative path of the root policy directory within the
 	// repo.
 	PolicyDir cmpath.Relative
@@ -60,17 +68,19 @@ type Options struct {
 	// kind. We only set this to true if a tool is running in offline mode (eg we
 	// are running nomos vet without contacting the API server).
 	AllowUnknownKinds bool
-	// DefaultNamespace is the namespace to assign to namespace-scoped objects
-	// which do not specify a namespace in an unstructured repo. Objects in a
-	// hierarchical repo are assigned to the namespace that matches their
-	// directory.
-	DefaultNamespace string
-	// IsNamespaceReconciler is a flag to indicate if the caller is a namespace
-	// reconciler which adds some additional validation logic.
-	IsNamespaceReconciler bool
 	// Visitors is a list of optional visitor functions which can be used to
 	// inject additional validation or hydration steps on the final objects.
 	Visitors []VisitorFunc
+	// AllowAPICall indicates whether the hydration process can send k8s API
+	// calls. Currently, only dynamic NamespaceSelector requires talking to
+	// k8s-api-server.
+	AllowAPICall bool
+	// DynamicNSSelectorEnabled indicates whether the dynamic mode of
+	// NamespaceSelector is enabled.
+	DynamicNSSelectorEnabled bool
+	// NSControllerState caches the NamespaceSelectors and selected Namespaces
+	// in the namespace controller.
+	NSControllerState *namespacecontroller.State
 }
 
 // Hierarchical validates and hydrates the given FileObjects from a structured,
@@ -85,7 +95,8 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	//   - adding metadata to resources (such as their filepath in the repo)
 	rawObjects := &objects.Raw{
 		ClusterName:       opts.ClusterName,
-		ReconcilerName:    opts.ReconcilerName,
+		Scope:             opts.Scope,
+		SyncName:          opts.SyncName,
 		PolicyDir:         opts.PolicyDir,
 		Objects:           objs,
 		PreviousCRDs:      opts.PreviousCRDs,
@@ -155,7 +166,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 
 // Unstructured validates and hydrates the given FileObjects from an
 // unstructured repo.
-func Unstructured(objs []ast.FileObject, opts Options) ([]ast.FileObject, status.MultiError) {
+func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, opts Options) ([]ast.FileObject, status.MultiError) {
 	// First we perform initial validation which includes:
 	//   - checking for illegal metadata or resource kinds
 	//   - checking for illegal or invalid namespaces or names
@@ -164,14 +175,18 @@ func Unstructured(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	//   - filtering out resources whose cluster selector does not match
 	//   - adding metadata to resources (such as their filepath in the repo)
 	rawObjects := &objects.Raw{
-		ClusterName:       opts.ClusterName,
-		ReconcilerName:    opts.ReconcilerName,
-		PolicyDir:         opts.PolicyDir,
-		Objects:           objs,
-		PreviousCRDs:      opts.PreviousCRDs,
-		BuildScoper:       opts.BuildScoper,
-		Converter:         opts.Converter,
-		AllowUnknownKinds: opts.AllowUnknownKinds,
+		ClusterName:              opts.ClusterName,
+		Scope:                    opts.Scope,
+		SyncName:                 opts.SyncName,
+		PolicyDir:                opts.PolicyDir,
+		Objects:                  objs,
+		PreviousCRDs:             opts.PreviousCRDs,
+		BuildScoper:              opts.BuildScoper,
+		Converter:                opts.Converter,
+		AllowUnknownKinds:        opts.AllowUnknownKinds,
+		AllowAPICall:             opts.AllowAPICall,
+		DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
+		NSControllerState:        opts.NSControllerState,
 	}
 
 	// nonBlockingErrs tracks the errors which do not block the apply stage
@@ -196,9 +211,9 @@ func Unstructured(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	}
 	nonBlockingErrs = status.Append(nonBlockingErrs, scopeErrs)
 
-	scopedObjects.DefaultNamespace = opts.DefaultNamespace
-	scopedObjects.IsNamespaceReconciler = opts.IsNamespaceReconciler
-	if errs := scoped.Unstructured(scopedObjects); errs != nil {
+	scopedObjects.Scope = opts.Scope
+	scopedObjects.SyncName = opts.SyncName
+	if errs := scoped.Unstructured(ctx, c, scopedObjects); errs != nil {
 		return nil, status.Append(nonBlockingErrs, errs)
 	}
 

@@ -40,6 +40,9 @@ func WaitForWebhookReadiness(nt *NT) {
 
 // StopWebhook removes the Config Sync ValidatingWebhookConfiguration object.
 func StopWebhook(nt *NT) {
+	if *nt.WebhookDisabled {
+		return
+	}
 	webhookName := configuration.Name
 	webhookGK := "validatingwebhookconfigurations.admissionregistration.k8s.io"
 

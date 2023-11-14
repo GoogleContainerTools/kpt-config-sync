@@ -56,7 +56,7 @@ func (p *namespace) options() *Options {
 }
 
 // parseSource implements the Parser interface
-func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
@@ -78,16 +78,20 @@ func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.Fil
 	}
 
 	options := validate.Options{
-		ClusterName:    p.ClusterName,
-		ReconcilerName: p.ReconcilerName,
-		PolicyDir:      p.SyncDir,
-		PreviousCRDs:   crds,
-		BuildScoper:    builder,
-		Converter:      p.Converter,
+		ClusterName:  p.ClusterName,
+		SyncName:     p.SyncName,
+		PolicyDir:    p.SyncDir,
+		PreviousCRDs: crds,
+		BuildScoper:  builder,
+		Converter:    p.Converter,
+		// Namespaces and NamespaceSelectors should not be declared in a namespace repo.
+		// So disable the API call and dynamic mode of NamespaceSelector.
+		AllowAPICall:             false,
+		DynamicNSSelectorEnabled: false,
 	}
 	options = OptionsForScope(options, p.Scope)
 
-	objs, err = validate.Unstructured(objs, options)
+	objs, err = validate.Unstructured(ctx, p.Client, objs, options)
 
 	if status.HasBlockingErrors(err) {
 		return nil, err

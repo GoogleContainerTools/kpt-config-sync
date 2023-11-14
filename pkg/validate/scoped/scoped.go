@@ -15,10 +15,14 @@
 package scoped
 
 import (
+	"context"
+
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/validate/objects"
 	"kpt.dev/configsync/pkg/validate/scoped/hydrate"
 	"kpt.dev/configsync/pkg/validate/scoped/validate"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Hierarchical performs the second round of validation and hydration for a
@@ -48,13 +52,13 @@ func Hierarchical(objs *objects.Scoped) status.MultiError {
 // Unstructured performs the second round of validation and hydration for an
 // unstructured repo against the given Scoped objects. Note that this will
 // modify the Scoped objects in-place.
-func Unstructured(objs *objects.Scoped) status.MultiError {
+func Unstructured(ctx context.Context, c client.Client, objs *objects.Scoped) status.MultiError {
 	var errs status.MultiError
 	var validateClusterScoped objects.ObjectVisitor
-	if objs.IsNamespaceReconciler {
-		validateClusterScoped = validate.ClusterScopedForNamespaceReconciler
-	} else {
+	if objs.Scope == declared.RootReconciler {
 		validateClusterScoped = validate.ClusterScoped
+	} else {
+		validateClusterScoped = validate.ClusterScopedForNamespaceReconciler
 	}
 
 	// See the note about ordering raw.Hierarchical().
@@ -71,7 +75,7 @@ func Unstructured(objs *objects.Scoped) status.MultiError {
 	}
 
 	hydrators := []objects.ScopedVisitor{
-		hydrate.NamespaceSelectors,
+		hydrate.NamespaceSelectors(ctx, c),
 		hydrate.UnknownScope,
 	}
 	for _, hydrator := range hydrators {

@@ -15,7 +15,9 @@
 package objects
 
 import (
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -25,11 +27,21 @@ type ScopedVisitor func(s *Scoped) status.MultiError
 // Scoped contains a collection of FileObjects that are organized based upon if
 // they are cluster-scoped or namespace-scoped.
 type Scoped struct {
-	Cluster               []ast.FileObject
-	Namespace             []ast.FileObject
-	Unknown               []ast.FileObject
-	DefaultNamespace      string
-	IsNamespaceReconciler bool
+	Cluster   []ast.FileObject
+	Namespace []ast.FileObject
+	Unknown   []ast.FileObject
+	Scope     declared.Scope
+	SyncName  string
+	// AllowAPICall indicates whether the hydration process can send k8s API
+	// calls. Currently, only dynamic NamespaceSelector requires talking to
+	// k8s-api-server.
+	AllowAPICall bool
+	// DynamicNSSelectorEnabled indicates whether the dynamic mode of
+	// NamespaceSelector is enabled.
+	DynamicNSSelectorEnabled bool
+	// NSControllerState caches the NamespaceSelectors and selected Namespaces
+	// in the namespace controller.
+	NSControllerState *namespacecontroller.State
 }
 
 // Objects returns all FileObjects in the Scoped collection.

@@ -15,7 +15,6 @@
 package parse
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
@@ -27,12 +26,8 @@ import (
 // OptionsForScope returns new Options that have been updated for the given
 // Scope.
 func OptionsForScope(options validate.Options, scope declared.Scope) validate.Options {
-	if scope == declared.RootReconciler {
-		options.DefaultNamespace = metav1.NamespaceDefault
-		options.IsNamespaceReconciler = false
-	} else {
-		options.DefaultNamespace = string(scope)
-		options.IsNamespaceReconciler = true
+	options.Scope = scope
+	if scope != declared.RootReconciler {
 		options.Visitors = append(options.Visitors, repositoryScopeVisitor(scope))
 	}
 	return options

@@ -134,3 +134,10 @@ const (
 	// update the resources in a specific Namespace.
 	EventReasonNamespaceUpdateFailed = "NamespaceUpdateFailed"
 )
+
+const (
+	// NSSelectorStaticMode indicates the NamespaceSelector uses `static` mode.
+	NSSelectorStaticMode string = "static"
+	// NSSelectorDynamicMode indicates the NamespaceSelector uses `dynamic` mode.
+	NSSelectorDynamicMode string = "dynamic"
+)

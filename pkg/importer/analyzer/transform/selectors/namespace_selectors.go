@@ -38,3 +38,16 @@ func ObjectNotInNamespaceSelectorSubdirectory(resource client.Object, selector c
 			resource.GetName(), metadata.NamespaceSelectorAnnotationKey, selector.GetName(), resource.GetName(), selector.GetName(), resource.GetName()).
 		BuildWithResources(selector, resource)
 }
+
+// ListNamespaceErrorCode is the error code for ListNamespaceError used in NamespaceSelector
+const ListNamespaceErrorCode = "2017"
+
+// listNamespaceErrorBuilder registers the new error code.
+var listNamespaceErrorBuilder = status.NewErrorBuilder(ListNamespaceErrorCode)
+
+// ListNamespaceError reports a LIST namespace error when applying NamespaceSelectors.
+func ListNamespaceError(err error) status.Error {
+	return listNamespaceErrorBuilder.Wrap(err).
+		Sprint("listing on-cluster Namespaces to apply NamespaceSelectors").
+		Build()
+}

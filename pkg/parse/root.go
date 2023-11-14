@@ -41,36 +41,50 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
-	utildiscovery "kpt.dev/configsync/pkg/util/discovery"
+	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(opts *Options, format filesystem.SourceFormat, namespaceStrategy configsync.NamespaceStrategy) Parser {
+func NewRootRunner(opts *Options, rootOpts *RootOptions) Parser {
 	opts.mux = &sync.Mutex{}
 	return &root{
-		Options:           opts,
-		sourceFormat:      format,
-		namespaceStrategy: namespaceStrategy,
+		Options:     opts,
+		RootOptions: rootOpts,
 	}
+}
+
+// RootOptions includes options specific to RootSync objects.
+type RootOptions struct {
+	// SourceFormat defines the structure of the Root repository. Only the Root
+	// repository may be SourceFormatHierarchy; all others are implicitly
+	// SourceFormatUnstructured.
+	SourceFormat filesystem.SourceFormat
+
+	// NamespaceStrategy indicates the NamespaceStrategy to be used by this
+	// reconciler.
+	NamespaceStrategy configsync.NamespaceStrategy
+
+	// DynamicNSSelectorEnabled represents whether the NamespaceSelector's dynamic
+	// mode is enabled. If it is enabled, NamespaceSelector will also select
+	// resources matching the on-cluster Namespaces.
+	DynamicNSSelectorEnabled bool
+
+	// NSControllerState stores whether the Namespace Controller schedules a sync
+	// event for the reconciler thread, along with the cached NamespaceSelector
+	// and selected namespaces.
+	NSControllerState *namespacecontroller.State
 }
 
 type root struct {
 	*Options
-
-	// sourceFormat defines the structure of the Root repository. Only the Root
-	// repository may be SourceFormatHierarchy; all others are implicitly
-	// SourceFormatUnstructured.
-	sourceFormat filesystem.SourceFormat
-
-	// namespaceStrategy indicates the NamespaceStrategy to be used by this
-	// reconciler.
-	namespaceStrategy configsync.NamespaceStrategy
+	*RootOptions
 }
 
 var _ Parser = &root{}
@@ -80,9 +94,9 @@ func (p *root) options() *Options {
 }
 
 // parseSource implements the Parser interface
-func (p *root) parseSource(_ context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
 	wantFiles := state.files
-	if p.sourceFormat == filesystem.SourceFormatHierarchy {
+	if p.SourceFormat == filesystem.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files
 		// outside of the allowed directories.
 		wantFiles = filesystem.FilterHierarchyFiles(state.syncDir, wantFiles)
@@ -98,7 +112,7 @@ func (p *root) parseSource(_ context.Context, state sourceState) ([]ast.FileObje
 	if err != nil {
 		return nil, err
 	}
-	builder := utildiscovery.ScoperBuilder(p.DiscoveryInterface)
+	builder := discovery.ScoperBuilder(p.DiscoveryInterface)
 
 	klog.Infof("Parsing files from source dir: %s", state.syncDir.OSPath())
 	objs, err := p.Parser.Parse(filePaths)
@@ -107,20 +121,24 @@ func (p *root) parseSource(_ context.Context, state sourceState) ([]ast.FileObje
 	}
 
 	options := validate.Options{
-		ClusterName:    p.ClusterName,
-		ReconcilerName: p.ReconcilerName,
-		PolicyDir:      p.SyncDir,
-		PreviousCRDs:   crds,
-		BuildScoper:    builder,
-		Converter:      p.Converter,
+		ClusterName:  p.ClusterName,
+		SyncName:     p.SyncName,
+		PolicyDir:    p.SyncDir,
+		PreviousCRDs: crds,
+		BuildScoper:  builder,
+		Converter:    p.Converter,
+		// Enable API call so NamespaceSelector can talk to k8s-api-server.
+		AllowAPICall:             true,
+		DynamicNSSelectorEnabled: p.DynamicNSSelectorEnabled,
+		NSControllerState:        p.NSControllerState,
 	}
 	options = OptionsForScope(options, p.Scope)
 
-	if p.sourceFormat == filesystem.SourceFormatUnstructured {
-		if p.namespaceStrategy == configsync.NamespaceStrategyImplicit {
+	if p.SourceFormat == filesystem.SourceFormatUnstructured {
+		if p.NamespaceStrategy == configsync.NamespaceStrategyImplicit {
 			options.Visitors = append(options.Visitors, p.addImplicitNamespaces)
 		}
-		objs, err = validate.Unstructured(objs, options)
+		objs, err = validate.Unstructured(ctx, p.Client, objs, options)
 	} else {
 		objs, err = validate.Hierarchical(objs, options)
 	}

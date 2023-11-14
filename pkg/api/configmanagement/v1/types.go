@@ -528,7 +528,23 @@ type ErrorResource struct {
 	// ResourceGVK is the GroupVersionKind of the affected K8S resource. This field may be empty for
 	// errors that are not associated with a specific resource.
 	// +optional
-	ResourceGVK schema.GroupVersionKind `json:"resourceGVK"`
+	ResourceGVK GroupVersionKind `json:"resourceGVK"`
+}
+
+// GroupVersionKind identifies a Kind. It substitutes schema.GroupVersionKind with json tags.
+type GroupVersionKind struct {
+	Group   string `json:"group"`
+	Version string `json:"version"`
+	Kind    string `json:"kind"`
+}
+
+// ParseSchemaGVK parses the schema.GroupVersionKind into custom groupVersionKind with json tags.
+func ParseSchemaGVK(gvk schema.GroupVersionKind) GroupVersionKind {
+	return GroupVersionKind{
+		Group:   gvk.Group,
+		Version: gvk.Version,
+		Kind:    gvk.Kind,
+	}
 }
 
 // +kubebuilder:object:root=true

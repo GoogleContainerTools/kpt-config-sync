@@ -22,8 +22,8 @@ const (
 	ACMController Feature = "acm-controller"
 	// NomosCLI verifies the CLI.
 	NomosCLI = "nomos-cli"
-	// ClusterSelector verifies both the ClusterSelector and the cluster-name-selector annotation.
-	ClusterSelector = "cluster-selector"
+	// Selector verifies ClusterSelector, the cluster-name-selector annotation, and NamespaceSelector
+	Selector = "selector"
 	// DriftControl verifies the admission webhook and drift correction.
 	DriftControl = "drift-control"
 	// Hydration verifies the rendering feature in the hydration-controller.
@@ -47,7 +47,7 @@ const (
 // KnownFeature indicates whether the test verifies a known feature
 func KnownFeature(f Feature) bool {
 	switch f {
-	case ACMController, NomosCLI, ClusterSelector, DriftControl, Hydration,
+	case ACMController, NomosCLI, Selector, DriftControl, Hydration,
 		Lifecycle, MultiRepos, OverrideAPI, Reconciliation1, Reconciliation2,
 		SyncSource, WorkloadIdentity:
 		return true

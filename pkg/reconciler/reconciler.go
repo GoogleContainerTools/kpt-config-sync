@@ -115,9 +115,10 @@ type Options struct {
 	// Root reconciler.
 	// Unset for Namespace repositories.
 	*RootOptions
-	// NSControllerEnabled indicates whether a separate Namespace controller is
-	// running to watch Namespace events.
-	NSControllerEnabled bool
+	// DynamicNSSelectorEnabled indicates whether there exists at least one
+	// NamespaceSelector using the dynamic mode, which requires Namespace
+	// controller running to watch Namespace events.
+	DynamicNSSelectorEnabled bool
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -296,7 +297,7 @@ func Run(opts Options) {
 	// If the flag is disabled, no need to watch the Namespace events.
 	// The NamespaceSelector will dis-select those dynamic/on-cluster Namespaces.
 	var nsControllerState *namespacecontroller.State
-	if opts.NSControllerEnabled {
+	if opts.DynamicNSSelectorEnabled {
 		nsControllerState = namespacecontroller.NewState()
 		nsController := namespacecontroller.New(cl, nsControllerState)
 

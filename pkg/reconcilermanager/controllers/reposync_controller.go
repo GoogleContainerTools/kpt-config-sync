@@ -851,7 +851,9 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			statusMode:        rs.Spec.SafeOverride().StatusMode,
 			reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
 			apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
-			requiresRendering: enableRendering(rs.GetAnnotations()),
+			requiresRendering: annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
+			// Namespace reconciler doesn't support NamespaceSelector at all.
+			dynamicNSSelectorEnabled: false,
 		}),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
@@ -1125,7 +1127,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			case reconcilermanager.HydrationController:
-				if !enableRendering(rs.GetAnnotations()) {
+				if !annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()) {
 					// if the sync source does not require rendering, omit the hydration controller
 					// this minimizes the resource footprint of the reconciler
 					addContainer = false

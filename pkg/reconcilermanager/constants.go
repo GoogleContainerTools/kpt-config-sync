@@ -93,9 +93,10 @@ const (
 	// use
 	NamespaceStrategy = "NAMESPACE_STRATEGY"
 
-	// NSControllerEnabled tells the reconciler container whether the namespace
-	// controller in running.
-	NSControllerEnabled = "NS_CONTROLLER_ENABLED"
+	// DynamicNSSelectorEnabled tells the reconciler container whether the dynamic
+	// mode is enabled in NamespaceSelectors, which requires a Namespace controller
+	// to be running.
+	DynamicNSSelectorEnabled = "DYNAMIC_NS_SELECTOR_ENABLED"
 )
 
 const (

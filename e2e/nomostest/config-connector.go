@@ -19,6 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 )
 
 const (
@@ -62,5 +63,6 @@ func setupConfigConnector(nt *NT) error {
 		return fmt.Errorf("applying config connector manifest: %w", err)
 	}
 
-	return nt.Watcher.WatchForCurrentStatus(gvk, kccObj.GetName(), "")
+	return nt.Watcher.WatchForCurrentStatus(gvk, kccObj.GetName(), "",
+		testwatcher.WatchUnstructured())
 }

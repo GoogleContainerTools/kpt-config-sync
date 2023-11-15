@@ -942,10 +942,16 @@ func (r *RepoSyncReconciler) upsertRoleBinding(ctx context.Context, reconcilerRe
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
-	delete(labelMap, metadata.SyncNameLabel)
+	// copy labelMap
+	labelMapCopy := make(map[string]string)
+	for k, v := range labelMap {
+		if k != metadata.SyncNameLabel {
+			labelMapCopy[k] = v
+		}
+	}
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
-		core.AddLabels(childRB, labelMap)
+		core.AddLabels(childRB, labelMapCopy)
 		childRB.RoleRef = rolereference(RepoSyncPermissionsName(), "ClusterRole")
 		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		return nil

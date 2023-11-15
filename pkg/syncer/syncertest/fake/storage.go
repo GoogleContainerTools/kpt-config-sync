@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -388,6 +389,12 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 	err := ms.validateCreateOptions(opts)
 	if err != nil {
 		return err
+	}
+	// create a generated name
+	// See https://github.com/kubernetes/apiserver/blob/9d3d7b483aa6949b82103fc5b0f132126676c37b/pkg/storage/names/generate.go
+	if obj.GetName() == "" && obj.GetGenerateName() != "" {
+		randomString := utilrand.String(5)
+		obj.SetName(obj.GetGenerateName() + randomString)
 	}
 
 	// Convert to a typed object for storage, with GVK populated.

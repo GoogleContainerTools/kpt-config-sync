@@ -69,7 +69,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 		saName := core.RootReconcilerName(rs.Name)
 		errs = multierr.Append(errs, nt.ValidateNotFound(saName, configsync.ControllerNamespace, fake.ServiceAccountObject(saName)))
 		// validate Root Reconciler ClusterRoleBinding is no longer present.
-		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncPermissionsName(nomostest.DefaultRootReconcilerName), configsync.ControllerNamespace, fake.ClusterRoleBindingObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncLegacyClusterRoleBindingName, configsync.ControllerNamespace, fake.ClusterRoleBindingObject()))
 		return errs
 	})
 	if err != nil {

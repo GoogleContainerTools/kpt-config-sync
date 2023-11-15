@@ -21,19 +21,27 @@ import (
 	"kpt.dev/configsync/pkg/core"
 )
 
+const (
+	// RepoSyncBaseClusterRoleName is the namespace reconciler permissions name.
+	// e.g. configsync.gke.io:ns-reconciler
+	RepoSyncBaseClusterRoleName = configsync.GroupName + ":" + core.NsReconcilerPrefix
+	// RootSyncBaseClusterRoleName is the root reconciler base ClusterRole name.
+	// e.g. configsync.gke.io:root-reconciler
+	RootSyncBaseClusterRoleName = configsync.GroupName + ":" + core.RootReconcilerPrefix
+	// RepoSyncBaseRoleBindingName is the name of the default RoleBinding created
+	// for RepoSync objects. This contains basic permissions for RepoSync reconcilers
+	//(e.g. RepoSync status update).
+	RepoSyncBaseRoleBindingName = RepoSyncBaseClusterRoleName
+	// RootSyncLegacyClusterRoleBindingName is the name of the legacy ClusterRoleBinding created
+	// for RootSync objects. It is always bound to cluster-admin.
+	RootSyncLegacyClusterRoleBindingName = RootSyncBaseClusterRoleName
+	// RootSyncBaseClusterRoleBindingName is the name of the default ClusterRoleBinding created
+	// for RootSync objects. This contains basic permissions for RootSync reconcilers
+	// (e.g. RootSync status update).
+	RootSyncBaseClusterRoleBindingName = RootSyncBaseClusterRoleName + "-base"
+)
+
 // ReconcilerResourceName returns resource name in the format <reconciler-name>-<resource-name>.
 func ReconcilerResourceName(reconcilerName, resourceName string) string {
 	return fmt.Sprintf("%s-%s", reconcilerName, resourceName)
-}
-
-// RepoSyncPermissionsName returns namespace reconciler permissions name.
-// e.g. configsync.gke.io:ns-reconciler
-func RepoSyncPermissionsName() string {
-	return fmt.Sprintf("%s:%s", configsync.GroupName, core.NsReconcilerPrefix)
-}
-
-// RootSyncPermissionsName returns root reconciler ClusterRoleBinding name.
-// e.g. configsync.gke.io:root-reconciler:my-root-sync
-func RootSyncPermissionsName(reconcilerName string) string {
-	return fmt.Sprintf("%s:%s", core.RootSyncPermissionsPrefix, core.RootSyncName(reconcilerName))
 }

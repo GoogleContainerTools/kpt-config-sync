@@ -328,21 +328,6 @@ spec:
                       about valid inputs: https://pkg.go.dev/time#ParseDuration. Recommended
                       apiServerTimeout range is from "3s" to "1m".'
                     type: string
-                  clusterRole:
-                    description: clusterRole controls which role to bind the service
-                      account for this RootSync's reconciler to.
-                    properties:
-                      disabled:
-                        description: "disabled turns off binding to a ClusterRole
-                          entirely. \n It is then your responsibility to bind any
-                          roles to the relevant service account."
-                        type: boolean
-                      name:
-                        description: "name is the name of the ClusterRole to bind
-                          to; defaults to \"cluster-admin\". \n If you specify a different
-                          name, the ClusterRole needs to be created manually."
-                        type: string
-                    type: object
                   enableShellInRendering:
                     description: 'enableShellInRendering specifies whether to enable
                       or disable the shell access in rendering process. Default: false.
@@ -457,6 +442,38 @@ spec:
                             request of a container
                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                           x-kubernetes-int-or-string: true
+                      type: object
+                    type: array
+                  roleRefs:
+                    description: roleRefs is a list of Roles or ClusterRoles to create
+                      bindings. If unset, a binding to cluster-admin will be created.
+                    items:
+                      description: each item references a Role or ClusterRole to create
+                        a binding to for this reconciler. It supports a namespace
+                        field that can be used to create RoleBindings rather than
+                        ClusterRoleBindings.
+                      properties:
+                        kind:
+                          description: kind refers to the Kind of the RBAC resource.
+                            Accepted values are Role and ClusterRole. Required.
+                          enum:
+                          - Role
+                          - ClusterRole
+                          type: string
+                        name:
+                          description: name is the name of the Role or ClusterRole
+                            resource. Required.
+                          type: string
+                        namespace:
+                          description: namespace indicates the Namespace in which
+                            a RoleBinding should be created. For ClusterRole objects,
+                            will determine whether a RoleBinding or ClusterRoleBinding
+                            is created. For Role objects, must be set to the same
+                            namespace as the Role.
+                          type: string
+                      required:
+                      - kind
+                      - name
                       type: object
                     type: array
                   statusMode:
@@ -1411,21 +1428,6 @@ spec:
                       about valid inputs: https://pkg.go.dev/time#ParseDuration. Recommended
                       apiServerTimeout range is from "3s" to "1m".'
                     type: string
-                  clusterRole:
-                    description: clusterRole controls which role to bind the service
-                      account for this RootSync's reconciler to.
-                    properties:
-                      disabled:
-                        description: "disabled turns off binding to a ClusterRole
-                          entirely. \n It is then your responsibility to bind any
-                          roles to the relevant service account."
-                        type: boolean
-                      name:
-                        description: "name is the name of the ClusterRole to bind
-                          to; defaults to \"cluster-admin\". \n If you specify a different
-                          name, the ClusterRole needs to be created manually."
-                        type: string
-                    type: object
                   enableShellInRendering:
                     description: 'enableShellInRendering specifies whether to enable
                       or disable the shell access in rendering process. Default: false.
@@ -1540,6 +1542,38 @@ spec:
                             request of a container
                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                           x-kubernetes-int-or-string: true
+                      type: object
+                    type: array
+                  roleRefs:
+                    description: roleRefs is a list of Roles or ClusterRoles to create
+                      bindings. If unset, a binding to cluster-admin will be created.
+                    items:
+                      description: each item references a Role or ClusterRole to create
+                        a binding to for this reconciler. It supports a namespace
+                        field that can be used to create RoleBindings rather than
+                        ClusterRoleBindings.
+                      properties:
+                        kind:
+                          description: kind refers to the Kind of the RBAC resource.
+                            Accepted values are Role and ClusterRole. Required.
+                          enum:
+                          - Role
+                          - ClusterRole
+                          type: string
+                        name:
+                          description: name is the name of the Role or ClusterRole
+                            resource. Required.
+                          type: string
+                        namespace:
+                          description: namespace indicates the Namespace in which
+                            a RoleBinding should be created. For ClusterRole objects,
+                            will determine whether a RoleBinding or ClusterRoleBinding
+                            is created. For Role objects, must be set to the same
+                            namespace as the Role.
+                          type: string
+                      required:
+                      - kind
+                      - name
                       type: object
                     type: array
                   statusMode:

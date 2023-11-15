@@ -93,29 +93,35 @@ type RootSyncOverrideSpec struct {
 	// +optional
 	NamespaceStrategy configsync.NamespaceStrategy `json:"namespaceStrategy,omitempty"`
 
-	// clusterRole controls which role to bind the service account for this RootSync's
-	// reconciler to.
+	// roleRefs is a list of Roles or ClusterRoles to create bindings.
+	// If unset, a binding to cluster-admin will be created.
 	//
 	// +optional
-	ClusterRole ClusterRoleOverrideSpec `json:"clusterRole,omitempty"`
+	RoleRefs []RootSyncRoleRef `json:"roleRefs,omitempty"`
 }
 
-// ClusterRoleOverrideSpec allows to override settings for the root reconciler permissions
-type ClusterRoleOverrideSpec struct {
-	// name is the name of the ClusterRole to bind to; defaults to "cluster-admin".
+// each item references a Role or ClusterRole to create
+// a binding to for this reconciler. It supports a namespace field that can be used
+// to create RoleBindings rather than ClusterRoleBindings.
+//
+//nolint:revive
+type RootSyncRoleRef struct {
+	// kind refers to the Kind of the RBAC resource.
+	// Accepted values are Role and ClusterRole. Required.
 	//
-	// If you specify a different name, the ClusterRole needs to be created manually.
-	//
-	// +optional
-	Name string `json:"name,omitempty"`
+	// +kubebuilder:validation:Enum=Role;ClusterRole
+	Kind string `json:"kind"`
 
-	// disabled turns off binding to a ClusterRole entirely.
-	//
-	// It is then your responsibility to bind any roles to the relevant service
-	// account.
+	// name is the name of the Role or ClusterRole resource. Required.
+	Name string `json:"name"`
+
+	// namespace indicates the Namespace in which a RoleBinding should be created.
+	// For ClusterRole objects, will determine whether a RoleBinding or ClusterRoleBinding
+	// is created.
+	// For Role objects, must be set to the same namespace as the Role.
 	//
 	// +optional
-	Disabled bool `json:"disabled,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // RepoSyncOverrideSpec allows to override the settings for a RepoSync reconciler pod

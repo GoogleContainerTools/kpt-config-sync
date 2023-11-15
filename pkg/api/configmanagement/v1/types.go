@@ -272,6 +272,15 @@ type NamespaceSelectorSpec struct {
 	// This field is NOT optional and follows standard label selector semantics. An empty selector
 	// matches all namespaces.
 	Selector metav1.LabelSelector `json:"selector"`
+
+	// mode specifies the selection mode of the NamespaceSelector.
+	// It must be set to either "static" or "dynamic" and is optional. If not specified, it defaults to "static."
+	// In static mode, only resources with labels matching Namespaces statically declared in the source of truth are selected.
+	// In dynamic mode, selection includes both statically declared Namespaces and Namespaces present on the cluster.
+	// +kubebuilder:validation:Pattern=^(static|dynamic)$
+	// +kubebuilder:default:=static
+	// +optional
+	Mode string `json:"mode,omitempty"`
 }
 
 // +kubebuilder:object:root=true

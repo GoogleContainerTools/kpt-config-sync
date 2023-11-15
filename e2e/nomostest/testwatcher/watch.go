@@ -222,7 +222,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 
 	// watch.Until watches the object and executes this ConditionFunc on each
 	// event until one of the following conditions is true:
-	// - The conditon function returns true (all predicates succeeded)
+	// - The condition function returns true (all predicates succeeded)
 	// - The condition function returns an error
 	// - The context is cancelled (timeout)
 	condition := func(event watch.Event) (bool, error) {

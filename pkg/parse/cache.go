@@ -65,7 +65,7 @@ type cacheForCommit struct {
 	// needToRetry indicates whether a retry is needed.
 	needToRetry bool
 
-	// errs tracks all the errors encounted during the reconciliation.
+	// errs tracks all the errors encountered during the reconciliation.
 	errs status.MultiError
 }
 

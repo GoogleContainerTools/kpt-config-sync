@@ -29,7 +29,7 @@ import (
 
 // RepoSyncFinalizer handles finalizing RepoSync objects, using the Destroyer
 // to destroy all managed user objects previously applied from source.
-// Impliments the Finalizer interface.
+// Implements the Finalizer interface.
 type RepoSyncFinalizer struct {
 	Destroyer applier.Destroyer
 	Client    client.Client

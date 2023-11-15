@@ -176,7 +176,7 @@ func setDefaultProtocolInNestedPodSpec(obj map[string]interface{}, fields ...str
 func setDefaultProtocolInPodSpec(podSpec map[string]interface{}, fields []string) []error {
 	var errs []error
 
-	// Use the more generic NestedField instead of NestedSlice. We can have occurences where
+	// Use the more generic NestedField instead of NestedSlice. We can have occurrences where
 	// the nested slice is empty/nill/null in the resource, causing unstructured.NestedSlice to
 	// error when it tries to assert nil to be []interface{}. We need to be able to ignore empty
 	// initContainers by handling nil values.

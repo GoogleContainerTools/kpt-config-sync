@@ -51,7 +51,7 @@ func isConfigSyncSA(userInfo authenticationv1.UserInfo) bool {
 
 // configSyncSAName returns the name of the service account, with the prefix
 // removed, assuming the prefix is present.
-// Run isConfigSyncSA first to detect the presense of the prefix.
+// Run isConfigSyncSA first to detect the presence of the prefix.
 func configSyncSAName(userInfo authenticationv1.UserInfo) string {
 	return strings.TrimPrefix(userInfo.Username, saNamespaceGroupPrefix)
 }

@@ -17,12 +17,10 @@ package e2e
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
@@ -118,7 +116,6 @@ func main(m *testing.M) int {
 		fmt.Printf("Error setting test.parallel: %v\n", err)
 		return 1
 	}
-	rand.Seed(time.Now().UnixNano())
 
 	if err := validateArgs(); err != nil {
 		fmt.Printf("error validating e2e test args: %v\n", err)

@@ -94,7 +94,7 @@ func (d Diff) Operation(scope declared.Scope, syncName string) Operation {
 		//
 		// We have a undeclared resource and nothing on the cluster.
 		// This could mean that git changed after the delete was detected,
-		// but it's more likely the delete was detected durring an apply run.
+		// but it's more likely the delete was detected during an apply run.
 		return NoOp
 	}
 }

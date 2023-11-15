@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// UnstructuredFields impliments fields.Fields to do field selection on any
+// UnstructuredFields Implements fields.Fields to do field selection on any
 // field in an unstructured object.
 type UnstructuredFields struct {
 	Object *unstructured.Unstructured

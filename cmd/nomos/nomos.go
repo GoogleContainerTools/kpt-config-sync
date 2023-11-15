@@ -51,8 +51,15 @@ func init() {
 }
 
 func main() {
-	klog.InitFlags(nil)
-	flag.Parse()
+	// Use the default flag set, because some libs register flags with init.
+	fs := flag.CommandLine
+
+	// Register klog flags
+	klog.InitFlags(fs)
+
+	// Cobra uses the pflag lib, instead of the go flag lib.
+	// So re-register all go flags as global (aka persistent) pflags.
+	rootCmd.PersistentFlags().AddGoFlagSet(fs)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

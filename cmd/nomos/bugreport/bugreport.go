@@ -15,7 +15,6 @@
 package bugreport
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -42,10 +41,9 @@ var Cmd = &cobra.Command{
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		// hack to set the hidden variable in klog to also print info statements
-		// cobra does not expose core golang-style flags
-		if err := flag.CommandLine.Parse([]string{"--stderrthreshold=0"}); err != nil {
-			klog.Errorf("could not increase logging verbosity: %v", err)
+		// Send all logs to STDERR.
+		if err := cmd.InheritedFlags().Lookup("stderrthreshold").Value.Set("0"); err != nil {
+			klog.Errorf("failed to increase logging STDERR threshold: %v", err)
 		}
 
 		cfg, err := restconfig.NewRestConfig(flags.ClientTimeout)

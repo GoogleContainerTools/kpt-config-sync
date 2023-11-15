@@ -50,6 +50,9 @@ DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
 
+GOLANGCI_LINT_VERSION := v1.52.0
+GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
+
 KUSTOMIZE_VERSION := v5.1.1-gke.2
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
@@ -325,7 +328,7 @@ deps: tidy vendor
 lint: lint-go lint-bash lint-yaml lint-license lint-license-headers
 
 .PHONY: lint-go
-lint-go: buildenv-dirs
+lint-go: "$(GOLANGCI_LINT)"
 	./scripts/lint-go.sh $(NOMOS_GO_PKG)
 
 .PHONY: lint-bash
@@ -338,6 +341,17 @@ lint-license: buildenv-dirs
 
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0
+
+"$(GOLANGCI_LINT)": buildenv-dirs
+	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+.PHONY: install-golangci-lint
+# install golangci-lint (user-friendly target alias)
+install-golangci-lint: "$(GOLANGCI_LINT)"
+
+.PHONY: clean-golangci-lint
+clean-golangci-lint:
+	@rm -rf $(GOLANGCI_LINT)
 
 "$(KUSTOMIZE)": buildenv-dirs
 	@KUSTOMIZE_VERSION="$(KUSTOMIZE_VERSION)" \
@@ -392,6 +406,10 @@ install-kind: "$(KIND)"
 .PHONY: install-crane
 # install crane (user-friendly target alias)
 install-crane: "$(CRANE)"
+
+.PHONY: clean-crane
+clean-crane:
+	@rm -rf $(CRANE)
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"

@@ -16,21 +16,20 @@
 
 set -euo pipefail
 
-export CGO_ENABLED=0
-
-# TODO: It is best practice to install directly on the Docker image,
-#  but for now it's unclear how to do this sanely.
-LINTER_VERSION="v1.52.0"
-go install "github.com/golangci/golangci-lint/cmd/golangci-lint@${LINTER_VERSION}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "${REPO_ROOT}"
 
 # golangci-lint uses $HOME to determine where to store .cache information.
 # For the docker image this is running in, $HOME is set to "/", so for this
 # script we overwrite that as the docker image does not have permission to
 # create a /.cache directory.
-HOME=.output/
+if [[ "${HOME}" == "/" ]]; then
+  HOME="$(pwd)/.output/"
+  export HOME
+fi
 
 echo "Running golangci-lint: "
-if ! OUT="$(.output/go/bin/golangci-lint run --exclude-use-default=false)"; then
+if ! OUT="$(golangci-lint run --exclude-use-default=false)"; then
   echo "${OUT}"
 
   NC=''

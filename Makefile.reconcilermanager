@@ -18,18 +18,32 @@ configsync-crds: install-controller-gen "$(KUSTOMIZE)" "$(GOBIN)/addlicense"
 	$(CONTROLLER_GEN) crd \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
+		paths="./pkg/api/configmanagement/v1" \
 		paths="./pkg/api/kpt.dev/v1alpha1" \
 		output:artifacts:config=./manifests \
 	&& mv ./manifests/configsync.gke.io_reposyncs.yaml ./manifests/patch/reposync-crd.yaml \
 	&& mv ./manifests/configsync.gke.io_rootsyncs.yaml ./manifests/patch/rootsync-crd.yaml \
+	&& mv ./manifests/configmanagement.gke.io_clusterselectors.yaml ./manifests/patch/cluster-selector-crd.yaml \
+	&& mv ./manifests/configmanagement.gke.io_hierarchyconfigs.yaml ./manifests/patch/hierarchyconfig-crd.yaml \
+	&& mv ./manifests/configmanagement.gke.io_namespaceselectors.yaml ./manifests/patch/namespace-selector-crd.yaml \
 	&& mv ./manifests/kpt.dev_resourcegroups.yaml ./manifests/patch/resourcegroup-crd.yaml \
 	&& "$(KUSTOMIZE)" build ./manifests/patch -o ./manifests \
 	&& mv ./manifests/*customresourcedefinition_rootsyncs* ./manifests/rootsync-crd.yaml \
 	&& mv ./manifests/*customresourcedefinition_reposyncs* ./manifests/reposync-crd.yaml \
+	&& mv ./manifests/*customresourcedefinition_clusterselectors* ./manifests/cluster-selector-crd.yaml \
+	&& mv ./manifests/*customresourcedefinition_hierarchyconfigs* ./manifests/hierarchyconfig-crd.yaml \
+	&& mv ./manifests/*customresourcedefinition_namespaceselectors* ./manifests/namespace-selector-crd.yaml \
 	&& mv ./manifests/*customresourcedefinition_resourcegroups* ./manifests/resourcegroup-crd.yaml \
 	&& rm ./manifests/patch/reposync-crd.yaml \
 	&& rm ./manifests/patch/rootsync-crd.yaml \
+	&& rm ./manifests/patch/cluster-selector-crd.yaml \
+	&& rm ./manifests/patch/hierarchyconfig-crd.yaml \
+	&& rm ./manifests/patch/namespace-selector-crd.yaml \
 	&& rm ./manifests/patch/resourcegroup-crd.yaml \
+	&& rm ./manifests/configmanagement.gke.io_clusterconfigs.yaml \
+	&& rm ./manifests/configmanagement.gke.io_namespaceconfigs.yaml \
+	&& rm ./manifests/configmanagement.gke.io_repoes.yaml \
+	&& rm ./manifests/configmanagement.gke.io_syncs.yaml \
 	&& "$(GOBIN)/addlicense" ./manifests
 
 .PHONY: install-controller-gen

@@ -265,7 +265,7 @@ include Makefile.reconcilermanager
 -include Makefile.release
 
 .PHONY: all
-all: test deps configsync-crds
+all: test deps configsync-crds generate clientgen
 
 # Cleans all artifacts.
 .PHONY: clean

@@ -25,5 +25,6 @@ if is_dirty_repo; then
   echo "Git status output:"
   # Prefix git status output with a pound sign for better readability
   git status | sed 's/.*/# &/'
+  git diff
   exit 1
 fi

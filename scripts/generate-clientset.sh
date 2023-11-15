@@ -32,7 +32,7 @@
 # Alternatively, make a symlink from the GOPATH package source directory to the
 # repo directory.
 
-set -euox pipefail
+set -euo pipefail
 
 GOPATH="${GOPATH:-$(go env GOPATH)}"
 

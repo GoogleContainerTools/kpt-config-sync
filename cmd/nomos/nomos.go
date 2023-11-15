@@ -29,7 +29,9 @@ import (
 	"kpt.dev/configsync/cmd/nomos/version"
 	"kpt.dev/configsync/cmd/nomos/vet"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/client/restconfig"
 	pkgversion "kpt.dev/configsync/pkg/version"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var (
@@ -56,6 +58,20 @@ func main() {
 
 	// Register klog flags
 	klog.InitFlags(fs)
+
+	// Work around the controller-runtime init registering a --kubeconfig flag
+	// with no default value. Use the same default as kubectl instead.
+	// https://github.com/kubernetes-sigs/controller-runtime/blob/v0.16.3/pkg/client/config/config.go#L44
+	if f := fs.Lookup(config.KubeconfigFlagName); f != nil {
+		// Change the default value & usage.
+		// This path should be expected because import inits load first.
+		defaultKubeConfigPath, err := restconfig.KubeConfigPath()
+		if err != nil {
+			klog.Fatal(err)
+		}
+		f.DefValue = defaultKubeConfigPath
+		f.Usage = "Path to the client config file."
+	}
 
 	// Cobra uses the pflag lib, instead of the go flag lib.
 	// So re-register all go flags as global (aka persistent) pflags.

@@ -15,13 +15,12 @@
 
 set -euo pipefail
 
-if [ "${GOBIN:-"unset"}" == "unset" ]; then
-  echo "GOBIN unset"
+if [[ -z "$(which addlicense)" ]]; then
+  echo "addlicense not in PATH"
   exit 1
 fi
 
-REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${REPO_ROOT}"
 
 GO_MODULE="$(grep "^module" "go.mod" | cut -d' ' -f2)"
@@ -71,6 +70,6 @@ for source_path in "${source_paths[@]}"; do
     PACKAGE_NAME="$(basename "${test_dir_path}")"
     PACKAGE_PATH="${test_dir_path}"
     render_main_test > "${file_name}"
-    "${GOBIN}/addlicense" -c "Google LLC" -f LICENSE_TEMPLATE "${file_name}"
+    "addlicense" -c "Google LLC" -f LICENSE_TEMPLATE "${file_name}"
   done <<< "$(find_test_dirs "${source_path}")"
 done

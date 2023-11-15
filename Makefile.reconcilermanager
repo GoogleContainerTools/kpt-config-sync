@@ -1,11 +1,12 @@
 
 
-CONTROLLER_GEN := $(GOBIN)/controller-gen
+CONTROLLER_GEN_VERSION := v0.13.0
+CONTROLLER_GEN := $(BIN_DIR)/controller-gen
 
 .PHONY: generate
 # Generate DeepCopy and runtime.Object implementation methods.
-generate: install-controller-gen
-	$(CONTROLLER_GEN) \
+generate: "$(CONTROLLER_GEN)"
+	"$(CONTROLLER_GEN)" \
 		object:headerFile="hack/boilerplate.txt" \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
@@ -14,8 +15,8 @@ generate: install-controller-gen
 
 .PHONY: configsync-crds
 # Generate configsync CRDs and then patch them with kustomize
-configsync-crds: install-controller-gen "$(KUSTOMIZE)" "$(GOBIN)/addlicense"
-	$(CONTROLLER_GEN) crd \
+configsync-crds: "$(CONTROLLER_GEN)" "$(KUSTOMIZE)" "$(ADDLICENSE)"
+	"$(CONTROLLER_GEN)" crd \
 		paths="./pkg/api/configsync/v1alpha1" \
 		paths="./pkg/api/configsync/v1beta1" \
 		paths="./pkg/api/configmanagement/v1" \
@@ -44,12 +45,18 @@ configsync-crds: install-controller-gen "$(KUSTOMIZE)" "$(GOBIN)/addlicense"
 	&& rm ./manifests/configmanagement.gke.io_namespaceconfigs.yaml \
 	&& rm ./manifests/configmanagement.gke.io_repoes.yaml \
 	&& rm ./manifests/configmanagement.gke.io_syncs.yaml \
-	&& "$(GOBIN)/addlicense" ./manifests
+	&& "$(ADDLICENSE)" ./manifests
+
+"$(CONTROLLER_GEN)": buildenv-dirs
+	GOPATH="$(GO_DIR)" go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
 
 .PHONY: install-controller-gen
-# install controller-gen from source
-install-controller-gen:
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
+# install controller-gen (user-friendly target alias)
+install-controller-gen: "$(CONTROLLER_GEN)"
+
+.PHONY: clean-controller-gen
+clean-controller-gen:
+	@rm -rf $(CONTROLLER_GEN)
 
 .PHONY: generate-in-docker
 # Run make generate-in-docker in the docker buildenv container

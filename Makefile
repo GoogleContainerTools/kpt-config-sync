@@ -50,6 +50,9 @@ DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
 
+ADDLICENSE_VERSION := v1.1.1
+ADDLICENSE := $(BIN_DIR)/addlicense
+
 GOLANGCI_LINT_VERSION := v1.52.0
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
@@ -339,8 +342,16 @@ lint-bash:
 lint-license: buildenv-dirs
 	./scripts/lint-license.sh
 
-"$(GOBIN)/addlicense":
-	go install github.com/google/addlicense@v1.0.0
+"$(ADDLICENSE)": buildenv-dirs
+	GOPATH="$(GO_DIR)" go install github.com/google/addlicense@$(ADDLICENSE_VERSION)
+
+.PHONY: install-addlicense
+# install addlicense (user-friendly target alias)
+install-addlicense: "$(ADDLICENSE)"
+
+.PHONY: clean-addlicense
+clean-addlicense:
+	@rm -rf $(ADDLICENSE)
 
 "$(GOLANGCI_LINT)": buildenv-dirs
 	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -412,12 +423,12 @@ clean-crane:
 	@rm -rf $(CRANE)
 
 .PHONY: license-headers
-license-headers: "$(GOBIN)/addlicense"
-	GOBIN=$(GOBIN) ./scripts/license-headers.sh add
+license-headers: "$(ADDLICENSE)"
+	./scripts/license-headers.sh add
 
 .PHONY: lint-license-headers
-lint-license-headers: "$(GOBIN)/addlicense"
-	GOBIN=$(GOBIN) ./scripts/license-headers.sh lint
+lint-license-headers: "$(ADDLICENSE)"
+	./scripts/license-headers.sh lint
 
 .PHONY: lint-yaml
 lint-yaml:
@@ -425,7 +436,7 @@ lint-yaml:
 
 .PHONY: test-loggers
 test-loggers:
-	GOBIN=$(GOBIN) ./scripts/generate-test-loggers.sh
+	./scripts/generate-test-loggers.sh
 
 # Print the value of a variable
 print-%:

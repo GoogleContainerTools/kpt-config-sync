@@ -15,6 +15,8 @@
 package selectors
 
 import (
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,4 +52,21 @@ func ListNamespaceError(err error) status.Error {
 	return listNamespaceErrorBuilder.Wrap(err).
 		Sprint("listing on-cluster Namespaces to apply NamespaceSelectors").
 		Build()
+}
+
+// UnsupportedNamespaceSelectorModeError reports that a NamespaceSelector uses
+// the dynamic mode with the hierarchy source format.
+func UnsupportedNamespaceSelectorModeError(nsSelector client.Object) status.Error {
+	return invalidSelectorError.Sprintf("NamespaceSelector MUST NOT use the %s mode with the %s source format."+
+		" To fix, either switch to the %s source format, or remove `spec.mode` from the NamespaceSelector.",
+		v1.NSSelectorDynamicMode, filesystem.SourceFormatHierarchy, filesystem.SourceFormatUnstructured).
+		BuildWithResources(nsSelector)
+}
+
+// UnknownNamespaceSelectorModeError reports that a NamespaceSelector mode is unknown.
+func UnknownNamespaceSelectorModeError(nsSelector client.Object) status.Error {
+	return invalidSelectorError.Sprintf("Unknown mode defined in NamespaceSelector."+
+		" To fix, please use either %q or %q.",
+		v1.NSSelectorStaticMode, v1.NSSelectorDynamicMode).
+		BuildWithResources(nsSelector)
 }

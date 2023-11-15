@@ -59,6 +59,13 @@ func labelSelector(obj ast.FileObject) (labels.Selector, status.Error) {
 	}
 	nss := s.(*v1.NamespaceSelector)
 
+	if nss.Spec.Mode == v1.NSSelectorDynamicMode {
+		return nil, selectors.UnsupportedNamespaceSelectorModeError(nss)
+	}
+	if nss.Spec.Mode != "" && nss.Spec.Mode != v1.NSSelectorStaticMode {
+		return nil, selectors.UnknownNamespaceSelectorModeError(nss)
+	}
+
 	selector, err := metav1.LabelSelectorAsSelector(&nss.Spec.Selector)
 	if err != nil {
 		return nil, selectors.InvalidSelectorError(obj, err)

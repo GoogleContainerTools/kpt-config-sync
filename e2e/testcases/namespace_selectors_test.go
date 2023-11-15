@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -84,6 +85,7 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 
 	nt.T.Log("Add Namespaces, NamespaceSelectors and Namespace-scoped resources")
 	bookstoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": bookstoreNS}
+	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode
 	bookstoreRQ.Spec.Hard = map[corev1.ResourceName]resource.Quantity{corev1.ResourcePods: resource.MustParse("1")}
 
 	shoestoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": shoestoreNS}
@@ -96,6 +98,13 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/rq-bookstore.yaml", bookstoreRQ))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/cm-shoestore.yaml", shoestoreCM))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
+
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.InvalidSelectorErrorCode, "NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+
+	nt.T.Log("Update NamespaceSelector to use static mode with the hierarchy format")
+	bookstoreNSS.Spec.Mode = v1.NSSelectorStaticMode
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update NamespaceSelector to use static mode"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

@@ -15,7 +15,7 @@
 kind: NamespaceSelector
 apiVersion: configmanagement.gke.io/v1
 metadata:
-  name: namespace-selector-bookstore1
+  name: dynamic-namespace-selector
 spec:
   selector:
     matchLabels:

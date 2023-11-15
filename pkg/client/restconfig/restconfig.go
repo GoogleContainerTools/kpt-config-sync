@@ -38,7 +38,7 @@ const DefaultTimeout = 15 * time.Second
 func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 	var cfg *rest.Config
 	// Detect kubectl config file
-	path, err := newConfigPath()
+	path, err := KubeConfigPath()
 	if err != nil {
 		// Build from k8s downward API
 		cfg, err = NewFromInClusterConfig()

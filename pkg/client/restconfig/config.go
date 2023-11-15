@@ -40,15 +40,15 @@ func defaultGetCurrentUser() (*user.User, error) {
 	return user.Current()
 }
 
-// newConfigPath returns the correct kubeconfig file path to use, depending on
-// the current user settings and the runtime environment.
-func newConfigPath() (string, error) {
-	// First try the KUBECONFIG variable.
+// KubeConfigPath returns the path to the kubeconfig:
+// 1. ${KUBECONFIG}, if non-empty
+// 2. ${userCurrentTestHook.HomeDir}/.kube/config, if userCurrentTestHook is set
+// 3. ${HOME}/.kube/config
+func KubeConfigPath() (string, error) {
 	envPath := os.Getenv("KUBECONFIG")
 	if envPath != "" {
 		return envPath, nil
 	}
-	// Try the current user.
 	curentUser, err := userCurrentTestHook()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get current user")
@@ -60,7 +60,7 @@ func newConfigPath() (string, error) {
 // newRawConfigWithRules returns a clientcmdapi.Config from a configuration file whose path is
 // provided by newConfigPath, and the clientcmd.ClientConfigLoadingRules associated with it
 func newRawConfigWithRules() (*clientcmdapi.Config, *clientcmd.ClientConfigLoadingRules, error) {
-	configPath, err := newConfigPath()
+	configPath, err := KubeConfigPath()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "while getting config path")
 	}

@@ -83,7 +83,7 @@ func (c *FakeNamespaceSelectors) Update(ctx context.Context, namespaceSelector *
 // Delete takes name of the namespaceSelector and deletes it. Returns an error if one occurs.
 func (c *FakeNamespaceSelectors) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(namespaceselectorsResource, name), &configmanagementv1.NamespaceSelector{})
+		Invokes(testing.NewRootDeleteActionWithOptions(namespaceselectorsResource, name, opts), &configmanagementv1.NamespaceSelector{})
 	return err
 }
 

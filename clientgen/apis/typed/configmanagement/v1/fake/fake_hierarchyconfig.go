@@ -83,7 +83,7 @@ func (c *FakeHierarchyConfigs) Update(ctx context.Context, hierarchyConfig *conf
 // Delete takes name of the hierarchyConfig and deletes it. Returns an error if one occurs.
 func (c *FakeHierarchyConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(hierarchyconfigsResource, name), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootDeleteActionWithOptions(hierarchyconfigsResource, name, opts), &configmanagementv1.HierarchyConfig{})
 	return err
 }
 

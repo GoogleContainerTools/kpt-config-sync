@@ -94,7 +94,7 @@ func (c *FakeSyncs) UpdateStatus(ctx context.Context, sync *configmanagementv1.S
 // Delete takes name of the sync and deletes it. Returns an error if one occurs.
 func (c *FakeSyncs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(syncsResource, name), &configmanagementv1.Sync{})
+		Invokes(testing.NewRootDeleteActionWithOptions(syncsResource, name, opts), &configmanagementv1.Sync{})
 	return err
 }
 

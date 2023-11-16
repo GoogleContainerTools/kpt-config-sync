@@ -28,6 +28,21 @@ const (
 	defaultCluster = "defaultcluster"
 )
 
+// ParseOptions includes information needed by the parsing step in nomos CLI.
+// It is different from pkg/parse/opts.go used in the reconciler container on the server side.
+type ParseOptions struct {
+	// Parser is an interface to read configs from a filesystem.
+	Parser filesystem.ConfigParser
+	// SourceFormat specifies how the Parser should parse the source configs.
+	SourceFormat filesystem.SourceFormat
+	// FilePaths encapsulates the list of absolute file paths to read and the
+	// absolute and relative path of the root directory.
+	FilePaths reader.FilePaths
+}
+
+// ClusterFilterFunc is the type alias for the function that filters objects for selected clusters.
+type ClusterFilterFunc func(clusterName string, fileObjects []ast.FileObject, err status.MultiError)
+
 // ForEachCluster hydrates an AllConfigs for each declared cluster and executes
 // the passed function on the result.
 //
@@ -46,25 +61,26 @@ const (
 // - err, the MultiError which Parser.Parse returned, if there was one.
 //
 // Per standard ForEach conventions, ForEachCluster has no return value.
-func ForEachCluster(parser filesystem.ConfigParser, options validate.Options,
-	sourceFormat filesystem.SourceFormat, filePaths reader.FilePaths,
-	f func(clusterName string, fileObjects []ast.FileObject, err status.MultiError)) {
-	clusterRegistry, errs := parser.ReadClusterRegistryResources(filePaths, sourceFormat)
-	clustersObjects, err2 := selectors.FilterClusters(clusterRegistry)
-	clusterNames, err3 := parser.ReadClusterNamesFromSelector(filePaths)
-	errs = status.Append(errs, err2, err3)
+func ForEachCluster(parseOpts ParseOptions, validateOpts validate.Options, f ClusterFilterFunc) {
+	var errs status.MultiError
+	clusterRegistry, err := parseOpts.Parser.ReadClusterRegistryResources(parseOpts.FilePaths, parseOpts.SourceFormat)
+	errs = status.Append(errs, err)
+	clustersObjects, err := selectors.FilterClusters(clusterRegistry)
+	errs = status.Append(errs, err)
+	clusterNames, err := parseOpts.Parser.ReadClusterNamesFromSelector(parseOpts.FilePaths)
+	errs = status.Append(errs, err)
 
 	// Hydrate for empty string cluster name. This is the default configuration.
-	options.ClusterName = defaultCluster
-	defaultFileObjects, err2 := parser.Parse(filePaths)
-	errs = status.Append(errs, err2)
+	validateOpts.ClusterName = defaultCluster
+	defaultFileObjects, err := parseOpts.Parser.Parse(parseOpts.FilePaths)
+	errs = status.Append(errs, err)
 
-	if sourceFormat == filesystem.SourceFormatHierarchy {
-		defaultFileObjects, err2 = validate.Hierarchical(defaultFileObjects, options)
+	if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
+		defaultFileObjects, err = validate.Hierarchical(defaultFileObjects, validateOpts)
 	} else {
-		defaultFileObjects, err2 = validate.Unstructured(defaultFileObjects, options)
+		defaultFileObjects, err = validate.Unstructured(defaultFileObjects, validateOpts)
 	}
-	errs = status.Append(errs, err2)
+	errs = status.Append(errs, err)
 
 	f(defaultCluster, defaultFileObjects, errs)
 
@@ -82,16 +98,17 @@ func ForEachCluster(parser filesystem.ConfigParser, options validate.Options,
 	}
 
 	for cluster := range clusters {
-		options.ClusterName = cluster
-		fileObjects, errs := parser.Parse(filePaths)
+		validateOpts.ClusterName = cluster
+		fileObjects, err := parseOpts.Parser.Parse(parseOpts.FilePaths)
+		errs = status.Append(errs, err)
 
-		if sourceFormat == filesystem.SourceFormatHierarchy {
-			fileObjects, err2 = validate.Hierarchical(fileObjects, options)
+		if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
+			fileObjects, err = validate.Hierarchical(fileObjects, validateOpts)
 		} else {
-			fileObjects, err2 = validate.Unstructured(fileObjects, options)
+			fileObjects, err = validate.Unstructured(fileObjects, validateOpts)
 		}
 
-		errs = status.Append(errs, err2)
+		errs = status.Append(errs, err)
 		f(cluster, fileObjects, errs)
 	}
 }

@@ -98,7 +98,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 
 		parser := filesystem.NewParser(&reader.File{})
 
-		options, err := hydrate.ValidateOptions(cmd.Context(), rootDir, flags.APIServerTimeout)
+		validateOpts, err := hydrate.ValidateOptions(cmd.Context(), rootDir, flags.APIServerTimeout)
 		if err != nil {
 			return err
 		}
@@ -113,10 +113,16 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 			Files:     files,
 		}
 
+		parseOpts := hydrate.ParseOptions{
+			Parser:       parser,
+			SourceFormat: sourceFormat,
+			FilePaths:    filePaths,
+		}
+
 		var allObjects []ast.FileObject
 		encounteredError := false
 		numClusters := 0
-		hydrate.ForEachCluster(parser, options, sourceFormat, filePaths, func(clusterName string, fileObjects []ast.FileObject, err status.MultiError) {
+		clusterFilterFunc := func(clusterName string, fileObjects []ast.FileObject, err status.MultiError) {
 			clusterEnabled := flags.AllClusters()
 			for _, cluster := range flags.Clusters {
 				if clusterName == cluster {
@@ -142,7 +148,8 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 			}
 
 			allObjects = append(allObjects, fileObjects...)
-		})
+		}
+		hydrate.ForEachCluster(parseOpts, validateOpts, clusterFilterFunc)
 
 		multiCluster := numClusters > 1
 		fileObjects := hydrate.GenerateFileObjects(multiCluster, allObjects...)

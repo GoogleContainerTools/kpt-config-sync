@@ -15,10 +15,13 @@
 
 set -euo pipefail
 
-if [ "${GOBIN:-"unset"}" == "unset" ]; then
-  echo "GOBIN unset"
+if [[ -z "$(which addlicense)" ]]; then
+  echo "addlicense not in PATH"
   exit 1
 fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "${REPO_ROOT}"
 
 ignores=(
   "-ignore=vendor/**"
@@ -31,10 +34,10 @@ ignores=(
 
 case "$1" in
   lint)
-    "${GOBIN}/addlicense" -check "${ignores[@]}" . 2>&1 | sed '/ skipping: / d'
+    "addlicense" -check "${ignores[@]}" . 2>&1 | sed '/ skipping: / d'
     ;;
   add)
-    "${GOBIN}/addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE \
+    "addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE \
       "${ignores[@]}" \
       . 2>&1 | sed '/ skipping: / d'
     ;;

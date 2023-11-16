@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -520,7 +521,10 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	// Update object to apply unwanted drift
 	err = modify(obj)
 	require.NoError(t, err)
-	err = fakeClient.Update(ctx, obj)
+	// reconciler-manager makes async changes, so retry on conflict
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return fakeClient.Update(ctx, obj)
+	})
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
@@ -559,6 +563,9 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
 			return fakeClient.RESTMapper(), nil
 		},
+		// The underlying library uses a fixed port for serving metrics, which can
+		// cause conflicts when running tests concurrently. This disables the metrics server.
+		MetricsBindAddress: "0",
 	})
 	require.NoError(t, err)
 

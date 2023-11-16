@@ -24,10 +24,10 @@ Sync images.
 
 1. Follow the [development instructions] to build Config Sync from source.
 2. Upon success the docker images are published to your GCR repository and the
-KRM manifests are placed in `./.output/oss/manifests`. The manifests can be
+KRM manifests are placed in `./.output/staging/oss`. The manifests can be
 applied directly to your cluster.
 ```shell
-kubectl apply -f ./.output/oss/manifests
+kubectl apply -f ./.output/staging/oss/config-sync-manifest.yaml
 ```
 3. If the Pod is in a `ImagePullBackoff` or `ErrImagePull` state, that indicates
    the Compute Engine default service account doesn't have permission to pull

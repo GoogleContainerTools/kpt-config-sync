@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -34,6 +35,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -1166,6 +1168,73 @@ func RootSyncSpecOverrideEquals(expected *v1beta1.RootSyncOverrideSpec) Predicat
 		found := rs.Spec.Override
 		if !equality.Semantic.DeepEqual(found, expected) {
 			return errors.Errorf("expected %s to have spec.override: %s, but got %s",
+				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
+		}
+		return nil
+	}
+}
+
+// DeploymentContainerArgsContains verifies a container
+// in reconciler deployment has the expected arg
+func DeploymentContainerArgsContains(containerName, args string) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		dep, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return WrongTypeErr(obj, &appsv1.Deployment{})
+		}
+		container := ContainerByName(dep, containerName)
+		if container == nil {
+			return fmt.Errorf("expected container not found: %s", containerName)
+		}
+		return containerArgsContains(container, args)
+	}
+}
+
+func containerArgsContains(container *corev1.Container, expectedArg string) error {
+	for _, actualArg := range container.Args {
+		if actualArg == expectedArg {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected arg not found: %s", expectedArg)
+}
+
+// ResourceGroupStatusEquals checks that the RootSync's spec.override matches
+// the specified RootSyncOverrideSpec.
+func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate {
+	return func(obj client.Object) error {
+		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+		}
+		found := rg.DeepCopy().Status
+		// Set LastTransitionTime to nil value for comparisons
+		for x := range found.Conditions {
+			found.Conditions[x].LastTransitionTime = metav1.Time{}
+		}
+		for x := range found.ResourceStatuses {
+			for y := range found.ResourceStatuses[x].Conditions {
+				found.ResourceStatuses[x].Conditions[y].LastTransitionTime = metav1.Time{}
+				// Allow substring matching for ResourceStatus messages
+				if x < len(expected.ResourceStatuses) && y < len(expected.ResourceStatuses[x].Conditions) {
+					foundMsg := found.ResourceStatuses[x].Conditions[y].Message
+					expectedMsg := expected.ResourceStatuses[x].Conditions[y].Message
+					if strings.Contains(foundMsg, expectedMsg) {
+						expected.ResourceStatuses[x].Conditions[y].Message = foundMsg
+					}
+				}
+			}
+		}
+		for x := range found.SubgroupStatuses {
+			for y := range found.SubgroupStatuses[x].Conditions {
+				found.SubgroupStatuses[x].Conditions[y].LastTransitionTime = metav1.Time{}
+			}
+		}
+		if !equality.Semantic.DeepEqual(found, expected) {
+			return errors.Errorf("expected %s to have status: %s, but got %s",
 				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
 		}
 		return nil

@@ -17,7 +17,6 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -415,7 +414,7 @@ func saveRootSyncYAML(ctx context.Context, cm *util.ConfigManagementClient, cont
 	}
 
 	yamlFile := filepath.Join(dir, rootSyncYamlFile)
-	if err := ioutil.WriteFile(yamlFile, content, 0644); err != nil {
+	if err := os.WriteFile(yamlFile, content, 0644); err != nil {
 		return rs, yamlFile, err
 	}
 	printInfo("A RootSync object is generated and saved in %q", yamlFile)
@@ -437,7 +436,7 @@ func saveConfigManagementYAML(ctx context.Context, cm *util.ConfigManagementClie
 		return cmMulti, "", err
 	}
 	yamlFile := filepath.Join(dir, cmOrigYAMLFile)
-	if err := ioutil.WriteFile(yamlFile, content, 0644); err != nil {
+	if err := os.WriteFile(yamlFile, content, 0644); err != nil {
 		return cmMulti, yamlFile, err
 	}
 	printInfo("The original ConfigManagement object is saved in %q", yamlFile)
@@ -447,7 +446,7 @@ func saveConfigManagementYAML(ctx context.Context, cm *util.ConfigManagementClie
 		return cmMulti, "", err
 	}
 	yamlFile = filepath.Join(dir, cmMultiYAMLFile)
-	if err := ioutil.WriteFile(yamlFile, content, 0644); err != nil {
+	if err := os.WriteFile(yamlFile, content, 0644); err != nil {
 		return cmMulti, yamlFile, err
 	}
 	printInfo("The ConfigManagement object is updated and saved in %q", yamlFile)

@@ -25,13 +25,14 @@ type Git struct {
 	// repo is the git repository URL to sync from. Required.
 	Repo string `json:"repo"`
 
-	// branch is the git branch to checkout.
-	// The field is deprecated. Use `revision` instead.
-	// If both `branch` and `revision` are defined, `revision` takes precedence over `branch`.
+	// branch is the git branch to sync from.
+	// Branch defaults to 'master', but if 'revision' is set and is not 'HEAD',
+	// 'revision' takes precedence over 'branch'.
 	// +optional
 	Branch string `json:"branch,omitempty"`
 
-	// revision is the git revision (branch, tag, ref or commit) to fetch. Default: "HEAD".
+	// revision is the git revision (branch, tag, ref or commit) to fetch.
+	// Revision defaults to 'branch'.
 	// +optional
 	Revision string `json:"revision,omitempty"`
 

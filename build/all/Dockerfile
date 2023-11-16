@@ -54,6 +54,7 @@ ARG USER_UID=65532
 ARG USER_GID=$USER_UID
 RUN groupadd --gid $USER_GID $USERNAME && \
   useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+RUN apt-get update && apt-get install -y bash git
 USER nonroot:nonroot
 
 # Hydration controller image
@@ -104,7 +105,6 @@ COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/b
 COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
-RUN apt-get update && apt-get install -y git
 USER nonroot:nonroot
 ENTRYPOINT ["/hydration-controller"]
 
@@ -158,9 +158,6 @@ ENTRYPOINT ["/resource-group"]
 # nomos CLI (e.g. containerized CI/CD)
 FROM debian-nonroot as nomos
 USER root
-
-# https://github.com/GoogleCloudPlatform/google-cloud-go/issues/791#issuecomment-353689746
-RUN apt-get update && apt-get install -y bash git
 
 # Install nomos CLI
 RUN mkdir -p /opt/nomos/bin

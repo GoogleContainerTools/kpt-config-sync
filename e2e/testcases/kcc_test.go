@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
@@ -25,8 +26,12 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -126,6 +131,86 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 			testwatcher.WatchUnstructured())
 	})
 	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func TestKCCResourceGroup(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.ACMController, ntopts.KCCTest)
+
+	namespace := "resourcegroup-e2e"
+	nt.T.Cleanup(func() {
+		// all test resources are created in this namespace
+		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+			nt.T.Error(err)
+		}
+	})
+	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+		nt.T.Fatal(err)
+	}
+	rgNN := types.NamespacedName{
+		Name:      "group-kcc",
+		Namespace: namespace,
+	}
+	resourceID := rgNN.Name
+	rg := testresourcegroup.New(rgNN, resourceID)
+	if err := nt.KubeClient.Create(rg); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Create a KCC object and verify the ResourceGroup status")
+	kccObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "serviceusage.cnrm.cloud.google.com/v1beta1",
+			"kind":       "Service",
+			"metadata": map[string]interface{}{
+				"name":      "pubsub.googleapis.com",
+				"namespace": namespace,
+				"annotations": map[string]interface{}{
+					"config.k8s.io/owning-inventory": resourceID,
+				},
+			},
+		},
+	}
+	resource := v1alpha1.ObjMetadata{
+		GroupKind: v1alpha1.GroupKind{
+			Group: kccObj.GroupVersionKind().Group,
+			Kind:  kccObj.GroupVersionKind().Kind,
+		},
+		Namespace: kccObj.GetNamespace(),
+		Name:      kccObj.GetName(),
+	}
+	if err := nt.KubeClient.Create(kccObj); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Add the KCC object to the ResourceGroup")
+	err := testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+		rg.Spec.Resources = []v1alpha1.ObjMetadata{resource}
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verifying the resourcegroup status: It can surface the kcc resource status.conditions")
+	expectedStatus := testresourcegroup.EmptyStatus()
+	expectedStatus.ObservedGeneration = 2
+	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
+		{
+			ObjMetadata: resource,
+			Conditions: []v1alpha1.Condition{
+				{
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "UpdateFailed",
+					Message: "Update call failed",
+				},
+			},
+			Status: v1alpha1.InProgress,
+		},
+	}
+	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
+		testpredicates.ResourceGroupStatusEquals(expectedStatus),
+	})
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 }

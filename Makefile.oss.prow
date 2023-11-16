@@ -38,33 +38,6 @@ push-gke-e2e:
 	@docker push $(GKE_E2E_IMAGE)
 
 ###################################
-# Helpers
-###################################
-
-.PHONY: clean-helm
-# remove any existing helm directory/binary. The install-helm target was previously
-# creating a directory at this path rather than the binary/file.
-clean-helm:
-	@rm -rf $(HELM_STAGING_DIR)
-	@rm -rf $(HELM)
-
-HELM_URL := gs://config-management-release/config-sync/helm/tag/$(HELM_VERSION)/helm-$(HELM_VERSION)-linux-amd64.tar.gz
-HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
-HELM_TARBALL := /tmp/helm-$(HELM_VERSION)-linux-amd64.tar.gz
-
-.PHONY: install-helm
-# install helm binary to publish the image
-install-helm: clean-helm buildenv-dirs
-	@gsutil cp $(HELM_URL).sha256 $(HELM_TARBALL).sha256
-	@gsutil cp $(HELM_URL) $(HELM_TARBALL)
-	@echo "$$(cat $(HELM_TARBALL).sha256)  $(HELM_TARBALL)" | sha256sum -c
-	@mkdir -p $(HELM_STAGING_DIR)
-	@tar -zxvf $(HELM_TARBALL) -C $(HELM_STAGING_DIR)
-	@cp $(HELM_STAGING_DIR)/helm $(HELM)
-	@rm $(HELM_TARBALL)
-	@rm $(HELM_TARBALL).sha256
-
-###################################
 # Prow environment provisioning
 ###################################
 
@@ -82,7 +55,7 @@ BOOKINFO_REPO_PUBLIC_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT
 # This target is run as a singleton against the ci-artifacts project, since
 # these require for the registries to be public.
 .PHONY: push-test-oci-images-public
-push-test-oci-images-public: install-crane
+push-test-oci-images-public: "$(CRANE)"
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE)
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE)
@@ -96,7 +69,7 @@ KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test
 
 .PHONY: push-test-oci-images-private
 # push-test-oci-images-private pushes the test images to the Artifact Registry and Container Registry repositories.
-push-test-oci-images-private: install-crane
+push-test-oci-images-private: "$(CRANE)"
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE)
@@ -120,5 +93,5 @@ set-up-workload-identity-test:
 	./scripts/set-up-workload-identity-configs.sh
 
 .PHONY: push-test-helm-charts-to-ar
-push-test-helm-charts-to-ar: install-helm
+push-test-helm-charts-to-ar: "$(HELM)"
 	GCP_PROJECT=$(GCP_PROJECT) ./scripts/push-test-helm-charts-to-ar.sh

@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"runtime"
@@ -63,7 +62,7 @@ func init() {
 // caused by the os.Pipe buffer limit: 64k.
 // This function is only used in `nomos bugreport` for the `nomos status` output.
 func SaveToTempFile(ctx context.Context, contexts []string) (*os.File, error) {
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "nomos-status-")
+	tmpFile, err := os.CreateTemp(os.TempDir(), "nomos-status-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a temporary file: %w", err)
 	}

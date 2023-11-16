@@ -57,12 +57,16 @@ const (
 	// RGControllerNamespace is the namespace used for the resource-group controller
 	RGControllerNamespace = "resource-group-system"
 
+	// MonitoringNamespace is the namespace used for Config Sync monitoring
+	MonitoringNamespace = "config-management-monitoring"
+
 	// RGControllerName is the name used for the resource-group controller
 	RGControllerName = "resource-group-controller-manager"
 )
 
-// IsControllerNamespace returns true if the namespace is the ACM Controller Namespace.
+// IsControllerNamespace returns true if the namespace is one of the Config Sync controller Namespace.
 func IsControllerNamespace(name string) bool {
-	// For now we only forbid syncing the Namespace containing the ACM controllers.
-	return name == ControllerNamespace
+	return name == ControllerNamespace ||
+		name == RGControllerNamespace ||
+		name == MonitoringNamespace
 }

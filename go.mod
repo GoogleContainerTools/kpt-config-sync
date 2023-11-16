@@ -52,7 +52,6 @@ require (
 	k8s.io/kubectl v0.26.9
 	k8s.io/kubernetes v1.26.9
 	k8s.io/utils v0.0.0-20230115233650-391b47cb4029
-	kpt.dev/resourcegroup v0.0.0-20231023223236-7ca71815022b
 	sigs.k8s.io/cli-utils v0.35.0
 	sigs.k8s.io/controller-runtime v0.14.1
 	sigs.k8s.io/kind v0.20.0
@@ -76,7 +75,7 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
 	github.com/docker/cli v23.0.6+incompatible // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
-	github.com/docker/docker v23.0.6+incompatible // indirect
+	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect

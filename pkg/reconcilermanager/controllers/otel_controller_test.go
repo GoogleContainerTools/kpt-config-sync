@@ -24,6 +24,7 @@ import (
 	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -71,13 +72,13 @@ func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 
 func TestOtelReconciler(t *testing.T) {
 	cm := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
-	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
 		return nil, errors.New("could not find default credentials")
@@ -90,7 +91,7 @@ func TestOtelReconciler(t *testing.T) {
 	}
 
 	wantDeployment := fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 	)
 
@@ -115,13 +116,13 @@ func TestOtelReconciler(t *testing.T) {
 
 func TestOtelReconcilerGooglecloud(t *testing.T) {
 	cm := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
-	reqNamespacedName := namespacedName(metrics.OtelCollectorName, metrics.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
 		return &google.Credentials{
@@ -138,7 +139,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	}
 
 	wantConfigMap := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorGooglecloud,
 		map[string]string{"otel-collector-config.yaml": metrics.CollectorConfigGooglecloud},
 		core.Labels(map[string]string{
@@ -151,7 +152,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	)
 
 	wantDeployment := fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 	)
 	core.SetAnnotation(&wantDeployment.Spec.Template, metadata.ConfigMapAnnotationKey, depAnnotationGooglecloud)
@@ -177,19 +178,19 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 
 func TestOtelReconcilerCustom(t *testing.T) {
 	cm := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	cmCustom := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorCustomCM,
 		map[string]string{"otel-collector-config.yaml": "custom"},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
-	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, metrics.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
 		return nil, nil
@@ -202,7 +203,7 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	}
 
 	wantDeployment := fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -229,19 +230,19 @@ func TestOtelReconcilerCustom(t *testing.T) {
 
 func TestOtelReconcilerDeleteCustom(t *testing.T) {
 	cm := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorName,
 		map[string]string{"otel-collector-config.yaml": ""},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	cmCustom := configMapWithData(
-		metrics.MonitoringNamespace,
+		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorCustomCM,
 		map[string]string{"otel-collector-config.yaml": "custom"},
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
-	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, metrics.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
 		return nil, nil
@@ -263,7 +264,7 @@ func TestOtelReconcilerDeleteCustom(t *testing.T) {
 	}
 
 	wantDeployment := fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -306,19 +307,19 @@ const test2GSAEmail = "metric-writer@test2.iam.gserviceaccount.com"
 func TestOtelSAReconciler(t *testing.T) {
 	sa := fake.ServiceAccountObject(
 		defaultSAName,
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Annotation(GCPSAAnnotationKey, test1GSAEmail),
 	)
-	reqNamespacedName := namespacedName(defaultSAName, metrics.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelSAReconciler(t, sa, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(metrics.MonitoringNamespace)))
+	reqNamespacedName := namespacedName(defaultSAName, configmanagement.MonitoringNamespace)
+	fakeClient, testReconciler := setupOtelSAReconciler(t, sa, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	// Verify that the otel-collector Deployment does not have the GCPSAAnnotationKey annotation.
 	wantDeployment := fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 	)
 	ctx := context.Background()
-	deployKey := client.ObjectKey{Namespace: metrics.MonitoringNamespace, Name: metrics.OtelCollectorName}
+	deployKey := client.ObjectKey{Namespace: configmanagement.MonitoringNamespace, Name: metrics.OtelCollectorName}
 	gotDeployment := &appsv1.Deployment{}
 	err := fakeClient.Get(ctx, deployKey, gotDeployment)
 	require.NoError(t, err, "Deployment[%s] not found", deployKey)
@@ -332,7 +333,7 @@ func TestOtelSAReconciler(t *testing.T) {
 
 	// Verify that the otel-collector Deployment has the GCPSAAnnotationKey annotation.
 	wantDeployment = fake.DeploymentObject(
-		core.Namespace(metrics.MonitoringNamespace),
+		core.Namespace(configmanagement.MonitoringNamespace),
 		core.Name(metrics.OtelCollectorName),
 	)
 	wantDeployment.Spec.Template.Annotations = map[string]string{GCPSAAnnotationKey: test1GSAEmail}

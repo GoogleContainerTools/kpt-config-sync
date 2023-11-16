@@ -15,16 +15,17 @@
 package bugreport
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/bugreport"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func init() {
@@ -40,18 +41,25 @@ var Cmd = &cobra.Command{
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		// hack to set the hidden variable in klog to also print info statements
-		// cobra does not expose core golang-style flags
-		if err := flag.CommandLine.Parse([]string{"--stderrthreshold=0"}); err != nil {
-			klog.Errorf("could not increase logging verbosity: %v", err)
+		// Send all logs to STDERR.
+		if err := cmd.InheritedFlags().Lookup("stderrthreshold").Value.Set("0"); err != nil {
+			klog.Errorf("failed to increase logging STDERR threshold: %v", err)
 		}
 
 		cfg, err := restconfig.NewRestConfig(flags.ClientTimeout)
 		if err != nil {
 			return errors.Wrapf(err, "failed to create rest config")
 		}
+		cs, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create kubernetes client set")
+		}
+		c, err := client.New(cfg, client.Options{})
+		if err != nil {
+			return errors.Wrapf(err, "failed to create kubernetes client")
+		}
 
-		report, err := bugreport.New(cmd.Context(), cfg)
+		report, err := bugreport.New(cmd.Context(), c, cs)
 		if err != nil {
 			return errors.Wrap(err, "failed to initialize bug reporter")
 		}

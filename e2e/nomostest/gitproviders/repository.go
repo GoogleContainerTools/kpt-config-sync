@@ -17,7 +17,6 @@ package gitproviders
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -441,7 +440,7 @@ func (g *Repository) AddFile(path string, bytes []byte) error {
 	}
 
 	// Write bytes to file.
-	if err := ioutil.WriteFile(absPath, bytes, fileMode); err != nil {
+	if err := os.WriteFile(absPath, bytes, fileMode); err != nil {
 		return errors.Wrapf(err, "writing file: %s", absPath)
 	}
 
@@ -463,7 +462,7 @@ func (g *Repository) AddEmptyDir(path string) error {
 func (g *Repository) GetFile(path string) ([]byte, error) {
 	absPath := filepath.Join(g.Root, path)
 
-	bytes, err := ioutil.ReadFile(absPath)
+	bytes, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading file: %s", absPath)
 	}

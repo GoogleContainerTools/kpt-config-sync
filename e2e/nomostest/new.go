@@ -16,7 +16,6 @@ package nomostest
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
@@ -36,7 +36,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kind/pkg/errors"
@@ -331,10 +330,6 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 
 	}
 
-	if *e2e.KCC {
-		nt.setupConfigConnector()
-	}
-
 	t.Cleanup(func() {
 		DeleteRemoteRepos(nt)
 	})
@@ -343,26 +338,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.KubeClient.Create(fake.NamespaceObject(metrics.MonitoringNamespace)); err != nil {
+	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
-	}
-	if *e2e.GitProvider == e2e.Local {
-		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
-			nt.T.Fatal(err)
-		}
-		// Pods don't always restart if the secrets don't exist, so we have to
-		// create the Namespaces + Secrets before anything else.
-		nt.gitPrivateKeyPath = generateSSHKeys(nt)
-
-		nt.caCertPath = generateSSLKeys(nt)
-
-		waitForGit := installGitServer(nt)
-		if err := waitForGit(); err != nil {
-			nt.describeNotRunningTestPods(testGitNamespace)
-			t.Fatalf("waiting for git-server Deployment to become available: %v", err)
-		}
-	} else {
-		nt.gitPrivateKeyPath = downloadSSHKey(nt)
 	}
 
 	t.Cleanup(func() {
@@ -371,11 +348,22 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		}
 	})
 
-	if err := installConfigSync(nt, opts.Nomos); err != nil {
-		nt.T.Fatal(err)
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return setupGit(nt)
+	})
+	tg.Go(func() error {
+		return installConfigSync(nt, opts.Nomos)
+	})
+	tg.Go(func() error {
+		return installPrometheus(nt)
+	})
+	if *e2e.KCC {
+		tg.Go(func() error {
+			return setupConfigConnector(nt)
+		})
 	}
-
-	if err := installPrometheus(nt); err != nil {
+	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -501,7 +489,7 @@ func TestDir(t nomostesting.NTB) string {
 	if err != nil {
 		t.Fatalf("creating nomos-e2e tmp directory: %v", err)
 	}
-	tmpDir, err := ioutil.TempDir(filepath.Join(os.TempDir(), NomosE2E), name)
+	tmpDir, err := os.MkdirTemp(filepath.Join(os.TempDir(), NomosE2E), name)
 	if err != nil {
 		t.Fatalf("creating nomos-e2e tmp test subdirectory %s: %v", tmpDir, err)
 	}

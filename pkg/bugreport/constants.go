@@ -16,7 +16,6 @@ package bugreport
 
 import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/policycontroller"
 )
 
@@ -39,6 +38,6 @@ var (
 		PolicyController:     policycontroller.NamespaceSystem,
 		ConfigSync:           configmanagement.ControllerNamespace,
 		ResourceGroup:        configmanagement.RGControllerNamespace,
-		ConfigSyncMonitoring: metrics.MonitoringNamespace,
+		ConfigSyncMonitoring: configmanagement.MonitoringNamespace,
 	}
 )

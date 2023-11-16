@@ -15,7 +15,7 @@
 package e2e
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -36,11 +36,11 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	newCRFile := filepath.Join(".", "..", "testdata", "customresources", "changed_schema_crds", "new_schema_cr.yaml")
 
 	// Add a CRD and CR to the repo
-	crdContent, err := ioutil.ReadFile(oldCRDFile)
+	crdContent, err := os.ReadFile(oldCRDFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	crContent, err := ioutil.ReadFile(oldCRFile)
+	crContent, err := os.ReadFile(oldCRFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -65,11 +65,11 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	}
 
 	// Add the CRD with a new schema and a CR using the new schema to the repo
-	crdContent, err = ioutil.ReadFile(newCRDFile)
+	crdContent, err = os.ReadFile(newCRDFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	crContent, err = ioutil.ReadFile(newCRFile)
+	crContent, err = os.ReadFile(newCRFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

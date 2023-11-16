@@ -16,7 +16,7 @@ package nomostest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -112,7 +112,7 @@ func checkImage(image string) error {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	_, err = ioutil.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return errors.Errorf("Failed to read response for image %s in registry: %s", image, err)
 	}

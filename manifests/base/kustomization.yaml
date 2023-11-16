@@ -22,6 +22,7 @@ resources:
 - ../reconciler-manager-service-account.yaml
 - ../reposync-crd.yaml
 - ../rootsync-crd.yaml
+- ../resourcegroup-crd.yaml
 - ../templates/otel-collector.yaml
 - ../templates/reconciler-manager.yaml
 - ../templates/reconciler-manager-configmap.yaml

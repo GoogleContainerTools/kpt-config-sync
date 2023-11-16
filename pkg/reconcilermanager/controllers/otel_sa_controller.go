@@ -21,7 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,10 +106,10 @@ func (r *OtelSAReconciler) SetupWithManager(mgr controllerruntime.Manager) error
 	// Process create / update events for service accounts in the `config-management-monitoring` namespace.
 	p := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return e.Object.GetNamespace() == metrics.MonitoringNamespace
+			return e.Object.GetNamespace() == configmanagement.MonitoringNamespace
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.ObjectNew.GetNamespace() == metrics.MonitoringNamespace
+			return e.ObjectNew.GetNamespace() == configmanagement.MonitoringNamespace
 		},
 	}
 	return controllerruntime.NewControllerManagedBy(mgr).

@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/utils/pointer"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -1654,7 +1653,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 
 	wantServiceAccount := fake.ServiceAccountObject(
 		rootReconcilerName,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.GCPServiceAccountEmail),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
@@ -1881,7 +1880,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	serviceAccount1 := fake.ServiceAccountObject(
 		rootReconcilerName,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label1),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -1955,7 +1954,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	serviceAccount2 := fake.ServiceAccountObject(
 		rootReconcilerName2,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label2),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2015,7 +2014,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	serviceAccount3 := fake.ServiceAccountObject(
 		rootReconcilerName3,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs3.Spec.GCPServiceAccountEmail),
 		core.Labels(label3),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
@@ -2080,7 +2079,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	serviceAccount4 := fake.ServiceAccountObject(
 		rootReconcilerName4,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label4),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2145,7 +2144,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	serviceAccount5 := fake.ServiceAccountObject(
 		rootReconcilerName5,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label5),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2767,7 +2766,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 
 	wantServiceAccount := fake.ServiceAccountObject(
 		rootReconcilerName,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
@@ -2848,7 +2847,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 
 	wantServiceAccount = fake.ServiceAccountObject(
 		rootReconcilerName,
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
@@ -3260,6 +3259,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 		reconcilermanager.GitSync: {
 			gitSyncKnownHosts: "false",
 			GitSyncRepo:       rootsyncRepo,
+			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
 			gitSyncPeriod:     "15s",
 		},
@@ -3571,7 +3571,7 @@ type depMutator func(*appsv1.Deployment)
 
 func rootSyncDeployment(reconcilerName string, muts ...depMutator) *appsv1.Deployment {
 	dep := fake.DeploymentObject(
-		core.Namespace(v1.NSConfigManagementSystem),
+		core.Namespace(configsync.ControllerNamespace),
 		core.Name(reconcilerName),
 	)
 	var replicas int32 = 1
@@ -3733,6 +3733,7 @@ func fleetWorkloadIdentityContainers() []corev1.Container {
 			ReadOnly:  true,
 			MountPath: gcpKSATokenDir,
 		}},
+		Args: defaultArgs(),
 	})
 	return containers
 }
@@ -3871,6 +3872,7 @@ func defaultContainers() []corev1.Container {
 		},
 		{
 			Name: reconcilermanager.GCENodeAskpassSidecar,
+			Args: defaultArgs(),
 		},
 		{
 			Name: reconcilermanager.OciSync,
@@ -4000,6 +4002,7 @@ func gceNodeContainers() []corev1.Container {
 	containers := noneGitContainers()
 	containers = append(containers, corev1.Container{
 		Name: reconcilermanager.GCENodeAskpassSidecar,
+		Args: defaultArgs(),
 	})
 	return containers
 }

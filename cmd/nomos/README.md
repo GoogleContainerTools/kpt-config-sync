@@ -1,8 +1,7 @@
 # Nomos CLI Development
 
-We distribute a binary called `nomos` for allowing users to get information
-about their nomos repository and the status of Anthos Configuration Management
-on their clusters.
+We distribute a binary called `nomos` to allow users to get information about
+their Config Sync repositories and the status of Config Sync on their clusters.
 
 ## CLI Patterns
 
@@ -12,7 +11,7 @@ is implemented in sub-commands.
    ```nomos sub-command [options...]```
 
 2. **Cobra.** We use [Cobra](https://github.com/spf13/cobra) to define
-subcommands and flags. See [main.go](main.go).
+subcommands and flags. See [nomos.go](nomos.go).
 
 3. **Multi-Cluster.** Commands default to showing information for all
 available clusters, with the option of limiting the scope to a cluster or set of

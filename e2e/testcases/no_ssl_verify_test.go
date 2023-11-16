@@ -24,7 +24,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -43,11 +42,11 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	key := controllers.GitSSLNoVerify
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
 		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 
 	// verify the reconciler deployments don't have the key yet
@@ -122,11 +121,11 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	key := controllers.GitSSLNoVerify
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
 		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 
 	// verify the reconciler deployments don't have the key yet

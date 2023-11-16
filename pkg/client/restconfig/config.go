@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog/v2"
 )
 
 const kubectlConfigPath = ".kube/config"
@@ -38,15 +40,15 @@ func defaultGetCurrentUser() (*user.User, error) {
 	return user.Current()
 }
 
-// newConfigPath returns the correct kubeconfig file path to use, depending on
-// the current user settings and the runtime environment.
-func newConfigPath() (string, error) {
-	// First try the KUBECONFIG variable.
+// KubeConfigPath returns the path to the kubeconfig:
+// 1. ${KUBECONFIG}, if non-empty
+// 2. ${userCurrentTestHook.HomeDir}/.kube/config, if userCurrentTestHook is set
+// 3. ${HOME}/.kube/config
+func KubeConfigPath() (string, error) {
 	envPath := os.Getenv("KUBECONFIG")
 	if envPath != "" {
 		return envPath, nil
 	}
-	// Try the current user.
 	curentUser, err := userCurrentTestHook()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get current user")
@@ -58,7 +60,7 @@ func newConfigPath() (string, error) {
 // newRawConfigWithRules returns a clientcmdapi.Config from a configuration file whose path is
 // provided by newConfigPath, and the clientcmd.ClientConfigLoadingRules associated with it
 func newRawConfigWithRules() (*clientcmdapi.Config, *clientcmd.ClientConfigLoadingRules, error) {
-	configPath, err := newConfigPath()
+	configPath, err := KubeConfigPath()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "while getting config path")
 	}
@@ -95,9 +97,23 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(apiCfg.Contexts) == 0 {
+		return map[string]*rest.Config{}, nil
+	}
+
+	if klog.V(4).Enabled() {
+		// Sort contexts for consistent ordering in the log
+		var contexts []string
+		for ctxName := range apiCfg.Contexts {
+			contexts = append(contexts, ctxName)
+		}
+		sort.Strings(contexts)
+		klog.V(4).Infof("Found config contexts: %s", strings.Join(contexts, ", "))
+		klog.V(4).Infof("Current config context: %s", apiCfg.CurrentContext)
+	}
 
 	var badConfigs []string
-	configs := map[string]*rest.Config{}
+	configs := make(map[string]*rest.Config, len(apiCfg.Contexts))
 	for ctxName := range apiCfg.Contexts {
 		cfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			rules, &clientcmd.ConfigOverrides{CurrentContext: ctxName})
@@ -115,9 +131,8 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 		configs[ctxName] = restCfg
 	}
 
-	var cfgErrs error
 	if len(badConfigs) > 0 {
-		cfgErrs = fmt.Errorf("failed to build configs:\n%s", strings.Join(badConfigs, "\n"))
+		return configs, fmt.Errorf("failed to build configs:\n%s", strings.Join(badConfigs, "\n"))
 	}
-	return configs, cfgErrs
+	return configs, nil
 }

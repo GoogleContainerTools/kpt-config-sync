@@ -22,6 +22,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -42,27 +43,56 @@ func testGitServerSelector() map[string]string {
 	return map[string]string{"app": testGitServer}
 }
 
+func setupGit(nt *NT) error {
+	if *e2e.GitProvider == e2e.Local {
+		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
+			return err
+		}
+
+		// Pods don't always restart if the secrets don't exist, so we have to
+		// create the Namespaces + Secrets before anything else.
+		gitPrivateKeyPath, err := generateSSHKeys(nt)
+		if err != nil {
+			return err
+		}
+		nt.gitPrivateKeyPath = gitPrivateKeyPath
+
+		caCertPath, err := generateSSLKeys(nt)
+		if err != nil {
+			return err
+		}
+		nt.caCertPath = caCertPath
+
+		if err := installGitServer(nt); err != nil {
+			nt.describeNotRunningTestPods(testGitNamespace)
+			return fmt.Errorf("waiting for git-server Deployment to become available: %w", err)
+		}
+	} else {
+		gitPrivateKeyPath, err := downloadSSHKey(nt)
+		if err != nil {
+			return err
+		}
+		nt.gitPrivateKeyPath = gitPrivateKeyPath
+	}
+	return nil
+}
+
 // installGitServer installs the git-server Pod, and returns a callback that
 // waits for the Pod to become available.
 //
 // The git-server almost always comes up before 40 seconds, but we give it a
 // full minute in the callback to be safe.
-func installGitServer(nt *NT) func() error {
-	nt.T.Helper()
-
+func installGitServer(nt *NT) error {
 	objs := gitServer()
 
 	for _, o := range objs {
-		err := nt.KubeClient.Create(o)
-		if err != nil {
-			nt.T.Fatalf("installing %v %s: %v", o.GetObjectKind().GroupVersionKind(),
+		if err := nt.KubeClient.Apply(o); err != nil {
+			return fmt.Errorf("applying %v %s: %w", o.GetObjectKind().GroupVersionKind(),
 				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, err)
 		}
 	}
 
-	return func() error {
-		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testGitServer, testGitNamespace)
-	}
+	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testGitServer, testGitNamespace)
 }
 
 func gitServer() []client.Object {

@@ -177,7 +177,7 @@ func toErrorResource(r client.Object) v1.ErrorResource {
 		SourcePath:        GetSourceAnnotation(r),
 		ResourceName:      r.GetName(),
 		ResourceNamespace: r.GetNamespace(),
-		ResourceGVK:       r.GetObjectKind().GroupVersionKind(),
+		ResourceGVK:       v1.ParseSchemaGVK(r.GetObjectKind().GroupVersionKind()),
 	}
 }
 

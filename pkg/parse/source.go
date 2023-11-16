@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -209,11 +209,11 @@ func hydratedError(errorFile, label string) hydrate.HydrationError {
 	content, err := os.ReadFile(errorFile)
 	if err != nil {
 		return hydrate.NewInternalError(errors.Errorf("Unable to load %s: %v. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
-			errorFile, err, reconcilermanager.HydrationController, v1.NSConfigManagementSystem, label, reconcilermanager.HydrationController))
+			errorFile, err, reconcilermanager.HydrationController, configsync.ControllerNamespace, label, reconcilermanager.HydrationController))
 	}
 	if len(content) == 0 {
 		return hydrate.NewInternalError(fmt.Errorf("%s is empty. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
-			errorFile, reconcilermanager.HydrationController, v1.NSConfigManagementSystem, label, reconcilermanager.HydrationController))
+			errorFile, reconcilermanager.HydrationController, configsync.ControllerNamespace, label, reconcilermanager.HydrationController))
 	}
 
 	payload := &hydrate.HydrationErrorPayload{}

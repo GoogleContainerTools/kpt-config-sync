@@ -28,6 +28,7 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // ClusterConfig is the top-level object for the config data definition.
 //
@@ -105,6 +106,7 @@ type ClusterConfigList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // NamespaceConfig is the top-level object for the config data definition.
 //
@@ -209,6 +211,7 @@ type GenericVersionResources struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // ClusterSelector specifies a LabelSelector applied to clusters that exist within a
 // cluster registry.
@@ -248,6 +251,7 @@ type ClusterSelectorList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // NamespaceSelector specifies a LabelSelector applied to namespaces that exist within a
 // NamespaceConfig hierarchy.
@@ -287,6 +291,7 @@ type NamespaceSelectorList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // Sync is used for configuring sync of generic resources.
 type Sync struct {
@@ -369,6 +374,7 @@ type SyncList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // Repo holds configuration and status about the Nomos source of truth.
 type Repo struct {
@@ -522,7 +528,23 @@ type ErrorResource struct {
 	// ResourceGVK is the GroupVersionKind of the affected K8S resource. This field may be empty for
 	// errors that are not associated with a specific resource.
 	// +optional
-	ResourceGVK schema.GroupVersionKind `json:"resourceGVK"`
+	ResourceGVK GroupVersionKind `json:"resourceGVK"`
+}
+
+// GroupVersionKind identifies a Kind. It substitutes schema.GroupVersionKind with json tags.
+type GroupVersionKind struct {
+	Group   string `json:"group"`
+	Version string `json:"version"`
+	Kind    string `json:"kind"`
+}
+
+// ParseSchemaGVK parses the schema.GroupVersionKind into custom groupVersionKind with json tags.
+func ParseSchemaGVK(gvk schema.GroupVersionKind) GroupVersionKind {
+	return GroupVersionKind{
+		Group:   gvk.Group,
+		Version: gvk.Version,
+		Kind:    gvk.Kind,
+	}
 }
 
 // +kubebuilder:object:root=true
@@ -542,6 +564,7 @@ type RepoList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // HierarchyConfig is used for configuring the HierarchyModeType for managed resources.
 type HierarchyConfig struct {

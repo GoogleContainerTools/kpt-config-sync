@@ -54,9 +54,19 @@ func TestNamespace(t *testing.T) {
 			obj:  fake.Namespace("hello"),
 		},
 		{
-			name:    "Illegal namespace",
+			name:    "Illegal namespace " + configmanagement.ControllerNamespace,
 			obj:     fake.Namespace(configmanagement.ControllerNamespace),
 			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.ControllerNamespace)),
+		},
+		{
+			name:    "Illegal namespace " + configmanagement.RGControllerNamespace,
+			obj:     fake.Namespace(configmanagement.RGControllerNamespace),
+			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.RGControllerNamespace)),
+		},
+		{
+			name:    "Illegal namespace " + configmanagement.MonitoringNamespace,
+			obj:     fake.Namespace(configmanagement.MonitoringNamespace),
+			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.MonitoringNamespace)),
 		},
 	}
 

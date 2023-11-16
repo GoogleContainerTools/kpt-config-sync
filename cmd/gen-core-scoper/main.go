@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -40,17 +39,17 @@ func CoreScoper() Scoper {
 
 func main() {
 	// Types available on a default-created cluster for both Kubernetes 1.15 and 1.18.
-	apiResources115, err := ioutil.ReadFile("cmd/gen-core-scoper/api_resources_1_15.txt")
+	apiResources115, err := os.ReadFile("cmd/gen-core-scoper/api_resources_1_15.txt")
 	if err != nil {
 		panic(err)
 	}
-	apiResources118, err := ioutil.ReadFile("cmd/gen-core-scoper/api_resources_1_18.txt")
+	apiResources118, err := os.ReadFile("cmd/gen-core-scoper/api_resources_1_18.txt")
 	if err != nil {
 		panic(err)
 	}
 	apiResources := append(apiResources115, apiResources118...)
 	// Read Nomos-specific types which are not available on a default-created cluster.
-	nomosResources, err := ioutil.ReadFile("cmd/gen-core-scoper/nomos_resources.txt")
+	nomosResources, err := os.ReadFile("cmd/gen-core-scoper/nomos_resources.txt")
 	if err != nil {
 		panic(err)
 	}
@@ -94,7 +93,7 @@ func main() {
 }
 `)
 
-	err = ioutil.WriteFile("pkg/util/discovery/core_scoper.generated.go", []byte(sb.String()), os.ModePerm)
+	err = os.WriteFile("pkg/util/discovery/core_scoper.generated.go", []byte(sb.String()), os.ModePerm)
 	if err != nil {
 		panic(err)
 	}

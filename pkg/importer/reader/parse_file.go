@@ -17,7 +17,7 @@ package reader
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -38,7 +38,7 @@ func parseFile(path string) ([]*unstructured.Unstructured, error) {
 
 	switch filepath.Ext(path) {
 	case ".yml", ".yaml":
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			klog.Errorf("Failed to read file declared in git from mounted filesystem: %s", path)
 			importer.Metrics.Violations.Inc()
@@ -46,7 +46,7 @@ func parseFile(path string) ([]*unstructured.Unstructured, error) {
 		}
 		return parseYAMLFile(contents)
 	case ".json":
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			klog.Errorf("Failed to read file declared in git from mounted filesystem: %s", path)
 			importer.Metrics.Violations.Inc()

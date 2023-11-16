@@ -956,9 +956,12 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		} else {
 			containerResourceDefaults = ReconcilerContainerResourceDefaults()
 		}
+		var containerLogLevelDefaults = ReconcilerContainerLogLevelDefaults()
+
 		overrides := rs.Spec.SafeOverride()
 		containerResources := setContainerResourceDefaults(overrides.Resources,
 			containerResourceDefaults)
+		containerLogLevels := setContainerLogLevelDefaults(overrides.LogLevels, containerLogLevelDefaults)
 
 		var updatedContainers []corev1.Container
 		for _, container := range templateSpec.Containers {
@@ -1030,7 +1033,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			if addContainer {
 				// Common mutations for all containers
 				mutateContainerResource(&container, containerResources)
-				mutateContainerLogLevel(&container, overrides.LogLevels)
+				mutateContainerLogLevel(&container, containerLogLevels)
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

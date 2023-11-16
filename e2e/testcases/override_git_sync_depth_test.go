@@ -24,7 +24,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -45,11 +44,11 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	key := controllers.GitSyncDepth
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
 		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 
 	err := validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,
@@ -143,11 +142,11 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	key := controllers.GitSyncDepth
 	rootReconcilerNN := types.NamespacedName{
 		Name:      nomostest.DefaultRootReconcilerName,
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
 		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
-		Namespace: v1.NSConfigManagementSystem,
+		Namespace: configsync.ControllerNamespace,
 	}
 
 	err := validateDeploymentContainerHasEnvVar(nt, rootReconcilerNN,

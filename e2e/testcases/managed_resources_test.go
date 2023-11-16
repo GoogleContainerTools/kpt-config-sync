@@ -16,7 +16,7 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -81,7 +81,7 @@ metadata:
     configsync.gke.io/manager: :root
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns1.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns1.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -110,7 +110,7 @@ metadata:
     configsync.gke.io/manager: :abcdef
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns2.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns2.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -145,7 +145,7 @@ metadata:
     configsync.gke.io/resource-id: _namespace_test-ns3
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns3.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns3.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -180,7 +180,7 @@ metadata:
     configsync.gke.io/manager: :root
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-ns4.yaml"), ns, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns4.yaml"), ns, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -238,7 +238,7 @@ data:
   weekday: "monday"
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-cm1.yaml"), cm, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm1.yaml"), cm, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -269,7 +269,7 @@ data:
   weekday: "monday"
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-cm2.yaml"), cm, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm2.yaml"), cm, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -308,7 +308,7 @@ data:
   weekday: "monday"
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-cm3.yaml"), cm, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm3.yaml"), cm, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -346,7 +346,7 @@ data:
   weekday: "monday"
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-cm4.yaml"), cm, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm4.yaml"), cm, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 
@@ -382,7 +382,7 @@ metadata:
     configsync.gke.io/manager: :root
 `)
 
-	if err := ioutil.WriteFile(filepath.Join(nt.TmpDir, "test-secret.yaml"), cm, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-secret.yaml"), cm, 0644); err != nil {
 		nt.T.Fatalf("failed to create a tmp file %v", err)
 	}
 

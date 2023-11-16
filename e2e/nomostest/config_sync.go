@@ -17,7 +17,6 @@ package nomostest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -110,7 +109,7 @@ func IsReconcilerManagerConfigMap(obj client.Object) bool {
 // otel-collector Deployment in the config-management-monitoring namespace.
 func isOtelCollectorDeployment(obj client.Object) bool {
 	return obj.GetName() == ocmetrics.OtelCollectorName &&
-		obj.GetNamespace() == ocmetrics.MonitoringNamespace &&
+		obj.GetNamespace() == configmanagement.MonitoringNamespace &&
 		obj.GetObjectKind().GroupVersionKind() == kinds.Deployment()
 }
 
@@ -215,15 +214,15 @@ func convertToTypedObjects(nt *NT, objs []client.Object) ([]client.Object, error
 }
 
 func copyFile(src, dst string) error {
-	bytes, err := ioutil.ReadFile(src)
+	bytes, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dst, bytes, fileMode)
+	return os.WriteFile(dst, bytes, fileMode)
 }
 
 func copyDirContents(src, dest string) error {
-	files, err := ioutil.ReadDir(src)
+	files, err := os.ReadDir(src)
 	if err != nil {
 		return err
 	}
@@ -271,7 +270,7 @@ func parseManifestDir(dirPath string) ([]client.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := ioutil.ReadDir(dirPath)
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +345,7 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 			predicates = append(predicates, testpredicates.HasGenerationAtLeast(2))
 		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			ocmetrics.OtelCollectorName, ocmetrics.MonitoringNamespace, predicates)
+			ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, predicates)
 	})
 	tg.Go(func() error {
 		// The root-reconciler is created after the reconciler-manager is ready.
@@ -596,7 +595,7 @@ func setupDelegatedControl(nt *NT) {
 		}
 
 		// create secret for the namespace reconciler.
-		CreateNamespaceSecret(nt, nn.Namespace)
+		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
 
 		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
 			nt.T.Fatal(err)
@@ -890,7 +889,7 @@ func setupCentralizedControl(nt *NT) {
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
 	for nn := range nt.NonRootRepos {
-		CreateNamespaceSecret(nt, nn.Namespace)
+		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
 	}
 }
 

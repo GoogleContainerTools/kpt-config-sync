@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -48,7 +47,7 @@ const (
 )
 
 var nsReconcilerKey = types.NamespacedName{
-	Namespace: v1.NSConfigManagementSystem,
+	Namespace: configsync.ControllerNamespace,
 	Name:      nsReconcilerName,
 }
 

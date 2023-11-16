@@ -34,13 +34,13 @@ __install-nomos-local:
 
 # Run the Go e2e tests after building images/manifests.
 # Useful for when you're actively modifying code between runs.
-.PHONY: test-e2e-go
+.PHONY: test-e2e
 test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 
 # Run the Go e2e tests without building images/manifests.
 # Useful for modifying test code and rerunning tests without rebuilding images.
 .PHONY: test-e2e-go-nobuild
-test-e2e-nobuild: install-kustomize install-helm install-crane
+test-e2e-nobuild: "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)"
 	./scripts/e2e.sh $(E2E_ARGS)
 
 # Run the Go e2e tests on GKE without building images/manifests.
@@ -62,7 +62,7 @@ test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 KIND_IMAGE := "kind-image"
 
 .PHONY: build-kind-e2e
-build-kind-e2e: install-kind install-kustomize install-helm install-crane
+build-kind-e2e: "$(KIND)" "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)"
 	@echo "+++ Building $(KIND_IMAGE)"
 	docker buildx build . \
 		--target kind-e2e \
@@ -76,11 +76,13 @@ build-kind-e2e: install-kind install-kustomize install-helm install-crane
 test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 	kind delete clusters --all
 	docker run \
+		$(DOCKER_INTERACTIVE) \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
 		--env ARTIFACTS="/logs/artifacts" \
 		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--network="host" \
+		--rm \
 		$(KIND_IMAGE) \
 		./scripts/e2e.sh \
 			--share-test-env \
@@ -92,7 +94,7 @@ test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 # This target runs the first group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group1
 test-e2e-kind-multi-repo-test-group1:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,cluster-selector,drift-control,lifecycle,nomos-cli" test-e2e-kind-multi-repo
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,selector,drift-control,lifecycle,nomos-cli" test-e2e-kind-multi-repo
 
 # This target runs the second group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group2

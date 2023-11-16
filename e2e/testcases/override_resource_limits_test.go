@@ -26,7 +26,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -699,7 +698,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nsReconcilerBackendDeploymentGeneration++
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
-	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), v1.NSConfigManagementSystem, &appsv1.Deployment{},
+	err = nt.Validate(core.NsReconcilerName(backendNamespace, configsync.RepoSyncName), configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.GenerationEquals(nsReconcilerBackendDeploymentGeneration),
 		testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.Reconciler]),
 		testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.GitSync]),

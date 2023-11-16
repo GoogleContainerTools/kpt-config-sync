@@ -18,6 +18,11 @@ set -euo pipefail
 
 export CGO_ENABLED=0
 
+# install kubebuilder assets for resourcegroup controller e2e tests
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+KUBEBUILDER_ASSETS="$(realpath "$(setup-envtest use --bin-dir .output -p path)")"
+export KUBEBUILDER_ASSETS
+
 echo "Running go tests:"
 go test -installsuffix "static" "$@"
 

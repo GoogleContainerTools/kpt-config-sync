@@ -49,14 +49,24 @@ DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
+
 KUSTOMIZE_VERSION := v5.1.1-gke.2
-HELM_VERSION := v3.13.1-gke.2
+KUSTOMIZE := $(BIN_DIR)/kustomize
+KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
+
+HELM_VERSION := v3.13.1-gke.3
+HELM := $(BIN_DIR)/helm
+HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
+
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
 KIND_VERSION := v0.20.0
+KIND := $(BIN_DIR)/kind
+
 # crane cli version used for publishing OCI images
 # used by tests or local make targets
 CRANE_VERSION := v0.16.1
+CRANE := $(BIN_DIR)/crane
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging
@@ -262,7 +272,7 @@ build-status:
 	@./scripts/build-status.sh
 
 .PHONY: test-unit
-test-unit: buildenv-dirs install-kustomize
+test-unit: buildenv-dirs "$(KUSTOMIZE)"
 	@echo "+++ Running unit tests in a docker container"
 	@./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
@@ -329,46 +339,59 @@ lint-license: buildenv-dirs
 "$(GOBIN)/addlicense":
 	go install github.com/google/addlicense@v1.0.0
 
+"$(KUSTOMIZE)": buildenv-dirs
+	@KUSTOMIZE_VERSION="$(KUSTOMIZE_VERSION)" \
+		INSTALL_DIR="$(BIN_DIR)" \
+		TMPDIR="/tmp" \
+		OUTPUT_DIR="$(OUTPUT_DIR)" \
+		STAGING_DIR="$(KUSTOMIZE_STAGING_DIR)" \
+		./scripts/install-kustomize.sh
+
+.PHONY: install-kustomize
+# install kustomize (user-friendly target alias)
+install-kustomize: "$(KUSTOMIZE)"
+
 .PHONY: clean-kustomize
 clean-kustomize:
 	@rm -rf $(KUSTOMIZE_STAGING_DIR)
-	@rm -rf $(BIN_DIR)/kustomize
+	@rm -rf $(KUSTOMIZE)
 
-KUSTOMIZE_URL := gs://config-management-release/config-sync/kustomize/tag/$(KUSTOMIZE_VERSION)/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
-KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
-KUSTOMIZE_TARBALL := /tmp/kustomize-$(KUSTOMIZE_VERSION)-linux-amd64.tar.gz
+"$(HELM)": buildenv-dirs
+	@HELM_VERSION="$(HELM_VERSION)" \
+		INSTALL_DIR="$(BIN_DIR)" \
+		TMPDIR="/tmp" \
+		OUTPUT_DIR="$(OUTPUT_DIR)" \
+		STAGING_DIR="$(HELM_STAGING_DIR)" \
+		./scripts/install-helm.sh
 
-"$(BIN_DIR)/kustomize": clean-kustomize buildenv-dirs
-	@gsutil cp $(KUSTOMIZE_URL).sha256 $(KUSTOMIZE_TARBALL).sha256
-	@gsutil cp $(KUSTOMIZE_URL) $(KUSTOMIZE_TARBALL)
-	@echo "$$(cat $(KUSTOMIZE_TARBALL).sha256)  $(KUSTOMIZE_TARBALL)" | sha256sum -c
-	@mkdir -p $(KUSTOMIZE_STAGING_DIR)
-	@tar -zxvf $(KUSTOMIZE_TARBALL) -C $(KUSTOMIZE_STAGING_DIR)
-	@cp $(KUSTOMIZE_STAGING_DIR)/kustomize $(BIN_DIR)/kustomize
-	@rm $(KUSTOMIZE_TARBALL)
-	@rm $(KUSTOMIZE_TARBALL).sha256
+.PHONY: install-helm
+# install helm (user-friendly target alias)
+install-helm: "$(HELM)"
 
-.PHONY: install-kustomize
-install-kustomize: "$(BIN_DIR)/kustomize"
+.PHONY: clean-helm
+clean-helm:
+	@rm -rf $(HELM_STAGING_DIR)
+	@rm -rf $(HELM)
 
 "$(GOBIN)/kind":
 	go install sigs.k8s.io/kind@$(KIND_VERSION)
 
-"$(BIN_DIR)/kind": "$(GOBIN)/kind" buildenv-dirs
-	cp $(GOBIN)/kind $(BIN_DIR)/kind
+"$(KIND)": "$(GOBIN)/kind" buildenv-dirs
+	cp $(GOBIN)/kind $(KIND)
 
 .PHONY: install-kind
-install-kind: "$(BIN_DIR)/kind"
+# install kind (user-friendly target alias)
+install-kind: "$(KIND)"
 
 "$(GOBIN)/crane":
 	go install github.com/google/go-containerregistry/cmd/crane@$(CRANE_VERSION)
 
-"$(BIN_DIR)/crane": "$(GOBIN)/crane" buildenv-dirs
-	cp $(GOBIN)/crane $(BIN_DIR)/crane
+"$(CRANE)": "$(GOBIN)/crane" buildenv-dirs
+	cp $(GOBIN)/crane $(CRANE)
 
 .PHONY: install-crane
-# install crane binary to publish OCI images
-install-crane: "$(BIN_DIR)/crane"
+# install crane (user-friendly target alias)
+install-crane: "$(CRANE)"
 
 .PHONY: license-headers
 license-headers: "$(GOBIN)/addlicense"

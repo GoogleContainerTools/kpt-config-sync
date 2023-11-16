@@ -19,22 +19,17 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
@@ -44,41 +39,16 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(clusterName, syncName, reconcilerName string, scope declared.Scope, fileReader reader.Reader, c client.Client, pollingPeriod, resyncPeriod, retryPeriod, statusUpdatePeriod time.Duration, fs FileSource, dc discovery.DiscoveryInterface, resources *declared.Resources, app applier.Applier, rem remediator.Interface, renderingEnabled bool) (Parser, error) {
-	converter, err := declared.NewValueConverter(dc)
-	if err != nil {
-		return nil, err
-	}
-
+func NewNamespaceRunner(opts *Options, scope declared.Scope) Parser {
+	opts.mux = &sync.Mutex{}
 	return &namespace{
-		opts: opts{
-			clusterName:        clusterName,
-			client:             c,
-			syncName:           syncName,
-			reconcilerName:     reconcilerName,
-			pollingPeriod:      pollingPeriod,
-			resyncPeriod:       resyncPeriod,
-			retryPeriod:        retryPeriod,
-			statusUpdatePeriod: statusUpdatePeriod,
-			files:              files{FileSource: fs},
-			parser:             filesystem.NewParser(fileReader),
-			updater: updater{
-				scope:      scope,
-				resources:  resources,
-				applier:    app,
-				remediator: rem,
-			},
-			discoveryInterface: dc,
-			converter:          converter,
-			mux:                &sync.Mutex{},
-			renderingEnabled:   renderingEnabled,
-		},
-		scope: scope,
-	}, nil
+		Options: opts,
+		scope:   scope,
+	}
 }
 
 type namespace struct {
-	opts
+	*Options
 
 	// scope is the name of the Namespace this parser is for.
 	// It is an error for this parser's repository to contain resources outside of
@@ -88,8 +58,8 @@ type namespace struct {
 
 var _ Parser = &namespace{}
 
-func (p *namespace) options() *opts {
-	return &(p.opts)
+func (p *namespace) options() *Options {
+	return p.Options
 }
 
 // parseSource implements the Parser interface
@@ -106,21 +76,21 @@ func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.Fil
 	if err != nil {
 		return nil, err
 	}
-	builder := utildiscovery.ScoperBuilder(p.discoveryInterface)
+	builder := utildiscovery.ScoperBuilder(p.DiscoveryInterface)
 
 	klog.Infof("Parsing files from source dir: %s", state.syncDir.OSPath())
-	objs, err := p.parser.Parse(filePaths)
+	objs, err := p.Parser.Parse(filePaths)
 	if err != nil {
 		return nil, err
 	}
 
 	options := validate.Options{
-		ClusterName:    p.clusterName,
-		ReconcilerName: p.reconcilerName,
+		ClusterName:    p.ClusterName,
+		ReconcilerName: p.ReconcilerName,
 		PolicyDir:      p.SyncDir,
 		PreviousCRDs:   crds,
 		BuildScoper:    builder,
-		Converter:      p.converter,
+		Converter:      p.Converter,
 	}
 	options = OptionsForScope(options, p.scope)
 
@@ -131,7 +101,7 @@ func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.Fil
 	}
 
 	// Duplicated with root.go.
-	e := addAnnotationsAndLabels(objs, p.scope, p.syncName, p.sourceContext(), state.commit)
+	e := addAnnotationsAndLabels(objs, p.scope, p.SyncName, p.sourceContext(), state.commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err
@@ -159,7 +129,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	// or if an attacker tried to maliciously change the cluster's record of the
 	// source of truth.
 	var rs v1beta1.RepoSync
-	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), &rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
@@ -193,21 +163,21 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
 			return p.setSourceStatusWithRetries(ctx, newStatus, denominator*2)
 		}
-		return status.APIServerError(err, "failed to update RepoSync source status from parser")
+		return status.APIServerError(err, "failed to update RepoSync source status from Parser")
 	}
 	return nil
 }
 
 func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
 	rs := &v1beta1.RepoSync{}
-	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), rs); err != nil {
-		return status.APIServerError(err, "failed to get RepoSync for parser")
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), rs); err != nil {
+		return status.APIServerError(err, "failed to get RepoSync for Parser")
 	}
 	newVal := strconv.FormatBool(renderingRequired)
 	if core.GetAnnotation(rs, metadata.RequiresRenderingAnnotationKey) == newVal {
@@ -216,7 +186,7 @@ func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired 
 	}
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
-	return p.client.Patch(ctx, rs, client.MergeFrom(existing))
+	return p.Client.Patch(ctx, rs, client.MergeFrom(existing))
 }
 
 // setRenderingStatus implements the Parser interface
@@ -236,7 +206,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	}
 
 	var rs v1beta1.RepoSync
-	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), &rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
@@ -270,7 +240,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
@@ -296,7 +266,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 	}
 
 	rs := &v1beta1.RepoSync{}
-	if err := p.client.Get(ctx, reposync.ObjectKey(p.scope, p.syncName), rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), rs); err != nil {
 		return status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.scope))
 	}
 
@@ -336,7 +306,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.client.Status().Update(ctx, rs); err != nil {
+	if err := p.Client.Status().Update(ctx, rs); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
@@ -351,16 +321,16 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 // validation errors, applier errors, and watch update errors.
 // SyncErrors implements the Parser interface
 func (p *namespace) SyncErrors() status.MultiError {
-	return p.updater.Errors()
+	return p.Errors()
 }
 
 // Syncing returns true if the updater is running.
 // SyncErrors implements the Parser interface
 func (p *namespace) Syncing() bool {
-	return p.updater.Updating()
+	return p.Updating()
 }
 
 // K8sClient implements the Parser interface
 func (p *namespace) K8sClient() client.Client {
-	return p.client
+	return p.Client
 }

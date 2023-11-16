@@ -209,6 +209,11 @@ func Run(opts Options) {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
 
+	converter, err := declared.NewValueConverter(discoveryClient)
+	if err != nil {
+		klog.Fatalf("Instantiating converter: %v", err)
+	}
+
 	// Configure the Parser.
 	var parser parse.Parser
 	fs := parse.FileSource{
@@ -222,16 +227,32 @@ func Run(opts Options) {
 		SourceBranch: opts.SourceBranch,
 		SourceRev:    opts.SourceRev,
 	}
+
+	parseOpts := &parse.Options{
+		Parser:             filesystem.NewParser(&reader.File{}),
+		ClusterName:        opts.ClusterName,
+		Client:             cl,
+		ReconcilerName:     opts.ReconcilerName,
+		SyncName:           opts.SyncName,
+		PollingPeriod:      opts.PollingPeriod,
+		ResyncPeriod:       opts.ResyncPeriod,
+		RetryPeriod:        opts.RetryPeriod,
+		StatusUpdatePeriod: opts.StatusUpdatePeriod,
+		DiscoveryInterface: discoveryClient,
+		Converter:          converter,
+		RenderingEnabled:   opts.RenderingEnabled,
+		Files:              parse.Files{FileSource: fs},
+		Updater: parse.Updater{
+			Scope:      opts.ReconcilerScope,
+			Resources:  decls,
+			Applier:    supervisor,
+			Remediator: rem,
+		},
+	}
 	if opts.ReconcilerScope == declared.RootReconciler {
-		parser, err = parse.NewRootRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.SourceFormat, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled,
-			opts.NamespaceStrategy)
-		if err != nil {
-			klog.Fatalf("Instantiating Root Repository Parser: %v", err)
-		}
+		parser = parse.NewRootRunner(parseOpts, opts.SourceFormat, opts.NamespaceStrategy)
 	} else {
-		parser, err = parse.NewNamespaceRunner(opts.ClusterName, opts.SyncName, opts.ReconcilerName, opts.ReconcilerScope, &reader.File{}, cl,
-			opts.PollingPeriod, opts.ResyncPeriod, opts.RetryPeriod, opts.StatusUpdatePeriod, fs, discoveryClient, decls, supervisor, rem, opts.RenderingEnabled)
+		parser = parse.NewNamespaceRunner(parseOpts, opts.ReconcilerScope)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}

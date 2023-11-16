@@ -58,23 +58,23 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 	}
 
 	parser.sourceFormat = filesystem.SourceFormatUnstructured
-	parser.opts = opts{
-		parser:             filesystem.NewParser(&reader.File{}),
-		statusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
-		syncName:           rootSyncName,
-		reconcilerName:     rootReconcilerName,
-		client:             syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-		discoveryInterface: syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-		converter:          converter,
-		files:              files{FileSource: fs},
-		updater: updater{
-			scope:      declared.RootReconciler,
-			resources:  &declared.Resources{},
-			remediator: &noOpRemediator{},
-			applier:    &fakeApplier{},
+	parser.Options = &Options{
+		Parser:             filesystem.NewParser(&reader.File{}),
+		StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+		SyncName:           rootSyncName,
+		ReconcilerName:     rootReconcilerName,
+		Client:             syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+		DiscoveryInterface: syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+		Converter:          converter,
+		Files:              Files{FileSource: fs},
+		Updater: Updater{
+			Scope:      declared.RootReconciler,
+			Resources:  &declared.Resources{},
+			Remediator: &noOpRemediator{},
+			Applier:    &fakeApplier{},
 		},
 		mux:              &sync.Mutex{},
-		renderingEnabled: renderingEnabled,
+		RenderingEnabled: renderingEnabled,
 	}
 	return parser
 }
@@ -380,7 +380,7 @@ func TestRun(t *testing.T) {
 			testutil.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
 
 			rs := &v1beta1.RootSync{}
-			if err = parser.options().client.Get(context.Background(), rootsync.ObjectKey(parser.options().syncName), rs); err != nil {
+			if err = parser.options().Client.Get(context.Background(), rootsync.ObjectKey(parser.options().SyncName), rs); err != nil {
 				t.Fatal(err)
 			}
 			expectedRSSourceErrs := status.ToCSE(state.sourceStatus.errs)

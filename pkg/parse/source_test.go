@@ -107,15 +107,15 @@ func TestReadConfigFiles(t *testing.T) {
 
 			parser := &root{
 				sourceFormat: filesystem.SourceFormatUnstructured,
-				opts: opts{
-					parser:             &fakeParser{},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					updater: updater{
-						scope:     declared.RootReconciler,
-						resources: &declared.Resources{},
+				Options: &Options{
+					Parser:             &fakeParser{},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					Updater: Updater{
+						Scope:     declared.RootReconciler,
+						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
 				},
@@ -265,8 +265,8 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 			}
 
 			parser := &root{
-				opts: opts{
-					files: files{
+				Options: &Options{
+					Files: Files{
 						FileSource: FileSource{
 							HydratedRoot: hydratedRoot,
 							HydratedLink: symLink,
@@ -283,7 +283,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 
 			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
 			hydrationState, hydrationErr := parser.readHydratedDirWithRetry(backoff,
-				cmpath.Absolute(hydratedRoot), parser.reconcilerName, *srcState)
+				cmpath.Absolute(hydratedRoot), parser.ReconcilerName, *srcState)
 
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, hydrationErr)

@@ -72,16 +72,16 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
 	// takes longer than the tick duration.
-	runTimer := time.NewTimer(opts.pollingPeriod)
+	runTimer := time.NewTimer(opts.PollingPeriod)
 	defer runTimer.Stop()
 
-	resyncTimer := time.NewTimer(opts.resyncPeriod)
+	resyncTimer := time.NewTimer(opts.ResyncPeriod)
 	defer resyncTimer.Stop()
 
-	retryTimer := time.NewTimer(opts.retryPeriod)
+	retryTimer := time.NewTimer(opts.RetryPeriod)
 	defer retryTimer.Stop()
 
-	statusUpdateTimer := time.NewTimer(opts.statusUpdatePeriod)
+	statusUpdateTimer := time.NewTimer(opts.StatusUpdatePeriod)
 	defer statusUpdateTimer.Stop()
 
 	nsEventPeriod := time.Second
@@ -91,7 +91,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	state := &reconcilerState{
 		backoff:     defaultBackoff(),
 		retryTimer:  retryTimer,
-		retryPeriod: opts.retryPeriod,
+		retryPeriod: opts.RetryPeriod,
 	}
 	for {
 		select {
@@ -110,10 +110,10 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			state.resetPartialCache()
 			run(ctx, p, triggerResync, state)
 
-			resyncTimer.Reset(opts.resyncPeriod) // Schedule resync attempt
+			resyncTimer.Reset(opts.ResyncPeriod) // Schedule resync attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.
-			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
 		// Re-import declared resources from the filesystem (from git-sync).
 		// If the reconciler is in the process of reconciling a given commit, the re-import won't
@@ -121,10 +121,10 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 		case <-runTimer.C:
 			run(ctx, p, triggerReimport, state)
 
-			runTimer.Reset(opts.pollingPeriod) // Schedule re-import attempt
+			runTimer.Reset(opts.PollingPeriod) // Schedule re-import attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.
-			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
 		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C:
@@ -146,7 +146,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 				// triggerRetry, and triggerWatchUpdate is true. If we don't reset retryTimer here, when
 				// the `run` function fails when runTimer or resyncTimer fires, the retry logic under this `case`
 				// will never be executed.
-				retryTimer.Reset(opts.retryPeriod)
+				retryTimer.Reset(opts.RetryPeriod)
 				continue
 			}
 			if state.backoff.Steps == 0 {
@@ -159,14 +159,14 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			retries := retryLimit - state.backoff.Steps
 			klog.Infof("a retry is triggered (trigger type: %v, retries: %v/%v)", trigger, retries, retryLimit)
 			// During the execution of `run`, if a new commit is detected,
-			// retryTimer will be reset to `opts.retryPeriod`, and state.backoff is reset to `defaultBackoff()`.
+			// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
 			// In this case, `run` will try to sync the configs from the new commit instead of the old commit
 			// being retried.
 			run(ctx, p, trigger, state)
 			// Reset retryTimer after `run` to make sure `retryDuration` happens between the end of one execution
 			// of `run` and the start of the next execution.
 			retryTimer.Reset(retryDuration)
-			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
 		// Update the sync status to report management conflicts (from the remediator).
 		case <-statusUpdateTimer.C:
@@ -182,7 +182,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 				}
 			}
 
-			statusUpdateTimer.Reset(opts.statusUpdatePeriod) // Schedule status update attempt
+			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.
 
@@ -213,7 +213,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	var syncDir cmpath.Absolute
 	gs := sourceStatus{}
 	// pull the source commit and directory with retries within 5 minutes.
-	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().reconcilerName)
+	gs.commit, syncDir, gs.errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, p.options().SourceType, p.options().SourceDir, p.options().SyncDir, p.options().ReconcilerName)
 
 	// If failed to fetch the source commit and directory, set `.status.source` to fail early.
 	// Otherwise, set `.status.rendering` before `.status.source` because the parser needs to
@@ -239,7 +239,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	}
 
 	// set the rendering status by checking the done file.
-	if p.options().renderingEnabled {
+	if p.options().RenderingEnabled {
 		doneFilePath := p.options().RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
 		_, err := os.Stat(doneFilePath)
 		if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.commit) {
@@ -314,7 +314,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 // It also updates the .status.rendering and .status.source fields.
 func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) status.MultiError {
 	hydrationStatus, sourceStatus := readFromSource(ctx, p, trigger, state, sourceState)
-	if p.options().renderingEnabled != hydrationStatus.requiresRendering {
+	if p.options().RenderingEnabled != hydrationStatus.requiresRendering {
 		// the reconciler is misconfigured. set the annotation so that the reconciler-manager
 		// will recreate this reconciler with the correct configuration.
 		if err := p.setRequiresRendering(ctx, hydrationStatus.requiresRendering); err != nil {
@@ -361,7 +361,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 // a renderingStatus.
 func parseHydrationState(p Parser, srcState sourceState, hydrationStatus renderingStatus) (sourceState, renderingStatus) {
 	options := p.options()
-	if !options.renderingEnabled {
+	if !options.RenderingEnabled {
 		hydrationStatus.message = RenderingSkipped
 		return srcState, hydrationStatus
 	}
@@ -377,7 +377,7 @@ func parseHydrationState(p Parser, srcState sourceState, hydrationStatus renderi
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
 		// pull the hydrated commit and directory with retries within 1 minute.
-		srcState, hydrationErr = options.readHydratedDirWithRetry(util.HydratedRetryBackoff, absHydratedRoot, options.reconcilerName, srcState)
+		srcState, hydrationErr = options.readHydratedDirWithRetry(util.HydratedRetryBackoff, absHydratedRoot, options.ReconcilerName, srcState)
 		if hydrationErr != nil {
 			hydrationStatus.message = RenderingFailed
 			hydrationStatus.errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
@@ -408,7 +408,7 @@ func readFromSource(ctx context.Context, p Parser, trigger string, recState *rec
 
 	hydrationStatus := renderingStatus{
 		commit:            srcState.commit,
-		requiresRendering: options.renderingEnabled,
+		requiresRendering: options.RenderingEnabled,
 	}
 	srcStatus := sourceStatus{
 		commit: srcState.commit,
@@ -426,8 +426,8 @@ func readFromSource(ctx context.Context, p Parser, trigger string, recState *rec
 	// Read all the files under srcState.syncDir
 	srcStatus.errs = options.readConfigFiles(&srcState)
 
-	if !options.renderingEnabled {
-		// Check if any kustomization files exist
+	if !options.RenderingEnabled {
+		// Check if any kustomization Files exist
 		for _, fi := range srcState.files {
 			if hydrate.HasKustomization(path.Base(fi.OSPath())) {
 				// Source of truth requires hydration, but the hydration-controller is not running
@@ -564,7 +564,7 @@ func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncin
 // cancellation function of the context is called.
 func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcilerState) {
 	klog.V(3).Info("Periodic sync status updates starting...")
-	updatePeriod := p.options().statusUpdatePeriod
+	updatePeriod := p.options().StatusUpdatePeriod
 	updateTimer := time.NewTimer(updatePeriod)
 	defer updateTimer.Stop()
 	for {

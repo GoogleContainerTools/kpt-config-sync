@@ -463,24 +463,24 @@ func TestRoot_Parse(t *testing.T) {
 			parser := &root{
 				sourceFormat:      tc.format,
 				namespaceStrategy: tc.namespaceStrategy,
-				opts: opts{
-					parser:             &fakeParser{parse: tc.parsed},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					converter:          converter,
-					updater: updater{
-						scope:      declared.RootReconciler,
-						resources:  &declared.Resources{},
-						remediator: &noOpRemediator{},
-						applier:    &fakeApplier{},
+				Options: &Options{
+					Parser:             &fakeParser{parse: tc.parsed},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					Converter:          converter,
+					Updater: Updater{
+						Scope:      declared.RootReconciler,
+						Resources:  &declared.Resources{},
+						Remediator: &noOpRemediator{},
+						Applier:    &fakeApplier{},
 					},
 					mux: &sync.Mutex{},
 				},
 			}
 			for _, o := range tc.existingObjects {
-				if err := parser.client.Create(context.Background(), o); err != nil {
+				if err := parser.Client.Create(context.Background(), o); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -709,18 +709,18 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			parser := &root{
 				sourceFormat:      filesystem.SourceFormatUnstructured,
 				namespaceStrategy: configsync.NamespaceStrategyImplicit,
-				opts: opts{
-					parser:             &fakeParser{parse: tc.parsed},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: tc.discoveryClient,
-					converter:          converter,
-					updater: updater{
-						scope:      declared.RootReconciler,
-						resources:  &declared.Resources{},
-						remediator: &noOpRemediator{},
-						applier:    &fakeApplier{},
+				Options: &Options{
+					Parser:             &fakeParser{parse: tc.parsed},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: tc.discoveryClient,
+					Converter:          converter,
+					Updater: Updater{
+						Scope:      declared.RootReconciler,
+						Resources:  &declared.Resources{},
+						Remediator: &noOpRemediator{},
+						Applier:    &fakeApplier{},
 					},
 					mux: &sync.Mutex{},
 				},
@@ -769,15 +769,15 @@ func TestRoot_ParseErrorsMetricValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := &root{
 				sourceFormat: filesystem.SourceFormatUnstructured,
-				opts: opts{
-					parser:             &fakeParser{errors: tc.errors},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					updater: updater{
-						scope:     declared.RootReconciler,
-						resources: &declared.Resources{},
+				Options: &Options{
+					Parser:             &fakeParser{errors: tc.errors},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					Updater: Updater{
+						Scope:     declared.RootReconciler,
+						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
 				},
@@ -827,15 +827,15 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 
 			parser := &root{
 				sourceFormat: filesystem.SourceFormatUnstructured,
-				opts: opts{
-					parser:             &fakeParser{errors: tc.parseErrors},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					updater: updater{
-						scope:     declared.RootReconciler,
-						resources: &declared.Resources{},
+				Options: &Options{
+					Parser:             &fakeParser{errors: tc.parseErrors},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					Updater: Updater{
+						Scope:     declared.RootReconciler,
+						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
 				},
@@ -894,18 +894,18 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 
 			parser := &root{
 				sourceFormat: filesystem.SourceFormatUnstructured,
-				opts: opts{
-					parser: &fakeParser{},
-					updater: updater{
-						scope:      declared.RootReconciler,
-						resources:  &declared.Resources{},
-						remediator: &noOpRemediator{},
-						applier:    &fakeApplier{errors: tc.applyErrors},
+				Options: &Options{
+					Parser: &fakeParser{},
+					Updater: Updater{
+						Scope:      declared.RootReconciler,
+						Resources:  &declared.Resources{},
+						Remediator: &noOpRemediator{},
+						Applier:    &fakeApplier{errors: tc.applyErrors},
 					},
-					syncName:           rootSyncName,
-					reconcilerName:     rootReconcilerName,
-					client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					discoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					mux:                &sync.Mutex{},
 				},
 			}

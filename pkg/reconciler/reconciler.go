@@ -253,7 +253,7 @@ func Run(opts Options) {
 	if opts.ReconcilerScope == declared.RootReconciler {
 		parser = parse.NewRootRunner(parseOpts, opts.SourceFormat, opts.NamespaceStrategy)
 	} else {
-		parser = parse.NewNamespaceRunner(parseOpts, opts.ReconcilerScope)
+		parser = parse.NewNamespaceRunner(parseOpts)
 		if err != nil {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}

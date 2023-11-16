@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/metadata"
@@ -39,21 +38,15 @@ import (
 )
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(opts *Options, scope declared.Scope) Parser {
+func NewNamespaceRunner(opts *Options) Parser {
 	opts.mux = &sync.Mutex{}
 	return &namespace{
 		Options: opts,
-		scope:   scope,
 	}
 }
 
 type namespace struct {
 	*Options
-
-	// scope is the name of the Namespace this parser is for.
-	// It is an error for this parser's repository to contain resources outside of
-	// this Namespace.
-	scope declared.Scope
 }
 
 var _ Parser = &namespace{}
@@ -92,7 +85,7 @@ func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.Fil
 		BuildScoper:    builder,
 		Converter:      p.Converter,
 	}
-	options = OptionsForScope(options, p.scope)
+	options = OptionsForScope(options, p.Scope)
 
 	objs, err = validate.Unstructured(objs, options)
 
@@ -101,7 +94,7 @@ func (p *namespace) parseSource(_ context.Context, state sourceState) ([]ast.Fil
 	}
 
 	// Duplicated with root.go.
-	e := addAnnotationsAndLabels(objs, p.scope, p.SyncName, p.sourceContext(), state.commit)
+	e := addAnnotationsAndLabels(objs, p.Scope, p.SyncName, p.sourceContext(), state.commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err
@@ -129,7 +122,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	// or if an attacker tried to maliciously change the cluster's record of the
 	// source of truth.
 	var rs v1beta1.RepoSync
-	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), &rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
@@ -176,7 +169,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 
 func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
 	rs := &v1beta1.RepoSync{}
-	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for Parser")
 	}
 	newVal := strconv.FormatBool(renderingRequired)
@@ -206,7 +199,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	}
 
 	var rs v1beta1.RepoSync
-	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), &rs); err != nil {
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
 
@@ -266,8 +259,8 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 	}
 
 	rs := &v1beta1.RepoSync{}
-	if err := p.Client.Get(ctx, reposync.ObjectKey(p.scope, p.SyncName), rs); err != nil {
-		return status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.scope))
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
+		return status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.Scope))
 	}
 
 	currentRS := rs.DeepCopy()
@@ -312,7 +305,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
-		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", p.scope))
+		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", p.Scope))
 	}
 	return nil
 }

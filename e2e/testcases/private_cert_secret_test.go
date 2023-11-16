@@ -57,6 +57,10 @@ func secretDataPatch(key, value string) string {
 	return fmt.Sprintf(`{"data": {"%s": "%s"}}`, key, value64)
 }
 
+func secretDataDeletePatch(key string) string {
+	return fmt.Sprintf(`{"data": {"%s": null}}`, key)
+}
+
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))

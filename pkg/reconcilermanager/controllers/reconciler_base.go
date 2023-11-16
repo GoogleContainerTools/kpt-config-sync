@@ -109,6 +109,7 @@ type reconcilerBase struct {
 	reconcilerPollingPeriod time.Duration
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
+	knownHostExist          bool
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string
@@ -670,4 +671,11 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef ty
 		logFieldObjectRef, bindingNN.String(),
 		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
 	return nil
+}
+
+func (r *reconcilerBase) isKnownHostsEnabled(auth configsync.AuthType) bool {
+	if auth == configsync.AuthSSH && r.knownHostExist {
+		return true
+	}
+	return false
 }

@@ -102,6 +102,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			reconcilerPollingPeriod: reconcilerPollingPeriod,
 			hydrationPollingPeriod:  hydrationPollingPeriod,
 			syncKind:                configsync.RepoSyncKind,
+			knownHostExist:          false,
 		},
 		configMapWatches: make(map[string]bool),
 	}
@@ -843,6 +844,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			depth:           rs.Spec.SafeOverride().GitSyncDepth,
 			noSSLVerify:     rs.Spec.Git.NoSSLVerify,
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
+			knownHost:       r.isKnownHostsEnabled(rs.Spec.Git.Auth),
 		})
 		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
@@ -934,6 +936,9 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 		}
 		return errors.Wrapf(err, "Secret %s get failed", namespaceSecretName)
 	}
+
+	_, r.knownHostExist = secret.Data[KnownHostsKey]
+
 	return validateSecretData(authType, secret)
 }
 

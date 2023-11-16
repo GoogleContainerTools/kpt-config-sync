@@ -3658,7 +3658,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 			reconcilermanager.RenderingEnabled:        "false",
 		},
 		reconcilermanager.GitSync: {
-			gitSyncKnownHosts: "false",
+			GitSyncKnownHosts: "false",
 			GitSyncRepo:       reposyncRepo,
 			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
@@ -3990,6 +3990,42 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 		t.FailNow()
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRepoReconcilerGetKnownHosts(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(GitSecretConfigKeySSH), reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	_, _, testReconciler := setupNSReconciler(t, rs, secretObjWithKnownHosts(t, reposyncSSHKey, core.Namespace(rs.Namespace)))
+
+	// Test performing reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	isKnownHosts := testReconciler.isKnownHostsEnabled(rs.Spec.Git.Auth)
+
+	require.Equal(t, true, isKnownHosts)
+}
+
+func TestRepoReconcilerWithoutKnownHosts(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(GitSecretConfigKeySSH), reposyncSecretRef(reposyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	_, _, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test performing reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	isKnownHosts := testReconciler.isKnownHostsEnabled(rs.Spec.Git.Auth)
+
+	require.Equal(t, false, isKnownHosts)
 }
 
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {

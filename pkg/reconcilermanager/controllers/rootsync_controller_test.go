@@ -173,6 +173,14 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 	return result
 }
 
+func secretObjWithKnownHosts(t *testing.T, name string, opts ...core.MetaMutator) *corev1.Secret {
+	t.Helper()
+	result := fake.SecretObject(name, opts...)
+	result.Data = secretData(t, "test-key", configsync.AuthSSH, v1beta1.GitSource)
+	result.Data[KnownHostsKey] = []byte("abc")
+	return result
+}
+
 func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RootSyncReconciler) {
 	t.Helper()
 
@@ -3406,7 +3414,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			reconcilermanager.RenderingEnabled:        "false",
 		},
 		reconcilermanager.GitSync: {
-			gitSyncKnownHosts: "false",
+			GitSyncKnownHosts: "false",
 			GitSyncRepo:       rootsyncRepo,
 			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
@@ -3699,6 +3707,42 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRootReconcilerGetKnownHosts(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	_, _, testReconciler := setupRootReconciler(t, rs, secretObjWithKnownHosts(t, rootsyncSSHKey, core.Namespace(rs.Namespace)))
+
+	// Test performing reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	isKnownHosts := testReconciler.isKnownHostsEnabled(rs.Spec.Git.Auth)
+
+	require.Equal(t, true, isKnownHosts)
+}
+
+func TestRootReconcilerWithoutKnownHosts(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	_, _, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+
+	// Test performing reconcile
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	isKnownHosts := testReconciler.isKnownHostsEnabled(rs.Spec.Git.Auth)
+
+	require.Equal(t, false, isKnownHosts)
 }
 
 func validateRootSyncStatus(t *testing.T, want *v1beta1.RootSync, fakeClient *syncerFake.Client) {

@@ -27,56 +27,60 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// opts holds configuration and core functionality required by all parsers.
-type opts struct {
-	parser filesystem.ConfigParser
+// Options holds configuration and core functionality required by all parsers.
+type Options struct {
+	// Parser defines the minimum interface required for Reconciler to use a
+	// Parser to read configs from a filesystem.
+	Parser filesystem.ConfigParser
 
-	// clusterName is the name of the cluster we're syncing configuration to.
-	clusterName string
+	// ClusterName is the name of the cluster we're syncing configuration to.
+	ClusterName string
 
-	// client knows how to read objects from a Kubernetes cluster and update
+	// Client knows how to read objects from a Kubernetes cluster and update
 	// status.
-	client client.Client
+	Client client.Client
 
-	// reconcilerName is the name of the reconciler resources, such as service
+	// ReconcilerName is the name of the reconciler resources, such as service
 	// account, service, deployment and etc.
-	reconcilerName string
+	ReconcilerName string
 
-	// syncName is the name of the RootSync or RepoSync object.
-	syncName string
+	// SyncName is the name of the RootSync or RepoSync object.
+	SyncName string
 
-	// pollingPeriod is the period of time between checking the filesystem for
+	// PollingPeriod is the period of time between checking the filesystem for
 	// source updates to sync.
-	pollingPeriod time.Duration
+	PollingPeriod time.Duration
 
 	// ResyncPeriod is the period of time between forced re-sync from source
 	// (even without a new commit).
-	resyncPeriod time.Duration
+	ResyncPeriod time.Duration
 
-	// retryPeriod is how long the parser waits between retries, after an error.
-	retryPeriod time.Duration
+	// RetryPeriod is how long the Parser waits between retries, after an error.
+	RetryPeriod time.Duration
 
-	// statusUpdatePeriod is how long the parser waits between updates of the
-	// sync status, to account for management conflict errors from the remediator.
-	statusUpdatePeriod time.Duration
+	// StatusUpdatePeriod is how long the Parser waits between updates of the
+	// sync status, to account for management conflict errors from the Remediator.
+	StatusUpdatePeriod time.Duration
 
-	// discoveryInterface is how the parser learns what types are currently
+	// DiscoveryInterface is how the Parser learns what types are currently
 	// available on the cluster.
-	discoveryInterface discovery.ServerResourcer
+	DiscoveryInterface discovery.ServerResourcer
 
-	// converter uses the discoveryInterface to encode the declared fields of
+	// Converter uses the DiscoveryInterface to encode the declared fields of
 	// objects in Git.
-	converter *declared.ValueConverter
+	Converter *declared.ValueConverter
 
 	// mux prevents status update conflicts.
 	mux *sync.Mutex
 
-	// renderingEnabled indicates whether the hydration-controller is currently
+	// RenderingEnabled indicates whether the hydration-controller is currently
 	// running for this reconciler.
-	renderingEnabled bool
+	RenderingEnabled bool
 
-	files
-	updater
+	// Files lists Files in the source of truth.
+	Files
+	// Updater mutates the most-recently-seen versions of objects stored in memory.
+	Updater
 }
 
 // Parser represents a parser that can be pointed at and continuously parse a source.
@@ -85,7 +89,7 @@ type Parser interface {
 	setSourceStatus(ctx context.Context, newStatus sourceStatus) error
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
 	SetSyncStatus(ctx context.Context, newStatus syncStatus) error
-	options() *opts
+	options() *Options
 	// SyncErrors returns all the sync errors, including remediator errors,
 	// validation errors, applier errors, and watch update errors.
 	SyncErrors() status.MultiError
@@ -97,10 +101,10 @@ type Parser interface {
 	setRequiresRendering(ctx context.Context, renderingRequired bool) error
 }
 
-func (o *opts) k8sClient() client.Client {
-	return o.client
+func (o *Options) k8sClient() client.Client {
+	return o.Client
 }
 
-func (o *opts) discoveryClient() discovery.ServerResourcer {
-	return o.discoveryInterface
+func (o *Options) discoveryClient() discovery.ServerResourcer {
+	return o.DiscoveryInterface
 }

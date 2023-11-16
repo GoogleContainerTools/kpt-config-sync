@@ -55,9 +55,9 @@ type FileSource struct {
 	SourceRev string
 }
 
-// files lists files in a repository and ensures the source repository hasn't been
+// Files lists files in a repository and ensures the source repository hasn't been
 // modified from HEAD.
-type files struct {
+type Files struct {
 	FileSource
 
 	// currentSyncDir is the directory (including git commit hash or OCI image digest)
@@ -79,7 +79,7 @@ type sourceState struct {
 // - if rendering is enabled, state.syncDir contains the hydrated files.
 // - if rendered is disabled, state.syncDir contains the source files.
 // readConfigFiles should be called after sourceState is populated.
-func (o *files) readConfigFiles(state *sourceState) status.Error {
+func (o *Files) readConfigFiles(state *sourceState) status.Error {
 	if state == nil || state.commit == "" || state.syncDir.OSPath() == "" {
 		return status.InternalError("sourceState is not populated yet")
 	}
@@ -109,7 +109,7 @@ func (o *files) readConfigFiles(state *sourceState) status.Error {
 	return nil
 }
 
-func (o *files) sourceContext() sourceContext {
+func (o *Files) sourceContext() sourceContext {
 	return sourceContext{
 		Repo:   o.SourceRepo,
 		Branch: o.SourceBranch,
@@ -118,7 +118,7 @@ func (o *files) sourceContext() sourceContext {
 }
 
 // readHydratedDirWithRetry returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded with retries.
-func (o *files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
+func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
 	result := sourceState{}
 	err := util.RetryWithBackoff(backoff, func() error {
 		var err error
@@ -136,7 +136,7 @@ func (o *files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpa
 }
 
 // readHydratedDir returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded.
-func (o *files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, error) {
+func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, error) {
 	result := sourceState{}
 	errorFile := hydratedRoot.Join(cmpath.RelativeSlash(hydrate.ErrorFile))
 	_, err := os.Stat(errorFile.OSPath())

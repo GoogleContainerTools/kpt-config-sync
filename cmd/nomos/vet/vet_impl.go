@@ -85,7 +85,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 
 	parser := filesystem.NewParser(&reader.File{})
 
-	options, err := hydrate.ValidateOptions(ctx, rootDir, apiServerTimeout)
+	validateOpts, err := hydrate.ValidateOptions(ctx, rootDir, apiServerTimeout)
 	if err != nil {
 		return err
 	}
@@ -102,9 +102,9 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 		files = filesystem.FilterHierarchyFiles(rootDir, files)
 	case filesystem.SourceFormatUnstructured:
 		if namespace == "" {
-			options = parse.OptionsForScope(options, declared.RootReconciler)
+			validateOpts = parse.OptionsForScope(validateOpts, declared.RootReconciler)
 		} else {
-			options = parse.OptionsForScope(options, declared.Scope(namespace))
+			validateOpts = parse.OptionsForScope(validateOpts, declared.Scope(namespace))
 		}
 	default:
 		return fmt.Errorf("unknown %s value %q", reconcilermanager.SourceFormat, sourceFormat)
@@ -116,11 +116,17 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 		Files:     files,
 	}
 
+	parseOpts := hydrate.ParseOptions{
+		Parser:       parser,
+		SourceFormat: sourceFormat,
+		FilePaths:    filePaths,
+	}
+
 	// Track per-cluster vet errors.
 	var allObjects []ast.FileObject
 	var vetErrs []string
 	numClusters := 0
-	hydrate.ForEachCluster(parser, options, sourceFormat, filePaths, func(clusterName string, fileObjects []ast.FileObject, err status.MultiError) {
+	clusterFilterFunc := func(clusterName string, fileObjects []ast.FileObject, err status.MultiError) {
 		clusterEnabled := flags.AllClusters()
 		for _, cluster := range flags.Clusters {
 			if clusterName == cluster {
@@ -145,7 +151,8 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 		if keepOutput {
 			allObjects = append(allObjects, fileObjects...)
 		}
-	})
+	}
+	hydrate.ForEachCluster(parseOpts, validateOpts, clusterFilterFunc)
 	if keepOutput {
 		multiCluster := numClusters > 1
 		fileObjects := hydrate.GenerateFileObjects(multiCluster, allObjects...)

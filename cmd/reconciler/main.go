@@ -100,6 +100,8 @@ var (
 	namespaceStrategy = flag.String(flags.namespaceStrategy, util.EnvString(reconcilermanager.NamespaceStrategy, ""),
 		fmt.Sprintf("Set the namespace strategy for the reconciler. Must be %s or %s. Default: %s.",
 			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit, configsync.NamespaceStrategyImplicit))
+
+	nsControllerEnabled = flag.Bool("ns-controller-enabled", util.EnvBool(reconcilermanager.NSControllerEnabled, false), "")
 )
 
 var flags = struct {
@@ -193,6 +195,7 @@ func main() {
 		ReconcileTimeout:        *reconcileTimeout,
 		APIServerTimeout:        *apiServerTimeout,
 		RenderingEnabled:        *renderingEnabled,
+		NSControllerEnabled:     *nsControllerEnabled,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

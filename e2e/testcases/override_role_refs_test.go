@@ -160,10 +160,10 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		nomostest.DefaultRootSha1Fn, nomostest.RootSyncHasStatusSyncCommit, nil); err != nil {
 		nt.T.Fatal(err)
 	}
+	if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), syncANN.Name, syncANN.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
 	tg = taskgroup.New()
-	tg.Go(func() error {
-		return nt.ValidateNotFound(syncANN.Name, syncANN.Namespace, &v1beta1.RootSync{})
-	})
 	tg.Go(func() error {
 		return validateRoleRefs(nt, configsync.RootSyncKind, syncANN, []v1beta1.RootSyncRoleRef{})
 	})

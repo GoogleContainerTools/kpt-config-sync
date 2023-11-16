@@ -829,8 +829,30 @@ func requeueRepoSyncRequest(obj client.Object, rsRef types.NamespacedName) []rec
 
 func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
 	result := map[string][]corev1.EnvVar{
-		reconcilermanager.HydrationController: hydrationEnvs(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, declared.Scope(rs.Namespace), reconcilerName, r.hydrationPollingPeriod.String()),
-		reconcilermanager.Reconciler:          reconcilerEnvs(r.clusterName, rs.Name, rs.Generation, reconcilerName, declared.Scope(rs.Namespace), rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, reposync.GetHelmBase(rs.Spec.Helm), r.reconcilerPollingPeriod.String(), rs.Spec.SafeOverride().StatusMode, v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout), v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout), enableRendering(rs.GetAnnotations())),
+		reconcilermanager.HydrationController: hydrationEnvs(hydrationOptions{
+			sourceType:     rs.Spec.SourceType,
+			gitConfig:      rs.Spec.Git,
+			ociConfig:      rs.Spec.Oci,
+			scope:          declared.Scope(rs.Namespace),
+			reconcilerName: reconcilerName,
+			pollPeriod:     r.hydrationPollingPeriod.String(),
+		}),
+		reconcilermanager.Reconciler: reconcilerEnvs(reconcilerOptions{
+			clusterName:       r.clusterName,
+			syncName:          rs.Name,
+			syncGeneration:    rs.Generation,
+			reconcilerName:    reconcilerName,
+			reconcilerScope:   declared.Scope(rs.Namespace),
+			sourceType:        rs.Spec.SourceType,
+			gitConfig:         rs.Spec.Git,
+			ociConfig:         rs.Spec.Oci,
+			helmConfig:        reposync.GetHelmBase(rs.Spec.Helm),
+			pollPeriod:        r.reconcilerPollingPeriod.String(),
+			statusMode:        rs.Spec.SafeOverride().StatusMode,
+			reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
+			apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
+			requiresRendering: enableRendering(rs.GetAnnotations()),
+		}),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
@@ -850,9 +872,18 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
 	case v1beta1.OciSource:
-		result[reconcilermanager.OciSync] = ociSyncEnvs(rs.Spec.Oci.Image, rs.Spec.Oci.Auth, v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds())
+		result[reconcilermanager.OciSync] = ociSyncEnvs(ociOptions{
+			image:  rs.Spec.Oci.Image,
+			auth:   rs.Spec.Oci.Auth,
+			period: v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds(),
+		})
 	case v1beta1.HelmSource:
-		result[reconcilermanager.HelmSync] = helmSyncEnvs(&rs.Spec.Helm.HelmBase, rs.Namespace, "")
+		result[reconcilermanager.HelmSync] = helmSyncEnvs(helmOptions{
+			helmBase:         &rs.Spec.Helm.HelmBase,
+			releaseNamespace: rs.Namespace,
+			// RepoSync API doesn't support specifying deployNamespace
+			deployNamespace: "",
+		})
 	}
 	return result
 }

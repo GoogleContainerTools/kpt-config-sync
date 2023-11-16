@@ -63,18 +63,11 @@ if ${SILENT:-false}; then
   LOGGING_FLAGS=""
 fi
 
-tools=()
 for tool in client-gen deepcopy-gen informer-gen lister-gen conversion-gen; do
-  tools+=("k8s.io/code-generator/cmd/${tool}")
-done
-
-# This should match the k8s.io/code-generator version in go.mod.
-tag="v0.22.2"
-echo "Checking out k8s.io/code-generator at tag ${tag}"
-# As of go 1.16, go install is the recommended way to build/install modules
-# https://go.dev/doc/go1.16#go-command
-for tool in "${tools[@]}"; do
-  go install "${tool}@${tag}"
+  if [[ -z "$(which "${tool}")" ]]; then
+    echo "${tool} not in PATH"
+    exit 1
+  fi
 done
 
 # If we run go mod tidy, it removes the empty code-generator declaration from
@@ -91,7 +84,7 @@ for i in apis informer listers; do
 done
 
 echo "Generating APIs"
-"${GOBASE}/bin/client-gen" \
+client-gen \
   --input-base "${INPUT_BASE}" \
   --input="${INPUT_APIS}" \
   --clientset-name="apis" \
@@ -108,7 +101,7 @@ for api in $(echo "${INPUT_APIS}" | tr ',' ' '); do
 done
 
 echo "informer"
-"${GOBASE}/bin/informer-gen" \
+informer-gen \
   "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --versioned-clientset-package="${OUTPUT_CLIENT}/apis" \
@@ -120,7 +113,7 @@ echo "informer"
 
 echo "deepcopy"
 # Creates types.generated.go
-"${GOBASE}/bin/deepcopy-gen" \
+deepcopy-gen \
   "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-file-base zz_generated.deepcopy \
@@ -128,7 +121,7 @@ echo "deepcopy"
   --go-header-file="hack/boilerplate.txt"
 
 echo "lister"
-"${GOBASE}/bin/lister-gen" \
+lister-gen \
   "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-base="$GOWORK/src" \
@@ -136,7 +129,7 @@ echo "lister"
   --go-header-file="hack/boilerplate.txt"
 
 echo "conversion"
-"${GOBASE}/bin/conversion-gen" \
+conversion-gen \
   "${LOGGING_FLAGS}" \
   --input-dirs="${informer_inputs}" \
   --output-base="$GOWORK/src" \

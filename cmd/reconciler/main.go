@@ -101,7 +101,7 @@ var (
 		fmt.Sprintf("Set the namespace strategy for the reconciler. Must be %s or %s. Default: %s.",
 			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit, configsync.NamespaceStrategyImplicit))
 
-	nsControllerEnabled = flag.Bool("ns-controller-enabled", util.EnvBool(reconcilermanager.NSControllerEnabled, false), "")
+	dynamicNSSelectorEnabled = flag.Bool("dynamic-ns-selector-enabled", util.EnvBool(reconcilermanager.DynamicNSSelectorEnabled, false), "")
 )
 
 var flags = struct {
@@ -172,30 +172,30 @@ func main() {
 	}
 
 	opts := reconciler.Options{
-		ClusterName:             *clusterName,
-		FightDetectionThreshold: *fightDetectionThreshold,
-		NumWorkers:              *workers,
-		ReconcilerScope:         declared.Scope(*scope),
-		ResyncPeriod:            *resyncPeriod,
-		PollingPeriod:           *pollingPeriod,
-		RetryPeriod:             configsync.DefaultReconcilerRetryPeriod,
-		StatusUpdatePeriod:      configsync.DefaultReconcilerSyncStatusUpdatePeriod,
-		SourceRoot:              absSourceDir,
-		RepoRoot:                absRepoRoot,
-		HydratedRoot:            *hydratedRootDir,
-		HydratedLink:            *hydratedLinkDir,
-		SourceRev:               *sourceRev,
-		SourceBranch:            *sourceBranch,
-		SourceType:              v1beta1.SourceType(*sourceType),
-		SourceRepo:              *sourceRepo,
-		SyncDir:                 relSyncDir,
-		SyncName:                *syncName,
-		ReconcilerName:          *reconcilerName,
-		StatusMode:              *statusMode,
-		ReconcileTimeout:        *reconcileTimeout,
-		APIServerTimeout:        *apiServerTimeout,
-		RenderingEnabled:        *renderingEnabled,
-		NSControllerEnabled:     *nsControllerEnabled,
+		ClusterName:              *clusterName,
+		FightDetectionThreshold:  *fightDetectionThreshold,
+		NumWorkers:               *workers,
+		ReconcilerScope:          declared.Scope(*scope),
+		ResyncPeriod:             *resyncPeriod,
+		PollingPeriod:            *pollingPeriod,
+		RetryPeriod:              configsync.DefaultReconcilerRetryPeriod,
+		StatusUpdatePeriod:       configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+		SourceRoot:               absSourceDir,
+		RepoRoot:                 absRepoRoot,
+		HydratedRoot:             *hydratedRootDir,
+		HydratedLink:             *hydratedLinkDir,
+		SourceRev:                *sourceRev,
+		SourceBranch:             *sourceBranch,
+		SourceType:               v1beta1.SourceType(*sourceType),
+		SourceRepo:               *sourceRepo,
+		SyncDir:                  relSyncDir,
+		SyncName:                 *syncName,
+		ReconcilerName:           *reconcilerName,
+		StatusMode:               *statusMode,
+		ReconcileTimeout:         *reconcileTimeout,
+		APIServerTimeout:         *apiServerTimeout,
+		RenderingEnabled:         *renderingEnabled,
+		DynamicNSSelectorEnabled: *dynamicNSSelectorEnabled,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

@@ -687,20 +687,21 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 		}),
 		reconcilermanager.Reconciler: append(
 			reconcilerEnvs(reconcilerOptions{
-				clusterName:       r.clusterName,
-				syncName:          rs.Name,
-				syncGeneration:    rs.Generation,
-				reconcilerName:    reconcilerName,
-				reconcilerScope:   declared.RootReconciler,
-				sourceType:        rs.Spec.SourceType,
-				gitConfig:         rs.Spec.Git,
-				ociConfig:         rs.Spec.Oci,
-				helmConfig:        rootsync.GetHelmBase(rs.Spec.Helm),
-				pollPeriod:        r.reconcilerPollingPeriod.String(),
-				statusMode:        rs.Spec.SafeOverride().StatusMode,
-				reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
-				apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
-				requiresRendering: enableRendering(rs.GetAnnotations()),
+				clusterName:              r.clusterName,
+				syncName:                 rs.Name,
+				syncGeneration:           rs.Generation,
+				reconcilerName:           reconcilerName,
+				reconcilerScope:          declared.RootReconciler,
+				sourceType:               rs.Spec.SourceType,
+				gitConfig:                rs.Spec.Git,
+				ociConfig:                rs.Spec.Oci,
+				helmConfig:               rootsync.GetHelmBase(rs.Spec.Helm),
+				pollPeriod:               r.reconcilerPollingPeriod.String(),
+				statusMode:               rs.Spec.SafeOverride().StatusMode,
+				reconcileTimeout:         v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
+				apiServerTimeout:         v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
+				requiresRendering:        annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
+				dynamicNSSelectorEnabled: annotationEnabled(metadata.DynamicNSSelectorEnabledAnnotationKey, rs.GetAnnotations()),
 			}),
 			sourceFormatEnv(rs.Spec.SourceFormat),
 			namespaceStrategyEnv(rs.Spec.SafeOverride().NamespaceStrategy),
@@ -1057,22 +1058,22 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 	return updated, nil
 }
 
-// enableRendering returns whether rendering should be enabled for the reconciler
-// of this RSync. This is determined by an annotation that is set on the RSync
-// by the reconciler.
-func enableRendering(annotations map[string]string) bool {
-	val, ok := annotations[metadata.RequiresRenderingAnnotationKey]
-	if !ok { // default to disabling rendering
+// annotationEnabled returns whether the annotation should be enabled for the
+// reconciler of this RSync. This is determined by an annotation that is set on
+// the RSync by the reconciler.
+func annotationEnabled(key string, annotations map[string]string) bool {
+	val, ok := annotations[key]
+	if !ok { // default to disabling the annotation
 		return false
 	}
-	renderingRequired, err := strconv.ParseBool(val)
+	boolVal, err := strconv.ParseBool(val)
 	if err != nil {
 		// This should never happen, as the annotation should always be set to a
 		// valid value by the reconciler. Log the error and return the default value.
-		klog.Infof("failed to parse %s value to boolean: %s", metadata.RequiresRenderingAnnotationKey, val)
+		klog.Infof("failed to parse %s value to boolean: %s", key, val)
 		return false
 	}
-	return renderingRequired
+	return boolVal
 }
 
 func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
@@ -1156,7 +1157,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			case reconcilermanager.HydrationController:
-				if !enableRendering(rs.GetAnnotations()) {
+				if !annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()) {
 					// if the sync source does not require rendering, omit the hydration controller
 					// this minimizes the resource footprint of the reconciler
 					addContainer = false

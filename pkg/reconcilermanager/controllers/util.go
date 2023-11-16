@@ -94,20 +94,21 @@ func hydrationEnvs(opts hydrationOptions) []corev1.EnvVar {
 }
 
 type reconcilerOptions struct {
-	clusterName       string
-	syncName          string
-	syncGeneration    int64
-	reconcilerName    string
-	reconcilerScope   declared.Scope
-	sourceType        string
-	gitConfig         *v1beta1.Git
-	ociConfig         *v1beta1.Oci
-	helmConfig        *v1beta1.HelmBase
-	pollPeriod        string
-	statusMode        string
-	reconcileTimeout  string
-	apiServerTimeout  string
-	requiresRendering bool
+	clusterName              string
+	syncName                 string
+	syncGeneration           int64
+	reconcilerName           string
+	reconcilerScope          declared.Scope
+	sourceType               string
+	gitConfig                *v1beta1.Git
+	ociConfig                *v1beta1.Oci
+	helmConfig               *v1beta1.HelmBase
+	pollPeriod               string
+	statusMode               string
+	reconcileTimeout         string
+	apiServerTimeout         string
+	requiresRendering        bool
+	dynamicNSSelectorEnabled bool
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
@@ -207,6 +208,15 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 			Value: strconv.FormatBool(opts.requiresRendering),
 		},
 	)
+
+	if opts.dynamicNSSelectorEnabled {
+		result = append(result,
+			corev1.EnvVar{
+				Name:  reconcilermanager.DynamicNSSelectorEnabled,
+				Value: strconv.FormatBool(opts.dynamicNSSelectorEnabled),
+			},
+		)
+	}
 
 	if syncBranch != "" {
 		result = append(result, corev1.EnvVar{

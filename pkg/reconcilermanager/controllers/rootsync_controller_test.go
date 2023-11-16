@@ -310,6 +310,13 @@ func rootsyncRenderingRequired(renderingRequired bool) func(*v1beta1.RootSync) {
 	}
 }
 
+func rootsyncDynamicNSSelectorEnabled(dynamicNSSelectorEnabled bool) func(*v1beta1.RootSync) {
+	return func(rs *v1beta1.RootSync) {
+		val := strconv.FormatBool(dynamicNSSelectorEnabled)
+		core.SetAnnotation(rs, metadata.DynamicNSSelectorEnabledAnnotationKey, val)
+	}
+}
+
 func rootSync(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
 	// default to require rendering for convenience with existing tests
@@ -3479,6 +3486,16 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			),
 			expected: createEnv(map[string]map[string]string{
 				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true"},
+			}),
+		},
+		{
+			name: "dynamic-ns-selector-enabled annotation sets env var",
+			rootSync: rootSyncWithGit(rootsyncName,
+				rootsyncRenderingRequired(false),
+				rootsyncDynamicNSSelectorEnabled(true),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.DynamicNSSelectorEnabled: "true"},
 			}),
 		},
 	}

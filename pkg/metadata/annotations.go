@@ -145,6 +145,14 @@ const (
 	// reconciler-manager will create the reconciler with the hydration-controller
 	// sidecar container.
 	RequiresRenderingAnnotationKey = configsync.ConfigSyncPrefix + "requires-rendering"
+
+	// DynamicNSSelectorEnabledAnnotationKey is the annotation key set on R*Sync
+	// object to indicate whether the source of truth contains at least one
+	// NamespaceSelector using the dynamic mode, which requires the Namespace
+	// controller. The reconciler writes the value of this annotation and the
+	// reconciler-manager reads it. If set to true, the reconciler-manager will
+	// create the reconciler with the Namespace controller in the reconciler container.
+	DynamicNSSelectorEnabledAnnotationKey = configsync.ConfigSyncPrefix + "dynamic-ns-selector-enabled"
 )
 
 // Lifecycle annotations

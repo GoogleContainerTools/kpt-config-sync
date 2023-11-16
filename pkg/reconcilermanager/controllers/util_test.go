@@ -91,7 +91,11 @@ func TestHelmSyncEnvs(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, helmSyncEnvs(&tc.base, tc.releaseNamespace, tc.deployNamespace))
+			assert.Equal(t, tc.expected, helmSyncEnvs(helmOptions{
+				helmBase:         &tc.base,
+				releaseNamespace: tc.releaseNamespace,
+				deployNamespace:  tc.deployNamespace,
+			}))
 		})
 	}
 }

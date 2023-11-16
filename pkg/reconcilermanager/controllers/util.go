@@ -42,15 +42,24 @@ func updateHydrationControllerImage(image string, overrides v1beta1.OverrideSpec
 	return strings.ReplaceAll(image, reconcilermanager.HydrationController+":", reconcilermanager.HydrationControllerWithShell+":")
 }
 
+type hydrationOptions struct {
+	sourceType     string
+	gitConfig      *v1beta1.Git
+	ociConfig      *v1beta1.Oci
+	scope          declared.Scope
+	reconcilerName string
+	pollPeriod     string
+}
+
 // hydrationEnvs returns environment variables for the hydration controller.
-func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, scope declared.Scope, reconcilerName, pollPeriod string) []corev1.EnvVar {
+func hydrationEnvs(opts hydrationOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	var syncDir string
-	switch v1beta1.SourceType(sourceType) {
+	switch v1beta1.SourceType(opts.sourceType) {
 	case v1beta1.OciSource:
-		syncDir = ociConfig.Dir
+		syncDir = opts.ociConfig.Dir
 	case v1beta1.GitSource:
-		syncDir = gitConfig.Dir
+		syncDir = opts.gitConfig.Dir
 	case v1beta1.HelmSource:
 		syncDir = "."
 	}
@@ -58,19 +67,19 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 	result = append(result,
 		corev1.EnvVar{
 			Name:  reconcilermanager.SourceTypeKey,
-			Value: sourceType,
+			Value: opts.sourceType,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ScopeKey,
-			Value: string(scope),
+			Value: string(opts.scope),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcilerNameKey,
-			Value: reconcilerName,
+			Value: opts.reconcilerName,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.NamespaceNameKey,
-			Value: string(scope),
+			Value: string(opts.scope),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SyncDirKey,
@@ -79,14 +88,32 @@ func hydrationEnvs(sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1
 		// Add Hydration Polling Period.
 		corev1.EnvVar{
 			Name:  reconcilermanager.HydrationPollingPeriod,
-			Value: pollPeriod,
+			Value: opts.pollPeriod,
 		})
 	return result
 }
 
+type reconcilerOptions struct {
+	clusterName       string
+	syncName          string
+	syncGeneration    int64
+	reconcilerName    string
+	reconcilerScope   declared.Scope
+	sourceType        string
+	gitConfig         *v1beta1.Git
+	ociConfig         *v1beta1.Oci
+	helmConfig        *v1beta1.HelmBase
+	pollPeriod        string
+	statusMode        string
+	reconcileTimeout  string
+	apiServerTimeout  string
+	requiresRendering bool
+}
+
 // reconcilerEnvs returns environment variables for namespace reconciler.
-func reconcilerEnvs(clusterName, syncName string, syncGeneration int64, reconcilerName string, reconcilerScope declared.Scope, sourceType string, gitConfig *v1beta1.Git, ociConfig *v1beta1.Oci, helmConfig *v1beta1.HelmBase, pollPeriod, statusMode string, reconcileTimeout string, apiServerTimeout string, requiresRendering bool) []corev1.EnvVar {
+func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
+	statusMode := opts.statusMode
 	if statusMode == "" {
 		statusMode = applier.StatusEnabled
 	}
@@ -94,28 +121,28 @@ func reconcilerEnvs(clusterName, syncName string, syncGeneration int64, reconcil
 	var syncBranch string
 	var syncRevision string
 	var syncDir string
-	switch v1beta1.SourceType(sourceType) {
+	switch v1beta1.SourceType(opts.sourceType) {
 	case v1beta1.OciSource:
-		syncRepo = ociConfig.Image
-		syncDir = ociConfig.Dir
+		syncRepo = opts.ociConfig.Image
+		syncDir = opts.ociConfig.Dir
 	case v1beta1.HelmSource:
-		syncRepo = helmConfig.Repo
-		syncDir = helmConfig.Chart
-		if helmConfig.Version != "" {
-			syncRevision = helmConfig.Version
+		syncRepo = opts.helmConfig.Repo
+		syncDir = opts.helmConfig.Chart
+		if opts.helmConfig.Version != "" {
+			syncRevision = opts.helmConfig.Version
 		} else {
 			syncRevision = "latest"
 		}
 	case v1beta1.GitSource:
-		syncRepo = gitConfig.Repo
-		syncDir = gitConfig.Dir
-		if gitConfig.Branch != "" {
-			syncBranch = gitConfig.Branch
+		syncRepo = opts.gitConfig.Repo
+		syncDir = opts.gitConfig.Dir
+		if opts.gitConfig.Branch != "" {
+			syncBranch = opts.gitConfig.Branch
 		} else {
 			syncBranch = "master"
 		}
-		if gitConfig.Revision != "" {
-			syncRevision = gitConfig.Revision
+		if opts.gitConfig.Revision != "" {
+			syncRevision = opts.gitConfig.Revision
 		} else {
 			syncRevision = "HEAD"
 		}
@@ -124,27 +151,27 @@ func reconcilerEnvs(clusterName, syncName string, syncGeneration int64, reconcil
 	result = append(result,
 		corev1.EnvVar{
 			Name:  reconcilermanager.ClusterNameKey,
-			Value: clusterName,
+			Value: opts.clusterName,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ScopeKey,
-			Value: string(reconcilerScope),
+			Value: string(opts.reconcilerScope),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SyncNameKey,
-			Value: syncName,
+			Value: opts.syncName,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SyncGenerationKey,
-			Value: fmt.Sprint(syncGeneration),
+			Value: fmt.Sprint(opts.syncGeneration),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcilerNameKey,
-			Value: reconcilerName,
+			Value: opts.reconcilerName,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.NamespaceNameKey,
-			Value: string(reconcilerScope),
+			Value: string(opts.reconcilerScope),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SyncDirKey,
@@ -156,7 +183,7 @@ func reconcilerEnvs(clusterName, syncName string, syncGeneration int64, reconcil
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SourceTypeKey,
-			Value: sourceType,
+			Value: opts.sourceType,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.StatusMode,
@@ -164,20 +191,20 @@ func reconcilerEnvs(clusterName, syncName string, syncGeneration int64, reconcil
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcileTimeout,
-			Value: reconcileTimeout,
+			Value: opts.reconcileTimeout,
 		},
 		// Add Filesystem Polling Period.
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcilerPollingPeriod,
-			Value: pollPeriod,
+			Value: opts.pollPeriod,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.APIServerTimeout,
-			Value: apiServerTimeout,
+			Value: opts.apiServerTimeout,
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.RenderingEnabled,
-			Value: strconv.FormatBool(requiresRendering),
+			Value: strconv.FormatBool(opts.requiresRendering),
 		},
 	)
 
@@ -215,18 +242,24 @@ func namespaceStrategyEnv(strategy configsync.NamespaceStrategy) corev1.EnvVar {
 	}
 }
 
+type ociOptions struct {
+	image  string
+	auth   configsync.AuthType
+	period float64
+}
+
 // ociSyncEnvs returns the environment variables for the oci-sync container.
-func ociSyncEnvs(image string, auth configsync.AuthType, period float64) []corev1.EnvVar {
+func ociSyncEnvs(opts ociOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncImage,
-		Value: image,
+		Value: opts.image,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncAuth,
-		Value: string(auth),
+		Value: string(opts.auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.OciSyncWait,
-		Value: fmt.Sprintf("%f", period),
+		Value: fmt.Sprintf("%f", opts.period),
 	})
 	return result
 }
@@ -237,43 +270,49 @@ const (
 	helmSyncPassword = "HELM_SYNC_PASSWORD"
 )
 
+type helmOptions struct {
+	helmBase         *v1beta1.HelmBase
+	releaseNamespace string
+	deployNamespace  string
+}
+
 // helmSyncEnvs returns the environment variables for the helm-sync container.
-func helmSyncEnvs(helmBase *v1beta1.HelmBase, releaseNamespace, deployNamespace string) []corev1.EnvVar {
+func helmSyncEnvs(opts helmOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	helmValues := ""
-	if helmBase.Values != nil {
-		helmValues = string(helmBase.Values.Raw)
+	if opts.helmBase.Values != nil {
+		helmValues = string(opts.helmBase.Values.Raw)
 	}
 	result = append(result, corev1.EnvVar{
 		Name:  reconcilermanager.HelmRepo,
-		Value: helmBase.Repo,
+		Value: opts.helmBase.Repo,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChart,
-		Value: helmBase.Chart,
+		Value: opts.helmBase.Chart,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmChartVersion,
-		Value: helmBase.Version,
+		Value: opts.helmBase.Version,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseName,
-		Value: helmBase.ReleaseName,
+		Value: opts.helmBase.ReleaseName,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmReleaseNamespace,
-		Value: releaseNamespace,
+		Value: opts.releaseNamespace,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmDeployNamespace,
-		Value: deployNamespace,
+		Value: opts.deployNamespace,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmValuesYAML,
 		Value: helmValues,
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmIncludeCRDs,
-		Value: fmt.Sprint(helmBase.IncludeCRDs),
+		Value: fmt.Sprint(opts.helmBase.IncludeCRDs),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmAuthType,
-		Value: string(helmBase.Auth),
+		Value: string(opts.helmBase.Auth),
 	}, corev1.EnvVar{
 		Name:  reconcilermanager.HelmSyncWait,
-		Value: fmt.Sprintf("%f", v1beta1.GetPeriod(helmBase.Period, configsync.DefaultHelmSyncVersionPollingPeriod).Seconds()),
+		Value: fmt.Sprintf("%f", v1beta1.GetPeriod(opts.helmBase.Period, configsync.DefaultHelmSyncVersionPollingPeriod).Seconds()),
 	})
 	return result
 }

@@ -94,7 +94,7 @@ func (c *FakeRepos) UpdateStatus(ctx context.Context, repo *configmanagementv1.R
 // Delete takes name of the repo and deletes it. Returns an error if one occurs.
 func (c *FakeRepos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(reposResource, name), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootDeleteActionWithOptions(reposResource, name, opts), &configmanagementv1.Repo{})
 	return err
 }
 

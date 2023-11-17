@@ -94,7 +94,7 @@ func (c *FakeNamespaceConfigs) UpdateStatus(ctx context.Context, namespaceConfig
 // Delete takes name of the namespaceConfig and deletes it. Returns an error if one occurs.
 func (c *FakeNamespaceConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(namespaceconfigsResource, name), &configmanagementv1.NamespaceConfig{})
+		Invokes(testing.NewRootDeleteActionWithOptions(namespaceconfigsResource, name, opts), &configmanagementv1.NamespaceConfig{})
 	return err
 }
 

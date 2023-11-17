@@ -26,7 +26,8 @@ symlink-gopath:
 
 CLIENTGEN_TOOLS := client-gen deepcopy-gen informer-gen lister-gen conversion-gen
 # This should match the k8s.io/code-generator version in go.mod.
-CLIENTGEN_VERSION := "v0.22.2"
+# We do not install k8s.io/code-generator, so use client-go as a proxy.
+CLIENTGEN_VERSION := $(shell grep k8s.io/client-go go.mod | head -n1 | cut -d' ' -f2)
 
 INSTALL_CLIENTGEN_TOOLS := $(patsubst %,install-%,$(CLIENTGEN_TOOLS))
 

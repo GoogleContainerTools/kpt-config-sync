@@ -24,10 +24,34 @@ symlink-gopath:
 	@[[ $(shell pwd) == $(shell realpath $(CANONICAL_GOPATH)) ]] \
 		|| (echo "expected $(shell pwd) to equal $(shell realpath $(CANONICAL_GOPATH))" ; exit 1)
 
+CLIENTGEN_TOOLS := client-gen deepcopy-gen informer-gen lister-gen conversion-gen
+# This should match the k8s.io/code-generator version in go.mod.
+CLIENTGEN_VERSION := "v0.22.2"
+
+INSTALL_CLIENTGEN_TOOLS := $(patsubst %,install-%,$(CLIENTGEN_TOOLS))
+
+.PHONY: $(INSTALL_CLIENTGEN_TOOLS)
+$(INSTALL_CLIENTGEN_TOOLS):
+	GOPATH="$(GO_DIR)" go install "k8s.io/code-generator/cmd/$(subst install-,,$@)@$(CLIENTGEN_VERSION)"
+
+.PHONY: install-clientgen-tools
+# install all clientgen tools (user-friendly target alias)
+install-clientgen-tools: $(INSTALL_CLIENTGEN_TOOLS)
+
+CLEAN_CLIENTGEN_TOOLS := $(patsubst %,clean-%,$(CLIENTGEN_TOOLS))
+
+.PHONY: $(CLEAN_CLIENTGEN_TOOLS)
+$(CLEAN_CLIENTGEN_TOOLS):
+	@rm $(BIN_DIR)/$(subst clean-,,$@)
+
+.PHONY: clean-clientgen-tools
+# remove all clientgen tools (user-friendly target alias)
+clean-clientgen-tools: $(CLEAN_CLIENTGEN_TOOLS)
+
 # The code generation libraries are not module aware, and expect the module to be
 # at the canonical gopath. Create a symlink as a hack to enable running clientgen.
 .PHONY: clientgen
-clientgen: symlink-gopath
+clientgen: symlink-gopath $(INSTALL_CLIENTGEN_TOOLS)
 	@echo "+++ Generating clientgen directory"
 	./scripts/generate-clientset.sh
 

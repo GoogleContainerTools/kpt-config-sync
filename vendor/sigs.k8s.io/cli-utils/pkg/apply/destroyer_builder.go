@@ -6,7 +6,6 @@ package apply
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -42,7 +41,6 @@ func (b *DestroyerBuilder) Build() (*Destroyer, error) {
 		invClient:     bx.invClient,
 		mapper:        bx.mapper,
 		client:        bx.client,
-		openAPIGetter: bx.discoClient,
 		infoHelper:    info.NewHelper(bx.mapper, bx.unstructuredClientForMapping),
 	}, nil
 }
@@ -59,11 +57,6 @@ func (b *DestroyerBuilder) WithInventoryClient(invClient inventory.Client) *Dest
 
 func (b *DestroyerBuilder) WithDynamicClient(client dynamic.Interface) *DestroyerBuilder {
 	b.client = client
-	return b
-}
-
-func (b *DestroyerBuilder) WithDiscoveryClient(discoClient discovery.CachedDiscoveryInterface) *DestroyerBuilder {
-	b.discoClient = discoClient
 	return b
 }
 

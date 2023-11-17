@@ -201,6 +201,7 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
+		newFakeCache(t, cs),
 		cs.Client,
 		cs.Client,
 		cs.DynamicClient,
@@ -2634,8 +2635,8 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 				}
 			}
 			_, _, testReconciler := setupRootReconciler(t, objs...)
-
-			result := testReconciler.mapSecretToRootSyncs(tc.secret)
+			ctx := context.Background()
+			result := testReconciler.mapSecretToRootSyncs(ctx, tc.secret)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}

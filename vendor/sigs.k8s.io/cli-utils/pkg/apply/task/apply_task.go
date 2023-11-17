@@ -12,10 +12,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/apply"
@@ -50,7 +50,6 @@ type ApplyTask struct {
 	TaskName string
 
 	DynamicClient     dynamic.Interface
-	OpenAPIGetter     discovery.OpenAPISchemaInterface
 	InfoHelper        info.Helper
 	Mapper            meta.RESTMapper
 	Objects           object.UnstructuredSet
@@ -151,7 +150,7 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 			// Create a new instance of the applyOptions interface and use it
 			// to apply the objects.
 			ao := applyOptionsFactoryFunc(a.Name(), taskContext.EventChannel(),
-				a.ServerSideOptions, a.DryRunStrategy, a.DynamicClient, a.OpenAPIGetter)
+				a.ServerSideOptions, a.DryRunStrategy, a.DynamicClient)
 			ao.SetObjects([]*resource.Info{info})
 			klog.V(5).Infof("applying object: %v", id)
 			err = ao.Run()
@@ -183,12 +182,11 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 }
 
 func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSideOptions common.ServerSideOptions,
-	strategy common.DryRunStrategy, dynamicClient dynamic.Interface,
-	openAPIGetter discovery.OpenAPISchemaInterface) applyOptions {
+	strategy common.DryRunStrategy, dynamicClient dynamic.Interface) applyOptions {
 	emptyString := ""
 	return &apply.ApplyOptions{
-		VisitedNamespaces: sets.NewString(),
-		VisitedUids:       sets.NewString(),
+		VisitedNamespaces: sets.New[string](),
+		VisitedUids:       sets.New[types.UID](),
 		Overwrite:         true, // Normally set in apply.NewApplyOptions
 		OpenAPIPatch:      true, // Normally set in apply.NewApplyOptions
 		Recorder:          genericclioptions.NoopRecorder{},
@@ -213,8 +211,7 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 			ch:        eventChannel,
 			groupName: taskName,
 		}).toPrinterFunc(),
-		DynamicClient:  dynamicClient,
-		DryRunVerifier: resource.NewQueryParamVerifier(dynamicClient, openAPIGetter, resource.QueryParamDryRun),
+		DynamicClient: dynamicClient,
 	}
 }
 
@@ -282,7 +279,7 @@ func isStreamError(err error) bool {
 }
 
 func (a *ApplyTask) clientSideApply(info *resource.Info, eventChannel chan<- event.Event) error {
-	ao := applyOptionsFactoryFunc(a.Name(), eventChannel, common.ServerSideOptions{ServerSideApply: false}, a.DryRunStrategy, a.DynamicClient, a.OpenAPIGetter)
+	ao := applyOptionsFactoryFunc(a.Name(), eventChannel, common.ServerSideOptions{ServerSideApply: false}, a.DryRunStrategy, a.DynamicClient)
 	ao.SetObjects([]*resource.Info{info})
 	return ao.Run()
 }

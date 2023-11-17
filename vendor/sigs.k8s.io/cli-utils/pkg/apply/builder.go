@@ -9,7 +9,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -22,7 +21,6 @@ type commonBuilder struct {
 	factory                      util.Factory
 	invClient                    inventory.Client
 	client                       dynamic.Interface
-	discoClient                  discovery.CachedDiscoveryInterface
 	mapper                       meta.RESTMapper
 	restConfig                   *rest.Config
 	unstructuredClientForMapping func(*meta.RESTMapping) (resource.RESTClient, error)
@@ -42,15 +40,6 @@ func (cb *commonBuilder) finalize() (*commonBuilder, error) {
 		cx.client, err = cx.factory.DynamicClient()
 		if err != nil {
 			return nil, fmt.Errorf("error getting dynamic client: %v", err)
-		}
-	}
-	if cx.discoClient == nil {
-		if cx.factory == nil {
-			return nil, fmt.Errorf("a factory must be provided or all other options: %v", err)
-		}
-		cx.discoClient, err = cx.factory.ToDiscoveryClient()
-		if err != nil {
-			return nil, fmt.Errorf("error getting discovery client: %v", err)
 		}
 	}
 	if cx.mapper == nil {

@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -54,6 +55,7 @@ import (
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -291,6 +293,21 @@ func rolebinding(name, roleName, roleKind string, opts ...core.MetaMutator) *rba
 	return result
 }
 
+func newFakeCache(t *testing.T, cs *syncerFake.ClientSet) cache.Cache {
+	cfg := &rest.Config{
+		//TODO
+	}
+	cache, err := cache.New(cfg, cache.Options{
+		// HTTPClient: TODO,
+		Scheme: cs.Client.Scheme(),
+		Mapper: cs.Client.RESTMapper(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create cache: %v", err)
+	}
+	return cache
+}
+
 func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RepoSyncReconciler) {
 	t.Helper()
 
@@ -311,6 +328,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		testCluster,
 		filesystemPollingPeriod,
 		hydrationPollingPeriod,
+		newFakeCache(t, cs),
 		cs.Client,
 		cs.Client,
 		cs.DynamicClient,
@@ -2726,7 +2744,8 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	_, _, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, rs4, serviceAccount)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := testReconciler.mapSecretToRepoSyncs(tc.secret)
+			ctx := context.Background()
+			result := testReconciler.mapSecretToRepoSyncs(ctx, tc.secret)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}
@@ -2842,7 +2861,8 @@ func TestMapObjectToRepoSync(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, testReconciler := setupNSReconciler(t, rs1, rs2)
 
-			result := testReconciler.mapObjectToRepoSync(tc.object)
+			ctx := context.Background()
+			result := testReconciler.mapObjectToRepoSync(ctx, tc.object)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}

@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
@@ -36,7 +35,6 @@ type Destroyer struct {
 	invClient     inventory.Client
 	mapper        meta.RESTMapper
 	client        dynamic.Interface
-	openAPIGetter discovery.OpenAPISchemaInterface
 	infoHelper    info.Helper
 }
 
@@ -119,7 +117,6 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		taskBuilder := &solver.TaskQueueBuilder{
 			Pruner:        d.pruner,
 			DynamicClient: d.client,
-			OpenAPIGetter: d.openAPIGetter,
 			InfoHelper:    d.infoHelper,
 			Mapper:        d.mapper,
 			InvClient:     d.invClient,

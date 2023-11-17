@@ -22,12 +22,14 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Client is a fake implementation of client.Client.
@@ -254,4 +256,14 @@ func (c *Client) SubResource(subResource string) client.SubResourceClient {
 			storage: c.storage.Subresource(subResource),
 		},
 	}
+}
+
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (c *Client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return apiutil.GVKForObject(obj, c.scheme)
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (c *Client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(obj, c.scheme, c.mapper)
 }

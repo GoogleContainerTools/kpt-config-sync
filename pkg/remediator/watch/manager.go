@@ -17,6 +17,7 @@ package watch
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -60,34 +61,18 @@ type Manager struct {
 
 // Options contains options for creating a watch manager.
 type Options struct {
+	HTTPClient     *http.Client
 	watcherFactory watcherFactory
-}
-
-// DefaultOptions return the default options with a ListerWatcherFactory built
-// from the specified REST config.
-func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	factory, err := NewListerWatcherFactoryFromClient(cfg)
-	if err != nil {
-		return nil, status.APIServerError(err, "failed to build ListerWatcherFactory")
-	}
-
-	return &Options{
-		watcherFactory: watcherFactoryFromListerWatcherFactory(factory),
-	}, nil
 }
 
 // NewManager starts a new watch manager
 func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 	q *queue.ObjectQueue, decls *declared.Resources, options *Options, ch conflict.Handler) (*Manager, error) {
 	if options == nil {
-		var err error
-		options, err = DefaultOptions(cfg)
-		if err != nil {
-			return nil, err
-		}
+		options = &Options{}
 	}
 
-	return &Manager{
+	mgr := &Manager{
 		scope:           scope,
 		syncName:        syncName,
 		cfg:             cfg,
@@ -96,7 +81,24 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		watcherFactory:  options.watcherFactory,
 		queue:           q,
 		conflictHandler: ch,
-	}, nil
+	}
+	// Set default options
+	if mgr.watcherFactory == nil {
+		httpClient := options.HTTPClient
+		if httpClient == nil {
+			var err error
+			httpClient, err = rest.HTTPClientFor(cfg)
+			if err != nil {
+				return nil, err
+			}
+		}
+		factory, err := NewListerWatcherFactoryFromClient(cfg, httpClient)
+		if err != nil {
+			return nil, status.APIServerError(err, "failed to build ListerWatcherFactory")
+		}
+		mgr.watcherFactory = watcherFactoryFromListerWatcherFactory(factory)
+	}
+	return mgr, nil
 }
 
 // NeedsUpdate returns true if the Manager's watches need to be updated. This function is threadsafe.

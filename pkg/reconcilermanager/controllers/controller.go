@@ -15,6 +15,8 @@
 package controllers
 
 import (
+	"context"
+
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -24,7 +26,7 @@ import (
 type Controller interface {
 	reconcile.Reconciler
 	// SetupWithManager registers the controller with the controller-manager
-	SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error
+	SetupWithManager(ctx context.Context, mgr controllerruntime.Manager, watchFleetMembership bool) error
 }
 
 var _ Controller = &RootSyncReconciler{}

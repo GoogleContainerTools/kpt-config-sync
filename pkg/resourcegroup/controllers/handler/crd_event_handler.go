@@ -15,6 +15,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/go-logr/logr"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,30 +38,30 @@ type CRDEventHandler struct {
 var _ handler.EventHandler = &CRDEventHandler{}
 
 // Create implements EventHandler
-func (h *CRDEventHandler) Create(e event.CreateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Create(ctx context.Context, e event.CreateEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a create event")
-	h.enqueueEvent(e.Object)
+	h.enqueueEvent(ctx, e.Object)
 }
 
 // Update implements EventHandler
-func (h *CRDEventHandler) Update(e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Update(ctx context.Context, e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received an update event")
-	h.enqueueEvent(e.ObjectNew)
+	h.enqueueEvent(ctx, e.ObjectNew)
 }
 
 // Delete implements EventHandler
-func (h *CRDEventHandler) Delete(e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Delete(ctx context.Context, e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a delete event")
-	h.enqueueEvent(e.Object)
+	h.enqueueEvent(ctx, e.Object)
 }
 
 // Generic implements EventHandler
-func (h *CRDEventHandler) Generic(e event.GenericEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Generic(ctx context.Context, e event.GenericEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a generic event")
-	h.enqueueEvent(e.Object)
+	h.enqueueEvent(ctx, e.Object)
 }
 
-func (h *CRDEventHandler) enqueueEvent(obj client.Object) {
+func (h *CRDEventHandler) enqueueEvent(ctx context.Context, obj client.Object) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		h.Log.Info("failed to derive a CRD from the event object", "name", obj.GetName())
@@ -79,7 +81,12 @@ func (h *CRDEventHandler) enqueueEvent(obj client.Object) {
 			resgroup.SetNamespace(r.Namespace)
 			resgroup.SetName(r.Name)
 			h.Log.V(5).Info("send a generic event for", "resourcegroup", resgroup.GetObjectMeta())
-			h.Channel <- event.GenericEvent{Object: resgroup}
+			select {
+			case <-ctx.Done():
+				h.Log.V(3).Info("CRDEventHandler stopping", "context_error", ctx.Err())
+				return
+			case h.Channel <- event.GenericEvent{Object: resgroup}:
+			}
 		}
 	}
 }

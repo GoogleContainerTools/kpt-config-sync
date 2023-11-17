@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
@@ -45,7 +44,6 @@ type Applier struct {
 	statusWatcher watcher.StatusWatcher
 	invClient     inventory.Client
 	client        dynamic.Interface
-	openAPIGetter discovery.OpenAPISchemaInterface
 	mapper        meta.RESTMapper
 	infoHelper    info.Helper
 }
@@ -171,7 +169,6 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		taskBuilder := &solver.TaskQueueBuilder{
 			Pruner:        a.pruner,
 			DynamicClient: a.client,
-			OpenAPIGetter: a.openAPIGetter,
 			InfoHelper:    a.infoHelper,
 			Mapper:        a.mapper,
 			InvClient:     a.invClient,

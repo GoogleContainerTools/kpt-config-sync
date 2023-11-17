@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/root"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	// +kubebuilder:scaffold:imports
 )
@@ -87,6 +88,9 @@ func run() error {
 		}
 	}()
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Client: client.Options{
+			Scheme: scheme,
+		},
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,

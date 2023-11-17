@@ -17,6 +17,7 @@ package watch
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -62,13 +63,13 @@ type ListerWatcherFactory func(gvk schema.GroupVersionKind, namespace string) Li
 
 // NewListerWatcherFactoryFromClient creates a ListerWatcherFactory using a
 // dynamic client and mapper build from the specified REST config.
-func NewListerWatcherFactoryFromClient(cfg *rest.Config) (ListerWatcherFactory, error) {
+func NewListerWatcherFactoryFromClient(cfg *rest.Config, httpClient *http.Client) (ListerWatcherFactory, error) {
 	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
 	}
 
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build mapper: %w", err)
 	}

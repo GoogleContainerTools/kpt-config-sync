@@ -54,13 +54,13 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // ReconcilerType defines the type of a reconciler
@@ -81,13 +81,14 @@ type RootSyncReconciler struct {
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
-func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
+func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, cache cache.Cache, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
 	return &RootSyncReconciler{
 		reconcilerBase: reconcilerBase{
 			loggingController: loggingController{
 				log: log,
 			},
 			clusterName:             clusterName,
+			cache:                   cache,
 			client:                  client,
 			watcher:                 watcher,
 			dynamicClient:           dynamicClient,
@@ -402,9 +403,9 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 }
 
 // SetupWithManager registers RootSync controller with reconciler-manager.
-func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error {
+func (r *RootSyncReconciler) SetupWithManager(ctx context.Context, mgr controllerruntime.Manager, watchFleetMembership bool) error {
 	// Index the `gitSecretRefName` field, so that we will be able to lookup RootSync be a referenced `SecretRef` name.
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
 		rs, ok := rawObj.(*v1beta1.RootSync)
 		if !ok {
 			// Only add index for RootSync
@@ -424,29 +425,29 @@ func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, wat
 		}).
 		For(&v1beta1.RootSync{}).
 		// Custom Watch to trigger Reconcile for objects created by RootSync controller.
-		Watches(&source.Kind{Type: withNamespace(&corev1.Secret{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.Secret{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRootSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&corev1.ConfigMap{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.ConfigMap{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapsToRootSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}},
+		Watches(&rbacv1.ClusterRoleBinding{},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		// TODO: is it possible to watch with a label filter?
-		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
+		Watches(&rbacv1.RoleBinding{},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
 		// Custom Watch for membership to trigger reconciliation.
-		controllerBuilder.Watches(&source.Kind{Type: &hubv1.Membership{}},
+		controllerBuilder.Watches(&hubv1.Membership{},
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs()),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
@@ -458,14 +459,14 @@ func withNamespace(obj client.Object, ns string) client.Object {
 	return obj
 }
 
-func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []reconcile.Request {
-	return func(o client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
 		// Clear the membership if the cluster is unregistered
-		if err := r.client.Get(context.Background(), types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+		if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
 			if apierrors.IsNotFound(err) {
 				klog.Info("Fleet Membership not found, clearing membership cache")
 				r.membership = nil
-				return r.requeueAllRootSyncs()
+				return r.requeueAllRootSyncs(ctx)
 			}
 			klog.Errorf("Fleet Membership get failed: %v", err)
 			return nil
@@ -481,12 +482,12 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 			return nil
 		}
 		r.membership = m
-		return r.requeueAllRootSyncs()
+		return r.requeueAllRootSyncs(ctx)
 	}
 }
 
 // mapConfigMapsToRootSyncs handles updates to referenced ConfigMaps
-func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces.
@@ -495,7 +496,6 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 	}
 
 	// Look up RootSyncs and see if any of them reference this ConfigMap.
-	ctx := context.Background()
 	rootSyncList := &v1beta1.RootSyncList{}
 	if err := r.client.List(ctx, rootSyncList, &client.ListOptions{Namespace: objRef.Namespace}); err != nil {
 		klog.Errorf("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
@@ -536,7 +536,7 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 
 // mapObjectToRootSync define a mapping from an object in 'config-management-system'
 // namespace to a RootSync to be reconciled.
-func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces because all the generated resources
@@ -560,7 +560,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	}
 
 	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
+	if err := r.client.List(ctx, allRootSyncs); err != nil {
 		klog.Errorf("failed to list all RootSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
 		return nil
@@ -615,9 +615,9 @@ func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile
 	}
 }
 
-func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
+func (r *RootSyncReconciler) requeueAllRootSyncs(ctx context.Context) []reconcile.Request {
 	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
+	if err := r.client.List(ctx, allRootSyncs); err != nil {
 		klog.Errorf("RootSync list failed: %v", err)
 		return nil
 	}
@@ -637,7 +637,7 @@ func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
 // mapSecretToRootSyncs define a mapping from the Secret object to its attached
 // RootSync objects via the `spec.git.secretRef.name` field .
 // The update to the Secret object will trigger a reconciliation of the RootSync objects.
-func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapSecretToRootSyncs(ctx context.Context, secret client.Object) []reconcile.Request {
 	sRef := client.ObjectKeyFromObject(secret)
 	// Ignore secret in other namespaces because the RootSync's git secret MUST
 	// exist in the config-management-system namespace.
@@ -655,7 +655,7 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 		FieldSelector: fields.OneTermEqualSelector(gitSecretRefField, sRef.Name),
 		Namespace:     sRef.Namespace,
 	}
-	if err := r.client.List(context.Background(), attachedRootSyncs, listOps); err != nil {
+	if err := r.client.List(ctx, attachedRootSyncs, listOps); err != nil {
 		klog.Errorf("RootSync list failed for Secret (%s): %v", sRef, err)
 		return nil
 	}

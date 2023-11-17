@@ -63,32 +63,12 @@ type Options struct {
 	watcherFunc createWatcherFunc
 }
 
-// DefaultOptions return the default options:
-// - create discovery RESTmapper from the passed rest.Config
-// - use createWatcher to create watchers
-func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Options{
-		Mapper:      mapper,
-		watcherFunc: createWatcher,
-	}, nil
-}
-
 // NewManager starts a new watch manager
 func NewManager(cfg *rest.Config, decls *resourcemap.ResourceMap, channel chan event.GenericEvent, options *Options) (*Manager, error) {
 	if options == nil {
-		var err error
-		options, err = DefaultOptions(cfg)
-		if err != nil {
-			return nil, err
-		}
+		options = &Options{}
 	}
-
-	return &Manager{
+	mgr := &Manager{
 		cfg:               cfg,
 		resources:         decls,
 		watcherMap:        make(map[schema.GroupVersionKind]Runnable),
@@ -96,7 +76,23 @@ func NewManager(cfg *rest.Config, decls *resourcemap.ResourceMap, channel chan e
 		mapper:            options.Mapper,
 		channel:           channel,
 		mux:               sync.Mutex{},
-	}, nil
+	}
+	// Set default options
+	if mgr.createWatcherFunc == nil {
+		mgr.createWatcherFunc = createWatcher
+	}
+	if mgr.mapper == nil {
+		httpClient, err := rest.HTTPClientFor(cfg)
+		if err != nil {
+			return nil, err
+		}
+		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+		if err != nil {
+			return nil, err
+		}
+		mgr.mapper = mapper
+	}
+	return mgr, nil
 }
 
 // NeedsUpdate returns true if the Manager's watches need to be updated. This function is threadsafe.

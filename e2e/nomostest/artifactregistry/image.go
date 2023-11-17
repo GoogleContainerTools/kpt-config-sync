@@ -15,10 +15,7 @@
 package artifactregistry
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -28,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
 
 // DefaultLocation is the default location in which to host Artifact Registry
@@ -63,8 +61,9 @@ func SetupImage(nt *nomostest.NT, name, version string) (*Image, error) {
 		// Use chart name to avoid overlap.
 		BuildPath: filepath.Join(nt.TmpDir, name),
 		// Use test name to avoid overlap. Truncate to 40 characters.
-		Name:    generateImageName(nt, name),
-		Version: version,
+		Name:       generateImageName(nt, name),
+		Version:    version,
+		FileSystem: filesys.MakeFsOnDisk(),
 	}
 	nt.T.Cleanup(func() {
 		if err := chart.Delete(); err != nil {
@@ -112,6 +111,9 @@ type Image struct {
 
 	// BuildPath is a local directory from which Image will read, package, and push the image from
 	BuildPath string
+
+	// FileSystem handles local file operations
+	FileSystem filesys.FileSystem
 }
 
 // RegistryHost returns the domain of the artifact registry
@@ -181,16 +183,12 @@ func (r *Image) ConfigureAuthHelper() error {
 // contents if it does.
 func (r *Image) CleanBuildPath() error {
 	r.Logger.Infof("Cleaning build path: %s", r.BuildPath)
-	if _, err := os.Stat(r.BuildPath); err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	} else {
-		if err := os.RemoveAll(r.BuildPath); err != nil {
+	if r.FileSystem.Exists(r.BuildPath) {
+		if err := r.FileSystem.RemoveAll(r.BuildPath); err != nil {
 			return fmt.Errorf("deleting package directory: %v", err)
 		}
 	}
-	if err := os.MkdirAll(r.BuildPath, os.ModePerm); err != nil {
+	if err := r.FileSystem.MkdirAll(r.BuildPath); err != nil {
 		return fmt.Errorf("creating package directory: %v", err)
 	}
 	return nil
@@ -200,7 +198,7 @@ func (r *Image) CleanBuildPath() error {
 // to r.BuildPath.
 func (r *Image) CopyLocalPackage(pkgPath string) error {
 	r.Logger.Infof("Copying package from test artifacts: %s", pkgPath)
-	if err := copyutil.CopyDir(pkgPath, r.BuildPath); err != nil {
+	if err := copyutil.CopyDir(r.FileSystem, pkgPath, r.BuildPath); err != nil {
 		return fmt.Errorf("copying package directory: %v", err)
 	}
 	return nil

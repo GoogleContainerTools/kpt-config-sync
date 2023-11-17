@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -557,10 +558,10 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 		NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 			return fakeCache, nil
 		},
-		NewClient: func(_ cache.Cache, _ *rest.Config, _ client.Options, _ ...client.Object) (client.Client, error) {
+		NewClient: func(_ *rest.Config, _ client.Options) (client.Client, error) {
 			return fakeClient, nil
 		},
-		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return fakeClient.RESTMapper(), nil
 		},
 		// The underlying library uses a fixed port for serving metrics, which can
@@ -569,11 +570,11 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 	})
 	require.NoError(t, err)
 
-	err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
-	require.NoError(t, err)
+	// err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
+	// require.NoError(t, err)
 
 	t.Log("registering root-reconciler-controller")
-	err = testReconciler.SetupWithManager(mgr, false)
+	err = testReconciler.SetupWithManager(ctx, mgr, false)
 	require.NoError(t, err)
 
 	errCh := make(chan error)

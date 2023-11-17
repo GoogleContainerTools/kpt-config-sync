@@ -327,7 +327,11 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 }
 
 func newClientClient(cfg *rest.Config) (client.Client, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create http client")
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return nil, apiServerCheckError(err, "failed to create mapper")
 	}

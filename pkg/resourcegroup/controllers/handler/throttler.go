@@ -15,6 +15,7 @@
 package handler
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -41,6 +43,8 @@ type Throttler struct {
 	duration time.Duration
 }
 
+var _ handler.EventHandler = &Throttler{}
+
 // NewThrottler returns an instance of Throttler
 func NewThrottler(d time.Duration) *Throttler {
 	return &Throttler{
@@ -51,20 +55,20 @@ func NewThrottler(d time.Duration) *Throttler {
 }
 
 // Create implements EventHandler. All create events are ignored.
-func (e *Throttler) Create(event.CreateEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Create(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 }
 
 // Update implements EventHandler. All update events are ignored.
-func (e *Throttler) Update(event.UpdateEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Update(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 }
 
 // Delete implements EventHandler. All delete events are ignored.
-func (e *Throttler) Delete(event.DeleteEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Delete(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
 }
 
 // Generic implements EventHandler.
 // It pushes at most one event for the same object to the queue during duration.
-func (e *Throttler) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *Throttler) Generic(_ context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	if evt.Object == nil {
 		return
 	}

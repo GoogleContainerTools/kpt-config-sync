@@ -27,10 +27,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
@@ -186,11 +186,13 @@ func isStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 	logger logr.Logger, resolver *typeresolver.TypeResolver, group string, resMap *resourcemap.ResourceMap) error {
 	cfg := mgr.GetConfig()
-	watchOption, err := watch.DefaultOptions(cfg)
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, mgr.GetHTTPClient())
 	if err != nil {
 		return err
 	}
-	watchManager, err := watch.NewManager(cfg, resMap, channel, watchOption)
+	watchManager, err := watch.NewManager(cfg, resMap, channel, &watch.Options{
+		Mapper: mapper,
+	})
 	if err != nil {
 		return err
 	}
@@ -212,7 +214,7 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 		WithEventFilter(ResourceGroupPredicate{}).
 		// skip the Generic events
 		WithEventFilter(NoGenericEventPredicate{}).
-		Watches(&source.Kind{Type: &apiextensionsv1.CustomResourceDefinition{}}, &handler.CRDEventHandler{
+		Watches(&apiextensionsv1.CustomResourceDefinition{}, &handler.CRDEventHandler{
 			Mapping: resMap,
 			Channel: channel,
 			Log:     logger,

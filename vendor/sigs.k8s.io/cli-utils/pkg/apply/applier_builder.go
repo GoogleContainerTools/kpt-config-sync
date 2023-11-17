@@ -6,7 +6,6 @@ package apply
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -41,7 +40,6 @@ func (b *ApplierBuilder) Build() (*Applier, error) {
 		statusWatcher: bx.statusWatcher,
 		invClient:     bx.invClient,
 		client:        bx.client,
-		openAPIGetter: bx.discoClient,
 		mapper:        bx.mapper,
 		infoHelper:    info.NewHelper(bx.mapper, bx.unstructuredClientForMapping),
 	}, nil
@@ -59,11 +57,6 @@ func (b *ApplierBuilder) WithInventoryClient(invClient inventory.Client) *Applie
 
 func (b *ApplierBuilder) WithDynamicClient(client dynamic.Interface) *ApplierBuilder {
 	b.client = client
-	return b
-}
-
-func (b *ApplierBuilder) WithDiscoveryClient(discoClient discovery.CachedDiscoveryInterface) *ApplierBuilder {
-	b.discoClient = discoClient
 	return b
 }
 

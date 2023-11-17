@@ -51,8 +51,9 @@ type EnqueueEventToChannel struct {
 
 var _ cache.ResourceEventHandler = &EnqueueEventToChannel{}
 
-// OnAdd implements EventHandler
-func (e *EnqueueEventToChannel) OnAdd(obj interface{}) {
+// OnAdd implements EventHandler.
+// Ignore new isInInitialList bool.
+func (e *EnqueueEventToChannel) OnAdd(obj interface{}, _ bool) {
 	e.Log.V(5).Info("received an add event")
 	e.enqueueEvent(obj)
 }

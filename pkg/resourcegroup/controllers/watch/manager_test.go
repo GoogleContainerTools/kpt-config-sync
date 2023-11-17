@@ -134,11 +134,10 @@ func TestManager_Update(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			options := &Options{
-				watcherFunc: testRunnables(ctx, tc.failedWatchers),
-			}
 			ch := make(chan event.GenericEvent)
-			m, err := NewManager(nil, nil, ch, options)
+			m, err := NewManager(nil, nil, ch, &Options{
+				watcherFunc: testRunnables(ctx, tc.failedWatchers),
+			})
 			if err != nil {
 				t.Fatal(err)
 			}

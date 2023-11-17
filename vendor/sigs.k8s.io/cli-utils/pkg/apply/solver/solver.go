@@ -20,7 +20,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -40,7 +39,6 @@ import (
 type TaskQueueBuilder struct {
 	Pruner        *prune.Pruner
 	DynamicClient dynamic.Interface
-	OpenAPIGetter discovery.OpenAPISchemaInterface
 	InfoHelper    info.Helper
 	Mapper        meta.RESTMapper
 	InvClient     inventory.Client
@@ -245,7 +243,6 @@ func (t *TaskQueueBuilder) newApplyTask(applyObjs object.UnstructuredSet,
 		ServerSideOptions: o.ServerSideOptions,
 		DryRunStrategy:    o.DryRunStrategy,
 		DynamicClient:     t.DynamicClient,
-		OpenAPIGetter:     t.OpenAPIGetter,
 		InfoHelper:        t.InfoHelper,
 		Mapper:            t.Mapper,
 	}

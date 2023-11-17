@@ -19,6 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -85,6 +86,16 @@ func (e ErrorClient) Scheme() *runtime.Scheme {
 // RESTMapper implements client.Client.
 func (e ErrorClient) RESTMapper() meta.RESTMapper {
 	panic("fake.ErrorClient does not support RESTMapper()")
+}
+
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (e *ErrorClient) GroupVersionKindFor(_ runtime.Object) (schema.GroupVersionKind, error) {
+	panic("fake.ErrorClient does not support GroupVersionKindFor()")
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (e *ErrorClient) IsObjectNamespaced(_ runtime.Object) (bool, error) {
+	panic("fake.ErrorClient does not support IsObjectNamespaced()")
 }
 
 // SubResourceErrorClient is a SubResourceClient that always returns a specified error.

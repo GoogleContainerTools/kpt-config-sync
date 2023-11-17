@@ -44,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -101,6 +102,7 @@ type reconcilerBase struct {
 	loggingController
 
 	clusterName             string
+	cache                   cache.Cache
 	client                  client.Client    // caching
 	watcher                 client.WithWatch // non-caching
 	dynamicClient           dynamic.Interface

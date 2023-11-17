@@ -72,7 +72,7 @@ func TestEventHandler(t *testing.T) {
 	u := &unstructured.Unstructured{}
 
 	// Push an event to channel
-	go func() { h.OnAdd(u) }()
+	go func() { h.OnAdd(u, false) }()
 
 	// Consume an event from the channel
 	e := <-ch
@@ -104,7 +104,7 @@ func TestEventHandlerMultipleHandlers(t *testing.T) {
 	u2 := &unstructured.Unstructured{}
 	u2.SetGroupVersionKind(schema.GroupVersionKind{Kind: "MyKind"})
 	// Push an event to channel
-	go func() { h1.OnAdd(u1) }()
+	go func() { h1.OnAdd(u1, false) }()
 	go func() { h2.OnDelete(u2) }()
 	time.Sleep(time.Second)
 

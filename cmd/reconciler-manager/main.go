@@ -35,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -69,6 +70,9 @@ func main() {
 		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Client: client.Options{
+			Scheme: core.Scheme,
+		},
 		Scheme: core.Scheme,
 	})
 	if err != nil {
@@ -94,20 +98,23 @@ func main() {
 	}
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
+	// Start listening to signals
+	signalCtx := signals.SetupSignalHandler()
+
 	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
-		mgr.GetClient(), watcher, dynamicClient,
+		mgr.GetCache(), mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
-	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
+	if err := repoSync.SetupWithManager(signalCtx, mgr, watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configsync.RepoSyncKind)
 		os.Exit(1)
 	}
 
 	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
-		mgr.GetClient(), watcher, dynamicClient,
+		mgr.GetCache(), mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
-	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
+	if err := rootSync.SetupWithManager(signalCtx, mgr, watchFleetMembership); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configsync.RootSyncKind)
 		os.Exit(1)
 	}
@@ -149,7 +156,7 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(signalCtx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		// os.Exit(1) does not run deferred functions so explicitly stopping the OC Agent exporter.
 		if err := oce.Stop(); err != nil {

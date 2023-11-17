@@ -16,8 +16,10 @@ package nomostest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +118,24 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 	return optsStruct
 }
 
+var featureDurations map[nomostesting.Feature]time.Duration
+var featureDurationMux sync.Mutex
+
+// PrintFeatureDurations prints the accumulative time duration testing each
+// feature. This is intended to be called at the end of the test suite.
+func PrintFeatureDurations() {
+	featureDurationMux.Lock()
+	defer featureDurationMux.Unlock()
+	if featureDurations == nil {
+		fmt.Println("No feature durations were recorded")
+		return
+	}
+	fmt.Println("Feature durations:")
+	for feature, duration := range featureDurations {
+		fmt.Printf("%s: %s\n", feature, duration)
+	}
+}
+
 // New establishes a connection to a test cluster and prepares it for testing.
 func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) *NT {
 	t.Helper()
@@ -139,6 +159,19 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 	if !optsStruct.SkipConfigSyncInstall {
 		setupTestCase(nt, optsStruct)
 	}
+	start := time.Now()
+	nt.T.Cleanup(func() {
+		duration := time.Since(start)
+		featureDurationMux.Lock()
+		defer featureDurationMux.Unlock()
+		if featureDurations == nil {
+			featureDurations = make(map[nomostesting.Feature]time.Duration)
+		}
+		if accumulative, ok := featureDurations[testFeature]; ok {
+			duration += accumulative
+		}
+		featureDurations[testFeature] = duration
+	})
 	return nt
 }
 

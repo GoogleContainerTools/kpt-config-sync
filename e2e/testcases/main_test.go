@@ -134,6 +134,9 @@ func main(m *testing.M) int {
 			return 1
 		}
 	}
+	defer func() {
+		nomostest.PrintFeatureDurations()
+	}()
 	exitCode := m.Run()
 	return exitCode
 }

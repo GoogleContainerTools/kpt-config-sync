@@ -34,23 +34,23 @@ require (
 	go.opencensus.io v0.24.0
 	go.uber.org/multierr v1.6.0
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
-	golang.org/x/mod v0.11.0
+	golang.org/x/mod v0.12.0
 	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.7.0
 	google.golang.org/api v0.114.0
-	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
+	google.golang.org/genproto/googleapis/api v0.0.0-20230525234020-1aefcd67740a
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.26.9
-	k8s.io/apiextensions-apiserver v0.26.9
-	k8s.io/apimachinery v0.26.9
-	k8s.io/cli-runtime v0.26.9
-	k8s.io/client-go v0.26.9
+	k8s.io/api v0.26.11
+	k8s.io/apiextensions-apiserver v0.26.11
+	k8s.io/apimachinery v0.26.11
+	k8s.io/cli-runtime v0.26.11
+	k8s.io/client-go v0.26.11
 	k8s.io/cluster-registry v0.0.6
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kube-aggregator v0.26.7
 	k8s.io/kube-openapi v0.0.0-20230109183929-3758b55a6596
-	k8s.io/kubectl v0.26.9
-	k8s.io/kubernetes v1.26.9
+	k8s.io/kubectl v0.26.11
+	k8s.io/kubernetes v1.26.11
 	k8s.io/utils v0.0.0-20230115233650-391b47cb4029
 	sigs.k8s.io/cli-utils v0.35.0
 	sigs.k8s.io/controller-runtime v0.14.1
@@ -131,18 +131,20 @@ require (
 	github.com/xlab/treeprint v1.1.0 // indirect
 	go.starlark.net v0.0.0-20210901212718-87f333178d59 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto v0.0.0-20230525234025-438c736192d0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
 	google.golang.org/grpc v1.56.3 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiserver v0.26.9 // indirect
-	k8s.io/component-base v0.26.9 // indirect
+	k8s.io/apiserver v0.26.11 // indirect
+	k8s.io/component-base v0.26.11 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 )

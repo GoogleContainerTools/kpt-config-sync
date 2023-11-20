@@ -20,3 +20,4 @@ spec:
   selector:
     matchLabels:
       app: bookstore2
+  mode: dynamic

@@ -172,6 +172,64 @@ metadata:
 	}
 }
 
+func TestNomosHydrateWithInvalidNamespaceSelectorsHierarchical(t *testing.T) {
+	configPath := "../testdata/invalid-hierarchy-namespace-selectors"
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
+	args := []string{
+		"vet",
+		"--no-api-server-check",
+		"--path", configPath,
+	}
+
+	out, err := nt.Shell.Command("nomos", args...).CombinedOutput()
+	assert.Error(t, err)
+	msg := string(out)
+	assert.Contains(t, msg, "KNV1014: NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+	assert.Contains(t, msg, "KNV1014: Unknown mode defined in NamespaceSelector")
+
+	args = []string{
+		"hydrate",
+		"--no-api-server-check",
+		"--path", configPath,
+		"--output", nt.TmpDir,
+	}
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
+	assert.Error(t, err)
+	msg = string(out)
+	assert.Contains(t, msg, "KNV1014: NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+	assert.Contains(t, msg, "KNV1014: Unknown mode defined in NamespaceSelector")
+}
+
+func TestNomosHydrateWithInvalidNamespaceSelectorsUnstructured(t *testing.T) {
+	configPath := "../testdata/invalid-unstructured-namespace-selectors"
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
+	args := []string{
+		"vet",
+		"--no-api-server-check",
+		"--path", configPath,
+		"--source-format", string(filesystem.SourceFormatUnstructured),
+	}
+
+	out, err := nt.Shell.Command("nomos", args...).CombinedOutput()
+	assert.Error(t, err)
+	msg := string(out)
+	assert.NotContains(t, msg, "KNV1014: NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+	assert.Contains(t, msg, "KNV1014: Unknown mode defined in NamespaceSelector")
+
+	args = []string{
+		"hydrate",
+		"--no-api-server-check",
+		"--path", configPath,
+		"--source-format", string(filesystem.SourceFormatUnstructured),
+		"--output", nt.TmpDir,
+	}
+	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
+	assert.Error(t, err)
+	msg = string(out)
+	assert.NotContains(t, msg, "KNV1014: NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+	assert.Contains(t, msg, "KNV1014: Unknown mode defined in NamespaceSelector")
+}
+
 func TestNomosHydrateWithClusterSelectorsHierarchical(t *testing.T) {
 	configPath := "../../examples/hierarchy-repo-with-cluster-selectors"
 	testNomosHydrateWithClusterSelectors(t, configPath, filesystem.SourceFormatHierarchy)
@@ -188,22 +246,21 @@ func TestNomosHydrateWithClusterSelectorsUnstructured(t *testing.T) {
 }
 
 func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourceFormat filesystem.SourceFormat) {
-	tmpDir := nomostest.TestDir(t)
 	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
 
 	expectedCompiledDir := "../../examples/repo-with-cluster-selectors-compiled"
-	compiledDir := fmt.Sprintf("%s/%s/compiled", tmpDir, sourceFormat)
+	compiledDir := fmt.Sprintf("%s/%s/compiled", nt.TmpDir, sourceFormat)
 	clusterDevCompiledDir := fmt.Sprintf("%s/cluster-dev", compiledDir)
 	clusterStagingCompiledDir := fmt.Sprintf("%s/cluster-staging", compiledDir)
 	clusterProdCompiledDir := fmt.Sprintf("%s/cluster-prod", compiledDir)
 
-	compiledWithAPIServerCheckDir := fmt.Sprintf("%s/%s/compiled-with-api-server-check", tmpDir, sourceFormat)
+	compiledWithAPIServerCheckDir := fmt.Sprintf("%s/%s/compiled-with-api-server-check", nt.TmpDir, sourceFormat)
 
-	compiledDirWithoutClustersFlag := fmt.Sprintf("%s/%s/compiled-without-clusters-flag", tmpDir, sourceFormat)
+	compiledDirWithoutClustersFlag := fmt.Sprintf("%s/%s/compiled-without-clusters-flag", nt.TmpDir, sourceFormat)
 	expectedCompiledWithoutClustersFlagDir := "../../examples/repo-with-cluster-selectors-compiled-without-clusters-flag"
 
-	compiledJSONDir := fmt.Sprintf("%s/%s/compiled-json", tmpDir, sourceFormat)
-	compiledJSONWithoutClustersFlagDir := fmt.Sprintf("%s/%s/compiled-json-without-clusters-flag", tmpDir, sourceFormat)
+	compiledJSONDir := fmt.Sprintf("%s/%s/compiled-json", nt.TmpDir, sourceFormat)
+	compiledJSONWithoutClustersFlagDir := fmt.Sprintf("%s/%s/compiled-json-without-clusters-flag", nt.TmpDir, sourceFormat)
 	expectedCompiledJSONDir := "../../examples/repo-with-cluster-selectors-compiled-json"
 	expectedCompiledWithoutClustersFlagJSONDir := "../../examples/repo-with-cluster-selectors-compiled-json-without-clusters-flag"
 
@@ -535,11 +592,10 @@ func TestSyncFromNomosHydrateUnstructuredOutputWithClusterSelectorYAMLFlat(t *te
 }
 
 func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
-	tmpDir := nomostest.TestDir(t)
 	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
 
-	compiledDirWithoutAPIServerCheck := fmt.Sprintf("%s/compiled-without-api-server-check", tmpDir)
-	compiledDirWithAPIServerCheck := fmt.Sprintf("%s/compiled-with-api-server-check", tmpDir)
+	compiledDirWithoutAPIServerCheck := fmt.Sprintf("%s/compiled-without-api-server-check", nt.TmpDir)
+	compiledDirWithAPIServerCheck := fmt.Sprintf("%s/compiled-with-api-server-check", nt.TmpDir)
 
 	kubevirtPath := "../../examples/kubevirt"
 

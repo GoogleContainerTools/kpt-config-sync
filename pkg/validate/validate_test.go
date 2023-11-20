@@ -15,20 +15,27 @@
 package validate
 
 import (
+	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation"
@@ -41,13 +48,16 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kinds"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
+	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/discoverytest"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const dir = "acme"
@@ -84,9 +94,10 @@ func clusterSelector(name, key, value string) *v1.ClusterSelector {
 	return cs
 }
 
-func namespaceSelector(name, key, value string) *v1.NamespaceSelector {
+func namespaceSelector(name, key, value, mode string) *v1.NamespaceSelector {
 	ns := fake.NamespaceSelectorObject(core.Name(name))
 	ns.Spec.Selector.MatchLabels = map[string]string{key: value}
+	ns.Spec.Mode = mode
 	return ns
 }
 
@@ -443,9 +454,9 @@ func TestHierarchical(t *testing.T) {
 			name: "object with namespace selector",
 			objs: []ast.FileObject{
 				fake.Repo(),
-				fake.FileObject(namespaceSelector("sre-supported", "env", "prod"),
+				fake.FileObject(namespaceSelector("sre-supported", "env", "prod", v1.NSSelectorStaticMode),
 					"namespaces/bar/ns-selector.yaml"),
-				fake.FileObject(namespaceSelector("dev-supported", "env", "test"),
+				fake.FileObject(namespaceSelector("dev-supported", "env", "test", v1.NSSelectorStaticMode),
 					"namespaces/bar/ns-selector.yaml"),
 				fake.RoleBindingAtPath("namespaces/bar/sre-rb.yaml",
 					core.Name("rb"),
@@ -902,7 +913,8 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "RepoSync manages itself",
 			options: Options{
-				ReconcilerName: "ns-reconciler-bookstore",
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
 				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
@@ -914,7 +926,8 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "RepoSync manages other RepoSync object",
 			options: Options{
-				ReconcilerName: "ns-reconciler-bookstore",
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
 				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
@@ -962,18 +975,22 @@ func TestHierarchical(t *testing.T) {
 
 func TestUnstructured(t *testing.T) {
 	testCases := []struct {
-		name          string
-		discoveryCRDs []*apiextensionsv1beta1.CustomResourceDefinition
-		options       Options
-		objs          []ast.FileObject
-		want          []ast.FileObject
-		wantErrs      status.MultiError
+		name                                   string
+		discoveryCRDs                          []*apiextensionsv1beta1.CustomResourceDefinition
+		options                                Options
+		objs                                   []ast.FileObject
+		onClusterObjects                       []client.Object
+		originalDynamicNSSelectorEnabled       bool
+		want                                   []ast.FileObject
+		wantErrs                               status.MultiError
+		wantDynamicNSSelectorEnabledAnnotation bool
 	}{
 		{
 			name: "no objects",
 		},
 		{
-			name: "cluster-scoped object",
+			name:    "cluster-scoped object",
+			options: Options{Scope: declared.RootReconciler},
 			objs: []ast.FileObject{
 				fake.ClusterRoleAtPath("cluster/cr.yaml"),
 			},
@@ -985,7 +1002,8 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name: "namespace-scoped objects",
+			name:    "namespace-scoped objects",
+			options: Options{Scope: declared.Scope("foo")},
 			objs: []ast.FileObject{
 				fake.RoleAtPath("role.yaml",
 					core.Namespace("foo")),
@@ -1006,7 +1024,8 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name: "CRD and CR",
+			name:    "CRD and CR",
+			options: Options{Scope: declared.RootReconciler},
 			objs: []ast.FileObject{
 				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "crd.yaml"),
 				fake.AnvilAtPath("anvil.yaml"),
@@ -1017,6 +1036,7 @@ func TestUnstructured(t *testing.T) {
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:group":{},"f:names":{"f:kind":{},"f:plural":{}},"f:scope":{},"f:versions":{}},"f:status":{"f:acceptedNames":{"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")), "crd.yaml"),
 				fake.AnvilAtPath("anvil.yaml",
+					core.Namespace(metav1.NamespaceDefault),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:group":{},"f:names":{".":{},"f:kind":{},"f:plural":{}},"f:scope":{}},"f:status":{".":{},"f:acceptedNames":{".":{},"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/anvil.yaml")),
@@ -1026,6 +1046,7 @@ func TestUnstructured(t *testing.T) {
 			name: "objects with cluster selectors",
 			options: Options{
 				ClusterName: "prod",
+				Scope:       declared.RootReconciler,
 			},
 			objs: []ast.FileObject{
 				fake.Cluster(
@@ -1113,10 +1134,11 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name: "objects with namespace selectors",
+			name:    "objects with namespace selectors (static mode)",
+			options: Options{Scope: declared.RootReconciler, SyncName: configsync.RootSyncName},
 			objs: []ast.FileObject{
-				fake.FileObject(namespaceSelector("sre", "sre-supported", "true"), "sre_nss.yaml"),
-				fake.FileObject(namespaceSelector("dev", "dev-supported", "true"), "dev_nss.yaml"),
+				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorStaticMode), "sre_nss.yaml"),
+				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorStaticMode), "dev_nss.yaml"),
 				fake.Namespace("prod-shipping",
 					core.Label("sre-supported", "true")),
 				fake.Namespace("dev-shipping",
@@ -1156,9 +1178,51 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
+			name:    "objects with namespace selectors (dynamic mode)",
+			options: Options{Scope: declared.RootReconciler, SyncName: configsync.RootSyncName},
+			objs: []ast.FileObject{
+				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorDynamicMode), "sre_nss.yaml"),
+				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorDynamicMode), "dev_nss.yaml"),
+				fake.Namespace("prod-shipping",
+					core.Label("sre-supported", "true")),
+				fake.RoleAtPath("sre-role.yaml",
+					core.Name("role"),
+					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre")),
+				fake.RoleAtPath("dev-role.yaml",
+					core.Name("role"),
+					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "dev")),
+			},
+			onClusterObjects: []client.Object{
+				fake.NamespaceObject("dev-shipping", core.Label("dev-supported", "true")),
+			},
+			want: []ast.FileObject{
+				fake.Namespace("prod-shipping",
+					core.Label("sre-supported", "true"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{"f:sre-supported":{}}},"f:spec":{},"f:status":{}}`),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/prod-shipping/namespace.yaml")),
+				fake.RoleAtPath("sre-role.yaml",
+					core.Name("role"),
+					core.Namespace("prod-shipping"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/namespace-selector":{}},"f:labels":{}},"f:rules":{}}`),
+					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/sre-role.yaml")),
+				fake.RoleAtPath("dev-role.yaml",
+					core.Name("role"),
+					core.Namespace("dev-shipping"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/namespace-selector":{}},"f:labels":{}},"f:rules":{}}`),
+					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "dev"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/dev-role.yaml")),
+			},
+			wantDynamicNSSelectorEnabledAnnotation: true,
+		},
+		{
 			name: "namespaced object gets assigned default namespace",
 			options: Options{
-				DefaultNamespace: "shipping",
+				Scope:    "shipping",
+				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
 				fake.RoleAtPath("sre-role.yaml",
@@ -1175,7 +1239,8 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name: "CR with management disabled that is missing its CRD",
+			name:    "CR with management disabled that is missing its CRD",
+			options: Options{Scope: declared.RootReconciler},
 			objs: []ast.FileObject{
 				fake.Namespace("namespaces/foo"),
 				fake.UnstructuredAtPath(
@@ -1208,7 +1273,8 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name: "duplicate objects fails",
+			name:    "duplicate objects fails",
+			options: Options{Scope: declared.Scope("shipping")},
 			objs: []ast.FileObject{
 				fake.Role(
 					core.Name("alice"),
@@ -1225,6 +1291,7 @@ func TestUnstructured(t *testing.T) {
 				PreviousCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
 					crdObject(kinds.Anvil()),
 				},
+				Scope: declared.RootReconciler,
 			},
 			objs: []ast.FileObject{
 				fake.AnvilAtPath("anvil.yaml"),
@@ -1234,7 +1301,8 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RootSync manages itself",
 			options: Options{
-				ReconcilerName: "root-reconciler",
+				Scope:    declared.RootReconciler,
+				SyncName: "root-sync",
 			},
 			objs: []ast.FileObject{
 				validRootSync("root-sync", "rs.yaml"),
@@ -1244,7 +1312,8 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RootSync manages other RootSync object",
 			options: Options{
-				ReconcilerName: "root-reconciler",
+				Scope:    declared.RootReconciler,
+				SyncName: "root-sync",
 			},
 			objs: []ast.FileObject{
 				validRootSync("root-sync-1", "rs.yaml"),
@@ -1258,7 +1327,8 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RepoSync manages itself",
 			options: Options{
-				ReconcilerName: "ns-reconciler-bookstore",
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
 				validRepoSync("bookstore", "repo-sync", "rs.yaml"),
@@ -1268,7 +1338,8 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RepoSync manages other RepoSync object",
 			options: Options{
-				ReconcilerName: "ns-reconciler-bookstore",
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
 				validRepoSync("bookstore", "repo-sync-1", "rs.yaml"),
@@ -1292,14 +1363,42 @@ func TestUnstructured(t *testing.T) {
 			tc.options.BuildScoper = discovery.ScoperBuilder(dc)
 			tc.options.PolicyDir = cmpath.RelativeSlash(dir)
 			tc.options.Converter = converter
+			tc.options.AllowAPICall = true
+			tc.options.DynamicNSSelectorEnabled = tc.originalDynamicNSSelectorEnabled
+			tc.options.NSControllerState = &namespacecontroller.State{}
 
-			got, errs := Unstructured(tc.objs, tc.options)
+			s := runtime.NewScheme()
+			if err := corev1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+			if err := v1beta1.AddToScheme(s); err != nil {
+				t.Fatal(err)
+			}
+
+			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+				core.Annotation(csmetadata.DynamicNSSelectorEnabledAnnotationKey, strconv.FormatBool(tc.originalDynamicNSSelectorEnabled)))
+			tc.onClusterObjects = append(tc.onClusterObjects, rs)
+			fakeClient := syncerFake.NewClient(t, s, tc.onClusterObjects...)
+
+			got, errs := Unstructured(context.Background(), fakeClient, tc.objs, tc.options)
 			if !errors.Is(errs, tc.wantErrs) {
 				t.Errorf("got Unstructured() error %v; want %v", errs, tc.wantErrs)
 			}
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf(diff)
+			assert.ElementsMatch(t, tc.want, got)
+
+			updatedDynamicNSSelectorEnabled, err := dynamicNSSelectorEnabled(fakeClient)
+			if err != nil {
+				t.Fatal(err)
 			}
+			assert.Equal(t, tc.wantDynamicNSSelectorEnabledAnnotation, updatedDynamicNSSelectorEnabled)
 		})
 	}
+}
+
+func dynamicNSSelectorEnabled(fakeClient client.Client) (bool, error) {
+	rs := &v1beta1.RootSync{}
+	if err := fakeClient.Get(context.Background(), client.ObjectKey{Namespace: configsync.ControllerNamespace, Name: configsync.RootSyncName}, rs); err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(rs.Annotations[csmetadata.DynamicNSSelectorEnabledAnnotationKey])
 }

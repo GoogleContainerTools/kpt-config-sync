@@ -152,7 +152,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 			allObjects = append(allObjects, fileObjects...)
 		}
 	}
-	hydrate.ForEachCluster(parseOpts, validateOpts, clusterFilterFunc)
+	hydrate.ForEachCluster(ctx, parseOpts, validateOpts, clusterFilterFunc)
 	if keepOutput {
 		multiCluster := numClusters > 1
 		fileObjects := hydrate.GenerateFileObjects(multiCluster, allObjects...)

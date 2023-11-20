@@ -375,6 +375,9 @@ func Generate() AllExamples {
 	// The transient error is not exposed in the R*Sync API, and is supposed to be autoresolvable.
 	result.add(status.TransientError(errors.New("transient error")))
 
+	// 2017
+	result.add(selectors.ListNamespaceError(errors.New("k8s api List error")))
+
 	// 9998
 	result.add(status.InternalError("we made a mistake"))
 

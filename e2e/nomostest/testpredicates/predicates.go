@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -1236,6 +1237,59 @@ func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate 
 		if !equality.Semantic.DeepEqual(found, expected) {
 			return errors.Errorf("expected %s to have status: %s, but got %s",
 				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
+		}
+		return nil
+	}
+}
+
+// ResourceGroupHasObjects checks whether the objects are in the ResourceGroup's inventory.
+func ResourceGroupHasObjects(objects []client.Object) Predicate {
+	return func(obj client.Object) error {
+		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+		}
+
+		rgResources := toManagedResourceIDs(rg)
+		for _, o := range objects {
+			if _, found := rgResources[core.IDOf(o)]; !found {
+				return fmt.Errorf("resource %s missing from the inventory of ResourceGroup %s",
+					core.IDOf(o), core.IDOf(rg))
+			}
+		}
+		return nil
+	}
+}
+
+func toManagedResourceIDs(rg *v1alpha1.ResourceGroup) map[core.ID]struct{} {
+	rgResources := make(map[core.ID]struct{}, len(rg.Spec.Resources))
+	for _, res := range rg.Spec.Resources {
+		id := core.ID{
+			GroupKind: schema.GroupKind{
+				Group: res.Group,
+				Kind:  res.Kind,
+			},
+			ObjectKey: client.ObjectKey{Name: res.Name, Namespace: res.Namespace},
+		}
+		rgResources[id] = struct{}{}
+	}
+	return rgResources
+}
+
+// ResourceGroupMissingObjects checks whether the objects are NOT in the ResourceGroup's inventory.
+func ResourceGroupMissingObjects(objects []client.Object) Predicate {
+	return func(obj client.Object) error {
+		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+		}
+
+		rgResources := toManagedResourceIDs(rg)
+		for _, o := range objects {
+			if _, found := rgResources[core.IDOf(o)]; found {
+				return fmt.Errorf("resource %s found from the inventory of ResourceGroup %s",
+					core.IDOf(o), core.IDOf(rg))
+			}
 		}
 		return nil
 	}

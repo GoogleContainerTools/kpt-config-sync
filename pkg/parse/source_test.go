@@ -106,7 +106,6 @@ func TestReadConfigFiles(t *testing.T) {
 			}
 
 			parser := &root{
-				sourceFormat: filesystem.SourceFormatUnstructured,
 				Options: &Options{
 					Parser:             &fakeParser{},
 					SyncName:           rootSyncName,
@@ -118,6 +117,9 @@ func TestReadConfigFiles(t *testing.T) {
 						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
 

@@ -250,8 +250,15 @@ func Run(opts Options) {
 			Remediator: rem,
 		},
 	}
+	nsControllerState := namespacecontroller.NewState()
 	if opts.ReconcilerScope == declared.RootReconciler {
-		parser = parse.NewRootRunner(parseOpts, opts.SourceFormat, opts.NamespaceStrategy)
+		rootOpts := &parse.RootOptions{
+			SourceFormat:             opts.SourceFormat,
+			NamespaceStrategy:        opts.NamespaceStrategy,
+			DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
+			NSControllerState:        nsControllerState,
+		}
+		parser = parse.NewRootRunner(parseOpts, rootOpts)
 	} else {
 		parser = parse.NewNamespaceRunner(parseOpts)
 		if err != nil {
@@ -317,9 +324,7 @@ func Run(opts Options) {
 	// Only create and register the Namespace Controller when the flag is enabled.
 	// If the flag is disabled, no need to watch the Namespace events.
 	// The NamespaceSelector will dis-select those dynamic/on-cluster Namespaces.
-	var nsControllerState *namespacecontroller.State
 	if opts.DynamicNSSelectorEnabled {
-		nsControllerState = namespacecontroller.NewState()
 		nsController := namespacecontroller.New(cl, nsControllerState)
 
 		// Register the Namespace Controller

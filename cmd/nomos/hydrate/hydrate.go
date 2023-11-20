@@ -22,6 +22,7 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
 	"kpt.dev/configsync/cmd/nomos/util"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -105,6 +106,9 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 
 		if sourceFormat == filesystem.SourceFormatHierarchy {
 			files = filesystem.FilterHierarchyFiles(rootDir, files)
+		} else {
+			// hydrate as a root repository to preview all the hydrated configs
+			validateOpts.Scope = declared.RootReconciler
 		}
 
 		filePaths := reader.FilePaths{
@@ -149,7 +153,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 
 			allObjects = append(allObjects, fileObjects...)
 		}
-		hydrate.ForEachCluster(parseOpts, validateOpts, clusterFilterFunc)
+		hydrate.ForEachCluster(cmd.Context(), parseOpts, validateOpts, clusterFilterFunc)
 
 		multiCluster := numClusters > 1
 		fileObjects := hydrate.GenerateFileObjects(multiCluster, allObjects...)

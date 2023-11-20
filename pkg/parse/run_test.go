@@ -57,7 +57,9 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 		t.Fatal(err)
 	}
 
-	parser.sourceFormat = filesystem.SourceFormatUnstructured
+	parser.RootOptions = &RootOptions{
+		SourceFormat: filesystem.SourceFormatUnstructured,
+	}
 	parser.Options = &Options{
 		Parser:             filesystem.NewParser(&reader.File{}),
 		StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,

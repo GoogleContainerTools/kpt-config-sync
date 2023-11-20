@@ -147,7 +147,10 @@ spec:
                     type: string
                   revision:
                     description: revision is the git revision (branch, tag, ref or
-                      commit) to fetch. Revision defaults to 'branch'.
+                      commit) to fetch. If 'revision' is not specified, it defaults
+                      to the HEAD of the branch that is specified in the 'branch'
+                      field. If neither 'revision' nor 'branch' is specified, it defaults
+                      to the HEAD of the 'master' branch.
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
@@ -1191,7 +1194,10 @@ spec:
                     type: string
                   revision:
                     description: revision is the git revision (branch, tag, ref or
-                      commit) to fetch. Revision defaults to 'branch'.
+                      commit) to fetch. If 'revision' is not specified, it defaults
+                      to the HEAD of the branch that is specified in the 'branch'
+                      field. If neither 'revision' nor 'branch' is specified, it defaults
+                      to the HEAD of the 'master' branch.
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git

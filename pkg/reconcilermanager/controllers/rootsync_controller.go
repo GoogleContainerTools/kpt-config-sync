@@ -899,7 +899,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	}
 	if len(roleRefs) == 0 {
 		// Backwards compatible behavior to default to cluster-admin
-		if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, "cluster-admin", reconcilerRef); err != nil {
+		if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, "cluster-admin", reconcilerRef, rsRef); err != nil {
 			return err
 		}
 		// Clean up any RoleRefs created previously that are no longer declared
@@ -914,7 +914,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 		return nil
 	}
 	// Add the base ClusterRole for basic root reconciler functionality
-	if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, RootSyncBaseClusterRoleName, reconcilerRef); err != nil {
+	if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, RootSyncBaseClusterRoleName, reconcilerRef, rsRef); err != nil {
 		return err
 	}
 	declaredRoleRefs := roleRefs
@@ -937,7 +937,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	// - if they are no longer declared in roleRefs, delete
 	for roleRef, binding := range currentRefMap {
 		if _, ok := declaredRefMap[roleRef]; ok { // update
-			if err := r.updateRBACBinding(ctx, reconcilerRef, binding); err != nil {
+			if err := r.updateRBACBinding(ctx, reconcilerRef, rsRef, binding); err != nil {
 				return errors.Wrap(err, "upserting RBAC Binding")
 			}
 		} else { // Clean up any RoleRefs created previously that are no longer declared
@@ -956,12 +956,17 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	return nil
 }
 
-func (r *RootSyncReconciler) upsertSharedClusterRoleBinding(ctx context.Context, name, clusterRole string, reconcilerRef types.NamespacedName) error {
+func (r *RootSyncReconciler) upsertSharedClusterRoleBinding(ctx context.Context, name, clusterRole string, reconcilerRef, rsRef types.NamespacedName) error {
 	crbRef := client.ObjectKey{Name: name}
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
+	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	// Remove sync-name label since the ClusterRoleBinding may be shared
+	delete(labelMap, metadata.SyncNameLabel)
+
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
+		core.AddLabels(childCRB, labelMap)
 		childCRB.OwnerReferences = nil
 		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
 		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))

@@ -75,6 +75,7 @@ func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceTyp
 	result.SetLabels(map[string]string{
 		metadata.SyncNamespaceLabel: reposyncNs,
 		metadata.SyncNameLabel:      reposyncName,
+		metadata.SyncKindLabel:      configsync.RepoSyncKind,
 	})
 	return result
 }
@@ -197,7 +198,11 @@ func TestUpsertAuthSecret(t *testing.T) {
 				},
 				client: tc.client,
 			}
-			sKey, err := r.upsertAuthSecret(ctx, tc.reposync, nsReconcilerKey)
+			labelMap := ManagedObjectLabelMap(configsync.RepoSyncKind, types.NamespacedName{
+				Name:      tc.reposync.Name,
+				Namespace: tc.reposync.Namespace,
+			})
+			sKey, err := r.upsertAuthSecret(ctx, tc.reposync, nsReconcilerKey, labelMap)
 			assert.Equal(t, tc.wantKey, sKey, "unexpected secret key returned")
 			if tc.wantError {
 				assert.Error(t, err, "expected upsertAuthSecret to error")

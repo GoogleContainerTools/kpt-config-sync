@@ -207,22 +207,18 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	rsRef := client.ObjectKeyFromObject(rs)
 	r.logger(ctx).V(3).Info("Reconciling managed objects")
 
+	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if _, err := r.upsertAuthSecret(ctx, rs, reconcilerRef); err != nil {
+	if _, err := r.upsertAuthSecret(ctx, rs, reconcilerRef, labelMap); err != nil {
 		return errors.Wrap(err, "upserting auth secret")
 	}
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if _, err := r.upsertCACertSecret(ctx, rs, reconcilerRef); err != nil {
+	if _, err := r.upsertCACertSecret(ctx, rs, reconcilerRef, labelMap); err != nil {
 		return errors.Wrap(err, "upserting CA cert secret")
-	}
-
-	labelMap := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      r.syncKind,
 	}
 
 	// Overwrite reconciler pod ServiceAccount.
@@ -983,8 +979,12 @@ func (r *RepoSyncReconciler) upsertSharedRoleBinding(ctx context.Context, reconc
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
+	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	// Remove sync-name label since the RoleBinding may be shared
+	delete(labelMap, metadata.SyncNameLabel)
 
 	op, err := CreateOrUpdate(ctx, r.client, childRB, func() error {
+		core.AddLabels(childRB, labelMap)
 		childRB.RoleRef = rolereference(RepoSyncBaseClusterRoleName, "ClusterRole")
 		childRB.Subjects = addSubject(childRB.Subjects, r.serviceAccountSubject(reconcilerRef))
 		return nil

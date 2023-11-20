@@ -1579,11 +1579,10 @@ func validateReconcilerClusterRoleBindings(fakeClient *syncerFake.Client, rootSy
 
 	opts := &client.ListOptions{}
 	opts.LabelSelector = client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNameLabel:      rootSyncName,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
-		}),
+		Selector: labels.SelectorFromSet(ManagedObjectLabelMap(
+			configsync.RootSyncKind,
+			types.NamespacedName{Name: rootSyncName, Namespace: configsync.ControllerNamespace},
+		)),
 	}
 	err := fakeClient.List(ctx, got, opts)
 	if err != nil {
@@ -1619,11 +1618,7 @@ func validateReconcilerRoleBindings(fakeClient *syncerFake.Client, syncKind stri
 
 	opts := &client.ListOptions{}
 	opts.LabelSelector = client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(map[string]string{
-			metadata.SyncKindLabel:      syncKind,
-			metadata.SyncNameLabel:      rsRef.Name,
-			metadata.SyncNamespaceLabel: rsRef.Namespace,
-		}),
+		Selector: labels.SelectorFromSet(ManagedObjectLabelMap(syncKind, rsRef)),
 	}
 	err := fakeClient.List(ctx, got, opts)
 	if err != nil {
@@ -1710,6 +1705,10 @@ func TestRootSyncCreateWithOverrideRoleRefs(t *testing.T) {
 		RootSyncBaseClusterRoleBindingName,
 		RootSyncBaseClusterRoleName,
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		core.Labels(map[string]string{
+			metadata.SyncKindLabel:      configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+		}),
 	)
 	defaultCrb.Subjects = addSubjectByName(nil, rootReconcilerName)
 
@@ -1745,6 +1744,10 @@ func TestRootSyncCreateWithOverrideRoleRefs(t *testing.T) {
 		RootSyncLegacyClusterRoleBindingName,
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		core.Labels(map[string]string{
+			metadata.SyncKindLabel:      configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+		}),
 	)
 	clusterAdminCRB.Subjects = addSubjectByName(nil, rootReconcilerName)
 	if err := validateClusterRoleBinding(clusterAdminCRB, fakeClient); err != nil {
@@ -1770,6 +1773,10 @@ func TestMigrationToIndividualClusterRoleBindingsWhenDefaultRootSyncExists(t *te
 		RootSyncLegacyClusterRoleBindingName,
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		core.Labels(map[string]string{
+			metadata.SyncKindLabel:      configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+		}),
 	)
 	oldBinding.Subjects = addSubjectByName(nil, rs1ReconcilerName)
 	oldBinding.Subjects = addSubjectByName(oldBinding.Subjects, rs2ReconcilerName)
@@ -2049,6 +2056,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 		RootSyncLegacyClusterRoleBindingName,
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+		core.Labels(map[string]string{
+			metadata.SyncKindLabel:      configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+		}),
 	)
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)
 	rootContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)

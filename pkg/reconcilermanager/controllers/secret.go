@@ -24,7 +24,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -60,7 +59,7 @@ func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
 // upsertAuthSecret creates or updates the auth secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, labelMap map[string]string) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	switch {
 	case shouldUpsertGitSecret(rs):
@@ -69,7 +68,7 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
 		}
-		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
 	case shouldUpsertHelmSecret(rs):
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef))
@@ -77,7 +76,7 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
 		}
-		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
 	default:
 		// No secret required
@@ -88,7 +87,7 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 // upsertCACertSecret creates or updates the CA cert secret in the
 // config-management-system namespace using an existing secret in the RepoSync
 // namespace.
-func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName) (client.ObjectKey, error) {
+func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, labelMap map[string]string) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
 	if shouldUpsertCACertSecret(rs) {
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef))
@@ -96,7 +95,7 @@ func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.Rep
 		if err != nil {
 			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")
 		}
-		_, err = r.upsertSecret(ctx, cmsSecretRef, rsRef, userSecret)
+		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
 	}
 	// No secret required
@@ -133,16 +132,13 @@ func getUserSecret(ctx context.Context, c client.Client, nsSecretRef client.Obje
 
 // upsertSecret creates or updates a secret in config-management-system
 // namespace using an existing user secret.
-func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef, rsRef types.NamespacedName, userSecret *corev1.Secret) (controllerutil.OperationResult, error) {
+func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef types.NamespacedName, userSecret *corev1.Secret, labelMap map[string]string) (controllerutil.OperationResult, error) {
 	cmsSecret := &corev1.Secret{}
 	cmsSecret.Name = cmsSecretRef.Name
 	cmsSecret.Namespace = cmsSecretRef.Namespace
 
 	op, err := CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
-		core.AddLabels(cmsSecret, map[string]string{
-			metadata.SyncNamespaceLabel: rsRef.Namespace,
-			metadata.SyncNameLabel:      rsRef.Name,
-		})
+		core.AddLabels(cmsSecret, labelMap)
 		// Copy user secret data & type to managed secret
 		cmsSecret.Data = userSecret.Data
 		cmsSecret.Type = userSecret.Type

@@ -649,7 +649,7 @@ func ManagedObjectLabelMap(syncKind string, rsRef types.NamespacedName) map[stri
 	}
 }
 
-func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef types.NamespacedName, binding client.Object) error {
+func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, binding client.Object) error {
 	existingBinding := binding.DeepCopyObject()
 	subjects := []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
 	if crb, ok := binding.(*rbacv1.ClusterRoleBinding); ok {
@@ -657,6 +657,7 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef ty
 	} else if rb, ok := binding.(*rbacv1.RoleBinding); ok {
 		rb.Subjects = subjects
 	}
+	core.AddLabels(binding, ManagedObjectLabelMap(r.syncKind, rsRef))
 	if equality.Semantic.DeepEqual(existingBinding, binding) {
 		return nil
 	}

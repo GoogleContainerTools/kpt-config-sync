@@ -102,9 +102,10 @@ func clusterrolebinding(name string, role string, opts ...core.MetaMutator) *rba
 func rootReconcilerClusterRoleBinding(reconcilerName, clusterRole string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
 	defaultOpts := []core.MetaMutator{
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNameLabel:      rootsyncName,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNameLabel:            rootsyncName,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 		core.GenerateName(reconcilerName + "-"),
 		core.Generation(1),
@@ -121,9 +122,10 @@ func rootReconcilerRoleBinding(roleRef v1beta1.RootSyncRoleRef, opts ...core.Met
 	defaultOpts := []core.MetaMutator{
 		core.Namespace(roleRef.Namespace),
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNameLabel:      rootsyncName,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNameLabel:            rootsyncName,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 		core.GenerateName("root-reconciler-my-root-sync-"),
 		core.Generation(1),
@@ -1706,8 +1708,9 @@ func TestRootSyncCreateWithOverrideRoleRefs(t *testing.T) {
 		RootSyncBaseClusterRoleName,
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 	)
 	defaultCrb.Subjects = addSubjectByName(nil, rootReconcilerName)
@@ -1745,8 +1748,9 @@ func TestRootSyncCreateWithOverrideRoleRefs(t *testing.T) {
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 	)
 	clusterAdminCRB.Subjects = addSubjectByName(nil, rootReconcilerName)
@@ -1774,8 +1778,9 @@ func TestMigrationToIndividualClusterRoleBindingsWhenDefaultRootSyncExists(t *te
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 	)
 	oldBinding.Subjects = addSubjectByName(nil, rs1ReconcilerName)
@@ -1812,9 +1817,10 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	}
 
 	labels := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs.Namespace,
+		metadata.SyncNameLabel:            rs.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(
@@ -2039,9 +2045,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	validateRootSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
-		metadata.SyncNamespaceLabel: rs1.Namespace,
-		metadata.SyncNameLabel:      rs1.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs1.Namespace,
+		metadata.SyncNameLabel:            rs1.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	serviceAccount1 := fake.ServiceAccountObject(
@@ -2057,8 +2064,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 		"cluster-admin",
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		core.Labels(map[string]string{
-			metadata.SyncKindLabel:      configsync.RootSyncKind,
-			metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+			metadata.SyncKindLabel:            configsync.RootSyncKind,
+			metadata.SyncNamespaceLabel:       configsync.ControllerNamespace,
+			metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 		}),
 	)
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)
@@ -2104,9 +2112,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	validateRootSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
-		metadata.SyncNamespaceLabel: rs2.Namespace,
-		metadata.SyncNameLabel:      rs2.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs2.Namespace,
+		metadata.SyncNameLabel:            rs2.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	rootContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
@@ -2161,9 +2170,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	validateRootSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
-		metadata.SyncNamespaceLabel: rs3.Namespace,
-		metadata.SyncNameLabel:      rs3.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs3.Namespace,
+		metadata.SyncNameLabel:            rs3.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	rootContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
@@ -2222,9 +2232,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	validateRootSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
-		metadata.SyncNamespaceLabel: rs4.Namespace,
-		metadata.SyncNameLabel:      rs4.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs4.Namespace,
+		metadata.SyncNameLabel:            rs4.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	rootContainerEnvs4 := testReconciler.populateContainerEnvs(ctx, rs4, rootReconcilerName4)
@@ -2283,9 +2294,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	validateRootSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{
-		metadata.SyncNamespaceLabel: rs5.Namespace,
-		metadata.SyncNameLabel:      rs5.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs5.Namespace,
+		metadata.SyncNameLabel:            rs5.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	rootContainerEnvs5 := testReconciler.populateContainerEnvs(ctx, rs5, rootReconcilerName5)
@@ -2934,9 +2946,10 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 
 	labels := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs.Namespace,
+		metadata.SyncNameLabel:            rs.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(

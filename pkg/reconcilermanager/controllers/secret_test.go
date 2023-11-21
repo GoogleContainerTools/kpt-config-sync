@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,9 +74,10 @@ func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceTyp
 	result := fake.SecretObject(name, opts...)
 	result.Data = secretData(t, data, auth, sourceType)
 	result.SetLabels(map[string]string{
-		metadata.SyncNamespaceLabel: reposyncNs,
-		metadata.SyncNameLabel:      reposyncName,
-		metadata.SyncKindLabel:      configsync.RepoSyncKind,
+		metadata.SyncNamespaceLabel:       reposyncNs,
+		metadata.SyncNameLabel:            reposyncName,
+		metadata.SyncKindLabel:            configsync.RepoSyncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	})
 	return result
 }

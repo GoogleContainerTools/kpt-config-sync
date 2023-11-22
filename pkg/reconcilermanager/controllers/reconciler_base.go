@@ -606,8 +606,15 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 
 		// Our finalizer is present, so setup managed resource objects.
 		if err := setupFn(ctx); err != nil {
+			var nre *NoRetryError
+			if errors.As(err, &nre) {
+				r.logger(ctx).Error(err, "Setup failed (waiting for resource status to change)")
+				// Return nil to avoid triggering immediate retry.
+				return nil
+			}
 			return errors.Wrap(err, "setup failed")
 		}
+
 		return nil
 	}
 	// Else - the object is being deleted.
@@ -622,6 +629,12 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerManagerFinalizer) {
 		// Our finalizer is present, so delete managed resource objects.
 		if err := teardownFn(ctx); err != nil {
+			var nre *NoRetryError
+			if errors.As(err, &nre) {
+				r.logger(ctx).Error(err, "Teardown failed (waiting for resource status to change)")
+				// Return nil to avoid triggering immediate retry.
+				return nil
+			}
 			return errors.Wrap(err, "teardown failed")
 		}
 

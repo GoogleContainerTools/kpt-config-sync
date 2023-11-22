@@ -185,3 +185,23 @@ func NewObjectReconcileErrorWithID(err error, id core.ID, status kstatus.Status)
 		Cause:  err,
 	}
 }
+
+// NoRetryError is an error that should not immediately trigger a reconcile retry.
+type NoRetryError struct {
+	Cause error
+}
+
+// NewNoRetryError constructs a new NewNoRetryError
+func NewNoRetryError(cause error) *NoRetryError {
+	return &NoRetryError{Cause: cause}
+}
+
+// Error returns the error message
+func (n *NoRetryError) Error() string {
+	return fmt.Sprintf("no retry: %v", n.Cause)
+}
+
+// Unwrap returns the cause of this NoRetryError
+func (n *NoRetryError) Unwrap() error {
+	return n.Cause
+}

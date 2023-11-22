@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -190,6 +191,160 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RepoSync reconciler and its dependencies were deleted")
+	for _, obj := range repoSyncDependencies {
+		validateObjectNotFound(nt, obj)
+	}
+}
+
+// TestReconcilerManagerTeardownRootSyncWithReconcileTimeout validates that when a
+// RootSync is deleted, the reconciler-manager finalizer handles deletion of the
+// reconciler and its dependencies managed by the reconciler-manager even when
+// the deletions fail to reconcile.
+func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.WithDelegatedControl, ntopts.Unstructured)
+
+	rootSync := &v1beta1.RootSync{}
+	rootSync.Name = configsync.RootSyncName
+	rootSync.Namespace = configsync.ControllerNamespace
+	rootSyncReconcilerNN := core.RootReconcilerObjectKey(rootSync.Name)
+	nt.T.Log("Validate the RootSync reconciler and its dependencies")
+	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
+
+	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
+	nt.T.Cleanup(func() {
+		rootSyncReconciler := &appsv1.Deployment{}
+		if err := nt.KubeClient.Get(rootSyncReconcilerNN.Name, rootSyncReconcilerNN.Namespace, rootSyncReconciler); err != nil {
+			if apierrors.IsNotFound(err) { // Happy path - exit
+				return
+			}
+			nt.T.Fatal(err) // unexpected error
+		}
+		if testutils.RemoveFinalizer(rootSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
+			// The test failed to remove the finalizer. Remove to enable deletion.
+			if err := nt.KubeClient.Update(rootSyncReconciler); err != nil {
+				nt.T.Fatal(err)
+			}
+			nt.T.Log("removed finalizer in test cleanup")
+		}
+	})
+	rootSyncReconciler := &appsv1.Deployment{}
+	if err := nt.KubeClient.Get(rootSyncReconcilerNN.Name, rootSyncReconcilerNN.Namespace, rootSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+	testutils.AppendFinalizer(rootSyncReconciler, nomostest.ConfigSyncE2EFinalizer)
+	if err := nt.KubeClient.Update(rootSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Deleting the RootSync should result in a Reconciling error")
+	if err := nt.KubeClient.Delete(rootSync); err != nil {
+		nt.T.Fatal(err)
+	}
+	expectedCondition := v1beta1.RootSyncCondition{
+		Message: "deleting reconciler deployment: Deployment (config-management-system/root-reconciler) Terminating: failed to watch for deletion of Deployment: config-management-system/root-reconciler: timed out waiting for the condition",
+		Reason:  "Deployment",
+		Status:  metav1.ConditionTrue,
+		Type:    v1beta1.RootSyncReconciling,
+	}
+	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(&expectedCondition)})
+	require.NoError(t, err)
+	nt.T.Log("Validate that all of the managed resources still exist")
+	validateRootSyncDependencies(nt, rootSync.Name)
+
+	nt.T.Log("Remove the fake finalizer on the Deployment to enable cleanup")
+	rootSyncReconciler = &appsv1.Deployment{}
+	if err := nt.KubeClient.Get(rootSyncReconcilerNN.Name, rootSyncReconcilerNN.Namespace, rootSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+	testutils.RemoveFinalizer(rootSyncReconciler, nomostest.ConfigSyncE2EFinalizer)
+	if err := nt.KubeClient.Update(rootSyncReconciler); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("The RootSync should be deleted")
+	if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Validate the RootSync reconciler and its dependencies were deleted")
+	for _, obj := range rootSyncDependencies {
+		validateObjectNotFound(nt, obj)
+	}
+}
+
+// TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout validates that when a
+// RepoSync is deleted, the reconciler-manager finalizer handles deletion of the
+// reconciler and its dependencies managed by the reconciler-manager even when
+// the deletions fail to reconcile.
+func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
+	testNamespace := "reconcile-timeout"
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.WithDelegatedControl, ntopts.Unstructured,
+		ntopts.NamespaceRepo(testNamespace, configsync.RepoSyncName))
+
+	repoSync := &v1beta1.RepoSync{}
+	repoSync.Name = configsync.RepoSyncName
+	repoSync.Namespace = testNamespace
+	repoSyncReconcilerNN := core.NsReconcilerObjectKey(repoSync.Namespace, repoSync.Name)
+	nt.T.Log("Validate the RepoSync reconciler and its dependencies")
+	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
+
+	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
+	nt.T.Cleanup(func() {
+		repoSyncReconciler := &appsv1.Deployment{}
+		if err := nt.KubeClient.Get(repoSyncReconcilerNN.Name, repoSyncReconcilerNN.Namespace, repoSyncReconciler); err != nil {
+			if apierrors.IsNotFound(err) { // Happy path - exit
+				return
+			}
+			nt.T.Fatal(err) // unexpected error
+		}
+		if testutils.RemoveFinalizer(repoSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
+			// The test failed to remove the finalizer. Remove to enable deletion.
+			if err := nt.KubeClient.Update(repoSyncReconciler); err != nil {
+				nt.T.Fatal(err)
+			}
+			nt.T.Log("removed finalizer in test cleanup")
+		}
+	})
+	repoSyncReconciler := &appsv1.Deployment{}
+	if err := nt.KubeClient.Get(repoSyncReconcilerNN.Name, repoSyncReconcilerNN.Namespace, repoSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+	testutils.AppendFinalizer(repoSyncReconciler, nomostest.ConfigSyncE2EFinalizer)
+	if err := nt.KubeClient.Update(repoSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Deleting the RepoSync should result in a Reconciling error")
+	if err := nt.KubeClient.Delete(repoSync); err != nil {
+		nt.T.Fatal(err)
+	}
+	expectedCondition := v1beta1.RepoSyncCondition{
+		Message: "deleting reconciler deployment: Deployment (config-management-system/ns-reconciler-reconcile-timeout) Terminating: failed to watch for deletion of Deployment: config-management-system/ns-reconciler-reconcile-timeout: timed out waiting for the condition",
+		Reason:  "Deployment",
+		Status:  metav1.ConditionTrue,
+		Type:    v1beta1.RepoSyncReconciling,
+	}
+	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace,
+		[]testpredicates.Predicate{testpredicates.RepoSyncHasCondition(&expectedCondition)})
+	require.NoError(t, err)
+	nt.T.Log("Validate that all of the managed resources still exist")
+	validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
+
+	nt.T.Log("Remove the fake finalizer on the Deployment to enable cleanup")
+	repoSyncReconciler = &appsv1.Deployment{}
+	if err := nt.KubeClient.Get(repoSyncReconcilerNN.Name, repoSyncReconcilerNN.Namespace, repoSyncReconciler); err != nil {
+		nt.T.Fatal(err)
+	}
+	testutils.RemoveFinalizer(repoSyncReconciler, nomostest.ConfigSyncE2EFinalizer)
+	if err := nt.KubeClient.Update(repoSyncReconciler); err != nil {
+		nt.T.Error(err)
+	}
+	nt.T.Log("The RepoSync should be deleted")
+	if err := nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Validate the RepoSync reconciler and its dependencies were deleted")
 	for _, obj := range repoSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}

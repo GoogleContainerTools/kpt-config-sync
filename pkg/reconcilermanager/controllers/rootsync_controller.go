@@ -352,7 +352,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 			// still making progress
 			rootsync.SetReconciling(rs, statusErr.ID.Kind, err.Error())
 			rootsync.ClearCondition(rs, v1beta1.RootSyncStalled)
-			return nil // no retry - wait for next event
+			return NewNoRetryError(err) // no immediate retry - wait for next event
 		default:
 			// failed or invalid
 			rootsync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))

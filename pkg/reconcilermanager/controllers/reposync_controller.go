@@ -394,7 +394,7 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 			// still making progress
 			reposync.SetReconciling(rs, statusErr.ID.Kind, err.Error())
 			reposync.ClearCondition(rs, v1beta1.RepoSyncStalled)
-			return nil // no immediate retry - wait for next event
+			return NewNoRetryError(err) // no immediate retry - wait for next event
 		default:
 			// failed or invalid
 			reposync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))

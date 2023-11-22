@@ -18,10 +18,13 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
@@ -29,7 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
-func TestOverrideLogLevel(t *testing.T) {
+func TestOverrideRootSyncLogLevel(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI)
 
 	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
@@ -104,5 +107,110 @@ func TestOverrideLogLevel(t *testing.T) {
 	err = nt.KubeClient.MergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": -3}]}}}`)
 	if !strings.Contains(err.Error(), minError) {
 		nt.T.Fatalf("Expecting invalid value error: %q, got %s", minError, err.Error())
+	}
+}
+
+func TestOverrideRepoSyncLogLevel(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	frontendReconcilerNN := core.NsReconcilerObjectKey(frontendNamespace, configsync.RepoSyncName)
+	frontendNN := nomostest.RepoSyncNN(frontendNamespace, configsync.RepoSyncName)
+	repoSyncFrontend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, frontendNN)
+
+	// Verify ns-reconciler-frontend uses the default log level
+	nsReconcilerFrontendDeployment := &appsv1.Deployment{}
+	err := nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, nsReconcilerFrontendDeployment,
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+	)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nsReconcilerFrontendDeploymentGeneration := nsReconcilerFrontendDeployment.Generation
+
+	// Override the log level of the reconciler container of ns-reconciler-frontend
+	repoSyncFrontend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			LogLevels: []v1beta1.ContainerLogLevelOverride{
+				{
+					ContainerName: "reconciler",
+					LogLevel:      3,
+				},
+			},
+		},
+	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// validate override and make sure other containers are unaffected
+	nsReconcilerFrontendDeploymentGeneration++
+	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+	)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Override the log level of the all containers in ns-reconciler-frontend
+	repoSyncFrontend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
+		OverrideSpec: v1beta1.OverrideSpec{
+			LogLevels: []v1beta1.ContainerLogLevelOverride{
+				{
+					ContainerName: "reconciler",
+					LogLevel:      7,
+				},
+				{
+					ContainerName: "git-sync",
+					LogLevel:      9,
+				},
+				{
+					ContainerName: "otel-agent",
+					LogLevel:      5,
+				},
+			},
+		},
+	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// validate override for all containers
+	nsReconcilerFrontendDeploymentGeneration++
+	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=7"),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=9"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=5"),
+	)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Clear override from repoSync Frontend
+	repoSyncFrontend.Spec.Override = nil
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear override from repoSync Frontend"))
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	nsReconcilerFrontendDeploymentGeneration++
+
+	// validate log level value are back to default for all containers
+	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
+		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
+		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+	)
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }

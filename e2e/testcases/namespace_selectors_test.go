@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,7 +28,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/kinds"
@@ -137,27 +135,41 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
 		unselectedResourcesWithShoestoreNSSOnly,
 	)
-	if err := nt.Validate(
+
+	// The annotation might be updated after the current sync completes as the
+	// reconciler continues to apply after sending the k8s API call to update the
+	// annotation. If the sync completes before the reconciler-manager finishes
+	// reconciling the RootSync, the annotation will remain unchanged.
+	// So, the test watches the update and reassures only expected objects are applied.
+	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		&v1beta1.RootSync{},
-		testpredicates.MissingAnnotation(metadata.DynamicNSSelectorEnabledAnnotationKey),
-	); err != nil {
+		[]testpredicates.Predicate{
+			testpredicates.MissingAnnotation(metadata.DynamicNSSelectorEnabledAnnotationKey),
+		}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(
+	if err := nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerName(configsync.RootSyncName),
 		configsync.ControllerNamespace,
-		&appsv1.Deployment{},
-		testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.DynamicNSSelectorEnabled),
-	); err != nil {
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.DynamicNSSelectorEnabled),
+		}); err != nil {
 		nt.T.Fatal(err)
 	}
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Only expected resources are applied after reconciler-manager updates the
+	// annotation and the reconciler finishes the sync loop.
+	validateSelectedAndUnselectedResources(nt,
+		selectedResourcesWithShoestoreNSSOnly,
+		unselectedResourcesWithShoestoreNSSOnly,
+	)
 
 	nt.Logger.Info("Update NamespaceSelector to use dynamic mode")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode

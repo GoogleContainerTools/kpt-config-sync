@@ -828,7 +828,10 @@ func (h *eventHandler) removeFromInventory(rg *live.InventoryResourceGroup, objs
 	if err != nil {
 		return err
 	}
-	newObjs := removeFrom(oldObjs, objs)
+	newObjs, err := removeFrom(oldObjs, objs, h.clientSet.Client.Scheme())
+	if err != nil {
+		return err
+	}
 	err = rg.Store(newObjs, nil)
 	if err != nil {
 		return err

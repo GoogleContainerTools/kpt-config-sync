@@ -66,9 +66,8 @@ func ToTypedObject(obj runtime.Object, scheme *runtime.Scheme) (runtime.Object, 
 	if err != nil {
 		return nil, err
 	}
-	// Conversion sometimes drops the GVK, so add it back in.
-	tObj.GetObjectKind().SetGroupVersionKind(gvk)
-
+	// Remove GVK on typed objects
+	tObj.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{})
 	return tObj, nil
 }
 
@@ -105,6 +104,8 @@ func ToTypedWithVersion(obj runtime.Object, targetGVK schema.GroupVersionKind, s
 	if err != nil {
 		return nil, err
 	}
+	// Remove GVK on typed objects
+	versionedObj.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{})
 	return versionedObj, nil
 }
 

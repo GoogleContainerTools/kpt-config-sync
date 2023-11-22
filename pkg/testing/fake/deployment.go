@@ -16,15 +16,24 @@ package fake
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/kinds"
 )
 
-// DeploymentObject initializes a Deployment.
+// DeploymentObject initializes a v1.Deployment.
 func DeploymentObject(opts ...core.MetaMutator) *appsv1.Deployment {
-	result := &appsv1.Deployment{TypeMeta: ToTypeMeta(kinds.Deployment())}
+	result := &appsv1.Deployment{}
+	defaultMutate(result)
+	mutate(result, opts...)
+
+	return result
+}
+
+// DeploymentObjectV1beta1 initializes a v1beta1.Deployment.
+func DeploymentObjectV1beta1(opts ...core.MetaMutator) *appsv1beta1.Deployment {
+	result := &appsv1beta1.Deployment{}
 	defaultMutate(result)
 	mutate(result, opts...)
 

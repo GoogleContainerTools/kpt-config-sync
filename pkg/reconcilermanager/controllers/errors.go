@@ -17,6 +17,7 @@ package controllers
 import (
 	"fmt"
 
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -157,32 +158,26 @@ func (oripe *ObjectReconcileError) Unwrap() error {
 }
 
 // NewObjectReconcileError constructs a new ObjectReconcileError
-func NewObjectReconcileError(err error, obj client.Object, status kstatus.Status) *ObjectReconcileError {
-	id := core.IDOf(obj)
-	if id.GroupKind.Empty() {
-		gvk, lookupErr := kinds.Lookup(obj, core.Scheme)
-		if lookupErr != nil {
-			// Invalid or unregistered resource type - err probably already includes the same message
-			// Fake the kind with the struct type
-			id.Kind = fmt.Sprintf("%T", obj)
-		} else {
-			id.GroupKind = gvk.GroupKind()
-		}
+func NewObjectReconcileError(cause error, obj client.Object, status kstatus.Status) *ObjectReconcileError {
+	id, err := core.LookupID(obj, core.Scheme)
+	if err != nil {
+		// If you see this error, please update core.Scheme!
+		klog.Fatalf("Unregistered or invalid resource type: %v", err)
 	}
 	return &ObjectReconcileError{
 		ID:     id,
 		Status: status,
-		Cause:  err,
+		Cause:  cause,
 	}
 }
 
 // NewObjectReconcileErrorWithID constructs a new ObjectReconcileError with the
 // specified ID.
-func NewObjectReconcileErrorWithID(err error, id core.ID, status kstatus.Status) *ObjectReconcileError {
+func NewObjectReconcileErrorWithID(cause error, id core.ID, status kstatus.Status) *ObjectReconcileError {
 	return &ObjectReconcileError{
 		ID:     id,
 		Status: status,
-		Cause:  err,
+		Cause:  cause,
 	}
 }
 

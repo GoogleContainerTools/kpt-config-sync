@@ -53,8 +53,7 @@ func TestFilteredWatcher(t *testing.T) {
 	syncName := "rs"
 
 	deployment1 := fake.DeploymentObject(core.Name("hello"))
-	deployment1Beta := fake.DeploymentObject(core.Name("hello"))
-	deployment1Beta.GetObjectKind().SetGroupVersionKind(deployment1Beta.GroupVersionKind().GroupKind().WithVersion("beta1"))
+	deployment1Beta := fake.DeploymentObjectV1beta1(core.Name("hello"))
 
 	deployment2 := fake.DeploymentObject(core.Name("world"))
 	deployment3 := fake.DeploymentObject(core.Name("nomes"))
@@ -98,9 +97,9 @@ func TestFilteredWatcher(t *testing.T) {
 				},
 			}},
 			want: []core.ID{
-				core.IDOf(deployment1),
-				core.IDOf(deployment2),
-				core.IDOf(deployment3),
+				queue.IDOf(deployment1),
+				queue.IDOf(deployment2),
+				queue.IDOf(deployment3),
 			},
 		},
 		{
@@ -134,7 +133,7 @@ func TestFilteredWatcher(t *testing.T) {
 				},
 			}},
 			want: []core.ID{
-				core.IDOf(managedBySelfDeployment),
+				queue.IDOf(managedBySelfDeployment),
 			},
 		},
 		{
@@ -208,7 +207,7 @@ func TestFilteredWatcher(t *testing.T) {
 				},
 			}},
 			want: []core.ID{
-				core.IDOf(deployment1),
+				queue.IDOf(deployment1),
 			},
 		},
 		{
@@ -232,7 +231,7 @@ func TestFilteredWatcher(t *testing.T) {
 				// No Stop
 			}},
 			want: []core.ID{
-				core.IDOf(deployment1),
+				queue.IDOf(deployment1),
 			},
 			wantErr: status.InternalWrapf(context.Canceled,
 				"remediator watch stopped for %s", kinds.Deployment()),
@@ -275,7 +274,7 @@ func TestFilteredWatcher(t *testing.T) {
 				// No Stop
 			}},
 			want: []core.ID{
-				core.IDOf(deployment1),
+				queue.IDOf(deployment1),
 			},
 			wantErr: status.InternalWrapf(context.Canceled,
 				"remediator watch stopped for %s", kinds.Deployment()),
@@ -313,8 +312,8 @@ func TestFilteredWatcher(t *testing.T) {
 				},
 			},
 			want: []core.ID{
-				core.IDOf(deployment1),
-				core.IDOf(deployment2),
+				queue.IDOf(deployment1),
+				queue.IDOf(deployment2),
 			},
 			wantErr: nil,
 		},
@@ -379,7 +378,7 @@ func TestFilteredWatcher(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Object queue was shut down unexpectedly: %v", err)
 				}
-				got = append(got, core.IDOf(obj))
+				got = append(got, queue.IDOf(obj))
 			}
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {

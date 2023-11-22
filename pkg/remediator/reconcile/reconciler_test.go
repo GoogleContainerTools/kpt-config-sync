@@ -236,7 +236,11 @@ func TestRemediator_Reconcile(t *testing.T) {
 			}
 			c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 			// Simulate the Parser having already parsed the resource and recorded it.
-			d := makeDeclared(t, "unused", tc.declared)
+			var declaredObjs []client.Object
+			if tc.declared != nil {
+				declaredObjs = append(declaredObjs, tc.declared)
+			}
+			d := makeDeclared(t, "unused", declaredObjs...)
 
 			r := newReconciler(declared.RootReconciler, configsync.RootSyncName, c.Applier(), d, testingfake.NewFightHandler())
 
@@ -257,11 +261,11 @@ func TestRemediator_Reconcile(t *testing.T) {
 					err, tc.wantError)
 			}
 
-			if tc.want == nil {
-				c.Check(t)
-			} else {
-				c.Check(t, tc.want)
+			var wantedObjs []client.Object
+			if tc.want != nil {
+				wantedObjs = append(wantedObjs, tc.want)
 			}
+			c.Check(t, wantedObjs...)
 		})
 	}
 }
@@ -356,7 +360,11 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			}
 			fakeClient := testingfake.NewClient(t, core.Scheme, existingObjs...)
 			// Simulate the Parser having already parsed the resource and recorded it.
-			d := makeDeclared(t, "abc123", tc.declared)
+			var declaredObjs []client.Object
+			if tc.declared != nil {
+				declaredObjs = append(declaredObjs, tc.declared)
+			}
+			d := makeDeclared(t, "abc123", declaredObjs...)
 
 			fakeApplier := &testingfake.Applier{Client: fakeClient}
 			fakeApplier.CreateError = tc.createError

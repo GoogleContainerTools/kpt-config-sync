@@ -19,12 +19,11 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/kinds"
 )
 
 // NamespaceObject returns an initialized Namespace.
 func NamespaceObject(name string, opts ...core.MetaMutator) *v1.Namespace {
-	result := &v1.Namespace{TypeMeta: ToTypeMeta(kinds.Namespace())}
+	result := &v1.Namespace{}
 	defaultMutate(result)
 	mutate(result, core.Name(name))
 	mutate(result, opts...)

@@ -18,7 +18,6 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/repo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,7 +31,7 @@ func RepoVersion(version string) core.MetaMutator {
 
 // RepoObject returns an initialized Repo.
 func RepoObject(opts ...core.MetaMutator) *v1.Repo {
-	result := &v1.Repo{TypeMeta: ToTypeMeta(kinds.Repo())}
+	result := &v1.Repo{}
 	defaultMutate(result)
 	mutate(result, core.Name(repo.DefaultName))
 	RepoVersion(repo.CurrentVersion)(result)

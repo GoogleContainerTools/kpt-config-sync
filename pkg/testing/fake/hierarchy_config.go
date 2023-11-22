@@ -19,7 +19,6 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -48,7 +47,7 @@ func HierarchyConfig(opts ...core.MetaMutator) ast.FileObject {
 
 // HierarchyConfigObject initializes a HierarchyConfig.
 func HierarchyConfigObject(opts ...core.MetaMutator) *v1.HierarchyConfig {
-	result := &v1.HierarchyConfig{TypeMeta: ToTypeMeta(kinds.HierarchyConfig())}
+	result := &v1.HierarchyConfig{}
 	defaultMutate(result)
 	for _, opt := range opts {
 		opt(result)

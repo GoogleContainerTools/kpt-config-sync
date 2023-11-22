@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -86,7 +87,7 @@ func TestObjMetaFrom(t *testing.T) {
 			Kind:  "Deployment",
 		},
 	}
-	actual := ObjMetaFromObject(d)
+	actual := mustObjMetaFromObject(t, d)
 	if actual != expected {
 		t.Errorf("expected %v but got %v", expected, actual)
 	}
@@ -94,7 +95,7 @@ func TestObjMetaFrom(t *testing.T) {
 
 func TestIDFrom(t *testing.T) {
 	d := fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
-	meta := ObjMetaFromObject(d)
+	meta := mustObjMetaFromObject(t, d)
 	id := idFrom(meta)
 	if id != core.IDOf(d) {
 		t.Errorf("expected %v but got %v", core.IDOf(d), id)
@@ -111,47 +112,47 @@ func TestRemoveFrom(t *testing.T) {
 		{
 			name: "toRemove is empty",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: nil,
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "all toRemove are in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "some toRemove are not in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
 				fake.ConfigMapObject(core.Name("cm"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "toRemove are the same as original objects",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default")),
@@ -162,7 +163,8 @@ func TestRemoveFrom(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := removeFrom(tc.allObjMeta, tc.objs)
+			actual, err := removeFrom(tc.allObjMeta, tc.objs, core.Scheme)
+			require.NoError(t, err)
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.SortSlices(
 				func(x, y object.ObjMetadata) bool { return x.String() < y.String() })); diff != "" {
 				t.Errorf("%s: Diff of removeFrom is: %s", tc.name, diff)
@@ -180,4 +182,15 @@ func TestGetObjectSize(t *testing.T) {
 	if size > 1000 {
 		t.Fatalf("An empty inventory object shouldn't have a large size: %d", size)
 	}
+}
+
+// mustObjMetaFromObject constructs an ObjMetadata representing the Object.
+//
+// Fails the test if the GroupKind is not set and not registered in core.Scheme.
+func mustObjMetaFromObject(t *testing.T, obj client.Object) object.ObjMetadata {
+	objMeta, err := ObjMetaFromObject(obj, core.Scheme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return objMeta
 }

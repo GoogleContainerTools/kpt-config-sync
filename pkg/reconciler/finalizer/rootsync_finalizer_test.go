@@ -414,7 +414,10 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 					return err
 				}
 				// delete RootSync to cause update error
-				return fakeClient.Delete(ctx, rs)
+				if err := fakeClient.Delete(ctx, rs); err != nil {
+					return fmt.Errorf("deleting: %w", err)
+				}
+				return nil
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerErrorWrap(
@@ -630,10 +633,13 @@ func yamlToTypedObject(t *testing.T, yml string) client.Object {
 func updateToRemoveFinalizers(ctx context.Context, fakeClient *fake.Client, obj client.Object) error {
 	key := client.ObjectKeyFromObject(obj)
 	if err := fakeClient.Get(ctx, key, obj); err != nil {
-		return err
+		return fmt.Errorf("getting: %w", err)
 	}
 	obj.SetFinalizers(nil)
-	return fakeClient.Update(ctx, obj)
+	if err := fakeClient.Update(ctx, obj); err != nil {
+		return fmt.Errorf("updating: %w", err)
+	}
+	return nil
 }
 
 type fakeDestroyer struct {

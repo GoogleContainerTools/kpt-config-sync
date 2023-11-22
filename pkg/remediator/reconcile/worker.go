@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -96,7 +95,7 @@ func (w *Worker) processNextObject(ctx context.Context) error {
 }
 
 func (w *Worker) process(ctx context.Context, obj client.Object) error {
-	id := core.IDOf(obj)
+	id := queue.IDOf(obj)
 	var toRemediate client.Object
 	if queue.WasDeleted(ctx, obj) {
 		// Passing a nil Object to the reconciler signals that the accompanying ID

@@ -920,11 +920,11 @@ func (r *RepoSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
-		return validate.OciSpec(rs.Spec.Oci, rs)
+		return validate.OciSpec(rs.Spec.Oci, rs, r.syncKind)
 	case v1beta1.HelmSource:
-		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs)
+		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs, r.syncKind)
 	default:
-		return validate.InvalidSourceType(rs)
+		return validate.InvalidSourceType(rs, r.syncKind)
 	}
 }
 
@@ -934,11 +934,11 @@ func (r *RepoSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, 
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil
 	}
-	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
+	return validate.ValuesFileRefs(ctx, r.client, rs, r.syncKind, rs.Spec.Helm.ValuesFileRefs)
 }
 
 func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
-	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
+	if err := validate.GitSpec(rs.Spec.Git, rs, r.syncKind); err != nil {
 		return err
 	}
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {

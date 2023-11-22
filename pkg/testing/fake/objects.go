@@ -15,7 +15,6 @@
 package fake
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	clusterregistry "k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1"
+	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -37,9 +37,7 @@ import (
 
 // NamespaceSelectorObject returns an initialized NamespaceSelector.
 func NamespaceSelectorObject(opts ...core.MetaMutator) *v1.NamespaceSelector {
-	result := &v1.NamespaceSelector{
-		TypeMeta: ToTypeMeta(kinds.NamespaceSelector()),
-	}
+	result := &v1.NamespaceSelector{}
 	defaultMutate(result)
 	mutate(result, opts...)
 
@@ -65,7 +63,7 @@ func NamespaceSelectorAtPathWithName(path string, name string, opts ...core.Meta
 
 // ResourceQuotaObject initializes a ResouceQuota.
 func ResourceQuotaObject(opts ...core.MetaMutator) *corev1.ResourceQuota {
-	obj := &corev1.ResourceQuota{TypeMeta: ToTypeMeta(kinds.ResourceQuota())}
+	obj := &corev1.ResourceQuota{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -74,7 +72,7 @@ func ResourceQuotaObject(opts ...core.MetaMutator) *corev1.ResourceQuota {
 
 // RoleBindingObject initializes a RoleBinding.
 func RoleBindingObject(opts ...core.MetaMutator) *rbacv1.RoleBinding {
-	obj := &rbacv1.RoleBinding{TypeMeta: ToTypeMeta(kinds.RoleBinding())}
+	obj := &rbacv1.RoleBinding{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -93,7 +91,7 @@ func RoleBinding(opts ...core.MetaMutator) ast.FileObject {
 
 // RoleBindingV1Beta1Object initializes a v1beta1 RoleBinding.
 func RoleBindingV1Beta1Object(opts ...core.MetaMutator) *rbacv1beta1.RoleBinding {
-	obj := &rbacv1beta1.RoleBinding{TypeMeta: ToTypeMeta(kinds.RoleBindingV1Beta1())}
+	obj := &rbacv1beta1.RoleBinding{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -112,7 +110,7 @@ func RoleBindingV1Beta1(opts ...core.MetaMutator) ast.FileObject {
 
 // ClusterRoleObject returns an rbacv1 ClusterRole.
 func ClusterRoleObject(opts ...core.MetaMutator) *rbacv1.ClusterRole {
-	obj := &rbacv1.ClusterRole{TypeMeta: ToTypeMeta(kinds.ClusterRole())}
+	obj := &rbacv1.ClusterRole{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -126,7 +124,7 @@ func ClusterRole(opts ...core.MetaMutator) ast.FileObject {
 
 // ClusterRoleBindingAtPath returns a ClusterRoleBinding at the specified path.
 func ClusterRoleBindingAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
-	obj := &rbacv1.ClusterRoleBinding{TypeMeta: ToTypeMeta(kinds.ClusterRoleBinding())}
+	obj := &rbacv1.ClusterRoleBinding{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -135,7 +133,7 @@ func ClusterRoleBindingAtPath(path string, opts ...core.MetaMutator) ast.FileObj
 
 // ClusterRoleBindingObject initializes a ClusterRoleBinding.
 func ClusterRoleBindingObject(opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
-	obj := &rbacv1.ClusterRoleBinding{TypeMeta: ToTypeMeta(kinds.ClusterRoleBinding())}
+	obj := &rbacv1.ClusterRoleBinding{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -144,7 +142,7 @@ func ClusterRoleBindingObject(opts ...core.MetaMutator) *rbacv1.ClusterRoleBindi
 
 // ClusterRoleBindingV1Beta1Object initializes a v1beta1 ClusterRoleBinding.
 func ClusterRoleBindingV1Beta1Object(opts ...core.MetaMutator) *rbacv1beta1.ClusterRoleBinding {
-	obj := &rbacv1beta1.ClusterRoleBinding{TypeMeta: ToTypeMeta(kinds.ClusterRoleBindingV1Beta1())}
+	obj := &rbacv1beta1.ClusterRoleBinding{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -158,7 +156,7 @@ func ClusterRoleBinding(opts ...core.MetaMutator) ast.FileObject {
 
 // ClusterRoleAtPath returns a ClusterRole at the specified path.
 func ClusterRoleAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
-	obj := &rbacv1.ClusterRole{TypeMeta: ToTypeMeta(kinds.ClusterRole())}
+	obj := &rbacv1.ClusterRole{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -167,7 +165,7 @@ func ClusterRoleAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 
 // ClusterSelectorObject initializes a ClusterSelector object.
 func ClusterSelectorObject(opts ...core.MetaMutator) *v1.ClusterSelector {
-	obj := &v1.ClusterSelector{TypeMeta: ToTypeMeta(kinds.ClusterSelector())}
+	obj := &v1.ClusterSelector{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -186,7 +184,7 @@ func ClusterSelectorAtPath(path string, opts ...core.MetaMutator) ast.FileObject
 
 // ClusterObject returns a fake Cluster object
 func ClusterObject(opts ...core.MetaMutator) *clusterregistry.Cluster {
-	obj := &clusterregistry.Cluster{TypeMeta: ToTypeMeta(kinds.Cluster())}
+	obj := &clusterregistry.Cluster{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -217,9 +215,7 @@ func RepoSyncV1Beta1(ns, name string, opts ...core.MetaMutator) ast.FileObject {
 
 // CustomResourceDefinitionV1Beta1Object returns an initialized CustomResourceDefinition.
 func CustomResourceDefinitionV1Beta1Object(opts ...core.MetaMutator) *v1beta1.CustomResourceDefinition {
-	result := &v1beta1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1Beta1()),
-	}
+	result := &v1beta1.CustomResourceDefinition{}
 	defaultMutate(result)
 	mutate(result, opts...)
 
@@ -234,28 +230,19 @@ func CustomResourceDefinitionV1Beta1(opts ...core.MetaMutator) ast.FileObject {
 
 // CustomResourceDefinitionV1Beta1Unstructured returns a v1Beta1 CRD as an unstructured
 func CustomResourceDefinitionV1Beta1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Beta1Object(opts...)
-	jsn, err := json.Marshal(o)
+	obj := CustomResourceDefinitionV1Beta1Object(opts...)
+	uObj, err := kinds.ToUnstructured(obj, core.Scheme)
 	if err != nil {
 		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
+		klog.Fatal(err)
 	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1Beta1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	normalizeUnstructured(u)
-	return u
+	normalizeUnstructured(uObj)
+	return uObj
 }
 
 // CustomResourceDefinitionV1Object returns an initialized CustomResourceDefinition.
 func CustomResourceDefinitionV1Object(opts ...core.MetaMutator) *apiextensionsv1.CustomResourceDefinition {
-	result := &apiextensionsv1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1()),
-	}
+	result := &apiextensionsv1.CustomResourceDefinition{}
 	defaultMutate(result)
 	mutate(result, opts...)
 
@@ -270,29 +257,39 @@ func CustomResourceDefinitionV1(opts ...core.MetaMutator) ast.FileObject {
 
 // CustomResourceDefinitionV1Unstructured returns a v1 CRD as an unstructured
 func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Object(opts...)
-	jsn, err := json.Marshal(o)
+	obj := CustomResourceDefinitionV1Object(opts...)
+	uObj, err := kinds.ToUnstructured(obj, core.Scheme)
 	if err != nil {
 		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
+		klog.Fatal(err)
 	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	normalizeUnstructured(u)
-	return u
+	normalizeUnstructured(uObj)
+	return uObj
 }
 
 // AnvilAtPath returns an Anvil Custom Resource.
 func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(kinds.Anvil())
+	obj.SetName("anvil")
+	defaultMutate(obj)
+	mutate(obj, opts...)
+
+	return FileObject(obj, path)
+}
+
+// AnvilCRDAtPath returns an Anvil Custom Resource Definition.
+func AnvilCRDAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
+	gvk := kinds.Anvil()
 	obj := &v1beta1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.Anvil()),
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "anvil",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group: gvk.Group,
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Kind: gvk.Kind,
+			},
 		},
 	}
 	defaultMutate(obj)
@@ -303,7 +300,7 @@ func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 
 // SyncObject returns a Sync configured for a particular
 func SyncObject(gk schema.GroupKind, opts ...core.MetaMutator) *v1.Sync {
-	obj := &v1.Sync{TypeMeta: ToTypeMeta(kinds.Sync())}
+	obj := &v1.Sync{}
 	obj.Name = strings.ToLower(gk.String())
 	obj.ObjectMeta.Finalizers = append(obj.ObjectMeta.Finalizers, v1.SyncFinalizer)
 	obj.Spec.Group = gk.Group
@@ -315,7 +312,7 @@ func SyncObject(gk schema.GroupKind, opts ...core.MetaMutator) *v1.Sync {
 
 // PersistentVolumeObject returns a PersistentVolume Object.
 func PersistentVolumeObject(opts ...core.MetaMutator) *corev1.PersistentVolume {
-	result := &corev1.PersistentVolume{TypeMeta: ToTypeMeta(kinds.PersistentVolume())}
+	result := &corev1.PersistentVolume{}
 	defaultMutate(result)
 	mutate(result, opts...)
 
@@ -324,7 +321,7 @@ func PersistentVolumeObject(opts ...core.MetaMutator) *corev1.PersistentVolume {
 
 // RoleObject initializes a Role.
 func RoleObject(opts ...core.MetaMutator) *rbacv1.Role {
-	obj := &rbacv1.Role{TypeMeta: ToTypeMeta(kinds.Role())}
+	obj := &rbacv1.Role{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -343,7 +340,7 @@ func Role(opts ...core.MetaMutator) ast.FileObject {
 
 // ConfigMapObject returns an initialized ConfigMap.
 func ConfigMapObject(opts ...core.MetaMutator) *corev1.ConfigMap {
-	obj := &corev1.ConfigMap{TypeMeta: ToTypeMeta(kinds.ConfigMap())}
+	obj := &corev1.ConfigMap{}
 	defaultMutate(obj)
 	mutate(obj, opts...)
 
@@ -366,7 +363,7 @@ func ToTypeMeta(gvk schema.GroupVersionKind) metav1.TypeMeta {
 // ServiceObject returns a default-initialized Service with the passed opts
 // applied.
 func ServiceObject(opts ...core.MetaMutator) *corev1.Service {
-	result := &corev1.Service{TypeMeta: ToTypeMeta(kinds.Service())}
+	result := &corev1.Service{}
 	defaultMutate(result)
 	mutate(result, opts...)
 
@@ -375,7 +372,7 @@ func ServiceObject(opts ...core.MetaMutator) *corev1.Service {
 
 // ServiceAccountObject returns an initialized ServiceAccount.
 func ServiceAccountObject(name string, opts ...core.MetaMutator) *corev1.ServiceAccount {
-	result := &corev1.ServiceAccount{TypeMeta: ToTypeMeta(kinds.ServiceAccount())}
+	result := &corev1.ServiceAccount{}
 	mutate(result, core.Name(name))
 	mutate(result, opts...)
 

@@ -16,6 +16,7 @@ package applier
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -23,7 +24,9 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
@@ -61,12 +64,19 @@ func toUnstructured(objs []client.Object) ([]*unstructured.Unstructured, status.
 }
 
 // ObjMetaFromObject constructs an ObjMetadata representing the Object.
-func ObjMetaFromObject(obj client.Object) object.ObjMetadata {
+//
+// Errors if the GroupKind is not set and not registered in core.Scheme.
+func ObjMetaFromObject(obj client.Object, scheme *runtime.Scheme) (object.ObjMetadata, error) {
+	gvk, err := kinds.Lookup(obj, scheme)
+	if err != nil {
+		return object.ObjMetadata{},
+			fmt.Errorf("ObjMetaFromObject: failed to lookup GroupKind of %T: %w", obj, err)
+	}
 	return object.ObjMetadata{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
-		GroupKind: obj.GetObjectKind().GroupVersionKind().GroupKind(),
-	}
+		GroupKind: gvk.GroupKind(),
+	}, nil
 }
 
 func objMetaFromID(id core.ID) object.ObjMetadata {
@@ -97,17 +107,16 @@ func idFromInventory(rg *live.InventoryResourceGroup) core.ID {
 	}
 }
 
-func removeFrom(all []object.ObjMetadata, toRemove []client.Object) []object.ObjMetadata {
+func removeFrom(all []object.ObjMetadata, toRemove []client.Object, scheme *runtime.Scheme) ([]object.ObjMetadata, error) {
 	m := map[object.ObjMetadata]bool{}
 	for _, a := range all {
 		m[a] = true
 	}
 
 	for _, r := range toRemove {
-		meta := object.ObjMetadata{
-			Namespace: r.GetNamespace(),
-			Name:      r.GetName(),
-			GroupKind: r.GetObjectKind().GroupVersionKind().GroupKind(),
+		meta, err := ObjMetaFromObject(r, scheme)
+		if err != nil {
+			return nil, err
 		}
 		delete(m, meta)
 	}
@@ -115,7 +124,7 @@ func removeFrom(all []object.ObjMetadata, toRemove []client.Object) []object.Obj
 	for key := range m {
 		results = append(results, key)
 	}
-	return results
+	return results, nil
 }
 
 func getObjectSize(u *unstructured.Unstructured) (int, error) {

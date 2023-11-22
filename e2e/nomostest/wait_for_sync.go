@@ -411,7 +411,6 @@ func (nt *NT) WaitForRootSyncStalledError(rsNamespace, rsName, reason, message s
 					Name:      rsName,
 					Namespace: rsNamespace,
 				},
-				TypeMeta: fake.ToTypeMeta(kinds.RootSyncV1Beta1()),
 			}
 			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err
@@ -442,7 +441,6 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 					Name:      rsName,
 					Namespace: rsNamespace,
 				},
-				TypeMeta: fake.ToTypeMeta(kinds.RepoSyncV1Beta1()),
 			}
 			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err

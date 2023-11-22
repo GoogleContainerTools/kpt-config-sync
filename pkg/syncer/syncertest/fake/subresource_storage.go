@@ -134,7 +134,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 		return errors.Wrap(err, "failed to update input object")
 	}
 	// TODO: Remove GVK from typed objects
-	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	// obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
 		return ss.Storage.sendPutEvent(ctx, id, watch.Modified)
 	}

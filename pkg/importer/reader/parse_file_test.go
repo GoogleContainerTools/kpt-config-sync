@@ -116,10 +116,8 @@ rules:
 						"apiVersion": "rbac/v1",
 						"kind":       "Role",
 						"metadata": map[string]interface{}{
-							"name":        "admin",
-							"namespace":   "shipping",
-							"labels":      make(map[string]interface{}),
-							"annotations": make(map[string]interface{}),
+							"name":      "admin",
+							"namespace": "shipping",
 						},
 						"rules": []interface{}{
 							map[string]interface{}{
@@ -203,15 +201,6 @@ metadata:
 				return
 			} else if err != nil {
 				t.Fatal(errors.Wrap(err, "unexpected error"))
-			}
-
-			for _, a := range actual {
-				if a.GetLabels() == nil {
-					a.SetLabels(make(map[string]string))
-				}
-				if a.GetAnnotations() == nil {
-					a.SetAnnotations(make(map[string]string))
-				}
 			}
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatal(diff)
@@ -448,14 +437,6 @@ inventory:
 				return
 			} else if err != nil {
 				t.Fatal(errors.Wrap(err, "unexpected error"))
-			}
-			for _, a := range actual {
-				if a.GetLabels() == nil {
-					a.SetLabels(make(map[string]string))
-				}
-				if a.GetAnnotations() == nil {
-					a.SetAnnotations(make(map[string]string))
-				}
 			}
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatal(diff)

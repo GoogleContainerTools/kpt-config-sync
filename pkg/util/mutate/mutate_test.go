@@ -360,7 +360,7 @@ func TestSpec(t *testing.T) {
 			// Expect err, because the UID in the request is older than the one on the server
 			expectedError: errors.Wrap(
 				errors.New("metadata.uid has changed: object may have been re-created"),
-				"failed to update object: apps/v1.Deployment(*v1.Deployment)[default/hello-world]"),
+				"failed to update object: (*v1.Deployment)[default/hello-world]"),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				// no change persisted
@@ -403,6 +403,8 @@ func yamlToTypedObject(t *testing.T, yml string) client.Object {
 		t.Fatalf("error decoding yaml: %v", err)
 		return nil
 	}
+	// Clear GVK - Typed objects don't need them
+	obj.SetGroupVersionKind(schema.GroupVersionKind{})
 	return obj
 }
 

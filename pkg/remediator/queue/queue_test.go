@@ -31,7 +31,7 @@ func add(toAdd client.Object, wantLen int) action {
 		t.Helper()
 		q.Add(toAdd)
 		if q.Len() != wantLen {
-			t.Errorf("got length %d after adding object %q; want length %d", q.Len(), core.IDOf(toAdd), wantLen)
+			t.Errorf("got length %d after adding object %q; want length %d", q.Len(), IDOf(toAdd), wantLen)
 		}
 	}
 }
@@ -57,7 +57,7 @@ func done(toDone client.Object, wantLen int) action {
 		t.Helper()
 		q.Done(toDone)
 		if q.Len() != wantLen {
-			t.Errorf("got length %d after marking object %q done; want length %d", q.Len(), core.IDOf(toDone), wantLen)
+			t.Errorf("got length %d after marking object %q done; want length %d", q.Len(), IDOf(toDone), wantLen)
 		}
 	}
 }

@@ -177,7 +177,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.NonRootRepos[nn3] = nn3Repo
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn3)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
+	if err := nomostest.SetDependencies(nrs3, nt.Scheme, nrb3); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn3.Name), nrs3))
@@ -204,7 +204,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.NonRootRepos[nn5] = nn5Repo
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn5)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {
+	if err := nomostest.SetDependencies(nrs5, nt.Scheme, nrb5); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.RootRepos[rr1].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn5.Name), nrs5))

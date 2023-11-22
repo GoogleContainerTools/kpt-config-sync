@@ -189,7 +189,7 @@ func TestFightDetector(t *testing.T) {
 
 			now := time.Now()
 			for id, updates := range tc.updates {
-				u := fake.Unstructured(id.WithVersion(""), core.Namespace(id.Namespace), core.Name(id.Name))
+				u := fake.Unstructured(id.WithVersion("v1"), core.Namespace(id.Namespace), core.Name(id.Name))
 
 				aboveThreshold := false
 				logged := false

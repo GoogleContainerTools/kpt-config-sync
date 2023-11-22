@@ -61,22 +61,26 @@ func TestToFileObjects(t *testing.T) {
 			name: "conflict resolved",
 			objects: []ast.FileObject{
 				fake.Unstructured(schema.GroupVersionKind{
-					Group: "rbac",
-					Kind:  "ClusterRole",
+					Group:   "rbac",
+					Kind:    "ClusterRole",
+					Version: "v1",
 				}, core.Name("alice")),
 				fake.Unstructured(schema.GroupVersionKind{
-					Group: "oauth",
-					Kind:  "ClusterRole",
+					Group:   "oauth",
+					Kind:    "ClusterRole",
+					Version: "v1",
 				}, core.Name("alice")),
 			},
 			expected: []ast.FileObject{
 				fake.UnstructuredAtPath(schema.GroupVersionKind{
-					Group: "rbac",
-					Kind:  "ClusterRole",
+					Group:   "rbac",
+					Kind:    "ClusterRole",
+					Version: "v1",
 				}, "defaultcluster/clusterrole.rbac_alice.yaml", core.Name("alice")),
 				fake.UnstructuredAtPath(schema.GroupVersionKind{
-					Group: "oauth",
-					Kind:  "ClusterRole",
+					Group:   "oauth",
+					Kind:    "ClusterRole",
+					Version: "v1",
 				}, "defaultcluster/clusterrole.oauth_alice.yaml", core.Name("alice")),
 			},
 		},

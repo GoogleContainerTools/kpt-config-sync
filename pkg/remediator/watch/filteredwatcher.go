@@ -180,14 +180,14 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 	// There should be no conflict if the resource manager key annotation is not found
 	// because any reconciler can manage a non-ConfigSync managed resource.
 	if !found {
-		klog.Warningf("No management conflict as the object %q is not managed by Config Sync", core.IDOf(object))
+		klog.Warningf("No management conflict as the object %q is not managed by Config Sync", queue.IDOf(object))
 		return
 	}
 	// Root reconciler can override resource managed by namespace reconciler.
 	// It is not a conflict in this case.
 	if !declared.IsRootManager(manager) {
 		klog.Warningf("No management conflict as the root reconciler %q should update the object %q that is managed by the namespace reconciler %q",
-			w.syncName, core.IDOf(object), manager)
+			w.syncName, queue.IDOf(object), manager)
 		return
 	}
 
@@ -460,26 +460,26 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 
 	if klog.V(5).Enabled() {
 		klog.V(5).Infof("Received watch event for object: %q (generation: %d): %s",
-			core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
+			queue.IDOf(object), object.GetGeneration(), log.AsJSON(object))
 	} else {
 		klog.V(3).Infof("Received watch event for object: %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+			queue.IDOf(object), object.GetGeneration())
 	}
 
 	// filter objects.
 	if !w.shouldProcess(object) {
 		klog.V(4).Infof("Ignoring event for object: %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+			queue.IDOf(object), object.GetGeneration())
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
 		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+			queue.IDOf(object), object.GetGeneration())
 		object = queue.MarkDeleted(ctx, object)
 	} else {
 		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
+			queue.IDOf(object), object.GetGeneration())
 	}
 
 	w.queue.Add(object)
@@ -495,7 +495,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		w.conflictHandler.RemoveConflictError(gvknn)
 		return true
 	}
-	id := core.IDOf(object)
+	id := queue.IDOf(object)
 	decl, commit, found := w.resources.Get(id)
 	if !found {
 		// The resource is neither declared nor managed by the same reconciler, so don't manage it.
@@ -506,7 +506,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	// its declaration. Otherwise we expect to get another event for the same
 	// object but with a matching GVK so we can actually compare it to its
 	// declaration.
-	if object.GetObjectKind().GroupVersionKind() != decl.GroupVersionKind() {
+	if gvknn.GroupVersionKind() != decl.GroupVersionKind() {
 		return false
 	}
 

@@ -40,6 +40,10 @@ const (
 	RepoSyncKind = "RepoSync"
 	// RootSyncKind is the kind of the RepoSync resource.
 	RootSyncKind = "RootSync"
+	// RootSyncCRDName is the name of RootSync CRD
+	RootSyncCRDName = "rootsyncs.configsync.gke.io"
+	// RepoSyncCRDName is the name of RepoSync CRD
+	RepoSyncCRDName = "reposyncs.configsync.gke.io"
 )
 
 const (

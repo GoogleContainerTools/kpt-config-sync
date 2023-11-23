@@ -41,6 +41,8 @@ import (
 
 type watchForAllSyncsOptions struct {
 	timeout            time.Duration
+	readyCheck         bool
+	syncRootRepos      bool
 	syncNamespaceRepos bool
 	rootSha1Fn         Sha1Func
 	repoSha1Fn         Sha1Func
@@ -74,10 +76,24 @@ func WithRepoSha1Func(fn Sha1Func) WatchForAllSyncsOptions {
 	}
 }
 
-// RootSyncOnly specifies that only the root-sync repo should be synced.
+// RootSyncOnly specifies that only the RootRepos should be synced.
 func RootSyncOnly() WatchForAllSyncsOptions {
 	return func(options *watchForAllSyncsOptions) {
 		options.syncNamespaceRepos = false
+	}
+}
+
+// RepoSyncOnly specifies that only the NonRootRepos should be synced.
+func RepoSyncOnly() WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.syncRootRepos = false
+	}
+}
+
+// SkipReadyCheck specifies not to wait for all Config Sync components to be ready.
+func SkipReadyCheck() WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.readyCheck = false
 	}
 }
 
@@ -111,6 +127,8 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	waitForRepoSyncsOptions := watchForAllSyncsOptions{
 		timeout:            nt.DefaultWaitTimeout,
+		readyCheck:         true,
+		syncRootRepos:      true,
 		syncNamespaceRepos: true,
 		rootSha1Fn:         DefaultRootSha1Fn,
 		repoSha1Fn:         DefaultRepoSha1Fn,
@@ -121,21 +139,25 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		option(&waitForRepoSyncsOptions)
 	}
 
-	if err := ValidateMultiRepoDeployments(nt); err != nil {
-		return err
+	if waitForRepoSyncsOptions.readyCheck {
+		if err := WaitForConfigSyncReady(nt); err != nil {
+			return err
+		}
 	}
 
 	tg := taskgroup.New()
 
-	for name := range nt.RootRepos {
-		nn := RootSyncNN(name)
-		syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
-		tg.Go(func() error {
-			return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
-				waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
-				&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
-				testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
-		})
+	if waitForRepoSyncsOptions.syncRootRepos {
+		for name := range nt.RootRepos {
+			nn := RootSyncNN(name)
+			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
+					waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
+					&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
+					testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
+			})
+		}
 	}
 
 	if waitForRepoSyncsOptions.syncNamespaceRepos {

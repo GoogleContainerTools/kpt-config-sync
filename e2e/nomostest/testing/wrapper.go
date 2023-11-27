@@ -16,6 +16,7 @@ package testing
 
 import (
 	"strings"
+	"time"
 
 	"kpt.dev/configsync/e2e"
 )
@@ -94,7 +95,7 @@ func (w *Wrapper) Cleanup(f func()) {
 
 // Error is equivalent to Log followed by Fail.
 func (w *Wrapper) Error(args ...interface{}) {
-	args = append([]interface{}{errorPrefix}, args...)
+	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
 
 	w.t.Helper()
 	w.t.Error(args...)
@@ -102,8 +103,8 @@ func (w *Wrapper) Error(args ...interface{}) {
 
 // Errorf is equivalent to Logf followed by Fail.
 func (w *Wrapper) Errorf(format string, args ...interface{}) {
-	format = "%s " + format
-	args = append([]interface{}{errorPrefix}, args...)
+	format = "%s %s " + format
+	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
 
 	w.t.Helper()
 	w.t.Errorf(format, args...)
@@ -128,7 +129,7 @@ func (w *Wrapper) Failed() bool {
 
 // Fatal is equivalent to Log followed by FailNow.
 func (w *Wrapper) Fatal(args ...interface{}) {
-	args = append([]interface{}{errorPrefix}, args...)
+	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
 
 	w.t.Helper()
 	w.t.Fatal(args...)
@@ -136,8 +137,8 @@ func (w *Wrapper) Fatal(args ...interface{}) {
 
 // Fatalf is equivalent to Logf followed by FailNow.
 func (w *Wrapper) Fatalf(format string, args ...interface{}) {
-	format = "%s " + format
-	args = append([]interface{}{errorPrefix}, args...)
+	format = "%s %s " + format
+	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
 
 	w.t.Helper()
 	w.t.Fatalf(format, args...)
@@ -153,6 +154,7 @@ func (w *Wrapper) Helper() {
 // Log generates the output. It's always at the same stack depth.
 func (w *Wrapper) Log(args ...interface{}) {
 	w.t.Helper()
+	args = append([]interface{}{time.Now().UTC()}, args...)
 	w.t.Log(args...)
 }
 
@@ -160,6 +162,8 @@ func (w *Wrapper) Log(args ...interface{}) {
 // records the text in the error log.
 func (w *Wrapper) Logf(format string, args ...interface{}) {
 	w.t.Helper()
+	format = "%s " + format
+	args = append([]interface{}{time.Now().UTC()}, args...)
 	w.t.Logf(format, args...)
 }
 
@@ -170,6 +174,7 @@ func (w *Wrapper) Name() string {
 
 // Skip is equivalent to Log followed by SkipNow.
 func (w *Wrapper) Skip(args ...interface{}) {
+	args = append([]interface{}{time.Now().UTC()}, args...)
 	w.t.Skip(args...)
 }
 
@@ -181,6 +186,8 @@ func (w *Wrapper) SkipNow() {
 
 // Skipf is equivalent to Logf followed by SkipNow.
 func (w *Wrapper) Skipf(format string, args ...interface{}) {
+	format = "%s " + format
+	args = append([]interface{}{time.Now().UTC()}, args...)
 	w.t.Skipf(format, args...)
 }
 

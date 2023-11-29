@@ -40,48 +40,53 @@ import (
 )
 
 const (
-	bookstoreNS = "bookstore"
-	shoestoreNS = "shoestore"
+	bookstoreNS      = "bookstore"
+	shoestoreNS      = "shoestore"
+	bookstoreNSSName = "bookstore-nss"
+	shoestoreNSSName = "shoestore-nss"
+	bookstoreCMName  = "cm-bookstore"
+	bookstoreRQName  = "rq-bookstore"
+	shoestoreCMName  = "cm-shoestore"
 )
 
 var (
-	bookstoreNSS = fake.NamespaceSelectorObject(core.Name(bookstoreNS))
-	bookstoreCM  = fake.ConfigMapObject(core.Name("cm-bookstore"),
-		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSS.Name))
-	bookstoreRQ = fake.ResourceQuotaObject(core.Name("rq-bookstore"),
-		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSS.Name))
-
-	shoestoreNSS = fake.NamespaceSelectorObject(core.Name(shoestoreNS))
-	shoestoreCM  = fake.ConfigMapObject(core.Name("cm-shoestore"),
-		core.Annotation(metadata.NamespaceSelectorAnnotationKey, shoestoreNSS.Name))
-
 	selectedResourcesWithBookstoreNSSAndShoestoreNSS = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCM.Name)),
-		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQ.Name)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCM.Name)),
+		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
+		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
+		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
 	}
 
 	unselectedResourcesWithBookstoreNSSAndShoestoreNSS = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCM.Name)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCM.Name)),
-		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQ.Name)),
+		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
+		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
+		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
 	}
 
 	selectedResourcesWithShoestoreNSSOnly = []client.Object{
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCM.Name)),
+		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
 	}
 
 	unselectedResourcesWithShoestoreNSSOnly = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCM.Name)),
-		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQ.Name)),
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCM.Name)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCM.Name)),
-		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQ.Name)),
+		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
+		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
+		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
+		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
+		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
 	}
 )
 
 func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
+
+	bookstoreNSS := fake.NamespaceSelectorObject(core.Name(bookstoreNSSName))
+	bookstoreCM := fake.ConfigMapObject(core.Name(bookstoreCMName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
+	bookstoreRQ := fake.ResourceQuotaObject(core.Name(bookstoreRQName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
+
+	shoestoreNSS := fake.NamespaceSelectorObject(core.Name(shoestoreNSSName))
+	shoestoreCM := fake.ConfigMapObject(core.Name(shoestoreCMName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, shoestoreNSSName))
 
 	nt.T.Log("Add Namespaces, NamespaceSelectors and Namespace-scoped resources")
 	bookstoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": bookstoreNS}
@@ -118,6 +123,16 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 
 func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector, ntopts.Unstructured)
+
+	bookstoreNSS := fake.NamespaceSelectorObject(core.Name(bookstoreNSSName))
+	bookstoreCM := fake.ConfigMapObject(core.Name(bookstoreCMName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
+	bookstoreRQ := fake.ResourceQuotaObject(core.Name(bookstoreRQName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
+
+	shoestoreNSS := fake.NamespaceSelectorObject(core.Name(shoestoreNSSName))
+	shoestoreCM := fake.ConfigMapObject(core.Name(shoestoreCMName),
+		core.Annotation(metadata.NamespaceSelectorAnnotationKey, shoestoreNSSName))
 
 	nt.T.Log("Add Namespaces, NamespaceSelectors and Namespace-scoped resources")
 	bookstoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": bookstoreNS}

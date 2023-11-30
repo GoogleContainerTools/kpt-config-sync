@@ -30,6 +30,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -559,7 +560,8 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 		return nil
 	}
 
-	allRootSyncs := &v1beta1.RootSyncList{}
+	allRootSyncs := &metav1.PartialObjectMetadataList{}
+	allRootSyncs.SetGroupVersionKind(kinds.RootSyncListV1Beta1())
 	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
 		klog.Errorf("failed to list all RootSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
@@ -604,7 +606,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	return requests
 }
 
-func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile.Request {
+func requeueRootSyncRequest(obj client.Object, rs client.Object) []reconcile.Request {
 	rsRef := client.ObjectKeyFromObject(rs)
 	klog.Infof("Changes to %s (%s) triggers a reconciliation for the RootSync (%s)",
 		obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), rsRef)
@@ -616,7 +618,8 @@ func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile
 }
 
 func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
-	allRootSyncs := &v1beta1.RootSyncList{}
+	allRootSyncs := &metav1.PartialObjectMetadataList{}
+	allRootSyncs.SetGroupVersionKind(kinds.RootSyncListV1Beta1())
 	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
 		klog.Errorf("RootSync list failed: %v", err)
 		return nil

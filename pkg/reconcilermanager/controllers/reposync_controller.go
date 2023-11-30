@@ -29,6 +29,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -583,7 +584,8 @@ func (r *RepoSyncReconciler) mapMembershipToRepoSyncs() func(client.Object) []re
 }
 
 func (r *RepoSyncReconciler) requeueAllRepoSyncs() []reconcile.Request {
-	allRepoSyncs := &v1beta1.RepoSyncList{}
+	allRepoSyncs := &metav1.PartialObjectMetadataList{}
+	allRepoSyncs.SetGroupVersionKind(kinds.RepoSyncListV1Beta1())
 	if err := r.client.List(context.Background(), allRepoSyncs); err != nil {
 		klog.Errorf("RepoSync list failed: %v", err)
 		return nil
@@ -778,7 +780,8 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.
 		}
 	}
 
-	allRepoSyncs := &v1beta1.RepoSyncList{}
+	allRepoSyncs := &metav1.PartialObjectMetadataList{}
+	allRepoSyncs.SetGroupVersionKind(kinds.RepoSyncListV1Beta1())
 	if err := r.client.List(context.Background(), allRepoSyncs); err != nil {
 		klog.Errorf("failed to list all RepoSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)

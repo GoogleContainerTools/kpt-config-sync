@@ -194,6 +194,11 @@ func ConfigMap() schema.GroupVersionKind {
 	return corev1.SchemeGroupVersion.WithKind("ConfigMap")
 }
 
+// ConfigMapList returns the canonical ConfigMapList GroupVersionKind.
+func ConfigMapList() schema.GroupVersionKind {
+	return corev1.SchemeGroupVersion.WithKind("ConfigMapList")
+}
+
 // Job returns the canonical Job GroupVersionKind.
 func Job() schema.GroupVersionKind {
 	return batchv1.SchemeGroupVersion.WithKind("Job")
@@ -224,6 +229,11 @@ func RepoSyncV1Beta1() schema.GroupVersionKind {
 	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RepoSyncKind)
 }
 
+// RepoSyncListV1Beta1 returns the v1beta1 RepoSyncList GroupVersionKind.
+func RepoSyncListV1Beta1() schema.GroupVersionKind {
+	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RepoSyncKind + "List")
+}
+
 // RootSyncV1Alpha1 returns the canonical RootSync GroupVersionKind.
 func RootSyncV1Alpha1() schema.GroupVersionKind {
 	return v1alpha1.SchemeGroupVersion.WithKind(configsync.RootSyncKind)
@@ -234,6 +244,11 @@ func RootSyncV1Beta1() schema.GroupVersionKind {
 	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RootSyncKind)
 }
 
+// RootSyncListV1Beta1 returns the v1beta1 RootSyncList GroupVersionKind.
+func RootSyncListV1Beta1() schema.GroupVersionKind {
+	return configsyncv1beta1.SchemeGroupVersion.WithKind(configsync.RootSyncKind + "List")
+}
+
 // Service returns the canonical Service GroupVersionKind.
 func Service() schema.GroupVersionKind {
 	return corev1.SchemeGroupVersion.WithKind("Service")
@@ -242,6 +257,11 @@ func Service() schema.GroupVersionKind {
 // Secret returns the canonical Secret GroupVersionKind.
 func Secret() schema.GroupVersionKind {
 	return corev1.SchemeGroupVersion.WithKind("Secret")
+}
+
+// SecretList returns the canonical SecretList GroupVersionKind.
+func SecretList() schema.GroupVersionKind {
+	return corev1.SchemeGroupVersion.WithKind("SecretList")
 }
 
 // ServiceAccount returns the canonical ServiceAccount GroupVersionKind.

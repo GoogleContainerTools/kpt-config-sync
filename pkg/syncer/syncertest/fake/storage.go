@@ -345,12 +345,30 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 		uList.Items = append(uList.Items, *uObj)
 	}
 
-	// Convert from the UnstructuredList to whatever type the caller asked for.
-	// If it's the same, it'll just do a DeepCopyInto.
-	err = ms.scheme.Convert(uList, list, nil)
-	if err != nil {
-		return err
+	switch val := list.(type) {
+	case *metav1.PartialObjectMetadataList:
+		for _, uObj := range uList.Items {
+			// This is a bit of a hack to form PartialObjectMetadata, since there
+			// doesn't seem to be a better conversion method exposed.
+			obj := &metav1.PartialObjectMetadata{}
+			bytes, err := json.Marshal(uObj.Object)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(bytes, obj); err != nil {
+				return err
+			}
+			val.Items = append(val.Items, *obj)
+		}
+	default:
+		// Convert from the UnstructuredList to whatever type the caller asked for.
+		// If it's the same, it'll just do a DeepCopyInto.
+		err = ms.scheme.Convert(uList, list, nil)
+		if err != nil {
+			return err
+		}
 	}
+
 	// TODO: Does the normal client.List always populate GVK on typed objects?
 	// Some of the code seems to require this...
 	list.GetObjectKind().SetGroupVersionKind(listGVK)

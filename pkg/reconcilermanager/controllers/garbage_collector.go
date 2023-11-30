@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -92,7 +93,8 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 }
 
 func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerRef types.NamespacedName) error {
-	secretList := &corev1.SecretList{}
+	secretList := &metav1.PartialObjectMetadataList{}
+	secretList.SetGroupVersionKind(kinds.SecretList())
 	if err := r.client.List(ctx, secretList, client.InNamespace(reconcilerRef.Namespace)); err != nil {
 		return NewObjectOperationErrorForListWithNamespace(err, secretList, OperationList, reconcilerRef.Namespace)
 	}
@@ -176,7 +178,8 @@ func (r *RepoSyncReconciler) deleteHelmConfigMapCopies(ctx context.Context, rsRe
 	// cleanup old copied ConfigMaps that we don't need anymore, e.g. if the list in valuesFileRefs changes
 	// TODO: Eventually remove the annotations and use the labels for list filtering, to optimize cleanup.
 	// We can't remove the annotations until v1.16.0 is no longer supported.
-	var cmList corev1.ConfigMapList
+	var cmList metav1.PartialObjectMetadataList
+	cmList.SetGroupVersionKind(kinds.ConfigMapList())
 	if err := r.client.List(ctx, &cmList, &client.ListOptions{Namespace: configsync.ControllerNamespace}); err != nil {
 		return errors.Wrapf(err, "config map list failed in namespace: %s", configsync.ControllerNamespace)
 	}

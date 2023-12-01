@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -377,11 +378,16 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 	// We want to avoid situations of hanging watchers. Stop any watchers that
 	// do not receive any events within the timeout window.
 	timeoutSeconds := int64(minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
+	// This label is added to all managed objects by the applier
+	selector := labels.SelectorFromSet(map[string]string{
+		metadata.ManagedByKey: metadata.ManagedByValue,
+	})
 	options := metav1.ListOptions{
 		AllowWatchBookmarks: true,
 		ResourceVersion:     resourceVersion,
 		TimeoutSeconds:      &timeoutSeconds,
 		Watch:               true,
+		LabelSelector:       selector.String(),
 	}
 
 	base, err := w.startWatch(ctx, options)

@@ -75,6 +75,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: test-ns1
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_test-ns1
@@ -104,6 +106,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: test-ns2
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_test-ns2
@@ -140,6 +144,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: test-ns3
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_test-ns3
@@ -174,6 +180,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: test-ns4
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_wrong-ns4
@@ -230,6 +238,8 @@ kind: ConfigMap
 metadata:
   name: test-cm1
   namespace: bookstore
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-cm1
@@ -261,6 +271,8 @@ kind: ConfigMap
 metadata:
   name: test-cm2
   namespace: bookstore
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_wrong-cm2
@@ -300,6 +312,8 @@ kind: ConfigMap
 metadata:
   name: test-cm3
   namespace: bookstore
+  labels:
+    app.kubernetes.io/managed-by: configmanagement.gke.io
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-cm3

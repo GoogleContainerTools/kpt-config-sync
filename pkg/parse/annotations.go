@@ -45,6 +45,7 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 		inventoryID = applier.InventoryID(syncName, string(scope))
 	}
 	for _, obj := range objs {
+		// Note: this label is used as a label selector by the remediator
 		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
 		core.SetAnnotation(obj, metadata.GitContextKey, string(gcVal))
 		core.SetAnnotation(obj, metadata.ResourceManagerKey, declared.ResourceManager(scope, syncName))

@@ -64,3 +64,6 @@ data:
           receivers: [opencensus]
           processors: [batch, resourcedetection, attributes]
           exporters: [opencensus]
+      telemetry:
+        logs:
+          level: "INFO"

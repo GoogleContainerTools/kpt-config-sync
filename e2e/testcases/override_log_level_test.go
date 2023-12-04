@@ -45,7 +45,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 		},
 	)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 		},
 	)
 	if err != nil {
@@ -67,14 +67,14 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	}
 
 	// apply override to all containers and validate
-	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": 9}]}}}`)
+	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": -1}]}}}`)
 
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerName.Name, rootReconcilerName.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=7"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=9"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=debug"),
 		},
 	)
 	if err != nil {
@@ -88,7 +88,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 		},
 	)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 	// try invalid log level value
 	maxError := "logLevel in body should be less than or equal to 10"
-	minError := "logLevel in body should be greater than or equal to 0"
+	minError := "logLevel in body should be greater than or equal to -1"
 
 	err = nt.KubeClient.MergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 13}]}}}`)
 	if !strings.Contains(err.Error(), maxError) {
@@ -121,7 +121,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 	err := nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, nsReconcilerFrontendDeployment,
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -151,7 +151,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -171,7 +171,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 				},
 				{
 					ContainerName: "otel-agent",
-					LogLevel:      5,
+					LogLevel:      2,
 				},
 			},
 		},
@@ -188,7 +188,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=7"),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=9"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=5"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=error"),
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -208,7 +208,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "-v=0"),
+		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
 	)
 	if err != nil {
 		nt.T.Fatal(err)

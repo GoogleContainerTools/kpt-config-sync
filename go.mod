@@ -32,7 +32,8 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/wk8/go-ordered-map v1.0.0
 	go.opencensus.io v0.24.0
-	go.uber.org/multierr v1.6.0
+	go.uber.org/multierr v1.10.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e
 	golang.org/x/mod v0.14.0
 	golang.org/x/net v0.17.0

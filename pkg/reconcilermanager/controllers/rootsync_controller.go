@@ -25,12 +25,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -401,23 +401,8 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	return nil
 }
 
-// SetupWithManager registers RootSync controller with reconciler-manager.
-func (r *RootSyncReconciler) SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error {
-	// Index the `gitSecretRefName` field, so that we will be able to lookup RootSync be a referenced `SecretRef` name.
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1beta1.RootSync{}, gitSecretRefField, func(rawObj client.Object) []string {
-		rs, ok := rawObj.(*v1beta1.RootSync)
-		if !ok {
-			// Only add index for RootSync
-			return nil
-		}
-		if rs.Spec.Git == nil || v1beta1.GetSecretName(rs.Spec.Git.SecretRef) == "" {
-			return nil
-		}
-		return []string{rs.Spec.Git.SecretRef.Name}
-	}); err != nil {
-		return err
-	}
-
+// Register RootSync controller with reconciler-manager.
+func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetMembership bool) error {
 	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
@@ -460,8 +445,10 @@ func withNamespace(obj client.Object, ns string) client.Object {
 
 func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []reconcile.Request {
 	return func(o client.Object) []reconcile.Request {
+		//TODO: pass through context (reqs updating controller-runtime)
+		ctx := context.Background()
 		// Clear the membership if the cluster is unregistered
-		if err := r.client.Get(context.Background(), types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+		if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
 			if apierrors.IsNotFound(err) {
 				klog.Info("Fleet Membership not found, clearing membership cache")
 				r.membership = nil
@@ -487,6 +474,8 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 
 // mapConfigMapsToRootSyncs handles updates to referenced ConfigMaps
 func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []reconcile.Request {
+	//TODO: pass through context (reqs updating controller-runtime)
+	ctx := context.Background()
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces.
@@ -495,37 +484,22 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 	}
 
 	// Look up RootSyncs and see if any of them reference this ConfigMap.
-	ctx := context.Background()
 	rootSyncList := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, rootSyncList, &client.ListOptions{Namespace: objRef.Namespace}); err != nil {
+	if err := r.client.List(ctx, rootSyncList, client.InNamespace(objRef.Namespace)); err != nil {
 		klog.Errorf("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
 		return nil
 	}
 	var requests []reconcile.Request
 	var attachedRSNames []string
 	for _, rs := range rootSyncList.Items {
-		if rs.Spec.SourceType != string(v1beta1.HelmSource) {
-			// we are only watching ConfigMaps to re-trigger helm-sync,
-			// so we can ignore other source types
-			continue
+		// Only enqueue a request for the RSync if it references the ConfigMap that triggered the event
+		//TODO: Use stdlib slices.Contains in Go 1.21+
+		if slices.Contains(rootSyncHelmValuesFileNames(&rs), objRef.Name) {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&rs),
+			})
+			attachedRSNames = append(attachedRSNames, rs.GetName())
 		}
-		if rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
-			continue
-		}
-		var referenced bool
-		for _, vf := range rs.Spec.Helm.ValuesFileRefs {
-			if vf.Name == objRef.Name {
-				referenced = true
-				break
-			}
-		}
-		if !referenced {
-			continue
-		}
-		requests = append(requests, reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(&rs),
-		})
-		attachedRSNames = append(attachedRSNames, rs.GetName())
 	}
 	if len(requests) > 0 {
 		klog.Infof("Changes to %s triggered a reconciliation for the RootSync(s) (%s)",
@@ -534,9 +508,28 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []recon
 	return requests
 }
 
+func rootSyncHelmValuesFileNames(rs *v1beta1.RootSync) []string {
+	if rs == nil {
+		return nil
+	}
+	if rs.Spec.Helm == nil {
+		return nil
+	}
+	if rs.Spec.Helm.ValuesFileRefs == nil {
+		return nil
+	}
+	names := make([]string, len(rs.Spec.Helm.ValuesFileRefs))
+	for i, ref := range rs.Spec.Helm.ValuesFileRefs {
+		names[i] = ref.Name
+	}
+	return names
+}
+
 // mapObjectToRootSync define a mapping from an object in 'config-management-system'
 // namespace to a RootSync to be reconciled.
 func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.Request {
+	//TODO: pass through context (reqs updating controller-runtime)
+	ctx := context.Background()
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces because all the generated resources
@@ -560,7 +553,7 @@ func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.
 	}
 
 	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
+	if err := r.client.List(ctx, allRootSyncs); err != nil {
 		klog.Errorf("failed to list all RootSyncs for %s (%s): %v",
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
 		return nil
@@ -616,8 +609,10 @@ func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile
 }
 
 func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
+	//TODO: pass through context (reqs updating controller-runtime)
+	ctx := context.Background()
 	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(context.Background(), allRootSyncs); err != nil {
+	if err := r.client.List(ctx, allRootSyncs); err != nil {
 		klog.Errorf("RootSync list failed: %v", err)
 		return nil
 	}
@@ -635,11 +630,16 @@ func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
 }
 
 // mapSecretToRootSyncs define a mapping from the Secret object to its attached
-// RootSync objects via the `spec.git.secretRef.name` field .
+// RootSync objects via the following fields:
+// - `spec.git.secretRef.name`
+// - `spec.git.caCertSecretRef.name`
+// - `spec.helm.secretRef.name`
 // The update to the Secret object will trigger a reconciliation of the RootSync objects.
 func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconcile.Request {
+	//TODO: pass through context (reqs updating controller-runtime)
+	ctx := context.Background()
 	sRef := client.ObjectKeyFromObject(secret)
-	// Ignore secret in other namespaces because the RootSync's git secret MUST
+	// Ignore secret in other namespaces because the RootSync's secrets MUST
 	// exist in the config-management-system namespace.
 	if sRef.Namespace != configsync.ControllerNamespace {
 		return nil
@@ -651,21 +651,21 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 	}
 
 	attachedRootSyncs := &v1beta1.RootSyncList{}
-	listOps := &client.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(gitSecretRefField, sRef.Name),
-		Namespace:     sRef.Namespace,
-	}
-	if err := r.client.List(context.Background(), attachedRootSyncs, listOps); err != nil {
+	if err := r.client.List(ctx, attachedRootSyncs, client.InNamespace(sRef.Namespace)); err != nil {
 		klog.Errorf("RootSync list failed for Secret (%s): %v", sRef, err)
 		return nil
 	}
 
-	requests := make([]reconcile.Request, len(attachedRootSyncs.Items))
-	attachedRSNames := make([]string, len(attachedRootSyncs.Items))
-	for i, rs := range attachedRootSyncs.Items {
-		attachedRSNames[i] = rs.GetName()
-		requests[i] = reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(&rs),
+	var requests []reconcile.Request
+	var attachedRSNames []string
+	for _, rs := range attachedRootSyncs.Items {
+		// Only enqueue a request for the RSync if it references the Secret that triggered the event
+		switch sRef.Name {
+		case rootSyncGitSecretName(&rs), rootSyncGitCACertSecretName(&rs), rootSyncHelmSecretName(&rs):
+			attachedRSNames = append(attachedRSNames, rs.GetName())
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&rs),
+			})
 		}
 	}
 	if len(requests) > 0 {
@@ -673,6 +673,45 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconc
 			sRef, strings.Join(attachedRSNames, ", "))
 	}
 	return requests
+}
+
+func rootSyncGitSecretName(rs *v1beta1.RootSync) string {
+	if rs == nil {
+		return ""
+	}
+	if rs.Spec.Git == nil {
+		return ""
+	}
+	if rs.Spec.Git.SecretRef == nil {
+		return ""
+	}
+	return rs.Spec.Git.SecretRef.Name
+}
+
+func rootSyncGitCACertSecretName(rs *v1beta1.RootSync) string {
+	if rs == nil {
+		return ""
+	}
+	if rs.Spec.Git == nil {
+		return ""
+	}
+	if rs.Spec.Git.CACertSecretRef == nil {
+		return ""
+	}
+	return rs.Spec.Git.CACertSecretRef.Name
+}
+
+func rootSyncHelmSecretName(rs *v1beta1.RootSync) string {
+	if rs == nil {
+		return ""
+	}
+	if rs.Spec.Helm == nil {
+		return ""
+	}
+	if rs.Spec.Helm.SecretRef == nil {
+		return ""
+	}
+	return rs.Spec.Helm.SecretRef.Name
 }
 
 func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) map[string][]corev1.EnvVar {

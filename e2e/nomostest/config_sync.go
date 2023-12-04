@@ -113,6 +113,12 @@ func isOtelCollectorDeployment(obj client.Object) bool {
 		obj.GetObjectKind().GroupVersionKind() == kinds.Deployment()
 }
 
+// isRootSyncCRD returns true if passed obj is the CRD for the RootSync resource.
+func isRootSyncCRD(obj client.Object) bool {
+	return obj.GetName() == configsync.RootSyncCRDName &&
+		obj.GetObjectKind().GroupVersionKind() == kinds.CustomResourceDefinitionV1()
+}
+
 // ResetReconcilerManagerConfigMap resets the reconciler manager config map
 // to what is defined in the manifest
 func ResetReconcilerManagerConfigMap(nt *NT) error {
@@ -132,6 +138,42 @@ func ResetReconcilerManagerConfigMap(nt *NT) error {
 		return nil
 	}
 	return fmt.Errorf("failed to reset reconciler manager ConfigMap")
+}
+
+// InstallRootSyncCRD installs the RootSync CRD on the test cluster
+func InstallRootSyncCRD(nt *NT) error {
+	nt.T.Log("Installing RootSync CRD")
+	objs, err := parseConfigSyncManifests(nt)
+	if err != nil {
+		return err
+	}
+	var crdObj client.Object
+	for _, obj := range objs {
+		if isRootSyncCRD(obj) {
+			crdObj = obj
+			break
+		}
+	}
+	if crdObj == nil {
+		return fmt.Errorf("RootSync CRD not found in manifests")
+	}
+	if err := nt.KubeClient.Apply(crdObj); err != nil {
+		return err
+	}
+	gvk, err := kinds.Lookup(crdObj, nt.Scheme)
+	if err != nil {
+		return err
+	}
+	return nt.Watcher.WatchForCurrentStatus(gvk,
+		crdObj.GetName(), crdObj.GetNamespace())
+}
+
+// UninstallRootSyncCRD uninstalls the RootSync CRD on the test cluster
+func UninstallRootSyncCRD(nt *NT) error {
+	nt.T.Log("Uninstalling RootSync CRD")
+	rootSyncCRD := fake.CustomResourceDefinitionV1Object(
+		core.Name(configsync.RootSyncCRDName))
+	return DeleteObjectsAndWait(nt, rootSyncCRD)
 }
 
 func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
@@ -318,7 +360,8 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 	return filtered, nil
 }
 
-// ValidateMultiRepoDeployments validates if all Config Sync Components are available.
+// ValidateMultiRepoDeployments waits for all Config Sync components to become available.
+// RootSync root-sync will be re-created, if not found.
 func ValidateMultiRepoDeployments(nt *NT) error {
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
 	if err := nt.KubeClient.Create(rs); err != nil {

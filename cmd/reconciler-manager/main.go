@@ -72,7 +72,7 @@ func main() {
 		Scheme: core.Scheme,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "failed to start manager")
 		os.Exit(1)
 	}
 	// The Client built by ctrl.NewManager uses caching by default, and doesn't
@@ -84,7 +84,7 @@ func main() {
 		Mapper: mgr.GetRESTMapper(),
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to create watching client")
+		setupLog.Error(err, "failed to create watching client")
 		os.Exit(1)
 	}
 	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
@@ -94,39 +94,59 @@ func main() {
 	}
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
 
-	repoSync := controllers.NewRepoSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+	crdController := controllers.NewCRDReconciler(
+		ctrl.Log.WithName("controllers").WithName("CRD"))
+	if err := crdController.Register(mgr); err != nil {
+		setupLog.Error(err, "failed to register controller", "controller", "CRD")
+		os.Exit(1)
+	}
+	setupLog.Info("CRD controller registration successful")
+
+	repoSyncController := controllers.NewRepoSyncReconciler(*clusterName,
+		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
-	if err := repoSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", configsync.RepoSyncKind)
-		os.Exit(1)
-	}
+	crdController.SetCRDHandler(configsync.RepoSyncCRDName, func() error {
+		if err := repoSyncController.Register(mgr, watchFleetMembership); err != nil {
+			return fmt.Errorf("registering %s controller: %w", configsync.RepoSyncKind, err)
+		}
+		setupLog.Info("RepoSync controller registration successful")
+		return nil
+	})
+	setupLog.Info("RepoSync controller registration scheduled")
 
-	rootSync := controllers.NewRootSyncReconciler(*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod,
+	rootSyncController := controllers.NewRootSyncReconciler(*clusterName,
+		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
 		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
-	if err := rootSync.SetupWithManager(mgr, watchFleetMembership); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", configsync.RootSyncKind)
-		os.Exit(1)
-	}
+	crdController.SetCRDHandler(configsync.RootSyncCRDName, func() error {
+		if err := rootSyncController.Register(mgr, watchFleetMembership); err != nil {
+			return fmt.Errorf("registering %s controller: %w", configsync.RootSyncKind, err)
+		}
+		setupLog.Info("RootSync controller registration successful")
+		return nil
+	})
+	setupLog.Info("RootSync controller registration scheduled")
 
 	otel := controllers.NewOtelReconciler(*clusterName, mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName("Otel"),
 		mgr.GetScheme())
-	if err := otel.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Otel")
+	if err := otel.Register(mgr); err != nil {
+		setupLog.Error(err, "failed to register controller", "controller", "Otel")
 		os.Exit(1)
 	}
+	setupLog.Info("Otel controller registration successful")
 
 	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName(controllers.OtelSALoggerName),
 		mgr.GetScheme())
-	if err := otelSA.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OtelSA")
+	if err := otelSA.Register(mgr); err != nil {
+		setupLog.Error(err, "failed to register controller", "controller", "OtelSA")
 		os.Exit(1)
 	}
+	setupLog.Info("OtelSA controller registration successful")
 
 	// Register the OpenCensus views
 	if err := metrics.RegisterReconcilerManagerMetricsViews(); err != nil {
@@ -142,7 +162,7 @@ func main() {
 
 	defer func() {
 		if err := oce.Stop(); err != nil {
-			setupLog.Error(err, "unable to stop the OC Agent exporter")
+			setupLog.Error(err, "failed to stop the OC Agent exporter")
 		}
 	}()
 
@@ -153,7 +173,7 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		// os.Exit(1) does not run deferred functions so explicitly stopping the OC Agent exporter.
 		if err := oce.Stop(); err != nil {
-			setupLog.Error(err, "unable to stop the OC Agent exporter")
+			setupLog.Error(err, "failed to stop the OC Agent exporter")
 		}
 		os.Exit(1)
 	}

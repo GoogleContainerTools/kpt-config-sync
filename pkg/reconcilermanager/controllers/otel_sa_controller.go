@@ -101,8 +101,8 @@ func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	return controllerruntime.Result{}, nil
 }
 
-// SetupWithManager registers otel Service Account controller with reconciler-manager.
-func (r *OtelSAReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
+// Register otel Service Account controller with reconciler-manager.
+func (r *OtelSAReconciler) Register(mgr controllerruntime.Manager) error {
 	// Process create / update events for service accounts in the `config-management-monitoring` namespace.
 	p := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {

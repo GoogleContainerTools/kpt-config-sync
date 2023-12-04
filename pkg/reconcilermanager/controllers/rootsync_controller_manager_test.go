@@ -572,8 +572,8 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 	err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
 	require.NoError(t, err)
 
-	t.Log("registering root-reconciler-controller")
-	err = testReconciler.SetupWithManager(mgr, false)
+	t.Log("registering controller")
+	err = testReconciler.Register(mgr, false)
 	require.NoError(t, err)
 
 	errCh := make(chan error)

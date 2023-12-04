@@ -23,8 +23,9 @@ import (
 // SetupWithManager
 type Controller interface {
 	reconcile.Reconciler
-	// SetupWithManager registers the controller with the controller-manager
-	SetupWithManager(mgr controllerruntime.Manager, watchFleetMembership bool) error
+	// Register the controller with the controller-manager.
+	// Register may be called before or after the controller-manager is started.
+	Register(mgr controllerruntime.Manager, watchFleetMembership bool) error
 }
 
 var _ Controller = &RootSyncReconciler{}

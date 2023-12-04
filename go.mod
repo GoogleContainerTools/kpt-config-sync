@@ -33,8 +33,8 @@ require (
 	github.com/wk8/go-ordered-map v1.0.0
 	go.opencensus.io v0.24.0
 	go.uber.org/multierr v1.6.0
-	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
-	golang.org/x/mod v0.12.0
+	golang.org/x/exp v0.0.0-20231127185646-65229373498e
+	golang.org/x/mod v0.14.0
 	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.7.0
 	google.golang.org/api v0.114.0

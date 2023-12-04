@@ -194,8 +194,8 @@ func updateDeploymentAnnotation(ctx context.Context, c client.Client, annotation
 	return c.Patch(ctx, dep, patch)
 }
 
-// SetupWithManager registers otel controller with reconciler-manager.
-func (r *OtelReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
+// Register otel controller with reconciler-manager.
+func (r *OtelReconciler) Register(mgr controllerruntime.Manager) error {
 	// Process create / update events for resources in the `config-management-monitoring` namespace.
 	p := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {

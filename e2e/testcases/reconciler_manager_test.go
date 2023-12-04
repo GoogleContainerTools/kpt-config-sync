@@ -33,7 +33,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -1115,4 +1117,140 @@ func filterResourceMap(resourceMap map[string]v1beta1.ContainerResourcesSpec, co
 		}
 	}
 	return filteredMap
+}
+
+// TestReconcilerManagerRSyncCRDMissing validates reconciler-manager still works
+// when the RootSync CRD is deleted and recreated.
+//
+// By proxy, this confirms that the uninstall flow should work when the
+// RootSync CRD finishes deletion before the RepoSync CRD, without trying to
+// test that specific race condition.
+//
+// This behavior is made possible by two features:
+// - The CRD controller allows delaying RSync controller registration
+// - The controller-manager retries failing watches when the resource is deleted
+//
+// Since the reconciler-manager may be rescheduled at any time, especially on
+// autopilot, we can't directly validate that it stays healthy continuously,
+// only that it eventually performs its duties as expected.
+//
+// Test Overview:
+// 1. Validate RootSync syncing works
+// 2. Delete RootSync CRD
+// 3. Validate RootSync deletion propagation worked
+// 4. Validate RepoSync syncing works
+// 5. Reschedule the reconciler-manager
+// 6. Validate RepoSync syncing still works
+// 7. Recreate RootSync CRD
+// 8. Validate RootSync syncing works
+func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
+	repoSyncNS := "bookstore"
+	repoSyncNN := nomostest.RepoSyncNN(repoSyncNS, configsync.RepoSyncName)
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.WithDelegatedControl, // Delegated so deleting the RootSync doesn't delete the RepoSyncs.
+		ntopts.Unstructured,
+		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
+	)
+
+	reconcilerManagerKey := client.ObjectKey{
+		Name:      reconcilermanager.ManagerName,
+		Namespace: configsync.ControllerNamespace,
+	}
+
+	t.Log("Validate the reconciler-manager deployment is healthy")
+	nt.Must(nt.Validate(reconcilerManagerKey.Name, reconcilerManagerKey.Namespace, &appsv1.Deployment{},
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)))
+
+	// Enable RootSync deletion propagation, if not enabled
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSync := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSync))
+	if nomostest.EnableDeletionPropagation(rootSync) {
+		nt.Must(nt.KubeClient.Update(rootSync))
+		nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
+			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
+		}))
+	}
+
+	t.Log("Validate RootSync syncing works")
+	nsName1 := "root-sync-1"
+	rootSyncDir1 := gitproviders.DefaultSyncDir
+	nt.Must(nt.ValidateNotFound(nsName1, "", &corev1.Namespace{}))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", rootSyncDir1, nsName1),
+		fake.NamespaceObject(nsName1)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace 1"))
+	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
+
+	// CRD normally installed by environment setup.
+	// So we need to ensure re-install explicitly.
+	nt.T.Cleanup(func() {
+		nt.Must(nomostest.InstallRootSyncCRD(nt))
+	})
+	nt.Must(nomostest.UninstallRootSyncCRD(nt))
+
+	t.Log("Validate RootSync managed objects were deleted when CRD was deleted (via deletion propagation)")
+	nt.Must(nt.ValidateNotFound(nsName1, "", &corev1.Namespace{}))
+
+	t.Log("Validate RepoSync syncing still works when the RootSync CRD is deleted")
+	saName1 := "repo-sync-1"
+	repoSyncDir1 := gitproviders.DefaultSyncDir
+	nt.Must(nt.ValidateNotFound(saName1, repoSyncNS, &corev1.ServiceAccount{}))
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir1, saName1),
+		fake.ServiceAccountObject(saName1, core.Namespace(repoSyncNS))))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 1"))
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
+		nomostest.RepoSyncOnly()))
+	nt.Must(nt.Validate(saName1, repoSyncNS, &corev1.ServiceAccount{}))
+
+	t.Log("Validate reconciler-manager startup works when the RootSync CRD is deleted")
+	rmPod, err := nt.KubeClient.GetDeploymentPod(reconcilerManagerKey.Name, reconcilerManagerKey.Namespace, nt.DefaultWaitTimeout)
+	require.NoError(nt.T, err)
+	nt.Must(nomostest.DeleteObjectsAndWait(nt, rmPod))
+
+	t.Log("Waiting for the reconciler-manager deployment to become healthy")
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+		reconcilerManagerKey.Name, reconcilerManagerKey.Namespace))
+
+	t.Log("Validate RepoSync syncing still works when the RootSync CRD is deleted after reconciler-manager has been rescheduled")
+	saName2 := "repo-sync-2"
+	repoSyncDir2 := "acme-2"
+	nt.Must(nt.ValidateNotFound(saName2, repoSyncNS, &corev1.ServiceAccount{}))
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir2, saName2),
+		fake.ServiceAccountObject(saName2, core.Namespace(repoSyncNS))))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 2"))
+	// Change RepoSync sync dir to trigger reconciler-manager to update the reconciler
+	repoSync := fake.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
+	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec":{"git":{"dir":%q}}}`, repoSyncDir2))
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
+		nomostest.RepoSyncOnly(),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			repoSyncNN: repoSyncDir2,
+		})))
+	nt.Must(nt.Validate(saName2, repoSyncNS, &corev1.ServiceAccount{}))
+
+	nt.Must(nomostest.InstallRootSyncCRD(nt))
+
+	t.Log("Waiting for the reconciler-manager deployment to become healthy")
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+		reconcilerManagerKey.Name, reconcilerManagerKey.Namespace))
+
+	t.Log("Validate RootSync syncing still works after the RootSync CRD is re-created")
+	nt.Must(nt.ValidateNotFound(nsName1, "", &corev1.Namespace{}))
+	// Sanitize to allow re-create
+	rootSync.UID = ""
+	rootSync.ResourceVersion = ""
+	rootSync.CreationTimestamp = metav1.Time{}
+	rootSync.Status = v1beta1.RootSyncStatus{}
+	// Re-create RootSync with same spec as before
+	nt.Must(nt.KubeClient.Create(rootSync))
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			rootSyncNN: rootSyncDir1,
+			repoSyncNN: repoSyncDir2,
+		})))
+	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
 }

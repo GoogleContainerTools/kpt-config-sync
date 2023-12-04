@@ -165,6 +165,7 @@ spec:
                   type: object
                 type: array
               observedGeneration:
+                default: 0
                 description: observedGeneration is the most recent generation observed.
                   It corresponds to the Object's generation, which is updated on mutation
                   by the API Server. Everytime the controller does a successful reconcile,
@@ -284,8 +285,6 @@ spec:
                   - status
                   type: object
                 type: array
-            required:
-            - observedGeneration
             type: object
         type: object
     served: true

@@ -67,15 +67,20 @@ type ResourceGroupStatus struct {
 	// mutation by the API Server.
 	// Everytime the controller does a successful reconcile, it sets
 	// observedGeneration to match ResourceGroup.metadata.generation.
+	// +optional
+	// +kubebuilder:default:=0
 	ObservedGeneration int64 `json:"observedGeneration"`
 
 	// resourceStatuses lists the status for each resource in the group
+	// +optional
 	ResourceStatuses []ResourceStatus `json:"resourceStatuses,omitempty"`
 
 	// subgroupStatuses lists the status for each subgroup.
+	// +optional
 	SubgroupStatuses []GroupStatus `json:"subgroupStatuses,omitempty"`
 
 	// conditions lists the conditions of the current status for the group
+	// +optional
 	Conditions []Condition `json:"conditions,omitempty"`
 }
 

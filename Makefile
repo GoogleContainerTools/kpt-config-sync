@@ -39,7 +39,7 @@ GO_DIR := $(OUTPUT_DIR)/go
 # Base image used for all golang containers
 GOLANG_IMAGE := golang:1.21.3-bullseye
 # Base image used for debian containers
-DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.1
+DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.2
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options

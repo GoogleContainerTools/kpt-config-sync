@@ -1210,7 +1210,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 
 func enableAskpassSidecar(sourceType string, auth configsync.AuthType) bool {
 	if v1beta1.SourceType(sourceType) == v1beta1.GitSource &&
-		(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
+		(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCPKSA || auth == configsync.AuthGCENode) {
 		return true
 	}
 	return false

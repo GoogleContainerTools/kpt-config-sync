@@ -277,6 +277,7 @@ spec:
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - gcpksa
                     - none
                     type: string
                   dir:
@@ -1325,6 +1326,7 @@ spec:
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - gcpksa
                     - none
                     type: string
                   dir:

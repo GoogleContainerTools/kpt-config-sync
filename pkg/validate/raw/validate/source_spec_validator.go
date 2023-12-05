@@ -141,14 +141,14 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
 	switch oci.Auth {
-	case configsync.AuthGCENode, configsync.AuthNone:
+	case configsync.AuthGCENode, configsync.AuthGCPKSA, configsync.AuthNone:
 	case configsync.AuthGCPServiceAccount:
-		// if oci.GCPServiceAccountEmail == "" {
-		// 	return MissingGCPSAEmail(rs)
-		// }
-		// if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
-		// 	return InvalidGCPSAEmail(rs)
-		// }
+		if oci.GCPServiceAccountEmail == "" {
+			return MissingGCPSAEmail(rs)
+		}
+		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
+			return InvalidGCPSAEmail(rs)
+		}
 	default:
 		return InvalidOciAuthType(rs)
 	}
@@ -254,7 +254,7 @@ func MissingGitRepo(o client.Object) status.Error {
 // InvalidAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
 func InvalidAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount)}
+	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount), string(configsync.AuthGCPKSA)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
@@ -360,7 +360,7 @@ func MissingOciImage(o client.Object) status.Error {
 // InvalidOciAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for OCI image.
 func InvalidOciAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthNone)}
+	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthGCPKSA), string(configsync.AuthNone)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,

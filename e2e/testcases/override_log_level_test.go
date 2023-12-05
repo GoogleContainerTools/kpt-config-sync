@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -33,11 +33,26 @@ import (
 )
 
 func TestOverrideRootSyncLogLevel(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI)
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
 
 	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncName.Name)
 	rootSyncV1 := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+
+	// add kustomize to enable hydration controller container in root-sync
+	nt.T.Log("Add the kustomize components root directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+
+	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
+	nt.MustMergePatch(rootSyncV1, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
+	}
+
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// validate initial container log level value
 	err := nt.Watcher.WatchObject(kinds.Deployment(),
@@ -46,9 +61,16 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+			testpredicates.DeploymentHasContainer(reconcilermanager.HydrationController),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "true"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
 		},
 	)
 	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -60,14 +82,18 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
 		},
 	)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// apply override to all containers and validate
-	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": -1}]}}}`)
+	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": -1}, {"containerName": "hydration-controller", "logLevel": 9}]}}}`)
 
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerName.Name, rootReconcilerName.Namespace,
@@ -75,6 +101,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=7"),
 			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=debug"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=9"),
 		},
 	)
 	if err != nil {
@@ -89,9 +116,14 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
 		},
 	)
 	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -111,22 +143,36 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 }
 
 func TestOverrideRepoSyncLogLevel(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured, ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
 	frontendReconcilerNN := core.NsReconcilerObjectKey(frontendNamespace, configsync.RepoSyncName)
 	frontendNN := nomostest.RepoSyncNN(frontendNamespace, configsync.RepoSyncName)
 	repoSyncFrontend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, frontendNN)
 
+	// add kustomize to enable hydration controller container in repo-sync
+	nt.T.Log("Add the kustomize components root repo directory")
+	nt.Must(nt.NonRootRepos[frontendNN].Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(nt.NonRootRepos[frontendNN].CommitAndPush("add DRY configs to the repository"))
+
+	nt.T.Log("Update RepoSync to sync from the kustomize-components directory")
+	repoSyncFrontend.Spec.Git.Dir = "kustomize-components"
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from the kustomize directory"))
+
 	// Verify ns-reconciler-frontend uses the default log level
-	nsReconcilerFrontendDeployment := &appsv1.Deployment{}
-	err := nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, nsReconcilerFrontendDeployment,
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+	err := nt.Watcher.WatchObject(kinds.Deployment(),
+		frontendReconcilerNN.Name, frontendReconcilerNN.Namespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+			testpredicates.DeploymentHasContainer(reconcilermanager.HydrationController),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "true"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
+		},
 	)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nsReconcilerFrontendDeploymentGeneration := nsReconcilerFrontendDeployment.Generation
 
 	// Override the log level of the reconciler container of ns-reconciler-frontend
 	repoSyncFrontend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
@@ -141,17 +187,16 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	// validate override and make sure other containers are unaffected
-	nsReconcilerFrontendDeploymentGeneration++
-	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+	err = nt.Watcher.WatchObject(kinds.Deployment(),
+		frontendReconcilerNN.Name, frontendReconcilerNN.Namespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=3"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
+		},
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -173,22 +218,25 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 					ContainerName: "otel-agent",
 					LogLevel:      2,
 				},
+				{
+					ContainerName: "hydration-controller",
+					LogLevel:      5,
+				},
 			},
 		},
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
 
 	// validate override for all containers
-	nsReconcilerFrontendDeploymentGeneration++
-	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=7"),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=9"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=error"),
+	err = nt.Watcher.WatchObject(kinds.Deployment(),
+		frontendReconcilerNN.Name, frontendReconcilerNN.Namespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=7"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=9"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=5"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=error"),
+		},
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -198,17 +246,16 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 	repoSyncFrontend.Spec.Override = nil
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear override from repoSync Frontend"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-	nsReconcilerFrontendDeploymentGeneration++
 
 	// validate log level value are back to default for all containers
-	err = nt.Validate(frontendReconcilerNN.Name, frontendReconcilerNN.Namespace, &appsv1.Deployment{},
-		testpredicates.GenerationEquals(nsReconcilerFrontendDeploymentGeneration),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
-		testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
-		testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+	err = nt.Watcher.WatchObject(kinds.Deployment(),
+		frontendReconcilerNN.Name, frontendReconcilerNN.Namespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=5"),
+			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=0"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=info"),
+		},
 	)
 	if err != nil {
 		nt.T.Fatal(err)

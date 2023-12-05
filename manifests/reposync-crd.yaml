@@ -589,6 +589,7 @@ spec:
                   digest.
                 type: string
               observedGeneration:
+                default: 0
                 description: observedGeneration is the most recent generation observed
                   for the sync resource. It corresponds to the it's generation, which
                   is updated on mutation by the API Server.
@@ -1637,6 +1638,7 @@ spec:
                   digest.
                 type: string
               observedGeneration:
+                default: 0
                 description: observedGeneration is the most recent generation observed
                   for the sync resource. It corresponds to the it's generation, which
                   is updated on mutation by the API Server.

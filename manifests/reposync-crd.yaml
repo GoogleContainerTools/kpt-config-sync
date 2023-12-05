@@ -357,9 +357,9 @@ spec:
                           description: logLevel specifies the log level override value
                             for the container. The default value for git-sync container
                             is 5, while all other containers will default to 0. Allowed
-                            values are from 0 to 10
+                            values are from -1 to 10
                           maximum: 10
-                          minimum: 0
+                          minimum: -1
                           type: integer
                       required:
                       - containerName
@@ -1406,9 +1406,9 @@ spec:
                           description: logLevel specifies the log level override value
                             for the container. The default value for git-sync container
                             is 5, while all other containers will default to 0. Allowed
-                            values are from 0 to 10
+                            values are from -1 to 10
                           maximum: 10
-                          minimum: 0
+                          minimum: -1
                           type: integer
                       required:
                       - containerName

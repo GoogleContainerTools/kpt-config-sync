@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/metrics"
@@ -90,9 +91,9 @@ func setContainerLogLevelDefaults(overrides []v1beta1.ContainerLogLevelOverride,
 }
 
 // mutateContainerLogLevel will add log level to container args as specified in the override
-func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLogLevelOverride) {
+func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLogLevelOverride) error {
 	if len(override) == 0 {
-		return
+		return nil
 	}
 	for i, arg := range c.Args {
 		if strings.HasPrefix(arg, "-v=") {
@@ -103,8 +104,21 @@ func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLo
 
 	for _, logLevel := range override {
 		if logLevel.ContainerName == c.Name {
-			c.Args = append(c.Args, fmt.Sprintf("-v=%d", logLevel.LogLevel))
+			switch c.Name {
+			case metrics.OtelAgentName:
+				// otel-agent surfaces the log level configuration differently.
+				zapLevel := zapcore.Level(logLevel.LogLevel)
+				// unmarshal and marshal to validate that the zap level is valid
+				if _, err := zapcore.ParseLevel(zapLevel.String()); err != nil {
+					return err
+				}
+				c.Args = append(c.Args, fmt.Sprintf("--set=service.telemetry.logs.level=%s", zapLevel.String()))
+			default:
+				c.Args = append(c.Args, fmt.Sprintf("-v=%d", logLevel.LogLevel))
+			}
+
 			break
 		}
 	}
+	return nil
 }

@@ -1196,7 +1196,9 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			if addContainer {
 				// Common mutations for all added containers
 				mutateContainerResource(&container, containerResources)
-				mutateContainerLogLevel(&container, containerLogLevels)
+				if err := mutateContainerLogLevel(&container, containerLogLevels); err != nil {
+					return err
+				}
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

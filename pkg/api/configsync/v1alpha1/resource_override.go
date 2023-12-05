@@ -162,8 +162,8 @@ type ContainerLogLevelOverride struct {
 
 	// logLevel specifies the log level override value for the container.
 	// The default value for git-sync container is 5, while all other containers will default to 0.
-	// Allowed values are from 0 to 10
-	// +kubebuilder:validation:Minimum=0
+	// Allowed values are from -1 to 10
+	// +kubebuilder:validation:Minimum=-1
 	// +kubebuilder:validation:Maximum=10
 	// +kubebuilder:validation:Required
 	LogLevel int `json:"logLevel"`

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Uber Technologies, Inc.
+// Copyright (c) 2023 Uber Technologies, Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,35 +18,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build go1.13
+package zapcore
 
-package multierr
+import "sync"
 
-import "errors"
-
-// As attempts to find the first error in the error list that matches the type
-// of the value that target points to.
-//
-// This function allows errors.As to traverse the values stored on the
-// multierr error.
-func (merr *multiError) As(target interface{}) bool {
-	for _, err := range merr.Errors() {
-		if errors.As(err, target) {
-			return true
-		}
-	}
-	return false
+type lazyWithCore struct {
+	Core
+	sync.Once
+	fields []Field
 }
 
-// Is attempts to match the provided error against errors in the error list.
-//
-// This function allows errors.Is to traverse the values stored on the
-// multierr error.
-func (merr *multiError) Is(target error) bool {
-	for _, err := range merr.Errors() {
-		if errors.Is(err, target) {
-			return true
-		}
+// NewLazyWith wraps a Core with a "lazy" Core that will only encode fields if
+// the logger is written to (or is further chained in a lon-lazy manner).
+func NewLazyWith(core Core, fields []Field) Core {
+	return &lazyWithCore{
+		Core:   core,
+		fields: fields,
 	}
-	return false
+}
+
+func (d *lazyWithCore) initOnce() {
+	d.Once.Do(func() {
+		d.Core = d.Core.With(d.fields)
+	})
+}
+
+func (d *lazyWithCore) With(fields []Field) Core {
+	d.initOnce()
+	return d.Core.With(fields)
+}
+
+func (d *lazyWithCore) Check(e Entry, ce *CheckedEntry) *CheckedEntry {
+	d.initOnce()
+	return d.Core.Check(e, ce)
 }

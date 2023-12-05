@@ -57,6 +57,7 @@ import (
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -944,7 +945,7 @@ func TestHierarchical(t *testing.T) {
 				),
 				validRepoSync("bookstore", "repo-sync-1", "namespaces/bookstore/rs.yaml",
 					core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/namespaces/bookstore/rs.yaml"),
-					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:observedGeneration":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
 				)},
 		},
@@ -1320,7 +1321,7 @@ func TestUnstructured(t *testing.T) {
 			},
 			want: []ast.FileObject{validRootSync("root-sync-1", "rs.yaml",
 				core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/rs.yaml"),
-				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:observedGeneration":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
 				core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
 			)},
 		},
@@ -1346,7 +1347,7 @@ func TestUnstructured(t *testing.T) {
 			},
 			want: []ast.FileObject{validRepoSync("bookstore", "repo-sync-1", "rs.yaml",
 				core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/rs.yaml"),
-				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
+				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:observedGeneration":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
 				core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
 			)},
 		},
@@ -1384,7 +1385,7 @@ func TestUnstructured(t *testing.T) {
 			if !errors.Is(errs, tc.wantErrs) {
 				t.Errorf("got Unstructured() error %v; want %v", errs, tc.wantErrs)
 			}
-			assert.ElementsMatch(t, tc.want, got)
+			testutil.AssertEqual(t, tc.want, got)
 
 			updatedDynamicNSSelectorEnabled, err := dynamicNSSelectorEnabled(fakeClient)
 			if err != nil {

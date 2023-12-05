@@ -23,7 +23,8 @@ type Status struct {
 	// observedGeneration is the most recent generation observed for the sync resource.
 	// It corresponds to the it's generation, which is updated on mutation by the API Server.
 	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// +kubebuilder:default:=0
+	ObservedGeneration int64 `json:"observedGeneration"`
 
 	// reconciler is the name of the reconciler process which corresponds to the
 	// sync resource.

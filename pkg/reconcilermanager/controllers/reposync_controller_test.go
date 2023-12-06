@@ -4010,6 +4010,94 @@ func TestRepoReconcilerGetKnownHosts(t *testing.T) {
 	require.Equal(t, true, isKnownHosts)
 }
 
+func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	gitSecret1Name := "git-secret-1"
+	gitSecret2Name := "git-secret-2"
+	caCertSecret1Name := "ca-secret-1"
+	caCertSecret2Name := "ca-secret-2"
+	rs := repoSyncWithGit(reposyncNs, reposyncName,
+		reposyncRef(gitRevision), reposyncBranch(branch),
+		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(gitSecret1Name),
+		reposyncCACert(caCertSecret1Name))
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	gitSecret1 := secretObjWithProxy(t, gitSecret1Name, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret1.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret1 := secretObj(t, caCertSecret1Name, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret1.Data[CACertSecretKey] = []byte("test-cert")
+	gitSecret2 := secretObjWithProxy(t, gitSecret2Name, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
+	gitSecret2.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	certSecret2 := secretObj(t, caCertSecret2Name, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret2.Data[CACertSecretKey] = []byte("test-cert")
+	fakeClient, _, testReconciler := setupNSReconciler(t, rs,
+		gitSecret1, certSecret1, gitSecret2, certSecret2)
+
+	// Test creating Deployment resources.
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	reconcilerRef := core.NsReconcilerName(reposyncNs, reposyncName)
+	upsertedGitSecret1 := fake.SecretObject(
+		ReconcilerResourceName(reconcilerRef, gitSecret1Name),
+		core.Namespace(configsync.ControllerNamespace))
+	upsertedGitSecret2 := fake.SecretObject(
+		ReconcilerResourceName(reconcilerRef, gitSecret2Name),
+		core.Namespace(configsync.ControllerNamespace))
+	upsertedCertSecret1 := fake.SecretObject(
+		ReconcilerResourceName(reconcilerRef, caCertSecret1Name),
+		core.Namespace(configsync.ControllerNamespace))
+	upsertedCertSecret2 := fake.SecretObject(
+		ReconcilerResourceName(reconcilerRef, caCertSecret2Name),
+		core.Namespace(configsync.ControllerNamespace))
+
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedGitSecret1), fakeClient))
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedGitSecret2), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret2), fakeClient))
+
+	// Update secret refs
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret2Name}
+	rs.Spec.SecretRef = &v1beta1.SecretReference{Name: gitSecret2Name}
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedGitSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedGitSecret2), fakeClient))
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedCertSecret2), fakeClient))
+
+	// Unset secret refs
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.CACertSecretRef = nil
+	rs.Spec.SecretRef = nil
+	rs.Spec.Auth = configsync.AuthNone
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedGitSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedGitSecret2), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret2), fakeClient))
+}
 func TestRepoReconcilerWithoutKnownHosts(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -4251,6 +4339,25 @@ func validateResourceDeleted(id core.ID, fakeClient *syncerFake.Client) error {
 		return err
 	}
 	return errors.Errorf("resource %s still exists: %#v", id, got)
+}
+
+func validateResourceExists(id core.ID, fakeClient *syncerFake.Client) error {
+	mapping, err := fakeClient.RESTMapper().RESTMapping(id.GroupKind)
+	if err != nil {
+		return err
+	}
+
+	key := id.ObjectKey
+	got := &unstructured.Unstructured{}
+	got.SetGroupVersionKind(mapping.GroupVersionKind)
+	ctx := context.Background()
+	err = fakeClient.Get(ctx, key, got)
+	if apierrors.IsNotFound(err) {
+		return errors.Errorf("resource %s does not exist: %#v", id, got)
+	} else if err != nil {
+		return err
+	}
+	return nil // success!
 }
 
 func addSubjectByName(subjects []rbacv1.Subject, name string) []rbacv1.Subject {

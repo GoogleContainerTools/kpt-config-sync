@@ -211,14 +211,20 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if _, err := r.upsertAuthSecret(ctx, rs, reconcilerRef, labelMap); err != nil {
+	authSecret, err := r.upsertAuthSecret(ctx, rs, reconcilerRef, labelMap)
+	if err != nil {
 		return errors.Wrap(err, "upserting auth secret")
 	}
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
-	if _, err := r.upsertCACertSecret(ctx, rs, reconcilerRef, labelMap); err != nil {
+	caSecret, err := r.upsertCACertSecret(ctx, rs, reconcilerRef, labelMap)
+	if err != nil {
 		return errors.Wrap(err, "upserting CA cert secret")
+	}
+
+	if err := r.deleteSecrets(ctx, reconcilerRef, authSecret.Name, caSecret.Name); err != nil {
+		return errors.Wrap(err, "garbage collecting secrets")
 	}
 
 	// Overwrite reconciler pod ServiceAccount.

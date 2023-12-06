@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,13 +92,17 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 	return nil
 }
 
-func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerRef types.NamespacedName) error {
+func (r *RepoSyncReconciler) deleteSecrets(ctx context.Context, reconcilerRef types.NamespacedName, exceptions ...string) error {
 	secretList := &corev1.SecretList{}
 	if err := r.client.List(ctx, secretList, client.InNamespace(reconcilerRef.Namespace)); err != nil {
 		return NewObjectOperationErrorForListWithNamespace(err, secretList, OperationList, reconcilerRef.Namespace)
 	}
 
 	for _, s := range secretList.Items {
+		if slices.Contains(exceptions, s.Name) {
+			// This Secret adheres to the current spec, skip deletion
+			continue
+		}
 		if strings.HasPrefix(s.Name, reconcilerRef.Name) {
 			if err := r.cleanup(ctx, &s); err != nil {
 				return err

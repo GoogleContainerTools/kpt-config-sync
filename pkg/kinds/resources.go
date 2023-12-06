@@ -17,9 +17,20 @@ package kinds
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
 
 // DeploymentResource returns the canonical Deployment GroupVersionResource.
 func DeploymentResource() schema.GroupVersionResource {
 	return appsv1.SchemeGroupVersion.WithResource("deployments")
+}
+
+// RootSyncResource returns the canonical RootSync GroupVersionResource.
+func RootSyncResource() schema.GroupVersionResource {
+	return configsyncv1beta1.SchemeGroupVersion.WithResource("rootsyncs")
+}
+
+// RepoSyncResource returns the canonical RepoSync GroupVersionResource.
+func RepoSyncResource() schema.GroupVersionResource {
+	return configsyncv1beta1.SchemeGroupVersion.WithResource("reposyncs")
 }

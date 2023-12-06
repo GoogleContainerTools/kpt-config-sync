@@ -31,6 +31,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// UntilDeleted watches the specified object and blocks until it is fully
+// deleted (NotFound, not just deleteTimestamp). This allows for any finalizers
+// to complete.
+//
+// Unlike client-go's watch.Until, this function uses an informer, which means
+// it does a ListAndWatch, not just a Watch. So it will return immediately if
+// the object was already deleted.
+//
+// For timeout, use:
+// watchCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+// defer cancel()
+func UntilDeleted(ctx context.Context, c client.WithWatch, obj client.Object) error {
+	return UntilDeletedWithSync(ctx, c, obj, nil)
+}
+
 // UntilDeletedWithSync watches the specified object and blocks until it is
 // fully deleted (NotFound, not just deleteTimestamp). This allows for any
 // finalizers to complete.

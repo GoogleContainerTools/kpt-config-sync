@@ -29,19 +29,25 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/util/log"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,11 +62,11 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	t.Log("building root-reconciler-controller")
+	t.Log("building RootSync controller")
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, secretObj)
 
 	defer logObjectYAMLIfFailed(t, fakeClient, rs)
 
@@ -78,46 +84,89 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 		}
 	}()
 
-	reconcilerKey := core.RootReconcilerObjectKey(rs.Name)
-
-	t.Log("watching for reconciler deployment creation")
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	// Use typed watch for Deployment so it's easier to process.
+	reconcilerWatcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
-	// Create RootSync
+	// Use unstructured watch for RootSync so kstatus.Compute works with the
+	// real field values and not just the default Go values.
+	// This way status.observedGeneration can be missing, not just 0.
+	rsyncWatcher, err := watchUnstructured(watchCtx, fakeDynamicClient, kinds.RootSyncResource())
+	require.NoError(t, err)
+
+	// Start the watches before creating the RootSync.
+	// While this order is not required, it means we should see distinct Added vs Modified events when debugging.
+	tg := taskgroup.New()
+
+	t.Log("Starting deployment controller simulation")
+	reconcilerKey := core.RootReconcilerObjectKey(rs.Name)
+	tg.Go(func() error {
+		return simulateDeploymentController(ctx, t, fakeClient, reconcilerWatcher, reconcilerKey)
+	})
+
+	t.Log("Starting RootSync validator")
+	rsKey := client.ObjectKeyFromObject(rs)
+	tg.Go(func() error {
+		return validateRootSyncSetup(ctx, t, fakeClient, rsyncWatcher, rsKey)
+	})
+
+	t.Log("Creating RootSync")
 	err = fakeClient.Create(ctx, rs)
 	require.NoError(t, err)
 
-	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
-		t.Logf("reconciler deployment %s", event.Type)
-		if event.Type == watch.Added || event.Type == watch.Modified {
-			reconcilerObj = event.Object.(*appsv1.Deployment)
-			// success! deployment was applied.
-			// Since there's no deployment controller,
-			// don't wait for availability.
-			return nil
-		}
-		// keep watching
-		return errors.Errorf("reconciler deployment %s", event.Type)
-	})
-	require.NoError(t, err)
-	if reconcilerObj == nil {
-		t.Fatal("timed out waiting for reconciler deployment to be applied")
+	t.Log("Waiting for Deployment Controller simulation & RootSync validation to stop")
+	if err := tg.Wait(); err != nil {
+		t.Fatal(err)
 	}
 
 	t.Log("verifying the reconciler-manager finalizer is present")
-	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RootSync{}
 	err = fakeClient.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
-	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	// Simulate managed object deletion being blocked.
+	// TODO: Simulate deployment graceful shutdown, which is a much more likely use scenario.
+	// Unfortunately, to be able to simulate graceful shutdown, we would need
+	// to apply a patch to the deployment, but the current implementation of
+	// server-side apply in the fake client acts like an update, because the
+	// field-manager code is in an `internal` package upstream.
+	// However, the controller-manager has a forked version we can use.
+	// TODO: Update fakeClient.Patch to handle SSA with multiple field managers.
+	testFinalizer := "test-delete-blocked"
+	crbKey := reconcilerKey
+	saObj := &corev1.ServiceAccount{}
+	err = fakeClient.Get(ctx, crbKey, saObj)
+	require.NoError(t, err)
+	require.True(t, controllerutil.AddFinalizer(saObj, testFinalizer))
+	err = fakeClient.Update(ctx, saObj)
+	require.NoError(t, err)
+
+	t.Log("Deleting sync object")
+	err = fakeClient.Delete(ctx, rs)
+	require.NoError(t, err)
+
+	t.Log("Simulating teardown blocked")
+	time.Sleep(5 * time.Second)
+
+	// Validate ServiceAccount still exists (means fake client handles finalizers correctly)
+	err = fakeClient.Get(ctx, crbKey, saObj)
+	require.NoError(t, err)
+
+	// Validate RootSync still exists (means reconciler-manager finalizer blocks waiting for ServiceAccount not found)
+	err = fakeClient.Get(ctx, rsKey, rs)
+	require.NoError(t, err)
+
+	t.Log("Simulating teardown unblocked")
+	require.True(t, controllerutil.RemoveFinalizer(saObj, testFinalizer))
+	err = fakeClient.Update(ctx, saObj)
+	require.NoError(t, err)
+
+	t.Log("Waiting for RootSync NotFound")
+	err = watchutil.UntilDeleted(ctx, fakeClient, rs)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
@@ -622,11 +671,25 @@ func watchObjects(ctx context.Context, fakeClient *syncerFake.Client, exampleLis
 	return watcher, nil
 }
 
+func watchUnstructured(ctx context.Context, fakeDynamicClient *syncerFake.DynamicClient, gvr schema.GroupVersionResource) (watch.Interface, error) {
+	watcher, err := fakeDynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		<-ctx.Done()
+		watcher.Stop()
+	}()
+	return watcher, nil
+}
+
 func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch.Interface, key client.ObjectKey, condition func(watch.Event) error) error {
 	// Wait until added or modified
 	var conditionErr error
 	doneCh := ctx.Done()
 	resultCh := watcher.ResultChan()
+	defer watcher.Stop()
 	var lastKnown client.Object
 	for {
 		select {
@@ -657,6 +720,10 @@ func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch
 				// success - condition met
 				return nil
 			}
+			if errors.Is(conditionErr, &TerminalError{}) {
+				// failure - exit early
+				return conditionErr
+			}
 			// wait for next event - condition not met
 		}
 	}
@@ -669,4 +736,134 @@ func parseResourceVersion(obj client.Object) (int, error) {
 			obj.GetResourceVersion(), kinds.ObjectSummary(obj))
 	}
 	return rv, nil
+}
+
+func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, reconcilerWatcher watch.Interface, reconcilerKey client.ObjectKey) error {
+	var reconcilerObj *appsv1.Deployment
+	err := watchObjectUntil(ctx, fakeClient.Scheme(), reconcilerWatcher, reconcilerKey, func(event watch.Event) error {
+		t.Logf("reconciler deployment %s", event.Type)
+		// Using Watch, not ListAndWatch, so Added event is not guaranteed
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			reconcilerObj = event.Object.(*appsv1.Deployment)
+			if reconcilerObj.Status.Replicas != *reconcilerObj.Spec.Replicas {
+				t.Log("Simulating scheduling delay")
+				time.Sleep(1 * time.Second)
+				t.Log("Simulating scheduling complete")
+				reconcilerObj.Status.Replicas = *reconcilerObj.Spec.Replicas
+				reconcilerObj.Status.UpdatedReplicas = *reconcilerObj.Spec.Replicas
+				if err := fakeClient.Status().Update(ctx, reconcilerObj); err != nil {
+					return err
+				}
+				// keep watching
+				return fmt.Errorf("scheduling complete - waiting for startup")
+			} else if reconcilerObj.Status.ReadyReplicas != *reconcilerObj.Spec.Replicas {
+				t.Log("Simulating startup delay")
+				time.Sleep(1 * time.Second)
+				t.Log("Simulating startup complete")
+				reconcilerObj.Status.ReadyReplicas = *reconcilerObj.Spec.Replicas
+				reconcilerObj.Status.AvailableReplicas = *reconcilerObj.Spec.Replicas
+				reconcilerObj.Status.Conditions = append(reconcilerObj.Status.Conditions,
+					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
+					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+				)
+				if err := fakeClient.Status().Update(ctx, reconcilerObj); err != nil {
+					return err
+				}
+				// Simulation complete - stop watching
+				return nil
+			} else {
+				// shouldn't happen - keep watching - wait for timeout
+				return fmt.Errorf("startup complete - expected watch to have terminated")
+			}
+		}
+		// keep watching
+		return fmt.Errorf("reconciler deployment %s", event.Type)
+	})
+	if err != nil {
+		return fmt.Errorf("deployment controller failed: %w", err)
+	}
+	if reconcilerObj == nil {
+		return fmt.Errorf("timed out waiting for reconciler deployment to be created")
+	}
+	return nil
+}
+
+func validateRootSyncSetup(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, rsyncWatcher watch.Interface, rsyncKey client.ObjectKey) error {
+	err := watchObjectUntil(ctx, fakeClient.Scheme(), rsyncWatcher, rsyncKey, func(event watch.Event) error {
+		t.Logf("RootSync %s", event.Type)
+		// Using Watch, not ListAndWatch, so Added event is not guaranteed
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			uObj := event.Object.(*unstructured.Unstructured)
+
+			// kstatus considers status.observedGeneration to be optional.
+			// So make sure it's always set by default, to avoid premature Current status.
+			observedGeneration, found, err := unstructured.NestedInt64(uObj.UnstructuredContent(), "status", "observedGeneration")
+			if err != nil {
+				return NewTerminalError(fmt.Errorf("RootSync status.observedGeneration lookup failed: %w", err))
+			}
+			if !found {
+				return NewTerminalError(fmt.Errorf("RootSync status.observedGeneration not found (expected 0 by default)"))
+			}
+			t.Logf("RootSync status.observedGeneration=%v", observedGeneration)
+
+			// Convert Unstructured to RootSync so we can use rootsync.GetCondition
+			tObj, err := kinds.ToTypedObject(uObj, fakeClient.Scheme())
+			if err != nil {
+				return err
+			}
+			rs := tObj.(*v1beta1.RootSync)
+
+			// observedGeneration > 0 indicates the RootSync controller has made a status change.
+			if observedGeneration > 0 {
+				// Validate that the Reconciling condition is always set
+				reconcilingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncReconciling)
+				if reconcilingCondition == nil {
+					return NewTerminalError(fmt.Errorf("expected RootSync %s condition to exist", v1beta1.RootSyncReconciling))
+				}
+				t.Logf("RootSync status.conditions[type==\"Reconciling\"].Status=%v", reconcilingCondition.Status)
+			}
+
+			// Wait for RootSync to be reconciled and Current.
+			// This ensures that blocking with kstatus works on RootSyncs,
+			// at least for the reconciler-manager Reconciling condition.
+			t.Log("verifying the RootSync is ready")
+			result, err := status.Compute(uObj)
+			if err != nil {
+				return fmt.Errorf("computing RootSync status: %w", err)
+			}
+			if result.Status != status.CurrentStatus {
+				return fmt.Errorf("RootSync not ready: %s: %s", result.Status, result.Message)
+			}
+			// stop watching
+			return nil
+		}
+		// keep watching
+		return fmt.Errorf("RootSync %s", event.Type)
+	})
+	if err != nil {
+		return fmt.Errorf("RootSync setup validation failed: %w", err)
+	}
+	return nil
+}
+
+// TerminalError will stop a Retry loop if returned.
+type TerminalError struct {
+	Cause error
+}
+
+// NewTerminalError constructs a new TerminalError
+func NewTerminalError(cause error) *TerminalError {
+	return &TerminalError{
+		Cause: cause,
+	}
+}
+
+// Error returns the error message
+func (te *TerminalError) Error() string {
+	return te.Cause.Error()
+}
+
+// Unwrap returns the cause of this TerminalError
+func (te *TerminalError) Unwrap() error {
+	return te.Cause
 }

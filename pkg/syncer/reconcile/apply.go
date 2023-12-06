@@ -103,6 +103,18 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) 
 	}, nil
 }
 
+func handleApplyError(err error, intendedState *unstructured.Unstructured) status.Error {
+	switch {
+	case apierrors.IsConflict(err):
+		return syncerclient.ConflictUpdateOldVersion(err, intendedState)
+	case apierrors.IsNotFound(err):
+		return syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
+	case err != nil:
+		return status.ResourceWrap(err, "unable to apply resource", intendedState)
+	}
+	return nil
+}
+
 // Create implements Applier.
 func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.Unstructured) status.Error {
 	var err status.Error
@@ -112,7 +124,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		err = c.create(ctx, intendedState)
 	} else {
 		if err1 := c.client.Patch(ctx, intendedState, client.Apply, client.FieldOwner(configsync.FieldManager)); err1 != nil {
-			err = status.ResourceWrap(err1, "unable to apply resource", intendedState)
+			err = handleApplyError(err1, intendedState)
 		}
 	}
 	metrics.Operations.WithLabelValues("create", metrics.StatusLabel(err)).Inc()
@@ -138,13 +150,8 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 	metrics.Operations.WithLabelValues("update", metrics.StatusLabel(err)).Inc()
 	m.RecordApplyOperation(ctx, m.RemediatorController, "update", m.StatusTagKey(err))
 
-	switch {
-	case apierrors.IsConflict(err):
-		return syncerclient.ConflictUpdateOldVersion(err, intendedState)
-	case apierrors.IsNotFound(err):
-		return syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
-	case err != nil:
-		return status.ResourceWrap(err, "unable to update resource", intendedState)
+	if err != nil {
+		return handleApplyError(err, intendedState)
 	}
 
 	updated := !isNoOpPatch(patch)

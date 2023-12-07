@@ -25,13 +25,19 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/retry"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reposync"
+	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -44,11 +50,11 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	t.Log("building RepoSyncReconciler")
-	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
+	t.Log("building RepoSync controller")
+	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(GitSecretConfigKeySSH), reposyncSecretRef(reposyncSSHKey))
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
 
-	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, secretObj)
 
 	defer logObjectYAMLIfFailed(t, fakeClient, rs)
 
@@ -66,46 +72,89 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 		}
 	}()
 
-	reconcilerKey := core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
-
-	t.Log("watching for reconciler deployment creation")
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
 
-	watcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
+	// Use typed watch for Deployment so it's easier to process.
+	reconcilerWatcher, err := watchObjects(watchCtx, fakeClient, &appsv1.DeploymentList{})
 	require.NoError(t, err)
 
-	// Create RepoSync
+	// Use unstructured watch for RepoSync so kstatus.Compute works with the
+	// real field values and not just the default Go values.
+	// This way status.observedGeneration can be missing, not just 0.
+	rsyncWatcher, err := watchUnstructured(watchCtx, fakeDynamicClient, kinds.RepoSyncResource())
+	require.NoError(t, err)
+
+	// Start the watches before creating the RepoSync.
+	// While this order is not required, it means we should see distinct Added vs Modified events when debugging.
+	tg := taskgroup.New()
+
+	t.Log("Starting deployment controller simulation")
+	reconcilerKey := core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
+	tg.Go(func() error {
+		return simulateDeploymentController(ctx, t, fakeClient, reconcilerWatcher, reconcilerKey)
+	})
+
+	t.Log("Starting RepoSync validator")
+	rsKey := client.ObjectKeyFromObject(rs)
+	tg.Go(func() error {
+		return validateRepoSyncSetup(ctx, t, fakeClient, rsyncWatcher, rsKey)
+	})
+
+	t.Log("Creating RepoSync")
 	err = fakeClient.Create(ctx, rs)
 	require.NoError(t, err)
 
-	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
-		t.Logf("reconciler deployment %s", event.Type)
-		if event.Type == watch.Added || event.Type == watch.Modified {
-			reconcilerObj = event.Object.(*appsv1.Deployment)
-			// success! deployment was applied.
-			// Since there's no deployment controller,
-			// don't wait for availability.
-			return nil
-		}
-		// keep watching
-		return errors.Errorf("reconciler deployment %s", event.Type)
-	})
-	require.NoError(t, err)
-	if reconcilerObj == nil {
-		t.Fatal("timed out waiting for reconciler deployment to be applied")
+	t.Log("Waiting for Deployment Controller simulation & RepoSync validation to stop")
+	if err := tg.Wait(); err != nil {
+		t.Fatal(err)
 	}
 
 	t.Log("verifying the reconciler-manager finalizer is present")
-	rsKey := client.ObjectKeyFromObject(rs)
 	rs = &v1beta1.RepoSync{}
 	err = fakeClient.Get(ctx, rsKey, rs)
 	require.NoError(t, err)
 	require.True(t, controllerutil.ContainsFinalizer(rs, metadata.ReconcilerManagerFinalizer))
 
-	t.Log("deleting sync object and watching for NotFound")
-	err = watchutil.DeleteAndWait(ctx, fakeClient, rs, 10*time.Second)
+	// Simulate managed object deletion being blocked.
+	// TODO: Simulate deployment graceful shutdown, which is a much more likely use scenario.
+	// Unfortunately, to be able to simulate graceful shutdown, we would need
+	// to apply a patch to the deployment, but the current implementation of
+	// server-side apply in the fake client acts like an update, because the
+	// field-manager code is in an `internal` package upstream.
+	// However, the controller-manager has a forked version we can use.
+	// TODO: Update fakeClient.Patch to handle SSA with multiple field managers.
+	testFinalizer := "test-delete-blocked"
+	crbKey := reconcilerKey
+	saObj := &corev1.ServiceAccount{}
+	err = fakeClient.Get(ctx, crbKey, saObj)
+	require.NoError(t, err)
+	require.True(t, controllerutil.AddFinalizer(saObj, testFinalizer))
+	err = fakeClient.Update(ctx, saObj)
+	require.NoError(t, err)
+
+	t.Log("Deleting sync object")
+	err = fakeClient.Delete(ctx, rs)
+	require.NoError(t, err)
+
+	t.Log("Simulating teardown blocked")
+	time.Sleep(5 * time.Second)
+
+	// Validate ServiceAccount still exists (means fake client handles finalizers correctly)
+	err = fakeClient.Get(ctx, crbKey, saObj)
+	require.NoError(t, err)
+
+	// Validate RepoSync still exists (means reconciler-manager finalizer blocks waiting for ServiceAccount not found)
+	err = fakeClient.Get(ctx, rsKey, rs)
+	require.NoError(t, err)
+
+	t.Log("Simulating teardown unblocked")
+	require.True(t, controllerutil.RemoveFinalizer(saObj, testFinalizer))
+	err = fakeClient.Update(ctx, saObj)
+	require.NoError(t, err)
+
+	t.Log("Waiting for RepoSync NotFound")
+	err = watchutil.UntilDeleted(ctx, fakeClient, rs)
 	require.NoError(t, err)
 
 	// All managed objects should have been deleted by the reconciler-manager finalizer.
@@ -493,4 +542,62 @@ func testRepoSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyF
 	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
 	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
+}
+
+func validateRepoSyncSetup(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, rsyncWatcher watch.Interface, rsyncKey client.ObjectKey) error {
+	err := watchObjectUntil(ctx, fakeClient.Scheme(), rsyncWatcher, rsyncKey, func(event watch.Event) error {
+		t.Logf("RepoSync %s", event.Type)
+		// Using Watch, not ListAndWatch, so Added event is not guaranteed
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			uObj := event.Object.(*unstructured.Unstructured)
+
+			// kstatus considers status.observedGeneration to be optional.
+			// So make sure it's always set by default, to avoid premature Current status.
+			observedGeneration, found, err := unstructured.NestedInt64(uObj.UnstructuredContent(), "status", "observedGeneration")
+			if err != nil {
+				return NewTerminalError(fmt.Errorf("RepoSync status.observedGeneration lookup failed: %w", err))
+			}
+			if !found {
+				return NewTerminalError(fmt.Errorf("RepoSync status.observedGeneration not found (expected 0 by default)"))
+			}
+			t.Logf("RepoSync status.observedGeneration=%v", observedGeneration)
+
+			// Convert Unstructured to RepoSync so we can use rootsync.GetCondition
+			tObj, err := kinds.ToTypedObject(uObj, fakeClient.Scheme())
+			if err != nil {
+				return err
+			}
+			rs := tObj.(*v1beta1.RepoSync)
+
+			// observedGeneration > 0 indicates the RootSync controller has made a status change.
+			if observedGeneration > 0 {
+				// Validate that the Reconciling condition is always set
+				reconcilingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncReconciling)
+				if reconcilingCondition == nil {
+					return NewTerminalError(fmt.Errorf("expected RepoSync %s condition to exist", v1beta1.RepoSyncReconciling))
+				}
+				t.Logf("RepoSync status.conditions[type==\"Reconciling\"].Status=%v", reconcilingCondition.Status)
+			}
+
+			// Wait for RepoSync to be reconciled and Current.
+			// This ensures that blocking with kstatus works on RepoSyncs,
+			// at least for the reconciler-manager Reconciling condition.
+			t.Log("verifying the RepoSync is ready")
+			result, err := status.Compute(uObj)
+			if err != nil {
+				return fmt.Errorf("computing RepoSync status: %w", err)
+			}
+			if result.Status != status.CurrentStatus {
+				return fmt.Errorf("RepoSync not ready: %s: %s", result.Status, result.Message)
+			}
+			// stop watching
+			return nil
+		}
+		// keep watching
+		return fmt.Errorf("RepoSync %s", event.Type)
+	})
+	if err != nil {
+		return fmt.Errorf("RepoSync setup validation failed: %w", err)
+	}
+	return nil
 }

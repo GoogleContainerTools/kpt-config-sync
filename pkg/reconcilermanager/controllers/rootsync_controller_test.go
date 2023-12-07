@@ -404,6 +404,9 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatal(err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -456,6 +459,9 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaults())
@@ -485,6 +491,9 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -518,6 +527,9 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -580,6 +592,9 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(overrideAllContainerResources, ReconcilerContainerResourceDefaults())
@@ -633,6 +648,9 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerAndHydrationResources, ReconcilerContainerResourceDefaults())
@@ -676,6 +694,9 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(overrideGitSyncResources, ReconcilerContainerResourceDefaults())
@@ -707,6 +728,9 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
@@ -733,12 +757,15 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncNoSSLVerify())
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -774,6 +801,9 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -828,6 +858,9 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -857,6 +890,9 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -889,12 +925,15 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
 	certSecret.Data[CACertSecretKey] = []byte("test-data")
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, gitSecret, certSecret)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -934,6 +973,9 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -985,6 +1027,9 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1014,6 +1059,9 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1101,12 +1149,15 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideGitSyncDepth(5))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1142,6 +1193,9 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1208,6 +1262,9 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	updatedRootDeployment = rootSyncDeployment(rootReconcilerName,
@@ -1238,6 +1295,9 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1285,12 +1345,15 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1327,6 +1390,9 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1358,6 +1424,9 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1388,6 +1457,9 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1435,12 +1507,15 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey), rootsyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1473,6 +1548,9 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
@@ -1815,6 +1893,9 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	labels := map[string]string{
 		metadata.SyncNamespaceLabel:       rs.Namespace,
@@ -1870,6 +1951,9 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -1928,12 +2012,15 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -2035,6 +2122,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs1), rs1); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	wantRs1 := fake.RootSyncObjectV1Beta1(rs1.Name)
 	wantRs1.Spec = rs1.Spec
@@ -2102,6 +2192,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs2), rs2); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	wantRs2 := fake.RootSyncObjectV1Beta1(rs2.Name)
 	wantRs2.Spec = rs2.Spec
@@ -2159,6 +2252,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs3), rs3); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	wantRs3 := fake.RootSyncObjectV1Beta1(rs3.Name)
@@ -2222,6 +2318,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs4), rs4); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	wantRs4 := fake.RootSyncObjectV1Beta1(rs4.Name)
 	wantRs4.Spec = rs4.Spec
@@ -2283,6 +2382,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs5), rs5); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	wantRs5 := fake.RootSyncObjectV1Beta1(rs5.Name)
@@ -2349,6 +2451,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName1); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs1), rs1); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	// No changes to the CRB
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
@@ -2386,6 +2491,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs2), rs2); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	// No changes to the CRB
@@ -2698,6 +2806,9 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
@@ -2770,6 +2881,9 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
@@ -2800,6 +2914,9 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -2837,6 +2954,9 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
@@ -2868,6 +2988,9 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -2911,6 +3034,9 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -2943,6 +3069,9 @@ func TestRootSyncWithOCI(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	labels := map[string]string{
@@ -2997,6 +3126,9 @@ func TestRootSyncWithOCI(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	// compare ServiceAccount.
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
@@ -3031,6 +3163,9 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	wantServiceAccount = fake.ServiceAccountObject(
@@ -3121,6 +3256,9 @@ func TestRootSyncWithOCI(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -3554,6 +3692,9 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
@@ -3616,6 +3757,9 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
@@ -3646,6 +3790,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatal(err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
@@ -3700,6 +3847,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaultsForAutopilot())
@@ -3729,6 +3879,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)

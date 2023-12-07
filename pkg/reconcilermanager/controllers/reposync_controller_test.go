@@ -1826,9 +1826,10 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	}
 
 	label := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs.Namespace,
+		metadata.SyncNameLabel:            rs.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(
@@ -2072,9 +2073,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
 	label1 := map[string]string{
-		metadata.SyncNamespaceLabel: rs1.Namespace,
-		metadata.SyncNameLabel:      rs1.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs1.Namespace,
+		metadata.SyncNameLabel:            rs1.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	serviceAccount1 := fake.ServiceAccountObject(
@@ -2134,9 +2136,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
 	label2 := map[string]string{
-		metadata.SyncNamespaceLabel: rs2.Namespace,
-		metadata.SyncNameLabel:      rs2.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs2.Namespace,
+		metadata.SyncNameLabel:            rs2.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	repoContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
@@ -2194,9 +2197,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
 	label3 := map[string]string{
-		metadata.SyncNamespaceLabel: rs3.Namespace,
-		metadata.SyncNameLabel:      rs3.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs3.Namespace,
+		metadata.SyncNameLabel:            rs3.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	repoContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
@@ -2253,9 +2257,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs4, fakeClient)
 
 	label4 := map[string]string{
-		metadata.SyncNamespaceLabel: rs4.Namespace,
-		metadata.SyncNameLabel:      rs4.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs4.Namespace,
+		metadata.SyncNameLabel:            rs4.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	repoContainerEnv4 := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4)
@@ -2312,9 +2317,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs5, fakeClient)
 
 	label5 := map[string]string{
-		metadata.SyncNamespaceLabel: rs5.Namespace,
-		metadata.SyncNameLabel:      rs5.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs5.Namespace,
+		metadata.SyncNameLabel:            rs5.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	repoContainerEnv5 := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5)
@@ -3160,9 +3166,10 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	}
 
 	label := map[string]string{
-		metadata.SyncNamespaceLabel: rs.Namespace,
-		metadata.SyncNameLabel:      rs.Name,
-		metadata.SyncKindLabel:      testReconciler.syncKind,
+		metadata.SyncNamespaceLabel:       rs.Namespace,
+		metadata.SyncNameLabel:            rs.Name,
+		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
 	wantServiceAccount := fake.ServiceAccountObject(

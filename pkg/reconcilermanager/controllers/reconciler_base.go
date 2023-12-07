@@ -637,14 +637,22 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	return nil
 }
 
+// ManagedByLabel is a uniform label that is applied to all resources which are
+// managed by reconciler-manager.
+func ManagedByLabel() map[string]string {
+	return map[string]string{
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
+	}
+}
+
 // ManagedObjectLabelMap returns the standard labels applied to objects related
 // to a RootSync/RepoSync that are created by reconciler-manager.
 func ManagedObjectLabelMap(syncKind string, rsRef types.NamespacedName) map[string]string {
-	return map[string]string{
-		metadata.SyncNamespaceLabel: rsRef.Namespace,
-		metadata.SyncNameLabel:      rsRef.Name,
-		metadata.SyncKindLabel:      syncKind,
-	}
+	labelMap := ManagedByLabel()
+	labelMap[metadata.SyncNamespaceLabel] = rsRef.Namespace
+	labelMap[metadata.SyncNameLabel] = rsRef.Name
+	labelMap[metadata.SyncKindLabel] = syncKind
+	return labelMap
 }
 
 func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, binding client.Object) error {

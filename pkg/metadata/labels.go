@@ -56,6 +56,11 @@ const (
 	// This is used to enable selecting pods by label, primarily for printing logs.
 	// Example: kubectl logs deployment/<deploy-name> <container-name> -n config-management-system
 	DeploymentNameLabel = configsync.ConfigSyncPrefix + "deployment-name"
+
+	// ConfigSyncManagedByLabel indicates which Config Sync component is managing
+	// the resource. Similar to the well known app.kubernetes.io/managed-by label,
+	// but scoped to Config Sync.
+	ConfigSyncManagedByLabel = configsync.ConfigSyncPrefix + "managed-by"
 )
 
 // DepthSuffix is a label suffix for hierarchical namespace depth.

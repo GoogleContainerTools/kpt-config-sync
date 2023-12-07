@@ -318,6 +318,7 @@ func (dc *DynamicClient) watch(action clienttesting.Action) (bool, watch.Interfa
 	if err != nil {
 		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
 	}
+	listGVK := kinds.ListGVKForItemGVK(gvk)
 	restrictions := watchAction.GetWatchRestrictions()
 	opts := &client.ListOptions{
 		Namespace:     watchAction.GetNamespace(),
@@ -328,7 +329,7 @@ func (dc *DynamicClient) watch(action clienttesting.Action) (bool, watch.Interfa
 		},
 	}
 	exampleList := &unstructured.UnstructuredList{}
-	exampleList.SetGroupVersionKind(gvk)
+	exampleList.SetGroupVersionKind(listGVK)
 	watcher, err := dc.storage.Watch(context.Background(), exampleList, opts)
 	if err != nil {
 		return true, nil, err

@@ -186,6 +186,24 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		}
 	}
 
+	// Update the resource watches (triggers for the Remediator).
+	// Start watches before the applier runs to detect any drift that may occur
+	// immediately after an apply.
+	var watchErrs status.MultiError
+	if !cache.watchesUpdated {
+		declaredGVKs, _ := u.Resources.DeclaredGVKs()
+		// Delay returning watchErrs until after resources are applied.
+		// This enables applying a CRD and CR in the same commit, because watches
+		// for a CRD cannot be started before the CRD exists. In this case,
+		// the updater will need to run a second time to start watches before apply.
+		watchErrs = u.watch(ctx, declaredGVKs)
+		// Only mark the watches as updated if there were no (non-blocking) parse errors.
+		// This ensures the update will be retried until parsing fully succeeds.
+		if watchErrs == nil && cache.parserErrs == nil {
+			cache.watchesUpdated = true
+		}
+	}
+
 	// Apply the declared resources
 	if !cache.applied {
 		declaredObjs, _ := u.Resources.DeclaredObjects()
@@ -195,23 +213,13 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		}
 		// Only mark the commit as applied if there were no (non-blocking) parse errors.
 		// This ensures the apply will be retried until parsing fully succeeds.
-		if cache.parserErrs == nil {
+		if watchErrs == nil && cache.parserErrs == nil {
 			cache.applied = true
 		}
 	}
 
-	// Update the resource watches (triggers for the Remediator).
-	if !cache.watchesUpdated {
-		declaredGVKs, _ := u.Resources.DeclaredGVKs()
-		err := u.watch(ctx, declaredGVKs)
-		if err != nil {
-			return err
-		}
-		// Only mark the watches as updated if there were no (non-blocking) parse errors.
-		// This ensures the update will be retried until parsing fully succeeds.
-		if cache.parserErrs == nil {
-			cache.watchesUpdated = true
-		}
+	if watchErrs != nil {
+		return watchErrs
 	}
 
 	// Restart remediator workers.

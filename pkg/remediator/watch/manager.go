@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -203,14 +204,24 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 	}
 
 	m.watcherMap[gvk] = w
-	go m.runWatcher(ctx, w, gvk)
-	return nil
+	startCh := make(chan error)
+	go m.runWatcher(ctx, w, gvk, startCh)
+
+	// Add a timeout so the reconciler doesn't wait a long time for the watch to start
+	ctxTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	select {
+	case <-ctxTimeout.Done():
+		return ctxTimeout.Err()
+	case err := <-startCh:
+		return err
+	}
 }
 
 // runWatcher blocks until the given watcher finishes running. This function is
 // threadsafe.
-func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind) {
-	if err := r.Run(ctx); err != nil {
+func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind, startCh chan error) {
+	if err := r.Run(ctx, startCh); err != nil {
 		if errors.Is(err, context.Canceled) {
 			klog.Infof("Watcher stopped for %s: %v", gvk, status.FormatSingleLine(err))
 		} else {

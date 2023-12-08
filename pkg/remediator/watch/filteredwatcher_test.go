@@ -370,8 +370,15 @@ func TestFilteredWatcher(t *testing.T) {
 				}
 			}()
 			// w.Run() blocks until w.Stop() is called or the context is cancelled.
-			err := w.Run(ctx)
+			startCh := make(chan error)
+			assertCh := make(chan error)
+			go func() {
+				err := <-startCh
+				assertCh <- err
+			}()
+			err := w.Run(ctx, startCh)
 			require.Equal(t, tc.wantErr, err)
+			require.NoError(t, <-assertCh)
 
 			var got []core.ID
 			for q.Len() > 0 {

@@ -72,7 +72,7 @@ const maxWatchRetryFactor = 18
 // Runnable defines the custom watch interface.
 type Runnable interface {
 	Stop()
-	Run(ctx context.Context) status.Error
+	Run(ctx context.Context, startCh chan error) status.Error
 	ManagementConflict() bool
 	SetManagementConflict(object client.Object, commit string)
 	ClearManagementConflict()
@@ -109,6 +109,7 @@ type filteredWatcher struct {
 	stopped            bool
 	managementConflict bool
 	conflictHandler    conflict.Handler
+	cancel             func()
 }
 
 // filteredWatcher implements the Runnable interface.
@@ -124,6 +125,7 @@ func NewFiltered(cfg watcherConfig) Runnable {
 		scope:           cfg.scope,
 		syncName:        cfg.syncName,
 		base:            watch.NewEmptyWatch(),
+		cancel:          func() {},
 		errorTracker:    make(map[string]time.Time),
 		conflictHandler: cfg.conflictHandler,
 	}
@@ -218,6 +220,10 @@ func (w *filteredWatcher) removeAllManagementConflictErrorsWithGVK(gvk schema.Gr
 // it stops the underlying base watch and prevents the filteredWatcher from
 // restarting it (like it does if the API server disconnects the base watch).
 func (w *filteredWatcher) Stop() {
+	// Cancel the underlying watch so that we don't enter a deadlock in the case
+	// where the watch failed to start
+	w.cancel()
+
 	w.mux.Lock()
 	defer w.mux.Unlock()
 
@@ -283,11 +289,12 @@ func findStatusErrorCauseMessage(statusErr *apierrors.StatusError, causeType met
 // Run reads the event from the base watch interface,
 // filters the event and pushes the object contained
 // in the event to the controller work queue.
-func (w *filteredWatcher) Run(ctx context.Context) status.Error {
+func (w *filteredWatcher) Run(ctx context.Context, startCh chan error) status.Error {
 	klog.Infof("Watch started for %s", w.gvk)
 	var resourceVersion string
 	var retriesForWatchError int
 	var runErr status.Error
+	first := true
 
 Watcher:
 	for {
@@ -296,6 +303,10 @@ Watcher:
 		// 2. false, nil   -> We have been stopped via Stop(), so exit Run().
 		// 3. true,  nil   -> We have not been stopped and we started a new watch.
 		started, err := w.start(ctx, resourceVersion)
+		if first {
+			startCh <- err
+			first = false
+		}
 		if err != nil {
 			return err
 		}
@@ -384,7 +395,10 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 		Watch:               true,
 	}
 
-	base, err := w.startWatch(ctx, options)
+	ctxWithCancel, cancel := context.WithCancel(ctx)
+	w.cancel = cancel
+
+	base, err := w.startWatch(ctxWithCancel, options)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false, status.InternalWrapf(err, "failed to start watch for %s", w.gvk)

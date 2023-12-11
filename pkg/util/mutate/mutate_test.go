@@ -165,8 +165,7 @@ func TestStatus(t *testing.T) {
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				// spec change not persisted
-				obj.SetResourceVersion("2") // ResourceVersion updated, even tho nothing changed // TODO: does this match apiserver behavior?
-				// generation unchanged (no spec changes)
+				// generation unchanged (no changes)
 				return obj
 			}(),
 		},
@@ -284,9 +283,7 @@ func TestSpec(t *testing.T) {
 			}(),
 		},
 		{
-			// The expected behavior mostly depends on how the fake.Client is
-			// implemented. mutate.WithRetry does not filter status changes.
-			name: "status change",
+			name: "ignore status change",
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
@@ -298,14 +295,7 @@ func TestSpec(t *testing.T) {
 			},
 			expectedUpdated: true,
 			expectedError:   nil,
-			expectedObj: func() client.Object {
-				obj := deploymentCopy(deployment1)
-				obj.Status.Replicas = 1
-				// status change persisted
-				obj.SetResourceVersion("2")
-				// generation unchanged (no spec changes)
-				return obj
-			}(),
+			expectedObj:     deploymentCopy(deployment1),
 		},
 		{
 			name: "stale version (succeed on retry)",

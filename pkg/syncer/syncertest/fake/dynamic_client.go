@@ -354,3 +354,18 @@ func (dc *DynamicClient) Check(t *testing.T, wants ...client.Object) {
 	t.Helper()
 	dc.storage.Check(t, wants...)
 }
+
+// Scheme returns the backing Scheme.
+func (dc *DynamicClient) Scheme() *runtime.Scheme {
+	return dc.scheme
+}
+
+// RESTMapper returns the backing RESTMapper.
+func (dc *DynamicClient) RESTMapper() meta.RESTMapper {
+	return dc.mapper
+}
+
+// Storage returns the backing Storage layer
+func (dc *DynamicClient) Storage() *MemoryStorage {
+	return dc.storage
+}

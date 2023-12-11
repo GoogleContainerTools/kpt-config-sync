@@ -86,7 +86,6 @@ var nsReconcilerName = core.NsReconcilerName(reposyncNs, reposyncName)
 var reconcilerDeploymentReplicaCount int32 = 1
 
 var parsedDeployment = func(de *appsv1.Deployment) error {
-	de.TypeMeta = fake.ToTypeMeta(kinds.Deployment())
 	de.Spec = appsv1.DeploymentSpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -105,7 +104,6 @@ var parsedDeployment = func(de *appsv1.Deployment) error {
 }
 
 var helmParsedDeployment = func(de *appsv1.Deployment) error {
-	de.TypeMeta = fake.ToTypeMeta(kinds.Deployment())
 	de.Spec = appsv1.DeploymentSpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -823,31 +821,22 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	t.Log("Deployment successfully created")
 
-	deployment := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"status": map[string]interface{}{
-				"replicas":          0,
-				"updatedReplicas":   0,
-				"readyReplicas":     0,
-				"availableReplicas": 0,
-				"conditions": []appsv1.DeploymentCondition{
-					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
-					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
-				},
-			},
-		},
+	deployment := &appsv1.Deployment{}
+	deployment.Name = repoDeployment.Name
+	deployment.Namespace = repoDeployment.Namespace
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
 	}
-	deployment.SetGroupVersionKind(kinds.Deployment())
-	patchData, err := json.Marshal(deployment)
-	if err != nil {
-		t.Fatalf("failed to change unstructured to byte array: %v", err)
-	}
-	t.Logf("Applying Patch: %s", string(patchData))
-	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
-		Namespace(repoDeployment.Namespace).
-		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("failed to patch the deployment status: %v", err)
+	deployment.Status.Replicas = 0
+	deployment.Status.UpdatedReplicas = 0
+	deployment.Status.ReadyReplicas = 0
+	deployment.Status.AvailableReplicas = 0
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
 	// Simulate Reconcile triggered by Deployment update
@@ -862,31 +851,19 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 
 	// Simulate Deployment becoming Available
 	replicas := *repoDeployment.Spec.Replicas
-	deployment = &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"status": map[string]interface{}{
-				"replicas":          replicas,
-				"updatedReplicas":   replicas,
-				"readyReplicas":     replicas,
-				"availableReplicas": replicas,
-				"conditions": []appsv1.DeploymentCondition{
-					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
-					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
-				},
-			},
-		},
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
 	}
-	deployment.SetGroupVersionKind(kinds.Deployment())
-	patchData, err = json.Marshal(deployment)
-	if err != nil {
-		t.Fatalf("failed to change unstructured to byte array: %v", err)
-	}
-	t.Logf("Applying Patch: %s", string(patchData))
-	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
-		Namespace(repoDeployment.Namespace).
-		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("failed to patch the deployment status: %v", err)
+	deployment.Status.Replicas = replicas
+	deployment.Status.UpdatedReplicas = replicas
+	deployment.Status.ReadyReplicas = replicas
+	deployment.Status.AvailableReplicas = replicas
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
 	// Simulate Reconcile triggered by Deployment update
@@ -938,8 +915,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	reposync.SetReconciling(wantRs, "Deployment",
-		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+	reposync.ClearCondition(rs, v1beta1.RepoSyncReconciling)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -962,31 +938,19 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	t.Log("Deployment successfully updated")
 
 	// Simulate Deployment being unavailable while replacing its pod
-	deployment = &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"status": map[string]interface{}{
-				"replicas":          1,
-				"updatedReplicas":   0,
-				"readyReplicas":     0,
-				"availableReplicas": 0,
-				"conditions": []appsv1.DeploymentCondition{
-					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
-					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
-				},
-			},
-		},
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
 	}
-	deployment.SetGroupVersionKind(kinds.Deployment())
-	patchData, err = json.Marshal(deployment)
-	if err != nil {
-		t.Fatalf("failed to change unstructured to byte array: %v", err)
-	}
-	t.Logf("Applying Patch: %s", string(patchData))
-	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
-		Namespace(repoDeployment.Namespace).
-		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("failed to patch the deployment status: %v", err)
+	deployment.Status.Replicas = 1
+	deployment.Status.UpdatedReplicas = 0
+	deployment.Status.ReadyReplicas = 0
+	deployment.Status.AvailableReplicas = 0
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
 	// Simulate Reconcile triggered by Deployment update
@@ -1000,31 +964,19 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// Simulate Deployment becoming Available
-	deployment = &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"status": map[string]interface{}{
-				"replicas":          replicas,
-				"updatedReplicas":   replicas,
-				"readyReplicas":     replicas,
-				"availableReplicas": replicas,
-				"conditions": []appsv1.DeploymentCondition{
-					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
-					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
-				},
-			},
-		},
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
 	}
-	deployment.SetGroupVersionKind(kinds.Deployment())
-	patchData, err = json.Marshal(deployment)
-	if err != nil {
-		t.Fatalf("failed to change unstructured to byte array: %v", err)
-	}
-	t.Logf("Applying Patch: %s", string(patchData))
-	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
-		Namespace(repoDeployment.Namespace).
-		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("failed to patch the deployment status: %v", err)
+	deployment.Status.Replicas = replicas
+	deployment.Status.UpdatedReplicas = replicas
+	deployment.Status.ReadyReplicas = replicas
+	deployment.Status.AvailableReplicas = replicas
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
 	// Simulate Reconcile triggered by Deployment update
@@ -1067,9 +1019,30 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
+	// Simulate Deployment being unavailable while replacing its pod
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
+	}
+	deployment.Status.Replicas = 1
+	deployment.Status.UpdatedReplicas = 0
+	deployment.Status.ReadyReplicas = 0
+	deployment.Status.AvailableReplicas = 0
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
+	}
+
+	// Simulate Reconcile triggered by Deployment update
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
 	// RepoSync should still be reconciling because the Deployment is not yet available
 	reposync.SetReconciling(wantRs, "Deployment",
-		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Updated: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
@@ -1079,7 +1052,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		secretMutator(nsReconcilerName+"-"+reposyncSSHKey),
 		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(repoContainerEnv),
-		setUID("1"), setResourceVersion("7"), setGeneration(3),
+		setUID("1"), setResourceVersion("8"), setGeneration(3),
 	)
 	wantDeployments[core.IDOf(repoDeployment)] = repoDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -1089,6 +1062,31 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.FailNow()
 	}
 	t.Log("Deployment successfully updated")
+
+	// Simulate Deployment becoming Available
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+		t.Fatalf("failed to get the reconciler deployment: %v", err)
+	}
+	deployment.Status.Replicas = replicas
+	deployment.Status.UpdatedReplicas = replicas
+	deployment.Status.ReadyReplicas = replicas
+	deployment.Status.AvailableReplicas = replicas
+	deployment.Status.Conditions = append(deployment.Status.Conditions,
+		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
+		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
+	)
+	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+		t.Fatalf("failed to update the reconciler deployment status: %v", err)
+	}
+
+	// Simulate Reconcile triggered by Deployment update
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error after deployment update, got error: %q, want error: nil", err)
+	}
+
+	// RepoSync should be done reconciling because the Deployment is available
+	reposync.ClearCondition(wantRs, v1beta1.RepoSyncReconciling)
+	validateRepoSyncStatus(t, wantRs, fakeClient)
 }
 
 func TestRepoSyncCreateWithCACert(t *testing.T) {
@@ -4203,6 +4201,9 @@ type validateFunc func(*appsv1.Deployment) error
 func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient *syncerFake.DynamicClient, validations ...validateFunc) error {
 	ctx := context.Background()
 	for id, want := range wants {
+		// Set defaults on the expected Deployment
+		fakeDynamicClient.Scheme().Default(want)
+		// Get the current Deployment from the server
 		uObj, err := fakeDynamicClient.Resource(kinds.DeploymentResource()).
 			Namespace(id.Namespace).
 			Get(ctx, id.Name, metav1.GetOptions{})

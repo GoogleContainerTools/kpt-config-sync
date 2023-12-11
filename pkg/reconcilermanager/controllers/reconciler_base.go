@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -32,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -209,6 +209,8 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		r.logger(ctx).Info("Managed object not found, creating",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind)
+		// Ensure GVK is included in the patch data
+		declared.SetGroupVersionKind(kinds.Deployment())
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)
@@ -257,6 +259,8 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		if err := deploymentClient.Delete(ctx, id.Name, metav1.DeleteOptions{}); err != nil {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationDelete)
 		}
+		// Ensure GVK is included in the patch data
+		declared.SetGroupVersionKind(kinds.Deployment())
 		data, err := json.Marshal(declared)
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to marshal declared deployment object to byte array: %w", err)

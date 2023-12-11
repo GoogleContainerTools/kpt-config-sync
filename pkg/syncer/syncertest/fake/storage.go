@@ -115,7 +115,7 @@ func (ms *MemoryStorage) TestPut(obj client.Object) error {
 	if err != nil {
 		return err
 	}
-	err = ms.putWithoutLock(id, obj)
+	_, _, err = ms.putWithoutLock(id, obj)
 	if err != nil {
 		return errors.Wrapf(err, "failed to put object into storage: %s %s",
 			id.Kind, id.ObjectKey)
@@ -135,7 +135,7 @@ func (ms *MemoryStorage) TestPutAll(objs ...client.Object) error {
 		if err != nil {
 			return err
 		}
-		err = ms.putWithoutLock(id, obj)
+		_, _, err = ms.putWithoutLock(id, obj)
 		if err != nil {
 			return errors.Wrapf(err, "failed to put object into storage: %s %s",
 				id.Kind, id.ObjectKey)
@@ -144,16 +144,29 @@ func (ms *MemoryStorage) TestPutAll(objs ...client.Object) error {
 	return nil
 }
 
-func (ms *MemoryStorage) putWithoutLock(id core.ID, obj client.Object) error {
+func (ms *MemoryStorage) putWithoutLock(id core.ID, obj client.Object) (*unstructured.Unstructured, bool, error) {
 	cachedObj := ms.objects[id]
 	uObj, err := ms.prepareObject(obj)
 	if err != nil {
-		return err
+		return cachedObj, false, err
+	}
+	if cachedObj != nil {
+		// If nothing but the generation and/or resourceVersion changed, skip the put
+		newGen := uObj.GetGeneration()
+		uObj.SetGeneration(cachedObj.GetGeneration())
+		newRV := uObj.GetResourceVersion()
+		uObj.SetResourceVersion(cachedObj.GetResourceVersion())
+		if equality.Semantic.DeepEqual(cachedObj, uObj) {
+			klog.V(5).Infof("MemoryStorage.Put (%s): No Diff", id)
+			return cachedObj, false, nil
+		}
+		uObj.SetGeneration(newGen)
+		uObj.SetResourceVersion(newRV)
 	}
 	klog.V(5).Infof("MemoryStorage.Put (%s): Diff (- Old, + New):\n%s",
 		id, log.AsYAMLDiffWithScheme(cachedObj, uObj, ms.scheme))
 	ms.objects[id] = uObj
-	return nil
+	return uObj, true, nil
 }
 
 // prepareObject converts the object to the scheme-preferred version, converts
@@ -164,13 +177,24 @@ func (ms *MemoryStorage) prepareObject(obj client.Object) (*unstructured.Unstruc
 		return nil, err
 	}
 
-	// Convert to Unstructured with the scheme-preferred version
-	uObj, err := kinds.ToUnstructuredWithVersion(obj, storageGVK, ms.scheme)
+	// Convert to typed with the scheme-preferred version
+	tObj, err := kinds.ToTypedWithVersion(obj, storageGVK, ms.scheme)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert to scheme-preferred version")
 	}
+	cObj, err := kinds.ObjectAsClientObject(tObj)
+	if err != nil {
+		return nil, err
+	}
 
-	MinimizeUnstructured(uObj)
+	// Set defaults (must be passed a typed object registered with the scheme)
+	ms.scheme.Default(cObj)
+
+	// Convert to Unstructured
+	uObj, err := kinds.ToUnstructured(cObj, ms.scheme)
+	if err != nil {
+		return nil, err
+	}
 
 	return uObj, nil
 }
@@ -269,12 +293,10 @@ func (ms *MemoryStorage) Get(_ context.Context, gvk schema.GroupVersionKind, key
 
 	// Convert from the typed object to whatever type the caller asked for.
 	// If it's the same, it'll just do a DeepCopyInto.
-	err = ms.scheme.Convert(tObj, obj, nil)
-	if err != nil {
+	if err = ms.scheme.Convert(tObj, obj, nil); err != nil {
 		return err
 	}
-	// Conversion sometimes drops the GVK, so add it back in.
-	// TODO: Does the real client do this for typed objects or just Unstructured?
+	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
 	klog.V(6).Infof("Getting %s (Generation: %v, ResourceVersion: %q): %s",
@@ -342,6 +364,11 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 			// No match
 			continue
 		}
+		// TODO: Remove GVK from items of typed lists
+		// if _, ok := list.(*unstructured.UnstructuredList); !ok {
+		// 	delete(uObj.Object, "apiVersion")
+		// 	delete(uObj.Object, "kind")
+		// }
 		uList.Items = append(uList.Items, *uObj)
 	}
 
@@ -351,8 +378,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 	if err != nil {
 		return err
 	}
-	// TODO: Does the normal client.List always populate GVK on typed objects?
-	// Some of the code seems to require this...
+	// TODO: Remove GVK from typed objects
 	list.GetObjectKind().SetGroupVersionKind(listGVK)
 
 	klog.V(6).Infof("Listing %s (ResourceVersion: %q, Items: %d): %s",
@@ -403,9 +429,6 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 		return err
 	}
 
-	// Set defaults (must be passed a typed object registered with the scheme)
-	ms.scheme.Default(tObj)
-
 	id, err := lookupObjectID(tObj, ms.scheme)
 	if err != nil {
 		return err
@@ -423,17 +446,20 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 		kinds.ObjectSummary(tObj),
 		tObj.GetGeneration(), tObj.GetResourceVersion())
 
-	// Copy ResourceVersion change back to input object
-	obj.SetResourceVersion(tObj.GetResourceVersion())
-	// Copy Generation change back to input object
-	obj.SetGeneration(tObj.GetGeneration())
-
-	err = ms.putWithoutLock(id, tObj)
+	cachedObj, diff, err := ms.putWithoutLock(id, tObj)
 	if err != nil {
 		return err
 	}
-
-	return ms.sendPutEvent(ctx, id, watch.Added)
+	// Copy everything back to input object, even if no diff
+	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
+		return errors.Wrap(err, "failed to update input object")
+	}
+	// TODO: Remove GVK from typed objects
+	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	if diff {
+		return ms.sendPutEvent(ctx, id, watch.Added)
+	}
+	return nil
 }
 
 func (ms *MemoryStorage) validateCreateOptions(opts *client.CreateOptions) error {
@@ -483,17 +509,22 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 	}
 
 	// Simulate apiserver delayed deletion for finalizers
-	if cachedObj.GetDeletionTimestamp() == nil && len(cachedObj.GetFinalizers()) > 0 {
-		klog.V(5).Infof("Found %d finalizers: Adding deleteTimestamp to %s (ResourceVersion: %q)",
-			len(cachedObj.GetFinalizers()), kinds.ObjectSummary(cachedObj), cachedObj.GetResourceVersion())
-		newObj := cachedObj.DeepCopyObject().(client.Object)
-		now := ms.Now()
-		newObj.SetDeletionTimestamp(&now)
-		// TODO: propagate DeleteOptions -> UpdateOptions
-		err := ms.updateWithoutLock(ctx, newObj, nil)
-		if err != nil {
-			return err
+	if len(cachedObj.GetFinalizers()) > 0 {
+		if cachedObj.GetDeletionTimestamp() == nil {
+			klog.V(5).Infof("Found %d finalizers: Adding deleteTimestamp to %s (ResourceVersion: %q)",
+				len(cachedObj.GetFinalizers()), kinds.ObjectSummary(cachedObj), cachedObj.GetResourceVersion())
+			newObj := cachedObj.DeepCopyObject().(client.Object)
+			now := ms.Now()
+			newObj.SetDeletionTimestamp(&now)
+			// TODO: propagate DeleteOptions -> UpdateOptions
+			err := ms.updateWithoutLock(ctx, newObj, nil)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
+		klog.V(5).Infof("Found %d finalizers and deleteTimestamp=%q on %s (ResourceVersion: %q): Ignoring delete request",
+			len(cachedObj.GetFinalizers()), cachedObj.GetDeletionTimestamp(), kinds.ObjectSummary(cachedObj), cachedObj.GetResourceVersion())
 		return nil
 	}
 
@@ -648,9 +679,6 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 		return err
 	}
 
-	// Set defaults (must be passed a typed object registered with the scheme)
-	ms.scheme.Default(tObj)
-
 	id, err := lookupObjectID(obj, ms.scheme)
 	if err != nil {
 		return err
@@ -695,21 +723,24 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 		}
 	}
 
-	// Copy latest values back to input object
-	obj.SetUID(tObj.GetUID())
-	obj.SetResourceVersion(tObj.GetResourceVersion())
-	obj.SetGeneration(tObj.GetGeneration())
-
 	klog.V(5).Infof("Updating %s (Generation: %v, ResourceVersion: %q)",
 		kinds.ObjectSummary(tObj),
 		tObj.GetGeneration(), tObj.GetResourceVersion())
 
-	err = ms.putWithoutLock(id, tObj)
+	cachedObj, diff, err := ms.putWithoutLock(id, tObj)
 	if err != nil {
 		return err
 	}
-
-	return ms.sendPutEvent(ctx, id, watch.Modified)
+	// Copy everything back to input object, even if no diff
+	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
+		return errors.Wrap(err, "failed to update input object")
+	}
+	// TODO: Remove GVK from typed objects
+	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	if diff {
+		return ms.sendPutEvent(ctx, id, watch.Modified)
+	}
+	return nil
 }
 
 func (ms *MemoryStorage) validateUpdateOptions(opts *client.UpdateOptions) error {
@@ -850,6 +881,19 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		return errors.Wrap(err, "failed to increment resourceVersion")
 	}
 	if found {
+		// Copy status from cache
+		// TODO: copy other sub-resources too
+		// TODO: Add support for sub-resource patch
+		oldStatus, hasStatus, err := unstructured.NestedMap(cachedObj.Object, "status")
+		if err != nil {
+			return err
+		}
+		if hasStatus {
+			if err = unstructured.SetNestedMap(uObj.Object, oldStatus, "status"); err != nil {
+				return err
+			}
+		}
+
 		// Update generation if spec changed
 		if err = ms.updateGeneration(cachedObj, uObj); err != nil {
 			return errors.Wrap(err, "failed to update generation")
@@ -861,12 +905,20 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		id, found,
 		uObj.GetGeneration(), uObj.GetResourceVersion())
 
-	err = ms.putWithoutLock(id, uObj)
+	cachedObj, diff, err := ms.putWithoutLock(id, uObj)
 	if err != nil {
 		return err
 	}
-
-	return ms.sendPutEvent(ctx, id, watch.Modified)
+	// Copy everything back to input object, even if no diff
+	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
+		return errors.Wrap(err, "failed to update input object")
+	}
+	// TODO: Remove GVK from typed objects
+	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	if diff {
+		return ms.sendPutEvent(ctx, id, watch.Modified)
+	}
+	return nil
 }
 
 func (ms *MemoryStorage) validatePatchOptions(opts *client.PatchOptions, patch client.Patch) error {
@@ -992,18 +1044,12 @@ func (ms *MemoryStorage) Check(t *testing.T, wants ...client.Object) {
 	wantMap := make(map[core.ID]client.Object)
 
 	for _, obj := range wants {
-		// Convert to typed first, so we can set the defaults on the specified
-		// version. Then prep for storage & minimize before comparison.
-		tObj, err := toTypedClientObject(obj, ms.scheme)
-		if err != nil {
-			t.Fatalf("failed to convert expected object: %v", err)
-		}
-		ms.scheme.Default(tObj)
-		uObj, err := ms.prepareObject(tObj)
+		// Then prep for storage with defaults & minimize before comparison.
+		uObj, err := ms.prepareObject(obj)
 		if err != nil {
 			t.Fatalf("failed to prepare expected object for comparison with objects in storage: %v", err)
 		}
-		wantMap[core.IDOf(obj)] = uObj
+		wantMap[core.IDOf(uObj)] = uObj
 	}
 
 	asserter := testutil.NewAsserter(

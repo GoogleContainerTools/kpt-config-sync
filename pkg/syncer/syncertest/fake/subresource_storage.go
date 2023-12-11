@@ -125,12 +125,20 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 	klog.V(5).Infof("Updating Status %s (ResourceVersion: %q)",
 		kinds.ObjectSummary(updatedObj), updatedObj.GetResourceVersion())
 
-	err = ss.Storage.putWithoutLock(id, updatedObj)
+	cachedObj, diff, err := ss.Storage.putWithoutLock(id, updatedObj)
 	if err != nil {
 		return err
 	}
-
-	return ss.Storage.sendPutEvent(ctx, id, watch.Modified)
+	// Copy everything back to input object, even if no diff
+	if err := ss.Storage.scheme.Convert(cachedObj, obj, nil); err != nil {
+		return errors.Wrap(err, "failed to update input object")
+	}
+	// TODO: Remove GVK from typed objects
+	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	if diff {
+		return ss.Storage.sendPutEvent(ctx, id, watch.Modified)
+	}
+	return nil
 }
 
 // Patch the sub-resource field. All other fields are ignored.

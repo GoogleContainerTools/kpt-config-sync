@@ -120,13 +120,6 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
-	rr2Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
-	rr3Repo := nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
-	nn2Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
-	nn3Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
-	nn4Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
-	nn5Repo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
-
 	nrb2 := nomostest.RepoSyncRoleBinding(nn2)
 	nrb3 := nomostest.RepoSyncRoleBinding(nn3)
 	nrb4 := nomostest.RepoSyncRoleBinding(nn4)
@@ -139,7 +132,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
-	nt.RootRepos[rr2] = rr2Repo
+	nt.RootRepos[rr2] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
 	rs2 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr2)
 	rs2ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr2)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(rs2ConfigFile, rs2))
@@ -150,7 +143,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr3, rr2)
-	nt.RootRepos[rr3] = rr3Repo
+	nt.RootRepos[rr3] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
 	rs3 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr3)
 	rs3ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr3)
 	nt.Must(nt.RootRepos[rr2].Add(rs3ConfigFile, rs3))
@@ -161,7 +154,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	nt.T.Logf("Create RepoSync %s", nn2)
-	nt.NonRootRepos[nn2] = nn2Repo
+	nt.NonRootRepos[nn2] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
 	nrs2 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn2)
 	if err := nt.KubeClient.Create(nrs2); err != nil {
 		nt.T.Fatal(err)
@@ -174,7 +167,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn3, configsync.RootSyncName)
-	nt.NonRootRepos[nn3] = nn3Repo
+	nt.NonRootRepos[nn3] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn3)
 	// Ensure the RoleBinding is deleted after the RepoSync
 	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
@@ -189,7 +182,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", nn4, nn2)
-	nt.NonRootRepos[nn4] = nn4Repo
+	nt.NonRootRepos[nn4] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
 	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn4)
 	nt.Must(nt.NonRootRepos[nn2].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name), nrs4))
 	// RoleBinding (nrb4) managed by RootSync root-sync, because RepoSync (nr2)
@@ -201,7 +194,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn5, rr1)
-	nt.NonRootRepos[nn5] = nn5Repo
+	nt.NonRootRepos[nn5] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn5)
 	// Ensure the RoleBinding is deleted after the RepoSync
 	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {

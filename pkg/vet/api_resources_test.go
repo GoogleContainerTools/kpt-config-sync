@@ -39,19 +39,21 @@ clusterroles                                   rbac.authorization.k8s.io/v1     
 rolebindings                                   rbac.authorization.k8s.io/v1           true         RoleBinding
 configmaps                        cm           v1                                     true         ConfigMap
 apiservices                                    apiregistration.k8s.io/v1              false        APIService
+customresourcedefinitions         crd,crds     apiextensions.k8s.io/v1                false        CustomResourceDefinition
 `,
 			wantScopes: map[schema.GroupKind]discovery.ScopeType{
-				kinds.Namespace().GroupKind():   discovery.ClusterScope,
-				kinds.Deployment().GroupKind():  discovery.NamespaceScope,
-				kinds.ClusterRole().GroupKind(): discovery.ClusterScope,
-				kinds.RoleBinding().GroupKind(): discovery.NamespaceScope,
-				kinds.ConfigMap().GroupKind():   discovery.NamespaceScope,
-				kinds.APIService().GroupKind():  discovery.ClusterScope,
+				kinds.Namespace().GroupKind():                  discovery.ClusterScope,
+				kinds.Deployment().GroupKind():                 discovery.NamespaceScope,
+				kinds.ClusterRole().GroupKind():                discovery.ClusterScope,
+				kinds.RoleBinding().GroupKind():                discovery.NamespaceScope,
+				kinds.ConfigMap().GroupKind():                  discovery.NamespaceScope,
+				kinds.APIService().GroupKind():                 discovery.ClusterScope,
+				kinds.CustomResourceDefinitionV1().GroupKind(): discovery.ClusterScope,
 			},
 			wantErr: nil,
 		},
 		{
-			name: "incorrect column name",
+			name: "incorrect APIVERSION column name",
 			lines: `NAME                              SHORTNAMES   APIGROUP                       NAMESPACED   KIND
 configmaps                        cm           v1                                     true         ConfigMap
 namespaces                        ns           v1                                     false        Namespace
@@ -65,7 +67,7 @@ poddisruptionbudgets              pdb          policy/v1                        
 			wantErr: MissingAPIVersion(""),
 		},
 		{
-			name: "invalid line",
+			name: "invalid scope value",
 			lines: `NAME                              SHORTNAMES   APIVERSION                       NAMESPACED   KIND
 configmaps                        cm           v1                                     other         ConfigMap
 namespaces                        ns           v1                                     false        Namespace
@@ -91,6 +93,26 @@ clusterroles                                   rbac.authorization.k8s.io/v1     
 poddisruptionbudgets              pdb          policy/v1                              true         PodDisruptionBudget 
 `,
 			wantErr: MissingAPIVersion(""),
+		},
+		{
+			name:       "empty data",
+			lines:      `NAME                              SHORTNAMES   APIVERSION                       NAMESPACED   KIND `,
+			wantScopes: nil,
+			wantErr:    nil,
+		},
+		{
+			name: "missing scope value",
+			lines: `NAME                              SHORTNAMES   APIVERSION                       NAMESPACED   KIND
+configmaps                        cm           v1                                     true         ConfigMap
+namespaces                        ns           v1                                     false        Namespace
+apiservices                                    apiregistration.k8s.io/v1              false        APIService
+deployments                       deploy       apps/v1                                true         Deployment
+namespaceselectors                             configmanagement.gke.io/v1             NamespaceSelector
+rootsyncs                                      configsync.gke.io/v1beta1              true         RootSync
+clusterroles                                   rbac.authorization.k8s.io/v1           false        ClusterRole
+poddisruptionbudgets              pdb          policy/v1                              true         PodDisruptionBudget
+`,
+			wantErr: InvalidScopeValue("", "", "NamespaceSelector"),
 		},
 	}
 
@@ -150,6 +172,13 @@ func TestAddLine(t *testing.T) {
 			name:      "invalid scope",
 			line:      "v1                             other        Namespace",
 			wantErr:   InvalidScopeValue("", "", "other"),
+			groupKind: kinds.Namespace().GroupKind(),
+			wantScope: discovery.UnknownScope,
+		},
+		{
+			name:      "missing scope",
+			line:      "v1                             ConfigMap",
+			wantErr:   InvalidScopeValue("", "", "ConfigMap"),
 			groupKind: kinds.Namespace().GroupKind(),
 			wantScope: discovery.UnknownScope,
 		},

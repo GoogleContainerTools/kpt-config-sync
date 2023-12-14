@@ -34,10 +34,15 @@ import (
 // repositories. In this case, `us`, which is a multi-region location.
 const DefaultLocation = "us"
 
+// RegistryReaderAccountName is the name of the google service account
+// with permission to read from Artifact Registry.
+const RegistryReaderAccountName = "e2e-test-ar-reader"
+
 // RegistryReaderAccountEmail returns the email of the google service account
 // with permission to read from Artifact Registry.
 func RegistryReaderAccountEmail() string {
-	return fmt.Sprintf("e2e-test-ar-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+	return fmt.Sprintf("%s@%s.iam.gserviceaccount.com",
+		RegistryReaderAccountName, *e2e.GCPProject)
 }
 
 // SetupImage constructs a new Image for use during an e2e test, along with its

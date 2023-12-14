@@ -22,7 +22,6 @@ You can reach the maintainers of this project at:
 
 * [Config Sync discussions]
 * [Config Sync issues]
-* #kpt channel on [k8s slack]
 
 [installation guide]: docs/installation.md
 [usage guide]: docs/usage.md

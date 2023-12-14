@@ -35,6 +35,7 @@ const testGitServer = "test-git-server"
 const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0"
 const testGitHTTPServer = "http-git-server"
 const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0-b3b4984cd"
+const safeToEvictAnnotation = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 
 func testGitServerSelector() map[string]string {
 	// Note that maps are copied by reference into objects.
@@ -125,6 +126,9 @@ func gitDeployment() *appsv1.Deployment {
 		core.Namespace(testGitNamespace),
 		core.Labels(testGitServerSelector()),
 	)
+	if *e2e.GKEAutopilot {
+		deployment.SetAnnotations(map[string]string{safeToEvictAnnotation: "false"})
+	}
 	gitGID := int64(1000)
 	deployment.Spec = appsv1.DeploymentSpec{
 		MinReadySeconds: 2,

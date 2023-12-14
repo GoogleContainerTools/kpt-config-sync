@@ -112,7 +112,6 @@ func buildSelectorMap(ctx context.Context, c client.Client, objs *objects.Scoped
 				hasDynamicNSSelector = true
 			} else if nsSelector.Spec.Mode != "" && nsSelector.Spec.Mode != v1.NSSelectorStaticMode {
 				errs = status.Append(errs, selectors.UnknownNamespaceSelectorModeError(nsSelector))
-				hasDynamicNSSelector = true
 			}
 		default:
 			others = append(others, obj)

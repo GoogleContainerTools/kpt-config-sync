@@ -360,7 +360,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				},
 			},
 			wantErrs:                               selectors.UnknownNamespaceSelectorModeError(unknownModeNSS),
-			wantDynamicNSSelectorEnabledAnnotation: true,
+			wantDynamicNSSelectorEnabledAnnotation: false,
 		},
 	}
 

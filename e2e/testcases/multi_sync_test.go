@@ -120,6 +120,13 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
+	nt.RootRepos[rr2] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
+	nt.RootRepos[rr3] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
+	nt.NonRootRepos[nn2] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
+	nt.NonRootRepos[nn3] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
+	nt.NonRootRepos[nn4] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
+	nt.NonRootRepos[nn5] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
+
 	nrb2 := nomostest.RepoSyncRoleBinding(nn2)
 	nrb3 := nomostest.RepoSyncRoleBinding(nn3)
 	nrb4 := nomostest.RepoSyncRoleBinding(nn4)
@@ -132,29 +139,27 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr2, configsync.RootSyncName)
-	nt.RootRepos[rr2] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
+
 	rs2 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr2)
 	rs2ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr2)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(rs2ConfigFile, rs2))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSync: " + rr2))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr2.
-	if err := nt.WatchForAllSyncs(); err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.SkipRootRepos(rr3), nomostest.SkipNonRootRepos(nn2, nn3, nn4, nn5)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rr3, rr2)
-	nt.RootRepos[rr3] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
 	rs3 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rr3)
 	rs3ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rr3)
 	nt.Must(nt.RootRepos[rr2].Add(rs3ConfigFile, rs3))
 	nt.Must(nt.RootRepos[rr2].CommitAndPush("Adding RootSync: " + rr3))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RootSync rr3.
-	if err := nt.WatchForAllSyncs(); err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(nn2, nn3, nn4, nn5)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Create RepoSync %s", nn2)
-	nt.NonRootRepos[nn2] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
 	nrs2 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn2)
 	if err := nt.KubeClient.Create(nrs2); err != nil {
 		nt.T.Fatal(err)
@@ -162,12 +167,11 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	// RoleBinding (nrb2) managed by RootSync root-sync, because the namespace
 	// tenant does not have permission to manage RBAC.
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr2.
-	if err := nt.WatchForAllSyncs(); err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(nn3, nn4, nn5)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn3, configsync.RootSyncName)
-	nt.NonRootRepos[nn3] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn3)
 	// Ensure the RoleBinding is deleted after the RepoSync
 	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
@@ -177,24 +181,22 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn3.Name), nrb3))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSync: " + nn3.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr3.
-	if err := nt.WatchForAllSyncs(); err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(nn4, nn5)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", nn4, nn2)
-	nt.NonRootRepos[nn4] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
 	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn4)
 	nt.Must(nt.NonRootRepos[nn2].Add(fmt.Sprintf("acme/reposyncs/%s.yaml", nn4.Name), nrs4))
 	// RoleBinding (nrb4) managed by RootSync root-sync, because RepoSync (nr2)
 	// does not have permission to manage RBAC.
 	nt.Must(nt.NonRootRepos[nn2].CommitAndPush("Adding RepoSync: " + nn4.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr4.
-	if err := nt.WatchForAllSyncs(); err != nil {
+	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(nn5)); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", nn5, rr1)
-	nt.NonRootRepos[nn5] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn5)
 	// Ensure the RoleBinding is deleted after the RepoSync
 	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {

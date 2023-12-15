@@ -44,6 +44,8 @@ type watchForAllSyncsOptions struct {
 	readyCheck         bool
 	syncRootRepos      bool
 	syncNamespaceRepos bool
+	skipRootRepos      map[string]bool
+	skipNonRootRepos   map[types.NamespacedName]bool
 	rootSha1Fn         Sha1Func
 	repoSha1Fn         Sha1Func
 	syncDirectoryMap   map[types.NamespacedName]string
@@ -90,6 +92,26 @@ func RepoSyncOnly() WatchForAllSyncsOptions {
 	}
 }
 
+// SkipRootRepos specifies RootSyncs which do not need to be synced.
+func SkipRootRepos(skipRootRepos ...string) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.skipRootRepos = make(map[string]bool)
+		for _, skip := range skipRootRepos {
+			options.skipRootRepos[skip] = true
+		}
+	}
+}
+
+// SkipNonRootRepos specifies RepoSyncs which do not need to be synced.
+func SkipNonRootRepos(skipNonRootRepos ...types.NamespacedName) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.skipNonRootRepos = make(map[types.NamespacedName]bool)
+		for _, skip := range skipNonRootRepos {
+			options.skipNonRootRepos[skip] = true
+		}
+	}
+}
+
 // SkipReadyCheck specifies not to wait for all Config Sync components to be ready.
 func SkipReadyCheck() WatchForAllSyncsOptions {
 	return func(options *watchForAllSyncsOptions) {
@@ -130,6 +152,8 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		readyCheck:         true,
 		syncRootRepos:      true,
 		syncNamespaceRepos: true,
+		skipRootRepos:      make(map[string]bool),
+		skipNonRootRepos:   make(map[types.NamespacedName]bool),
 		rootSha1Fn:         DefaultRootSha1Fn,
 		repoSha1Fn:         DefaultRepoSha1Fn,
 		syncDirectoryMap:   map[types.NamespacedName]string{},
@@ -149,6 +173,9 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 
 	if waitForRepoSyncsOptions.syncRootRepos {
 		for name := range nt.RootRepos {
+			if _, ok := waitForRepoSyncsOptions.skipRootRepos[name]; ok {
+				continue
+			}
 			nn := RootSyncNN(name)
 			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
 			tg.Go(func() error {
@@ -162,6 +189,9 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 
 	if waitForRepoSyncsOptions.syncNamespaceRepos {
 		for nn := range nt.NonRootRepos {
+			if _, ok := waitForRepoSyncsOptions.skipNonRootRepos[nn]; ok {
+				continue
+			}
 			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
 			nnPtr := nn
 			tg.Go(func() error {

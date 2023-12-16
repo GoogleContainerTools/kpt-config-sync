@@ -15,17 +15,23 @@
 package e2e
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -765,10 +771,32 @@ func TestHelmGCENode(t *testing.T) {
 	}
 }
 
-// TestHelmARTokenAuth verifies Config Sync can pull Helm chart from private Artifact Registry with Token auth type.
-// This test will work only with following pre-requisites:
-// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
-// A JSON key file is generated for this service account and stored in Secret Manager
+// ServiceAccountFile represents a Google Service Account json file.
+// https://github.com/googleapis/google-cloud-go/blob/main/auth/internal/internaldetect/filetype.go#L35
+type ServiceAccountFile struct {
+	Type           string `json:"type"`
+	ProjectID      string `json:"project_id"`
+	PrivateKeyID   string `json:"private_key_id"`
+	PrivateKey     string `json:"private_key"`
+	ClientEmail    string `json:"client_email"`
+	ClientID       string `json:"client_id"`
+	AuthURL        string `json:"auth_uri"`
+	TokenURL       string `json:"token_uri"`
+	UniverseDomain string `json:"universe_domain"`
+}
+
+// TestHelmARTokenAuth verifies Config Sync can pull Helm chart from private
+// Artifact Registry with Token auth type.
+//
+// Test pre-requisites:
+//   - Google service account
+//     `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created
+//     with `roles/artifactregistry.reader` for accessing images in Artifact
+//     Registry.
+//   - A JSON key file is generated for this service account and stored in
+//     Secret Manager
+//
+// Test handles service account key rotation.
 func TestHelmARTokenAuth(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
@@ -777,14 +805,20 @@ func TestHelmARTokenAuth(t *testing.T) {
 	)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Fetch password from Secret Manager")
-	key, err := gitproviders.FetchCloudSecret("config-sync-ci-ar-key")
+
+	gsaKeySecretID := "config-sync-ci-ar-key"
+	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
+	gsaName := artifactregistry.RegistryReaderAccountName
+	gsaKeyFilePath, err := fetchServiceAccountKeyFile(nt, *e2e.GCPProject, gsaKeySecretID, gsaEmail, gsaName)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Create secret for authentication")
-	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo", fmt.Sprintf("--namespace=%s", configsync.ControllerNamespace), "--from-literal=username=_json_key", fmt.Sprintf("--from-literal=password=%s", key))
+	nt.T.Log("Creating kubernetes secret for authentication")
+	_, err = nt.Shell.Kubectl("create", "secret", "generic", "foo",
+		"--namespace", configsync.ControllerNamespace,
+		"--from-literal", "username=_json_key",
+		"--from-file", fmt.Sprintf("password=%s", gsaKeyFilePath))
 	if err != nil {
 		nt.T.Fatalf("failed to create secret, err: %v", err)
 	}
@@ -878,4 +912,149 @@ func helmChartVersion(chartVersion string) nomostest.Sha1Func {
 	return func(*nomostest.NT, types.NamespacedName) (string, error) {
 		return chartVersion, nil
 	}
+}
+
+// fetchServiceAccountKeyFile downloads a service account key from google
+// secret manager, using the specified `gsaKeySecretID`. If the key has expired,
+// a new key is generated and stored as a new version of the secret in secret
+// manager. If successful, the old expired key is deleted. Then the path to the
+// new key file is returned. The key file will be deleted when the current
+// test ends.
+func fetchServiceAccountKeyFile(nt *nomostest.NT, projectID, gsaKeySecretID, gsaEmail, gsaName string) (string, error) {
+	// Use a temp file to hold the secret to avoid logging the secret contents
+	gsaKeyFilePath := filepath.Join(nt.TmpDir, fmt.Sprintf("%s.json", gsaName))
+	nt.T.Cleanup(func() {
+		nt.Must(os.RemoveAll(gsaKeyFilePath))
+	})
+
+	nt.T.Log("Listing enabled service account key versions in Secret Manager")
+	out, err := nt.Shell.ExecWithDebug("gcloud", "secrets", "versions", "list",
+		gsaKeySecretID,
+		"--filter", "state=ENABLED",
+		"--limit", "1",
+		"--format", "value(name)",
+		"--project", projectID)
+	if err != nil {
+		// TODO: create new key and secret if no secret found
+		return "", fmt.Errorf("listing enabled secret versions: %w", err)
+	}
+	// For some reason, the "name" value is just the version,
+	// even tho in json the "name" field is the full name.
+	// But what the access command wants is the version. So it's fine.
+	gsaKeySecretVersion := strings.TrimSpace(string(out))
+	if gsaKeySecretVersion == "" {
+		nt.T.Log("No enabled secrets versions")
+		err = generateServiceAccountKey(nt, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath)
+		if err != nil {
+			return "", err
+		}
+		return gsaKeyFilePath, nil
+	}
+
+	nt.T.Log("Reading service account key from Secret Manager")
+	_, err = nt.Shell.ExecWithDebug("gcloud", "secrets", "versions",
+		"access", gsaKeySecretVersion,
+		"--secret", gsaKeySecretID,
+		"--out-file", gsaKeyFilePath,
+		"--project", projectID)
+	if err != nil {
+		return "", fmt.Errorf("reading latest enabled secret version: %w", err)
+	}
+
+	nt.T.Log("Checking service account key expiration")
+	gsaKeyFileBytes, err := os.ReadFile(gsaKeyFilePath)
+	if err != nil {
+		return "", fmt.Errorf("reading service account file: %w", err)
+	}
+	gsaKeyJSON := string(gsaKeyFileBytes)
+	gsaKeyFile := &ServiceAccountFile{}
+	if err := json.Unmarshal([]byte(gsaKeyJSON), gsaKeyFile); err != nil {
+		return "", fmt.Errorf("parsing service account key file: %w", err)
+	}
+	gsaKeyID := gsaKeyFile.PrivateKeyID
+	if gsaKeyID == "" {
+		return "", errors.New("invalid service account key file: empty private_key_id")
+	}
+	// There's no describe for individual keys, so we have to list with a filter.
+	gsaKeyName := fmt.Sprintf("projects/%s/serviceAccounts/%s/keys/%s",
+		projectID, gsaEmail, gsaKeyID)
+	out, err = nt.Shell.ExecWithDebug("gcloud", "iam", "service-accounts", "keys", "list",
+		"--iam-account", gsaEmail,
+		"--filter", fmt.Sprintf("name=%s", gsaKeyName),
+		"--format", "value(validBeforeTime)",
+		"--project", projectID)
+	if err != nil {
+		return "", fmt.Errorf("listing service account keys: %w", err)
+	}
+	validBeforeTimestamp := strings.TrimSpace(string(out))
+	if validBeforeTimestamp == "" {
+		nt.T.Log("No matching service account key found")
+		err = generateServiceAccountKey(nt, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath)
+		if err != nil {
+			return "", err
+		}
+
+		nt.T.Log("Destroying invalid secret version")
+		_, err = nt.Shell.ExecWithDebug("gcloud", "secrets", "versions",
+			"destroy", gsaKeySecretVersion,
+			"--secret", gsaKeySecretID,
+			"--project", projectID,
+			"--quiet") // skip confirmation prompt
+		if err != nil {
+			return "", fmt.Errorf("destroying secret version: %w", err)
+		}
+		return gsaKeyFilePath, nil
+	}
+	validBeforeTime, err := time.Parse(time.RFC3339, validBeforeTimestamp)
+	if err != nil {
+		return "", fmt.Errorf("parsing service account key validBeforeTime: %w", err)
+	}
+	// If the key is valid for at least another hour, return its file path.
+	if validBeforeTime.After(time.Now().Add(time.Hour)) {
+		return gsaKeyFilePath, nil
+	}
+	nt.T.Log("Service account key expired")
+
+	// Delete the invalid key file
+	if err := os.RemoveAll(gsaKeyFilePath); err != nil {
+		return "", fmt.Errorf("deleting service account key file: %w", err)
+	}
+
+	err = generateServiceAccountKey(nt, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	nt.T.Log("Deleting expired service account key")
+	_, err = nt.Shell.ExecWithDebug("gcloud", "iam", "service-accounts", "keys", "delete", gsaKeyID,
+		"--iam-account", gsaEmail,
+		"--project", projectID,
+		"--quiet") // skip confirmation prompt
+	if err != nil {
+		return "", fmt.Errorf("deleting service account key: %w", err)
+	}
+	return gsaKeyFilePath, nil
+}
+
+func generateServiceAccountKey(nt *nomostest.NT, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath string) error {
+	// Recreate key if it expires in the next hour
+	// Warning: This is not thread safe!
+	// It's possible that this may cause flakey tests trying to refresh the key in parallel.
+	// If this becomes a problem, we may need to externalize key rotation.
+	nt.T.Log("Generating new service account key")
+	_, err := nt.Shell.ExecWithDebug("gcloud", "iam", "service-accounts", "keys", "create", gsaKeyFilePath,
+		"--iam-account", gsaEmail,
+		"--project", projectID)
+	if err != nil {
+		return fmt.Errorf("creating service account key: %w", err)
+	}
+	nt.T.Log("Writing service account key to Secret Manager")
+	_, err = nt.Shell.ExecWithDebug("gcloud", "secrets", "versions", "add",
+		gsaKeySecretID,
+		"--data-file", gsaKeyFilePath,
+		"--project", projectID)
+	if err != nil {
+		return fmt.Errorf("adding secret version: %w", err)
+	}
+	return nil
 }

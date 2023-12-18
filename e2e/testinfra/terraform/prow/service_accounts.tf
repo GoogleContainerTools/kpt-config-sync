@@ -23,11 +23,17 @@ resource "google_project_iam_member" "test-runner-iam" {
     "roles/container.admin",
     "roles/gkehub.admin",
     "roles/monitoring.viewer",
-    "roles/secretmanager.secretAccessor",
+    "roles/secretmanager.admin",
     "roles/source.reader",
   ])
 
   role    = each.value
   member  = "serviceAccount:e2e-test-runner@oss-prow-build-kpt-config-sync.iam.gserviceaccount.com"
   project = data.google_project.project.id
+}
+
+resource "google_service_account_iam_member" "admin-account-iam" {
+  service_account_id = "projects/${data.google_project.project.id}/serviceAccounts/e2e-test-ar-reader@${data.google_project.project.id}.iam.gserviceaccount.com"
+  role               = "roles/iam.serviceAccountKeyAdmin"
+  member             = "serviceAccount:e2e-test-runner@oss-prow-build-kpt-config-sync.iam.gserviceaccount.com"
 }

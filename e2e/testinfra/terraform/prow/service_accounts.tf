@@ -33,7 +33,7 @@ resource "google_project_iam_member" "test-runner-iam" {
 }
 
 resource "google_service_account_iam_member" "admin-account-iam" {
-  service_account_id = "projects/${data.google_project.project.id}/serviceAccounts/e2e-test-ar-reader@${data.google_project.project.id}.iam.gserviceaccount.com"
+  service_account_id = "${data.google_project.project.id}/serviceAccounts/e2e-test-ar-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com"
   role               = "roles/iam.serviceAccountKeyAdmin"
   member             = "serviceAccount:e2e-test-runner@oss-prow-build-kpt-config-sync.iam.gserviceaccount.com"
 }

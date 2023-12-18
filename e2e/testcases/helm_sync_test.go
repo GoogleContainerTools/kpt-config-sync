@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -914,6 +915,10 @@ func helmChartVersion(chartVersion string) nomostest.Sha1Func {
 	}
 }
 
+// Synchronize Secret Manager operations across test threads. Note that there
+// can still be conflicts across periodic jobs in Prow since the Secret is shared.
+var secretManagerMux sync.Mutex
+
 // fetchServiceAccountKeyFile downloads a service account key from google
 // secret manager, using the specified `gsaKeySecretID`. If the key has expired,
 // a new key is generated and stored as a new version of the secret in secret
@@ -921,6 +926,8 @@ func helmChartVersion(chartVersion string) nomostest.Sha1Func {
 // new key file is returned. The key file will be deleted when the current
 // test ends.
 func fetchServiceAccountKeyFile(nt *nomostest.NT, projectID, gsaKeySecretID, gsaEmail, gsaName string) (string, error) {
+	secretManagerMux.Lock()
+	defer secretManagerMux.Unlock()
 	// Use a temp file to hold the secret to avoid logging the secret contents
 	gsaKeyFilePath := filepath.Join(nt.TmpDir, fmt.Sprintf("%s.json", gsaName))
 	nt.T.Cleanup(func() {
@@ -931,12 +938,26 @@ func fetchServiceAccountKeyFile(nt *nomostest.NT, projectID, gsaKeySecretID, gsa
 	out, err := nt.Shell.ExecWithDebug("gcloud", "secrets", "versions", "list",
 		gsaKeySecretID,
 		"--filter", "state=ENABLED",
+		"--no-user-output-enabled", // suppress warning messages that interfere with parsing
 		"--limit", "1",
 		"--format", "value(name)",
 		"--project", projectID)
 	if err != nil {
-		// TODO: create new key and secret if no secret found
-		return "", fmt.Errorf("listing enabled secret versions: %w", err)
+		if !strings.Contains(string(out), "NOT_FOUND") {
+			return "", err
+		}
+		nt.T.Log("Secret not found, bootstrapping initial Secret")
+		_, err = nt.Shell.ExecWithDebug("gcloud", "secrets", "create",
+			gsaKeySecretID,
+			"--project", projectID)
+		if err != nil {
+			return "", fmt.Errorf("bootstrapping secret: %w", err)
+		}
+		err = generateServiceAccountKey(nt, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath)
+		if err != nil {
+			return "", err
+		}
+		return gsaKeyFilePath, nil
 	}
 	// For some reason, the "name" value is just the version,
 	// even tho in json the "name" field is the full name.

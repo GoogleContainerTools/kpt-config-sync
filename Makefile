@@ -37,9 +37,9 @@ OUTPUT_DIR := $(abspath .output)
 GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
-GOLANG_IMAGE := golang:1.21.3-bullseye
+GOLANG_IMAGE := golang:1.21.5-bullseye
 # Base image used for debian containers
-DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.2
+DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.3
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
@@ -56,11 +56,11 @@ ADDLICENSE := $(BIN_DIR)/addlicense
 GOLANGCI_LINT_VERSION := v1.52.0
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
-KUSTOMIZE_VERSION := v5.1.1-gke.2
+KUSTOMIZE_VERSION := v5.3.0-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.13.1-gke.3
+HELM_VERSION := v3.13.3-gke.0
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 

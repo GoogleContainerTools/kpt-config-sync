@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -853,7 +854,6 @@ func fetchServiceAccountKeyFile(nt *nomostest.NT, projectID, gsaKeySecretID, gsa
 	out, err := nt.Shell.ExecWithDebug("gcloud", "secrets", "versions", "list",
 		gsaKeySecretID,
 		"--filter", "state=ENABLED",
-		"--no-user-output-enabled", // suppress warning messages that interfere with parsing
 		"--limit", "1",
 		"--format", "value(name)",
 		"--project", projectID)
@@ -878,13 +878,16 @@ func fetchServiceAccountKeyFile(nt *nomostest.NT, projectID, gsaKeySecretID, gsa
 	// even tho in json the "name" field is the full name.
 	// But what the access command wants is the version. So it's fine.
 	gsaKeySecretVersion := strings.TrimSpace(string(out))
-	if gsaKeySecretVersion == "" {
+	if gsaKeySecretVersion == "" || strings.HasPrefix(gsaKeySecretVersion, "WARNING: ") {
 		nt.T.Log("No enabled secrets versions")
 		err = generateServiceAccountKey(nt, projectID, gsaKeySecretID, gsaEmail, gsaKeyFilePath)
 		if err != nil {
 			return "", err
 		}
 		return gsaKeyFilePath, nil
+	}
+	if _, err := strconv.Atoi(gsaKeySecretVersion); err != nil {
+		return "", fmt.Errorf("converting version to int: %w", err)
 	}
 
 	nt.T.Log("Reading service account key from Secret Manager")

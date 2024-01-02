@@ -19,7 +19,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${REPO_ROOT}"
 
 # Required environment variables
+# shellcheck disable=SC2269 # validate non-null with errexit + nounset
 HELM_VERSION=${HELM_VERSION}
+# shellcheck disable=SC2269 # validate non-null with errexit + nounset
 INSTALL_DIR=${INSTALL_DIR}
 
 # Optional environment variables

@@ -27,6 +27,17 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// bufferTime is the approximate amount of time that the credentials should
+// remain valid after being returned by the askpass sidecar.
+//
+// A 5m buffer was chosen as a compromise to avoid git API call errors without
+// significantly increasing credential refresh request volume. It's assumed that
+// credentials are valid for ~60m, so a 5m early refresh should cause less than
+// 10% increase in refresh call volume, while still allowing enough time for the
+// askpass service to respond and git to make at least one API call, possibly
+// multiple and/or retries.
+const bufferTime = 5 * time.Minute
+
 // Server contains server wide state and settings for the askpass sidecar
 type Server struct {
 	Email string
@@ -67,7 +78,7 @@ func (aps *Server) needNewToken() bool {
 		return true
 	}
 
-	if time.Now().After(aps.token.Expiry) {
+	if time.Now().Add(bufferTime).After(aps.token.Expiry) {
 		return true
 	}
 

@@ -16,6 +16,8 @@ resources:
 - ../cluster-selector-crd.yaml
 - ../cluster-registry-crd.yaml
 - ../container-default-limits.yaml
+# Applying hierarchyconfig-crd.yaml allows client-side validation of the HierarchyConfig resources.
+- ../hierarchyconfig-crd.yaml
 - ../namespace-selector-crd.yaml
 - ../ns-reconciler-base-cluster-role.yaml
 - ../root-reconciler-base-cluster-role.yaml

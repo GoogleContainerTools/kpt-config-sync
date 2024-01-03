@@ -37,7 +37,8 @@ func TestCachedToken(t *testing.T) {
 		AccessToken:  "0xBEEFCAFE",
 		TokenType:    "Bearer",
 		RefreshToken: "0xDEADC0DE",
-		Expiry:       time.Now().Add(time.Second * 30),
+		// Expiry needs to be long enough to account for early refresh (5m).
+		Expiry: time.Now().Add(time.Minute * 6),
 	}
 
 	aps := &Server{

@@ -14,5 +14,4 @@
 
 resources:
 - ../base
-- ../hierarchyconfig-crd.yaml
 - ../templates/admission-webhook.yaml

@@ -37,7 +37,7 @@ OUTPUT_DIR := $(abspath .output)
 GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
-GOLANG_IMAGE := golang:1.21.5-bullseye
+GOLANG_IMAGE := golang:1.21.5-bookworm
 # Base image used for debian containers
 DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.0-gke.4
 # Base image used for gcloud install, primarily for test images.
@@ -129,7 +129,7 @@ TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-inf
 # When upgrading this tag, the image will be rebuilt locally during presubmits.
 # After the change is submitted, a postsubmit job will publish the new tag.
 # There is no need to manually publish this image.
-BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.1
+BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.2
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler

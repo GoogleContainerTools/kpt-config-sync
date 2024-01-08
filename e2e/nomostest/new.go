@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -105,6 +106,10 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 
 	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
 		t.Skip("Test skipped for non-local GitProvider types")
+	}
+
+	if *e2e.OCIProvider != e2e.Local && optsStruct.RequireLocalOCIProvider {
+		t.Skip("Test skipped for non-local OCIProvider types")
 	}
 
 	if optsStruct.RESTConfig == nil {
@@ -205,11 +210,13 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		NonRootRepos:            sharedNt.NonRootRepos,
 		MetricsExpectations:     sharedNt.MetricsExpectations,
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
-		caCertPath:              sharedNt.caCertPath,
+		gitCACertPath:           sharedNt.gitCACertPath,
+		registryCACertPath:      sharedNt.registryCACertPath,
 		Scheme:                  sharedNt.Scheme,
 		RemoteRepositories:      sharedNt.RemoteRepositories,
 		WebhookDisabled:         sharedNt.WebhookDisabled,
 		GitProvider:             sharedNt.GitProvider,
+		OCIProvider:             sharedNt.OCIProvider,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -288,6 +295,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
+		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider),
 	}
 
 	// TODO: Try speeding up the reconciler and hydration polling.
@@ -386,6 +394,9 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		return setupGit(nt)
 	})
 	tg.Go(func() error {
+		return setupRegistry(nt)
+	})
+	tg.Go(func() error {
 		return installConfigSync(nt, opts.Nomos)
 	})
 	tg.Go(func() error {
@@ -438,6 +449,24 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	if *e2e.GitProvider == e2e.Local {
 		nt.portForwardGitServer()
 	}
+	// set up port forward if using in-cluster registry server
+	if *e2e.OCIProvider == e2e.Local {
+		nt.portForwardRegistryServer()
+	}
+	// Images created by the tests should not be persisted after the test finishes.
+	// Cleanup all images before the port forward gets torn down.
+	nt.T.Cleanup(func() {
+		for _, image := range nt.ociImages {
+			remoteURL, err := nt.OCIProvider.PushURL(image.Name)
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+			if err := image.Delete(remoteURL); err != nil {
+				nt.T.Error(err)
+			}
+		}
+		nt.ociImages = nil
+	})
 	// The following prerequisites have been met, so we can now push commits
 	// - local repo initialized
 	// - remote repo exists

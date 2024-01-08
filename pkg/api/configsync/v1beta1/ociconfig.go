@@ -55,4 +55,13 @@ type Oci struct {
 	// the RootSync/RepoSync controller Kubernetes Service Account.
 	// Note: The field is used when secretType: gcpServiceAccount.
 	GCPServiceAccountEmail string `json:"gcpServiceAccountEmail,omitempty"`
+
+	// caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+	// The creation of the secret should be done out of band by the user and should store the
+	// certificate in a key named "cert". For RepoSync resources, the secret must be
+	// created in the same namespace as the RepoSync. For RootSync resource, the secret
+	// must be created in the config-management-system namespace.
+	// +nullable
+	// +optional
+	CACertSecretRef *SecretReference `json:"caCertSecretRef,omitempty"`
 }

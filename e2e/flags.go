@@ -104,6 +104,10 @@ var ShareTestEnv = flag.Bool("share-test-env", false,
 var GitProvider = flag.String("git-provider", Local,
 	"The git provider that hosts the Git repositories. Defaults to local.")
 
+// OCIProvider is the provider that hosts the OCI repositories.
+var OCIProvider = flag.String("oci-provider", Local,
+	"The registry provider that hosts the OCI repositories. Defaults to local.")
+
 // TestFeatures is the list of features to run.
 var TestFeatures = flag.String("test-features", "",
 	"A list of features to run, separated by comma. Defaults to empty, which should run all tests.")

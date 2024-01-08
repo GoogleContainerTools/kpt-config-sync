@@ -132,6 +132,11 @@ const (
 
 	// OciSyncWait is the OS env variable key for the OCI sync wait period in seconds.
 	OciSyncWait = "OCI_SYNC_WAIT"
+
+	// OciCACert is the OS env variable key for the OCI CA cert file path.
+	// This variable is consumed by the underlying crypto library:
+	// - https://pkg.go.dev/crypto/x509#SystemCertPool
+	OciCACert = "SSL_CERT_FILE"
 )
 
 const (

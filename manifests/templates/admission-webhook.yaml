@@ -142,4 +142,3 @@ metadata:
     app: admission-webhook
     configmanagement.gke.io/system: "true"
     configmanagement.gke.io/arch: "csmr"
-webhooks: []

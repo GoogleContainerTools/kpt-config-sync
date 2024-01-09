@@ -93,14 +93,14 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	}
 
 	// apply override to all containers and validate
-	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": -1}, {"containerName": "hydration-controller", "logLevel": 9}]}}}`)
+	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": 0}, {"containerName": "hydration-controller", "logLevel": 9}]}}}`)
 
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerName.Name, rootReconcilerName.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=5"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=7"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=debug"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=fatal"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=9"),
 		},
 	)
@@ -129,7 +129,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 	// try invalid log level value
 	maxError := "logLevel in body should be less than or equal to 10"
-	minError := "logLevel in body should be greater than or equal to -1"
+	minError := "logLevel in body should be greater than or equal to 0"
 
 	err = nt.KubeClient.MergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 13}]}}}`)
 	if !strings.Contains(err.Error(), maxError) {
@@ -216,7 +216,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 				},
 				{
 					ContainerName: "otel-agent",
-					LogLevel:      2,
+					LogLevel:      8,
 				},
 				{
 					ContainerName: "hydration-controller",
@@ -235,7 +235,7 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.Reconciler, "-v=7"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.GitSync, "-v=9"),
 			testpredicates.DeploymentContainerArgsContains(reconcilermanager.HydrationController, "-v=5"),
-			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=error"),
+			testpredicates.DeploymentContainerArgsContains(metrics.OtelAgentName, "--set=service.telemetry.logs.level=debug"),
 		},
 	)
 	if err != nil {

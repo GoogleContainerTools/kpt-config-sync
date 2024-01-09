@@ -27,7 +27,7 @@ import (
 
 // ReconcilerContainerLogLevelDefaults are the default log level to use for the
 // reconciler deployment containers.
-// All containers default value are 0 except git-sync which default value is 5
+// All containers default value are 0 except git-sync/otel-agent which default value is 5
 func ReconcilerContainerLogLevelDefaults() map[string]v1beta1.ContainerLogLevelOverride {
 	return map[string]v1beta1.ContainerLogLevelOverride{
 		reconcilermanager.Reconciler: {
@@ -56,7 +56,7 @@ func ReconcilerContainerLogLevelDefaults() map[string]v1beta1.ContainerLogLevelO
 		},
 		metrics.OtelAgentName: {
 			ContainerName: metrics.OtelAgentName,
-			LogLevel:      0,
+			LogLevel:      5, // otel-agent default is 5, this maps to zap level "INFO"
 		},
 	}
 }
@@ -107,7 +107,9 @@ func mutateContainerLogLevel(c *corev1.Container, override []v1beta1.ContainerLo
 			switch c.Name {
 			case metrics.OtelAgentName:
 				// otel-agent surfaces the log level configuration differently.
-				zapLevel := zapcore.Level(logLevel.LogLevel)
+				// Our log levels range from 0-10, whereas zap ranges from -1 (debug) to 5 (fatal).
+				// We reverse the order for consistent behavior with our other log levels.
+				zapLevel := zapcore.Level(max(int(zapcore.FatalLevel)-logLevel.LogLevel, int(zapcore.DebugLevel)))
 				// unmarshal and marshal to validate that the zap level is valid
 				if _, err := zapcore.ParseLevel(zapLevel.String()); err != nil {
 					return err

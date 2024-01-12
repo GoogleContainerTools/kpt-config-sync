@@ -98,10 +98,10 @@ func ReconcilerContainerResourceDefaultsForAutopilot() map[string]v1beta1.Contai
 		},
 		reconcilermanager.HelmSync: {
 			ContainerName: reconcilermanager.HelmSync,
-			CPURequest:    resource.MustParse("150m"),
-			CPULimit:      resource.MustParse("150m"),
-			MemoryRequest: resource.MustParse("256Mi"),
-			MemoryLimit:   resource.MustParse("256Mi"),
+			CPURequest:    resource.MustParse("250m"),
+			CPULimit:      resource.MustParse("250m"),
+			MemoryRequest: resource.MustParse("384Mi"),
+			MemoryLimit:   resource.MustParse("384Mi"),
 		},
 		reconcilermanager.GitSync: {
 			ContainerName: reconcilermanager.GitSync,

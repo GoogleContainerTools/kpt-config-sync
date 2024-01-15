@@ -804,17 +804,17 @@ func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
-		return validate.OciSpec(rs.Spec.Oci, rs)
+		return validate.OciSpec(rs.Spec.Oci, rs, r.syncKind)
 	case v1beta1.HelmSource:
-		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
+		if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs, r.syncKind); err != nil {
 			return err
 		}
 		if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
-			return validate.HelmNSAndDeployNS(rs)
+			return validate.HelmNSAndDeployNS(rs, r.syncKind)
 		}
 		return nil
 	default:
-		return validate.InvalidSourceType(rs)
+		return validate.InvalidSourceType(rs, configsync.RootSyncKind)
 	}
 }
 
@@ -833,11 +833,11 @@ func (r *RootSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, 
 	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil
 	}
-	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
+	return validate.ValuesFileRefs(ctx, r.client, rs, r.syncKind, rs.Spec.Helm.ValuesFileRefs)
 }
 
 func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
-	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
+	if err := validate.GitSpec(rs.Spec.Git, rs, r.syncKind); err != nil {
 		return err
 	}
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {

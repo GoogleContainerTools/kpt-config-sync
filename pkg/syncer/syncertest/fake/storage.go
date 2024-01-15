@@ -297,7 +297,7 @@ func (ms *MemoryStorage) Get(_ context.Context, gvk schema.GroupVersionKind, key
 		return err
 	}
 	// TODO: Remove GVK from typed objects
-	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	// obj.GetObjectKind().SetGroupVersionKind(gvk)
 
 	klog.V(6).Infof("Getting %s (Generation: %v, ResourceVersion: %q): %s",
 		kinds.ObjectSummary(obj),
@@ -364,11 +364,11 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 			// No match
 			continue
 		}
-		// TODO: Remove GVK from items of typed lists
-		// if _, ok := list.(*unstructured.UnstructuredList); !ok {
-		// 	delete(uObj.Object, "apiVersion")
-		// 	delete(uObj.Object, "kind")
-		// }
+		// Remove GVK from items of typed lists
+		if _, ok := list.(*unstructured.UnstructuredList); !ok {
+			delete(uObj.Object, "apiVersion")
+			delete(uObj.Object, "kind")
+		}
 		uList.Items = append(uList.Items, *uObj)
 	}
 
@@ -379,7 +379,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 		return err
 	}
 	// TODO: Remove GVK from typed objects
-	list.GetObjectKind().SetGroupVersionKind(listGVK)
+	// list.GetObjectKind().SetGroupVersionKind(listGVK)
 
 	klog.V(6).Infof("Listing %s (ResourceVersion: %q, Items: %d): %s",
 		kinds.ObjectSummary(list),
@@ -455,7 +455,7 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 		return errors.Wrap(err, "failed to update input object")
 	}
 	// TODO: Remove GVK from typed objects
-	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	// obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
 		return ms.sendPutEvent(ctx, id, watch.Added)
 	}
@@ -736,7 +736,7 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 		return errors.Wrap(err, "failed to update input object")
 	}
 	// TODO: Remove GVK from typed objects
-	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	// obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
 		return ms.sendPutEvent(ctx, id, watch.Modified)
 	}
@@ -914,7 +914,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		return errors.Wrap(err, "failed to update input object")
 	}
 	// TODO: Remove GVK from typed objects
-	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
+	// obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
 		return ms.sendPutEvent(ctx, id, watch.Modified)
 	}

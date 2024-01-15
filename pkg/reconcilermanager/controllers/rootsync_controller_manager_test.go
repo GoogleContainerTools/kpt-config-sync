@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -219,7 +218,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RootSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RootSync)
@@ -294,7 +293,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -329,7 +328,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RootSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RootSync)
@@ -543,7 +542,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 
 	// Consume watch events until success or timeout
 	var obj client.Object
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			obj = event.Object.(client.Object)
@@ -577,7 +576,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, key, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, key, func(event watch.Event) error {
 		t.Logf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			return validate(event.Object.(client.Object))
@@ -652,9 +651,13 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 func logObjectYAMLIfFailed(t *testing.T, fakeClient *syncerFake.Client, obj client.Object) {
 	if t.Failed() {
 		err := fakeClient.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)
-		require.NoError(t, err)
-		t.Logf("%s YAML:\n%s", kinds.ObjectSummary(obj),
-			log.AsYAMLWithScheme(obj, fakeClient.Scheme()))
+		if apierrors.IsNotFound(err) {
+			t.Logf("%s Not Found", kinds.ObjectSummary(obj))
+		} else {
+			require.NoError(t, err)
+			t.Logf("%s YAML:\n%s", kinds.ObjectSummary(obj),
+				log.AsYAMLWithScheme(obj, fakeClient.Scheme()))
+		}
 	}
 }
 
@@ -684,7 +687,7 @@ func watchUnstructured(ctx context.Context, fakeDynamicClient *syncerFake.Dynami
 	return watcher, nil
 }
 
-func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch.Interface, key client.ObjectKey, condition func(watch.Event) error) error {
+func watchObjectUntil(ctx context.Context, watcher watch.Interface, key client.ObjectKey, condition func(watch.Event) error) error {
 	// Wait until added or modified
 	var conditionErr error
 	doneCh := ctx.Done()
@@ -713,7 +716,7 @@ func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch
 			}
 			klog.V(5).Infof("Watch Event %s Diff (- Removed, + Added):\n%s",
 				kinds.ObjectSummary(obj),
-				log.AsYAMLDiffWithScheme(lastKnown, obj, scheme))
+				lastKnown)
 			lastKnown = obj
 			conditionErr = condition(event)
 			if conditionErr == nil {
@@ -740,7 +743,7 @@ func parseResourceVersion(obj client.Object) (int, error) {
 
 func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, reconcilerWatcher watch.Interface, reconcilerKey client.ObjectKey) error {
 	var reconcilerObj *appsv1.Deployment
-	err := watchObjectUntil(ctx, fakeClient.Scheme(), reconcilerWatcher, reconcilerKey, func(event watch.Event) error {
+	err := watchObjectUntil(ctx, reconcilerWatcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		// Using Watch, not ListAndWatch, so Added event is not guaranteed
 		if event.Type == watch.Added || event.Type == watch.Modified {
@@ -789,7 +792,7 @@ func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient 
 }
 
 func validateRootSyncSetup(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, rsyncWatcher watch.Interface, rsyncKey client.ObjectKey) error {
-	err := watchObjectUntil(ctx, fakeClient.Scheme(), rsyncWatcher, rsyncKey, func(event watch.Event) error {
+	err := watchObjectUntil(ctx, rsyncWatcher, rsyncKey, func(event watch.Event) error {
 		t.Logf("RootSync %s", event.Type)
 		// Using Watch, not ListAndWatch, so Added event is not guaranteed
 		if event.Type == watch.Added || event.Type == watch.Modified {

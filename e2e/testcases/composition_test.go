@@ -118,7 +118,7 @@ func TestComposition(t *testing.T) {
 	// and RootSync level-1 is manage by RootSync root-sync (level-0),
 	// we need to make RepoSync level-1 depend on both RoleBindings,
 	// so the RoleBindings are deleted after both RepoSyncs.
-	if err := nomostest.SetDependencies(lvl1Sync, lvl2RB, lvl3RB); err != nil {
+	if err := nomostest.SetDependencies(lvl1Sync, nt.Scheme, lvl2RB, lvl3RB); err != nil {
 		nt.T.Fatal(err)
 	}
 

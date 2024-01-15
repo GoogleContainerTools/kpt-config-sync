@@ -19,7 +19,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,7 +29,6 @@ func RepoSyncObjectV1Alpha1(ns, name string, opts ...core.MetaMutator) *v1alpha1
 			Namespace: ns,
 			Name:      name,
 		},
-		TypeMeta: ToTypeMeta(kinds.RepoSyncV1Alpha1()),
 	}
 	mutate(result, opts...)
 
@@ -44,7 +42,6 @@ func RepoSyncObjectV1Beta1(ns, name string, opts ...core.MetaMutator) *v1beta1.R
 			Namespace: ns,
 			Name:      name,
 		},
-		TypeMeta: ToTypeMeta(kinds.RepoSyncV1Beta1()),
 	}
 	mutate(result, opts...)
 

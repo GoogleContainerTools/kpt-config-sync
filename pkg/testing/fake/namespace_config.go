@@ -17,12 +17,11 @@ package fake
 import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 )
 
 // NamespaceConfigObject initializes a NamespaceConfig.
 func NamespaceConfigObject(opts ...core.MetaMutator) *v1.NamespaceConfig {
-	result := &v1.NamespaceConfig{TypeMeta: ToTypeMeta(kinds.NamespaceConfig())}
+	result := &v1.NamespaceConfig{}
 	defaultMutate(result)
 	for _, opt := range opts {
 		opt(result)

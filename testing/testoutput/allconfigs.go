@@ -17,11 +17,13 @@ package testoutput
 import (
 	"path"
 	"strings"
+	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -30,21 +32,16 @@ const importToken = "abcde"
 
 // ClusterConfig generates a valid ClusterConfig to be put in AllConfigs given the set of hydrated
 // cluster-scoped client.Objects.
-func ClusterConfig(objects ...client.Object) *v1.ClusterConfig {
+func ClusterConfig(t *testing.T, objects ...client.Object) *v1.ClusterConfig {
 	config := fake.ClusterConfigObject()
 	config.Spec.Token = importToken
 	for _, o := range objects {
-		config.AddResource(o)
-	}
-	return config
-}
-
-// CRDClusterConfig generates a valid ClusterConfig which holds the list of CRDs in the repo.
-func CRDClusterConfig(objects ...client.Object) *v1.ClusterConfig {
-	config := fake.CRDClusterConfigObject()
-	config.Spec.Token = importToken
-	for _, o := range objects {
-		config.AddResource(o)
+		// AddResource requires GroupKind set, so convert to unstructured
+		uObj, err := kinds.ToUnstructured(o, core.Scheme)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.AddResource(uObj)
 	}
 	return config
 }

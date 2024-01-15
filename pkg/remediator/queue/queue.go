@@ -40,11 +40,43 @@ func (gvknn GVKNN) GroupVersionKind() schema.GroupVersionKind {
 }
 
 // GVKNNOf converts an Object to its GVKNN.
+//
+// Panics if the GroupKind is not set and not registered in core.Scheme.
+//
+// Deprecated: Typed objects should not include GroupKind! Use LookupGKVNN
+// instead, and handle the error, instead of panicking or returning a GKVNN with
+// empty GroupVersionKind.
 func GVKNNOf(obj client.Object) GVKNN {
-	return GVKNN{
-		ID:      core.IDOf(obj),
-		Version: obj.GetObjectKind().GroupVersionKind().Version,
+	// Unwrap deleted objects
+	if dObj, ok := obj.(*Deleted); ok {
+		obj = dObj.Object
 	}
+	gvk, err := kinds.Lookup(obj, core.Scheme)
+	if err != nil {
+		klog.Fatalf("GVKNNOf: Failed to lookup GroupVersionKind of %T: %v", obj, err)
+	}
+	return GVKNN{
+		ID: core.ID{
+			GroupKind: gvk.GroupKind(),
+			ObjectKey: client.ObjectKeyFromObject(obj),
+		},
+		Version: gvk.Version,
+	}
+}
+
+// IDOf converts an Object to its ID.
+//
+// Panics if the GroupKind is not set and not registered in core.Scheme.
+//
+// Deprecated: Typed objects should not include GroupKind! Use LookupID instead,
+// and handle the error, instead of panicking or returning an ID with empty
+// GroupKind.
+func IDOf(obj client.Object) core.ID {
+	// Unwrap deleted objects
+	if dObj, ok := obj.(*Deleted); ok {
+		obj = dObj.Object
+	}
+	return core.IDOf(obj)
 }
 
 // ErrShutdown is returned by `ObjectQueue.Get` if the queue is shut down

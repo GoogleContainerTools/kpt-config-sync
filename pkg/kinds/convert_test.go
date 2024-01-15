@@ -95,10 +95,6 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: coreScheme,
 			expected: &corev1.Service{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: Service().GroupVersion().String(),
-					Kind:       Service().Kind,
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-name",
 				},
@@ -171,10 +167,6 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: coreScheme,
 			expected: &corev1.Service{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: Service().GroupVersion().String(),
-					Kind:       Service().Kind,
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-name",
 				},
@@ -239,10 +231,6 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: coreScheme,
 			expected: &corev1.Service{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: Service().GroupVersion().String(),
-					Kind:       Service().Kind,
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-name",
 				},

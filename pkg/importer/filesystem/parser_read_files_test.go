@@ -176,9 +176,7 @@ spec:
 					"apiVersion": "employees/v1alpha1",
 					"kind":       "Engineer",
 					"metadata": map[string]interface{}{
-						"name":        "philo",
-						"annotations": map[string]interface{}{},
-						"labels":      map[string]interface{}{},
+						"name": "philo",
 					},
 					"spec": map[string]interface{}{
 						"cafePreference": int64(3),
@@ -205,9 +203,7 @@ spec:
 					"apiVersion": "configmanagement.gke.io/v1",
 					"kind":       "HierarchyConfig",
 					"metadata": map[string]interface{}{
-						"name":        "config",
-						"annotations": map[string]interface{}{},
-						"labels":      map[string]interface{}{},
+						"name": "config",
 					},
 					"spec": map[string]interface{}{
 						"resources": []interface{}{

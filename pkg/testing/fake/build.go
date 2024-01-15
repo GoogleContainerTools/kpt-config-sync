@@ -15,13 +15,13 @@
 package fake
 
 import (
-	"encoding/json"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -33,8 +33,8 @@ import (
 // setting labels and annotations to empty map circumvents the issue.
 var defaultMutations = []core.MetaMutator{
 	core.Name("default-name"),
-	core.Annotations(map[string]string{}),
-	core.Labels(map[string]string{}),
+	// core.Annotations(map[string]string{}),
+	// core.Labels(map[string]string{}),
 }
 
 func defaultMutate(object client.Object) {
@@ -55,34 +55,25 @@ func FileObject(object client.Object, path string) ast.FileObject {
 	if fo, isFileObject := object.(ast.FileObject); isFileObject {
 		return fo
 	}
-
-	jsn, err := json.Marshal(object)
+	uObj, err := kinds.ToUnstructured(object, core.Scheme)
 	if err != nil {
 		// Something has gone horribly wrong in our test code; this should never fail.
-		panic(err)
+		klog.Fatal(err)
 	}
-
-	u := &unstructured.Unstructured{}
-	err = u.UnmarshalJSON(jsn)
-	if err != nil {
-		// Something has gone horribly wrong in our test code; this should never fail.
-		panic(err)
-	}
-
-	normalizeUnstructured(u)
-	return ast.NewFileObject(u, cmpath.RelativeSlash(path))
+	normalizeUnstructured(uObj)
+	return ast.NewFileObject(uObj, cmpath.RelativeSlash(path))
 }
 
 func normalizeUnstructured(u *unstructured.Unstructured) {
 	if ct := u.GetCreationTimestamp(); ct.IsZero() {
 		delete(u.Object["metadata"].(map[string]interface{}), "creationTimestamp")
 	}
-	if u.GetAnnotations() == nil {
-		u.SetAnnotations(map[string]string{})
-	}
-	if u.GetLabels() == nil {
-		u.SetLabels(map[string]string{})
-	}
+	// if u.GetAnnotations() == nil {
+	// 	u.SetAnnotations(map[string]string{})
+	// }
+	// if u.GetLabels() == nil {
+	// 	u.SetLabels(map[string]string{})
+	// }
 }
 
 // UnstructuredObject initializes an unstructured.Unstructured.

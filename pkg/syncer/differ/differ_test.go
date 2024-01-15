@@ -21,12 +21,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 )
 
 func buildUnstructured(opts ...func(*unstructured.Unstructured)) *unstructured.Unstructured {
 	result := &unstructured.Unstructured{}
+	result.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "acme.com",
+		Version: "v1",
+		Kind:    "Example",
+	})
 	for _, opt := range opts {
 		opt(result)
 	}

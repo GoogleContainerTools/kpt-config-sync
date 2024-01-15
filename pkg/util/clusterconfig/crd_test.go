@@ -18,8 +18,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -28,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/decode"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/testing/testoutput"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,7 +51,7 @@ func TestGetCRDs(t *testing.T) {
 	}{
 		{
 			name: "No CRDs",
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{},
+			want: nil,
 		},
 		{
 			name: "v1Beta1 CRD",
@@ -77,17 +76,12 @@ func TestGetCRDs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			decoder := decode.NewGenericResourceDecoder(core.Scheme)
-			cc := testoutput.ClusterConfig(tc.objs...)
+			cc := testoutput.ClusterConfig(t, tc.objs...)
 			actual, err := GetCRDs(decoder, cc)
-
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			if diff := cmp.Diff(tc.want, actual, cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(apiextensionsv1beta1.CustomResourceDefinition{}, "TypeMeta")); diff != "" {
-				t.Error(diff)
-			}
+			testutil.AssertEqual(t, tc.want, actual)
 		})
 	}
 }

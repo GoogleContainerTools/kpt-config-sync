@@ -17,6 +17,8 @@ package differ
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/policycontroller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +40,13 @@ var SpecialNamespaces = map[string]bool{
 
 // IsManageableSystemNamespace returns if the input namespace is a manageable system namespace.
 func IsManageableSystemNamespace(o client.Object) bool {
-	if o.GetObjectKind().GroupVersionKind().GroupKind() != kinds.Namespace().GroupKind() {
+	gvk, err := kinds.Lookup(o, core.Scheme)
+	if err != nil {
+		// Only tests call this with a typed object.
+		// If you see this error, update the core.Scheme!
+		klog.Fatalf("IsManageableSystemNamespace: Failed to lookup GroupKind of %T: %v", o, err)
+	}
+	if gvk.GroupKind() != kinds.Namespace().GroupKind() {
 		return false
 	}
 	return SpecialNamespaces[o.GetName()]

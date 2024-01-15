@@ -17,7 +17,6 @@ package fake
 import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 )
 
 // ClusterConfigMutator mutates a ClusterConfig.
@@ -38,7 +37,7 @@ func CRDClusterConfigObject(opts ...ClusterConfigMutator) *v1.ClusterConfig {
 
 // ClusterConfigObject initializes a ClusterConfig.
 func ClusterConfigObject(opts ...ClusterConfigMutator) *v1.ClusterConfig {
-	result := &v1.ClusterConfig{TypeMeta: ToTypeMeta(kinds.ClusterConfig())}
+	result := &v1.ClusterConfig{}
 	defaultMutate(result)
 	mutate(result, core.Name(v1.ClusterConfigName))
 	for _, opt := range opts {

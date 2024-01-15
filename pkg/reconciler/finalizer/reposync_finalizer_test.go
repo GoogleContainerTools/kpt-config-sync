@@ -248,7 +248,10 @@ func TestRepoSyncFinalize(t *testing.T) {
 					return err
 				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(ctx, rs)
+				if err := fakeClient.Delete(ctx, rs); err != nil {
+					return fmt.Errorf("deleting: %w", err)
+				}
+				return nil
 			},
 			expectedError: errors.Wrapf(
 				errors.Wrapf(
@@ -406,7 +409,10 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 					return err
 				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(ctx, rs)
+				if err := fakeClient.Delete(ctx, rs); err != nil {
+					return fmt.Errorf("deleting: %w", err)
+				}
+				return nil
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerErrorWrap(
@@ -550,7 +556,10 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 					return err
 				}
 				// delete RepoSync to cause update error
-				return fakeClient.Delete(ctx, rs)
+				if err := fakeClient.Delete(ctx, rs); err != nil {
+					return fmt.Errorf("deleting: %w", err)
+				}
+				return nil
 			},
 			expectedError: errors.Wrapf(
 				status.APIServerErrorWrap(

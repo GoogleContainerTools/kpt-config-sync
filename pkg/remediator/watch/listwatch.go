@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -198,7 +199,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 		// Send Added event for all pre-existing objects
 		for i := range cObjList.Items {
 			obj := cObjList.Items[i]
-			ids[core.IDOf(&obj)] = struct{}{}
+			ids[queue.IDOf(&obj)] = struct{}{}
 			event := watch.Event{Type: watch.Added, Object: &obj}
 			select {
 			case <-wrapper.stopCh:
@@ -239,7 +240,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 					}
 					return
 				}
-				if _, found := ids[core.IDOf(cObj)]; found {
+				if _, found := ids[queue.IDOf(cObj)]; found {
 					// Convert from Added to Modified, because we already sent Added
 					e.Type = watch.Modified
 				}
@@ -257,7 +258,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 					return
 				}
 				// Remove from cache so that subsequent Added events are allowed
-				delete(ids, core.IDOf(cObj))
+				delete(ids, queue.IDOf(cObj))
 			}
 			select {
 			case <-wrapper.stopCh:

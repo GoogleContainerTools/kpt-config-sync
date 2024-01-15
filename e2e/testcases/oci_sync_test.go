@@ -334,7 +334,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		Auth:   configsync.AuthNone,
 	}
 	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
-	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
+	if err := nomostest.SetDependencies(repoSyncGit, nt.Scheme, rsRB, rsCR); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -406,7 +406,7 @@ func TestSwitchFromGitToOci(t *testing.T) {
 		Auth:  configsync.AuthNone,
 	}
 	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
-	if err := nomostest.SetDependencies(repoSyncOCI, rsRB, rsCR); err != nil {
+	if err := nomostest.SetDependencies(repoSyncOCI, nt.Scheme, rsRB, rsCR); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))

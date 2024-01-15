@@ -289,7 +289,7 @@ func Generate() AllExamples {
 	result.add(status.ManagementConflictErrorWrap(fake.Role(), declared.ResourceManager(declared.RootReconciler, configsync.RootSyncName)))
 
 	// 1061
-	result.add(validate.MissingGitRepo(fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)))
+	result.add(validate.MissingGitRepo(fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName), configsync.RepoSyncKind))
 
 	// 1062 is Deprecated.
 	result.markDeprecated("1062")

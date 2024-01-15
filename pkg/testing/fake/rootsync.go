@@ -20,7 +20,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,7 +30,6 @@ func RootSyncObjectV1Alpha1(name string, opts ...core.MetaMutator) *v1alpha1.Roo
 			Name:      name,
 			Namespace: configsync.ControllerNamespace,
 		},
-		TypeMeta: ToTypeMeta(kinds.RootSyncV1Alpha1()),
 	}
 	mutate(result, opts...)
 
@@ -45,7 +43,6 @@ func RootSyncObjectV1Beta1(name string, opts ...core.MetaMutator) *v1beta1.RootS
 			Name:      name,
 			Namespace: configsync.ControllerNamespace,
 		},
-		TypeMeta: ToTypeMeta(kinds.RootSyncV1Beta1()),
 	}
 	mutate(result, opts...)
 

@@ -207,7 +207,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RepoSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
@@ -282,7 +282,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, reconcilerKey, func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, reconcilerKey, func(event watch.Event) error {
 		t.Logf("reconciler deployment %s", event.Type)
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			reconcilerObj = event.Object.(*appsv1.Deployment)
@@ -319,7 +319,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync
-	err = watchObjectUntil(ctx, fakeClient.Scheme(), watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
+	err = watchObjectUntil(ctx, watcher, core.ObjectNamespacedName(rs), func(event watch.Event) error {
 		t.Logf("RepoSync %s", event.Type)
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
@@ -545,7 +545,7 @@ func testRepoSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyF
 }
 
 func validateRepoSyncSetup(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, rsyncWatcher watch.Interface, rsyncKey client.ObjectKey) error {
-	err := watchObjectUntil(ctx, fakeClient.Scheme(), rsyncWatcher, rsyncKey, func(event watch.Event) error {
+	err := watchObjectUntil(ctx, rsyncWatcher, rsyncKey, func(event watch.Event) error {
 		t.Logf("RepoSync %s", event.Type)
 		// Using Watch, not ListAndWatch, so Added event is not guaranteed
 		if event.Type == watch.Added || event.Type == watch.Modified {

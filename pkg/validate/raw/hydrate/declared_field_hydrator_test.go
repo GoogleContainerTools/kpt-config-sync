@@ -74,7 +74,7 @@ func TestDeclaredFields(t *testing.T) {
 								"name":      "hello",
 								"namespace": "world",
 								"annotations": map[string]interface{}{
-									metadata.DeclaredFieldsKey: `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`,
+									metadata.DeclaredFieldsKey: `{"f:rules":{}}`,
 								},
 							},
 							"rules": []interface{}{
@@ -123,7 +123,7 @@ func TestDeclaredFields(t *testing.T) {
 									"this": "that",
 								},
 								"annotations": map[string]interface{}{
-									metadata.DeclaredFieldsKey: `{"f:metadata":{"f:annotations":{},"f:labels":{"f:this":{}}}}`,
+									metadata.DeclaredFieldsKey: `{"f:metadata":{"f:labels":{"f:this":{}}}}`,
 								},
 							},
 						},
@@ -147,7 +147,7 @@ func TestDeclaredFields(t *testing.T) {
 								"labels":      map[string]interface{}{},
 							},
 							"spec": map[string]interface{}{
-								"lbs": 123,
+								"lbs": float64(123),
 							},
 						},
 					}, "anvil.yaml"),
@@ -166,9 +166,10 @@ func TestDeclaredFields(t *testing.T) {
 								"annotations": map[string]interface{}{
 									metadata.DeclaredFieldsKey: `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:lbs":{}}}`,
 								},
+								"labels": map[string]interface{}{},
 							},
 							"spec": map[string]interface{}{
-								"lbs": 123,
+								"lbs": float64(123),
 							},
 						},
 					}, "anvil.yaml"),

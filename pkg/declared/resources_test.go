@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -196,8 +197,8 @@ func TestGVKSet(t *testing.T) {
 	got, commit := dr.DeclaredGVKs()
 	require.Equal(t, expectedCommit, commit)
 	want := map[schema.GroupVersionKind]struct{}{
-		obj1.GroupVersionKind(): {},
-		obj2.GroupVersionKind(): {},
+		kinds.CustomResourceDefinitionV1Beta1(): {},
+		kinds.ResourceQuota():                   {},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Error(diff)

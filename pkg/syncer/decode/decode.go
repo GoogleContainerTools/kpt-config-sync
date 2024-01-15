@@ -16,14 +16,13 @@
 package decode
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/kinds"
 )
 
 // Decoder decodes GenericResources from NamespaceConfigs / ClusterConfigs to
@@ -39,17 +38,15 @@ var _ Decoder = &genericResourceDecoder{}
 
 // genericResourceDecoder implements Decoder.
 type genericResourceDecoder struct {
-	scheme                *runtime.Scheme
-	decoder               runtime.Decoder
-	unstructuredConverter runtime.UnstructuredConverter
+	scheme  *runtime.Scheme
+	decoder runtime.Decoder
 }
 
 // NewGenericResourceDecoder returns a new genericResourceDecoder.
 func NewGenericResourceDecoder(scheme *runtime.Scheme) Decoder {
 	return &genericResourceDecoder{
-		scheme:                scheme,
-		decoder:               serializer.NewCodecFactory(scheme).UniversalDeserializer(),
-		unstructuredConverter: runtime.DefaultUnstructuredConverter,
+		scheme:  scheme,
+		decoder: serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 	}
 }
 
@@ -69,16 +66,11 @@ func (d *genericResourceDecoder) DecodeResources(genericResources []v1.GenericRe
 						return nil, errors.Wrapf(err, "could not decode client.Object from %q RawExtension bytes", gvk)
 					}
 				}
-				au, ok := o.(*unstructured.Unstructured)
-				if !ok {
-					m, err := d.unstructuredConverter.ToUnstructured(o)
-					if err != nil {
-						return nil, fmt.Errorf("could not treat GenericResource object %q as an unstructured.Unstructured", gvk)
-					}
-					au = &unstructured.Unstructured{Object: m}
-					au.SetGroupVersionKind(gvk)
+				uObj, err := kinds.ToUnstructured(o, d.scheme)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to convert %T to Unstructured", o)
 				}
-				us[gvk] = append(us[gvk], au)
+				us[gvk] = append(us[gvk], uObj)
 			}
 		}
 	}

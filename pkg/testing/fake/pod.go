@@ -17,14 +17,12 @@ package fake
 import (
 	v1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/kinds"
 )
 
 // PodObject returns an initialized Pod.
 func PodObject(name string, containers []v1.Container, opts ...core.MetaMutator) *v1.Pod {
 	result := &v1.Pod{
-		TypeMeta: ToTypeMeta(kinds.Pod()),
-		Spec:     v1.PodSpec{Containers: containers},
+		Spec: v1.PodSpec{Containers: containers},
 	}
 	mutate(result, core.Name(name))
 	mutate(result, opts...)

@@ -147,12 +147,6 @@ func toFileObjects(u runtime.Unstructured, rootDir cmpath.Absolute, policyDir cm
 			BuildWithPaths(path)
 	}
 
-	if obj.GetAnnotations() == nil {
-		obj.SetAnnotations(map[string]string{})
-	}
-	if obj.GetLabels() == nil {
-		obj.SetLabels(map[string]string{})
-	}
 	return []ast.FileObject{ast.NewFileObject(obj, cmpath.RelativeOS(rel))}, nil
 }
 

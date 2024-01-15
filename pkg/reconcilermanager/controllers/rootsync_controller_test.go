@@ -3297,7 +3297,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Git
@@ -3312,7 +3312,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Oci
@@ -3327,7 +3327,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm
@@ -3342,7 +3342,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing OCI image
@@ -3358,7 +3358,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid OCI Auth
@@ -3374,7 +3374,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm repo
@@ -3391,7 +3391,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm chart
@@ -3407,7 +3407,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid Helm Auth
@@ -3423,7 +3423,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs, configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid OCI spec

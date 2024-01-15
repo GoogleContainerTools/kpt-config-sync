@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -33,11 +32,11 @@ func TestAsUnstructured_AddsStatus(t *testing.T) {
 	}{
 		{
 			name: "Namespace",
-			obj:  &corev1.Namespace{TypeMeta: fake.ToTypeMeta(kinds.Namespace())},
+			obj:  &corev1.Namespace{},
 		},
 		{
 			name: "Service",
-			obj:  &corev1.Service{TypeMeta: fake.ToTypeMeta(kinds.Service())},
+			obj:  &corev1.Service{},
 		},
 	}
 
@@ -109,11 +108,11 @@ func TestAsUnstructuredSanitized_DoesNotAddStatus(t *testing.T) {
 	}{
 		{
 			name: "Namespace",
-			obj:  &corev1.Namespace{TypeMeta: fake.ToTypeMeta(kinds.Namespace())},
+			obj:  &corev1.Namespace{},
 		},
 		{
 			name: "Service",
-			obj:  &corev1.Service{TypeMeta: fake.ToTypeMeta(kinds.Service())},
+			obj:  &corev1.Service{},
 		},
 	}
 
@@ -145,7 +144,7 @@ func TestAsUnstructuredSanitized_DeepCopy(t *testing.T) {
 	}{
 		{
 			name: "Namespace as object",
-			obj:  &corev1.Namespace{TypeMeta: fake.ToTypeMeta(kinds.Namespace())},
+			obj:  &corev1.Namespace{},
 		},
 		{
 			name: "Namespace as unstructured",

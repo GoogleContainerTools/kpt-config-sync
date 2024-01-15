@@ -3380,7 +3380,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Git
@@ -3395,7 +3395,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Oci
@@ -3410,7 +3410,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm
@@ -3425,7 +3425,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing OCI image
@@ -3441,7 +3441,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid OCI Auth
@@ -3457,7 +3457,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm repo
@@ -3474,7 +3474,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm chart
@@ -3490,7 +3490,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid Helm Auth
@@ -3506,7 +3506,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs, configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid OCI spec

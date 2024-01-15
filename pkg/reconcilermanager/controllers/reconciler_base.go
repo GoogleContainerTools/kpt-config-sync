@@ -323,6 +323,8 @@ func (r *reconcilerBase) compareDeploymentsToCreatePatchData(declared *appsv1.De
 	if err != nil {
 		return nil, err
 	}
+	// Convert to Unstructured to ensure json contains GVK without modifying `declared`.
+	// Also needs to be Unstructured to delete fields allowed to drift.
 	uObjDeclared, err := kinds.ToUnstructured(declared, r.scheme)
 	if err != nil {
 		return nil, err

@@ -546,6 +546,29 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	if err := nt.KubeClient.Apply(namespace); err != nil {
 		nt.T.Fatal(err)
 	}
+
+	// Remove the fake finalizer
+	t.Cleanup(func() {
+		namespace = fake.NamespaceObject(namespaceNN.Name)
+		nt.T.Logf("Remove the fake finalizer named %s from Namespace %s", contrivedFinalizer, namespaceNN.Name)
+		if err := nt.KubeClient.Apply(namespace); err != nil {
+			nt.T.Fatal(err)
+		}
+		// With the finalizer removed, the deletion should reconcile
+		tg := taskgroup.New()
+		tg.Go(func() error {
+			return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
+				nestedRootSyncNN.Name, nestedRootSyncNN.Namespace)
+		})
+		tg.Go(func() error {
+			return nt.Watcher.WatchForNotFound(kinds.Namespace(),
+				namespaceNN.Name, namespaceNN.Namespace)
+		})
+		if err := tg.Wait(); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+
 	// Try to remove the nested RootSync. Deletion should be blocked by ns finalizer
 	nestedRootSyncPath := fmt.Sprintf("acme/namespaces/%s/%s.yaml",
 		configsync.ControllerNamespace, nestedRootSyncNN.Name)
@@ -574,25 +597,6 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(namespaceNN.Name, namespaceNN.Namespace, &corev1.Namespace{}); err != nil {
-		nt.T.Fatal(err)
-	}
-	// Remove the fake finalizer
-	namespace = fake.NamespaceObject(namespaceNN.Name)
-	nt.T.Logf("Remove the fake finalizer named %s from Namespace %s", contrivedFinalizer, namespaceNN.Name)
-	if err := nt.KubeClient.Apply(namespace); err != nil {
-		nt.T.Fatal(err)
-	}
-	// With the finalizer removed, the deletion should reconcile
-	tg := taskgroup.New()
-	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
-			nestedRootSyncNN.Name, nestedRootSyncNN.Namespace)
-	})
-	tg.Go(func() error {
-		return nt.Watcher.WatchForNotFound(kinds.Namespace(),
-			namespaceNN.Name, namespaceNN.Namespace)
-	})
-	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
 	}
 }

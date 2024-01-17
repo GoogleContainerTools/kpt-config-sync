@@ -408,8 +408,9 @@ clean-helm:
 # install kind (user-friendly target alias)
 install-kind: "$(KIND)"
 
+# Set CGO_ENABLED=0 for compatibility with containers missing glibc
 "$(GOBIN)/crane":
-	go install github.com/google/go-containerregistry/cmd/crane@$(CRANE_VERSION)
+	CGO_ENABLED=0 go install github.com/google/go-containerregistry/cmd/crane@$(CRANE_VERSION)
 
 "$(CRANE)": "$(GOBIN)/crane" buildenv-dirs
 	cp $(GOBIN)/crane $(CRANE)

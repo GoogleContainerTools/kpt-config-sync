@@ -112,6 +112,10 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		t.Skip("Test skipped for non-local OCIProvider types")
 	}
 
+	if *e2e.HelmProvider != e2e.Local && optsStruct.RequireLocalHelmProvider {
+		t.Skip("Test skipped for non-local HelmProvider types")
+	}
+
 	if optsStruct.RESTConfig == nil {
 		RestConfig(t, optsStruct)
 		// Increase the QPS for the clients used by the e2e tests.
@@ -217,6 +221,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		WebhookDisabled:         sharedNt.WebhookDisabled,
 		GitProvider:             sharedNt.GitProvider,
 		OCIProvider:             sharedNt.OCIProvider,
+		HelmProvider:            sharedNt.HelmProvider,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -296,6 +301,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		WebhookDisabled:         &webhookDisabled,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
 		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider),
+		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider),
 	}
 
 	// TODO: Try speeding up the reconciler and hydration polling.
@@ -450,7 +456,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		nt.portForwardGitServer()
 	}
 	// set up port forward if using in-cluster registry server
-	if *e2e.OCIProvider == e2e.Local {
+	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
 		nt.portForwardRegistryServer()
 	}
 	// Images created by the tests should not be persisted after the test finishes.
@@ -466,6 +472,18 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 			}
 		}
 		nt.ociImages = nil
+	})
+	nt.T.Cleanup(func() {
+		for _, helmPackage := range nt.helmPackages {
+			remoteURL, err := nt.HelmProvider.PushURL(helmPackage.Name)
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+			if err := helmPackage.Delete(remoteURL); err != nil {
+				nt.T.Error(err)
+			}
+		}
+		nt.helmPackages = nil
 	})
 	// The following prerequisites have been met, so we can now push commits
 	// - local repo initialized

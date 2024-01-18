@@ -108,6 +108,10 @@ var GitProvider = flag.String("git-provider", Local,
 var OCIProvider = flag.String("oci-provider", Local,
 	"The registry provider that hosts the OCI repositories. Defaults to local.")
 
+// HelmProvider is the provider that hosts the OCI repositories.
+var HelmProvider = flag.String("helm-provider", Local,
+	"The registry provider that hosts the helm packages. Defaults to local.")
+
 // TestFeatures is the list of features to run.
 var TestFeatures = flag.String("test-features", "",
 	"A list of features to run, separated by comma. Defaults to empty, which should run all tests.")

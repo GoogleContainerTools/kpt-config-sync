@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -471,6 +473,125 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 		}),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nn: ".",
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the ConfigMap was created")
+	if err := nt.Validate(cm.Name, cm.Namespace, &corev1.ConfigMap{}); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the upserted Secret was created")
+	if err := nt.Validate(upsertedSecret, configsync.ControllerNamespace, &corev1.Secret{}); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Set the RepoSync to sync from git")
+	rs.Spec.SourceType = string(v1beta1.GitSource)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the RepoSync to sync from Git"))
+
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the ConfigMap was pruned")
+	if err := nt.ValidateNotFound(cm.Name, cm.Namespace, &corev1.ConfigMap{}); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the upserted Secret was garbage collected")
+	if err := nt.ValidateNotFound(upsertedSecret, configsync.ControllerNamespace, &corev1.Secret{}); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestHelmCACertSecretRefRootRepo can run only run on KinD clusters.
+// It tests RootSyncs can pull from OCI images using a CA certificate.
+func TestHelmCACertSecretRefRootRepo(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.RequireLocalHelmProvider)
+
+	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
+
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("templates/ns.yaml", fake.NamespaceObject("foo-ns")))
+
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Set the RootSync to sync the Helm package without providing a CA cert")
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "none", "period": "15s"}, "git": null}}`,
+		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+
+	nt.T.Log("Add caCertSecretRef to RootSync")
+	nt.MustMergePatch(rs, caCertSecretPatch(v1beta1.HelmSource, caCertSecret))
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(helmChartVersion(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nomostest.DefaultRootRepoNamespacedName: chart.Name,
+		}))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the Namespace was created")
+	if err := nt.Validate("foo-ns", "", &corev1.Namespace{}); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestHelmCACertSecretRefNamespaceRepo can run only run on KinD clusters.
+// It tests RepoSyncs can pull from OCI images using a CA certificate.
+func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.RequireLocalHelmProvider,
+		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
+
+	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
+
+	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
+	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	upsertedSecret := controllers.ReconcilerResourceName(
+		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
+
+	cm := fake.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
+
+	nt.Must(nt.NonRootRepos[nn].Add("templates/ns.yaml", cm))
+
+	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[nn])
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Set the RepoSync to sync the Helm package without providing a CA cert")
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{
+		HelmBase: v1beta1.HelmBase{
+			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Chart:   chart.Name,
+			Version: chart.Version,
+			Auth:    "none",
+			Period:  metav1.Duration{Duration: 15 * time.Second},
+		},
+	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the RepoSync to use Helm without providing CA cert"))
+
+	nt.WaitForRepoSyncSourceError(nn.Namespace, nn.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+
+	nt.T.Log("Add caCertSecretRef to RepoSync")
+	rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the CA cert for the RepoSync"))
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRepoSha1Func(helmChartVersion(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			nn: chart.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)

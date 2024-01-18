@@ -31,6 +31,8 @@ import (
 )
 
 var (
+	flCACert = flag.String("ca-cert", os.Getenv(reconcilermanager.HelmCACert),
+		"CA cert to use for validating HTTPS connections")
 	flRepo = flag.String("repo", os.Getenv(reconcilermanager.HelmRepo),
 		"helm repository url where to locate the requested chart")
 	flChart = flag.String("chart", os.Getenv(reconcilermanager.HelmChart),
@@ -129,6 +131,7 @@ func main() {
 			Dest:            *flDest,
 			UserName:        *flUsername,
 			Password:        *flPassword,
+			CACertFilePath:  *flCACert,
 		}
 
 		if err := hydrator.HelmTemplate(ctx); err != nil {

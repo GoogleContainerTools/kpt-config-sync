@@ -225,6 +225,8 @@ func reposyncCACert(sourceType v1beta1.SourceType, caCertSecretRef string) func(
 			rs.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 		case v1beta1.OciSource:
 			rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
+		case v1beta1.HelmSource:
+			rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 		}
 	}
 }
@@ -1271,6 +1273,10 @@ func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 		"oci": {
 			repoSync: repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
 				reposyncCACert(v1beta1.OciSource, caCertSecret)),
+		},
+		"helm": {
+			repoSync: repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
+				reposyncCACert(v1beta1.HelmSource, caCertSecret)),
 		},
 	}
 	for name, tc := range testCases {
@@ -2606,10 +2612,12 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	rs3 := repoSyncWithGit("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(testSecretName))
 	rs4 := repoSyncWithGit("ns1", "rs4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthNone), reposyncCACert(v1beta1.GitSource, caCertSecret))
 	rs5 := repoSyncWithOCI("ns1", "rs5", reposyncOCIAuthType(configsync.AuthNone), reposyncCACert(v1beta1.OciSource, caCertSecret))
+	rs6 := repoSyncWithHelm("ns1", "rs6", reposyncHelmAuthType(configsync.AuthNone), reposyncCACert(v1beta1.HelmSource, caCertSecret))
 
 	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	ns1rs4ReconcilerName := core.NsReconcilerName(rs4.Namespace, rs4.Name)
 	ns1rs5ReconcilerName := core.NsReconcilerName(rs5.Namespace, rs5.Name)
+	ns1rs6ReconcilerName := core.NsReconcilerName(rs6.Namespace, rs6.Name)
 	serviceAccountToken := ns1rs1ReconcilerName + "-token-p29b5"
 	serviceAccount := fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(nsReconcilerKey.Namespace))
 	serviceAccount.Secrets = []corev1.ObjectReference{{Name: serviceAccountToken}}
@@ -2677,6 +2685,21 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 				{
 					NamespacedName: types.NamespacedName{
 						Name:      "rs5",
+						Namespace: "ns1",
+					},
+				},
+			},
+		},
+		{
+			name: fmt.Sprintf("A helm caCertSecretRef from the %s namespace starting with %s, with a mapping RepoSync",
+				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
+			secret: fake.SecretObject(ReconcilerResourceName(ns1rs6ReconcilerName, caCertSecret),
+				core.Namespace(configsync.ControllerNamespace),
+			),
+			want: []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "rs6",
 						Namespace: "ns1",
 					},
 				},
@@ -2754,11 +2777,17 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 						Namespace: "ns1",
 					},
 				},
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "rs6",
+						Namespace: "ns1",
+					},
+				},
 			},
 		},
 	}
 
-	_, _, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, rs4, rs5, serviceAccount)
+	_, _, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, rs4, rs5, rs6, serviceAccount)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := testReconciler.mapSecretToRepoSyncs(tc.secret)
@@ -4166,6 +4195,49 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Remove CA cert secret ref
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone))
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret2), fakeClient))
+
+	// End validation for OCI source type
+
+	// Verify Secret garbage collection behavior with helm source type
+	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
+		reposyncCACert(v1beta1.HelmSource, caCertSecret1Name))
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret2), fakeClient))
+
+	// Switch secret reference to a different Secret
+	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
+		reposyncCACert(v1beta1.HelmSource, caCertSecret2Name))
+	if err := fakeClient.Update(ctx, rs); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	}
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	require.NoError(t, validateResourceDeleted(core.IDOf(upsertedCertSecret1), fakeClient))
+	require.NoError(t, validateResourceExists(core.IDOf(upsertedCertSecret2), fakeClient))
+
+	// Remove CA cert secret ref
+	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone))
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}

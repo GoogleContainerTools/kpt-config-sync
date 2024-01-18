@@ -111,6 +111,15 @@ type HelmBase struct {
 	// +nullable
 	// +optional
 	SecretRef *SecretReference `json:"secretRef,omitempty"`
+
+	// caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+	// The creation of the secret should be done out of band by the user and should store the
+	// certificate in a key named "cert". For RepoSync resources, the secret must be
+	// created in the same namespace as the RepoSync. For RootSync resource, the secret
+	// must be created in the config-management-system namespace.
+	// +nullable
+	// +optional
+	CACertSecretRef *SecretReference `json:"caCertSecretRef,omitempty"`
 }
 
 // ValuesFileRef references a ConfigMap object that contains a values file to use for

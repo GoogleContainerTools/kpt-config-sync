@@ -64,3 +64,35 @@ func (l *LocalOCIProvider) PushURLWithPort(localPort int, name string) string {
 func (l *LocalOCIProvider) SyncURL(name string) string {
 	return fmt.Sprintf("test-registry-server.test-registry-system/oci/%s", name)
 }
+
+// LocalHelmProvider provides methods for interacting with the test registry-server
+// using the oci-sync interface.
+type LocalHelmProvider struct {
+	LocalProvider
+}
+
+// PushURL returns a URL for pushing images to the remote registry.
+// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
+func (l *LocalHelmProvider) PushURL(name string) (string, error) {
+	if l.PortForwarder == nil {
+		return "", fmt.Errorf("PortForwarder must be set for LocalProvider.OCIPushURL()")
+	}
+	port, err := l.PortForwarder.LocalPort()
+	if err != nil {
+		return "", err
+	}
+	return l.PushURLWithPort(port, name), nil
+}
+
+// PushURLWithPort returns a URL for pushing images to the remote registry.
+// localPort refers to the local port the PortForwarder is listening on.
+// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
+func (l *LocalHelmProvider) PushURLWithPort(localPort int, name string) string {
+	return fmt.Sprintf("oci://localhost:%d/helm/%s", localPort, name)
+}
+
+// SyncURL returns a URL for Config Sync to sync from using helm.
+// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
+func (l *LocalHelmProvider) SyncURL(name string) string {
+	return fmt.Sprintf("oci://test-registry-server.test-registry-system/helm/%s", name)
+}

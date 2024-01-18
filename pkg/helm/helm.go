@@ -26,6 +26,7 @@ import (
 	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	semverrange "github.com/Masterminds/semver/v3"
+	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -64,6 +65,7 @@ type Hydrator struct {
 	UserName                string
 	Password                string
 	ValuesFileApplyStrategy string
+	CACertFilePath          string
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -160,9 +162,9 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+	out, err := h.helm(ctx, args...)
 	if err != nil {
-		return fmt.Errorf("failed to run `helm show chart`: %w, stdout: %s", err, string(out))
+		return errors.Wrapf(err, "getting helm chart version")
 	}
 	var parsedOut map[string]interface{}
 	if err := yaml.Unmarshal(out, &parsedOut); err != nil {
@@ -246,15 +248,27 @@ data:
 	return pkgReadWriter.Write(newNodes)
 }
 
+func (h *Hydrator) helm(ctx context.Context, args ...string) ([]byte, error) {
+	var allArgs []string
+	allArgs = append(allArgs, args...)
+	if h.CACertFilePath != "" {
+		allArgs = append(allArgs, "--ca-file", h.CACertFilePath)
+	}
+	out, err := exec.CommandContext(ctx, "helm", allArgs...).CombinedOutput()
+	if err != nil {
+		return out, errors.Wrapf(err, "invoking helm: %s", string(out))
+	}
+	return out, nil
+}
+
 func (h *Hydrator) registryLogin(ctx context.Context) error {
 	if h.Auth != configsync.AuthNone && h.isOCI() {
 		args, err := h.registryLoginArgs(ctx)
 		if err != nil {
 			return err
 		}
-		out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to authenticate to helm registry: %w, stdout: %s", err, string(out))
+		if _, err := h.helm(ctx, args...); err != nil {
+			return errors.Wrapf(err, "failed to authenticate to helm registry")
 		}
 	}
 	return nil
@@ -299,9 +313,9 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	out, err := exec.CommandContext(ctx, "helm", args...).CombinedOutput()
+	out, err := h.helm(ctx, args...)
 	if err != nil {
-		return fmt.Errorf("failed to render the helm chart: %w, stdout: %s", err, string(out))
+		return errors.Wrapf(err, "rendering helm chart")
 	}
 
 	// Create the repo/chart directory, in case the chart is empty.

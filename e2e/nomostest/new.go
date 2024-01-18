@@ -103,7 +103,7 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		t.Skip("Test skipped for non-gcenode auth types")
 	}
 
-	if *e2e.GitProvider != e2e.Local && optsStruct.SkipNonLocalGitProvider {
+	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
 		t.Skip("Test skipped for non-local GitProvider types")
 	}
 

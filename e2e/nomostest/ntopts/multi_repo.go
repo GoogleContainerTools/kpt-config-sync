@@ -46,8 +46,8 @@ type MultiRepo struct {
 	// Default: 5m.
 	ReconcileTimeout *time.Duration
 
-	// SkipNonLocalGitProvider will skip the test if run with a GitProvider type other than local.
-	SkipNonLocalGitProvider bool
+	// RequireLocalGitProvider will skip the test if run with a GitProvider type other than local.
+	RequireLocalGitProvider bool
 
 	// RepoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	RepoSyncPermissions []rbacv1.PolicyRule
@@ -73,9 +73,9 @@ func RootRepo(name string) func(opt *New) {
 	}
 }
 
-// SkipNonLocalGitProvider will skip the test with non-local GitProvider types
-func SkipNonLocalGitProvider(opt *New) {
-	opt.SkipNonLocalGitProvider = true
+// RequireLocalGitProvider will skip the test with non-local GitProvider types
+func RequireLocalGitProvider(opt *New) {
+	opt.RequireLocalGitProvider = true
 }
 
 // WithDelegatedControl will specify the Delegated Control Pattern.

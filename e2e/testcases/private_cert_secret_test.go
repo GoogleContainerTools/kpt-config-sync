@@ -62,7 +62,7 @@ func secretDataDeletePatch(key string) string {
 }
 
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 
 	key := controllers.GitSSLCAInfo
@@ -180,7 +180,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 }
 
 func TestCACertSecretRefV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 
 	key := controllers.GitSSLCAInfo
@@ -303,7 +303,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 }
 
 func TestCACertSecretWatch(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SkipNonLocalGitProvider,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
 
 	key := controllers.GitSSLCAInfo

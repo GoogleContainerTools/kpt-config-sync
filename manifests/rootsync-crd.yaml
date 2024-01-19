@@ -347,6 +347,16 @@ spec:
                     format: int64
                     minimum: 0
                     type: integer
+                  gitSyncOverride:
+                    description: gitSyncOverride specify git-sync container override
+                    properties:
+                      gitSyncTimeout:
+                        description: gitSyncTimeout allows one to configure the timeout
+                          for the git-sync container. Must be no less than 0. If this
+                          field is not provided, the default value is 2 minutes.
+                        minimum: 0
+                        type: integer
+                    type: object
                   logLevels:
                     description: logLevels specify the container name and log level
                       override value for the reconciler deployment container. Each
@@ -1453,6 +1463,16 @@ spec:
                     format: int64
                     minimum: 0
                     type: integer
+                  gitSyncOverride:
+                    description: gitSyncOverride specify git-sync container override
+                    properties:
+                      gitSyncTimeout:
+                        description: gitSyncTimeout allows one to configure the timeout
+                          for the git-sync container. Must be no less than 0. If this
+                          field is not provided, the default value is 2 minutes.
+                        minimum: 0
+                        type: integer
+                    type: object
                   logLevels:
                     description: logLevels specify the container name and log level
                       override value for the reconciler deployment container. Each

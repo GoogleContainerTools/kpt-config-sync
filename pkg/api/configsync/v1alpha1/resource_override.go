@@ -74,6 +74,10 @@ type OverrideSpec struct {
 	// +listMapKey=containerName
 	// +optional
 	LogLevels []ContainerLogLevelOverride `json:"logLevels,omitempty"`
+
+	// gitSyncOverride specify git-sync container override
+	// +optional
+	GitSyncOverride GitSyncOverride `json:"gitSyncOverride,omitempty"`
 }
 
 // RootSyncOverrideSpec allows to override the settings for a RootSync reconciler pod
@@ -169,4 +173,15 @@ type ContainerLogLevelOverride struct {
 	// +kubebuilder:validation:Maximum=10
 	// +kubebuilder:validation:Required
 	LogLevel int `json:"logLevel"`
+}
+
+// GitSyncOverride specifies the git-sync container override value
+type GitSyncOverride struct {
+	// gitSyncTimeout allows one to configure the timeout for the git-sync container.
+	// Must be no less than 0.
+	// If this field is not provided, the default value is 2 minutes.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	GitSyncTimeout int `json:"gitSyncTimeout,omitempty"`
 }

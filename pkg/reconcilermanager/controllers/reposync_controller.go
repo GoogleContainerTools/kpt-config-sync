@@ -1205,6 +1205,11 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 				if err := mutateContainerLogLevel(&container, containerLogLevels); err != nil {
 					return err
 				}
+				if container.Name == reconcilermanager.GitSync {
+					if err := mutateGitsyncTimeout(&container, overrides.GitSyncOverride.GitSyncTimeout); err != nil {
+						return err
+					}
+				}
 				updatedContainers = append(updatedContainers, container)
 			}
 		}

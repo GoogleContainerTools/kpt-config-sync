@@ -96,7 +96,7 @@ type Git struct {
 }
 
 // SecretReference contains the reference to the secret used to connect to
-// Git source of truth.
+// source of truth.
 type SecretReference struct {
 	// name represents the secret name.
 	// +optional

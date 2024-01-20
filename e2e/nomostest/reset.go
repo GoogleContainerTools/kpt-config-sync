@@ -51,6 +51,7 @@ var sharedTestNamespaces = []string{
 	configmanagement.RGControllerNamespace,
 	configmanagement.MonitoringNamespace,
 	testGitNamespace,
+	TestRegistryNamespace,
 	prometheusNamespace,
 }
 

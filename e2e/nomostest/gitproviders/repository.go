@@ -621,6 +621,16 @@ func (g *Repository) RenameBranch(current, new string) error {
 	return g.Push(current, "--delete")
 }
 
+// CurrentBranch returns the name of the current branch.
+// Note: this will not work if not checked out to a branch (e.g. detached HEAD).
+func (g *Repository) CurrentBranch() (string, error) {
+	out, err := g.Git("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // Hash returns the current hash of the git repository.
 //
 // Immediately ends the test on error.

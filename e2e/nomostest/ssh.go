@@ -37,38 +37,39 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 )
 
+// SyncSource represents a type of sync source. This typically maps to a type of
+// server which hosts a source of truth for syncing. This does not necessarily
+// map 1:1 with SourceType, for example both helm and oci use registry-server.
+type SyncSource string
+
 const (
 	// RootAuthSecretName is the name of the Auth secret required by the
 	// RootSync reconciler to authenticate with the git-server.
 	RootAuthSecretName = controllers.GitCredentialVolume
 
-	// rootCACertSecretName is the name of the CACert secret required by
-	// the RootSync reconciler.
-	rootCACertSecretName = "git-cert-pub"
-
 	// NamespaceAuthSecretName is the name of the Auth secret required by the
 	// RepoSync reconciler to authenticate with the git-server.
 	NamespaceAuthSecretName = "ssh-key"
-
-	// NamespaceCACertSecretName is the name of the CACert secret required by
-	// the RepoSync reconciler to authenticate the git-server SSL cert.
-	NamespaceCACertSecretName = "git-cert-pub"
 
 	// gitServerSecretName is the name of the Secret used by the local
 	// git-server to authenticate clients.
 	gitServerSecretName = "ssh-pub"
 
-	// gitServerCertSecretName ins the name of the Secret used by the local
-	// git-server to authenticate itself to clients.
-	gitServerCertSecretName = "ssl-cert"
+	// GitSyncSource is the name of the git-server sync source. Used by the git
+	// source type.
+	GitSyncSource SyncSource = "git-server"
+
+	// RegistrySyncSource is the name of the registry-server sync source. Used
+	// by both the oci and helm source types.
+	RegistrySyncSource SyncSource = "registry-server"
 )
 
 func sshDir(nt *NT) string {
 	return filepath.Join(nt.TmpDir, "ssh")
 }
 
-func sslDir(nt *NT) string {
-	return filepath.Join(nt.TmpDir, "ssl")
+func sslDir(nt *NT, syncSource SyncSource) string {
+	return filepath.Join(nt.TmpDir, string(syncSource), "ssl")
 }
 
 func privateKeyPath(nt *NT) string {
@@ -79,16 +80,16 @@ func publicKeyPath(nt *NT) string {
 	return filepath.Join(sshDir(nt), "id_rsa.nomos.pub")
 }
 
-func caCertPath(nt *NT) string {
-	return filepath.Join(sslDir(nt), "ca_cert.pem")
+func caCertPath(nt *NT, syncSource SyncSource) string {
+	return filepath.Join(sslDir(nt, syncSource), "ca_cert.pem")
 }
 
-func certPath(nt *NT) string {
-	return filepath.Join(sslDir(nt), "cert.pem")
+func certPath(nt *NT, syncSource SyncSource) string {
+	return filepath.Join(sslDir(nt, syncSource), "cert.pem")
 }
 
-func certPrivateKeyPath(nt *NT) string {
-	return filepath.Join(sslDir(nt), "key.pem")
+func certPrivateKeyPath(nt *NT, syncSource SyncSource) string {
+	return filepath.Join(sslDir(nt, syncSource), "key.pem")
 }
 
 // GetKnownHosts will generate and format the key to be used for
@@ -147,8 +148,8 @@ func writePEMToFile(path, pemType string, data []byte) error {
 	return nil
 }
 
-func createCAWithCerts(nt *NT) error {
-	if err := os.MkdirAll(sslDir(nt), fileMode); err != nil {
+func createCAWithCerts(nt *NT, syncSource SyncSource, domains []string) error {
+	if err := os.MkdirAll(sslDir(nt, syncSource), fileMode); err != nil {
 		return fmt.Errorf("creating ssl directory: %w", err)
 	}
 	ca := &x509.Certificate{
@@ -177,7 +178,7 @@ func createCAWithCerts(nt *NT) error {
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().AddDate(1, 0, 0),
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{"test-git-server.config-management-system-test"},
+		DNSNames:     domains,
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
 	certPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -189,13 +190,13 @@ func createCAWithCerts(nt *NT) error {
 		return fmt.Errorf("creating server cert: %w", err)
 	}
 
-	if err := writePEMToFile(caCertPath(nt), "CERTIFICATE", caBytes); err != nil {
+	if err := writePEMToFile(caCertPath(nt, syncSource), "CERTIFICATE", caBytes); err != nil {
 		return err
 	}
-	if err := writePEMToFile(certPath(nt), "CERTIFICATE", certBytes); err != nil {
+	if err := writePEMToFile(certPath(nt, syncSource), "CERTIFICATE", certBytes); err != nil {
 		return err
 	}
-	return writePEMToFile(certPrivateKeyPath(nt), "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(certPrivateKey))
+	return writePEMToFile(certPrivateKeyPath(nt, syncSource), "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(certPrivateKey))
 }
 
 // createSecret creates secret in the given namespace using 'keypath'.
@@ -244,29 +245,44 @@ func generateSSHKeys(nt *NT) (string, error) {
 	return privateKeyPath(nt), nil
 }
 
+// PublicCertSecretName is the name of the Secret which contains a CA cert used
+// for HTTPS handshakes of the provided sync source
+func PublicCertSecretName(sourceType SyncSource) string {
+	return fmt.Sprintf("%s-cert-public", sourceType)
+}
+
+// privateCertSecretName is the name of the Secret which contains the private
+// certificate and key used by in-cluster sync sources for HTTPS handshakes.
+// Example usages: git-server, registry-server
+func privateCertSecretName(sourceType SyncSource) string {
+	return fmt.Sprintf("%s-cert-private", sourceType)
+}
+
 // generateSSLKeys generates a self signed certificate for the test
 //
 // It turns out kubectl create secret is annoying to emulate, and it doesn't
 // expose the inner logic to outside consumers. So instead of trying to do it
 // ourselves, we're shelling out to kubectl to ensure we create a valid set of
 // secrets.
-func generateSSLKeys(nt *NT) (string, error) {
-	if err := createCAWithCerts(nt); err != nil {
+func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []string) (string, error) {
+	if err := createCAWithCerts(nt, syncSource, domains); err != nil {
 		return "", err
 	}
 
-	if err := createSecret(nt, configmanagement.ControllerNamespace, rootCACertSecretName,
-		fmt.Sprintf("cert=%s", caCertPath(nt))); err != nil {
+	// Create public secret in config-management-system to enable syncing with
+	// RootSyncs. For RepoSyncs, see CreateNamespaceSecret
+	if err := createSecret(nt, configmanagement.ControllerNamespace, PublicCertSecretName(syncSource),
+		fmt.Sprintf("cert=%s", caCertPath(nt, syncSource))); err != nil {
 		return "", err
 	}
 
-	if err := createSecret(nt, testGitNamespace, gitServerCertSecretName,
-		fmt.Sprintf("server.crt=%s", certPath(nt)),
-		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt))); err != nil {
+	if err := createSecret(nt, namespace, privateCertSecretName(syncSource),
+		fmt.Sprintf("server.crt=%s", certPath(nt, syncSource)),
+		fmt.Sprintf("server.key=%s", certPrivateKeyPath(nt, syncSource))); err != nil {
 		return "", err
 	}
 
-	return caCertPath(nt), nil
+	return caCertPath(nt, syncSource), nil
 }
 
 // downloadSSHKey downloads the private SSH key from Cloud Secret Manager.
@@ -303,11 +319,20 @@ func CreateNamespaceSecret(nt *NT, ns string) error {
 		return err
 	}
 	if nt.GitProvider.Type() == e2e.Local {
-		caCertPathVal := nt.caCertPath
+		caCertPathVal := nt.gitCACertPath
 		if len(caCertPathVal) == 0 {
-			caCertPathVal = caCertPath(nt)
+			caCertPathVal = caCertPath(nt, GitSyncSource)
 		}
-		if err := createSecret(nt, ns, NamespaceCACertSecretName, fmt.Sprintf("cert=%s", caCertPathVal)); err != nil {
+		if err := createSecret(nt, ns, PublicCertSecretName(GitSyncSource), fmt.Sprintf("cert=%s", caCertPathVal)); err != nil {
+			return err
+		}
+	}
+	if nt.OCIProvider.Type() == e2e.Local {
+		caCertPathVal := nt.registryCACertPath
+		if len(caCertPathVal) == 0 {
+			caCertPathVal = caCertPath(nt, RegistrySyncSource)
+		}
+		if err := createSecret(nt, ns, PublicCertSecretName(RegistrySyncSource), fmt.Sprintf("cert=%s", caCertPathVal)); err != nil {
 			return err
 		}
 	}

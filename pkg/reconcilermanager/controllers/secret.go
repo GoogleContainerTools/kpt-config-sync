@@ -32,7 +32,7 @@ import (
 // config-management-system namespace was upserted by the Reconciler
 func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 	reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
-	if shouldUpsertCACertSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)) {
+	if name, ok := getCACertName(rs); ok && useCACert(name) && secretName == ReconcilerResourceName(reconcilerName, name) {
 		return true
 	}
 	if shouldUpsertGitSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, v1beta1.GetSecretName(rs.Spec.Git.SecretRef)) {
@@ -44,8 +44,21 @@ func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 	return false
 }
 
-func shouldUpsertCACertSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && rs.Spec.CACertSecretRef != nil && useCACert(rs.Spec.CACertSecretRef.Name)
+func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
+	switch v1beta1.SourceType(rs.Spec.SourceType) {
+	case v1beta1.GitSource:
+		if rs.Spec.Git == nil || rs.Spec.Git.CACertSecretRef == nil {
+			return "", false
+		}
+		return v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef), true
+	case v1beta1.OciSource:
+		if rs.Spec.Oci == nil || rs.Spec.Oci.CACertSecretRef == nil {
+			return "", false
+		}
+		return v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef), true
+	default:
+		return "", false
+	}
 }
 
 func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
@@ -89,11 +102,11 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 // namespace.
 func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, labelMap map[string]string) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
-	if shouldUpsertCACertSecret(rs) {
-		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef))
+	if secretName, ok := getCACertName(rs); ok && useCACert(secretName) {
+		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, secretName)
 		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for git server validation")
+			return cmsSecretRef, errors.Wrap(err, "user secret required for CA cert validation")
 		}
 		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err

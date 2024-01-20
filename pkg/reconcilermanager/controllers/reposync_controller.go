@@ -635,7 +635,8 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	for _, rs := range attachedRepoSyncs.Items {
 		// Only enqueue a request for the RSync if it references the Secret that triggered the event
 		switch sRef.Name {
-		case repoSyncGitSecretName(&rs), repoSyncGitCACertSecretName(&rs), repoSyncHelmSecretName(&rs):
+		case repoSyncGitSecretName(&rs), repoSyncGitCACertSecretName(&rs),
+			repoSyncOCICACertSecretName(&rs), repoSyncHelmSecretName(&rs):
 			attachedRSNames = append(attachedRSNames, rs.GetName())
 			requests = append(requests, reconcile.Request{
 				NamespacedName: client.ObjectKeyFromObject(&rs),
@@ -673,6 +674,19 @@ func repoSyncGitCACertSecretName(rs *v1beta1.RepoSync) string {
 		return ""
 	}
 	return rs.Spec.Git.CACertSecretRef.Name
+}
+
+func repoSyncOCICACertSecretName(rs *v1beta1.RepoSync) string {
+	if rs == nil {
+		return ""
+	}
+	if rs.Spec.Oci == nil {
+		return ""
+	}
+	if rs.Spec.Oci.CACertSecretRef == nil {
+		return ""
+	}
+	return rs.Spec.Oci.CACertSecretRef.Name
 }
 
 func repoSyncHelmSecretName(rs *v1beta1.RepoSync) string {
@@ -884,9 +898,10 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 		}
 	case v1beta1.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(ociOptions{
-			image:  rs.Spec.Oci.Image,
-			auth:   rs.Spec.Oci.Auth,
-			period: v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds(),
+			image:           rs.Spec.Oci.Image,
+			auth:            rs.Spec.Oci.Auth,
+			period:          v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds(),
+			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef),
 		})
 	case v1beta1.HelmSource:
 		result[reconcilermanager.HelmSync] = helmSyncEnvs(helmOptions{
@@ -920,7 +935,7 @@ func (r *RepoSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 	case v1beta1.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
 	case v1beta1.OciSource:
-		return validate.OciSpec(rs.Spec.Oci, rs)
+		return r.validateOciSpec(ctx, rs)
 	case v1beta1.HelmSource:
 		return validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs)
 	default:
@@ -935,6 +950,13 @@ func (r *RepoSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, 
 		return nil
 	}
 	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
+}
+
+func (r *RepoSyncReconciler) validateOciSpec(ctx context.Context, rs *v1beta1.RepoSync) error {
+	if err := validate.OciSpec(rs.Spec.Oci, rs); err != nil {
+		return err
+	}
+	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
 }
 
 func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
@@ -1080,6 +1102,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		case v1beta1.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
+			caCertSecretRefName = v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef)
 		case v1beta1.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
@@ -1154,6 +1177,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
+					container.VolumeMounts = volumeMounts(rs.Spec.Oci.Auth, caCertSecretRefName, rs.Spec.SourceType, container.VolumeMounts)
 					injectFWICredsToContainer(&container, injectFWICreds)
 				}
 			case reconcilermanager.HelmSync:

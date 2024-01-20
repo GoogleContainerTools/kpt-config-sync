@@ -49,7 +49,6 @@ func setupGit(nt *NT) error {
 		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
 			return err
 		}
-
 		// Pods don't always restart if the secrets don't exist, so we have to
 		// create the Namespaces + Secrets before anything else.
 		gitPrivateKeyPath, err := generateSSHKeys(nt)
@@ -57,12 +56,14 @@ func setupGit(nt *NT) error {
 			return err
 		}
 		nt.gitPrivateKeyPath = gitPrivateKeyPath
-
-		caCertPath, err := generateSSLKeys(nt)
+		gitDomains := []string{
+			fmt.Sprintf("%s.%s", testGitServer, testGitNamespace),
+		}
+		gitCACertPath, err := generateSSLKeys(nt, GitSyncSource, testGitNamespace, gitDomains)
 		if err != nil {
 			return err
 		}
-		nt.caCertPath = caCertPath
+		nt.gitCACertPath = gitCACertPath
 
 		if err := installGitServer(nt); err != nil {
 			nt.describeNotRunningTestPods(testGitNamespace)
@@ -145,7 +146,7 @@ func gitDeployment() *appsv1.Deployment {
 					}},
 					{Name: "repos", VolumeSource: corev1.VolumeSource{EmptyDir: nil}},
 					{Name: "ssl-cert", VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: gitServerCertSecretName},
+						Secret: &corev1.SecretVolumeSource{SecretName: privateCertSecretName(GitSyncSource)},
 					}},
 				},
 				Containers: []corev1.Container{

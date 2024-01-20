@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
@@ -128,6 +129,11 @@ type NT struct {
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*gitproviders.Repository
 
+	// ociImages tracks the images which have been pushed to the registry for the
+	// current test. This is used to re-push images if the in-cluster registry
+	// crashes, and to tear down images at the end of the test execution.
+	ociImages []*registryproviders.OCIImage
+
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
 	// RootSyncs and RepoSyncs managed by this test.
@@ -144,8 +150,11 @@ type NT struct {
 	// gitPrivateKeyPath is the path to the private key used for communicating with the Git server.
 	gitPrivateKeyPath string
 
-	// caCertPath is the path to the CA cert used for communicating with the Git server.
-	caCertPath string
+	// gitCACertPath is the path to the CA cert used for communicating with the Git server.
+	gitCACertPath string
+
+	// registryCACertPath is the path to the CA cert used for communicating with the Registry server.
+	registryCACertPath string
 
 	// prometheusPortForwarder is the local port forwarding for the prometheus deployment.
 	prometheusPortForwarder *portforwarder.PortForwarder
@@ -161,6 +170,9 @@ type NT struct {
 
 	// GitProvider is the provider that hosts the Git repositories.
 	GitProvider gitproviders.GitProvider
+
+	// OCIProvider is the provider that hosts the OCI repositories.
+	OCIProvider registryproviders.RegistryProvider
 
 	// RemoteRepositories maintains a map between the repo local name and the remote repository.
 	// It includes both root repo and namespace repos and can be shared among test cases.
@@ -731,6 +743,35 @@ func (nt *NT) portForwardGitServer() {
 	nt.startPortForwarder(
 		testGitNamespace,
 		testGitServer,
+		provider.PortForwarder,
+	)
+}
+
+// portForwardRegistryServer forwards the registry-server deployment to a port.
+func (nt *NT) portForwardRegistryServer() {
+	provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
+	resetImages := func(newPort int, podName string) {
+		for _, image := range nt.ociImages {
+			// construct push URL with provided port. Calling LocalPort would lead to deadlock
+			if err := image.Push(provider.PushURLWithPort(newPort, image.Name)); err != nil {
+				nt.T.Fatalf("pushing image: %w", err)
+			}
+		}
+	}
+	nt.T.Cleanup(func() {
+		// clear PortForwarder after each test. at this point it has been stopped
+		// a new PortForwarder is created for each test.
+		provider.PortForwarder = nil
+	})
+	provider.PortForwarder = nt.newPortForwarder(
+		TestRegistryNamespace,
+		TestRegistryServer,
+		fmt.Sprintf(":%d", RegistryHTTPPort),
+		portforwarder.WithOnReadyCallback(resetImages),
+	)
+	nt.startPortForwarder(
+		TestRegistryNamespace,
+		TestRegistryServer,
 		provider.PortForwarder,
 	)
 }

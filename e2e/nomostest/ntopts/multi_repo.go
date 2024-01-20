@@ -49,6 +49,9 @@ type MultiRepo struct {
 	// RequireLocalGitProvider will skip the test if run with a GitProvider type other than local.
 	RequireLocalGitProvider bool
 
+	// RequireLocalOCIProvider will skip the test if run with a OCIProvider type other than local.
+	RequireLocalOCIProvider bool
+
 	// RepoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	RepoSyncPermissions []rbacv1.PolicyRule
 }
@@ -76,6 +79,11 @@ func RootRepo(name string) func(opt *New) {
 // RequireLocalGitProvider will skip the test with non-local GitProvider types
 func RequireLocalGitProvider(opt *New) {
 	opt.RequireLocalGitProvider = true
+}
+
+// RequireLocalOCIProvider will skip the test with non-local OCIProvider types
+func RequireLocalOCIProvider(opt *New) {
+	opt.RequireLocalOCIProvider = true
 }
 
 // WithDelegatedControl will specify the Delegated Control Pattern.

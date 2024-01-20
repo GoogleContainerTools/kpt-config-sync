@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 )
@@ -156,4 +157,44 @@ func TestUpdateHydrationControllerImage(t *testing.T) {
 		})
 	}
 
+}
+
+func TestOCISyncEnvs(t *testing.T) {
+	testCases := map[string]struct {
+		options      ociOptions
+		expectedEnvs []corev1.EnvVar
+	}{
+		"oci-sync with CA cert": {
+			options: ociOptions{
+				image:           "registry/some/image:v1",
+				period:          30,
+				auth:            configsync.AuthNone,
+				caCertSecretRef: "cert-ref",
+			},
+			expectedEnvs: []corev1.EnvVar{
+				{Name: "OCI_SYNC_IMAGE", Value: "registry/some/image:v1"},
+				{Name: "OCI_SYNC_AUTH", Value: "none"},
+				{Name: "OCI_SYNC_WAIT", Value: "30.000000"},
+				{Name: "SSL_CERT_FILE", Value: "/etc/ca-cert/cert"},
+			},
+		},
+		"oci-sync without CA cert": {
+			options: ociOptions{
+				image:  "registry/some/image:v1",
+				period: 30,
+				auth:   configsync.AuthNone,
+			},
+			expectedEnvs: []corev1.EnvVar{
+				{Name: "OCI_SYNC_IMAGE", Value: "registry/some/image:v1"},
+				{Name: "OCI_SYNC_AUTH", Value: "none"},
+				{Name: "OCI_SYNC_WAIT", Value: "30.000000"},
+			},
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			envs := ociSyncEnvs(tc.options)
+			assert.Equal(t, tc.expectedEnvs, envs)
+		})
+	}
 }

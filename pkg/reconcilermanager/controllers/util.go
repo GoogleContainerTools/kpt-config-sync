@@ -253,9 +253,10 @@ func namespaceStrategyEnv(strategy configsync.NamespaceStrategy) corev1.EnvVar {
 }
 
 type ociOptions struct {
-	image  string
-	auth   configsync.AuthType
-	period float64
+	image           string
+	auth            configsync.AuthType
+	period          float64
+	caCertSecretRef string
 }
 
 // ociSyncEnvs returns the environment variables for the oci-sync container.
@@ -271,6 +272,12 @@ func ociSyncEnvs(opts ociOptions) []corev1.EnvVar {
 		Name:  reconcilermanager.OciSyncWait,
 		Value: fmt.Sprintf("%f", opts.period),
 	})
+	if useCACert(opts.caCertSecretRef) {
+		result = append(result, corev1.EnvVar{
+			Name:  reconcilermanager.OciCACert,
+			Value: fmt.Sprintf("%s/%s", CACertPath, CACertSecretKey),
+		})
+	}
 	return result
 }
 

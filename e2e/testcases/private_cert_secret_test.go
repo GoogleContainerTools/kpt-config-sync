@@ -17,7 +17,6 @@ package e2e
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -413,10 +412,7 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 	nt.T.Log("Add caCertSecretRef to RootSync")
 	nt.MustMergePatch(rs, caCertSecretPatch(v1beta1.OciSource, caCertSecret))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
-			// the RSync status does not include the sha256: prefix
-			return strings.TrimPrefix(image.Digest, "sha256:"), nil
-		}),
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: ".",
 		}))
@@ -467,10 +463,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the CA cert for the RepoSync"))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
-			// the RSync status does not include the sha256: prefix
-			return strings.TrimPrefix(image.Digest, "sha256:"), nil
-		}),
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nn: ".",
 		}))

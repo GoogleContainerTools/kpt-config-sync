@@ -14,6 +14,13 @@
 
 package registryproviders
 
+import (
+	"fmt"
+
+	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/testshell"
+)
+
 // RegistryProvider is an interface for the remote Git providers.
 type RegistryProvider interface {
 	Type() string
@@ -28,24 +35,70 @@ type RegistryProvider interface {
 	// SyncURL returns the registry URL for Config Sync to sync from using OCI.
 	// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
 	SyncURL(name string) string
+	// Setup is used to perform initialization of the RegistryProvider before the
+	// tests begin.
+	Setup() error
+	// Teardown is used to perform cleanup of the RegistryProvider after test
+	// completion.
+	Teardown() error
+	// deleteImage is used to delegate image deletion to the RegistryProvider
+	// implementation. This is needed because the delete interface varies by
+	// provider.
+	deleteImage(name, digest string) error
 }
 
 // NewOCIProvider creates a RegistryProvider for the specific OCI provider type.
 // This enables writing tests that can run against multiple types of registries.
-func NewOCIProvider(provider string) RegistryProvider {
+func NewOCIProvider(provider, repoName string, shell *testshell.TestShell) RegistryProvider {
+	repositoryName := fmt.Sprintf("config-sync-e2e-test--%s", repoName)
+	repositorySuffix := "oci"
 	switch provider {
-	// TODO: Refactor existing Artifact Registry impl to this interface
+	case e2e.ArtifactRegistry:
+		return &ArtifactRegistryOCIProvider{
+			ArtifactRegistryProvider{
+				project:  *e2e.GCPProject,
+				location: DefaultLocation,
+				// Use cluster name to avoid overlap.
+				repositoryName:   repositoryName,
+				repositorySuffix: repositorySuffix,
+				shell:            shell,
+			},
+		}
 	default:
-		return &LocalOCIProvider{}
+		return &LocalOCIProvider{
+			LocalProvider{
+				repositoryName:   repositoryName,
+				repositorySuffix: repositorySuffix,
+				shell:            shell,
+			},
+		}
 	}
 }
 
 // NewHelmProvider creates a RegistryProvider for the specific helm provider type.
 // This enables writing tests that can run against multiple types of registries.
-func NewHelmProvider(provider string) RegistryProvider {
+func NewHelmProvider(provider, repoName string, shell *testshell.TestShell) RegistryProvider {
+	repositoryName := fmt.Sprintf("config-sync-e2e-test--%s", repoName)
+	repositorySuffix := "helm"
 	switch provider {
-	// TODO: Refactor existing Artifact Registry impl to this interface
+	case e2e.ArtifactRegistry:
+		return &ArtifactRegistryHelmProvider{
+			ArtifactRegistryProvider{
+				project:  *e2e.GCPProject,
+				location: DefaultLocation,
+				// Use cluster name to avoid overlap.
+				repositoryName:   repositoryName,
+				repositorySuffix: repositorySuffix,
+				shell:            shell,
+			},
+		}
 	default:
-		return &LocalHelmProvider{}
+		return &LocalHelmProvider{
+			LocalProvider{
+				repositoryName:   repositoryName,
+				repositorySuffix: repositorySuffix,
+				shell:            shell,
+			},
+		}
 	}
 }

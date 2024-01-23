@@ -27,19 +27,19 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
-	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -401,21 +401,23 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
 		ntopts.Unstructured,
-		ntopts.RequireGKE(t),
 	)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-
-	chart, err := artifactregistry.PushHelmChart(nt, privateSimpleHelmChart, privateSimpleHelmChartVersion)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "namespace": "", "deployNamespace": ""}}}`,
-		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version, gsaARReaderEmail()))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
+	nt.T.Log("Update RootSync to sync from a helm chart")
+	// Switch from Git to Helm
+	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	nt.T.Log("Manually update the RepoSync object to sync from helm")
+	if err := nt.KubeClient.Apply(rootSyncHelm); err != nil {
+		nt.T.Fatal(err)
+	}
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -447,46 +449,48 @@ func TestHelmLatestVersion(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.WorkloadIdentity,
 		ntopts.Unstructured,
-		ntopts.RequireGKE(t),
 	)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	chart, err := artifactregistry.PushHelmChart(nt, privateSimpleHelmChart, privateSimpleHelmChartVersion)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
+	newVersion := "1.0.0"
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "", "period": "5s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "deployNamespace": "simple"}, "git": null}}`,
-		v1beta1.HelmSource, chart.Image.Name, chart.Image.RepositoryOCI(), gsaARReaderEmail()))
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	rs.Spec.Helm.Version = ""
+	rs.Spec.Helm.DeployNamespace = "simple"
+	rs.Spec.Helm.Period = metav1.Duration{Duration: 5 * time.Second}
+
+	nt.T.Log("Update RootSync to sync from a helm chart")
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
-		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Image.Version)}); err != nil {
-		nt.T.Error(err)
+		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Version)}); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// helm-sync automatically detects and updates to the new helm chart version
-	newVersion := "2.5.9"
-	if err := chart.SetVersion(newVersion); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := chart.Push(); err != nil {
-		nt.T.Fatal("failed to push helm chart update: %v", err)
+	newVersion = "2.5.9"
+	chart, err = nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
-		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Image.Version)}); err != nil {
-		nt.T.Error(err)
+		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Version)}); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	newVersion = "3.0.0"
-	if err := chart.SetVersion(newVersion); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := chart.Push(); err != nil {
-		nt.T.Fatal("failed to push helm chart update: %v", err)
+	chart, err = nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 	if err = nt.Watcher.WatchObject(kinds.Deployment(), "deploy-default", "simple",
-		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Image.Version)}); err != nil {
-		nt.T.Error(err)
+		[]testpredicates.Predicate{testpredicates.HasLabel("version", chart.Version)}); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -512,48 +516,45 @@ func TestHelmVersionRange(t *testing.T) {
 
 // TestHelmNamespaceRepo verifies RepoSync does not sync the helm chart with cluster-scoped resources. It also verifies that RepoSync can successfully
 // sync the namespace scoped resources, and assign the RepoSync namespace to these resources.
-// This test will work only with following pre-requisites:
+// Running this test on Artifact Registry has following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
-	nt.T.Log("Update RepoSync to sync from a public Helm Chart")
-	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:    publicHelmRepo,
-		Chart:   publicHelmChart,
-		Auth:    configsync.AuthNone,
-		Version: publicHelmChartVersion,
-	}}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a public Helm Chart with cluster-scoped type"))
-	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 
-	chart, err := artifactregistry.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
+	nt.T.Log("Push cluster-scoped resources to helm repo")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add("templates/ns.yaml", fake.NamespaceObject("foo-ns")))
+	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
-	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:                   chart.Image.RepositoryOCI(),
-		Chart:                  chart.Image.Name,
-		Auth:                   configsync.AuthGCPServiceAccount,
-		GCPServiceAccountEmail: gsaARReaderEmail(),
-		Version:                chart.Image.Version,
-		ReleaseName:            "test",
-	}}
+	nt.T.Log("Update RepoSync to sync from helm repo, should fail due to cluster-scope resource")
+	rs := nt.RepoSyncObjectHelm(repoSyncNN, chart)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
-	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Image.Name}))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart with cluster-scoped resources"))
+	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
+
+	nt.T.Log("Remove cluster-scope resource from helm repo, add namespace-scope resource")
+	nt.Must(nt.NonRootRepos[repoSyncNN].Remove("templates/ns.yaml"))
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add("templates/cm.yaml", fake.ConfigMapObject(core.Name("foo-cm"))))
+	validChart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN], registryproviders.HelmChartVersion("v1.1.0"))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
+	}
+	rs = nt.RepoSyncObjectHelm(repoSyncNN, validChart)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart with namespace-scoped resources"))
+
+	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(validChart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: validChart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+chart.Image.Name, testNs, &appsv1.Deployment{}); err != nil {
-		nt.T.Error(err)
+	if err := nt.Validate("foo-cm", repoSyncNN.Namespace, &corev1.ConfigMap{}); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 
@@ -564,30 +565,23 @@ func TestHelmNamespaceRepo(t *testing.T) {
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireGKE(t),
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
-	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncNN)
 	cmName := "helm-cm-ns-repo-1"
 
-	chart, err := artifactregistry.PushHelmChart(nt, privateNSHelmChart, privateNSHelmChartVersion)
+	nt.Must(nt.NonRootRepos[repoSyncNN].UseHelmChart(privateNSHelmChart))
+	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Update RepoSync to sync from a private Artifact Registry")
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:                   chart.Image.RepositoryOCI(),
-		Chart:                  chart.Image.Name,
-		Auth:                   configsync.AuthGCPServiceAccount,
-		GCPServiceAccountEmail: gsaARReaderEmail(),
-		Version:                chart.Image.Version,
-		ReleaseName:            "test",
-		ValuesFileRefs:         []v1beta1.ValuesFileRef{{Name: cmName, DataKey: "foo.yaml"}},
-	}}
+	nt.T.Log("Update RepoSync to sync from a helm chart")
+	rs := nt.RepoSyncObjectHelm(repoSyncNN, chart)
+	rs.Spec.Helm.ReleaseName = "test"
+	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{{Name: cmName, DataKey: "foo.yaml"}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart without cluster scoped resources"))
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" not found")
 
 	nt.T.Log("Create a ConfigMap that is not immutable (which should not be allowed)")
@@ -653,12 +647,12 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to reference new ConfigMap"))
 
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Image.Name}))
+		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+chart.Image.Name, testNs, &appsv1.Deployment{},
+	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+chart.Name, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "foo")); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -671,9 +665,10 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 func TestHelmGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest)
+		ntopts.RequireGKE(t), ntopts.GCENodeTest, ntopts.RequireHelmArtifactRegistry(t))
 
-	chart, err := artifactregistry.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateCoreDNSHelmChart))
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -681,14 +676,14 @@ func TestHelmGCENode(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version))
+		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Image.Name), "coredns", &appsv1.Deployment{},
+	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Name), "coredns", &appsv1.Deployment{},
 		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent")); err != nil {
 		nt.T.Error(err)
 	}
@@ -725,13 +720,14 @@ func TestHelmARTokenAuth(t *testing.T) {
 		nomostesting.SyncSource,
 		ntopts.Unstructured,
 		ntopts.RequireGKE(t),
+		ntopts.RequireHelmArtifactRegistry(t),
 	)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	gsaKeySecretID := "config-sync-ci-ar-key"
-	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
-	gsaName := artifactregistry.RegistryReaderAccountName
+	gsaEmail := registryproviders.ArtifactRegistryReaderEmail()
+	gsaName := registryproviders.ArtifactRegistryReaderName
 	gsaKeyFilePath, err := fetchServiceAccountKeyFile(nt, *e2e.GCPProject, gsaKeySecretID, gsaEmail, gsaName)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -749,82 +745,49 @@ func TestHelmARTokenAuth(t *testing.T) {
 		nt.MustKubectl("delete", "secret", "foo", "-n", configsync.ControllerNamespace, "--ignore-not-found")
 	})
 
-	chart, err := artifactregistry.PushHelmChart(nt, privateCoreDNSHelmChart, privateCoreDNSHelmChartVersion)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateCoreDNSHelmChart))
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version))
+		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Image.Name), "coredns", &appsv1.Deployment{}); err != nil {
+	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Name), "coredns", &appsv1.Deployment{}); err != nil {
 		nt.T.Error(err)
 	}
 }
 
 // TestHelmEmptyChart verifies Config Sync can apply an empty Helm chart.
-//
-// Requirements:
-// 1. Helm auth https://cloud.google.com/artifact-registry/docs/helm/authentication
-// 2. gcloud auth login OR gcloud auth activate-service-account ACCOUNT --key-file=KEY-FILE
-// 3. Artifact Registry repo: us-docker.pkg.dev/${GCP_PROJECT}/config-sync-test-private
-// 4. GKE cluster with Workload Identity
-// 5. Google Service Account: e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-// 6. IAM for the GSA to read from the Artifact Registry repo
-// 7. IAM for the test runner to write to Artifact Registry repo
-// 8. gcloud & helm
 func TestHelmEmptyChart(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
 		ntopts.Unstructured,
-		ntopts.RequireGKE(t),
 	)
 
-	if err := workloadidentity.ValidateEnabled(nt); err != nil {
-		nt.T.Fatal(err)
-	}
-	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
-	if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	chart, err := artifactregistry.PushHelmChart(nt, "empty", "v1.0.0")
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Image.Name, chart.Image.Version)
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{
-		"spec": {
-			"sourceType": %q,
-			"helm": {
-				"repo": %q,
-				"chart": %q,
-				"version": %q,
-				"auth": "gcpserviceaccount",
-				"gcpServiceAccountEmail": %q
-			},
-			"git": null
-		}
-	}`,
-		v1beta1.HelmSource,
-		chart.Image.RepositoryOCI(),
-		chart.Image.Name,
-		chart.Image.Version,
-		gsaEmail))
+	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Name, chart.Version)
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate that the chart syncs without error
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: chart.Image.Name,
+			nomostest.DefaultRootRepoNamespacedName: chart.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)

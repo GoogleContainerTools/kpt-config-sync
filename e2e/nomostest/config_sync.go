@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -69,6 +70,11 @@ const (
 
 	// clusterRoleName imitates a user-created (Cluster)Role for NS reconcilers.
 	clusterRoleName = "cs-e2e"
+
+	// helmPeriodOverride overrides the default helm-sync period for responsiveness,
+	// particularly during errors. The current default period is 1 hour even during
+	// a sync error. TODO: revisit after b/321790360
+	helmPeriodOverride = 15 * time.Second
 )
 
 var (
@@ -813,6 +819,114 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
+	return rs
+}
+
+// RootSyncObjectOCI returns a RootSync object that syncs the provided OCIImage.
+func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) *v1beta1.RootSync {
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{
+		Image: image.FloatingBranchTag(),
+		Auth:  configsync.AuthNone,
+	}
+	switch *e2e.OCIProvider {
+	case e2e.Local:
+		// Local provider requires CA cert because host is not well known
+		rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{
+			Name: PublicCertSecretName(RegistrySyncSource),
+		}
+	case e2e.ArtifactRegistry:
+		// AR provider requires auth because the registry is private
+		rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
+		rs.Spec.Oci.GCPServiceAccountEmail = registryproviders.ArtifactRegistryReaderEmail()
+	default:
+		nt.T.Fatalf("Unrecognized OCIProvider: %s", *e2e.OCIProvider)
+	}
+	return rs
+}
+
+// RepoSyncObjectOCI returns a RepoSync object that syncs the provided OCIImage.
+func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryproviders.OCIImage) *v1beta1.RepoSync {
+	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.Oci = &v1beta1.Oci{
+		Image: image.FloatingBranchTag(),
+		Auth:  configsync.AuthNone,
+	}
+	switch *e2e.OCIProvider {
+	case e2e.Local:
+		// Local provider requires CA cert because host is not well known
+		rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{
+			Name: PublicCertSecretName(RegistrySyncSource),
+		}
+	case e2e.ArtifactRegistry:
+		// AR provider requires auth because the registry is private
+		rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
+		rs.Spec.Oci.GCPServiceAccountEmail = registryproviders.ArtifactRegistryReaderEmail()
+	default:
+		nt.T.Fatalf("Unrecognized OCIProvider: %s", *e2e.OCIProvider)
+	}
+	return rs
+}
+
+// RootSyncObjectHelm returns a RootSync object that syncs the provided HelmPackage
+func (nt *NT) RootSyncObjectHelm(name string, chart *registryproviders.HelmPackage) *v1beta1.RootSync {
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRootSync{
+		HelmBase: v1beta1.HelmBase{
+			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Chart:   chart.Name,
+			Version: chart.Version,
+			Auth:    configsync.AuthNone,
+			Period:  metav1.Duration{Duration: helmPeriodOverride},
+		},
+	}
+	switch *e2e.HelmProvider {
+	case e2e.Local:
+		// Local provider requires CA cert because host is not well known
+		rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{
+			Name: PublicCertSecretName(RegistrySyncSource),
+		}
+	case e2e.ArtifactRegistry:
+		// AR provider requires auth because the registry is private
+		rs.Spec.Helm.Auth = configsync.AuthGCPServiceAccount
+		rs.Spec.Helm.GCPServiceAccountEmail = registryproviders.ArtifactRegistryReaderEmail()
+	default:
+		nt.T.Fatalf("Unrecognized HelmProvider: %s", *e2e.OCIProvider)
+	}
+	return rs
+}
+
+// RepoSyncObjectHelm returns a RepoSync object that syncs the provided HelmPackage
+func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chart *registryproviders.HelmPackage) *v1beta1.RepoSync {
+	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	rs.Spec.Git = nil
+	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{
+		HelmBase: v1beta1.HelmBase{
+			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Chart:   chart.Name,
+			Version: chart.Version,
+			Auth:    configsync.AuthNone,
+			// Override the default period of 1 hour for responsiveness
+			Period: metav1.Duration{Duration: helmPeriodOverride},
+		},
+	}
+	switch *e2e.HelmProvider {
+	case e2e.Local:
+		// Local provider requires CA cert because host is not well known
+		rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{
+			Name: PublicCertSecretName(RegistrySyncSource),
+		}
+	case e2e.ArtifactRegistry:
+		// AR provider requires auth because the registry is private
+		rs.Spec.Helm.Auth = configsync.AuthGCPServiceAccount
+		rs.Spec.Helm.GCPServiceAccountEmail = registryproviders.ArtifactRegistryReaderEmail()
+	default:
+		nt.T.Fatalf("Unrecognized HelmProvider: %s", *e2e.OCIProvider)
+	}
 	return rs
 }
 

@@ -499,6 +499,28 @@ func (g *Repository) Copy(sourceDir, destDir string) error {
 	return err
 }
 
+// UseHelmChart copies the files from the provided helm chart to the current
+// repository.
+func (g *Repository) UseHelmChart(chart string) error {
+	if err := g.RemoveAll(); err != nil {
+		return err
+	}
+	if err := g.Copy(fmt.Sprintf("../testdata/helm-charts/%s/.", chart), "."); err != nil {
+		return err
+	}
+	if _, err := g.Git("add", "."); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RemoveAll removes all files in the repository.
+func (g *Repository) RemoveAll() error {
+	return g.BulkGit(
+		[]string{"rm", "-f", "-r", "*"},
+	)
+}
+
 // Remove deletes `file` from the git repository.
 // If `file` is a directory, deletes the directory.
 // Returns error if the file does not exist.

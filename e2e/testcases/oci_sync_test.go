@@ -34,12 +34,11 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -55,9 +54,6 @@ const (
 
 	// publicARImage pulls the public OCI image by the default `latest` tag
 	publicARImage = nomostesting.ConfigSyncTestPublicRegistry + "/kustomize-components"
-
-	// bookinfoARImage pulls the public OCI image by the default `latest` tag
-	bookinfoARImage = nomostesting.ConfigSyncTestPublicRegistry + "/namespace-repo-bookinfo"
 )
 
 // privateGCRImage pulls the private OCI image by tag
@@ -89,7 +85,7 @@ func TestPublicOCI(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
 		v1beta1.OciSource, publicARImage))
 	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(publicARImage)),
+		nomostest.WithRootSha1Func(imageDigestFuncByName(publicARImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: ".",
 		}))
@@ -102,7 +98,7 @@ func TestPublicOCI(t *testing.T) {
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, publicGCRImage, tenant))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(publicGCRImage)),
+		nomostest.WithRootSha1Func(imageDigestFuncByName(publicGCRImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: "tenant-a",
 		}))
@@ -133,7 +129,7 @@ func TestGCENodeOCI(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
 		v1beta1.OciSource, tenant, privateARImage()))
 	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(privateARImage())),
+		nomostest.WithRootSha1Func(imageDigestFuncByName(privateARImage())),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
@@ -146,7 +142,7 @@ func TestGCENodeOCI(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage(), tenant))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(privateGCRImage())),
+		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage())),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
@@ -156,121 +152,58 @@ func TestGCENodeOCI(t *testing.T) {
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
-func TestSwitchFromGitToOci(t *testing.T) {
+func TestSwitchFromGitToOciCentralized(t *testing.T) {
+	namespace := testNs
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
 	var err error
-	namespace := "bookinfo"
-	managerScope := string(declared.RootReconciler)
 	// file path to the RepoSync config in the root repository.
-	repoSyncPath := "acme/reposync-bookinfo.yaml"
+	repoSyncPath := nomostest.StructuredNSPath(namespace, configsync.RepoSyncName)
 	rsNN := types.NamespacedName{
 		Name:      configsync.RepoSyncName,
 		Namespace: namespace,
 	}
-	repoSyncCRPath := "acme/cluster/cr.yaml"
-	repoSyncRBPath := fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", rsNN.Namespace, rsNN.Name)
 
-	rsCR := nt.RepoSyncClusterRole()
-	rsRB := nomostest.RepoSyncRoleBinding(rsNN)
-	repoSyncGit := nomostest.RepoSyncObjectV1Beta1(rsNN, "", filesystem.SourceFormatUnstructured)
-	repoSyncGit.Spec.Git = &v1beta1.Git{
-		Repo:   "https://github.com/config-sync-examples/namespace-repo-bookinfo",
-		Branch: "main",
-		Auth:   configsync.AuthNone,
-	}
-	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
-	if err := nomostest.SetDependencies(repoSyncGit, rsRB, rsCR); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// To facilitate cleanup, add the implicit namespace explicitly.
-	// This ensures the implicit namespace is deleted in the right order.
-	t.Cleanup(func() {
-		implicitNs := &corev1.Namespace{}
-		implicitNs.Name = namespace
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, implicitNs))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add implicit namespace explicitly"))
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
-	})
-
-	// Verify the central controlled configuration: switch from Git to OCI
-	// Backward compatibility check. Previously managed RepoSync objects without sourceType should still work.
-	nt.T.Log("Add the RepoSync object to the Root Repo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncGit))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncCRPath, rsCR))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncRBPath, rsRB))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync in the root repository"))
-	// nt.WaitForRepoSyncs only waits for the root repo being synced because the reposync is not tracked by nt.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.T.Log("Verify an implicit namespace is created")
-	implicitNs := &corev1.Namespace{}
-	if err := nt.Validate(namespace, "", implicitNs,
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, managerScope),
-		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
-		nt.T.Error(err)
-	}
-	nt.T.Log("Verify the namespace objects are synced")
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
+	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
+	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	// OCI image will only contain the bookinfo-admin role
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/role.yaml", bookinfoRole))
+	image, err := nt.BuildAndPushOCIImage(nt.NonRootRepos[rsNN])
 	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// Remote git branch will only contain the bookinfo-sa ServiceAccount
+	nt.Must(nt.NonRootRepos[rsNN].Remove("acme/role.yaml"))
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+
+	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
-
-	// To facilitate cleanup, revert the RepoSync to this known good state.
-	// This way, the RootSync finalizer will delete the RepoSync cleanly and in
-	// the right order.
-	t.Cleanup(func() {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncGit))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncCRPath, rsCR))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncRBPath, rsRB))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("revert RepoSync"))
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
-	})
 
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	repoSyncOCI := repoSyncGit.DeepCopy()
-	repoSyncOCI.Spec.Git = nil
-	repoSyncOCI.Spec.SourceType = string(v1beta1.OciSource)
-	imageURL := bookinfoARImage
-	repoSyncOCI.Spec.Oci = &v1beta1.Oci{
-		Image: imageURL,
-		Auth:  configsync.AuthNone,
-	}
-	// Ensure the RoleBinding & ClusterRole are deleted after the RepoSync
-	if err := nomostest.SetDependencies(repoSyncOCI, rsRB, rsCR); err != nil {
-		nt.T.Fatal(err)
-	}
+	repoSyncOCI := nt.RepoSyncObjectOCI(rsNN, image)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
-	if err := nt.WatchForAllSyncs(); err != nil {
+
+	if err := nt.WatchForAllSyncs(
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			rsNN: ".",
+		})); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
-	}
-	nt.T.Log("Verify the namespace objects are updated")
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
-	if err != nil {
-		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
@@ -278,68 +211,71 @@ func TestSwitchFromGitToOci(t *testing.T) {
 	}
 	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
 		nt.T.Error(err)
+	}
+}
+
+func TestSwitchFromGitToOciDelegated(t *testing.T) {
+	namespace := testNs
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.WithDelegatedControl,
+		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
+		// bookinfo image contains RoleBinding
+		// bookinfo repo contains ServiceAccount
+		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
+	)
+	rsNN := types.NamespacedName{
+		Name:      configsync.RepoSyncName,
+		Namespace: namespace,
+	}
+
+	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
+	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	// OCI image will only contain the bookinfo-admin Role
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/role.yaml", bookinfoRole))
+	image, err := nt.BuildAndPushOCIImage(nt.NonRootRepos[rsNN])
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	// Remote git branch will only contain the bookinfo-sa ServiceAccount
+	nt.Must(nt.NonRootRepos[rsNN].Remove("acme/role.yaml"))
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	// Verify the manual configuration: switch from Git to OCI
-	nt.T.Log("Remove RepoSync from the root repository")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(repoSyncPath))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove RepoSync from the root repository"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.T.Log("Verify the RepoSync object doesn't exist")
-	if err := nt.ValidateNotFound(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}); err != nil {
-		nt.T.Error(err)
-	}
 	// Verify the default sourceType is set when not specified.
-	nt.T.Log("Revert the RepoSync object to sync from Git")
-	if err := nt.KubeClient.Create(repoSyncGit.DeepCopy()); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.GitSource)); err != nil {
-		nt.T.Error(err)
-	}
-	nt.T.Log("Verify the namespace objects are synced")
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		nomostest.RemoteNsRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
 	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound("bookinfo-admin", namespace, &rbacv1.Role{}); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 	// Switch from Git to OCI
+	repoSyncOCI := nt.RepoSyncObjectOCI(rsNN, image)
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
-	nt.MustMergePatch(repoSyncOCI.DeepCopy(), fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "%s"}, "helm": null, "git": null}}`,
-		v1beta1.OciSource, imageURL, configsync.AuthNone))
+	if err := nt.KubeClient.Apply(repoSyncOCI); err != nil {
+		nt.T.Fatal(err)
+	}
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
 	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		imageDigestFunc(imageURL), nomostest.RepoSyncHasStatusSyncCommit, nil)
+		imageDigestFuncByDigest(image.Digest), nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
-	nt.T.Cleanup(func() {
-		// Reset RepoSync OCI config to be valid and managed by RootSync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("re-configure RepoSync to sync from OCI in the root repository"))
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
-	})
 
 	// Invalid cases
 	rs := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
@@ -442,9 +378,9 @@ func getImageDigest(nt *nomostest.NT, imageName string) (string, error) {
 	return hex, nil
 }
 
-// imageDigestFunc wraps getImageDigest to return a Sha1Func that caches the
+// imageDigestFuncByName wraps getImageDigest to return a Sha1Func that caches the
 // image digest, to avoid polling the image registry unnecessarily.
-func imageDigestFunc(imageName string) nomostest.Sha1Func {
+func imageDigestFuncByName(imageName string) nomostest.Sha1Func {
 	var cached bool
 	var digest string
 	var err error
@@ -455,6 +391,14 @@ func imageDigestFunc(imageName string) nomostest.Sha1Func {
 		digest, err = getImageDigest(nt, imageName)
 		cached = true
 		return digest, err
+	}
+}
+
+// imageDigestFuncByDigest uses the provided digest to return a valid Sha1Func
+func imageDigestFuncByDigest(digest string) func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
+	return func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
+		// The RSync status does not include the sha256: prefix
+		return strings.TrimPrefix(digest, "sha256:"), nil
 	}
 }
 

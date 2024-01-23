@@ -59,6 +59,20 @@ const (
 )
 
 func setupRegistry(nt *NT) error {
+	nt.T.Cleanup(func() {
+		if err := nt.OCIProvider.Teardown(); err != nil {
+			nt.T.Error(err)
+		}
+		if err := nt.HelmProvider.Teardown(); err != nil {
+			nt.T.Error(err)
+		}
+	})
+	if err := nt.OCIProvider.Setup(); err != nil {
+		return err
+	}
+	if err := nt.HelmProvider.Setup(); err != nil {
+		return err
+	}
 	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
 		if err := nt.KubeClient.Create(fake.NamespaceObject(TestRegistryNamespace)); err != nil {
 			return err
@@ -129,14 +143,14 @@ func (nt *NT) BuildAndPushOCIImage(repository *gitproviders.Repository) (*regist
 // BuildAndPushHelmPackage uses the current file system state of the provided Repository
 // to build a helm package and push it to the current HelmProvider. The resulting
 // HelmPackage object can be used to set the spec.oci.image field on the RSync.
-func (nt *NT) BuildAndPushHelmPackage(repository *gitproviders.Repository) (*registryproviders.HelmPackage, error) {
+func (nt *NT) BuildAndPushHelmPackage(repository *gitproviders.Repository, options ...registryproviders.HelmOption) (*registryproviders.HelmPackage, error) {
 	// Construct artifactDir using TmpDir. TmpDir is scoped to each test case and
 	// cleaned up after the test.
 	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "helm", repository.Name)
 	if err := os.MkdirAll(artifactDir, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("creating artifact dir: %w", err)
 	}
-	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, repository, nt.HelmProvider)
+	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, repository, nt.HelmProvider, options...)
 	if err != nil {
 		return nil, err
 	}

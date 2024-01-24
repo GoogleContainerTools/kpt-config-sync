@@ -56,6 +56,11 @@ func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
 			return "", false
 		}
 		return v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef), true
+	case v1beta1.HelmSource:
+		if rs.Spec.Helm == nil || rs.Spec.Helm.CACertSecretRef == nil {
+			return "", false
+		}
+		return v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef), true
 	default:
 		return "", false
 	}

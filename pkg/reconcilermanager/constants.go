@@ -174,4 +174,7 @@ const (
 
 	// HelmSyncWait is the OS env variable key for the Helm sync wait period in seconds.
 	HelmSyncWait = "HELM_SYNC_WAIT"
+
+	// HelmCACert is the OS env variable key for the Helm sync CA cert file path.
+	HelmCACert = "HELM_CA_CERT"
 )

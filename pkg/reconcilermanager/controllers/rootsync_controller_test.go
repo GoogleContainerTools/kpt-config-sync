@@ -306,6 +306,8 @@ func rootsyncCACert(sourceType v1beta1.SourceType, caCertSecretRef string) func(
 			rs.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 		case v1beta1.OciSource:
 			rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
+		case v1beta1.HelmSource:
+			rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 		}
 	}
 }
@@ -1100,6 +1102,10 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 		"oci": {
 			rootSync: rootSyncWithOCI(rootsyncName, rootsyncOCIAuthType(configsync.AuthNone),
 				rootsyncCACert(v1beta1.OciSource, caCertSecret)),
+		},
+		"helm": {
+			rootSync: rootSyncWithHelm(rootsyncName, rootsyncHelmAuthType(configsync.AuthNone),
+				rootsyncCACert(v1beta1.HelmSource, caCertSecret)),
 		},
 	}
 	for name, tc := range testCases {
@@ -2718,6 +2724,7 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 	rs3 := rootSyncWithGit("rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(testSecretName))
 	rs4 := rootSyncWithGit("rs-4", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthNone), rootsyncCACert(v1beta1.GitSource, caCertSecret))
 	rs5 := rootSyncWithOCI("rs-5", rootsyncOCIAuthType(configsync.AuthNone), rootsyncCACert(v1beta1.OciSource, caCertSecret))
+	rs6 := rootSyncWithHelm("rs-6", rootsyncHelmAuthType(configsync.AuthNone), rootsyncCACert(v1beta1.HelmSource, caCertSecret))
 
 	testCases := []struct {
 		name   string
@@ -2785,11 +2792,17 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 						Namespace: configsync.ControllerNamespace,
 					},
 				},
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "rs-6",
+						Namespace: configsync.ControllerNamespace,
+					},
+				},
 			},
 		},
 	}
 
-	_, _, testReconciler := setupRootReconciler(t, rs1, rs2, rs3, rs4, rs5)
+	_, _, testReconciler := setupRootReconciler(t, rs1, rs2, rs3, rs4, rs5, rs6)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := testReconciler.mapSecretToRootSyncs(tc.secret)

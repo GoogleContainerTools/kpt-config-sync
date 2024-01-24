@@ -59,7 +59,7 @@ const (
 )
 
 func setupRegistry(nt *NT) error {
-	if *e2e.OCIProvider == e2e.Local {
+	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
 		if err := nt.KubeClient.Create(fake.NamespaceObject(TestRegistryNamespace)); err != nil {
 			return err
 		}
@@ -124,6 +124,35 @@ func (nt *NT) BuildAndPushOCIImage(repository *gitproviders.Repository) (*regist
 	}
 
 	return image, nil
+}
+
+// BuildAndPushHelmPackage uses the current file system state of the provided Repository
+// to build a helm package and push it to the current HelmProvider. The resulting
+// HelmPackage object can be used to set the spec.oci.image field on the RSync.
+func (nt *NT) BuildAndPushHelmPackage(repository *gitproviders.Repository) (*registryproviders.HelmPackage, error) {
+	// Construct artifactDir using TmpDir. TmpDir is scoped to each test case and
+	// cleaned up after the test.
+	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "helm", repository.Name)
+	if err := os.MkdirAll(artifactDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("creating artifact dir: %w", err)
+	}
+	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, repository, nt.HelmProvider)
+	if err != nil {
+		return nil, err
+	}
+	// Track image for cleanup and for recovering from a LocalProvider crash.
+	nt.helmPackages = append(nt.helmPackages, helmPackage)
+
+	address, err := nt.HelmProvider.PushURL(helmPackage.Name)
+	if err != nil {
+		return nil, fmt.Errorf("getting OCIPushURL: %w", err)
+	}
+
+	if err := helmPackage.Push(address); err != nil {
+		return nil, err
+	}
+
+	return helmPackage, nil
 }
 
 func testRegistryServerSelector() map[string]string {

@@ -39,3 +39,13 @@ func NewOCIProvider(provider string) RegistryProvider {
 		return &LocalOCIProvider{}
 	}
 }
+
+// NewHelmProvider creates a RegistryProvider for the specific helm provider type.
+// This enables writing tests that can run against multiple types of registries.
+func NewHelmProvider(provider string) RegistryProvider {
+	switch provider {
+	// TODO: Refactor existing Artifact Registry impl to this interface
+	default:
+		return &LocalHelmProvider{}
+	}
+}

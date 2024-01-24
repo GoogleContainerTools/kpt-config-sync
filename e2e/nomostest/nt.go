@@ -134,6 +134,11 @@ type NT struct {
 	// crashes, and to tear down images at the end of the test execution.
 	ociImages []*registryproviders.OCIImage
 
+	// helmPackages tracks the images which have been pushed to the registry for the
+	// current test. This is used to re-push images if the in-cluster registry
+	// crashes, and to tear down images at the end of the test execution.
+	helmPackages []*registryproviders.HelmPackage
+
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
 	// RootSyncs and RepoSyncs managed by this test.
@@ -173,6 +178,9 @@ type NT struct {
 
 	// OCIProvider is the provider that hosts the OCI repositories.
 	OCIProvider registryproviders.RegistryProvider
+
+	// HelmProvider is the provider that hosts the helm packages.
+	HelmProvider registryproviders.RegistryProvider
 
 	// RemoteRepositories maintains a map between the repo local name and the remote repository.
 	// It includes both root repo and namespace repos and can be shared among test cases.
@@ -749,30 +757,65 @@ func (nt *NT) portForwardGitServer() {
 
 // portForwardRegistryServer forwards the registry-server deployment to a port.
 func (nt *NT) portForwardRegistryServer() {
-	provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
-	resetImages := func(newPort int, podName string) {
-		for _, image := range nt.ociImages {
-			// construct push URL with provided port. Calling LocalPort would lead to deadlock
-			if err := image.Push(provider.PushURLWithPort(newPort, image.Name)); err != nil {
-				nt.T.Fatalf("pushing image: %w", err)
+	// The local registry uses ephemeral storage. So re-push all the oci images
+	// and helm charts after the registry recovers from a crash.
+	var onReadyCallbacks []func(int, string)
+	if *e2e.OCIProvider == e2e.Local {
+		provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
+		resetImages := func(newPort int, podName string) {
+			for _, image := range nt.ociImages {
+				// construct push URL with provided port. Calling LocalPort would lead to deadlock
+				if err := image.Push(provider.PushURLWithPort(newPort, image.Name)); err != nil {
+					nt.T.Fatalf("pushing image: %w", err)
+				}
 			}
 		}
+		onReadyCallbacks = append(onReadyCallbacks, resetImages)
 	}
-	nt.T.Cleanup(func() {
-		// clear PortForwarder after each test. at this point it has been stopped
-		// a new PortForwarder is created for each test.
-		provider.PortForwarder = nil
-	})
-	provider.PortForwarder = nt.newPortForwarder(
+	if *e2e.HelmProvider == e2e.Local {
+		provider := nt.HelmProvider.(*registryproviders.LocalHelmProvider)
+		resetPackages := func(newPort int, podName string) {
+			for _, pkg := range nt.helmPackages {
+				// construct push URL with provided port. Calling LocalPort would lead to deadlock
+				if err := pkg.Push(provider.PushURLWithPort(newPort, pkg.Name)); err != nil {
+					nt.T.Fatalf("pushing image: %w", err)
+				}
+			}
+		}
+		onReadyCallbacks = append(onReadyCallbacks, resetPackages)
+	}
+	portForwarder := nt.newPortForwarder(
 		TestRegistryNamespace,
 		TestRegistryServer,
 		fmt.Sprintf(":%d", RegistryHTTPPort),
-		portforwarder.WithOnReadyCallback(resetImages),
+		portforwarder.WithOnReadyCallback(func(newPort int, podName string) {
+			for _, fn := range onReadyCallbacks {
+				fn(newPort, podName)
+			}
+		}),
 	)
+	if *e2e.OCIProvider == e2e.Local {
+		provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
+		nt.T.Cleanup(func() {
+			// clear PortForwarder after each test. at this point it has been stopped
+			// a new PortForwarder is created for each test.
+			provider.PortForwarder = nil
+		})
+		provider.PortForwarder = portForwarder
+	}
+	if *e2e.HelmProvider == e2e.Local {
+		provider := nt.HelmProvider.(*registryproviders.LocalHelmProvider)
+		nt.T.Cleanup(func() {
+			// clear PortForwarder after each test. at this point it has been stopped
+			// a new PortForwarder is created for each test.
+			provider.PortForwarder = nil
+		})
+		provider.PortForwarder = portForwarder
+	}
 	nt.startPortForwarder(
 		TestRegistryNamespace,
 		TestRegistryServer,
-		provider.PortForwarder,
+		portForwarder,
 	)
 }
 

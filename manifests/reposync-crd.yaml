@@ -179,6 +179,20 @@ spec:
                     - token
                     - gcenode
                     type: string
+                  caCertSecretRef:
+                    description: caCertSecretRef specifies the name of the secret
+                      where the CA certificate is stored. The creation of the secret
+                      should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the
+                      secret must be created in the same namespace as the RepoSync.
+                      For RootSync resource, the secret must be created in the config-management-system
+                      namespace.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   chart:
                     description: chart is a Helm chart name. Required.
                     type: string
@@ -1243,6 +1257,20 @@ spec:
                     - token
                     - gcenode
                     type: string
+                  caCertSecretRef:
+                    description: caCertSecretRef specifies the name of the secret
+                      where the CA certificate is stored. The creation of the secret
+                      should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the
+                      secret must be created in the same namespace as the RepoSync.
+                      For RootSync resource, the secret must be created in the config-management-system
+                      namespace.
+                    nullable: true
+                    properties:
+                      name:
+                        description: name represents the secret name.
+                        type: string
+                    type: object
                   chart:
                     description: chart is a Helm chart name. Required.
                     type: string

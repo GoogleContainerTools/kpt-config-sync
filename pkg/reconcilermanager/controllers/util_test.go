@@ -30,27 +30,25 @@ import (
 func TestHelmSyncEnvs(t *testing.T) {
 	duration, _ := time.ParseDuration("15s")
 	testCases := map[string]struct {
-		base             v1beta1.HelmBase
-		releaseNamespace string
-		deployNamespace  string
-
+		options  helmOptions
 		expected []corev1.EnvVar
 	}{
 		"with inline values": {
-			base: v1beta1.HelmBase{
-				Repo:        "example.com/repo",
-				Chart:       "my-chart",
-				Version:     "1.0.0",
-				ReleaseName: "release-name",
-				Values: &apiextensionsv1.JSON{
-					Raw: []byte("foo: bar"),
+			options: helmOptions{
+				helmBase: &v1beta1.HelmBase{
+					Repo:        "example.com/repo",
+					Chart:       "my-chart",
+					Version:     "1.0.0",
+					ReleaseName: "release-name",
+					Values: &apiextensionsv1.JSON{
+						Raw: []byte("foo: bar"),
+					},
+					Period: metav1.Duration{Duration: duration},
+					Auth:   "none",
 				},
-				Period: metav1.Duration{Duration: duration},
-				Auth:   "none",
+				releaseNamespace: "releaseNamespace",
+				deployNamespace:  "deployNamespace",
 			},
-			releaseNamespace: "releaseNamespace",
-			deployNamespace:  "deployNamespace",
-
 			expected: []corev1.EnvVar{
 				{Name: reconcilermanager.HelmRepo, Value: "example.com/repo"},
 				{Name: reconcilermanager.HelmChart, Value: "my-chart"},
@@ -65,16 +63,17 @@ func TestHelmSyncEnvs(t *testing.T) {
 			},
 		},
 		"without inline values": {
-			base: v1beta1.HelmBase{
-				Repo:        "example.com/repo",
-				Chart:       "my-chart",
-				Version:     "1.0.0",
-				ReleaseName: "release-name",
-				Auth:        "none",
+			options: helmOptions{
+				helmBase: &v1beta1.HelmBase{
+					Repo:        "example.com/repo",
+					Chart:       "my-chart",
+					Version:     "1.0.0",
+					ReleaseName: "release-name",
+					Auth:        "none",
+				},
+				releaseNamespace: "releaseNamespace",
+				deployNamespace:  "deployNamespace",
 			},
-			releaseNamespace: "releaseNamespace",
-			deployNamespace:  "deployNamespace",
-
 			expected: []corev1.EnvVar{
 				{Name: reconcilermanager.HelmRepo, Value: "example.com/repo"},
 				{Name: reconcilermanager.HelmChart, Value: "my-chart"},
@@ -88,15 +87,39 @@ func TestHelmSyncEnvs(t *testing.T) {
 				{Name: reconcilermanager.HelmSyncWait, Value: "3600.000000"},
 			},
 		},
+		"with ca cert": {
+			options: helmOptions{
+				helmBase: &v1beta1.HelmBase{
+					Repo:            "example.com/repo",
+					Chart:           "my-chart",
+					Version:         "1.0.0",
+					ReleaseName:     "release-name",
+					Auth:            "none",
+					CACertSecretRef: &v1beta1.SecretReference{Name: "ca-cert"},
+				},
+				releaseNamespace: "releaseNamespace",
+				deployNamespace:  "deployNamespace",
+				caCertSecretRef:  "ca-cert",
+			},
+			expected: []corev1.EnvVar{
+				{Name: reconcilermanager.HelmRepo, Value: "example.com/repo"},
+				{Name: reconcilermanager.HelmChart, Value: "my-chart"},
+				{Name: reconcilermanager.HelmChartVersion, Value: "1.0.0"},
+				{Name: reconcilermanager.HelmReleaseName, Value: "release-name"},
+				{Name: reconcilermanager.HelmReleaseNamespace, Value: "releaseNamespace"},
+				{Name: reconcilermanager.HelmDeployNamespace, Value: "deployNamespace"},
+				{Name: reconcilermanager.HelmValuesYAML, Value: ""},
+				{Name: reconcilermanager.HelmIncludeCRDs, Value: "false"},
+				{Name: reconcilermanager.HelmAuthType, Value: "none"},
+				{Name: reconcilermanager.HelmSyncWait, Value: "3600.000000"},
+				{Name: reconcilermanager.HelmCACert, Value: "/etc/ca-cert/cert"},
+			},
+		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, helmSyncEnvs(helmOptions{
-				helmBase:         &tc.base,
-				releaseNamespace: tc.releaseNamespace,
-				deployNamespace:  tc.deployNamespace,
-			}))
+			assert.Equal(t, tc.expected, helmSyncEnvs(tc.options))
 		})
 	}
 }

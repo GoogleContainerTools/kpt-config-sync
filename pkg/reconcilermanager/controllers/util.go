@@ -291,6 +291,7 @@ type helmOptions struct {
 	helmBase         *v1beta1.HelmBase
 	releaseNamespace string
 	deployNamespace  string
+	caCertSecretRef  string
 }
 
 // helmSyncEnvs returns the environment variables for the helm-sync container.
@@ -331,6 +332,12 @@ func helmSyncEnvs(opts helmOptions) []corev1.EnvVar {
 		Name:  reconcilermanager.HelmSyncWait,
 		Value: fmt.Sprintf("%f", v1beta1.GetPeriod(opts.helmBase.Period, configsync.DefaultHelmSyncVersionPollingPeriod).Seconds()),
 	})
+	if useCACert(opts.caCertSecretRef) {
+		result = append(result, corev1.EnvVar{
+			Name:  reconcilermanager.HelmCACert,
+			Value: fmt.Sprintf("%s/%s", CACertPath, CACertSecretKey),
+		})
+	}
 	return result
 }
 

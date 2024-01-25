@@ -48,7 +48,7 @@ type Oci struct {
 	// Must be one of gcenode, gcpserviceaccount, or none.
 	// The validation of this is case-sensitive. Required.
 	//
-	// +kubebuilder:validation:Enum=gcenode;gcpserviceaccount;none
+	// +kubebuilder:validation:Enum=gcenode;gcpserviceaccount;gcpksa;none
 	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate

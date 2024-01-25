@@ -301,6 +301,7 @@ spec:
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - gcpksa
                     - none
                     type: string
                   caCertSecretRef:
@@ -1435,6 +1436,7 @@ spec:
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - gcpksa
                     - none
                     type: string
                   caCertSecretRef:

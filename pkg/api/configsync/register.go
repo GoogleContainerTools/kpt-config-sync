@@ -106,6 +106,9 @@ const (
 	// AuthGCPServiceAccount indicates using a GCP service account to authenticate to
 	// Git or OCI or Helm, when GKE Workload Identity or Fleet Workload Identity is enabled.
 	AuthGCPServiceAccount AuthType = "gcpserviceaccount"
+	// AuthGCPKSA indicates using the kubernetes service account as the third party identity provider
+	// for accessing the artifacts stored in GCP services.
+	AuthGCPKSA AuthType = "gcpksa"
 )
 
 // NamespaceStrategy specifies the strategy used by the reconciler for undeclared

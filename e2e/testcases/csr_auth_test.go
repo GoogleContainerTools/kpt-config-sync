@@ -40,7 +40,7 @@ const (
 // references resources for tenant-a, tenant-b, and tenant-c.
 // Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
 func csrRepo() string {
-	return fmt.Sprintf("https://source.developers.google.com/p/%s/r/kustomize-components", *e2e.GCPProject)
+	return fmt.Sprintf("%s/p/%s/r/kustomize-components", nomostesting.CSRHost, *e2e.GCPProject)
 }
 
 func gsaCSRReaderEmail() string {

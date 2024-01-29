@@ -24,15 +24,36 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"golang.org/x/net/context"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
+	utillog "kpt.dev/configsync/pkg/util/log"
 )
 
+// authenticator returns an authn.Authenticator that generates access tokens.
+func authenticator(authType string, logger *utillog.Logger) (authenticator authn.Authenticator, err error) {
+	switch configsync.AuthType(authType) {
+	case configsync.AuthNone:
+		return authn.Anonymous, nil
+	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
+		return google.NewEnvAuthenticator()
+	default:
+		utillog.HandleError(logger, true, "ERROR: unsupported authentication type %q", authType)
+	}
+	return nil, nil
+}
+
 // FetchPackage fetches the package from the OCI repository and write it to the destination.
-func FetchPackage(ctx context.Context, imageName, ociRoot, rev string, auth authn.Authenticator) error {
+func FetchPackage(ctx context.Context, logger *utillog.Logger, authType, imageName, ociRoot, rev string) error {
+	auth, err := authenticator(authType, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get the authentication with type %q: %w", authType, err)
+	}
+
 	image, err := PullImage(imageName, remote.WithContext(ctx), remote.WithAuth(auth))
 	if err != nil {
 		return err

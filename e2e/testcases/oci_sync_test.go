@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -95,7 +96,7 @@ func TestPublicOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
@@ -108,7 +109,7 @@ func TestPublicOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
 // TestOCIGCENode tests the `gcenode` auth type for the OCI image.
@@ -139,7 +140,7 @@ func TestGCENodeOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 
 	tenant = "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
@@ -152,159 +153,7 @@ func TestGCENodeOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	validateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-}
-
-// TestOCIARGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIARGKEWorkloadIdentity(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  false,
-		crossProject: false,
-		sourceRepo:   privateARImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateARImage()),
-	})
-}
-
-// TestOCIGCRGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIGCRGKEWorkloadIdentity(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  false,
-		crossProject: false,
-		sourceRepo:   privateGCRImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateGCRImage()),
-	})
-}
-
-// TestOCIARFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIARFleetWISameProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  true,
-		crossProject: false,
-		sourceRepo:   privateARImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateARImage()),
-	})
-}
-
-// TestOCIGCRFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIGCRFleetWISameProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  true,
-		crossProject: false,
-		sourceRepo:   privateGCRImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateGCRImage()),
-	})
-}
-
-// TestOCIARFleetWIDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The cross-project fleet host project 'cs-dev-hub' is created.
-// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIARFleetWIDifferentProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  true,
-		crossProject: true,
-		sourceRepo:   privateARImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaARReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateARImage()),
-	})
-}
-
-// TestOCIGCRFleetWIDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/containerregistry.ServiceAgent` for access image in Container Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-gcr-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The cross-project fleet host project 'cs-dev-hub' is created.
-// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestOCIGCRFleetWIDifferentProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:  true,
-		crossProject: true,
-		sourceRepo:   privateGCRImage(),
-		sourceType:   v1beta1.OciSource,
-		gsaEmail:     gsaGCRReaderEmail(),
-		rootCommitFn: imageDigestFunc(privateGCRImage()),
-	})
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 }
 
 func TestSwitchFromGitToOci(t *testing.T) {

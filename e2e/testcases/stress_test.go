@@ -642,7 +642,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
 		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: chart.Image.Name,
 		}))
@@ -676,7 +676,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
 		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(helmChartVersion(emptyChart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(emptyChart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: emptyChart.Image.Name,
 		}))

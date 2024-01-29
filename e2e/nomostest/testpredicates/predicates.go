@@ -34,7 +34,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
-	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
@@ -851,7 +850,7 @@ func RootSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return testutils.ValidateError(rs.Status.Source.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Source.Errors, errCode, errMessage)
 	}
 }
 
@@ -866,7 +865,7 @@ func RepoSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return testutils.ValidateError(rs.Status.Source.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Source.Errors, errCode, errMessage)
 	}
 }
 
@@ -881,7 +880,7 @@ func RootSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return testutils.ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
 	}
 }
 
@@ -947,7 +946,7 @@ func RepoSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return testutils.ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
 	}
 }
 
@@ -962,7 +961,7 @@ func RootSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return testutils.ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }
 
@@ -977,7 +976,7 @@ func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return testutils.ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
 	}
 }
 
@@ -1356,4 +1355,23 @@ func ClusterRoleBindingSubjectNamesEqual(subjects ...string) func(o client.Objec
 		}
 		return subjectNamesEqual(subjects, r.Subjects)
 	}
+}
+
+// ValidateError returns true if the specified errors contain an error
+// with the specified error code and (partial) message.
+func ValidateError(errs []v1beta1.ConfigSyncError, code, message string) error {
+	if len(errs) == 0 {
+		return errors.Errorf("no errors present")
+	}
+	for _, e := range errs {
+		if e.Code == code {
+			if message == "" || strings.Contains(e.ErrorMessage, message) {
+				return nil
+			}
+		}
+	}
+	if message != "" {
+		return errors.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
+	}
+	return errors.Errorf("error %s not present: %s", code, log.AsJSON(errs))
 }

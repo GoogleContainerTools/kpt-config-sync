@@ -928,6 +928,13 @@ func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	return commit, nil
 }
 
+// HelmChartVersionShaFn returns the provided chart version as a function.
+func HelmChartVersionShaFn(chartVersion string) Sha1Func {
+	return func(*NT, types.NamespacedName) (string, error) {
+		return chartVersion, nil
+	}
+}
+
 // RemoteNsRepoSha1Fn returns the latest commit from a RepoSync Git spec.
 func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RepoSync{}

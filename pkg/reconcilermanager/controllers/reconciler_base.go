@@ -485,10 +485,11 @@ func removeArg(args []string, i int) []string {
 	return args
 }
 
-func (r *reconcilerBase) injectFleetWorkloadIdentityCredentials(podTemplate *corev1.PodTemplateSpec, gsaEmail string) error {
+// BuildFWICredsContent generates the Fleet WI credentials content in a JSON string.
+func BuildFWICredsContent(workloadIdentityPool, identityProvider, gsaEmail string) (string, error) {
 	content := map[string]interface{}{
 		"type":                              "external_account",
-		"audience":                          fmt.Sprintf("identitynamespace:%s:%s", r.membership.Spec.WorkloadIdentityPool, r.membership.Spec.IdentityProvider),
+		"audience":                          fmt.Sprintf("identitynamespace:%s:%s", workloadIdentityPool, identityProvider),
 		"service_account_impersonation_url": fmt.Sprintf("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken", gsaEmail),
 		"subject_token_type":                "urn:ietf:params:oauth:token-type:jwt",
 		"token_url":                         "https://sts.googleapis.com/v1/token",
@@ -498,10 +499,9 @@ func (r *reconcilerBase) injectFleetWorkloadIdentityCredentials(podTemplate *cor
 	}
 	bytes, err := json.Marshal(content)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal the Fleet Workload Identity credentials")
+		return "", errors.Wrap(err, "failed to marshal the Fleet Workload Identity credentials")
 	}
-	core.SetAnnotation(podTemplate, metadata.FleetWorkloadIdentityCredentials, string(bytes))
-	return nil
+	return string(bytes), nil
 }
 
 // addSelectorLabels will merge the labelMaps into the deployment spec.selector.matchLabels

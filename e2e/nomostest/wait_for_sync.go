@@ -26,7 +26,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -269,7 +268,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testutils.ValidateError(rs.Status.Source.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},
@@ -289,7 +288,7 @@ func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string,
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Revert this hack once async sync status updates are fixed to include rendering errors
-			return testutils.ValidateError(rs.Status.Rendering.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Rendering.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Rendering.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.RenderingError})
 		},
@@ -309,7 +308,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testutils.ValidateError(rs.Status.Sync.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -329,7 +328,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testutils.ValidateError(rs.Status.Sync.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -349,7 +348,7 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testutils.ValidateError(rs.Status.Source.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},
@@ -496,7 +495,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 
 // TODO: Uncomment when Syncing condition consistency is fixed
 // func validateRootSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RootSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := testutils.ValidateError(statusErrs, code, message); err != nil {
+// 	if err := testpredicates.ValidateError(statusErrs, code, message); err != nil {
 // 		return err
 // 	}
 // 	if syncingCondition == nil {
@@ -513,7 +512,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 
 // TODO: Uncomment when Syncing condition consistency is fixed
 // func validateRepoSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RepoSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := testutils.ValidateError(statusErrs, code, message); err != nil {
+// 	if err := testpredicates.ValidateError(statusErrs, code, message); err != nil {
 // 		return err
 // 	}
 // 	if syncingCondition == nil {

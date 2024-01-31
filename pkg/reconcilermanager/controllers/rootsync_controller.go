@@ -1196,9 +1196,11 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
-			if err := r.injectFleetWorkloadIdentityCredentials(&d.Spec.Template, gcpSAEmail); err != nil {
-				return err
+			creds, err := BuildFWICredsContent(r.membership.Spec.WorkloadIdentityPool, r.membership.Spec.IdentityProvider, gcpSAEmail)
+			if err != nil {
+				return nil
 			}
+			core.SetAnnotation(&d.Spec.Template, metadata.FleetWorkloadIdentityCredentials, creds)
 		}
 
 		// Add sync-generation label

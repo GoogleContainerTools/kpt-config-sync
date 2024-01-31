@@ -16,18 +16,17 @@ package e2e
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	nomosstatus "kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -41,10 +40,8 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var testLabels = client.MatchingLabels{"test-case": "hydration"}
 var expectedBuiltinOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
 
 func TestHydrateKustomizeComponents(t *testing.T) {
@@ -122,7 +119,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml"))
@@ -363,7 +360,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	expectedOrigin := "path: base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
 	nt.T.Log("Validate resources are synced")
 	var expectedNamespaces = []string{"tenant-a"}
-	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
+	kustomizecomponents.ValidateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
 	nt.T.Log("Update kustomization.yaml to use a remote overlay")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-overlay-kustomization.yaml", "./remote-base/kustomization.yaml"))
@@ -375,7 +372,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-b"}
-	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
+	kustomizecomponents.ValidateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
 	// Update kustomization.yaml to use remote resources
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-resources-kustomization.yaml", "./remote-base/kustomization.yaml"))
@@ -388,7 +385,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-a", "tenant-b", "tenant-c"}
 	expectedOrigin = "path: notCloned/base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
-	validateNamespaces(nt, expectedNamespaces, expectedOrigin)
+	kustomizecomponents.ValidateNamespaces(nt, expectedNamespaces, expectedOrigin)
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./remote-base"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove remote-base repository"))
@@ -451,29 +448,6 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	}
 }
 
-func validateNamespaces(nt *nomostest.NT, expectedNamespaces []string, expectedOrigin string) {
-	namespaces := &corev1.NamespaceList{}
-	if err := nt.KubeClient.List(namespaces, testLabels); err != nil {
-		nt.T.Error(err)
-	}
-	var actualNamespaces []string
-	for _, ns := range namespaces.Items {
-		if ns.Status.Phase == corev1.NamespaceActive {
-			actualNamespaces = append(actualNamespaces, ns.Name)
-		}
-		origin, ok := ns.Annotations[metadata.KustomizeOrigin]
-		if !ok {
-			nt.T.Errorf("expected annotation[%q], but not found", metadata.KustomizeOrigin)
-		}
-		if origin != expectedOrigin {
-			nt.T.Errorf("expected annotation[%q] to be %q, but got '%s'", metadata.KustomizeOrigin, expectedOrigin, origin)
-		}
-	}
-	if !reflect.DeepEqual(actualNamespaces, expectedNamespaces) {
-		nt.T.Errorf("expected namespaces: %v, but got: %v", expectedNamespaces, actualNamespaces)
-	}
-}
-
 // getRootSyncCommitStatusErrorSummary converts the given rootSync into a RepoState, then into a string
 func getRootSyncCommitStatusErrorSummary(rootSync *v1beta1.RootSync, rg *unstructured.Unstructured, syncingConditionSupported bool) (string, string, string) {
 	rs := nomosstatus.RootRepoStatus(rootSync, rg, syncingConditionSupported)
@@ -497,38 +471,6 @@ func validateRootSyncRepoState(expectedCommit string, commit string, expectedSta
 			commit, status, errorSummary, expectedCommit, expectedStatus)
 	}
 	return nil
-}
-
-// validateAllTenants validates if resources for all tenants are rendered, created and managed by the reconciler.
-func validateAllTenants(nt *nomostest.NT, reconcilerScope, baseRelPath string, tenants ...string) {
-	nt.T.Logf("Validate resources are synced for all tenants %s", tenants)
-	validateNamespaces(nt, tenants, fmt.Sprintf("path: %s/namespace.yaml\n", baseRelPath))
-	for _, tenant := range tenants {
-		validateTenant(nt, reconcilerScope, tenant, baseRelPath)
-	}
-}
-
-// validateTenant validates if the tenant resources are created and managed by the reconciler.
-func validateTenant(nt *nomostest.NT, reconcilerScope, tenant, baseRelPath string) {
-	nt.T.Logf("Validate %s resources are created and managed by %s", tenant, reconcilerScope)
-	if err := nt.Validate(tenant, "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("deny-all", tenant, &networkingv1.NetworkPolicy{},
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/networkpolicy.yaml\n", baseRelPath)),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("tenant-admin", tenant, &rbacv1.Role{},
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/role.yaml\n", baseRelPath)),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("tenant-admin-rolebinding", tenant, &rbacv1.RoleBinding{},
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, fmt.Sprintf("path: %s/rolebinding.yaml\n", baseRelPath)),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
 }
 
 // validateHelmComponents validates if all resources are rendered, created and managed by the reconciler.

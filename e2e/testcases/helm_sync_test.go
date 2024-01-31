@@ -70,7 +70,7 @@ func TestPublicHelm(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -112,7 +112,7 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with deploy namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": "deploy-ns"}}}`)
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -127,7 +127,7 @@ func TestPublicHelm(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from a public Helm Chart without specified release namespace or deploy namespace")
 	nt.MustMergePatch(rs, `{"spec": {"helm": {"namespace": "", "deployNamespace": ""}}}`)
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -265,7 +265,7 @@ service:
 	if err := nt.KubeClient.Create(cm2); err != nil {
 		nt.T.Fatal(err)
 	}
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -373,7 +373,7 @@ image:
 		}
 	  }`)
 
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.2.35")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -414,7 +414,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "namespace": "", "deployNamespace": ""}}}`,
 		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version, gsaARReaderEmail()))
-	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+	err = nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -499,7 +499,7 @@ func TestHelmVersionRange(t *testing.T) {
 	rootSyncFilePath := "../testdata/root-sync-helm-chart-version-range-cr.yaml"
 	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
 	nt.MustKubectl("apply", "-f", rootSyncFilePath)
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(helmChartVersion("15.4.1")),
+	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.4.1")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -548,7 +548,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	}}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a private Helm Chart without cluster scoped resources"))
-	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(helmChartVersion(chart.Image.Version)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Image.Name}))
+	err = nt.WatchForAllSyncs(nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)), nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Image.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -653,7 +653,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to reference new ConfigMap"))
 
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{repoSyncNN: chart.Image.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -662,85 +662,6 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		testpredicates.HasLabel("labelsTest", "foo")); err != nil {
 		nt.T.Fatal(err)
 	}
-}
-
-// TestHelmARFleetWISameProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (in-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestHelmARFleetWISameProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:   true,
-		crossProject:  false,
-		sourceVersion: privateCoreDNSHelmChartVersion,
-		sourceChart:   privateCoreDNSHelmChart,
-		sourceType:    v1beta1.HelmSource,
-		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
-	})
-}
-
-// TestHelmARFleetWIDifferentProject tests the `gcpserviceaccount` auth type with Fleet Workload Identity (cross-project).
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member="serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The cross-project fleet host project 'cs-dev-hub' is created.
-// 5. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestHelmARFleetWIDifferentProject(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:   true,
-		crossProject:  true,
-		sourceVersion: privateCoreDNSHelmChartVersion,
-		sourceChart:   privateCoreDNSHelmChart,
-		sourceType:    v1beta1.HelmSource,
-		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
-	})
-}
-
-// TestHelmARGKEWorkloadIdentity tests the `gcpserviceaccount` auth type with GKE Workload Identity.
-//
-//	The test will run on a GKE cluster only with following pre-requisites
-//
-// 1. Workload Identity is enabled.
-// 2. The Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for access image in Artifact Registry.
-// 3. An IAM policy binding is created between the Google service account and the Kubernetes service accounts with the `roles/iam.workloadIdentityUser` role.
-//
-//	gcloud iam service-accounts add-iam-policy-binding --project=${GCP_PROJECT} \
-//	   --role roles/iam.workloadIdentityUser \
-//	   --member "serviceAccount:${GCP_PROJECT}.svc.id.goog[config-management-system/root-reconciler]" \
-//	   e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com
-//
-// 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
-func TestHelmARGKEWorkloadIdentity(t *testing.T) {
-	testWorkloadIdentity(t, workloadIdentityTestSpec{
-		fleetWITest:   false,
-		crossProject:  false,
-		sourceVersion: privateCoreDNSHelmChartVersion,
-		sourceChart:   privateCoreDNSHelmChart,
-		sourceType:    v1beta1.HelmSource,
-		gsaEmail:      gsaARReaderEmail(),
-		rootCommitFn:  helmChartVersion(privateCoreDNSHelmChartVersion),
-	})
 }
 
 // TestHelmGCENode tests the `gcenode` auth type for the Helm repository.
@@ -762,7 +683,7 @@ func TestHelmGCENode(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
 		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -837,7 +758,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
 		v1beta1.HelmSource, chart.Image.RepositoryOCI(), chart.Image.Name, chart.Image.Version))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Image.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -901,18 +822,12 @@ func TestHelmEmptyChart(t *testing.T) {
 
 	// Validate that the chart syncs without error
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(helmChartVersion(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: chart.Image.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-}
-
-func helmChartVersion(chartVersion string) nomostest.Sha1Func {
-	return func(*nomostest.NT, types.NamespacedName) (string, error) {
-		return chartVersion, nil
 	}
 }
 

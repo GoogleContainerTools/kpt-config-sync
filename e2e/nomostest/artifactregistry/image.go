@@ -243,6 +243,10 @@ func (r *Image) Delete() error {
 // Chart name and version must be less than 63 characters combined.
 func generateImageName(nt *nomostest.NT, chartName string) string {
 	testName := strcase.ToKebab(nt.T.Name())
+	// The table-driven test sets the test name as a nested subdirectory,
+	// resulting in the Chart.yaml file not being located at the root directory,
+	// thus leading to a push error due to the missing Chart.yaml.
+	testName = strings.ReplaceAll(testName, "/", "-")
 	if len(chartName) > 20 {
 		chartName = chartName[:20]
 		chartName = strings.Trim(chartName, "-")

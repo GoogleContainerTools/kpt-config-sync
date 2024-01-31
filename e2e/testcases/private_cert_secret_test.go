@@ -529,7 +529,7 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 	nt.T.Log("Add caCertSecretRef to RootSync")
 	nt.MustMergePatch(rs, caCertSecretPatch(v1beta1.HelmSource, caCertSecret))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(helmChartVersion(chart.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: chart.Name,
 		}))
@@ -589,7 +589,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the CA cert for the RepoSync"))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(helmChartVersion(chart.Version)),
+		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nn: chart.Name,
 		}))

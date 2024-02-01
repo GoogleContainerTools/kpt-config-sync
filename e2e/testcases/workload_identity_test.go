@@ -168,6 +168,7 @@ func TestWorkloadIdentity(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
 			if err := workloadidentity.ValidateEnabled(nt); err != nil {

@@ -35,8 +35,8 @@ import (
 var flImage = flag.String("image", util.EnvString(reconcilermanager.OciSyncImage, ""),
 	"the OCI image repository for the package")
 var flAuth = flag.String("auth", util.EnvString(reconcilermanager.OciSyncAuth, string(configsync.AuthNone)),
-	fmt.Sprintf("the authentication type for access to the OCI package. Must be one of %s, %s, or %s. Defaults to %s",
-		configsync.AuthGCPServiceAccount, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
+	fmt.Sprintf("the authentication type for access to the OCI package. Must be one of %s, %s, %s, or %s. Defaults to %s",
+		configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
 var flRoot = flag.String("root", util.EnvString("OCI_SYNC_ROOT", util.EnvString("HOME", "")+"/oci"),
 	"the root directory for oci-sync operations, under which --dest will be created")
 var flDest = flag.String("dest", util.EnvString("OCI_SYNC_DEST", ""),
@@ -86,7 +86,7 @@ func main() {
 	switch configsync.AuthType(*flAuth) {
 	case configsync.AuthNone:
 		auth = authn.Anonymous
-	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
+	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
 		a, err := google.NewEnvAuthenticator()
 		if err != nil {
 			utillog.HandleError(log, true, "ERROR: failed to get the authentication with type %q: %v", *flAuth, err)

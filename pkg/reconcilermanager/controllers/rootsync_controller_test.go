@@ -2930,15 +2930,15 @@ func TestRootSyncWithHelm(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = helmParsedDeployment
 	secretName := "helm-secret"
-	// Test creating RootSync resources with Token auth type
+	ctx := context.Background()
+
+	// Test 1: creating RootSync resources with Token auth type
 	rs := rootSyncWithHelm(rootsyncName,
 		rootsyncHelmAuthType(configsync.AuthToken), rootsyncHelmSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	helmSecret := secretObj(t, secretName, configsync.AuthToken, v1beta1.HelmSource, core.Namespace(rs.Namespace))
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, helmSecret)
 
-	// Test creating Deployment resources.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2946,9 +2946,31 @@ func TestRootSyncWithHelm(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
+	// test 1: validations
+	// Get RootSync to refresh the generation, which is passed as the `SYNC_GENERATION` env.
+	// The generation is updated because the validateRoleRefs function resets the spec.override field.
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+
+	labels := map[string]string{
+		metadata.SyncNamespaceLabel: rs.Namespace,
+		metadata.SyncNameLabel:      rs.Name,
+		metadata.SyncKindLabel:      testReconciler.syncKind,
+	}
+	ksaNoGSAAnnotation := fake.ServiceAccountObject(
+		rootReconcilerName,
+		core.Namespace(configsync.ControllerNamespace),
+		core.Labels(labels),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(ksaNoGSAAnnotation): ksaNoGSAAnnotation}
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
+
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
-
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		helmSecretMutator(secretName),
@@ -2968,9 +2990,9 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 	t.Log("Deployment successfully created")
 
-	// Test updating RootSync resources with None auth type.
-	rs = rootSyncWithHelm(rootsyncName,
-		rootsyncHelmAuthType(configsync.AuthNone))
+	// Test 2: updating RootSync resources with None auth type.
+	rs.Spec.Helm.Auth = configsync.AuthNone
+	rs.Spec.Helm.SecretRef = nil
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
@@ -2981,6 +3003,10 @@ func TestRootSyncWithHelm(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
+	// test 2: validations
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -2998,6 +3024,124 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
+	// Test 3: switch to authenticate with `gcpserviceaccount` type using GKE WI.
+	existing := rs.DeepCopy()
+	rs.Spec.Helm.Auth = configsync.AuthGCPServiceAccount
+	rs.Spec.Helm.GCPServiceAccountEmail = gcpSAEmail
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// test 3: validations
+	ksaWithGSAAnnotation := fake.ServiceAccountObject(
+		rootReconcilerName,
+		core.Namespace(configsync.ControllerNamespace),
+		core.Annotation(GCPSAAnnotationKey, rs.Spec.Helm.GCPServiceAccountEmail),
+		core.Labels(labels),
+		core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
+	)
+	wantServiceAccounts[core.IDOf(ksaWithGSAAnnotation)] = ksaWithGSAAnnotation
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		containersWithRepoVolumeMutator(noneHelmContainers()),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("3"), setGeneration(3),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	// Test 4: authenticate with `gcpserviceaccount` type using Fleet WI.
+	t.Log("Test FWI")
+	workloadIdentityPool := "test-gke-dev.svc.id.goog"
+	testReconciler.membership = &hubv1.Membership{
+		Spec: hubv1.MembershipSpec{
+			WorkloadIdentityPool: workloadIdentityPool,
+			IdentityProvider:     "https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster",
+		},
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// test 4: validations
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setAnnotations(map[string]string{
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
+		setServiceAccountName(rootReconcilerName),
+		fwiMutator(workloadIdentityPool, reconcilermanager.HelmSync),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("4"), setGeneration(4),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	// Test 5: Migrate from GSA to KSA for authentication using Fleet WI.
+	existing = rs.DeepCopy()
+	rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// test 5: validations
+	wantServiceAccounts[core.IDOf(ksaNoGSAAnnotation)] = ksaNoGSAAnnotation
+	ksaNoGSAAnnotation.ResourceVersion = "3"
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setAnnotations(map[string]string{
+			// `service_account_impersonation_url` is removed from the annotation,
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
+		setServiceAccountName(rootReconcilerName),
+		fwiMutator(workloadIdentityPool, reconcilermanager.HelmSync),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("5"), setGeneration(5),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	// Test 6: override helm-sync resources
 	t.Log("Test overriding the cpu request and memory limits of the helm-sync container")
 	overrideHelmSyncResources := []v1beta1.ContainerResourcesSpec{
 		{
@@ -3007,33 +3151,32 @@ func TestRootSyncWithHelm(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
-		t.Fatalf("failed to get the root sync: %v", err)
-	}
+	existing = rs.DeepCopy()
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
 		OverrideSpec: v1beta1.OverrideSpec{
 			Resources: overrideHelmSyncResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
-		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
-		t.Fatalf("failed to get the root sync: %v", err)
-	}
+	// test 6: validations
 	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
-
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setAnnotations(map[string]string{
+			// `service_account_impersonation_url` is removed from the annotation,
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
 		setServiceAccountName(rootReconcilerName),
-		containersWithRepoVolumeMutator(noneHelmContainers()),
+		fwiMutator(workloadIdentityPool, reconcilermanager.HelmSync),
 		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
-		setUID("1"), setResourceVersion("3"), setGeneration(3),
+		setUID("1"), setResourceVersion("6"), setGeneration(6),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -3049,12 +3192,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
+	ctx := context.Background()
+
+	// test 1: authenticate with `none` type for public OCI images.
 	rs := rootSyncWithOCI(rootsyncName, rootsyncOCIAuthType(configsync.AuthNone))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs)
-
-	// Test creating Deployment resources with GCPServiceAccount auth type.
-	ctx := context.Background()
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -3062,22 +3205,31 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
+	// test 1: validations
+	// Get RootSync to refresh the generation, which is passed as the `SYNC_GENERATION` env.
+	// The generation is updated because the validateRoleRefs function resets the spec.override field.
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
 	labels := map[string]string{
 		metadata.SyncNamespaceLabel: rs.Namespace,
 		metadata.SyncNameLabel:      rs.Name,
 		metadata.SyncKindLabel:      testReconciler.syncKind,
 	}
 
-	wantServiceAccount := fake.ServiceAccountObject(
+	ksaNoGSAAnnotation := fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
+	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(ksaNoGSAAnnotation): ksaNoGSAAnnotation}
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
 
 	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
-
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
@@ -3086,14 +3238,6 @@ func TestRootSyncWithOCI(t *testing.T) {
 		setUID("1"), setResourceVersion("1"), setGeneration(1),
 	)
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
-
-	// compare ServiceAccount.
-	wantServiceAccounts := map[core.ID]*corev1.ServiceAccount{core.IDOf(wantServiceAccount): wantServiceAccount}
-	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
-		t.Errorf("ServiceAccount validation failed: %v", err)
-	}
-
-	// compare Deployment.
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
@@ -3102,10 +3246,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	t.Log("Resources successfully created")
 
+	// test 2: switch to authenticate with `gcenode` type.
 	t.Log("Test updating RootSync resources with gcenode auth type.")
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
-		t.Fatalf("failed to get the root sync: %v", err)
-	}
 	rs.Spec.Oci.Auth = configsync.AuthGCENode
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
@@ -3117,7 +3259,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	// compare ServiceAccount.
+	// test 2: validations
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
@@ -3139,13 +3281,12 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
+	// test 3: switch to authenticate with `gcpserviceaccount` type using GKE WI.
 	t.Log("Test updating RootSync resources with gcpserviceaccount auth type.")
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
-		t.Fatalf("failed to get the root sync: %v", err)
-	}
+	existing := rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Oci.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3155,15 +3296,15 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantServiceAccount = fake.ServiceAccountObject(
+	// test 3: validations
+	ksaWithGSAAnnotation := fake.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
 		core.Labels(labels),
 		core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 	)
-	// compare ServiceAccount.
-	wantServiceAccounts[core.IDOf(wantServiceAccount)] = wantServiceAccount
+	wantServiceAccounts[core.IDOf(ksaWithGSAAnnotation)] = ksaWithGSAAnnotation
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
@@ -3185,6 +3326,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
+	// test 4: authenticate with `gcpserviceaccount` type using Fleet WI.
 	t.Log("Test FWI")
 	workloadIdentityPool := "test-gke-dev.svc.id.goog"
 	testReconciler.membership = &hubv1.Membership{
@@ -3197,6 +3339,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
+	// test 4: validations
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
@@ -3205,7 +3348,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
 		setServiceAccountName(rootReconcilerName),
-		fwiOciMutator(workloadIdentityPool),
+		fwiMutator(workloadIdentityPool, reconcilermanager.OciSync),
 		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
 		setUID("1"), setResourceVersion("4"), setGeneration(4),
@@ -3220,6 +3363,46 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 	t.Log("Deployment successfully updated")
 
+	// test 5: Migrate from GSA to KSA for authentication using Fleet WI.
+	existing = rs.DeepCopy()
+	rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	// test 5: validations
+	wantServiceAccounts[core.IDOf(ksaNoGSAAnnotation)] = ksaNoGSAAnnotation
+	ksaNoGSAAnnotation.ResourceVersion = "3"
+	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Errorf("ServiceAccount validation failed: %v", err)
+	}
+	rootDeployment = rootSyncDeployment(rootReconcilerName,
+		setAnnotations(map[string]string{
+			// `service_account_impersonation_url` is removed from the annotation,
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+		}),
+		setServiceAccountName(rootReconcilerName),
+		fwiMutator(workloadIdentityPool, reconcilermanager.OciSync),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("5"), setGeneration(5),
+	)
+	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
+
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully updated")
+
+	// test 6: override the CPU request and memory limits of the oci-sync container
 	t.Log("Test overriding the cpu request and memory limits of the oci-sync container")
 	overrideOciSyncResources := []v1beta1.ContainerResourcesSpec{
 		{
@@ -3229,16 +3412,14 @@ func TestRootSyncWithOCI(t *testing.T) {
 		},
 	}
 
-	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
-		t.Fatalf("failed to get the root sync: %v", err)
-	}
+	existing = rs.DeepCopy()
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{
 		OverrideSpec: v1beta1.OverrideSpec{
 			Resources: overrideOciSyncResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
-		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3248,17 +3429,19 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
+	// test 6: validations
 	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
 	resourceOverrides = setContainerResourceDefaults(overrideOciSyncResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		setAnnotations(map[string]string{
-			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/config-sync@cs-project.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
+			// `service_account_impersonation_url` is removed from the annotation,
+			metadata.FleetWorkloadIdentityCredentials: `{"audience":"identitynamespace:test-gke-dev.svc.id.goog:https://container.googleapis.com/v1/projects/test-gke-dev/locations/us-central1-c/clusters/fleet-workload-identity-test-cluster","credential_source":{"file":"/var/run/secrets/tokens/gcp-ksa/token"},"subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account"}`,
 		}),
-		fwiOciMutator(workloadIdentityPool),
+		fwiMutator(workloadIdentityPool, reconcilermanager.OciSync),
 		containerResourcesMutator(resourceOverrides),
 		containerEnvMutator(rootContainerEnvs),
-		setUID("1"), setResourceVersion("5"), setGeneration(5),
+		setUID("1"), setResourceVersion("6"), setGeneration(6),
 	)
 	wantDeployments[core.IDOf(rootDeployment)] = rootDeployment
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
@@ -4112,17 +4295,17 @@ func fleetWorkloadIdentityContainers() []corev1.Container {
 	return containers
 }
 
-func fwiOciMutator(workloadIdentityPool string) depMutator {
+func fwiMutator(workloadIdentityPool, syncContainerName string) depMutator {
 	return func(dep *appsv1.Deployment) {
 		dep.Spec.Template.Spec.Volumes = []corev1.Volume{
 			{Name: "repo"},
 			fwiVolume(workloadIdentityPool),
 		}
-		dep.Spec.Template.Spec.Containers = fwiOciContainers()
+		dep.Spec.Template.Spec.Containers = fwiContainers(syncContainerName)
 	}
 }
 
-func fwiOciContainers() []corev1.Container {
+func fwiContainers(syncContainerName string) []corev1.Container {
 	return []corev1.Container{
 		{
 			Name: reconcilermanager.Reconciler,
@@ -4133,7 +4316,7 @@ func fwiOciContainers() []corev1.Container {
 			Args: defaultArgs(),
 		},
 		{
-			Name: reconcilermanager.OciSync,
+			Name: syncContainerName,
 			Args: defaultArgs(),
 			Env: []corev1.EnvVar{{
 				Name:  googleApplicationCredentialsEnvKey,

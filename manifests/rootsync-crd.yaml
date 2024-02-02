@@ -171,11 +171,12 @@ spec:
                 properties:
                   auth:
                     description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of token, gcpserviceaccount, gcenode
-                      or none. The validation of this is case-sensitive. Required.
+                      repository. Must be one of token, gcpserviceaccount, k8sserviceaccount,
+                      gcenode or none. The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
+                    - k8sserviceaccount
                     - token
                     - gcenode
                     type: string
@@ -297,10 +298,12 @@ spec:
                   auth:
                     description: auth is the type of secret configured for access
                       to the OCI package. Must be one of gcenode, gcpserviceaccount,
-                      or none. The validation of this is case-sensitive. Required.
+                      k8sserviceaccount, or none. The validation of this is case-sensitive.
+                      Required.
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - k8sserviceaccount
                     - none
                     type: string
                   caCertSecretRef:
@@ -1304,11 +1307,12 @@ spec:
                 properties:
                   auth:
                     description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of token, gcpserviceaccount, gcenode
-                      or none. The validation of this is case-sensitive. Required.
+                      repository. Must be one of token, gcpserviceaccount, k8sserviceaccount,
+                      gcenode or none. The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
+                    - k8sserviceaccount
                     - token
                     - gcenode
                     type: string
@@ -1431,10 +1435,12 @@ spec:
                   auth:
                     description: auth is the type of secret configured for access
                       to the OCI package. Must be one of gcenode, gcpserviceaccount,
-                      or none. The validation of this is case-sensitive. Required.
+                      k8sserviceaccount, or none. The validation of this is case-sensitive.
+                      Required.
                     enum:
                     - gcenode
                     - gcpserviceaccount
+                    - k8sserviceaccount
                     - none
                     type: string
                   caCertSecretRef:

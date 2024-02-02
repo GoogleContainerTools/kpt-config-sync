@@ -193,11 +193,12 @@ func getSecret(ctx context.Context, c client.Client, sRef types.NamespacedName, 
 	return c.Get(ctx, sRef, secret)
 }
 
-// SkipForAuth returns true if the passed auth is either 'none' or 'gcenode' or
-// 'gcpserviceaccount'.
+// SkipForAuth returns true if the passed auth is either 'none' or 'gcenode',
+// 'gcpserviceaccount', or 'k8sserviceaccount'.
 func SkipForAuth(auth configsync.AuthType) bool {
 	switch auth {
-	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
+	case configsync.AuthNone, configsync.AuthGCENode,
+		configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount:
 		return true
 	default:
 		return false

@@ -95,9 +95,9 @@ type HelmBase struct {
 	Period metav1.Duration `json:"period,omitempty"`
 
 	// auth specifies the type to authenticate to the Helm repository.
-	// Must be one of token, gcpserviceaccount, gcenode or none.
+	// Must be one of token, gcpserviceaccount, k8sserviceaccount, gcenode or none.
 	// The validation of this is case-sensitive. Required.
-	// +kubebuilder:validation:Enum=none;gcpserviceaccount;token;gcenode
+	// +kubebuilder:validation:Enum=none;gcpserviceaccount;k8sserviceaccount;token;gcenode
 	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate

@@ -1133,7 +1133,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		}
 		injectFWICreds := useFWIAuth(auth, r.membership)
 		if injectFWICreds {
-			creds, err := BuildFWICredsContent(r.membership.Spec.WorkloadIdentityPool, r.membership.Spec.IdentityProvider, gcpSAEmail)
+			creds, err := BuildFWICredsContent(r.membership.Spec.WorkloadIdentityPool, r.membership.Spec.IdentityProvider, gcpSAEmail, auth)
 			if err != nil {
 				return nil
 			}

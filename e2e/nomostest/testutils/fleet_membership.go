@@ -21,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -122,7 +123,7 @@ func ClearMembershipInfo(nt *nomostest.NT, fleetMembership, fleetProject, gkeURI
 
 // ReconcilerPodHasFWICredsAnnotation checks whether the reconciler Pod has the
 // FWI credentials annotation.
-func ReconcilerPodHasFWICredsAnnotation(nt *nomostest.NT, reconcilerName, gsaEmail string) error {
+func ReconcilerPodHasFWICredsAnnotation(nt *nomostest.NT, reconcilerName, gsaEmail string, auth configsync.AuthType) error {
 	var podList = &corev1.PodList{}
 	if err := nt.KubeClient.List(podList, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{metadata.ReconcilerLabel: reconcilerName}); err != nil {
 		return err
@@ -140,7 +141,7 @@ func ReconcilerPodHasFWICredsAnnotation(nt *nomostest.NT, reconcilerName, gsaEma
 	if err := nt.KubeClient.Get("membership", "", membership); err != nil {
 		return err
 	}
-	expectedCreds, err := controllers.BuildFWICredsContent(membership.Spec.WorkloadIdentityPool, membership.Spec.IdentityProvider, gsaEmail)
+	expectedCreds, err := controllers.BuildFWICredsContent(membership.Spec.WorkloadIdentityPool, membership.Spec.IdentityProvider, gsaEmail, auth)
 	if err != nil {
 		return err
 	}

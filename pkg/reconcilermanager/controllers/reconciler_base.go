@@ -125,11 +125,12 @@ func (r *reconcilerBase) upsertServiceAccount(
 		if len(refs) > 0 {
 			childSA.OwnerReferences = refs
 		}
-		// Update annotation when Workload Identity is enabled on a GKE cluster.
-		// In case, Workload Identity is not enabled on a cluster and spec.git.auth: gcpserviceaccount,
-		// the added annotation will be a no-op.
 		if auth == configsync.AuthGCPServiceAccount {
+			// Set annotation when impersonating a GSA on a Workload Identity enabled cluster.
 			core.SetAnnotation(childSA, GCPSAAnnotationKey, email)
+		} else {
+			// Remove the annotation when not impersonating a GSA
+			core.RemoveAnnotations(childSA, GCPSAAnnotationKey)
 		}
 		return nil
 	})
@@ -486,16 +487,20 @@ func removeArg(args []string, i int) []string {
 }
 
 // BuildFWICredsContent generates the Fleet WI credentials content in a JSON string.
-func BuildFWICredsContent(workloadIdentityPool, identityProvider, gsaEmail string) (string, error) {
+func BuildFWICredsContent(workloadIdentityPool, identityProvider, gsaEmail string, authType configsync.AuthType) (string, error) {
 	content := map[string]interface{}{
-		"type":                              "external_account",
-		"audience":                          fmt.Sprintf("identitynamespace:%s:%s", workloadIdentityPool, identityProvider),
-		"service_account_impersonation_url": fmt.Sprintf("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken", gsaEmail),
-		"subject_token_type":                "urn:ietf:params:oauth:token-type:jwt",
-		"token_url":                         "https://sts.googleapis.com/v1/token",
+		"type":               "external_account",
+		"audience":           fmt.Sprintf("identitynamespace:%s:%s", workloadIdentityPool, identityProvider),
+		"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+		"token_url":          "https://sts.googleapis.com/v1/token",
 		"credential_source": map[string]string{
 			"file": filepath.Join(gcpKSATokenDir, gsaTokenPath),
 		},
+	}
+	// Set this field to get a GSA access token only when impersonating a GSA
+	// Otherwise, skip this field to obtain a federated access token.
+	if gsaEmail != "" && authType == configsync.AuthGCPServiceAccount {
+		content["service_account_impersonation_url"] = fmt.Sprintf("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken", gsaEmail)
 	}
 	bytes, err := json.Marshal(content)
 	if err != nil {

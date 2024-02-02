@@ -18,7 +18,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -27,12 +29,16 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -44,15 +50,16 @@ import (
 // 4. IAM permission and IAM policy binding are created.
 func TestWorkloadIdentity(t *testing.T) {
 	testCases := []struct {
-		name          string
-		fleetWITest   bool
-		crossProject  bool
-		sourceRepo    string
-		sourceChart   string
-		sourceVersion string
-		sourceType    v1beta1.SourceType
-		gsaEmail      string
-		rootCommitFn  nomostest.Sha1Func
+		name             string
+		fleetWITest      bool
+		crossProject     bool
+		sourceRepo       string
+		sourceChart      string
+		sourceVersion    string
+		sourceType       v1beta1.SourceType
+		gsaEmail         string
+		rootCommitFn     nomostest.Sha1Func
+		testKSAMigration bool
 	}{
 		{
 			name:         "Authenticate to Git repo on CSR with GKE WI",
@@ -82,13 +89,14 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		},
 		{
-			name:         "Authenticate to OCI image on AR with GKE WI",
-			fleetWITest:  false,
-			crossProject: false,
-			sourceRepo:   privateARImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaARReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateARImage()),
+			name:             "Authenticate to OCI image on AR with GKE WI",
+			fleetWITest:      false,
+			crossProject:     false,
+			sourceRepo:       privateARImage(),
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     imageDigestFunc(privateARImage()),
+			testKSAMigration: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with GKE WI",
@@ -100,13 +108,14 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: imageDigestFunc(privateGCRImage()),
 		},
 		{
-			name:         "Authenticate to OCI image on AR with Fleet WI in the same project",
-			fleetWITest:  true,
-			crossProject: false,
-			sourceRepo:   privateARImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaARReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateARImage()),
+			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
+			fleetWITest:      true,
+			crossProject:     false,
+			sourceRepo:       privateARImage(),
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     imageDigestFunc(privateARImage()),
+			testKSAMigration: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI in the same project",
@@ -118,13 +127,14 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: imageDigestFunc(privateGCRImage()),
 		},
 		{
-			name:         "Authenticate to OCI image on AR with Fleet WI across project",
-			fleetWITest:  true,
-			crossProject: true,
-			sourceRepo:   privateARImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaARReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateARImage()),
+			name:             "Authenticate to OCI image on AR with Fleet WI across project",
+			fleetWITest:      true,
+			crossProject:     true,
+			sourceRepo:       privateARImage(),
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     imageDigestFunc(privateARImage()),
+			testKSAMigration: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI across project",
@@ -136,34 +146,37 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: imageDigestFunc(privateGCRImage()),
 		},
 		{
-			name:          "Authenticate to Helm chart on AR with GKE WI",
-			fleetWITest:   false,
-			crossProject:  false,
-			sourceVersion: privateCoreDNSHelmChartVersion,
-			sourceChart:   privateCoreDNSHelmChart,
-			sourceType:    v1beta1.HelmSource,
-			gsaEmail:      gsaARReaderEmail(),
-			rootCommitFn:  nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			name:             "Authenticate to Helm chart on AR with GKE WI",
+			fleetWITest:      false,
+			crossProject:     false,
+			sourceVersion:    privateCoreDNSHelmChartVersion,
+			sourceChart:      privateCoreDNSHelmChart,
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration: true,
 		},
 		{
-			name:          "Authenticate to Helm chart on AR with Fleet WI in the same project",
-			fleetWITest:   true,
-			crossProject:  false,
-			sourceVersion: privateCoreDNSHelmChartVersion,
-			sourceChart:   privateCoreDNSHelmChart,
-			sourceType:    v1beta1.HelmSource,
-			gsaEmail:      gsaARReaderEmail(),
-			rootCommitFn:  nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			name:             "Authenticate to Helm chart on AR with Fleet WI in the same project",
+			fleetWITest:      true,
+			crossProject:     false,
+			sourceVersion:    privateCoreDNSHelmChartVersion,
+			sourceChart:      privateCoreDNSHelmChart,
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration: true,
 		},
 		{
-			name:          "Authenticate to Helm chart on AR with Fleet WI across project",
-			fleetWITest:   true,
-			crossProject:  true,
-			sourceVersion: privateCoreDNSHelmChartVersion,
-			sourceChart:   privateCoreDNSHelmChart,
-			sourceType:    v1beta1.HelmSource,
-			gsaEmail:      gsaARReaderEmail(),
-			rootCommitFn:  nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			name:             "Authenticate to Helm chart on AR with Fleet WI across project",
+			fleetWITest:      true,
+			crossProject:     true,
+			sourceVersion:    privateCoreDNSHelmChartVersion,
+			sourceChart:      privateCoreDNSHelmChart,
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration: true,
 		},
 	}
 
@@ -255,11 +268,21 @@ func TestWorkloadIdentity(t *testing.T) {
 					v1beta1.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
 			}
 
+			ksaRef := types.NamespacedName{
+				Namespace: configsync.ControllerNamespace,
+				Name:      core.RootReconcilerName(rs.Name),
+			}
+			nt.T.Log("Validate the GSA annotation is added to the RootSync's service account")
+			require.NoError(nt.T,
+				nt.Watcher.WatchObject(kinds.ServiceAccount(), ksaRef.Name, ksaRef.Namespace, []testpredicates.Predicate{
+					testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
+				}))
 			if tc.fleetWITest {
 				nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
-					return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, tc.gsaEmail)
+					return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, tc.gsaEmail, configsync.AuthGCPServiceAccount)
 				})
 			}
+
 			if tc.sourceType == v1beta1.HelmSource {
 				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
 					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tc.sourceChart}))
@@ -277,6 +300,13 @@ func TestWorkloadIdentity(t *testing.T) {
 				}
 				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
 			}
+
+			// Migrate from gcpserviceaccount to k8sserviceaccount
+			if tc.testKSAMigration {
+				if err := migrateFromGSAtoKSA(nt, rs, ksaRef, tc.fleetWITest, tc.rootCommitFn); err != nil {
+					nt.T.Fatal(err)
+				}
+			}
 		})
 	}
 }
@@ -286,4 +316,93 @@ func truncateStringByLength(s string, l int) string {
 		return s[:l]
 	}
 	return s
+}
+
+// migrateFromGSAtoKSA tests the scenario of migrating from impersonating a GSA
+// to leveraging KSA+WI (a.k.a, BYOID/Ubermint).
+func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.NamespacedName, fleetWITest bool, rootCommitFn nomostest.Sha1Func) error {
+	nt.T.Log("Update RootSync auth type from gcpserviceaccount to k8sserviceaccount")
+	sourceChart := ""
+	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
+		// Change the source repo to guarantee new resources can be reconciled with k8sserviceaccount
+		chart, err := artifactregistry.PushHelmChart(nt, privateSimpleHelmChart, privateSimpleHelmChartVersion)
+		if err != nil {
+			nt.T.Fatalf("failed to push helm chart: %v", err)
+		}
+		nt.MustMergePatch(rs, fmt.Sprintf(`{
+			"spec": {
+				"helm": {
+					"repo": %q,
+					"chart": %q,
+					"version": %q,
+					"auth": "k8sserviceaccount"
+				}
+			}
+		}`,
+			chart.Image.RepositoryOCI(),
+			chart.Image.Name,
+			chart.Image.Version))
+		rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Image.Version)
+		sourceChart = chart.Image.Name
+	} else {
+		// The OCI image contains 3 tenants. The RootSync is only configured to sync
+		// with the `tenant-a` directory. The migration flow changes the sync
+		// directory to the root directory, which also includes tenant-b and tenant-c.
+		// This is to guarantee new resources can be reconciled with k8sserviceaccount.
+		// Validate previously reconciled object is pruned
+		if err := nt.ValidateNotFound("tenant-b", "", &corev1.Namespace{}); err != nil {
+			return err
+		}
+		if err := nt.ValidateNotFound("tenant-c", "", &corev1.Namespace{}); err != nil {
+			return err
+		}
+		nt.MustMergePatch(rs, `{
+			"spec": {
+				"oci": {
+          "auth": "k8sserviceaccount",
+					"dir": "."
+    		}
+			}
+		}`)
+	}
+
+	// Validations
+	nt.T.Log("Validate the GSA annotation is removed from the RootSync's service account")
+	if err := nt.Watcher.WatchObject(kinds.ServiceAccount(), ksaRef.Name, ksaRef.Namespace, []testpredicates.Predicate{
+		testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
+	}); err != nil {
+		return err
+	}
+	if fleetWITest {
+		nt.T.Log("Validate the serviceaccount_impersonation_url is absent from the injected FWI credentials")
+		nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
+			return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, "", configsync.AuthK8sServiceAccount)
+		})
+	}
+
+	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
+		if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(rootCommitFn),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: sourceChart})); err != nil {
+			return err
+		}
+		// Validate previously reconciled object is pruned
+		if err := nt.ValidateNotFound(fmt.Sprintf("my-coredns-%s", sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
+			return err
+		}
+		// Validate objects in the new helm chart are reconciled
+		if err := nt.Validate("deploy-default", "default", &appsv1.Deployment{}); err != nil {
+			return err
+		}
+		if err := nt.Validate("deploy-ns", "ns", &appsv1.Deployment{}); err != nil {
+			return err
+		}
+	} else {
+		if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(rootCommitFn),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."})); err != nil {
+			return err
+		}
+		// Validate all tenants are reconciled
+		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	}
+	return nil
 }

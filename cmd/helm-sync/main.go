@@ -46,8 +46,8 @@ var (
 	flIncludeCRDs = flag.String("include-crds", os.Getenv(reconcilermanager.HelmIncludeCRDs),
 		"include CRDs in the helm rendering output")
 	flAuth = flag.String("auth", util.EnvString(reconcilermanager.HelmAuthType, string(configsync.AuthNone)),
-		fmt.Sprintf("the authentication type for access to the Helm repository. Must be one of %s, %s, %s or %s. Defaults to %s",
-			configsync.AuthGCPServiceAccount, configsync.AuthToken, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
+		fmt.Sprintf("the authentication type for access to the Helm repository. Must be one of %s, %s, %s, %s or %s. Defaults to %s",
+			configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthToken, configsync.AuthGCENode, configsync.AuthNone, configsync.AuthNone))
 	flReleaseName = flag.String("release-name", os.Getenv(reconcilermanager.HelmReleaseName),
 		"the name of helm release")
 	flNamespace = flag.String("namespace", os.Getenv(reconcilermanager.HelmReleaseNamespace),

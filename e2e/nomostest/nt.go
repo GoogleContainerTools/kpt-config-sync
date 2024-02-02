@@ -971,7 +971,7 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 		pattern = "HEAD"
 	}
 	var args []string
-	if strings.Contains(gitSpec.Repo, "https://source.developers.google.com") {
+	if strings.Contains(gitSpec.Repo, testing.CSRHost) {
 		cloneDir, err := cloneCloudSourceRepo(nt, gitSpec.Repo)
 		if err != nil {
 			return "", err

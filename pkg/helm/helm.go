@@ -340,7 +340,7 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 	case configsync.AuthToken:
 		args = append(args, "--username", h.UserName)
 		args = append(args, "--password", h.Password)
-	case configsync.AuthGCPServiceAccount, configsync.AuthGCENode:
+	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
 		token, err := fetchNewToken(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch new token: %w", err)

@@ -390,10 +390,12 @@ func PollingPeriod(envName string, defaultValue time.Duration) time.Duration {
 
 // useFWIAuth returns whether ConfigSync uses fleet workload identity for authentication.
 // It is true only when all the following conditions are true:
-// 1. the auth type is `gcpserviceaccount`.
+// 1. the auth type is `gcpserviceaccount` or `k8sserviceaccount`.
 // 2. the cluster is registered in a fleet (the membership object exists).
 // 3. the fleet workload identity is enabled (workload_identity_pool and identity_provider are not empty).
 func useFWIAuth(authType configsync.AuthType, membership *hubv1.Membership) bool {
-	return authType == configsync.AuthGCPServiceAccount && membership != nil &&
-		membership.Spec.IdentityProvider != "" && membership.Spec.WorkloadIdentityPool != ""
+	return (authType == configsync.AuthGCPServiceAccount || authType == configsync.AuthK8sServiceAccount) &&
+		membership != nil &&
+		membership.Spec.IdentityProvider != "" &&
+		membership.Spec.WorkloadIdentityPool != ""
 }

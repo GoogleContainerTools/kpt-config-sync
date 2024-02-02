@@ -45,7 +45,8 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("sync to the kcc resources from a CSR repo")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "kcc", "branch": "main", "repo": "https://source.developers.google.com/p/%s/r/configsync-kcc", "auth": "gcpserviceaccount","gcpServiceAccountEmail": "e2e-test-csr-reader@%s.iam.gserviceaccount.com", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`, *e2e.GCPProject, *e2e.GCPProject))
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "kcc", "branch": "main", "repo": "%s/p/%s/r/configsync-kcc", "auth": "gcpserviceaccount","gcpServiceAccountEmail": "e2e-test-csr-reader@%s.iam.gserviceaccount.com", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
+		nomostesting.CSRHost, *e2e.GCPProject, *e2e.GCPProject))
 
 	err := nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),

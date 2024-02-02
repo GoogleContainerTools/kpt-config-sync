@@ -63,12 +63,12 @@ const (
 // privateGCRImage pulls the private OCI image by tag
 // The test environment GCR is assumed to be private.
 func privateGCRImage() string {
-	return fmt.Sprintf("gcr.io/%s/config-sync-test/kustomize-components:v1", *e2e.GCPProject)
+	return fmt.Sprintf("%s/%s/config-sync-test/kustomize-components:v1", nomostesting.GCRHost, *e2e.GCPProject)
 }
 
 // privateARImage() pulls the private OCI image by tag
 func privateARImage() string {
-	return fmt.Sprintf("us-docker.pkg.dev/%s/config-sync-test-private/kustomize-components:v1", *e2e.GCPProject)
+	return fmt.Sprintf("%s/%s/config-sync-test-private/kustomize-components:v1", nomostesting.ARHost, *e2e.GCPProject)
 }
 
 func gsaARReaderEmail() string {

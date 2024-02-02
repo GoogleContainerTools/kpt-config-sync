@@ -45,10 +45,10 @@ type Oci struct {
 	Period metav1.Duration `json:"period,omitempty"`
 
 	// auth is the type of secret configured for access to the OCI package.
-	// Must be one of gcenode, gcpserviceaccount, or none.
+	// Must be one of gcenode, gcpserviceaccount, k8sserviceaccount, or none.
 	// The validation of this is case-sensitive. Required.
 	//
-	// +kubebuilder:validation:Enum=gcenode;gcpserviceaccount;none
+	// +kubebuilder:validation:Enum=gcenode;gcpserviceaccount;k8sserviceaccount;none
 	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate

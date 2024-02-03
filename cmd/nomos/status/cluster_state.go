@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/cmd/nomos/util"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -75,7 +76,7 @@ func unavailableCluster(ref string) *ClusterState {
 type RepoState struct {
 	scope             string
 	syncName          string
-	sourceType        v1beta1.SourceType
+	sourceType        configsync.SourceType
 	git               *v1beta1.Git
 	oci               *v1beta1.Oci
 	helm              *v1beta1.HelmBase
@@ -133,13 +134,13 @@ func (r *RepoState) printRows(writer io.Writer) {
 	}
 }
 
-func sourceString(sourceType v1beta1.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmBase) string {
+func sourceString(sourceType configsync.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmBase) string {
 	switch sourceType {
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return ociString(oci)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		return helmString(helm)
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		return gitString(git)
 	}
 	return gitString(git)
@@ -307,7 +308,7 @@ func namespaceRepoStatus(rs *v1beta1.RepoSync, rg *unstructured.Unstructured, sy
 	repostate := &RepoState{
 		scope:      rs.Namespace,
 		syncName:   rs.Name,
-		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
+		sourceType: configsync.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
 		helm:       reposync.GetHelmBase(rs.Spec.Helm),
@@ -409,7 +410,7 @@ func RootRepoStatus(rs *v1beta1.RootSync, rg *unstructured.Unstructured, syncing
 	repostate := &RepoState{
 		scope:      "<root>",
 		syncName:   rs.Name,
-		sourceType: v1beta1.SourceType(rs.Spec.SourceType),
+		sourceType: configsync.SourceType(rs.Spec.SourceType),
 		git:        rs.Spec.Git,
 		oci:        rs.Spec.Oci,
 		helm:       rootsync.GetHelmBase(rs.Spec.Helm),

@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -49,7 +48,7 @@ type Hydrator struct {
 	// DonePath is the absolute path to the done file under the /repo directory.
 	DonePath cmpath.Absolute
 	// SourceType is the type of the source repository, must be git or oci.
-	SourceType v1beta1.SourceType
+	SourceType configsync.SourceType
 	// SourceRoot is the absolute path to the source root directory.
 	SourceRoot cmpath.Absolute
 	// HydratedRoot is the absolute path to the hydrated root directory.
@@ -338,7 +337,7 @@ func deleteErrorFile(file string) error {
 // OCI image digest or a helm chart version), the absolute path of the sync
 // directory, and source errors.
 // It retries with the provided backoff.
-func SourceCommitAndDirWithRetry(backoff wait.Backoff, sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (commit string, sourceDir cmpath.Absolute, _ status.Error) {
+func SourceCommitAndDirWithRetry(backoff wait.Backoff, sourceType configsync.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (commit string, sourceDir cmpath.Absolute, _ status.Error) {
 	err := util.RetryWithBackoff(backoff, func() error {
 		var err error
 		commit, sourceDir, err = SourceCommitAndDir(sourceType, sourceRevDir, syncDir, reconcilerName)
@@ -352,7 +351,7 @@ func SourceCommitAndDirWithRetry(backoff wait.Backoff, sourceType v1beta1.Source
 // SourceCommitAndDir returns the source hash (a git commit hash or an OCI image
 // digest or a helm chart version), the absolute path of the sync directory,
 // and source errors.
-func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, error) {
+func SourceCommitAndDir(sourceType configsync.SourceType, sourceRevDir cmpath.Absolute, syncDir cmpath.Relative, reconcilerName string) (string, cmpath.Absolute, error) {
 	sourceRoot := path.Dir(sourceRevDir.OSPath())
 	if _, err := os.Stat(sourceRoot); err != nil {
 		// It fails to check the source root directory status, either because of
@@ -366,11 +365,11 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 
 	var containerName string
 	switch sourceType {
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		containerName = reconcilermanager.OciSync
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		containerName = reconcilermanager.GitSync
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		containerName = reconcilermanager.HelmSync
 	}
 

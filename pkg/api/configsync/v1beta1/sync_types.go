@@ -249,17 +249,3 @@ type ResourceRef struct {
 	// +optional
 	GVK metav1.GroupVersionKind `json:"gvk,omitempty"`
 }
-
-// SourceType specifies the type of the source of truth.
-type SourceType string
-
-const (
-	// GitSource represents the source type is Git repository.
-	GitSource SourceType = "git"
-
-	// OciSource represents the source type is OCI package.
-	OciSource SourceType = "oci"
-
-	// HelmSource represents the source type is Helm repository.
-	HelmSource SourceType = "helm"
-)

@@ -41,7 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
-func caCertSecretPatch(sourceType v1beta1.SourceType, name string) string {
+func caCertSecretPatch(sourceType configsync.SourceType, name string) string {
 	return fmt.Sprintf(`{"spec": {"%s": {"caCertSecretRef": {"name": "%s"}}}}`, sourceType, name)
 }
 
@@ -100,7 +100,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	}
 
 	// Set caCertSecret for RootSync
-	nt.MustMergePatch(rootSync, caCertSecretPatch(v1beta1.GitSource, caCertSecret))
+	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, caCertSecret))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	}
 
 	// Unset caCertSecret for RootSync
-	nt.MustMergePatch(rootSync, caCertSecretPatch(v1beta1.GitSource, ""))
+	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, ""))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
@@ -218,7 +218,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	}
 
 	// Set caCertSecret for RootSync
-	nt.MustMergePatch(rootSync, caCertSecretPatch(v1beta1.GitSource, caCertSecret))
+	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, caCertSecret))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	}
 
 	// Unset caCertSecret for RootSync
-	nt.MustMergePatch(rootSync, caCertSecretPatch(v1beta1.GitSource, ""))
+	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, ""))
 	// RootSync should fail without caCertSecret
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
@@ -406,11 +406,11 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 
 	nt.T.Log("Set the RootSync to sync the OCI image without providing a CA cert")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, image.FloatingBranchTag()))
+		configsync.OciSource, image.FloatingBranchTag()))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
-	nt.MustMergePatch(rs, caCertSecretPatch(v1beta1.OciSource, caCertSecret))
+	nt.MustMergePatch(rs, caCertSecretPatch(configsync.OciSource, caCertSecret))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
@@ -446,7 +446,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Set the RepoSync to sync the OCI image without providing a CA cert")
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
 		Image: image.FloatingBranchTag(),
 		Auth:  "none",
@@ -480,7 +480,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Set the RepoSync to sync from git")
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the RepoSync to sync from Git"))
@@ -516,11 +516,11 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 
 	nt.T.Log("Set the RootSync to sync the Helm package without providing a CA cert")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "none", "period": "15s"}, "git": null}}`,
-		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
+		configsync.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
-	nt.MustMergePatch(rs, caCertSecretPatch(v1beta1.HelmSource, caCertSecret))
+	nt.MustMergePatch(rs, caCertSecretPatch(configsync.HelmSource, caCertSecret))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
@@ -560,7 +560,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Set the RepoSync to sync the Helm package without providing a CA cert")
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{
 		HelmBase: v1beta1.HelmBase{
 			Repo:    nt.HelmProvider.SyncURL(chart.Name),
@@ -599,7 +599,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Set the RepoSync to sync from git")
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Set the RepoSync to sync from Git"))

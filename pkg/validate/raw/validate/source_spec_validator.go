@@ -47,12 +47,12 @@ func HelmValuesFileDataKeyOrDefault(key string) string {
 
 // RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
 func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
-	switch v1beta1.SourceType(sourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(sourceType) {
+	case configsync.GitSource:
 		return GitSpec(git, rs)
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return OciSpec(oci, rs)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		return HelmSpec(reposync.GetHelmBase(helm), rs)
 	default:
 		return InvalidSourceType(rs)
@@ -61,12 +61,12 @@ func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v
 
 // RootSyncSpec validates the Root Sync source specification for any obvious problems.
 func RootSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRootSync, rs client.Object) status.Error {
-	switch v1beta1.SourceType(sourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(sourceType) {
+	case configsync.GitSource:
 		return GitSpec(git, rs)
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return OciSpec(oci, rs)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if err := HelmSpec(rootsync.GetHelmBase(helm), rs); err != nil {
 			return err
 		}
@@ -93,34 +93,21 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	// Ensure auth is a valid value.
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
-	switch git.Auth {
-	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone:
-	case configsync.AuthGCPServiceAccount:
-		if git.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.GitSource, rs)
-		}
-		if !validGCPServiceAccountEmail(git.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.GitSource, rs)
-		}
-	default:
+	if !configsync.IsAuthTypeSupported(configsync.GitSource, git.Auth) {
 		return InvalidGitAuthType(rs)
+	}
+
+	if err := validateGSAEmail(configsync.GitSource, git.Auth, git.GCPServiceAccountEmail, rs); err != nil {
+		return err
+	}
+
+	if err := validateSecretRef(configsync.GitSource, git.Auth, git.SecretRef, rs); err != nil {
+		return err
 	}
 
 	// Check that proxy isn't unnecessarily declared.
 	if git.Proxy != "" && git.Auth != configsync.AuthNone && git.Auth != configsync.AuthCookieFile && git.Auth != configsync.AuthToken {
 		return NoOpProxy(rs)
-	}
-
-	// Check the secret ref is specified if and only if it is required.
-	switch git.Auth {
-	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
-		if git.SecretRef != nil && git.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.GitSource, rs)
-		}
-	default:
-		if git.SecretRef == nil || git.SecretRef.Name == "" {
-			return MissingSecretRef(v1beta1.GitSource, rs)
-		}
 	}
 
 	return nil
@@ -140,17 +127,57 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	// Ensure auth is a valid value.
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
-	switch oci.Auth {
-	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
-	case configsync.AuthGCPServiceAccount:
-		if oci.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.OciSource, rs)
-		}
-		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.OciSource, rs)
-		}
-	default:
+	if !configsync.IsAuthTypeSupported(configsync.OciSource, oci.Auth) {
 		return InvalidOciAuthType(rs)
+	}
+	return validateGSAEmail(configsync.OciSource, oci.Auth, oci.GCPServiceAccountEmail, rs)
+}
+
+// validateGSAEmail checks whether gcpServiceAccountEmail is specified when
+// using the gcpserviceaccount auth type.
+func validateGSAEmail(sourceType configsync.SourceType, auth configsync.AuthType,
+	gsaEmail string, rs client.Object) status.Error {
+	// Only the gcpserviceaccount auth type requires GSAEmail
+	if auth != configsync.AuthGCPServiceAccount {
+		return nil
+	}
+
+	if gsaEmail == "" {
+		return MissingGCPSAEmail(sourceType, rs)
+	}
+	if !validGCPServiceAccountEmail(gsaEmail) {
+		return InvalidGCPSAEmail(sourceType, rs)
+	}
+	return nil
+}
+
+// AuthRequiresSecret returns true if the given source type and auth type
+// requires the secret.
+// Below lists the auth types of each source type that require secret:
+// - Git: ssh, token, cookiefile
+// - Helm: token
+// - oci: N/A
+func AuthRequiresSecret(sourceType configsync.SourceType, auth configsync.AuthType) bool {
+	switch sourceType {
+	case configsync.GitSource:
+		return auth == configsync.AuthSSH ||
+			auth == configsync.AuthToken ||
+			auth == configsync.AuthCookieFile
+	case configsync.HelmSource:
+		return auth == configsync.AuthToken
+	}
+	return false
+}
+
+// validateSecretRef checks whether the secretRef is specified when needed.
+func validateSecretRef(sourceType configsync.SourceType, auth configsync.AuthType,
+	secretRef *v1beta1.SecretReference, rs client.Object) status.Error {
+	if !AuthRequiresSecret(sourceType, auth) {
+		return nil
+	}
+
+	if secretRef == nil || secretRef.Name == "" {
+		return MissingSecretRef(sourceType, rs)
 	}
 	return nil
 }
@@ -174,27 +201,14 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	// Ensure auth is a valid value.
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
-	switch helm.Auth {
-	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
-		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.HelmSource, rs)
-		}
-	case configsync.AuthToken:
-		if helm.SecretRef == nil || helm.SecretRef.Name == "" {
-			return MissingSecretRef(v1beta1.HelmSource, rs)
-		}
-	case configsync.AuthGCPServiceAccount:
-		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.HelmSource, rs)
-		}
-		if helm.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.HelmSource, rs)
-		}
-		if !validGCPServiceAccountEmail(helm.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.HelmSource, rs)
-		}
-	default:
+	if !configsync.IsAuthTypeSupported(configsync.HelmSource, helm.Auth) {
 		return InvalidHelmAuthType(rs)
+	}
+	if err := validateGSAEmail(configsync.HelmSource, helm.Auth, helm.GCPServiceAccountEmail, rs); err != nil {
+		return err
+	}
+	if err := validateSecretRef(configsync.HelmSource, helm.Auth, helm.SecretRef, rs); err != nil {
+		return err
 	}
 
 	for _, vf := range helm.ValuesFileRefs {
@@ -238,7 +252,7 @@ var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 func MissingGitSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, configsync.GitSource).
 		BuildWithResources(o)
 }
 
@@ -247,18 +261,16 @@ func MissingGitSpec(o client.Object) status.Error {
 func MissingGitRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, configsync.GitSource).
 		BuildWithResources(o)
 }
 
 // InvalidGitAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
 func InvalidGitAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
-			strings.Join(types, ",")).
+		Sprintf("%ss must specify spec.git.auth to be one of %s", kind, configsync.SupportedAuthTypes(configsync.GitSource)).
 		BuildWithResources(o)
 }
 
@@ -272,19 +284,9 @@ func NoOpProxy(o client.Object) status.Error {
 		BuildWithResources(o)
 }
 
-// IllegalSecretRef reports that a RootSync/RepoSync declares an auth mode that doesn't
-// allow SecretRefs does declare a SecretRef.
-func IllegalSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
-	return invalidSyncBuilder.
-		Sprintf("%ss which specify spec.%s.auth as one of %q, %q, or %q must not specify spec.%s.secretRef",
-			kind, sourceType, configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount, sourceType).
-		BuildWithResources(o)
-}
-
 // MissingSecretRef reports that a RootSync/RepoSync declares an auth mode that requires
 // a SecretRef, but does not do so.
-func MissingSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func MissingSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as one of %q, %q or %q must also specify spec.%s.secretRef",
@@ -295,7 +297,7 @@ func MissingSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Err
 // InvalidGCPSAEmail reports that a RepoSync/RootSync Resource doesn't have the
 //
 //	correct gcp service account suffix.
-func InvalidGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func InvalidGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must use suffix <gcp_serviceaccount_name>.[%s]",
@@ -305,7 +307,7 @@ func InvalidGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Er
 
 // MissingGCPSAEmail reports that a RepoSync/RootSync resource declares an auth
 // mode that requires a GCPServiceAccountEmail, but does not do so.
-func MissingGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func MissingGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must also specify spec.%s.gcpServiceAccountEmail",
@@ -335,7 +337,7 @@ func validGCPServiceAccountEmail(email string) bool {
 func InvalidSourceType(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, v1beta1.GitSource, v1beta1.OciSource, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, configsync.GitSource, configsync.OciSource, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -344,7 +346,7 @@ func InvalidSourceType(o client.Object) status.Error {
 func MissingOciSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, configsync.OciSource).
 		BuildWithResources(o)
 }
 
@@ -353,18 +355,16 @@ func MissingOciSpec(o client.Object) status.Error {
 func MissingOciImage(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, configsync.OciSource).
 		BuildWithResources(o)
 }
 
 // InvalidOciAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for OCI image.
 func InvalidOciAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthK8sServiceAccount), string(configsync.AuthNone)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,
-			strings.Join(types, ",")).
+		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind, configsync.SupportedAuthTypes(configsync.OciSource)).
 		BuildWithResources(o)
 }
 
@@ -373,7 +373,7 @@ func InvalidOciAuthType(o client.Object) status.Error {
 func MissingHelmSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -382,7 +382,7 @@ func MissingHelmSpec(o client.Object) status.Error {
 func MissingHelmRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -391,18 +391,16 @@ func MissingHelmRepo(o client.Object) status.Error {
 func MissingHelmChart(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
 // InvalidHelmAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for Helm.
 func InvalidHelmAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthK8sServiceAccount), string(configsync.AuthNone), string(configsync.AuthToken)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.auth to be one of %s", kind,
-			strings.Join(types, ",")).
+		Sprintf("%ss must specify spec.helm.auth to be one of %s", kind, configsync.SupportedAuthTypes(configsync.HelmSource)).
 		BuildWithResources(o)
 }
 

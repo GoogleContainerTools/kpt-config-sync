@@ -56,7 +56,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		sourceRepo                  string
 		sourceChart                 string
 		sourceVersion               string
-		sourceType                  v1beta1.SourceType
+		sourceType                  configsync.SourceType
 		gsaEmail                    string
 		rootCommitFn                nomostest.Sha1Func
 		testKSAMigration            bool
@@ -67,7 +67,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  false,
 			crossProject: false,
 			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gsaCSRReaderEmail(),
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		},
@@ -76,7 +76,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  true,
 			crossProject: false,
 			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gsaCSRReaderEmail(),
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		},
@@ -85,7 +85,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  true,
 			crossProject: true,
 			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gsaCSRReaderEmail(),
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		},
@@ -94,7 +94,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:      false,
 			crossProject:     false,
 			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
@@ -104,7 +104,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  false,
 			crossProject: false,
 			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
+			sourceType:   configsync.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
 			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
@@ -113,7 +113,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:      true,
 			crossProject:     false,
 			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
@@ -123,7 +123,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  true,
 			crossProject: false,
 			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
+			sourceType:   configsync.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
 			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
@@ -132,7 +132,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:      true,
 			crossProject:     true,
 			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
@@ -142,7 +142,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			fleetWITest:  true,
 			crossProject: true,
 			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
+			sourceType:   configsync.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
 			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
@@ -152,7 +152,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject:                false,
 			sourceVersion:               privateCoreDNSHelmChartVersion,
 			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
+			sourceType:                  configsync.HelmSource,
 			gsaEmail:                    gsaARReaderEmail(),
 			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
 			testKSAMigration:            true,
@@ -164,7 +164,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject:                false,
 			sourceVersion:               privateCoreDNSHelmChartVersion,
 			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
+			sourceType:                  configsync.HelmSource,
 			gsaEmail:                    gsaARReaderEmail(),
 			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
 			testKSAMigration:            true,
@@ -176,7 +176,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject:                true,
 			sourceVersion:               privateCoreDNSHelmChartVersion,
 			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
+			sourceType:                  configsync.HelmSource,
 			gsaEmail:                    gsaARReaderEmail(),
 			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
 			testKSAMigration:            true,
@@ -250,7 +250,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			}
 
 			// For helm charts, we need to push the chart to the AR before configuring the RootSync
-			if tc.sourceType == v1beta1.HelmSource {
+			if tc.sourceType == configsync.HelmSource {
 				nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(tc.sourceChart))
 				chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(tc.sourceVersion))
 				if err != nil {
@@ -266,15 +266,15 @@ func TestWorkloadIdentity(t *testing.T) {
 			// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
 			nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, tc.sourceRepo)
 			switch tc.sourceType {
-			case v1beta1.GitSource:
+			case configsync.GitSource:
 				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "main", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
 					tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.OciSource:
+			case configsync.OciSource:
 				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-					v1beta1.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.HelmSource:
+					configsync.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
+			case configsync.HelmSource:
 				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-					v1beta1.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
+					configsync.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
 			}
 
 			ksaRef := types.NamespacedName{
@@ -291,8 +291,7 @@ func TestWorkloadIdentity(t *testing.T) {
 					return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, tc.gsaEmail, configsync.AuthGCPServiceAccount)
 				})
 			}
-
-			if tc.sourceType == v1beta1.HelmSource {
+			if tc.sourceType == configsync.HelmSource {
 				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
 					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tc.sourceChart}))
 				if err != nil {
@@ -332,7 +331,7 @@ func truncateStringByLength(s string, l int) string {
 func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.NamespacedName, fleetWITest bool, rootCommitFn nomostest.Sha1Func) error {
 	nt.T.Log("Update RootSync auth type from gcpserviceaccount to k8sserviceaccount")
 	sourceChart := ""
-	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
+	if configsync.SourceType(rs.Spec.SourceType) == configsync.HelmSource {
 		// Change the source repo to guarantee new resources can be reconciled with k8sserviceaccount
 		nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
 		chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(privateSimpleHelmChartVersion))
@@ -391,7 +390,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 		})
 	}
 
-	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
+	if configsync.SourceType(rs.Spec.SourceType) == configsync.HelmSource {
 		if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(rootCommitFn),
 			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: sourceChart})); err != nil {
 			return err

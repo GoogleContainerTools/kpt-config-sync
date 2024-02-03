@@ -65,7 +65,7 @@ const dir = "acme"
 
 func validRootSync(name, path string, opts ...core.MetaMutator) ast.FileObject {
 	rs := fake.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "https://github.com/test/abc",
 		Auth: "none",
@@ -78,7 +78,7 @@ func validRootSync(name, path string, opts ...core.MetaMutator) ast.FileObject {
 
 func validRepoSync(ns, name, path string, opts ...core.MetaMutator) ast.FileObject {
 	rs := fake.RepoSyncObjectV1Beta1(ns, name)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "https://github.com/test/abc",
 		Auth: "none",

@@ -218,14 +218,14 @@ func reposyncNoSSLVerify() func(*v1beta1.RepoSync) {
 	}
 }
 
-func reposyncCACert(sourceType v1beta1.SourceType, caCertSecretRef string) func(sync *v1beta1.RepoSync) {
+func reposyncCACert(sourceType configsync.SourceType, caCertSecretRef string) func(sync *v1beta1.RepoSync) {
 	return func(rs *v1beta1.RepoSync) {
 		switch sourceType {
-		case v1beta1.GitSource:
+		case configsync.GitSource:
 			rs.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
-		case v1beta1.OciSource:
+		case configsync.OciSource:
 			rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
-		case v1beta1.HelmSource:
+		case configsync.HelmSource:
 			rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecretRef}
 		}
 	}
@@ -250,7 +250,7 @@ func repoSync(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSyn
 
 func repoSyncWithGit(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	addGit := func(rs *v1beta1.RepoSync) {
-		rs.Spec.SourceType = string(v1beta1.GitSource)
+		rs.Spec.SourceType = string(configsync.GitSource)
 		rs.Spec.Git = &v1beta1.Git{
 			Repo: reposyncRepo,
 			Dir:  reposyncDir,
@@ -262,7 +262,7 @@ func repoSyncWithGit(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.
 
 func repoSyncWithOCI(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	addOci := func(rs *v1beta1.RepoSync) {
-		rs.Spec.SourceType = string(v1beta1.OciSource)
+		rs.Spec.SourceType = string(configsync.OciSource)
 		rs.Spec.Oci = &v1beta1.Oci{
 			Image: ociImage,
 			Dir:   reposyncDir,
@@ -274,7 +274,7 @@ func repoSyncWithOCI(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.
 
 func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	addHelm := func(rs *v1beta1.RepoSync) {
-		rs.Spec.SourceType = string(v1beta1.HelmSource)
+		rs.Spec.SourceType = string(configsync.HelmSource)
 		rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 			Repo:    helmRepo,
 			Chart:   helmChart,
@@ -356,7 +356,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH),
 		reposyncSecretRef(reposyncSSHKey), reposyncOverrideResources(overrideReconcilerAndGitSyncResourceLimits))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -496,7 +496,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -749,7 +749,7 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncNoSSLVerify())
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -792,7 +792,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncSourceType(gitSourceType), reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1102,11 +1102,11 @@ func TestRepoSyncCreateWithCACert(t *testing.T) {
 	caCertSecret := "foo-secret"
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
 		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName),
-		reposyncCACert(v1beta1.GitSource, caCertSecret))
+		reposyncCACert(configsync.GitSource, caCertSecret))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, configsync.GitSource, core.Namespace(rs.Namespace))
 	certSecret.Data[CACertSecretKey] = []byte("test-cert")
 	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
 
@@ -1147,7 +1147,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret := secretObj(t, caCertSecret, GitSecretConfigKeyToken, configsync.GitSource, core.Namespace(rs.Namespace))
 	certSecret.Data[CACertSecretKey] = []byte("test-cert")
 	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, gitSecret, certSecret)
 
@@ -1268,15 +1268,15 @@ func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 		"git": {
 			repoSync: repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch),
 				reposyncSecretType(configsync.AuthNone),
-				reposyncCACert(v1beta1.GitSource, caCertSecret)),
+				reposyncCACert(configsync.GitSource, caCertSecret)),
 		},
 		"oci": {
 			repoSync: repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
-				reposyncCACert(v1beta1.OciSource, caCertSecret)),
+				reposyncCACert(configsync.OciSource, caCertSecret)),
 		},
 		"helm": {
 			repoSync: repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
-				reposyncCACert(v1beta1.HelmSource, caCertSecret)),
+				reposyncCACert(configsync.HelmSource, caCertSecret)),
 		},
 	}
 	for name, tc := range testCases {
@@ -1334,7 +1334,7 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideGitSyncDepth(5))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1369,7 +1369,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1522,7 +1522,7 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideReconcileTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1557,7 +1557,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1677,7 +1677,7 @@ func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey), reposyncOverrideAPIServerTimeout(metav1.Duration{Duration: 50 * time.Second}))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	_, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1709,7 +1709,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -1829,7 +1829,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources with GCPServiceAccount auth type.
 	ctx := context.Background()
@@ -1951,7 +1951,7 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -2063,7 +2063,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs1.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)))
 
 	nsReconcilerName2 := core.NsReconcilerName(rs2.Namespace, rs2.Name)
 	nsReconcilerName3 := core.NsReconcilerName(rs3.Namespace, rs3.Name)
@@ -2610,9 +2610,9 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	rs1 := repoSyncWithGit("ns1", "rs1", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rs2 := repoSyncWithGit("ns1", "rs2", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	rs3 := repoSyncWithGit("ns1", "rs3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(testSecretName))
-	rs4 := repoSyncWithGit("ns1", "rs4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthNone), reposyncCACert(v1beta1.GitSource, caCertSecret))
-	rs5 := repoSyncWithOCI("ns1", "rs5", reposyncOCIAuthType(configsync.AuthNone), reposyncCACert(v1beta1.OciSource, caCertSecret))
-	rs6 := repoSyncWithHelm("ns1", "rs6", reposyncHelmAuthType(configsync.AuthNone), reposyncCACert(v1beta1.HelmSource, caCertSecret))
+	rs4 := repoSyncWithGit("ns1", "rs4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthNone), reposyncCACert(configsync.GitSource, caCertSecret))
+	rs5 := repoSyncWithOCI("ns1", "rs5", reposyncOCIAuthType(configsync.AuthNone), reposyncCACert(configsync.OciSource, caCertSecret))
+	rs6 := repoSyncWithHelm("ns1", "rs6", reposyncHelmAuthType(configsync.AuthNone), reposyncCACert(configsync.HelmSource, caCertSecret))
 
 	ns1rs1ReconcilerName := core.NsReconcilerName(rs1.Namespace, rs1.Name)
 	ns1rs4ReconcilerName := core.NsReconcilerName(rs4.Namespace, rs4.Name)
@@ -2958,7 +2958,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 	// The membership doesn't have WorkloadIdentityPool and IdentityProvider specified, so FWI creds won't be injected.
 	testReconciler.membership = &hubv1.Membership{
 		Spec: hubv1.MembershipSpec{
@@ -3110,7 +3110,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	rs := repoSyncWithHelm(reposyncNs, reposyncName,
 		reposyncHelmAuthType(configsync.AuthToken), reposyncHelmSecretRef(secretName))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	helmSecret := secretObj(t, secretName, configsync.AuthToken, v1beta1.HelmSource, core.Namespace(rs.Namespace))
+	helmSecret := secretObj(t, secretName, configsync.AuthToken, configsync.HelmSource, core.Namespace(rs.Namespace))
 	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, helmSecret)
 
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3632,7 +3632,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -3647,7 +3647,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -3662,7 +3662,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
@@ -3677,7 +3677,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -3693,7 +3693,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -3709,7 +3709,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{}
 	if err := fakeClient.Update(ctx, rs); err != nil {
@@ -3726,7 +3726,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo}}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -3742,7 +3742,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart}}
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
@@ -3758,7 +3758,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	rs.Spec.Git = nil
 	rs.Spec.Helm = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
@@ -3784,7 +3784,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Git = nil
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}}
@@ -3860,7 +3860,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	rs.ResourceVersion = "2" // doesn't need to be increasing or even numeric
 	err = fakeClient.Update(ctx, rs)
 	require.NoError(t, err, "unexpected Update error")
@@ -3981,7 +3981,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, testReconciler := setupNSReconciler(t, tc.repoSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(tc.repoSync.Namespace)))
+			_, _, testReconciler := setupNSReconciler(t, tc.repoSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(tc.repoSync.Namespace)))
 
 			env := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName)
 
@@ -4000,7 +4000,7 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -4108,7 +4108,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH),
 		reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, util.FakeAutopilotWebhookObject(), rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, util.FakeAutopilotWebhookObject(), rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -4271,15 +4271,15 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	rs := repoSyncWithGit(reposyncNs, reposyncName,
 		reposyncRef(gitRevision), reposyncBranch(branch),
 		reposyncSecretType(configsync.AuthToken), reposyncSecretRef(gitSecret1Name),
-		reposyncCACert(v1beta1.GitSource, caCertSecret1Name))
+		reposyncCACert(configsync.GitSource, caCertSecret1Name))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	gitSecret1 := secretObjWithProxy(t, gitSecret1Name, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret1.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	certSecret1 := secretObj(t, caCertSecret1Name, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret1 := secretObj(t, caCertSecret1Name, GitSecretConfigKeyToken, configsync.GitSource, core.Namespace(rs.Namespace))
 	certSecret1.Data[CACertSecretKey] = []byte("test-cert")
 	gitSecret2 := secretObjWithProxy(t, gitSecret2Name, GitSecretConfigKeyToken, core.Namespace(rs.Namespace))
 	gitSecret2.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
-	certSecret2 := secretObj(t, caCertSecret2Name, GitSecretConfigKeyToken, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	certSecret2 := secretObj(t, caCertSecret2Name, GitSecretConfigKeyToken, configsync.GitSource, core.Namespace(rs.Namespace))
 	certSecret2.Data[CACertSecretKey] = []byte("test-cert")
 	fakeClient, _, testReconciler := setupNSReconciler(t, rs,
 		gitSecret1, certSecret1, gitSecret2, certSecret2)
@@ -4352,7 +4352,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Verify Secret garbage collection behavior with OCI source type
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
-		reposyncCACert(v1beta1.OciSource, caCertSecret1Name))
+		reposyncCACert(configsync.OciSource, caCertSecret1Name))
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -4366,7 +4366,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Switch secret reference to a different Secret
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
-		reposyncCACert(v1beta1.OciSource, caCertSecret2Name))
+		reposyncCACert(configsync.OciSource, caCertSecret2Name))
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -4395,7 +4395,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Verify Secret garbage collection behavior with helm source type
 	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
-		reposyncCACert(v1beta1.HelmSource, caCertSecret1Name))
+		reposyncCACert(configsync.HelmSource, caCertSecret1Name))
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -4409,7 +4409,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Switch secret reference to a different Secret
 	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
-		reposyncCACert(v1beta1.HelmSource, caCertSecret2Name))
+		reposyncCACert(configsync.HelmSource, caCertSecret2Name))
 	if err := fakeClient.Update(ctx, rs); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
@@ -4441,7 +4441,7 @@ func TestRepoReconcilerWithoutKnownHosts(t *testing.T) {
 
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(GitSecretConfigKeySSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
-	_, _, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace)))
+	_, _, testReconciler := setupNSReconciler(t, rs, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace)))
 
 	// Test performing reconcile
 	ctx := context.Background()

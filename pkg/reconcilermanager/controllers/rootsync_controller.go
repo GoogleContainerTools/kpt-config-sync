@@ -187,14 +187,14 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Overwrite reconciler pod ServiceAccount.
 	var auth configsync.AuthType
 	var gcpSAEmail string
-	switch v1beta1.SourceType(rs.Spec.SourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(rs.Spec.SourceType) {
+	case configsync.GitSource:
 		auth = rs.Spec.Auth
 		gcpSAEmail = rs.Spec.GCPServiceAccountEmail
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		auth = rs.Spec.Oci.Auth
 		gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		auth = rs.Spec.Helm.Auth
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	default:
@@ -774,8 +774,8 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			namespaceStrategyEnv(rs.Spec.SafeOverride().NamespaceStrategy),
 		),
 	}
-	switch v1beta1.SourceType(rs.Spec.SourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(rs.Spec.SourceType) {
+	case configsync.GitSource:
 		result[reconcilermanager.GitSync] = gitSyncEnvs(ctx, options{
 			ref:             rs.Spec.Git.Revision,
 			branch:          rs.Spec.Git.Branch,
@@ -791,14 +791,14 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		result[reconcilermanager.OciSync] = ociSyncEnvs(ociOptions{
 			image:           rs.Spec.Oci.Image,
 			auth:            rs.Spec.Oci.Auth,
 			period:          v1beta1.GetPeriod(rs.Spec.Oci.Period, configsync.DefaultReconcilerPollingPeriod).Seconds(),
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef),
 		})
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		result[reconcilermanager.HelmSync] = helmSyncEnvs(helmOptions{
 			helmBase:         &rs.Spec.Helm.HelmBase,
 			releaseNamespace: rs.Spec.Helm.Namespace,
@@ -830,12 +830,12 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 }
 
 func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
-	switch v1beta1.SourceType(rs.Spec.SourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(rs.Spec.SourceType) {
+	case configsync.GitSource:
 		return r.validateGitSpec(ctx, rs, reconcilerName)
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return r.validateOciSpec(ctx, rs)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		return r.validateHelmSpec(ctx, rs)
 	default:
 		return validate.InvalidSourceType(rs)
@@ -854,7 +854,7 @@ func (r *RootSyncReconciler) validateRoleRefs(roleRefs []v1beta1.RootSyncRoleRef
 // validateValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist, are immutable, and have the
 // specified data key.
 func (r *RootSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, rs *v1beta1.RootSync) status.Error {
-	if rs.Spec.SourceType != string(v1beta1.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
+	if rs.Spec.SourceType != string(configsync.HelmSource) || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
 		return nil
 	}
 	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
@@ -891,7 +891,7 @@ func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.Ro
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
 func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync, reconcilerName string) error {
-	if SkipForAuth(rootSync.Spec.Auth) {
+	if !validate.AuthRequiresSecret(configsync.SourceType(rootSync.Spec.SourceType), rootSync.Spec.Auth) {
 		// There is no Secret to check for the Config object.
 		return nil
 	}
@@ -1178,17 +1178,17 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 		var gcpSAEmail string
 		var secretRefName string
 		var caCertSecretRefName string
-		switch v1beta1.SourceType(rs.Spec.SourceType) {
-		case v1beta1.GitSource:
+		switch configsync.SourceType(rs.Spec.SourceType) {
+		case configsync.GitSource:
 			auth = rs.Spec.Auth
 			gcpSAEmail = rs.Spec.GCPServiceAccountEmail
 			secretRefName = v1beta1.GetSecretName(rs.Spec.SecretRef)
 			caCertSecretRefName = v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)
-		case v1beta1.OciSource:
+		case configsync.OciSource:
 			auth = rs.Spec.Oci.Auth
 			gcpSAEmail = rs.Spec.Oci.GCPServiceAccountEmail
 			caCertSecretRefName = v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef)
-		case v1beta1.HelmSource:
+		case configsync.HelmSource:
 			auth = rs.Spec.Helm.Auth
 			gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 			secretRefName = v1beta1.GetSecretName(rs.Spec.Helm.SecretRef)
@@ -1258,7 +1258,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				}
 			case reconcilermanager.OciSync:
 				// Don't add the oci-sync container when sourceType is NOT oci.
-				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.OciSource {
+				if configsync.SourceType(rs.Spec.SourceType) != configsync.OciSource {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
@@ -1267,7 +1267,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				}
 			case reconcilermanager.HelmSync:
 				// Don't add the helm-sync container when sourceType is NOT helm.
-				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.HelmSource {
+				if configsync.SourceType(rs.Spec.SourceType) != configsync.HelmSource {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
@@ -1280,7 +1280,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				}
 			case reconcilermanager.GitSync:
 				// Don't add the git-sync container when sourceType is NOT git.
-				if v1beta1.SourceType(rs.Spec.SourceType) != v1beta1.GitSource {
+				if configsync.SourceType(rs.Spec.SourceType) != configsync.GitSource {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)

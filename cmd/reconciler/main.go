@@ -23,7 +23,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -186,7 +185,7 @@ func main() {
 		HydratedLink:             *hydratedLinkDir,
 		SourceRev:                *sourceRev,
 		SourceBranch:             *sourceBranch,
-		SourceType:               v1beta1.SourceType(*sourceType),
+		SourceType:               configsync.SourceType(*sourceType),
 		SourceRepo:               *sourceRepo,
 		SyncDir:                  relSyncDir,
 		SyncName:                 *syncName,

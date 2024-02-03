@@ -38,8 +38,8 @@ import (
 const (
 	sshAuth        = configsync.AuthSSH
 	tokenAuth      = configsync.AuthToken
-	gitSource      = v1beta1.GitSource
-	helmSource     = v1beta1.HelmSource
+	gitSource      = configsync.GitSource
+	helmSource     = configsync.HelmSource
 	gitSecretName  = "ssh-key"
 	helmSecretName = "token"
 	keyData        = "test-key"
@@ -52,15 +52,15 @@ var nsReconcilerKey = types.NamespacedName{
 	Name:      nsReconcilerName,
 }
 
-func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType v1beta1.SourceType, opts ...core.MetaMutator) *v1beta1.RepoSync {
+func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *v1beta1.RepoSync {
 	result := fake.RepoSyncObjectV1Beta1(ns, name, opts...)
 	result.Spec.SourceType = string(sourceType)
-	if sourceType == v1beta1.GitSource {
+	if sourceType == configsync.GitSource {
 		result.Spec.Git = &v1beta1.Git{
 			Auth:      auth,
 			SecretRef: &v1beta1.SecretReference{Name: gitSecretName},
 		}
-	} else if sourceType == v1beta1.HelmSource {
+	} else if sourceType == configsync.HelmSource {
 		result.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 			Auth:      auth,
 			SecretRef: &v1beta1.SecretReference{Name: helmSecretName},
@@ -69,7 +69,7 @@ func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType v1be
 	return result
 }
 
-func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceType v1beta1.SourceType, opts ...core.MetaMutator) *corev1.Secret {
+func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
 	result := fake.SecretObject(name, opts...)
 	result.Data = secretData(t, data, auth, sourceType)
@@ -82,13 +82,13 @@ func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceTyp
 	return result
 }
 
-func secretData(t *testing.T, data string, auth configsync.AuthType, sourceType v1beta1.SourceType) map[string][]byte {
+func secretData(t *testing.T, data string, auth configsync.AuthType, sourceType configsync.SourceType) map[string][]byte {
 	t.Helper()
 	key, err := json.Marshal(data)
 	if err != nil {
 		t.Fatalf("failed to marshal test key: %v", err)
 	}
-	if auth == configsync.AuthToken && sourceType == v1beta1.HelmSource {
+	if auth == configsync.AuthToken && sourceType == configsync.HelmSource {
 		return map[string][]byte{
 			"username": key,
 			"password": key,

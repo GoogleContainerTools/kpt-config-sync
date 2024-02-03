@@ -358,7 +358,7 @@ func TestRun(t *testing.T) {
 				RepoRoot:     cmpath.Absolute(rootDir),
 				HydratedRoot: hydratedRoot,
 				HydratedLink: symLink,
-				SourceType:   v1beta1.GitSource,
+				SourceType:   configsync.GitSource,
 				SourceRepo:   "https://github.com/test/test.git",
 				SourceBranch: "main",
 			}

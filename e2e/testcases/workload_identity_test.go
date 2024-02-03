@@ -191,6 +191,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			if tc.requireHelmArtifactRegistry {
 				opts = append(opts, ntopts.RequireHelmArtifactRegistry(t))
 			}
+			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+			tenant := "tenant-a"
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err := workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)
@@ -200,82 +202,17 @@ func TestWorkloadIdentity(t *testing.T) {
 				nt.T.Fatal(err)
 			}
 
-			// Truncate the fleetMembership length to be at most 63 characters.
-			fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), nt.ClusterName), 63)
-			gkeURI := "https://container.googleapis.com/v1/projects/" + *e2e.GCPProject
-			if *e2e.GCPRegion != "" {
-				gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", *e2e.GCPRegion, nt.ClusterName)
-			} else {
-				gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", *e2e.GCPZone, nt.ClusterName)
+			mustConfigureMembership(nt, tc.fleetWITest, tc.crossProject)
+
+			spec := &sourceSpec{
+				sourceType:    tc.sourceType,
+				sourceRepo:    tc.sourceRepo,
+				sourceChart:   tc.sourceChart,
+				sourceVersion: tc.sourceVersion,
+				gsaEmail:      tc.gsaEmail,
+				rootCommitFn:  tc.rootCommitFn,
 			}
-
-			testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
-			testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
-
-			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-			nt.T.Cleanup(func() {
-				testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
-				testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
-			})
-
-			tenant := "tenant-a"
-
-			// Register the cluster for fleet workload identity test
-			if tc.fleetWITest {
-				fleetProject := *e2e.GCPProject
-				if tc.crossProject {
-					fleetProject = testutils.TestCrossProjectFleetProjectID
-				}
-				nt.T.Logf("Register the cluster to a fleet in project %q", fleetProject)
-				if err := testutils.RegisterCluster(nt, fleetMembership, fleetProject, gkeURI); err != nil {
-					nt.T.Fatalf("Failed to register the cluster to project %q: %v", fleetProject, err)
-					exists, err := testutils.FleetHasMembership(nt, fleetMembership, fleetProject)
-					if err != nil {
-						nt.T.Fatalf("Unable to check if membership exists: %v", err)
-					}
-					if !exists {
-						nt.T.Fatalf("The membership wasn't created")
-					}
-				}
-				nt.T.Logf("Restart the reconciler-manager to pick up the Membership")
-				// The reconciler manager checks if the Membership CRD exists before setting
-				// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
-				// If the CRD exists, it configures the Membership watch.
-				// Otherwise, the watch is not configured to prevent the controller from crashing caused by an unknown CRD.
-				// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
-				// can set up the watch. Once the watch is configured, it can detect the
-				// deletion and creation of the Membership, which implies cluster unregistration and registration.
-				// The underlying reconciler should be updated with FWI creds after the reconciler-manager restarts.
-				nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
-			}
-
-			// For helm charts, we need to push the chart to the AR before configuring the RootSync
-			if tc.sourceType == v1beta1.HelmSource {
-				nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(tc.sourceChart))
-				chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(tc.sourceVersion))
-				if err != nil {
-					nt.T.Fatalf("failed to push helm chart: %v", err)
-				}
-
-				tc.sourceRepo = nt.HelmProvider.SyncURL(chart.Name)
-				tc.sourceChart = chart.Name
-				tc.sourceVersion = chart.Version
-				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
-			}
-
-			// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
-			nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, tc.sourceRepo)
-			switch tc.sourceType {
-			case v1beta1.GitSource:
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "main", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
-					tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.OciSource:
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-					v1beta1.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.HelmSource:
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-					v1beta1.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
-			}
+			mustConfigureRootSync(nt, rs, tenant, spec)
 
 			ksaRef := types.NamespacedName{
 				Namespace: configsync.ControllerNamespace,
@@ -292,17 +229,17 @@ func TestWorkloadIdentity(t *testing.T) {
 				})
 			}
 
-			if tc.sourceType == v1beta1.HelmSource {
-				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
-					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tc.sourceChart}))
+			if spec.sourceType == v1beta1.HelmSource {
+				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(spec.rootCommitFn),
+					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: spec.sourceChart}))
 				if err != nil {
 					nt.T.Fatal(err)
 				}
-				if err := nt.Validate(fmt.Sprintf("my-coredns-%s", tc.sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
+				if err := nt.Validate(fmt.Sprintf("my-coredns-%s", spec.sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
 					nt.T.Error(err)
 				}
 			} else {
-				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
+				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(spec.rootCommitFn),
 					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
 				if err != nil {
 					nt.T.Fatal(err)
@@ -312,7 +249,7 @@ func TestWorkloadIdentity(t *testing.T) {
 
 			// Migrate from gcpserviceaccount to k8sserviceaccount
 			if tc.testKSAMigration {
-				if err := migrateFromGSAtoKSA(nt, rs, ksaRef, tc.fleetWITest, tc.rootCommitFn); err != nil {
+				if err := migrateFromGSAtoKSA(nt, rs, ksaRef, tc.fleetWITest, spec.rootCommitFn); err != nil {
 					nt.T.Fatal(err)
 				}
 			}
@@ -416,4 +353,103 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 	}
 	return nil
+}
+
+// mustConfigureMembership clears the membership before and after the test.
+// When testing Fleet WI, it registers the cluster to a fleet.
+func mustConfigureMembership(nt *nomostest.NT, fleetWITest, crossProject bool) {
+	// Truncate the fleetMembership length to be at most 63 characters.
+	fleetMembership := truncateStringByLength(fmt.Sprintf("%s-%s", truncateStringByLength(*e2e.GCPProject, 20), nt.ClusterName), 63)
+	gkeURI := "https://container.googleapis.com/v1/projects/" + *e2e.GCPProject
+	if *e2e.GCPRegion != "" {
+		gkeURI += fmt.Sprintf("/locations/%s/clusters/%s", *e2e.GCPRegion, nt.ClusterName)
+	} else {
+		gkeURI += fmt.Sprintf("/zones/%s/clusters/%s", *e2e.GCPZone, nt.ClusterName)
+	}
+
+	testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
+	testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
+
+	nt.T.Cleanup(func() {
+		testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
+		testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
+	})
+
+	// Register the cluster for fleet workload identity test
+	if fleetWITest {
+		fleetProject := *e2e.GCPProject
+		if crossProject {
+			fleetProject = testutils.TestCrossProjectFleetProjectID
+		}
+		nt.T.Logf("Register the cluster to a fleet in project %q", fleetProject)
+		if err := testutils.RegisterCluster(nt, fleetMembership, fleetProject, gkeURI); err != nil {
+			nt.T.Fatalf("Failed to register the cluster to project %q: %v", fleetProject, err)
+			exists, err := testutils.FleetHasMembership(nt, fleetMembership, fleetProject)
+			if err != nil {
+				nt.T.Fatalf("Unable to check if membership exists: %v", err)
+			}
+			if !exists {
+				nt.T.Fatalf("The membership wasn't created")
+			}
+		}
+		nt.T.Logf("Restart the reconciler-manager to pick up the Membership")
+		// The reconciler manager checks if the Membership CRD exists before setting
+		// up the RootSync and RepoSync controllers: cmd/reconciler-manager/main.go:90.
+		// If the CRD exists, it configures the Membership watch.
+		// Otherwise, the watch is not configured to prevent the controller from crashing caused by an unknown CRD.
+		// DeletePodByLabel deletes the current reconciler-manager Pod so that new Pod
+		// can set up the watch. Once the watch is configured, it can detect the
+		// deletion and creation of the Membership, which implies cluster unregistration and registration.
+		// The underlying reconciler should be updated with FWI creds after the reconciler-manager restarts.
+		nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
+	}
+}
+
+type sourceSpec struct {
+	sourceType    v1beta1.SourceType
+	sourceRepo    string
+	sourceChart   string
+	sourceVersion string
+	gsaEmail      string
+	rootCommitFn  nomostest.Sha1Func
+}
+
+func pushSource(nt *nomostest.NT, sourceSpec *sourceSpec) error {
+	// For helm charts, we need to push the chart to the AR before configuring the RootSync
+	if sourceSpec.sourceType == v1beta1.HelmSource {
+		nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(sourceSpec.sourceChart))
+		chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(sourceSpec.sourceVersion))
+		if err != nil {
+			nt.T.Fatalf("failed to push helm chart: %v", err)
+		}
+
+		sourceSpec.sourceRepo = nt.HelmProvider.SyncURL(chart.Name)
+		sourceSpec.sourceChart = chart.Name
+		sourceSpec.sourceVersion = chart.Version
+		sourceSpec.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
+	}
+	return nil
+}
+
+// mustConfigureRootSync updates RootSync to sync with the provided auth.
+// It reuses the RootSync instead of creating a new one so that test resources
+// can be cleaned up after the test.
+func mustConfigureRootSync(nt *nomostest.NT, rs *v1beta1.RootSync, tenant string, sourceSpec *sourceSpec) {
+	if err := pushSource(nt, sourceSpec); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, sourceSpec.sourceRepo)
+	switch sourceSpec.sourceType {
+	case v1beta1.GitSource:
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "main", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
+			tenant, sourceSpec.sourceRepo, sourceSpec.gsaEmail))
+	case v1beta1.OciSource:
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
+			v1beta1.OciSource, tenant, sourceSpec.sourceRepo, sourceSpec.gsaEmail))
+	case v1beta1.HelmSource:
+		// Set the helm re-pulling duration to 5s instead of relying on the default 1h,
+		// because updates to IAM policy bindings doesn't trigger a reconciliation.
+		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns", "period": "5s"}, "git": null}}`,
+			v1beta1.HelmSource, sourceSpec.sourceChart, sourceSpec.sourceRepo, sourceSpec.sourceVersion, sourceSpec.gsaEmail))
+	}
 }

@@ -37,3 +37,15 @@ resource "google_service_account_iam_member" "admin-account-iam" {
   role               = "roles/iam.serviceAccountKeyAdmin"
   member             = "serviceAccount:e2e-test-runner@oss-prow-build-kpt-config-sync.iam.gserviceaccount.com"
 }
+
+# Grant source reader permissions to the RootSync's KSA with Fleet workload identity.
+resource "google_project_iam_member" "root-reconciler-fwi-sa-iam" {
+  for_each = toset([
+    "roles/source.reader",
+    "roles/artifactregistry.reader",
+    "roles/storage.objectViewer",
+  ])
+  role    = each.value
+  member             = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]"
+  project = data.google_project.project.id
+}

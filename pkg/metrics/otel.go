@@ -269,6 +269,66 @@ processors:
           - action: aggregate_labels
             label_set: [status]
             aggregation_type: max
+      - include: kustomize_field_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [field_name]
+            aggregation_type: max
+      - include: kustomize_deprecating_field_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [deprecating_field]
+            aggregation_type: max
+      - include: kustomize_simplification_adoption_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [simplification_field]
+            aggregation_type: max
+      - include: kustomize_builtin_transformers
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [k8s_metadata_transformer]
+            aggregation_type: max
+      - include: kustomize_helm_inflator_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [helm_inflator]
+            aggregation_type: max
+      - include: kustomize_base_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [base_source]
+            aggregation_type: max
+      - include: kustomize_patch_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [patch_field]
+            aggregation_type: max
+      - include: kustomize_ordered_top_tier_metrics
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: [top_tier_field]
+            aggregation_type: max
+      - include: kustomize_resource_count
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: max
+      - include: kustomize_build_latency
+        action: update
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: max
 extensions:
   health_check:
 service:

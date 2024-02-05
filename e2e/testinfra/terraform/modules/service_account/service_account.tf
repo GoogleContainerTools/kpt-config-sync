@@ -17,6 +17,7 @@
 data "google_project" "project" {
 }
 
+// Create GSA and workload identity bindings to the KSA(s)
 resource "google_service_account" "gcp_sa" {
   account_id   = var.gcp_sa_id
   display_name = var.gcp_sa_display_name
@@ -38,5 +39,18 @@ resource "google_service_account_iam_member" "k8s_sa_ns_binding" {
 resource "google_project_iam_member" "gcp_sa_role" {
   role    = var.role
   member  = "serviceAccount:${google_service_account.gcp_sa.email}"
+  project = data.google_project.project.id
+}
+
+// Create IAM bindings directly to the KSA(s) for BYOID
+resource "google_project_iam_member" "k8s_sa_role_rootsync" {
+  role    = var.role
+  member  = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler]"
+  project = data.google_project.project.id
+}
+
+resource "google_project_iam_member" "k8s_sa_role_reposync" {
+  role    = var.role
+  member  = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
   project = data.google_project.project.id
 }

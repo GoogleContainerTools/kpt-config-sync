@@ -30,6 +30,7 @@ import (
 	"google.golang.org/genproto/googleapis/api/monitoredres"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/iam"
@@ -47,10 +48,11 @@ import (
 )
 
 const (
-	DefaultMonitorKSA     = "default"
-	MonitorGSA            = "e2e-test-metric-writer"
-	GCMExportErrorCaption = "One or more TimeSeries could not be written"
-	GCMMetricPrefix       = "custom.googleapis.com/opencensus/config_sync"
+	DefaultMonitorKSA             = "default"
+	MonitorGSA                    = "e2e-test-metric-writer"
+	MetricExportErrorCaption      = "One or more TimeSeries could not be written"
+	UnrecognizedLabelErrorCaption = "Unrecognized metric labels"
+	GCMMetricPrefix               = "custom.googleapis.com/opencensus/config_sync"
 )
 
 var GCMMetricTypes = []string{
@@ -72,7 +74,11 @@ var GCMMetricTypes = []string{
 //   - e2e-test-metric-writer GSA with roles/monitoring.metricWriter IAM
 //   - roles/iam.workloadIdentityUser on config-management-monitoring/default for e2e-test-metric-writer
 func TestOtelCollectorDeployment(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t))
+	nt := nomostest.New(t,
+		nomostesting.Reconciliation1,
+		ntopts.RequireGKE(t),
+		ntopts.Unstructured,
+	)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", ocmetrics.OtelCollectorName, "", false)
@@ -80,7 +86,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	})
 	setupMetricsServiceAccount(nt)
 	nt.T.Cleanup(func() {
-		nt.MustKubectl("delete", "-f", "../testdata/otel-collector/otel-cm-monarch-rejected-labels.yaml", "--ignore-not-found")
+		nt.MustKubectl("delete", "cm", ocmetrics.OtelCollectorCustomCM, "-n", configmanagement.MonitoringNamespace, "--ignore-not-found")
 		nt.T.Log("Restart otel-collector pod to reset the ConfigMap and log")
 		nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
 		if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
@@ -124,7 +130,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	}
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
-	err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, GCMExportErrorCaption)
+	err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -143,7 +149,63 @@ func TestOtelCollectorDeployment(t *testing.T) {
 
 	nt.T.Log("Checking the otel-collector log contains failure...")
 	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, GCMExportErrorCaption)
+		return validateDeploymentLogHasFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Remove otel-collector ConfigMap that creates duplicated time series error")
+	nt.MustKubectl("delete", "cm", ocmetrics.OtelCollectorCustomCM, "-n", configmanagement.MonitoringNamespace, "--ignore-not-found")
+	nt.T.Log("Restart otel-collector pod to refresh the ConfigMap, log and IAM")
+	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Change the RootSync to sync from kustomize-components dir to enable Kustomize metrics
+	nt.T.Log("Add the kustomize components root directory to enable kustomize metrics")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+
+	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
+	}
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// retry for 2 minutes until metric is accessible from GCM
+	_, err = retry.Retry(120*time.Second, func() error {
+		for _, metricType := range GCMMetricTypes {
+			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
+			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
+			return validateMetricInGCM(nt, it, descriptor, nt.ClusterName)
+		}
+		return nil
+	})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Checking the otel-collector log contains no failure...")
+	err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Apply custom otel-collector ConfigMap that could cause Monarch label rejected error")
+	nt.MustKubectl("apply", "-f", "../testdata/otel-collector/otel-cm-kustomize-rejected-labels.yaml")
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Checking the otel-collector log contains failure...")
+	_, err = retry.Retry(60*time.Second, func() error {
+		return validateDeploymentLogHasFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, UnrecognizedLabelErrorCaption)
 	})
 	if err != nil {
 		nt.T.Fatal(err)

@@ -51,6 +51,7 @@ data:
            configsync.gke.io/sync-generation: "" # this field will be assigned dynamically by the reconciler-manager
          annotations:
            cluster-autoscaler.kubernetes.io/safe-to-evict: "true" # this annotation is needed so that pods doesn't block scale down
+           cluster-autoscaler.kubernetes.io/safe-to-evict: "true" # this annotation is needed so that pods doesn't block scale down
        spec:
          serviceAccountName: # this field will be assigned dynamically by the reconciler-manager
          containers:
@@ -101,7 +102,7 @@ data:
                - NET_RAW
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v4.1.0-gke.5__linux_amd64
+           image: gcr.io/config-management-release/git-sync:v4.1.0-gke.7__linux_amd64
            args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
            volumeMounts:
            - name: repo

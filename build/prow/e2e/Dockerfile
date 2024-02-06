@@ -21,7 +21,7 @@ ARG DOCKER_CLI_IMAGE
 FROM ${GCLOUD_IMAGE} as gcloud-install
 
 RUN apt-get update && apt-get install -y \
-    kubectl google-cloud-sdk-gke-gcloud-auth-plugin
+    kubectl google-cloud-cli-gke-gcloud-auth-plugin
 
 FROM ${GOLANG_IMAGE} as builder
 

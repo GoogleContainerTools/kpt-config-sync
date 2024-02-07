@@ -162,7 +162,7 @@ data:
                - NET_RAW
              runAsUser: 65533
          - name: otel-agent
-           image: gcr.io/config-management-release/otelcontribcol:v0.91.0-gke.4
+           image: gcr.io/config-management-release/otelcontribcol:v0.91.0-gke.5
            command:
            - /otelcontribcol
            args:

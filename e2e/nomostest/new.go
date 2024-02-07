@@ -300,8 +300,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
-		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider),
-		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider),
+		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider, opts.ClusterName, shell),
+		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider, opts.ClusterName, shell),
 	}
 
 	// TODO: Try speeding up the reconciler and hydration polling.
@@ -463,11 +463,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// Cleanup all images before the port forward gets torn down.
 	nt.T.Cleanup(func() {
 		for _, image := range nt.ociImages {
-			remoteURL, err := nt.OCIProvider.PushURL(image.Name)
-			if err != nil {
-				nt.T.Fatal(err)
-			}
-			if err := image.Delete(remoteURL); err != nil {
+			if err := image.Delete(); err != nil {
 				nt.T.Error(err)
 			}
 		}
@@ -475,11 +471,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	})
 	nt.T.Cleanup(func() {
 		for _, helmPackage := range nt.helmPackages {
-			remoteURL, err := nt.HelmProvider.PushURL(helmPackage.Name)
-			if err != nil {
-				nt.T.Fatal(err)
-			}
-			if err := helmPackage.Delete(remoteURL); err != nil {
+			if err := helmPackage.Delete(); err != nil {
 				nt.T.Error(err)
 			}
 		}

@@ -19,6 +19,7 @@ package e2e
 import (
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,6 +46,33 @@ func newStringListFlag(name string, def []string, usage string) *[]string {
 	}
 	flag.Var(lf, name, usage)
 	return &lf.arr
+}
+
+// stringEnum is a string flag with a set of allowed values
+type stringEnum struct {
+	value         string
+	allowedValues []string
+}
+
+func (i *stringEnum) String() string {
+	return i.value
+}
+
+func (i *stringEnum) Set(value string) error {
+	if !slices.Contains(i.allowedValues, value) {
+		return fmt.Errorf("%s not in allowed values: %s", value, i.allowedValues)
+	}
+	i.value = value
+	return nil
+}
+
+func newStringEnum(name string, defaultVal string, usage string, allowed []string) *string {
+	lf := &stringEnum{
+		value:         defaultVal,
+		allowedValues: allowed,
+	}
+	flag.Var(lf, name, fmt.Sprintf("%s Allowed values: %s", usage, allowed))
+	return &lf.value
 }
 
 // E2E enables running end-to-end tests.
@@ -101,16 +129,19 @@ var ShareTestEnv = flag.Bool("share-test-env", false,
 	"Specify that the test is using a shared test environment instead of fresh installation per test case.")
 
 // GitProvider is the provider that hosts the Git repositories.
-var GitProvider = flag.String("git-provider", Local,
-	"The git provider that hosts the Git repositories. Defaults to local.")
+var GitProvider = newStringEnum("git-provider", util.EnvString("E2E_GIT_PROVIDER", Local),
+	"The git provider that hosts the Git repositories. Defaults to Local.",
+	[]string{Local, Bitbucket, GitLab, CSR})
 
 // OCIProvider is the provider that hosts the OCI repositories.
-var OCIProvider = flag.String("oci-provider", Local,
-	"The registry provider that hosts the OCI repositories. Defaults to local.")
+var OCIProvider = newStringEnum("oci-provider", util.EnvString("E2E_OCI_PROVIDER", Local),
+	"The registry provider that hosts the OCI repositories. Defaults to Local.",
+	[]string{Local, ArtifactRegistry})
 
-// HelmProvider is the provider that hosts the OCI repositories.
-var HelmProvider = flag.String("helm-provider", Local,
-	"The registry provider that hosts the helm packages. Defaults to local.")
+// HelmProvider is the provider that hosts the helm repositories.
+var HelmProvider = newStringEnum("helm-provider", util.EnvString("E2E_HELM_PROVIDER", Local),
+	"The registry provider that hosts the helm repositories. Defaults to Local.",
+	[]string{Local, ArtifactRegistry})
 
 // TestFeatures is the list of features to run.
 var TestFeatures = flag.String("test-features", "",
@@ -250,6 +281,8 @@ const (
 	GitLab = "gitlab"
 	// CSR indicates using Google Cloud Source Repositories to host the repositories.
 	CSR = "csr"
+	// ArtifactRegistry indicates using Google Artifact Registry to host the repositories.
+	ArtifactRegistry = "gar"
 )
 
 // NumParallel returns the number of parallel test threads

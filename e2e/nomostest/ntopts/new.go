@@ -101,6 +101,14 @@ func RequireKind(t testing.NTB) Opt {
 	return func(opt *New) {}
 }
 
+// RequireHelmArtifactRegistry requires the --helm-provider flag to be set to artifact_registry
+func RequireHelmArtifactRegistry(t testing.NTB) Opt {
+	if *e2e.HelmProvider != e2e.ArtifactRegistry {
+		t.Skip("The --helm-provider flag must be set to `artifact_registry` to run this test.")
+	}
+	return func(opt *New) {}
+}
+
 // WithInitialCommit creates the initialCommit before the first sync
 func WithInitialCommit(initialCommit Commit) func(opt *New) {
 	return func(opt *New) {

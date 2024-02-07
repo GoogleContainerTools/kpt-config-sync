@@ -54,6 +54,7 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, repository *gitp
 		syncURL:            provider.SyncURL(repository.Name),
 		branch:             branch,
 		shell:              shell,
+		provider:           provider,
 	}
 	return image, nil
 }
@@ -69,6 +70,7 @@ type OCIImage struct {
 	Name               string
 	Digest             string
 	shell              *testshell.TestShell
+	provider           RegistryProvider
 }
 
 // FloatingBranchTag returns the floating tag that initially points to this image.
@@ -106,11 +108,7 @@ func (o *OCIImage) Push(registry string) error {
 }
 
 // Delete the image from the remote registry using the provided registry endpoint.
-func (o *OCIImage) Delete(registry string) error {
-	imageTag := fmt.Sprintf("%s@%s", registry, o.Digest)
-	_, err := o.shell.ExecWithDebug("crane", "delete", imageTag)
-	if err != nil {
-		return fmt.Errorf("deleting image: %w", err)
-	}
-	return nil
+func (o *OCIImage) Delete() error {
+	// How to delete images varies by provider, so delegate deletion to the provider.
+	return o.provider.deleteImage(o.Name, o.Digest)
 }

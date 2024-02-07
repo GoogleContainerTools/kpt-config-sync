@@ -24,10 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -50,16 +50,17 @@ import (
 // 4. IAM permission and IAM policy binding are created.
 func TestWorkloadIdentity(t *testing.T) {
 	testCases := []struct {
-		name             string
-		fleetWITest      bool
-		crossProject     bool
-		sourceRepo       string
-		sourceChart      string
-		sourceVersion    string
-		sourceType       v1beta1.SourceType
-		gsaEmail         string
-		rootCommitFn     nomostest.Sha1Func
-		testKSAMigration bool
+		name                        string
+		fleetWITest                 bool
+		crossProject                bool
+		sourceRepo                  string
+		sourceChart                 string
+		sourceVersion               string
+		sourceType                  v1beta1.SourceType
+		gsaEmail                    string
+		rootCommitFn                nomostest.Sha1Func
+		testKSAMigration            bool
+		requireHelmArtifactRegistry bool
 	}{
 		{
 			name:         "Authenticate to Git repo on CSR with GKE WI",
@@ -95,7 +96,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFunc(privateARImage()),
+			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -105,7 +106,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
 		{
 			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
@@ -114,7 +115,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFunc(privateARImage()),
+			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -124,7 +125,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
 		{
 			name:             "Authenticate to OCI image on AR with Fleet WI across project",
@@ -133,7 +134,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFunc(privateARImage()),
+			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -143,47 +144,54 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFunc(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
 		},
 		{
-			name:             "Authenticate to Helm chart on AR with GKE WI",
-			fleetWITest:      false,
-			crossProject:     false,
-			sourceVersion:    privateCoreDNSHelmChartVersion,
-			sourceChart:      privateCoreDNSHelmChart,
-			sourceType:       v1beta1.HelmSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration: true,
+			name:                        "Authenticate to Helm chart on AR with GKE WI",
+			fleetWITest:                 false,
+			crossProject:                false,
+			sourceVersion:               privateCoreDNSHelmChartVersion,
+			sourceChart:                 privateCoreDNSHelmChart,
+			sourceType:                  v1beta1.HelmSource,
+			gsaEmail:                    gsaARReaderEmail(),
+			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration:            true,
+			requireHelmArtifactRegistry: true,
 		},
 		{
-			name:             "Authenticate to Helm chart on AR with Fleet WI in the same project",
-			fleetWITest:      true,
-			crossProject:     false,
-			sourceVersion:    privateCoreDNSHelmChartVersion,
-			sourceChart:      privateCoreDNSHelmChart,
-			sourceType:       v1beta1.HelmSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration: true,
+			name:                        "Authenticate to Helm chart on AR with Fleet WI in the same project",
+			fleetWITest:                 true,
+			crossProject:                false,
+			sourceVersion:               privateCoreDNSHelmChartVersion,
+			sourceChart:                 privateCoreDNSHelmChart,
+			sourceType:                  v1beta1.HelmSource,
+			gsaEmail:                    gsaARReaderEmail(),
+			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration:            true,
+			requireHelmArtifactRegistry: true,
 		},
 		{
-			name:             "Authenticate to Helm chart on AR with Fleet WI across project",
-			fleetWITest:      true,
-			crossProject:     true,
-			sourceVersion:    privateCoreDNSHelmChartVersion,
-			sourceChart:      privateCoreDNSHelmChart,
-			sourceType:       v1beta1.HelmSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration: true,
+			name:                        "Authenticate to Helm chart on AR with Fleet WI across project",
+			fleetWITest:                 true,
+			crossProject:                true,
+			sourceVersion:               privateCoreDNSHelmChartVersion,
+			sourceChart:                 privateCoreDNSHelmChart,
+			sourceType:                  v1beta1.HelmSource,
+			gsaEmail:                    gsaARReaderEmail(),
+			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
+			testKSAMigration:            true,
+			requireHelmArtifactRegistry: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured, ntopts.RequireGKE(t))
+			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t)}
+			if tc.requireHelmArtifactRegistry {
+				opts = append(opts, ntopts.RequireHelmArtifactRegistry(t))
+			}
+			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err := workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)
 			}
@@ -243,15 +251,16 @@ func TestWorkloadIdentity(t *testing.T) {
 
 			// For helm charts, we need to push the chart to the AR before configuring the RootSync
 			if tc.sourceType == v1beta1.HelmSource {
-				chart, err := artifactregistry.PushHelmChart(nt, tc.sourceChart, tc.sourceVersion)
+				nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(tc.sourceChart))
+				chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(tc.sourceVersion))
 				if err != nil {
 					nt.T.Fatalf("failed to push helm chart: %v", err)
 				}
 
-				tc.sourceRepo = chart.Image.RepositoryOCI()
-				tc.sourceChart = chart.Image.Name
-				tc.sourceVersion = chart.Image.Version
-				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Image.Version)
+				tc.sourceRepo = nt.HelmProvider.SyncURL(chart.Name)
+				tc.sourceChart = chart.Name
+				tc.sourceVersion = chart.Version
+				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
 			}
 
 			// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
@@ -325,7 +334,9 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 	sourceChart := ""
 	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
 		// Change the source repo to guarantee new resources can be reconciled with k8sserviceaccount
-		chart, err := artifactregistry.PushHelmChart(nt, privateSimpleHelmChart, privateSimpleHelmChartVersion)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
+		chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(privateSimpleHelmChartVersion))
+
 		if err != nil {
 			nt.T.Fatalf("failed to push helm chart: %v", err)
 		}
@@ -339,11 +350,11 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 				}
 			}
 		}`,
-			chart.Image.RepositoryOCI(),
-			chart.Image.Name,
-			chart.Image.Version))
-		rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Image.Version)
-		sourceChart = chart.Image.Name
+			nt.HelmProvider.SyncURL(chart.Name),
+			chart.Name,
+			chart.Version))
+		rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
+		sourceChart = chart.Name
 	} else {
 		// The OCI image contains 3 tenants. The RootSync is only configured to sync
 		// with the `tenant-a` directory. The migration flow changes the sync

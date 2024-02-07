@@ -327,7 +327,7 @@ func CreateNamespaceSecret(nt *NT, ns string) error {
 			return err
 		}
 	}
-	if nt.OCIProvider.Type() == e2e.Local {
+	if nt.OCIProvider.Type() == e2e.Local || nt.HelmProvider.Type() == e2e.Local {
 		caCertPathVal := nt.registryCACertPath
 		if len(caCertPathVal) == 0 {
 			caCertPathVal = caCertPath(nt, RegistrySyncSource)

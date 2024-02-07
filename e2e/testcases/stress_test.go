@@ -33,10 +33,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/artifactregistry"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
@@ -467,19 +467,14 @@ func TestStressMemoryUsageGit(t *testing.T) {
 // 7. IAM for the test runner to write to Artifact Registry repo
 func TestStressMemoryUsageOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest, ntopts.RequireGKE(t),
+		ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
+	gsaEmail := registryproviders.ArtifactRegistryReaderEmail()
 	if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	image, err := artifactregistry.SetupCraneImage(nt, "anvil-set", "v1.0.0")
-	if err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -490,12 +485,16 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 	crCount := 50
 
 	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
-	nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/ns-%s.yaml", image.BuildPath, ns), fake.NamespaceObject(ns)))
+	// Remove safety namespace/clusterrole
+	nt.Must(nt.RootRepos[configsync.RootSyncName].RemoveAll())
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		fmt.Sprintf("ns-%s.yaml", ns), fake.NamespaceObject(ns)))
 
 	for i := 1; i <= crdCount; i++ {
 		group := fmt.Sprintf("acme-%d.com", i)
 		crd := fakeCRD(kind, group)
-		nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/crd-%s.yaml", image.BuildPath, crd.Name), crd))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+			fmt.Sprintf("crd-%s.yaml", crd.Name), crd))
 		gvk := schema.GroupVersionKind{
 			Group:   group,
 			Kind:    kind,
@@ -503,25 +502,27 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 		}
 		for j := 1; j <= crCount; j++ {
 			cr := fakeCR(fmt.Sprintf("%s-%d", strings.ToLower(kind), j), ns, gvk)
-			nt.Must(artifactregistry.WriteObjectYAMLFile(nt, fmt.Sprintf("%s/namespaces/%s/%s-%s.yaml", image.BuildPath, ns, crd.Name, cr.GetName()), cr))
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+				fmt.Sprintf("namespaces/%s/%s-%s.yaml", ns, crd.Name, cr.GetName()), cr))
 		}
 	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespaces, CRDs, and CRs"))
 
-	if err := image.Push(); err != nil {
+	image, err := nt.BuildAndPushOCIImage(nt.RootRepos[configsync.RootSyncName])
+	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	imageURL := image.AddressWithTag()
-
 	nt.T.Log("Update RootSync to sync from the OCI image in Artifact Registry")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": ".", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-		v1beta1.OciSource, imageURL, gsaEmail))
+	rs := nt.RootSyncObjectOCI(configsync.RootSyncName, image)
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(imageURL)),
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: ".",
 		}))
@@ -542,25 +543,17 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 			client.InNamespace(ns))
 	}
 
-	emptyImage, err := artifactregistry.SetupCraneImage(nt, "empty", "v1.0.0")
+	nt.T.Log("Remove all files and publish an empty OCI image")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].RemoveAll())
+	emptyImage, err := nt.BuildAndPushOCIImage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
-	if err := emptyImage.Push(); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	emptyImageURL := emptyImage.AddressWithTag()
-
-	nt.T.Log("Removing resources from OCI")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s"}}}`,
-		emptyImageURL))
-
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFunc(emptyImageURL)),
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(emptyImage.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: ".",
 		}))
@@ -584,20 +577,21 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 // 8. gcloud & helm
 func TestStressMemoryUsageHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest, ntopts.RequireGKE(t),
+		ntopts.StressTest,
 		ntopts.WithReconcileTimeout(30*time.Second))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	gsaEmail := artifactregistry.RegistryReaderAccountEmail()
+	gsaEmail := registryproviders.ArtifactRegistryReaderEmail()
 	if err := iam.ValidateServiceAccountExists(nt, gsaEmail); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	chart, err := artifactregistry.PushHelmChart(nt, "anvil-set", "v1.0.0")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart("anvil-set"))
+	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
 	ns := "stress-test-ns"
@@ -606,45 +600,24 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	crCount := 50
 	kind := "Anvil"
 
-	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Image.Name, chart.Image.Version)
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{
-		"spec": {
-			"sourceType": %q, 
-			"helm": {
-				"repo": %q, 
-				"chart": %q, 
-				"version": %q, 
-				"namespace": %q,  
-				"auth": "gcpserviceaccount", 
-				"gcpServiceAccountEmail": %q, 
-				"values": {
-					"resources": %d, 
-					"replicas": %d
-				}
-			},
-			"git": null,
-			"override": {
-				"apiServerTimeout": "30s"
-			}
-		}
-	}`,
-		v1beta1.HelmSource,
-		chart.Image.RepositoryOCI(),
-		chart.Image.Name,
-		chart.Image.Version,
-		ns,
-		gsaEmail,
-		crdCount,
-		crCount))
+	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Name, chart.Version)
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	rs.Spec.Helm.Namespace = ns
+	rs.Spec.Helm.Values = &apiextensionsv1.JSON{
+		Raw: []byte(fmt.Sprintf(`{"resources": %d, "replicas": %d}`, crdCount, crCount)),
+	}
+	rs.Spec.SafeOverride().APIServerTimeout = &metav1.Duration{Duration: 30 * time.Second}
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
 		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: chart.Image.Name,
+			nomostest.DefaultRootRepoNamespacedName: chart.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -663,22 +636,24 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 			client.InNamespace(ns))
 	}
 
-	emptyChart, err := artifactregistry.PushHelmChart(nt, "empty", "v1.0.0")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart("empty"))
+	emptyChart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName],
+		registryproviders.HelmChartVersion("v1.1.0"))
 	if err != nil {
-		nt.T.Fatal(err)
+		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", emptyChart.Image.Name, emptyChart.Image.Version)
+	nt.T.Logf("Updating RootSync to sync from the empty Helm chart: %s:%s", emptyChart.Name, emptyChart.Version)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"chart": %q, "version": %q, "namespace": null, "values": null}}}`,
-		emptyChart.Image.Name, emptyChart.Image.Version))
+		emptyChart.Name, emptyChart.Version))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	err = nt.WatchForAllSyncs(
 		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(emptyChart.Image.Version)),
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(emptyChart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: emptyChart.Image.Name,
+			nomostest.DefaultRootRepoNamespacedName: emptyChart.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)

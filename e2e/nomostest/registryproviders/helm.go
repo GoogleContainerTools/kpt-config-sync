@@ -30,11 +30,30 @@ import (
 // use an auto-incrementing index to create unique file names for tarballs
 var helmIndex int
 
+type helmOptions struct {
+	version string
+}
+
+// HelmOption is an optional parameter when building a helm chart.
+type HelmOption func(options *helmOptions)
+
+// HelmChartVersion builds the chart with the specified version.
+func HelmChartVersion(version string) func(options *helmOptions) {
+	return func(options *helmOptions) {
+		options.version = version
+	}
+}
+
 // BuildHelmPackage creates a new OCIImage object and associated tarball using the provided
 // Repository. The contents of the git repository will be bundled into a tarball
 // at the artifactDir. The resulting OCIImage object can be pushed to a remote
 // registry using its Push method.
-func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository *gitproviders.Repository, provider RegistryProvider) (*HelmPackage, error) {
+func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository *gitproviders.Repository, provider RegistryProvider, opts ...HelmOption) (*HelmPackage, error) {
+	options := helmOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	commitHash, err := repository.Hash()
 	if err != nil {
 		return nil, fmt.Errorf("getting hash: %w", err)
@@ -46,7 +65,10 @@ func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository
 	// replace / with - to avoid creating nested directories/paths
 	name := strings.Replace(repository.Name, "/", "-", -1)
 	// helm forces a semver, but we can append the branch to create a floating tag
-	version := fmt.Sprintf("v1.0.0-%s", branch)
+	version := options.version
+	if version == "" {
+		version = fmt.Sprintf("v1.0.0-%s", branch)
+	}
 	// Use branch/hash for context and imageIndex to enforce file name uniqueness.
 	// This avoids file name collision even if the test builds an image twice with
 	// a dirty repo state.
@@ -74,6 +96,7 @@ func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository
 		syncURL:        provider.SyncURL(name),
 		branch:         branch,
 		shell:          shell,
+		provider:       provider,
 	}
 	return helmPackage, nil
 }
@@ -114,6 +137,7 @@ type HelmPackage struct {
 	Version        string
 	Digest         string
 	shell          *testshell.TestShell
+	provider       RegistryProvider
 }
 
 // Push the image to the remote registry using the provided registry endpoint.
@@ -132,11 +156,7 @@ func (h *HelmPackage) Push(registry string) error {
 }
 
 // Delete the image from the remote registry using the provided registry endpoint.
-func (h *HelmPackage) Delete(registry string) error {
-	imageTag := fmt.Sprintf("%s/%s@%s", strings.TrimPrefix(registry, "oci://"), h.Name, h.Digest)
-	_, err := h.shell.ExecWithDebug("crane", "delete", imageTag)
-	if err != nil {
-		return fmt.Errorf("deleting image: %w", err)
-	}
-	return nil
+func (h *HelmPackage) Delete() error {
+	// How to delete images varies by provider, so delegate deletion to the provider.
+	return h.provider.deleteImage(h.Name, h.Digest)
 }

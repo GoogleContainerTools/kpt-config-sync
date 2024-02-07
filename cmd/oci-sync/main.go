@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/v1/google"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/oci"
@@ -82,25 +80,11 @@ func main() {
 		utillog.HandleError(log, true, "ERROR: --timeout must be greater than 0")
 	}
 
-	var auth authn.Authenticator
-	switch configsync.AuthType(*flAuth) {
-	case configsync.AuthNone:
-		auth = authn.Anonymous
-	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
-		a, err := google.NewEnvAuthenticator()
-		if err != nil {
-			utillog.HandleError(log, true, "ERROR: failed to get the authentication with type %q: %v", *flAuth, err)
-		}
-		auth = a
-	default:
-		utillog.HandleError(log, true, "ERROR: unsupported authentication type %q", *flAuth)
-	}
-
 	initialSync := true
 	failCount := 0
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
-		if err := oci.FetchPackage(ctx, *flImage, *flRoot, *flDest, auth); err != nil {
+		if err := oci.FetchPackage(ctx, log, *flAuth, *flImage, *flRoot, *flDest); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {
 				// Exit after too many retries, maybe the error is not recoverable.
 				log.Error(err, "too many failures, aborting", "failCount", failCount)

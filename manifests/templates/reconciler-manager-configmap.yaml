@@ -73,7 +73,7 @@ data:
              readOnlyRootFilesystem: false
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
              runAsUser: 65533
          - name: reconciler
            image: RECONCILER_IMAGE_NAME
@@ -98,7 +98,7 @@ data:
              readOnlyRootFilesystem: true
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
            imagePullPolicy: IfNotPresent
          - name: git-sync
            image: gcr.io/config-management-release/git-sync:v4.1.0-gke.7__linux_amd64
@@ -115,7 +115,7 @@ data:
              readOnlyRootFilesystem: false
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
              runAsUser: 65533
          - name: gcenode-askpass-sidecar
            image: ASKPASS_IMAGE_NAME
@@ -128,7 +128,7 @@ data:
              readOnlyRootFilesystem: false
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
          - name: oci-sync
            image: OCI_SYNC_IMAGE_NAME
            args: ["--root=/repo/source", "--dest=rev", "--max-sync-failures=30", "--error-file=error.json"]
@@ -141,7 +141,7 @@ data:
              readOnlyRootFilesystem: false
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
              runAsUser: 65533
          - name: helm-sync
            image: HELM_SYNC_IMAGE_NAME
@@ -158,7 +158,7 @@ data:
              readOnlyRootFilesystem: false
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
              runAsUser: 65533
          - name: otel-agent
            image: gcr.io/config-management-release/otelcontribcol:v0.91.0-gke.5
@@ -174,7 +174,7 @@ data:
              readOnlyRootFilesystem: true
              capabilities:
                drop:
-               - NET_RAW
+               - ALL
            ports:
            - containerPort: 55678 # Default OpenCensus receiver port.
              protocol: TCP
@@ -277,6 +277,7 @@ data:
          securityContext:
            fsGroup: 65533
            runAsUser: 1000
+           runAsGroup: 1000
            runAsNonRoot: true
            seccompProfile:
              type: RuntimeDefault

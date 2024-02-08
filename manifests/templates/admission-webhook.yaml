@@ -50,6 +50,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         resources:
           requests:
             cpu: 10m
@@ -76,6 +79,12 @@ spec:
         secret:
           defaultMode: 420
           secretName: admission-webhook-cert
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
 ---
 apiVersion: v1
 kind: Service

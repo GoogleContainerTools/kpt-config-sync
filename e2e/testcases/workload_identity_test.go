@@ -96,7 +96,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
+			rootCommitFn:     imageDigestFuncByName(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -106,7 +106,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
 		},
 		{
 			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
@@ -115,7 +115,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
+			rootCommitFn:     imageDigestFuncByName(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -125,7 +125,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
 		},
 		{
 			name:             "Authenticate to OCI image on AR with Fleet WI across project",
@@ -134,7 +134,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:       privateARImage(),
 			sourceType:       v1beta1.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByDigest(privateARImage()),
+			rootCommitFn:     imageDigestFuncByName(privateARImage()),
 			testKSAMigration: true,
 		},
 		{
@@ -144,7 +144,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceRepo:   privateGCRImage(),
 			sourceType:   v1beta1.OciSource,
 			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByDigest(privateGCRImage()),
+			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
 		},
 		{
 			name:                        "Authenticate to Helm chart on AR with GKE WI",

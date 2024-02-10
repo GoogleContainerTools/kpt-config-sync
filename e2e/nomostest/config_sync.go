@@ -827,7 +827,7 @@ func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) 
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingBranchTag(),
+		Image: image.FloatingTag(),
 		Auth:  configsync.AuthNone,
 	}
 	switch *e2e.OCIProvider {
@@ -851,7 +851,7 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingBranchTag(),
+		Image: image.FloatingTag(),
 		Auth:  configsync.AuthNone,
 	}
 	switch *e2e.OCIProvider {

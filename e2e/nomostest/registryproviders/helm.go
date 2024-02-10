@@ -21,8 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
 	"sigs.k8s.io/yaml"
 )
@@ -31,7 +34,10 @@ import (
 var helmIndex int
 
 type helmOptions struct {
-	version string
+	version      string
+	sourceChart  string
+	chartObjects []client.Object
+	scheme       *runtime.Scheme
 }
 
 // HelmOption is an optional parameter when building a helm chart.
@@ -44,37 +50,71 @@ func HelmChartVersion(version string) func(options *helmOptions) {
 	}
 }
 
+// HelmSourceChart builds the chart with the specified source chart.
+// It should be a subfolder under '../testdata/helm-charts'.
+func HelmSourceChart(chart string) func(options *helmOptions) {
+	return func(options *helmOptions) {
+		options.sourceChart = chart
+	}
+}
+
+// HelmChartObjects builds the chart with the specified objects.
+// A scheme must be provided to encode the object.
+func HelmChartObjects(scheme *runtime.Scheme, objs ...client.Object) func(options *helmOptions) {
+	return func(options *helmOptions) {
+		options.scheme = scheme
+		options.chartObjects = objs
+	}
+}
+
 // BuildHelmPackage creates a new OCIImage object and associated tarball using the provided
 // Repository. The contents of the git repository will be bundled into a tarball
 // at the artifactDir. The resulting OCIImage object can be pushed to a remote
 // registry using its Push method.
-func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository *gitproviders.Repository, provider RegistryProvider, opts ...HelmOption) (*HelmPackage, error) {
+func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, provider RegistryProvider, rsRef types.NamespacedName, opts ...HelmOption) (*HelmPackage, error) {
 	options := helmOptions{}
 	for _, opt := range opts {
 		opt(&options)
 	}
 
-	commitHash, err := repository.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("getting hash: %w", err)
-	}
-	branch, err := repository.CurrentBranch()
-	if err != nil {
-		return nil, fmt.Errorf("getting branch: %w", err)
-	}
-	// replace / with - to avoid creating nested directories/paths
-	name := strings.Replace(repository.Name, "/", "-", -1)
-	// helm forces a semver, but we can append the branch to create a floating tag
+	name := rsRef.Namespace + "-" + rsRef.Name
+	// Use a floating tag when a semver is not specified
 	version := options.version
 	if version == "" {
-		version = fmt.Sprintf("v1.0.0-%s", branch)
+		version = "v1.0.0-latest"
 	}
-	// Use branch/hash for context and imageIndex to enforce file name uniqueness.
+	chartName := options.sourceChart
+	if chartName == "" {
+		chartName = "test"
+	}
+	// Use chart name/version for context and helmIndex to enforce file name uniqueness.
 	// This avoids file name collision even if the test builds an image twice with
 	// a dirty repo state.
-	tmpDir := filepath.Join(artifactDir, branch, commitHash, strconv.Itoa(helmIndex))
-	if err := copyutil.CopyDir(repository.Root, tmpDir); err != nil {
-		return nil, fmt.Errorf("copying package directory: %v", err)
+	tmpDir := filepath.Join(artifactDir, chartName, version, strconv.Itoa(helmIndex))
+	if options.sourceChart != "" {
+		inputDir := "../testdata/helm-charts/" + options.sourceChart
+		if err := copyutil.CopyDir(inputDir, tmpDir); err != nil {
+			return nil, fmt.Errorf("copying package directory: %v", err)
+		}
+	}
+	for _, obj := range options.chartObjects {
+		fullPath := filepath.Join(tmpDir, "templates", fmt.Sprintf("%s-%s-%s-%s-%s.yaml",
+			obj.GetObjectKind().GroupVersionKind().Group,
+			obj.GetObjectKind().GroupVersionKind().Version,
+			obj.GetObjectKind().GroupVersionKind().Kind,
+			obj.GetNamespace(), obj.GetName()))
+		bytes, err := testkubeclient.SerializeObject(obj, ".yaml", options.scheme)
+		if err != nil {
+			return nil, err
+		}
+		if err = testkubeclient.WriteToFile(fullPath, bytes); err != nil {
+			return nil, err
+		}
+	}
+
+	// Ensure tmpDir always exists, even if it is an empty chart.
+	if err := os.MkdirAll(tmpDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("creating tmp dir: %w", err)
 	}
 	updateFn := func(chartMap map[string]interface{}) error {
 		chartMap["name"] = name
@@ -94,7 +134,6 @@ func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, repository
 		Name:           name,
 		Version:        version,
 		syncURL:        provider.SyncURL(name),
-		branch:         branch,
 		shell:          shell,
 		provider:       provider,
 	}
@@ -132,7 +171,6 @@ func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) er
 type HelmPackage struct {
 	localChartFile string
 	syncURL        string
-	branch         string
 	Name           string
 	Version        string
 	Digest         string

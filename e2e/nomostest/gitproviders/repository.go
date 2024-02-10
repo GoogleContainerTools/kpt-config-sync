@@ -15,7 +15,6 @@
 package gitproviders
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	jserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -36,7 +34,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/filesystem"
-	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -114,8 +111,6 @@ type Repository struct {
 	// Logger for methods to use.
 	Logger *testlogger.TestLogger
 
-	yamlSerializer *jserializer.Serializer
-
 	defaultWaitTimeout time.Duration
 	// isEmpty indicates whether the local repo has any commits
 	isEmpty bool
@@ -150,7 +145,6 @@ func NewRepository(
 		Logger:                logger,
 		GitProvider:           provider,
 		PrivateKeyPath:        privateKeyPath,
-		yamlSerializer:        jserializer.NewYAMLSerializer(jserializer.DefaultMetaFactory, scheme, scheme),
 		defaultWaitTimeout:    defaultWaitTimeout,
 		isEmpty:               true,
 	}
@@ -275,39 +269,12 @@ func (g *Repository) Init() error {
 // files is the behavior under test. In that case, use AddFile.
 func (g *Repository) Add(path string, obj client.Object) error {
 	testkubeclient.AddTestLabel(obj)
-
 	ext := filepath.Ext(path)
-	switch ext {
-	case ".yaml", ".yml":
-		// We must convert through JSON/Unstructured to avoid "omitempty" fields
-		// from being specified.
-		var err error
-		uObj, err := reconcile.AsUnstructuredSanitized(obj)
-		if err != nil {
-			return errors.Wrap(err, "sanitizing object")
-		}
-		// Encode converts to json then yaml, to handle "omitempty" directives.
-		bytes, err := runtime.Encode(g.yamlSerializer, uObj)
-		if err != nil {
-			return errors.Wrap(err, "encoding object as yaml")
-		}
-		return g.AddFile(path, bytes)
-	case ".json":
-		var err error
-		uObj, err := reconcile.AsUnstructuredSanitized(obj)
-		if err != nil {
-			return errors.Wrap(err, "sanitizing object")
-		}
-		bytes, err := json.MarshalIndent(uObj, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "encoding object as json")
-		}
-		return g.AddFile(path, bytes)
-	default:
-		// If you're seeing this error, use "AddFile" instead to test ignoring
-		// files with extensions we ignore.
-		return fmt.Errorf("invalid extension to write object to, %q, use .AddFile() instead", ext)
+	bytes, err := testkubeclient.SerializeObject(obj, ext, g.Scheme)
+	if err != nil {
+		return err
 	}
+	return g.AddFile(path, bytes)
 }
 
 // Get reads, parses, and returns the specified file as an object.
@@ -433,17 +400,9 @@ func (g *Repository) MustGetAll(t testing.NTB, dirPath string, recursive bool) [
 // Does not commit/push.
 func (g *Repository) AddFile(path string, bytes []byte) error {
 	absPath := filepath.Join(g.Root, path)
-
-	parentDir := filepath.Dir(absPath)
-	if err := os.MkdirAll(parentDir, fileMode); err != nil {
-		return errors.Wrapf(err, "creating directory: %s", parentDir)
+	if err := testkubeclient.WriteToFile(absPath, bytes); err != nil {
+		return err
 	}
-
-	// Write bytes to file.
-	if err := os.WriteFile(absPath, bytes, fileMode); err != nil {
-		return errors.Wrapf(err, "writing file: %s", absPath)
-	}
-
 	// Add the file to Git.
 	_, err := g.Git("add", absPath)
 	return err
@@ -497,21 +456,6 @@ func (g *Repository) Copy(sourceDir, destDir string) error {
 	// Add the directory to Git.
 	_, err := g.Git("add", absDestPath)
 	return err
-}
-
-// UseHelmChart copies the files from the provided helm chart to the current
-// repository.
-func (g *Repository) UseHelmChart(chart string) error {
-	if err := g.RemoveAll(); err != nil {
-		return err
-	}
-	if err := g.Copy(fmt.Sprintf("../testdata/helm-charts/%s/.", chart), "."); err != nil {
-		return err
-	}
-	if _, err := g.Git("add", "."); err != nil {
-		return err
-	}
-	return nil
 }
 
 // RemoveAll removes all files in the repository.

@@ -55,12 +55,12 @@ type hydrationOptions struct {
 func hydrationEnvs(opts hydrationOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	var syncDir string
-	switch v1beta1.SourceType(opts.sourceType) {
-	case v1beta1.OciSource:
+	switch configsync.SourceType(opts.sourceType) {
+	case configsync.OciSource:
 		syncDir = opts.ociConfig.Dir
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		syncDir = opts.gitConfig.Dir
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		syncDir = "."
 	}
 
@@ -122,11 +122,11 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 	var syncBranch string
 	var syncRevision string
 	var syncDir string
-	switch v1beta1.SourceType(opts.sourceType) {
-	case v1beta1.OciSource:
+	switch configsync.SourceType(opts.sourceType) {
+	case configsync.OciSource:
 		syncRepo = opts.ociConfig.Image
 		syncDir = opts.ociConfig.Dir
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		syncRepo = opts.helmConfig.Repo
 		syncDir = opts.helmConfig.Chart
 		if opts.helmConfig.Version != "" {
@@ -134,7 +134,7 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 		} else {
 			syncRevision = "latest"
 		}
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		syncRepo = opts.gitConfig.Repo
 		syncDir = opts.gitConfig.Dir
 		if opts.gitConfig.Branch != "" {

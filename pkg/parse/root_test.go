@@ -275,11 +275,11 @@ func TestRoot_Parse(t *testing.T) {
 			format:            filesystem.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parsed: []ast.FileObject{
-				fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(v1beta1.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
+				fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(configsync.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
 			},
 			want: []ast.FileObject{
 				fake.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", configsync.AuthNone),
-					fake.WithRootSyncSourceType(v1beta1.GitSource),
+					fake.WithRootSyncSourceType(configsync.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:observedGeneration":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),

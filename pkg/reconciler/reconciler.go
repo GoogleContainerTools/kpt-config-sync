@@ -23,7 +23,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
@@ -99,7 +98,7 @@ type Options struct {
 	// SourceRepo is the git or OCI or Helm repo being synced.
 	SourceRepo string
 	// SourceType is the type of the source repository, must be git or oci or Helm.
-	SourceType v1beta1.SourceType
+	SourceType configsync.SourceType
 	// SyncDir is the relative path to the configurations in the source.
 	SyncDir cmpath.Relative
 	// StatusMode controls the kpt applier to inject the actuation status data or not

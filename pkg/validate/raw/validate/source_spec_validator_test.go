@@ -62,9 +62,29 @@ func secret(secretName string) func(*v1beta1.RepoSync) {
 	}
 }
 
+func secretForHelm(secretName string) func(*v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Helm.SecretRef = &v1beta1.SecretReference{
+			Name: secretName,
+		}
+	}
+}
+
 func gcpSAEmail(email string) func(sync *v1beta1.RepoSync) {
 	return func(sync *v1beta1.RepoSync) {
 		sync.Spec.GCPServiceAccountEmail = email
+	}
+}
+
+func gcpSAEmailForOCI(email string) func(sync *v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Oci.GCPServiceAccountEmail = email
+	}
+}
+
+func gcpSAEmailForHelm(email string) func(sync *v1beta1.RepoSync) {
+	return func(sync *v1beta1.RepoSync) {
+		sync.Spec.Helm.GCPServiceAccountEmail = email
 	}
 }
 
@@ -86,7 +106,7 @@ func missingHelmChart(rs *v1beta1.RepoSync) {
 
 func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = string(configsync.GitSource)
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "fake repo",
 	}
@@ -98,7 +118,7 @@ func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 
 func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = string(configsync.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
 		Image: "fake image",
 	}
@@ -110,7 +130,7 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 
 func repoSyncWithHelm(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 		Repo:  "fake repo",
 		Chart: "fake chart",
@@ -141,7 +161,7 @@ func withHelm() func(*v1beta1.RepoSync) {
 
 func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = string(configsync.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
 		Repo:  "fake repo",
 		Chart: "fake chart",
@@ -202,9 +222,8 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			obj:  repoSyncWithGit(auth(configsync.AuthToken), secret("token"), proxy("ok proxy")),
 		},
 		{
-			name:    "illegal secret",
-			obj:     repoSyncWithGit(auth(configsync.AuthNone), secret("illegal secret")),
-			wantErr: fake.Error(InvalidSyncCode),
+			name: "secret ref is allowed when using none auth type",
+			obj:  repoSyncWithGit(auth(configsync.AuthNone), secret("any secret")),
 		},
 		{
 			name:    "missing secret",
@@ -231,6 +250,10 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			obj:     repoSyncWithGit(auth(configsync.AuthGCPServiceAccount)),
 			wantErr: fake.Error(InvalidSyncCode),
 		},
+		{
+			name: "GCP serviceaccount email is allowed with other auth types for git",
+			obj:  repoSyncWithGit(auth(configsync.AuthGCENode), gcpSAEmail("foo-bar@my-project.iam.gserviceaccount.com")),
+		},
 		// Validate OCI spec
 		{
 			name: "valid oci",
@@ -250,6 +273,10 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			name:    "missing GCP serviceaccount email for Oci",
 			obj:     repoSyncWithOci(ociAuth(configsync.AuthGCPServiceAccount)),
 			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name: "GCP serviceaccount email for Oci is allowed when using other auth types",
+			obj:  repoSyncWithOci(ociAuth(configsync.AuthK8sServiceAccount), gcpSAEmailForOCI("foo@my-project.iam.gserviceaccount.com")),
 		},
 		{
 			name:    "invalid source type",
@@ -290,6 +317,14 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			name:    "missing GCP serviceaccount email for Helm",
 			obj:     repoSyncWithHelm(helmAuth(configsync.AuthGCPServiceAccount)),
 			wantErr: fake.Error(InvalidSyncCode),
+		},
+		{
+			name: "secret ref for Helm is allowed when using other auth types",
+			obj:  repoSyncWithHelm(helmAuth(configsync.AuthK8sServiceAccount), secretForHelm("token")),
+		},
+		{
+			name: "GCP serviceaccount email for Helm is allowed when using other auth types",
+			obj:  repoSyncWithHelm(helmAuth(configsync.AuthK8sServiceAccount), gcpSAEmailForHelm("foo-bar@my-project.iam.gserviceaccount.com")),
 		},
 		{
 			name:    "redundant Helm spec",

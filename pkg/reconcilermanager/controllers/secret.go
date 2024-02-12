@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -35,28 +36,26 @@ func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 	if name, ok := getCACertName(rs); ok && useCACert(name) && secretName == ReconcilerResourceName(reconcilerName, name) {
 		return true
 	}
-	if shouldUpsertGitSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, v1beta1.GetSecretName(rs.Spec.Git.SecretRef)) {
-		return true
-	}
-	if shouldUpsertHelmSecret(rs) && secretName == ReconcilerResourceName(reconcilerName, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef)) {
+	secRef, shouldUpsert := shouldUpsertSecret(rs)
+	if shouldUpsert && secretName == ReconcilerResourceName(reconcilerName, v1beta1.GetSecretName(secRef)) {
 		return true
 	}
 	return false
 }
 
 func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
-	switch v1beta1.SourceType(rs.Spec.SourceType) {
-	case v1beta1.GitSource:
+	switch configsync.SourceType(rs.Spec.SourceType) {
+	case configsync.GitSource:
 		if rs.Spec.Git == nil || rs.Spec.Git.CACertSecretRef == nil {
 			return "", false
 		}
 		return v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef), true
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		if rs.Spec.Oci == nil || rs.Spec.Oci.CACertSecretRef == nil {
 			return "", false
 		}
 		return v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef), true
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if rs.Spec.Helm == nil || rs.Spec.Helm.CACertSecretRef == nil {
 			return "", false
 		}
@@ -66,12 +65,23 @@ func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
 	}
 }
 
-func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && rs.Spec.Git.SecretRef != nil && !SkipForAuth(rs.Spec.Auth)
-}
-
-func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource && rs.Spec.Helm != nil && rs.Spec.Helm.SecretRef != nil && !SkipForAuth(rs.Spec.Helm.Auth)
+func shouldUpsertSecret(rs *v1beta1.RepoSync) (*v1beta1.SecretReference, bool) {
+	sourceType := configsync.SourceType(rs.Spec.SourceType)
+	switch sourceType {
+	case configsync.GitSource:
+		upsert := validate.AuthRequiresSecret(sourceType, rs.Spec.Auth) &&
+			rs.Spec.Git != nil && rs.Spec.Git.SecretRef != nil
+		if upsert {
+			return rs.Spec.Git.SecretRef, true
+		}
+	case configsync.HelmSource:
+		upsert := validate.AuthRequiresSecret(sourceType, rs.Spec.Helm.Auth) &&
+			rs.Spec.Helm != nil && rs.Spec.Helm.SecretRef != nil
+		if upsert {
+			return rs.Spec.Helm.SecretRef, true
+		}
+	}
+	return nil, false
 }
 
 // upsertAuthSecret creates or updates the auth secret in the
@@ -79,27 +89,18 @@ func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
 // namespace.
 func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoSync, reconcilerRef types.NamespacedName, labelMap map[string]string) (client.ObjectKey, error) {
 	rsRef := client.ObjectKeyFromObject(rs)
-	switch {
-	case shouldUpsertGitSecret(rs):
-		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.SecretRef))
-		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
-		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
-		}
-		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
-		return cmsSecretRef, err
-	case shouldUpsertHelmSecret(rs):
-		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef))
-		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
-		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
-		}
-		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
-		return cmsSecretRef, err
-	default:
+	secRef, shouldUpsert := shouldUpsertSecret(rs)
+	if !shouldUpsert {
 		// No secret required
 		return client.ObjectKey{}, nil
 	}
+	nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(secRef))
+	userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
+	if err != nil {
+		return cmsSecretRef, errors.Wrapf(err, "user secret required for %s client authentication", rs.Spec.SourceType)
+	}
+	_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
+	return cmsSecretRef, err
 }
 
 // upsertCACertSecret creates or updates the CA cert secret in the
@@ -191,16 +192,4 @@ func GetSecretKeys(ctx context.Context, c client.Client, sRef types.NamespacedNa
 // getSecret secret using provided namespace and name.
 func getSecret(ctx context.Context, c client.Client, sRef types.NamespacedName, secret *corev1.Secret) error {
 	return c.Get(ctx, sRef, secret)
-}
-
-// SkipForAuth returns true if the passed auth is either 'none' or 'gcenode',
-// 'gcpserviceaccount', or 'k8sserviceaccount'.
-func SkipForAuth(auth configsync.AuthType) bool {
-	switch auth {
-	case configsync.AuthNone, configsync.AuthGCENode,
-		configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount:
-		return true
-	default:
-		return false
-	}
 }

@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
@@ -46,7 +45,7 @@ type FileSource struct {
 	// SyncDir is the path to the directory of policies within the source repository.
 	SyncDir cmpath.Relative
 	// SourceType is the type of the source repository, must be git or oci.
-	SourceType v1beta1.SourceType
+	SourceType configsync.SourceType
 	// SourceRepo is the source repo to sync.
 	SourceRepo string
 	// SourceBranch is the branch of the source repo to sync.

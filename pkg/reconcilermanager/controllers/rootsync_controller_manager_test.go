@@ -64,7 +64,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 
 	t.Log("building RootSync controller")
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
-	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, secretObj)
 
@@ -187,7 +187,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	t.Log("building RootSyncReconciler")
 	// rs is an invalid RootSync as its auth type is set to `token`, but the token key is not configured in the secret.
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeyToken), rootsyncSecretRef(rootsyncSSHKey))
-	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
 
@@ -260,7 +260,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 
 	t.Log("building RootSyncReconciler")
 	rs := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
-	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
 
@@ -498,7 +498,7 @@ func TestRootSyncReconcilerClusterRoleBindingDriftProtection(t *testing.T) {
 func testRootSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyFunc func(client.ObjectKey) client.ObjectKey, modify, validate func(client.Object) error) {
 	t.Log("building RootSyncReconciler")
 	syncObj := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
-	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
+	secretObj := secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(syncObj.Namespace))
 	fakeClient, _, testReconciler := setupRootReconciler(t, secretObj)
 	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
 }

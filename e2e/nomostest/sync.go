@@ -51,7 +51,7 @@ func RootSyncHasStatusSyncDirectory(dir string) testpredicates.Predicate {
 					configsync.RootSyncKind, i, log.AsJSON(condition), log.AsYAML(rs))
 			}
 		}
-		err := statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir)
+		err := statusHasSyncDirAndNoErrors(rs.Status.Status, configsync.SourceType(rs.Spec.SourceType), dir)
 		if err != nil {
 			return fmt.Errorf("%s %w:\n%s", configsync.RootSyncKind, err, log.AsYAML(rs))
 		}
@@ -82,7 +82,7 @@ func RepoSyncHasStatusSyncDirectory(dir string) testpredicates.Predicate {
 					configsync.RepoSyncKind, i, log.AsJSON(condition), log.AsYAML(rs))
 			}
 		}
-		err := statusHasSyncDirAndNoErrors(rs.Status.Status, v1beta1.SourceType(rs.Spec.SourceType), dir)
+		err := statusHasSyncDirAndNoErrors(rs.Status.Status, configsync.SourceType(rs.Spec.SourceType), dir)
 		if err != nil {
 			return fmt.Errorf("%s %w:\n%s", configsync.RepoSyncKind, err, log.AsYAML(rs))
 		}
@@ -189,7 +189,7 @@ func statusHasSyncCommitAndNoErrors(status v1beta1.Status, sha1 string) error {
 	return nil
 }
 
-func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.SourceType, dir string) error {
+func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType configsync.SourceType, dir string) error {
 	if status.Source.ErrorSummary != nil && status.Source.ErrorSummary.TotalCount > 0 {
 		return fmt.Errorf("status.source contains %d errors", status.Source.ErrorSummary.TotalCount)
 	}
@@ -203,7 +203,7 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.Sourc
 		return fmt.Errorf("status.rendering.message %q does not indicate a successful state", message)
 	}
 	switch sourceType {
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		if status.Source.Oci == nil {
 			return fmt.Errorf("status.source.oci is nil")
 		}
@@ -222,7 +222,7 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.Sourc
 		if ociDir := status.Rendering.Oci.Dir; ociDir != dir {
 			return fmt.Errorf("status.rendering.oci.dir %q does not match the provided directory %q", ociDir, dir)
 		}
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		if status.Source.Git == nil {
 			return fmt.Errorf("status.source.git is nil")
 		}
@@ -241,7 +241,7 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType v1beta1.Sourc
 		if gitDir := status.Rendering.Git.Dir; gitDir != dir {
 			return fmt.Errorf("status.rendering.git.dir %q does not match the provided directory %q", gitDir, dir)
 		}
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if status.Source.Helm == nil {
 			return fmt.Errorf("status.source.helm is nil")
 		}

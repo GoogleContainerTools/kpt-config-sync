@@ -83,7 +83,7 @@ func TestPublicOCI(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, publicARImage))
+		configsync.OciSource, publicARImage))
 	err := nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByName(publicARImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
@@ -127,7 +127,7 @@ func TestGCENodeOCI(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, privateARImage()))
+		configsync.OciSource, tenant, privateARImage()))
 	err := nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByName(privateARImage())),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
@@ -202,7 +202,7 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		})); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
@@ -260,7 +260,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	if err := nt.KubeClient.Apply(repoSyncOCI); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
@@ -288,7 +288,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.
-func isSourceType(sourceType v1beta1.SourceType) testpredicates.Predicate {
+func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -333,7 +333,7 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, image))
+		configsync.OciSource, image))
 	nt.WaitForRepoSyncs(nomostest.WithRootSha1Func(fixedOCIDigest(digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
 	validateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")

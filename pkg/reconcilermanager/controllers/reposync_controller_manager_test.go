@@ -52,7 +52,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 
 	t.Log("building RepoSync controller")
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(GitSecretConfigKeySSH), reposyncSecretRef(reposyncSSHKey))
-	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, secretObj)
 
@@ -175,7 +175,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	t.Log("building RepoSyncReconciler")
 	// rs is an invalid RepoSync as its auth type is set to `token`, but the token key is not configured in the secret.
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(reposyncSSHKey))
-	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
 
@@ -248,7 +248,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 
 	t.Log("building RepoSyncReconciler")
 	rs := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
-	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rs.Namespace))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs.Namespace))
 
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
 
@@ -539,7 +539,7 @@ func TestRepoSyncReconcilerAuthSecretDriftProtection(t *testing.T) {
 func testRepoSyncDriftProtection(t *testing.T, exampleObj client.Object, objKeyFunc func(client.ObjectKey) client.ObjectKey, modify, validate func(client.Object) error) {
 	t.Log("building RepoSyncReconciler")
 	syncObj := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
-	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(syncObj.Namespace))
+	secretObj := secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(syncObj.Namespace))
 	fakeClient, _, testReconciler := setupNSReconciler(t, secretObj)
 	testDriftProtection(t, fakeClient, testReconciler, syncObj, exampleObj, objKeyFunc, modify, validate)
 }

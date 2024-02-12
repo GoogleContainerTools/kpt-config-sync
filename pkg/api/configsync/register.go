@@ -14,7 +14,12 @@
 
 package configsync
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"golang.org/x/exp/slices"
+)
 
 const (
 	// GroupName is the name of the group of configsync resources.
@@ -89,6 +94,20 @@ const (
 	DefaultHelmReleaseNamespace = "default"
 )
 
+// SourceType specifies the type of the source of truth.
+type SourceType string
+
+const (
+	// GitSource represents the source type is Git repository.
+	GitSource SourceType = "git"
+
+	// OciSource represents the source type is OCI package.
+	OciSource SourceType = "oci"
+
+	// HelmSource represents the source type is Helm repository.
+	HelmSource SourceType = "helm"
+)
+
 // AuthType specifies the type to authenticate to a repository.
 type AuthType string
 
@@ -123,3 +142,44 @@ const (
 	// declared to be created by the reconciler.
 	NamespaceStrategyExplicit NamespaceStrategy = "explicit"
 )
+
+// supportedAuthTypes returns a list of supported auth types for the given source type.
+func supportedAuthTypes(sourceType SourceType) []string {
+	switch sourceType {
+	case GitSource:
+		return []string{
+			string(AuthSSH),
+			string(AuthCookieFile),
+			string(AuthGCENode),
+			string(AuthToken),
+			string(AuthNone),
+			string(AuthGCPServiceAccount),
+		}
+	case OciSource:
+		return []string{
+			string(AuthGCPServiceAccount),
+			string(AuthK8sServiceAccount),
+			string(AuthGCENode),
+			string(AuthNone),
+		}
+	case HelmSource:
+		return []string{
+			string(AuthGCPServiceAccount),
+			string(AuthK8sServiceAccount),
+			string(AuthToken),
+			string(AuthGCENode),
+			string(AuthNone),
+		}
+	}
+	return nil
+}
+
+// SupportedAuthTypes returns a list of the supported auth types in a string for the given source type.
+func SupportedAuthTypes(sourceType SourceType) string {
+	return strings.Join(supportedAuthTypes(sourceType), ", ")
+}
+
+// IsAuthTypeSupported checks if the provided auth type is supported for the given source type.
+func IsAuthTypeSupported(sourceType SourceType, authType AuthType) bool {
+	return slices.Contains(supportedAuthTypes(sourceType), string(authType))
+}

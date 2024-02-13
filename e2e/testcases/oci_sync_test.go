@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
@@ -60,11 +61,6 @@ const (
 // The test environment GCR is assumed to be private.
 func privateGCRImage() string {
 	return fmt.Sprintf("%s/%s/config-sync-test/kustomize-components:v1", nomostesting.GCRHost, *e2e.GCPProject)
-}
-
-// privateARImage() pulls the private OCI image by tag
-func privateARImage() string {
-	return fmt.Sprintf("%s/%s/config-sync-test-private/kustomize-components:v1", nomostesting.ARHost, *e2e.GCPProject)
 }
 
 func gsaARReaderEmail() string {
@@ -116,20 +112,27 @@ func TestPublicOCI(t *testing.T) {
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest)
+		ntopts.RequireGKE(t), ntopts.GCENodeTest, ntopts.RequireOCIArtifactRegistry(t))
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	tenant := "tenant-a"
-
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	image, err := nt.BuildAndPushOCIImage(
+		nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.ImageSourcePackage("kustomize-components"),
+		registryproviders.ImageVersion("v1"))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, privateARImage()))
-	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(privateARImage())),
+		v1beta1.OciSource, tenant, image.FloatingTag()))
+	err = nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
@@ -168,24 +171,26 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		Namespace: namespace,
 	}
 
+	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
-	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+
 	// OCI image will only contain the bookinfo-admin role
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/role.yaml", bookinfoRole))
-	image, err := nt.BuildAndPushOCIImage(nt.NonRootRepos[rsNN])
+	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	// Remote git branch will only contain the bookinfo-sa ServiceAccount
-	nt.Must(nt.NonRootRepos[rsNN].Remove("acme/role.yaml"))
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
-	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
+	if err := nt.Validate(bookinfoSA.Name, bookinfoSA.Namespace, &corev1.ServiceAccount{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.ValidateNotFound(bookinfoRole.Name, namespace, &rbacv1.Role{}); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -205,11 +210,11 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
+	if err := nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Error(err)
 	}
-	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
+	if err := nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}); err != nil {
 		nt.T.Error(err)
 	}
 }
@@ -228,18 +233,17 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 		Namespace: namespace,
 	}
 
+	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
+	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+
+	// OCI image will only contain the bookinfo-admin role
 	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
-	// OCI image will only contain the bookinfo-admin Role
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/role.yaml", bookinfoRole))
-	image, err := nt.BuildAndPushOCIImage(nt.NonRootRepos[rsNN])
+	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	// Remote git branch will only contain the bookinfo-sa ServiceAccount
-	nt.Must(nt.NonRootRepos[rsNN].Remove("acme/role.yaml"))
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
-	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -247,13 +251,14 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 
 	// Verify the manual configuration: switch from Git to OCI
 	// Verify the default sourceType is set when not specified.
-	if err := nt.Validate("bookinfo-sa", namespace, &corev1.ServiceAccount{},
+	if err := nt.Validate(bookinfoSA.Name, namespace, &corev1.ServiceAccount{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.ValidateNotFound("bookinfo-admin", namespace, &rbacv1.Role{}); err != nil {
+	if err := nt.ValidateNotFound(bookinfoRole.Name, namespace, &rbacv1.Role{}); err != nil {
 		nt.T.Fatal(err)
 	}
+
 	// Switch from Git to OCI
 	repoSyncOCI := nt.RepoSyncObjectOCI(rsNN, image)
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
@@ -269,11 +274,11 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate("bookinfo-admin", namespace, &rbacv1.Role{},
+	if err := nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.ValidateNotFound("bookinfo-sa", namespace, &corev1.ServiceAccount{}); err != nil {
+	if err := nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}); err != nil {
 		nt.T.Fatal(err)
 	}
 

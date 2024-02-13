@@ -54,6 +54,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		fleetWITest                 bool
 		crossProject                bool
 		sourceRepo                  string
+		sourcePackage               string
 		sourceChart                 string
 		sourceVersion               string
 		sourceType                  v1beta1.SourceType
@@ -61,6 +62,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		rootCommitFn                nomostest.Sha1Func
 		testKSAMigration            bool
 		requireHelmArtifactRegistry bool
+		requireOCIArtifactRegistry  bool
 	}{
 		{
 			name:         "Authenticate to Git repo on CSR with GKE WI",
@@ -90,14 +92,15 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
 		},
 		{
-			name:             "Authenticate to OCI image on AR with GKE WI",
-			fleetWITest:      false,
-			crossProject:     false,
-			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByName(privateARImage()),
-			testKSAMigration: true,
+			name:                       "Authenticate to OCI image on AR with GKE WI",
+			fleetWITest:                false,
+			crossProject:               false,
+			sourcePackage:              "kustomize-components",
+			sourceVersion:              "v1",
+			sourceType:                 v1beta1.OciSource,
+			gsaEmail:                   gsaARReaderEmail(),
+			testKSAMigration:           true,
+			requireOCIArtifactRegistry: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with GKE WI",
@@ -109,14 +112,15 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
 		},
 		{
-			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
-			fleetWITest:      true,
-			crossProject:     false,
-			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByName(privateARImage()),
-			testKSAMigration: true,
+			name:                       "Authenticate to OCI image on AR with Fleet WI in the same project",
+			fleetWITest:                true,
+			crossProject:               false,
+			sourcePackage:              "kustomize-components",
+			sourceVersion:              "v1",
+			sourceType:                 v1beta1.OciSource,
+			gsaEmail:                   gsaARReaderEmail(),
+			testKSAMigration:           true,
+			requireOCIArtifactRegistry: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI in the same project",
@@ -128,14 +132,15 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
 		},
 		{
-			name:             "Authenticate to OCI image on AR with Fleet WI across project",
-			fleetWITest:      true,
-			crossProject:     true,
-			sourceRepo:       privateARImage(),
-			sourceType:       v1beta1.OciSource,
-			gsaEmail:         gsaARReaderEmail(),
-			rootCommitFn:     imageDigestFuncByName(privateARImage()),
-			testKSAMigration: true,
+			name:                       "Authenticate to OCI image on AR with Fleet WI across project",
+			fleetWITest:                true,
+			crossProject:               true,
+			sourcePackage:              "kustomize-components",
+			sourceVersion:              "v1",
+			sourceType:                 v1beta1.OciSource,
+			gsaEmail:                   gsaARReaderEmail(),
+			testKSAMigration:           true,
+			requireOCIArtifactRegistry: true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI across project",
@@ -190,6 +195,9 @@ func TestWorkloadIdentity(t *testing.T) {
 			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t)}
 			if tc.requireHelmArtifactRegistry {
 				opts = append(opts, ntopts.RequireHelmArtifactRegistry(t))
+			}
+			if tc.requireOCIArtifactRegistry {
+				opts = append(opts, ntopts.RequireOCIArtifactRegistry(t))
 			}
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err := workloadidentity.ValidateEnabled(nt); err != nil {
@@ -251,8 +259,9 @@ func TestWorkloadIdentity(t *testing.T) {
 
 			// For helm charts, we need to push the chart to the AR before configuring the RootSync
 			if tc.sourceType == v1beta1.HelmSource {
-				nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(tc.sourceChart))
-				chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(tc.sourceVersion))
+				chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(rs.Name),
+					registryproviders.HelmSourceChart(tc.sourceChart),
+					registryproviders.HelmChartVersion(tc.sourceVersion))
 				if err != nil {
 					nt.T.Fatalf("failed to push helm chart: %v", err)
 				}
@@ -261,6 +270,19 @@ func TestWorkloadIdentity(t *testing.T) {
 				tc.sourceChart = chart.Name
 				tc.sourceVersion = chart.Version
 				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
+			} else if tc.sourceType == v1beta1.OciSource && tc.requireOCIArtifactRegistry {
+				// It only builds and pushes OCI image when the source type is `oci` and
+				// when the registryprovider is GAR.
+				// TODO: remove the requireOCIArtifactRegistry check when GCR is end of life.
+				image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(rs.Name),
+					registryproviders.ImageSourcePackage(tc.sourcePackage),
+					registryproviders.ImageVersion(tc.sourceVersion))
+				if err != nil {
+					nt.T.Fatalf("failed to push oci image: %v", err)
+				}
+
+				tc.sourceRepo = image.FloatingTag()
+				tc.rootCommitFn = imageDigestFuncByDigest(image.Digest)
 			}
 
 			// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
@@ -334,8 +356,9 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 	sourceChart := ""
 	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
 		// Change the source repo to guarantee new resources can be reconciled with k8sserviceaccount
-		nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
-		chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(privateSimpleHelmChartVersion))
+		chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(rs.Name),
+			registryproviders.HelmSourceChart(privateSimpleHelmChart),
+			registryproviders.HelmChartVersion(privateSimpleHelmChartVersion))
 
 		if err != nil {
 			nt.T.Fatalf("failed to push helm chart: %v", err)

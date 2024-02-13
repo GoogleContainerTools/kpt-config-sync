@@ -40,6 +40,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -403,8 +404,8 @@ func TestHelmDefaultNamespace(t *testing.T) {
 		ntopts.Unstructured,
 	)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateSimpleHelmChart))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -451,9 +452,10 @@ func TestHelmLatestVersion(t *testing.T) {
 		ntopts.Unstructured,
 	)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateSimpleHelmChart))
 	newVersion := "1.0.0"
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateSimpleHelmChart),
+		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -474,7 +476,9 @@ func TestHelmLatestVersion(t *testing.T) {
 
 	// helm-sync automatically detects and updates to the new helm chart version
 	newVersion = "2.5.9"
-	chart, err = nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
+	chart, err = nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateSimpleHelmChart),
+		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -484,7 +488,9 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	newVersion = "3.0.0"
-	chart, err = nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName], registryproviders.HelmChartVersion(newVersion))
+	chart, err = nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateSimpleHelmChart),
+		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -524,9 +530,9 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 
-	nt.T.Log("Push cluster-scoped resources to helm repo")
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add("templates/ns.yaml", fake.NamespaceObject("foo-ns")))
-	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN])
+	nt.T.Log("Build a Helm chart with cluster-scoped resources")
+	chart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
+		registryproviders.HelmChartObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -537,10 +543,10 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart with cluster-scoped resources"))
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 
-	nt.T.Log("Remove cluster-scope resource from helm repo, add namespace-scope resource")
-	nt.Must(nt.NonRootRepos[repoSyncNN].Remove("templates/ns.yaml"))
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add("templates/cm.yaml", fake.ConfigMapObject(core.Name("foo-cm"))))
-	validChart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN], registryproviders.HelmChartVersion("v1.1.0"))
+	nt.T.Log("Update the helm chart with only a namespace-scope resource")
+	validChart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
+		registryproviders.HelmChartObjects(nt.Scheme, fake.ConfigMapObject(core.Name("foo-cm"))),
+		registryproviders.HelmChartVersion("v1.1.0"))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -570,8 +576,8 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	cmName := "helm-cm-ns-repo-1"
 
-	nt.Must(nt.NonRootRepos[repoSyncNN].UseHelmChart(privateNSHelmChart))
-	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[repoSyncNN])
+	chart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
+		registryproviders.HelmSourceChart(privateNSHelmChart))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -667,8 +673,12 @@ func TestHelmGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest, ntopts.RequireHelmArtifactRegistry(t))
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateCoreDNSHelmChart))
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	if err := workloadidentity.ValidateDisabled(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateCoreDNSHelmChart))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -745,8 +755,8 @@ func TestHelmARTokenAuth(t *testing.T) {
 		nt.MustKubectl("delete", "secret", "foo", "-n", configsync.ControllerNamespace, "--ignore-not-found")
 	})
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart(privateCoreDNSHelmChart))
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart(privateCoreDNSHelmChart))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -772,7 +782,7 @@ func TestHelmEmptyChart(t *testing.T) {
 		ntopts.Unstructured,
 	)
 
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}

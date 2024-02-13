@@ -16,43 +16,115 @@ package registryproviders
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/kyaml/copyutil"
 )
 
 // use an auto-incrementing index to create unique file names for tarballs
 var imageIndex int
 
+type imageOptions struct {
+	version       string
+	sourcePackage string
+	objects       []client.Object
+	scheme        *runtime.Scheme
+}
+
+// ImageOption is an optional parameter when building an OCI image.
+type ImageOption func(options *imageOptions)
+
+// ImageVersion builds the image with the specified version.
+func ImageVersion(version string) func(options *imageOptions) {
+	return func(options *imageOptions) {
+		options.version = version
+	}
+}
+
+// ImageSourcePackage builds the image with the specified package name.
+// It should be a subfolder under '../testdata/hydration'.
+func ImageSourcePackage(sourcePackage string) func(options *imageOptions) {
+	return func(options *imageOptions) {
+		options.sourcePackage = sourcePackage
+	}
+}
+
+// ImageInputObjects builds the image with the specified objects.
+// A scheme must be provided to encode the object.
+func ImageInputObjects(scheme *runtime.Scheme, objs ...client.Object) func(options *imageOptions) {
+	return func(options *imageOptions) {
+		options.scheme = scheme
+		options.objects = objs
+	}
+}
+
 // BuildImage creates a new OCIImage object and associated tarball using the provided
 // Repository. The contents of the git repository will be bundled into a tarball
 // at the artifactDir. The resulting OCIImage object can be pushed to a remote
 // registry using its Push method.
-func BuildImage(artifactDir string, shell *testshell.TestShell, repository *gitproviders.Repository, provider RegistryProvider) (*OCIImage, error) {
-	commitHash, err := repository.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("getting hash: %w", err)
+func BuildImage(artifactDir string, shell *testshell.TestShell, provider RegistryProvider, rsRef types.NamespacedName, opts ...ImageOption) (*OCIImage, error) {
+	options := imageOptions{}
+	for _, opt := range opts {
+		opt(&options)
 	}
-	branch, err := repository.CurrentBranch()
-	if err != nil {
-		return nil, fmt.Errorf("getting branch: %w", err)
+
+	// Use latest as a floating tag when a version is not specified
+	version := options.version
+	if version == "" {
+		version = "latest"
 	}
-	// Use branch/hash for context and imageIndex to enforce file name uniqueness.
+	packageName := options.sourcePackage
+	if options.sourcePackage == "" {
+		packageName = "test"
+	}
+
+	// Use package name/version for context and imageIndex to enforce file name uniqueness.
 	// This avoids file name collision even if the test builds an image twice with
 	// a dirty repo state.
-	localSourceTgzPath := filepath.Join(artifactDir,
-		fmt.Sprintf("%s-%s-%d.tgz", branch, commitHash, imageIndex))
+	tmpDir := filepath.Join(artifactDir, packageName, version, strconv.Itoa(imageIndex))
+	if options.sourcePackage != "" {
+		inputDir := "../testdata/hydration/" + options.sourcePackage
+		if err := copyutil.CopyDir(inputDir, tmpDir); err != nil {
+			return nil, fmt.Errorf("copying package directory: %v", err)
+		}
+	}
+	for _, obj := range options.objects {
+		fullPath := filepath.Join(tmpDir, fmt.Sprintf("%s-%s-%s-%s-%s.yaml",
+			obj.GetObjectKind().GroupVersionKind().Group,
+			obj.GetObjectKind().GroupVersionKind().Version,
+			obj.GetObjectKind().GroupVersionKind().Kind,
+			obj.GetNamespace(), obj.GetName()))
+		bytes, err := testkubeclient.SerializeObject(obj, ".yaml", options.scheme)
+		if err != nil {
+			return nil, err
+		}
+		if err = testkubeclient.WriteToFile(fullPath, bytes); err != nil {
+			return nil, err
+		}
+	}
+
+	// Ensure tmpDir always exists, even if it is an empty package.
+	if err := os.MkdirAll(tmpDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("creating tmp dir: %w", err)
+	}
+	localSourceTgzPath := filepath.Join(artifactDir, fmt.Sprintf("%s-%s-%d.tgz", packageName, version, imageIndex))
 	imageIndex++
-	if _, err := shell.ExecWithDebug("tar", "-cvzf", localSourceTgzPath, repository.Root); err != nil {
+	if _, err := shell.ExecWithDebug("tar", "-cvzf", localSourceTgzPath, "-C", tmpDir, "."); err != nil {
 		return nil, fmt.Errorf("packaging image: %w", err)
 	}
 	image := &OCIImage{
 		localSourceTgzPath: localSourceTgzPath,
-		Name:               repository.Name,
-		syncURL:            provider.SyncURL(repository.Name),
-		branch:             branch,
+		Name:               rsRef.String(),
+		syncURL:            provider.SyncURL(rsRef.String()),
+		version:            version,
 		shell:              shell,
 		provider:           provider,
 	}
@@ -66,21 +138,18 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, repository *gitp
 type OCIImage struct {
 	localSourceTgzPath string
 	syncURL            string
-	branch             string
+	version            string
 	Name               string
 	Digest             string
 	shell              *testshell.TestShell
 	provider           RegistryProvider
 }
 
-// FloatingBranchTag returns the floating tag that initially points to this image.
+// FloatingTag returns the floating tag that initially points to this image.
 // This tag is suitable for use on RSync object spec but not for interacting with
 // the image from the test suite.
-// This uses the git branch as a version, such that the tag will be updated
-// whenever a new image is pushed from the git branch. This enables syncing
-// to an OCI image similar to a git branch.
-func (o *OCIImage) FloatingBranchTag() string {
-	return fmt.Sprintf("%s:%s", o.syncURL, o.branch)
+func (o *OCIImage) FloatingTag() string {
+	return fmt.Sprintf("%s:%s", o.syncURL, o.version)
 }
 
 // DigestTag returns the image tag formed using the image digest.
@@ -92,7 +161,7 @@ func (o *OCIImage) DigestTag() string {
 
 // Push the image to the remote registry using the provided registry endpoint.
 func (o *OCIImage) Push(registry string) error {
-	imageTag := fmt.Sprintf("%s:%s", registry, o.branch)
+	imageTag := fmt.Sprintf("%s:%s", registry, o.version)
 	_, err := o.shell.ExecWithDebug("crane", "append",
 		"-f", o.localSourceTgzPath,
 		"-t", imageTag)

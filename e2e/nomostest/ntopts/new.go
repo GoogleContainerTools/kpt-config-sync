@@ -101,10 +101,18 @@ func RequireKind(t testing.NTB) Opt {
 	return func(opt *New) {}
 }
 
-// RequireHelmArtifactRegistry requires the --helm-provider flag to be set to artifact_registry
+// RequireHelmArtifactRegistry requires the --helm-provider flag to be set to gar
 func RequireHelmArtifactRegistry(t testing.NTB) Opt {
 	if *e2e.HelmProvider != e2e.ArtifactRegistry {
-		t.Skip("The --helm-provider flag must be set to `artifact_registry` to run this test.")
+		t.Skip("The --helm-provider flag must be set to `gar` to run this test.")
+	}
+	return func(opt *New) {}
+}
+
+// RequireOCIArtifactRegistry requires the --oci-provider flag to be set to gar
+func RequireOCIArtifactRegistry(t testing.NTB) Opt {
+	if *e2e.OCIProvider != e2e.ArtifactRegistry {
+		t.Skip("The --oci-provider flag must be set to `gar` to run this test.")
 	}
 	return func(opt *New) {}
 }

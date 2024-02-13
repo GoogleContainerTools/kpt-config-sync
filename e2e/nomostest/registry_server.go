@@ -23,9 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -114,21 +114,21 @@ func installRegistryServer(nt *NT) error {
 // BuildAndPushOCIImage uses the current file system state of the provided Repository
 // to build an OCI image and push it to the current OCIProvider. The resulting
 // OCIImage object can be used to set the spec.oci.image field on the RSync.
-func (nt *NT) BuildAndPushOCIImage(repository *gitproviders.Repository) (*registryproviders.OCIImage, error) {
+func (nt *NT) BuildAndPushOCIImage(rsRef types.NamespacedName, options ...registryproviders.ImageOption) (*registryproviders.OCIImage, error) {
 	// Construct artifactDir using TmpDir. TmpDir is scoped to each test case and
 	// cleaned up after the test.
-	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "oci", repository.Name)
+	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "oci", rsRef.Namespace, rsRef.Name)
 	if err := os.MkdirAll(artifactDir, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("creating artifact dir: %w", err)
 	}
-	image, err := registryproviders.BuildImage(artifactDir, nt.Shell, repository, nt.OCIProvider)
+	image, err := registryproviders.BuildImage(artifactDir, nt.Shell, nt.OCIProvider, rsRef, options...)
 	if err != nil {
 		return nil, err
 	}
 	// Track image for cleanup and for recovering from a LocalProvider crash.
 	nt.ociImages = append(nt.ociImages, image)
 
-	address, err := nt.OCIProvider.PushURL(repository.Name)
+	address, err := nt.OCIProvider.PushURL(rsRef.String())
 	if err != nil {
 		return nil, fmt.Errorf("getting OCIPushURL: %w", err)
 	}
@@ -143,14 +143,14 @@ func (nt *NT) BuildAndPushOCIImage(repository *gitproviders.Repository) (*regist
 // BuildAndPushHelmPackage uses the current file system state of the provided Repository
 // to build a helm package and push it to the current HelmProvider. The resulting
 // HelmPackage object can be used to set the spec.oci.image field on the RSync.
-func (nt *NT) BuildAndPushHelmPackage(repository *gitproviders.Repository, options ...registryproviders.HelmOption) (*registryproviders.HelmPackage, error) {
+func (nt *NT) BuildAndPushHelmPackage(rsRef types.NamespacedName, options ...registryproviders.HelmOption) (*registryproviders.HelmPackage, error) {
 	// Construct artifactDir using TmpDir. TmpDir is scoped to each test case and
 	// cleaned up after the test.
-	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "helm", repository.Name)
+	artifactDir := filepath.Join(nt.TmpDir, "artifacts", "helm", rsRef.Namespace, rsRef.Name)
 	if err := os.MkdirAll(artifactDir, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("creating artifact dir: %w", err)
 	}
-	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, repository, nt.HelmProvider, options...)
+	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, nt.HelmProvider, rsRef, options...)
 	if err != nil {
 		return nil, err
 	}

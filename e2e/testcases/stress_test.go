@@ -485,16 +485,13 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 	crCount := 50
 
 	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
-	// Remove safety namespace/clusterrole
-	nt.Must(nt.RootRepos[configsync.RootSyncName].RemoveAll())
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
-		fmt.Sprintf("ns-%s.yaml", ns), fake.NamespaceObject(ns)))
+	var packageObjs []client.Object
+	packageObjs = append(packageObjs, fake.NamespaceObject(ns))
 
 	for i := 1; i <= crdCount; i++ {
 		group := fmt.Sprintf("acme-%d.com", i)
 		crd := fakeCRD(kind, group)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
-			fmt.Sprintf("crd-%s.yaml", crd.Name), crd))
+		packageObjs = append(packageObjs, crd)
 		gvk := schema.GroupVersionKind{
 			Group:   group,
 			Kind:    kind,
@@ -502,13 +499,12 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 		}
 		for j := 1; j <= crCount; j++ {
 			cr := fakeCR(fmt.Sprintf("%s-%d", strings.ToLower(kind), j), ns, gvk)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
-				fmt.Sprintf("namespaces/%s/%s-%s.yaml", ns, crd.Name, cr.GetName()), cr))
+			packageObjs = append(packageObjs, cr)
 		}
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespaces, CRDs, and CRs"))
 
-	image, err := nt.BuildAndPushOCIImage(nt.RootRepos[configsync.RootSyncName])
+	image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.ImageInputObjects(nt.Scheme, packageObjs...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -544,8 +540,7 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 	}
 
 	nt.T.Log("Remove all files and publish an empty OCI image")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].RemoveAll())
-	emptyImage, err := nt.BuildAndPushOCIImage(nt.RootRepos[configsync.RootSyncName])
+	emptyImage, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -588,8 +583,8 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart("anvil-set"))
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart("anvil-set"))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -636,8 +631,8 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 			client.InNamespace(ns))
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].UseHelmChart("empty"))
-	emptyChart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName],
+	emptyChart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmSourceChart("empty"),
 		registryproviders.HelmChartVersion("v1.1.0"))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)

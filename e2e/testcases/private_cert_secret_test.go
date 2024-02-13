@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -397,16 +398,14 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns.yaml", fake.NamespaceObject("foo-ns")))
-
-	image, err := nt.BuildAndPushOCIImage(nt.RootRepos[configsync.RootSyncName])
+	image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName), registryproviders.ImageInputObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Set the RootSync to sync the OCI image without providing a CA cert")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, image.FloatingBranchTag()))
+		v1beta1.OciSource, image.FloatingTag()))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
@@ -437,10 +436,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
 
 	cm := fake.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
-
-	nt.Must(nt.NonRootRepos[nn].Add("ns.yaml", cm))
-
-	image, err := nt.BuildAndPushOCIImage(nt.NonRootRepos[nn])
+	image, err := nt.BuildAndPushOCIImage(nn, registryproviders.ImageInputObjects(nt.Scheme, cm))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -448,7 +444,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	nt.T.Log("Set the RepoSync to sync the OCI image without providing a CA cert")
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingBranchTag(),
+		Image: image.FloatingTag(),
 		Auth:  "none",
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
@@ -507,9 +503,8 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("templates/ns.yaml", fake.NamespaceObject("foo-ns")))
-
-	chart, err := nt.BuildAndPushHelmPackage(nt.RootRepos[configsync.RootSyncName])
+	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+		registryproviders.HelmChartObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -551,10 +546,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
 
 	cm := fake.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
-
-	nt.Must(nt.NonRootRepos[nn].Add("templates/ns.yaml", cm))
-
-	chart, err := nt.BuildAndPushHelmPackage(nt.NonRootRepos[nn])
+	chart, err := nt.BuildAndPushHelmPackage(nn, registryproviders.HelmChartObjects(nt.Scheme, cm))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -226,8 +226,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
       - args:
         - --config=/conf/otel-agent-config.yaml
         command:
@@ -281,8 +282,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - mountPath: /conf
           name: otel-agent-config-vol
@@ -292,3 +294,9 @@ spec:
       - configMap:
           name: resource-group-otel-agent
         name: otel-agent-config-vol
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

@@ -47,6 +47,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         resources:
           requests:
             cpu: 10m
@@ -81,6 +84,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - name: otel-agent-config-vol
           mountPath: /conf
@@ -140,4 +146,7 @@ spec:
           name: otel-agent
       securityContext:
         runAsUser: 1000
+        runAsGroup: 1000
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

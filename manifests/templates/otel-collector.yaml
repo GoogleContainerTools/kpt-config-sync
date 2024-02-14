@@ -115,6 +115,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - name: otel-collector-config-vol
           mountPath: /conf
@@ -138,3 +141,6 @@ spec:
         fsGroup: 2000
         runAsNonRoot: true
         runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault

@@ -127,9 +127,6 @@ func gitDeployment() *appsv1.Deployment {
 		core.Namespace(testGitNamespace),
 		core.Labels(testGitServerSelector()),
 	)
-	if *e2e.GKEAutopilot {
-		deployment.SetAnnotations(map[string]string{safeToEvictAnnotation: "false"})
-	}
 	gitGID := int64(1000)
 	deployment.Spec = appsv1.DeploymentSpec{
 		MinReadySeconds: 2,
@@ -138,6 +135,9 @@ func gitDeployment() *appsv1.Deployment {
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: testGitServerSelector(),
+				Annotations: map[string]string{
+					safeToEvictAnnotation: "false",
+				},
 			},
 			Spec: corev1.PodSpec{
 				Volumes: []corev1.Volume{

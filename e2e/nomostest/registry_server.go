@@ -238,6 +238,9 @@ func registryDeployment() *appsv1.Deployment {
 		Template: v1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: testRegistryServerSelector(),
+				Annotations: map[string]string{
+					safeToEvictAnnotation: "false",
+				},
 			},
 			Spec: v1.PodSpec{
 				Volumes: []v1.Volume{

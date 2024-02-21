@@ -162,10 +162,9 @@ spec:
       labels:
         app: prometheus-server
       annotations:
-        # Allow eviction & rescheduling by cluster-autoscaler.
-        # This will delete ephemeral metrics storage,
-        # but is required for usage on GKE Autopilot.
-        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        # Prevent eviction & rescheduling by cluster-autoscaler.
+        # This preserves ephemeral metrics storage.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     spec:
       containers:
         - name: prometheus

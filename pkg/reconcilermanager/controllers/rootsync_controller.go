@@ -896,11 +896,6 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		return nil
 	}
 
-	secretName := ReconcilerResourceName(reconcilerName, rootSync.Spec.SecretRef.Name)
-	if errs := validation.IsDNS1123Label(secretName); errs != nil {
-		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
-	}
-
 	secret, err := validateSecretExist(ctx,
 		v1beta1.GetSecretName(rootSync.Spec.SecretRef),
 		rootSync.Namespace,

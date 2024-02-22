@@ -15,9 +15,9 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
 	rbacv1 "k8s.io/api/rbac/v1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -483,7 +483,7 @@ func hasV1Subjects(subjects ...string) func(o client.Object) error {
 			return testpredicates.WrongTypeErr(o, r)
 		}
 		if len(r.Subjects) != len(subjects) {
-			return errors.Wrapf(testpredicates.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
+			return fmt.Errorf("want %v subjects; got %v: %w", subjects, r.Subjects, testpredicates.ErrFailedPredicate)
 		}
 
 		found := make(map[string]bool)
@@ -492,7 +492,7 @@ func hasV1Subjects(subjects ...string) func(o client.Object) error {
 		}
 		for _, name := range subjects {
 			if !found[name] {
-				return errors.Wrapf(testpredicates.ErrFailedPredicate, "missing subject %q", name)
+				return fmt.Errorf("missing subject %q: %w", name, testpredicates.ErrFailedPredicate)
 			}
 		}
 
@@ -510,7 +510,7 @@ func hasV1Beta1Subjects(subjects ...string) func(o client.Object) error {
 			return testpredicates.WrongTypeErr(o, r)
 		}
 		if len(r.Subjects) != len(subjects) {
-			return errors.Wrapf(testpredicates.ErrFailedPredicate, "want %v subjects; got %v", subjects, r.Subjects)
+			return fmt.Errorf("want %v subjects; got %v: %w", subjects, r.Subjects, testpredicates.ErrFailedPredicate)
 		}
 
 		found := make(map[string]bool)
@@ -519,7 +519,7 @@ func hasV1Beta1Subjects(subjects ...string) func(o client.Object) error {
 		}
 		for _, name := range subjects {
 			if !found[name] {
-				return errors.Wrapf(testpredicates.ErrFailedPredicate, "missing subject %q", name)
+				return fmt.Errorf("missing subject %q: %w", name, testpredicates.ErrFailedPredicate)
 			}
 		}
 

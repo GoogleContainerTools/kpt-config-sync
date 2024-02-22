@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -849,7 +848,7 @@ func truncateSourceErrors() testpredicates.Predicate {
 				return nil
 			}
 		}
-		return errors.Errorf("the source errors should be truncated")
+		return fmt.Errorf("the source errors should be truncated")
 	}
 }
 

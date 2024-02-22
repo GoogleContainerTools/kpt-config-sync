@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -467,7 +466,7 @@ func getUpdatedRootSync(nt *nomostest.NT, name string, namespace string) *v1beta
 // validateRootSyncRepoState verifies the output from getRootSyncCommitStatusErrorSummary is as expected.
 func validateRootSyncRepoState(expectedCommit string, commit string, expectedStatus string, status string, errorSummary string) error {
 	if expectedCommit != commit || expectedStatus != status {
-		return errors.Errorf("Error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v\n",
+		return fmt.Errorf("Error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v\n",
 			commit, status, errorSummary, expectedCommit, expectedStatus)
 	}
 	return nil

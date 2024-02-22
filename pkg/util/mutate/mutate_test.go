@@ -16,11 +16,11 @@ package mutate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -135,12 +135,13 @@ func TestStatus(t *testing.T) {
 			expectedUpdated: false,
 			// Expect a conflict, because the ResourceVersion in the request is older than the one on the server
 			expectedError: status.APIServerErrorWrap(
-				errors.Wrapf(
+				fmt.Errorf(
+					"failed to update object status: %s: %w", kinds.ObjectSummary(deployment1),
 					apierrors.NewConflict(
 						schema.GroupResource{Group: "apps", Resource: "Deployment"},
 						"default/hello-world",
 						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-					"failed to update object status: %s", kinds.ObjectSummary(deployment1)),
+				),
 				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
@@ -267,12 +268,13 @@ func TestSpec(t *testing.T) {
 			expectedUpdated: false,
 			// Expect a conflict, because the ResourceVersion in the request is older than the one on the server
 			expectedError: status.APIServerErrorWrap(
-				errors.Wrapf(
+				fmt.Errorf(
+					"failed to update object: %s: %w", kinds.ObjectSummary(deployment1),
 					apierrors.NewConflict(
 						schema.GroupResource{Group: "apps", Resource: "Deployment"},
 						"default/hello-world",
 						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
-					"failed to update object: %s", kinds.ObjectSummary(deployment1)),
+				),
 				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
@@ -358,9 +360,9 @@ func TestSpec(t *testing.T) {
 			// Expect no update because there was an error
 			expectedUpdated: false,
 			// Expect err, because the UID in the request is older than the one on the server
-			expectedError: errors.Wrap(
-				errors.New("metadata.uid has changed: object may have been re-created"),
-				"failed to update object: apps/v1.Deployment(*v1.Deployment)[default/hello-world]"),
+			expectedError: fmt.Errorf(
+				"failed to update object: apps/v1.Deployment(*v1.Deployment)[default/hello-world]: %w",
+				errors.New("metadata.uid has changed: object may have been re-created")),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
 				// no change persisted

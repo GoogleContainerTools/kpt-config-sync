@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"golang.org/x/exp/slices"
 	"kpt.dev/configsync/e2e"
@@ -63,33 +62,33 @@ func setDefaultArgs() {
 func validateArgs() error {
 	var errs error
 	if len(*e2e.ClusterNames) == 0 && *e2e.CreateClusters == e2e.CreateClustersDisabled {
-		errs = multierr.Append(errs, errors.Errorf("At least one of CLUSTER_NAMES or CREATE_CLUSTERS is required"))
+		errs = multierr.Append(errs, fmt.Errorf("At least one of CLUSTER_NAMES or CREATE_CLUSTERS is required"))
 	}
 	if !slices.Contains(e2e.CreateClustersAllowedValues, *e2e.CreateClusters) {
 		errs = multierr.Append(errs,
-			errors.Errorf("Unrecognized value %s for CREATE_CLUSTERS. Allowed values: [%s]",
+			fmt.Errorf("Unrecognized value %s for CREATE_CLUSTERS. Allowed values: [%s]",
 				*e2e.CreateClusters, strings.Join(e2e.CreateClustersAllowedValues, ", ")))
 	}
 	if !slices.Contains(e2e.DestroyClustersAllowedValues, *e2e.DestroyClusters) {
 		errs = multierr.Append(errs,
-			errors.Errorf("Unrecognized value %s for DESTROY_CLUSTERS. Allowed values: [%s]",
+			fmt.Errorf("Unrecognized value %s for DESTROY_CLUSTERS. Allowed values: [%s]",
 				*e2e.DestroyClusters, strings.Join(e2e.DestroyClustersAllowedValues, ", ")))
 	}
 	if *e2e.TestCluster == e2e.GKE { // required vars for GKE
 		if *e2e.GCPProject == "" {
-			errs = multierr.Append(errs, errors.Errorf("Environment variable GCP_PROJECT is required for GKE clusters"))
+			errs = multierr.Append(errs, fmt.Errorf("Environment variable GCP_PROJECT is required for GKE clusters"))
 		}
 		if *e2e.GCPRegion == "" && *e2e.GCPZone == "" {
-			errs = multierr.Append(errs, errors.Errorf("One of GCP_REGION or GCP_ZONE is required for GKE clusters"))
+			errs = multierr.Append(errs, fmt.Errorf("One of GCP_REGION or GCP_ZONE is required for GKE clusters"))
 		}
 		if *e2e.GCPRegion != "" && *e2e.GCPZone != "" {
-			errs = multierr.Append(errs, errors.Errorf("At most one of GCP_ZONE or GCP_REGION may be specified"))
+			errs = multierr.Append(errs, fmt.Errorf("At most one of GCP_ZONE or GCP_REGION may be specified"))
 		}
 		if *e2e.GKEAutopilot && *e2e.GCPRegion == "" {
-			errs = multierr.Append(errs, errors.Errorf("Autopilot clusters must be created with a region"))
+			errs = multierr.Append(errs, fmt.Errorf("Autopilot clusters must be created with a region"))
 		}
 		if *e2e.GKEAutopilot && *e2e.GceNode {
-			errs = multierr.Append(errs, errors.Errorf("Cannot run gcenode tests on autopilot clusters"))
+			errs = multierr.Append(errs, fmt.Errorf("Cannot run gcenode tests on autopilot clusters"))
 		}
 	}
 	return errs

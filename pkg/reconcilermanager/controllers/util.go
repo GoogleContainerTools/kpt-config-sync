@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -380,8 +379,7 @@ func PollingPeriod(envName string, defaultValue time.Duration) time.Duration {
 	if present {
 		pollingFreq, err := time.ParseDuration(val)
 		if err != nil {
-			panic(errors.Wrapf(err, "failed to parse environment variable %q,"+
-				"got value: %v, want err: nil", envName, pollingFreq))
+			panic(fmt.Errorf("failed to parse environment variable %q, got value: %v, want err: nil: %w", envName, pollingFreq, err))
 		}
 		return pollingFreq
 	}

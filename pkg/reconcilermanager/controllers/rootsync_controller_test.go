@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1682,7 +1681,7 @@ func validateReconcilerClusterRoleBindings(fakeClient *syncerFake.Client, rootSy
 		return err
 	}
 	if len(want) != len(got.Items) {
-		return errors.Errorf("want %d ClusterRoleBindings, got %d", len(want), len(got.Items))
+		return fmt.Errorf("want %d ClusterRoleBindings, got %d", len(want), len(got.Items))
 	}
 	gotCRBMap := make(map[v1beta1.RootSyncRoleRef]rbacv1.ClusterRoleBinding)
 	for idx, crb := range got.Items {
@@ -1695,11 +1694,11 @@ func validateReconcilerClusterRoleBindings(fakeClient *syncerFake.Client, rootSy
 	for roleRef, wantCRB := range want {
 		gotCRB, ok := gotCRBMap[roleRef]
 		if !ok {
-			return errors.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
+			return fmt.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
 		}
 		wantCRB.Name = gotCRB.Name
 		if diff := cmp.Diff(wantCRB, gotCRB, cmpopts.EquateEmpty()); diff != "" {
-			return errors.Errorf("ClusterRoleBinding[%s] diff: %s", wantCRB.Name, diff)
+			return fmt.Errorf("ClusterRoleBinding[%s] diff: %s", wantCRB.Name, diff)
 		}
 	}
 	return nil
@@ -1718,7 +1717,7 @@ func validateReconcilerRoleBindings(fakeClient *syncerFake.Client, syncKind stri
 		return err
 	}
 	if len(want) != len(got.Items) {
-		return errors.Errorf("want %d RoleBindings, got %d", len(want), len(got.Items))
+		return fmt.Errorf("want %d RoleBindings, got %d", len(want), len(got.Items))
 	}
 	gotRBMap := make(map[v1beta1.RootSyncRoleRef]rbacv1.RoleBinding)
 	for idx, rb := range got.Items {
@@ -1732,11 +1731,11 @@ func validateReconcilerRoleBindings(fakeClient *syncerFake.Client, syncKind stri
 	for roleRef, wantRB := range want {
 		gotRB, ok := gotRBMap[roleRef]
 		if !ok {
-			return errors.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
+			return fmt.Errorf("ClusterRoleBinding for roleRef %v not found", roleRef)
 		}
 		wantRB.Name = gotRB.Name
 		if diff := cmp.Diff(wantRB, gotRB, cmpopts.EquateEmpty()); diff != "" {
-			return errors.Errorf("ClusterRoleBinding[%s] diff: %s", wantRB.Name, diff)
+			return fmt.Errorf("ClusterRoleBinding[%s] diff: %s", wantRB.Name, diff)
 		}
 	}
 	return nil

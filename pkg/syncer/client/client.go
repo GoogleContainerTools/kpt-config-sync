@@ -22,7 +22,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -112,7 +111,7 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 		klog.V(2).Infof("Not found during attempted delete %s", description)
 		err = nil
 	default:
-		err = errors.Wrapf(err, "delete failed for %s", description)
+		err = fmt.Errorf("delete failed for %s: %w", description, err)
 	}
 
 	c.recordLatency(start, "delete", metrics.StatusLabel(err))

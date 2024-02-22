@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -105,7 +104,7 @@ func (r *RepoSyncReconciler) upsertHelmConfigMaps(ctx context.Context, rs *v1bet
 			cmNamesToKeep[copyCMRef.Name] = struct{}{}
 			userCM, err := r.getUserHelmConfigMap(ctx, userCMRef)
 			if err != nil {
-				return errors.Wrapf(err, "user config map required for helm values: %s", userCMRef)
+				return fmt.Errorf("user config map required for helm values: %s: %w", userCMRef, err)
 			}
 			if _, err = r.upsertHelmConfigMap(ctx, copyCMRef, rsRef, userCM, labelMap); err != nil {
 				return err
@@ -122,11 +121,10 @@ func (r *RepoSyncReconciler) getUserHelmConfigMap(ctx context.Context, userCMRef
 	userCM := &corev1.ConfigMap{}
 	if err := r.client.Get(ctx, userCMRef, userCM); err != nil {
 		if apierrors.IsNotFound(err) {
-			return userCM, errors.Errorf(
+			return userCM, fmt.Errorf(
 				"config map not found: %s", userCMRef)
 		}
-		return userCM, errors.Wrapf(err,
-			"config map get failed: %s", userCMRef)
+		return userCM, fmt.Errorf("config map get failed: %s: %w", userCMRef, err)
 	}
 	return userCM, nil
 }

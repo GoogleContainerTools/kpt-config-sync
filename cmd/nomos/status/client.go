@@ -25,7 +25,6 @@ import (
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/Masterminds/semver"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -454,7 +453,7 @@ func (c *ClusterClient) IsConfigured(ctx context.Context, cs *ClusterState) bool
 func ClusterClients(ctx context.Context, contexts []string) (map[string]*ClusterClient, error) {
 	configs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout)
 	if configs == nil {
-		return nil, errors.Wrap(err, "failed to create client configs")
+		return nil, fmt.Errorf("failed to create client configs: %w", err)
 	}
 	if err != nil {
 		fmt.Println(err)

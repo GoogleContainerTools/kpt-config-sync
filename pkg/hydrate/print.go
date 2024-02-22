@@ -16,11 +16,11 @@ package hydrate
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/cmd/nomos/flags"
@@ -55,7 +55,7 @@ func PrintDirectoryOutput(output, extension string, fileObjects []ast.FileObject
 	for _, obj := range fileObjects {
 		u, err := toUnstructured(obj.Unstructured)
 		if err != nil {
-			return errors.Wrapf(err, "failed to convert the object %s/%s/%s to unstructured format", obj.GroupVersionKind(), obj.GetNamespace(), obj.GetName())
+			return fmt.Errorf("failed to convert the object %s/%s/%s to unstructured format: %w", obj.GroupVersionKind(), obj.GetNamespace(), obj.GetName(), err)
 		}
 		files[obj.SlashPath()] = append(files[obj.SlashPath()], u)
 	}
@@ -63,7 +63,7 @@ func PrintDirectoryOutput(output, extension string, fileObjects []ast.FileObject
 	for file, objects := range files {
 		err := PrintFile(filepath.Join(output, file), extension, objects)
 		if err != nil {
-			return errors.Wrap(err, "failed to print file")
+			return fmt.Errorf("failed to print file: %w", err)
 		}
 	}
 	return nil

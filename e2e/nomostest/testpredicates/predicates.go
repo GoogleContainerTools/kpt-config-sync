@@ -15,13 +15,13 @@
 package testpredicates
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -195,7 +195,7 @@ func HasExactlyAnnotationKeys(wantKeys ...string) Predicate {
 		}
 		sort.Strings(gotKeys)
 		if diff := cmp.Diff(wantKeys, gotKeys); diff != "" {
-			return errors.Errorf("unexpected diff in metadata.annotation keys: %s", diff)
+			return fmt.Errorf("unexpected diff in metadata.annotation keys: %s", diff)
 		}
 		return nil
 	}
@@ -217,7 +217,7 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 		}
 		sort.Strings(gotKeys)
 		if diff := cmp.Diff(wantKeys, gotKeys); diff != "" {
-			return errors.Errorf("unexpected diff in metadata.annotation keys: %s", diff)
+			return fmt.Errorf("unexpected diff in metadata.annotation keys: %s", diff)
 		}
 		return nil
 	}
@@ -248,7 +248,7 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 			expectImage += "@" + expectImageDigest
 		}
 		if !strings.Contains(container.Image, expectImage) {
-			return errors.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
+			return fmt.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
 		}
 		return nil
 	}
@@ -410,7 +410,7 @@ func NotPendingDeletion(o client.Object) error {
 	if o.GetDeletionTimestamp() == nil {
 		return nil
 	}
-	return errors.Errorf("object has non-nil deletionTimestamp")
+	return fmt.Errorf("object has non-nil deletionTimestamp")
 }
 
 // HasAllNomosMetadata ensures that the object contains the expected
@@ -512,10 +512,10 @@ func DeploymentHasEnvVar(containerName, key, value string) Predicate {
 				if e.Value == value {
 					return nil
 				}
-				return errors.Errorf("Container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
+				return fmt.Errorf("Container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
 			}
 		}
-		return errors.Errorf("Container %q does not contain environment variable %q", containerName, key)
+		return fmt.Errorf("Container %q does not contain environment variable %q", containerName, key)
 	}
 }
 
@@ -536,7 +536,7 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 		}
 		for _, e := range container.Env {
 			if e.Name == key {
-				return errors.Errorf("Container %q should not have environment variable %q", containerName, key)
+				return fmt.Errorf("Container %q should not have environment variable %q", containerName, key)
 			}
 		}
 		return nil
@@ -556,7 +556,7 @@ func DeploymentHasContainer(containerName string) Predicate {
 		}
 		container := ContainerByName(d, containerName)
 		if container == nil {
-			return errors.Errorf("Deployment %s should have container %s",
+			return fmt.Errorf("Deployment %s should have container %s",
 				core.ObjectNamespacedName(o), containerName)
 		}
 		return nil
@@ -576,7 +576,7 @@ func DeploymentMissingContainer(containerName string) Predicate {
 		}
 		container := ContainerByName(d, containerName)
 		if container != nil {
-			return errors.Errorf("Deployment %s should not have container %s",
+			return fmt.Errorf("Deployment %s should not have container %s",
 				core.ObjectNamespacedName(o), containerName)
 		}
 		return nil
@@ -605,7 +605,7 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 		// managed is required by differ.ManagedByConfigSync
 		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
 		if managedValue != metadata.ResourceManagementEnabled {
-			return errors.Errorf("expected %s %s to be managed by configsync, but found %q=%q",
+			return fmt.Errorf("expected %s %s to be managed by configsync, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagementKey, managedValue)
 		}
@@ -614,7 +614,7 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 		expectedManager := declared.ResourceManager(scope, syncName)
 		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
 		if managerValue != expectedManager {
-			return errors.Errorf("expected %s %s to be managed by %q, but found %q=%q",
+			return fmt.Errorf("expected %s %s to be managed by %q, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				expectedManager, metadata.ResourceManagerKey, managerValue)
 		}
@@ -623,7 +623,7 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 		expectedID := core.GKNN(obj)
 		resourceIDValue := core.GetAnnotation(obj, metadata.ResourceIDKey)
 		if resourceIDValue != expectedID {
-			return errors.Errorf("expected %s %s to have resource-id %q, but found %q=%q",
+			return fmt.Errorf("expected %s %s to have resource-id %q, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				expectedID, metadata.ResourceIDKey, resourceIDValue)
 		}
@@ -652,7 +652,7 @@ func IsNotManaged(scheme *runtime.Scheme) Predicate {
 		// manager is required by diff.IsManager.
 		managerValue := core.GetAnnotation(obj, metadata.ResourceManagerKey)
 		if managerValue != "" {
-			return errors.Errorf("expected %s %s to NOT have a manager, but found %q=%q",
+			return fmt.Errorf("expected %s %s to NOT have a manager, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagerKey, managerValue)
 		}
@@ -660,7 +660,7 @@ func IsNotManaged(scheme *runtime.Scheme) Predicate {
 		// managed is required by differ.ManagedByConfigSync
 		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
 		if managedValue == metadata.ResourceManagementEnabled {
-			return errors.Errorf("expected %s %s to NOT have management enabled, but found %q=%q",
+			return fmt.Errorf("expected %s %s to NOT have management enabled, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				metadata.ResourceManagementKey, managedValue)
 		}
@@ -687,7 +687,7 @@ func ResourceVersionEquals(scheme *runtime.Scheme, expected string) Predicate {
 				return err
 			}
 		}
-		return errors.Errorf("expected %s %s to have resourceVersion %q, but got %q",
+		return fmt.Errorf("expected %s %s to have resourceVersion %q, but got %q",
 			gvk.Kind, core.ObjectNamespacedName(obj),
 			expected, resourceVersion)
 	}
@@ -712,7 +712,7 @@ func ResourceVersionNotEquals(scheme *runtime.Scheme, unexpected string) Predica
 				return err
 			}
 		}
-		return errors.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
+		return fmt.Errorf("expected %s %s to NOT have resourceVersion %q, but got %q",
 			gvk.Kind, core.ObjectNamespacedName(obj),
 			unexpected, resourceVersion)
 	}
@@ -771,21 +771,17 @@ func StatusEquals(scheme *runtime.Scheme, expected status.Status) Predicate {
 		}
 		uObj, err := kinds.ToUnstructured(obj, scheme)
 		if err != nil {
-			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
-				obj, core.ObjectNamespacedName(obj))
+			return fmt.Errorf("failed to convert %T %s to unstructured: %w", obj, core.ObjectNamespacedName(obj), err)
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
 
 		result, err := status.Compute(uObj)
 		if err != nil {
-			return errors.Wrapf(err, "failed to compute status for %s %s",
-				gvk.Kind, core.ObjectNamespacedName(obj))
+			return fmt.Errorf("failed to compute status for %s %s: %w", gvk.Kind, core.ObjectNamespacedName(obj), err)
 		}
 
 		if result.Status != expected {
-			return errors.Errorf("expected %s %s to have status %q, but got %q",
-				gvk.Kind, core.ObjectNamespacedName(obj),
-				expected, result.Status)
+			return fmt.Errorf("expected %s %s to have status %q, but got %q", gvk.Kind, core.ObjectNamespacedName(obj), expected, result.Status)
 		}
 		return nil
 	}
@@ -800,10 +796,10 @@ func SecretHasKey(key, value string) Predicate {
 		secret := o.(*corev1.Secret)
 		actual, ok := secret.Data[key]
 		if !ok {
-			return errors.Errorf("expected key %s not found in secret %s/%s", key, secret.GetNamespace(), secret.GetName())
+			return fmt.Errorf("expected key %s not found in secret %s/%s", key, secret.GetNamespace(), secret.GetName())
 		}
 		if string(actual) != value {
-			return errors.Errorf("expected secret %s/%s to have %s=%s, but got %s=%s",
+			return fmt.Errorf("expected secret %s/%s to have %s=%s, but got %s=%s",
 				secret.GetNamespace(), secret.GetName(), key, value, key, actual)
 		}
 		return nil
@@ -819,7 +815,7 @@ func SecretMissingKey(key string) Predicate {
 		secret := o.(*corev1.Secret)
 		_, ok := secret.Data[key]
 		if ok {
-			return errors.Errorf("expected key %s to be missing from secret %s/%s, but was found", key, secret.GetNamespace(), secret.GetName())
+			return fmt.Errorf("expected key %s to be missing from secret %s/%s, but was found", key, secret.GetNamespace(), secret.GetName())
 		}
 		return nil
 	}
@@ -833,7 +829,7 @@ func RoleBindingHasName(expectedName string) Predicate {
 		}
 		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
 		if actualName != expectedName {
-			return errors.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+			return fmt.Errorf("Expected name: %s, got: %s", expectedName, actualName)
 		}
 		return nil
 	}
@@ -893,21 +889,20 @@ func HasObservedLatestGeneration(scheme *runtime.Scheme) Predicate {
 		}
 		uObj, err := kinds.ToUnstructured(obj, scheme)
 		if err != nil {
-			return errors.Wrapf(err, "failed to convert %T %s to unstructured",
-				obj, core.ObjectNamespacedName(obj))
+			return fmt.Errorf("failed to convert %T %s to unstructured: %w", obj, core.ObjectNamespacedName(obj), err)
 		}
 		gvk := uObj.GroupVersionKind()
 		expected := obj.GetGeneration()
 		found, ok, err := unstructured.NestedInt64(uObj.UnstructuredContent(), "status", "observedGeneration")
 		if err != nil {
-			return errors.Wrapf(err, "expected %s %s to have observedGeneration",
-				gvk.Kind, core.ObjectNamespacedName(obj))
+			return fmt.Errorf("expected %s %s to have observedGeneration: %w",
+				gvk.Kind, core.ObjectNamespacedName(obj), err)
 		} else if !ok {
-			return errors.Errorf("expected %s %s to have observedGeneration, but the field is missing",
+			return fmt.Errorf("expected %s %s to have observedGeneration, but the field is missing",
 				gvk.Kind, core.ObjectNamespacedName(obj))
 		}
 		if found != expected {
-			return errors.Errorf("expected %s %s to have observedGeneration equal to %d, but got %d",
+			return fmt.Errorf("expected %s %s to have observedGeneration equal to %d, but got %d",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				expected, found)
 		}
@@ -927,7 +922,7 @@ func RootSyncHasObservedGenerationNoLessThan(generation int64) Predicate {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
 		if rs.Status.ObservedGeneration < generation {
-			return errors.Errorf("expected %s %s to have observedGeneration no less than %d, but got %d",
+			return fmt.Errorf("expected %s %s to have observedGeneration no less than %d, but got %d",
 				rs.Kind, core.ObjectNamespacedName(rs),
 				generation, rs.Status.ObservedGeneration)
 		}
@@ -1040,7 +1035,7 @@ func ObjectNotFoundPredicate(scheme *runtime.Scheme) Predicate {
 			return nil
 		}
 		// If you see this error, the WatchObject timeout was probably reached.
-		return errors.Errorf("expected %T object %s to be not found:\n%s",
+		return fmt.Errorf("expected %T object %s to be not found:\n%s",
 			o, core.ObjectNamespacedName(o), log.AsYAMLWithScheme(o, scheme))
 	}
 }
@@ -1197,7 +1192,7 @@ func RootSyncSpecOverrideEquals(expected *v1beta1.RootSyncOverrideSpec) Predicat
 		}
 		found := rs.Spec.Override
 		if !equality.Semantic.DeepEqual(found, expected) {
-			return errors.Errorf("expected %s to have spec.override: %s, but got %s",
+			return fmt.Errorf("expected %s to have spec.override: %s, but got %s",
 				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
 		}
 		return nil
@@ -1264,7 +1259,7 @@ func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate 
 			}
 		}
 		if !equality.Semantic.DeepEqual(found, expected) {
-			return errors.Errorf("expected %s to have status: %s, but got %s",
+			return fmt.Errorf("expected %s to have status: %s, but got %s",
 				kinds.ObjectSummary(obj), log.AsJSON(expected), log.AsJSON(found))
 		}
 		return nil
@@ -1326,7 +1321,7 @@ func ResourceGroupMissingObjects(objects []client.Object) Predicate {
 
 func subjectNamesEqual(want []string, got []rbacv1.Subject) error {
 	if len(got) != len(want) {
-		return errors.Errorf("want %v subjects; got %v", want, got)
+		return fmt.Errorf("want %v subjects; got %v", want, got)
 	}
 
 	found := make(map[string]bool)
@@ -1335,7 +1330,7 @@ func subjectNamesEqual(want []string, got []rbacv1.Subject) error {
 	}
 	for _, name := range want {
 		if !found[name] {
-			return errors.Errorf("missing subject %q", name)
+			return fmt.Errorf("missing subject %q", name)
 		}
 	}
 
@@ -1361,7 +1356,7 @@ func ClusterRoleBindingSubjectNamesEqual(subjects ...string) func(o client.Objec
 // with the specified error code and (partial) message.
 func ValidateError(errs []v1beta1.ConfigSyncError, code, message string) error {
 	if len(errs) == 0 {
-		return errors.Errorf("no errors present")
+		return fmt.Errorf("no errors present")
 	}
 	for _, e := range errs {
 		if e.Code == code {
@@ -1371,7 +1366,7 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string) error {
 		}
 	}
 	if message != "" {
-		return errors.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
+		return fmt.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
 	}
-	return errors.Errorf("error %s not present: %s", code, log.AsJSON(errs))
+	return fmt.Errorf("error %s not present: %s", code, log.AsJSON(errs))
 }

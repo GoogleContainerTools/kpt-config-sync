@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -90,7 +89,7 @@ func listOperations(ctx context.Context, t testing.NTB, name string) ([]string, 
 	cmd := exec.CommandContext(ctx, "gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, errors.Errorf("failed to list operations for %s: %v\nstdout/stderr:\n%s",
+		return nil, fmt.Errorf("failed to list operations for %s: %v\nstdout/stderr:\n%s",
 			name, err, string(out))
 	}
 	operations := strings.Fields(string(out))
@@ -118,7 +117,7 @@ func waitOperation(ctx context.Context, t testing.NTB, operation string) error {
 	cmd := exec.CommandContext(ctx, "gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.Errorf("failed to wait for operation %s: %v\nstdout/stderr:\n%s",
+		return fmt.Errorf("failed to wait for operation %s: %v\nstdout/stderr:\n%s",
 			operation, err, string(out))
 	}
 	return nil
@@ -168,7 +167,7 @@ func deleteGKECluster(t testing.NTB, name string) error {
 		cmd := exec.Command("gcloud", args...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return errors.Errorf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
+			return fmt.Errorf("failed to delete cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 		}
 		return nil
 	})
@@ -250,7 +249,7 @@ func createGKECluster(t testing.NTB, name string) error {
 	cmd := exec.Command("gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
+		return fmt.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
 	return listAndWaitForOperations(context.Background(), t, name)
 }
@@ -274,14 +273,14 @@ func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 		kubeconfig,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return errors.Errorf("failed to get credentials: %v\nstdout/stderr:\n%s", err, string(out))
+		return fmt.Errorf("failed to get credentials: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 	cmd = withKubeConfig( // gcloud config config-helper --force-auth-refresh
 		exec.Command("gcloud", "config", "config-helper", "--force-auth-refresh"),
 		kubeconfig,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return errors.Errorf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
+		return fmt.Errorf("failed to refresh access_token: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 	// after getting credentials, wait for any running operations to complete
 	// before handing over this cluster to the test environment
@@ -305,7 +304,7 @@ func clusterExistsGKE(t testing.NTB, clusterName string) (bool, error) {
 	cmd := exec.Command("gcloud", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return false, errors.Errorf("failed to list cluster (%s): %v\nstdout/stderr:\n%s",
+		return false, fmt.Errorf("failed to list cluster (%s): %v\nstdout/stderr:\n%s",
 			clusterName, err, string(out))
 	}
 	clusters := strings.Fields(string(out))

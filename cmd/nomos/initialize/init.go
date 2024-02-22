@@ -15,11 +15,11 @@
 package initialize
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/printers"
 	"kpt.dev/configsync/cmd/nomos/flags"
@@ -65,7 +65,7 @@ func Initialize(root string, force bool) error {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		err = os.MkdirAll(root, os.ModePerm)
 		if err != nil {
-			return errors.Wrapf(err, "unable to create dir %q", root)
+			return fmt.Errorf("unable to create dir %q: %w", root, err)
 		}
 	} else if err != nil {
 		return err
@@ -118,12 +118,12 @@ func Initialize(root string, force bool) error {
 func checkEmpty(dir cmpath.Absolute) error {
 	files, err := os.ReadDir(dir.OSPath())
 	if err != nil {
-		return errors.Wrapf(err, "error reading %q", dir)
+		return fmt.Errorf("error reading %q: %w", dir, err)
 	}
 
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name(), ".") {
-			return errors.Errorf("passed dir %q has file %q; use --force to proceed", dir, file.Name())
+			return fmt.Errorf("passed dir %q has file %q; use --force to proceed", dir, file.Name())
 		}
 	}
 	return nil

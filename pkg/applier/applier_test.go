@@ -16,6 +16,7 @@ package applier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -23,7 +24,6 @@ import (
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

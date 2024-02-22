@@ -16,8 +16,8 @@ package watch
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -67,11 +67,11 @@ func (fw *TypedListerWatcher) List(options metav1.ListOptions) (runtime.Object, 
 	}
 	cOpts, err := ConvertListOptions(&options)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
+		return nil, fmt.Errorf("failed to convert metav1.ListOptions to client.ListOptions: %w", err)
 	}
 	cOpts, err = MergeListOptions(cOpts, fw.DefaultListOptions)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
+		return nil, fmt.Errorf("failed to merge list options: %w", err)
 	}
 	optsList := UnrollListOptions(cOpts)
 	klog.V(5).Infof("Listing %T %s: %v", objList, objList.GetObjectKind().GroupVersionKind().Kind, optsList)
@@ -87,11 +87,11 @@ func (fw *TypedListerWatcher) Watch(options metav1.ListOptions) (watch.Interface
 	}
 	cOpts, err := ConvertListOptions(&options)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
+		return nil, fmt.Errorf("failed to convert metav1.ListOptions to client.ListOptions: %w", err)
 	}
 	cOpts, err = MergeListOptions(cOpts, fw.DefaultListOptions)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
+		return nil, fmt.Errorf("failed to merge list options: %w", err)
 	}
 	optsList := UnrollListOptions(cOpts)
 	klog.V(5).Infof("Watching %T %s: %v", objList, objList.GetObjectKind().GroupVersionKind().Kind, optsList)

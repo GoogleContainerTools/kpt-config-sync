@@ -15,10 +15,10 @@
 package parse
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 )
 
@@ -32,7 +32,7 @@ import (
 func FindFiles(dir cmpath.Absolute) ([]cmpath.Absolute, error) {
 	out, err := exec.Command("find", dir.OSPath(), "-type", "f", "-not", "-path", "*/\\.git/*").CombinedOutput()
 	if err != nil {
-		return nil, errors.Wrap(err, string(out))
+		return nil, fmt.Errorf("%s: %w", string(out), err)
 	}
 	files := strings.Split(string(out), "\n")
 	var result []cmpath.Absolute

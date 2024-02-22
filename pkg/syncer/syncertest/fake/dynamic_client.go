@@ -16,9 +16,9 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -151,12 +151,12 @@ func (dc *DynamicClient) create(action clienttesting.Action) (bool, runtime.Obje
 	createAction := action.(clienttesting.CreateAction)
 	if createAction.GetSubresource() != "" {
 		// TODO: add support for subresource create, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.create: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.create: resource=%q subresource=%q: not yet implemented",
 			createAction.GetResource().Resource, createAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(createAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	rObj := createAction.GetObject()
 	uObj, err := kinds.ToUnstructured(rObj, dc.scheme)
@@ -164,11 +164,11 @@ func (dc *DynamicClient) create(action clienttesting.Action) (bool, runtime.Obje
 		return true, nil, err
 	}
 	if uObj.GetNamespace() != "" && uObj.GetNamespace() != createAction.GetNamespace() {
-		return true, nil, errors.Errorf("invalid metadata.namespace: expected %q but found %q",
+		return true, nil, fmt.Errorf("invalid metadata.namespace: expected %q but found %q",
 			createAction.GetNamespace(), uObj.GetNamespace())
 	}
 	if gvk != uObj.GroupVersionKind() {
-		return true, nil, errors.Errorf("invalid GVK for resource %q: expected %q but found %q",
+		return true, nil, fmt.Errorf("invalid GVK for resource %q: expected %q but found %q",
 			createAction.GetResource(),
 			gvk, uObj.GroupVersionKind())
 	}
@@ -180,12 +180,12 @@ func (dc *DynamicClient) get(action clienttesting.Action) (bool, runtime.Object,
 	getAction := action.(clienttesting.GetAction)
 	if getAction.GetSubresource() != "" {
 		// TODO: add support for subresource get, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.get: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.get: resource=%q subresource=%q: not yet implemented",
 			getAction.GetResource().Resource, getAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(getAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	id := genID(getAction.GetNamespace(), getAction.GetName(), gvk.GroupKind())
 	uObj := &unstructured.Unstructured{}
@@ -197,7 +197,7 @@ func (dc *DynamicClient) list(action clienttesting.Action) (bool, runtime.Object
 	listAction := action.(clienttesting.ListAction)
 	if listAction.GetSubresource() != "" {
 		// TODO: add support for subresource list, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.list: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.list: resource=%q subresource=%q: not yet implemented",
 			listAction.GetResource().Resource, listAction.GetSubresource())
 	}
 	restrictions := listAction.GetListRestrictions()
@@ -208,7 +208,7 @@ func (dc *DynamicClient) list(action clienttesting.Action) (bool, runtime.Object
 	}
 	gvk, err := dc.mapper.KindFor(listAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	uObjList := kinds.NewUnstructuredListForItemGVK(gvk)
 	err = dc.storage.List(context.Background(), uObjList, opts)
@@ -219,12 +219,12 @@ func (dc *DynamicClient) update(action clienttesting.Action) (bool, runtime.Obje
 	updateAction := action.(clienttesting.UpdateAction)
 	if updateAction.GetSubresource() != "" {
 		// TODO: add support for subresource updates, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.update: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.update: resource=%q subresource=%q: not yet implemented",
 			updateAction.GetResource().Resource, updateAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(updateAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	rObj := updateAction.GetObject()
 	uObj, err := kinds.ToUnstructured(rObj, dc.scheme)
@@ -232,11 +232,11 @@ func (dc *DynamicClient) update(action clienttesting.Action) (bool, runtime.Obje
 		return true, nil, err
 	}
 	if uObj.GetNamespace() != "" && uObj.GetNamespace() != updateAction.GetNamespace() {
-		return true, nil, errors.Errorf("invalid metadata.namespace: expected %q but found %q",
+		return true, nil, fmt.Errorf("invalid metadata.namespace: expected %q but found %q",
 			updateAction.GetNamespace(), uObj.GetNamespace())
 	}
 	if gvk != uObj.GroupVersionKind() {
-		return true, nil, errors.Errorf("invalid GVK for resource %q: expected %q but found %q",
+		return true, nil, fmt.Errorf("invalid GVK for resource %q: expected %q but found %q",
 			updateAction.GetResource(),
 			gvk, uObj.GroupVersionKind())
 	}
@@ -248,12 +248,12 @@ func (dc *DynamicClient) patch(action clienttesting.Action) (bool, runtime.Objec
 	patchAction := action.(clienttesting.PatchAction)
 	if patchAction.GetSubresource() != "" {
 		// TODO: add support for subresource patch, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.patch: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.patch: resource=%q subresource=%q: not yet implemented",
 			patchAction.GetResource().Resource, patchAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(patchAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
@@ -268,12 +268,12 @@ func (dc *DynamicClient) delete(action clienttesting.Action) (bool, runtime.Obje
 	deleteAction := action.(clienttesting.DeleteAction)
 	if deleteAction.GetSubresource() != "" {
 		// TODO: add support for subresource delete, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.delete: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.delete: resource=%q subresource=%q: not yet implemented",
 			deleteAction.GetResource().Resource, deleteAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(deleteAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
@@ -287,7 +287,7 @@ func (dc *DynamicClient) deleteAllOf(action clienttesting.Action) (bool, runtime
 	deleteAction := action.(clienttesting.DeleteCollectionAction)
 	if deleteAction.GetSubresource() != "" {
 		// TODO: add support for subresource delete-collection, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.deleteAllOf: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.deleteAllOf: resource=%q subresource=%q: not yet implemented",
 			deleteAction.GetResource().Resource, deleteAction.GetSubresource())
 	}
 	restrictions := deleteAction.GetListRestrictions()
@@ -300,7 +300,7 @@ func (dc *DynamicClient) deleteAllOf(action clienttesting.Action) (bool, runtime
 	}
 	gvk, err := dc.mapper.KindFor(deleteAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	uObjList := kinds.NewUnstructuredListForItemGVK(gvk)
 	err = dc.storage.DeleteAllOf(context.Background(), uObjList, opts)
@@ -311,12 +311,12 @@ func (dc *DynamicClient) watch(action clienttesting.Action) (bool, watch.Interfa
 	watchAction := action.(clienttesting.WatchAction)
 	if watchAction.GetSubresource() != "" {
 		// TODO: add support for subresource watch, if needed
-		return true, nil, errors.Errorf("fake.DynamicClient.watch: resource=%q subresource=%q: not yet implemented",
+		return true, nil, fmt.Errorf("fake.DynamicClient.watch: resource=%q subresource=%q: not yet implemented",
 			watchAction.GetResource().Resource, watchAction.GetSubresource())
 	}
 	gvk, err := dc.mapper.KindFor(watchAction.GetResource())
 	if err != nil {
-		return true, nil, errors.Wrapf(err, "failed to lookup kind for resource")
+		return true, nil, fmt.Errorf("failed to lookup kind for resource: %w", err)
 	}
 	listGVK := kinds.ListGVKForItemGVK(gvk)
 	restrictions := watchAction.GetWatchRestrictions()

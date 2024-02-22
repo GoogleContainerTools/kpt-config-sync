@@ -15,6 +15,7 @@
 package parse
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"sort"
@@ -22,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 )
 
@@ -62,7 +62,7 @@ func TestListPolicyFiles(t *testing.T) {
 			// Initialize a git repository.
 			out, err := exec.Command("git", "-C", dir.OSPath(), "init").CombinedOutput()
 			if err != nil {
-				t.Fatal(errors.Wrap(err, string(out)))
+				t.Fatal(fmt.Errorf("%s: %w", string(out), err))
 			}
 
 			// Add all of the specified files to the repository.
@@ -84,7 +84,7 @@ func TestListPolicyFiles(t *testing.T) {
 					}
 					out, err = exec.Command("git", "-C", dir.OSPath(), "add", f).CombinedOutput()
 					if err != nil {
-						t.Fatal(errors.Wrap(err, string(out)))
+						t.Fatal(fmt.Errorf("%s: %w", string(out), err))
 					}
 				}
 			}
@@ -97,7 +97,7 @@ func TestListPolicyFiles(t *testing.T) {
 					"-c", "user.email='team@example.comcmpath'",
 					"-C", dir.OSPath(), "commit", "-m", "add files").CombinedOutput()
 				if err != nil {
-					t.Fatal(errors.Wrap(err, string(out)))
+					t.Fatal(fmt.Errorf("%s: %w", string(out), err))
 				}
 			}
 

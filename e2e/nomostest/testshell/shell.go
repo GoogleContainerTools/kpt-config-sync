@@ -16,6 +16,7 @@ package testshell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,8 +25,6 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
-
-	"github.com/pkg/errors"
 )
 
 // TestShell is a helper utility to execute shell commands in a test.

@@ -15,10 +15,10 @@
 package kinds
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -66,9 +66,11 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				errors.Wrap(
+				fmt.Errorf(
+					"unsupported resource type (v1.Service): %w",
 					runtime.NewNotRegisteredErrForKind(emptyScheme.Name(), Service()),
-					"unsupported resource type (v1.Service)")),
+				),
+			),
 		},
 		{
 			name: "unstructured pre-populated GVK in scheme",
@@ -141,10 +143,10 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				errors.Wrap(
+				fmt.Errorf(
+					"failed to lookup object type: %w",
 					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})),
-					"failed to lookup object type")),
+						reflect.TypeOf(corev1.Service{})))),
 		},
 		{
 			name: "typed pre-populated GVK in scheme",
@@ -213,10 +215,10 @@ func TestToTypedObject(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				errors.Wrap(
+				fmt.Errorf(
+					"failed to lookup object type: %w",
 					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})),
-					"failed to lookup object type")),
+						reflect.TypeOf(corev1.Service{})))),
 		},
 		{
 			name: "typed unpopulated GVK in scheme",
@@ -402,10 +404,10 @@ func TestToUnstructured(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				errors.Wrap(
+				fmt.Errorf(
+					"failed to lookup object type: %w",
 					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})),
-					"failed to lookup object type")),
+						reflect.TypeOf(corev1.Service{})))),
 		},
 		{
 			name: "typed pre-populated GVK in scheme",
@@ -478,10 +480,10 @@ func TestToUnstructured(t *testing.T) {
 			},
 			scheme: emptyScheme,
 			expectedError: testutil.EqualError(
-				errors.Wrap(
+				fmt.Errorf(
+					"failed to lookup object type: %w",
 					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})),
-					"failed to lookup object type")),
+						reflect.TypeOf(corev1.Service{})))),
 		},
 		{
 			name: "typed unpopulated GVK in scheme",

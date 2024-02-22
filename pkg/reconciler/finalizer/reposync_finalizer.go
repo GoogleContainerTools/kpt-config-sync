@@ -16,8 +16,8 @@ package finalizer
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -55,7 +55,7 @@ type RepoSyncFinalizer struct {
 func (f *RepoSyncFinalizer) Finalize(ctx context.Context, syncObj client.Object) error {
 	rs, ok := syncObj.(*v1beta1.RepoSync)
 	if !ok {
-		return errors.Errorf("invalid syncObj type: expected *v1beta1.RepoSync, but got %T", syncObj)
+		return fmt.Errorf("invalid syncObj type: expected *v1beta1.RepoSync, but got %T", syncObj)
 	}
 
 	// Stop the parser & remediator
@@ -67,20 +67,20 @@ func (f *RepoSyncFinalizer) Finalize(ctx context.Context, syncObj client.Object)
 	klog.Info("Finalizer executing: Parser & Remediator stopped")
 
 	if _, err := f.setFinalizingCondition(ctx, rs); err != nil {
-		return errors.Wrap(err, "setting Finalizing condition")
+		return fmt.Errorf("setting Finalizing condition: %w", err)
 	}
 
 	if err := f.deleteManagedObjects(ctx, rs); err != nil {
-		return errors.Wrap(err, "deleting managed objects")
+		return fmt.Errorf("deleting managed objects: %w", err)
 	}
 	klog.Infof("Deletion of managed objects successful")
 
 	// TODO: optimize by combining these updates into a single update
 	if _, err := f.removeFinalizingCondition(ctx, rs); err != nil {
-		return errors.Wrap(err, "removing Finalizing condition")
+		return fmt.Errorf("removing Finalizing condition: %w", err)
 	}
 	if _, err := f.RemoveFinalizer(ctx, rs); err != nil {
-		return errors.Wrap(err, "removing finalizer")
+		return fmt.Errorf("removing finalizer: %w", err)
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func (f *RepoSyncFinalizer) AddFinalizer(ctx context.Context, syncObj client.Obj
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "failed to add finalizer")
+		return updated, fmt.Errorf("failed to add finalizer: %w", err)
 	}
 	if updated {
 		klog.Info("Finalizer injection successful")
@@ -121,7 +121,7 @@ func (f *RepoSyncFinalizer) RemoveFinalizer(ctx context.Context, syncObj client.
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "failed to remove finalizer")
+		return updated, fmt.Errorf("failed to remove finalizer: %w", err)
 	}
 	if updated {
 		klog.Info("Finalizer removal successful")
@@ -142,7 +142,7 @@ func (f *RepoSyncFinalizer) setFinalizingCondition(ctx context.Context, syncObj 
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "failed to set ReconcilerFinalizing condition")
+		return updated, fmt.Errorf("failed to set ReconcilerFinalizing condition: %w", err)
 	}
 	if updated {
 		klog.Info("ReconcilerFinalizing condition update successful")
@@ -163,7 +163,7 @@ func (f *RepoSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "failed to remove ReconcilerFinalizing condition")
+		return updated, fmt.Errorf("failed to remove ReconcilerFinalizing condition: %w", err)
 	}
 	if updated {
 		klog.Info("ReconcilerFinalizing condition removal successful")
@@ -179,7 +179,7 @@ func (f *RepoSyncFinalizer) deleteManagedObjects(ctx context.Context, syncObj *v
 	destroyErrs := f.Destroyer.Destroy(ctx)
 	// Update the FinalizerFailure condition whether the destroy succeeded or failed
 	if _, updateErr := f.updateFailureCondition(ctx, syncObj, destroyErrs); updateErr != nil {
-		updateErr = errors.Wrap(updateErr, "updating FinalizerFailure condition")
+		updateErr = fmt.Errorf("updating FinalizerFailure condition: %w", updateErr)
 		if destroyErrs != nil {
 			return status.Append(destroyErrs, updateErr)
 		}
@@ -209,7 +209,7 @@ func (f *RepoSyncFinalizer) updateFailureCondition(ctx context.Context, syncObj 
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "failed to set ReconcilerFinalizerFailure condition")
+		return updated, fmt.Errorf("failed to set ReconcilerFinalizerFailure condition: %w", err)
 	}
 	if updated {
 		klog.Info("ReconcilerFinalizerFailure condition update successful")

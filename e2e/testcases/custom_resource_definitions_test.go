@@ -15,13 +15,13 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -576,7 +576,7 @@ func hasRule(name string) testpredicates.Predicate {
 				return nil
 			}
 		}
-		return errors.Errorf("missing ValidatingWebhook %q", name)
+		return fmt.Errorf("missing ValidatingWebhook %q", name)
 	}
 }
 

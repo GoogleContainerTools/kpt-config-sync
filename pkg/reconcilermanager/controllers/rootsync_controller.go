@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -129,7 +129,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 				// Return an error to trigger retry.
 				metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 				// requeue for retry
-				return controllerruntime.Result{}, errors.Wrap(err, "failed to delete managed objects")
+				return controllerruntime.Result{}, fmt.Errorf("failed to delete managed objects: %w", err)
 			}
 			// cleanup successful
 			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
@@ -199,15 +199,15 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	default:
 		// Should have been caught by validation
-		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
+		return fmt.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
 	if _, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
-		return errors.Wrap(err, "upserting service account")
+		return fmt.Errorf("upserting service account: %w", err)
 	}
 
 	// Reconcile reconciler RBAC bindings.
 	if err := r.manageRBACBindings(ctx, reconcilerRef, rsRef, rs.Spec.SafeOverride().RoleRefs); err != nil {
-		return errors.Wrap(err, "configuring RBAC bindings")
+		return fmt.Errorf("configuring RBAC bindings: %w", err)
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -216,7 +216,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Upsert Root reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
-		return errors.Wrap(err, "upserting reconciler deployment")
+		return fmt.Errorf("upserting reconciler deployment: %w", err)
 	}
 
 	// Get the latest deployment to check the status.
@@ -224,7 +224,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if op == controllerutil.OperationResultNone {
 		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			return errors.Wrap(err, "getting reconciler deployment")
+			return fmt.Errorf("getting reconciler deployment: %w", err)
 		}
 	}
 
@@ -239,7 +239,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	result, err := kstatus.Compute(deployObj)
 	if err != nil {
-		return errors.Wrap(err, "computing reconciler deployment status")
+		return fmt.Errorf("computing reconciler deployment status: %w", err)
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -365,7 +365,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 	}
 
 	if err != nil {
-		err = errors.Wrap(err, stage)
+		err = fmt.Errorf("%s: %w", stage, err)
 	}
 	return err // retry
 }
@@ -376,7 +376,7 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting reconciler deployment")
+		return fmt.Errorf("deleting reconciler deployment: %w", err)
 	}
 
 	// Note: ConfigMaps have been replaced by Deployment env vars.
@@ -384,18 +384,18 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// This deletion remains to clean up after users upgrade.
 
 	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting config maps")
+		return fmt.Errorf("deleting config maps: %w", err)
 	}
 
 	// Note: ReconcilerManager doesn't manage the RootSync Secret.
 	// So we don't need to delete it here.
 
 	if err := r.cleanRBACBindings(ctx, reconcilerRef, rsRef); err != nil {
-		return errors.Wrap(err, "deleting RBAC bindings")
+		return fmt.Errorf("deleting RBAC bindings: %w", err)
 	}
 
 	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting service account")
+		return fmt.Errorf("deleting service account: %w", err)
 	}
 
 	return nil
@@ -845,7 +845,7 @@ func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 func (r *RootSyncReconciler) validateRoleRefs(roleRefs []v1beta1.RootSyncRoleRef) error {
 	for _, roleRef := range roleRefs {
 		if roleRef.Kind == "Role" && roleRef.Namespace == "" {
-			return errors.Errorf("namespace must be provided for roleRef with kind Role.")
+			return fmt.Errorf("namespace must be provided for roleRef with kind Role.")
 		}
 	}
 	return nil
@@ -902,9 +902,9 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return errors.Errorf("Secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
+			return fmt.Errorf("Secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
 		}
-		return errors.Wrapf(err, "Secret %s get failed", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
+		return fmt.Errorf("Secret %s get failed: %w", v1beta1.GetSecretName(rootSync.Spec.SecretRef), err)
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]
@@ -924,7 +924,7 @@ func (r *RootSyncReconciler) listCurrentRoleRefs(ctx context.Context, rsRef type
 	}
 	rbList := rbacv1.RoleBindingList{}
 	if err := r.client.List(ctx, &rbList, opts); err != nil {
-		return nil, errors.Wrap(err, "listing RoleBindings")
+		return nil, fmt.Errorf("listing RoleBindings: %w", err)
 	}
 	for idx, rb := range rbList.Items {
 		roleRef := v1beta1.RootSyncRoleRef{
@@ -936,7 +936,7 @@ func (r *RootSyncReconciler) listCurrentRoleRefs(ctx context.Context, rsRef type
 	}
 	crbList := rbacv1.ClusterRoleBindingList{}
 	if err := r.client.List(ctx, &crbList, opts); err != nil {
-		return nil, errors.Wrap(err, "listing ClusterRoleBindings")
+		return nil, fmt.Errorf("listing ClusterRoleBindings: %w", err)
 	}
 	for idx, crb := range crbList.Items {
 		roleRef := v1beta1.RootSyncRoleRef{
@@ -955,14 +955,14 @@ func (r *RootSyncReconciler) cleanRBACBindings(ctx context.Context, reconcilerRe
 	}
 	for _, binding := range currentRefMap {
 		if err := r.cleanup(ctx, binding); err != nil {
-			return errors.Wrap(err, "deleting RBAC Binding")
+			return fmt.Errorf("deleting RBAC Binding: %w", err)
 		}
 	}
 	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "deleting legacy binding")
+		return fmt.Errorf("deleting legacy binding: %w", err)
 	}
 	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "deleting base binding")
+		return fmt.Errorf("deleting base binding: %w", err)
 	}
 	return nil
 }
@@ -982,11 +982,11 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 		// Clean up any RoleRefs created previously that are no longer declared
 		for _, binding := range currentRefMap {
 			if err := r.cleanup(ctx, binding); err != nil {
-				return errors.Wrap(err, "deleting RBAC Binding")
+				return fmt.Errorf("deleting RBAC Binding: %w", err)
 			}
 		}
 		if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
-			return errors.Wrap(err, "deleting base binding")
+			return fmt.Errorf("deleting base binding: %w", err)
 		}
 		return nil
 	}
@@ -1000,7 +1000,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 		if _, ok := currentRefMap[roleRef]; !ok {
 			// we need to call a separate create method here for generateName
 			if _, err := r.createRBACBinding(ctx, reconcilerRef, rsRef, roleRef); err != nil {
-				return errors.Wrap(err, "creating RBAC Binding")
+				return fmt.Errorf("creating RBAC Binding: %w", err)
 			}
 		}
 	}
@@ -1015,11 +1015,11 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	for roleRef, binding := range currentRefMap {
 		if _, ok := declaredRefMap[roleRef]; ok { // update
 			if err := r.updateRBACBinding(ctx, reconcilerRef, rsRef, binding); err != nil {
-				return errors.Wrap(err, "upserting RBAC Binding")
+				return fmt.Errorf("upserting RBAC Binding: %w", err)
 			}
 		} else { // Clean up any RoleRefs created previously that are no longer declared
 			if err := r.cleanup(ctx, binding); err != nil {
-				return errors.Wrap(err, "deleting RBAC Binding")
+				return fmt.Errorf("deleting RBAC Binding: %w", err)
 			}
 		}
 	}
@@ -1028,7 +1028,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	// In older versions, this ClusterRoleBinding was always bound to cluster-admin.
 	// This ensures smooth migrations for users upgrading past that version boundary.
 	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "deleting legacy binding")
+		return fmt.Errorf("deleting legacy binding: %w", err)
 	}
 	return nil
 }
@@ -1130,7 +1130,7 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "Sync status update failed")
+		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}
 	if updated {
 		r.logger(ctx).Info("Sync status update successful")
@@ -1162,7 +1162,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
-			return errors.Errorf("expected appsv1 Deployment, got: %T", obj)
+			return fmt.Errorf("expected appsv1 Deployment, got: %T", obj)
 		}
 		// Remove existing OwnerReferences, now that we're using finalizers.
 		d.OwnerReferences = nil
@@ -1302,7 +1302,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			case metrics.OtelAgentName:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			default:
-				return errors.Errorf("unknown container in reconciler deployment template: %q", container.Name)
+				return fmt.Errorf("unknown container in reconciler deployment template: %q", container.Name)
 			}
 			if addContainer {
 				// Common mutations for all containers

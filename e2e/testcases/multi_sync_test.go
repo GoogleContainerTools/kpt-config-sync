@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -261,7 +260,7 @@ func waitForResourcesCurrent(nt *nomostest.NT, gvk schema.GroupVersionKind, labe
 		return err
 	}
 	if len(list.Items) != expectedCount {
-		return errors.Errorf("expected %d reconciler %s(s), got %d",
+		return fmt.Errorf("expected %d reconciler %s(s), got %d",
 			expectedCount, gvk.Kind, len(list.Items))
 	}
 	tg := taskgroup.New()
@@ -890,7 +889,7 @@ func roleHasRules(wantRules []rbacv1.PolicyRule) testpredicates.Predicate {
 		}
 
 		if diff := cmp.Diff(wantRules, r.Rules); diff != "" {
-			return errors.Errorf("Pod Role .rules diff: %s", diff)
+			return fmt.Errorf("Pod Role .rules diff: %s", diff)
 		}
 		return nil
 	}

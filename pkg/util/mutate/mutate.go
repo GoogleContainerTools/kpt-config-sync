@@ -16,8 +16,9 @@ package mutate
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/retry"
@@ -73,7 +74,7 @@ func Status(ctx context.Context, c client.Client, obj client.Object, mutateFn Fu
 		if obj.GetGeneration() != oldGen {
 			// If the spec changed, stop trying to update the status.
 			// When this happens, the controller should re-reconcile with the new spec.
-			return errors.Errorf("generation changed while attempting to update status: %d -> %d",
+			return fmt.Errorf("generation changed while attempting to update status: %d -> %d",
 				oldGen, newGen)
 		}
 		return mutateFn()
@@ -105,7 +106,7 @@ func withRetry(ctx context.Context, c updater, obj client.Object, mutate Func) (
 			// No change necessary.
 			return false, nil
 		}
-		return false, c.WrapError(ctx, obj, errors.Wrap(err, "mutating object"))
+		return false, c.WrapError(ctx, obj, fmt.Errorf("mutating object: %w", err))
 	}
 	retryErr := retry.OnError(retry.DefaultRetry, RetriableOrConflict, func() error {
 		// If ResourceVersion is NOT set, request the latest object from the server.
@@ -113,7 +114,7 @@ func withRetry(ctx context.Context, c updater, obj client.Object, mutate Func) (
 		if obj.GetResourceVersion() == "" {
 			if getErr := c.Get(ctx, obj); getErr != nil {
 				// Return the GET error & retry
-				return errors.Wrap(getErr, "failed to get latest version of object")
+				return fmt.Errorf("failed to get latest version of object: %w", getErr)
 			}
 			if obj.GetUID() != uid {
 				// Stop retrying
@@ -122,7 +123,7 @@ func withRetry(ctx context.Context, c updater, obj client.Object, mutate Func) (
 			// Mutate the latest object from the server
 			if err := mutate(); err != nil {
 				// Stop retrying
-				return errors.Wrap(err, "failed to mutate object")
+				return fmt.Errorf("failed to mutate object: %w", err)
 			}
 		}
 		if updateErr := c.Update(ctx, obj); updateErr != nil {
@@ -184,7 +185,7 @@ func (c *specClient) Update(ctx context.Context, obj client.Object) error {
 // WrapError returns the specified error wrapped with extra context specific
 // to this updater.
 func (c *specClient) WrapError(_ context.Context, obj client.Object, err error) error {
-	return errors.Wrapf(err, "failed to update object: %s", kinds.ObjectSummary(obj))
+	return fmt.Errorf("failed to update object: %s: %w", kinds.ObjectSummary(obj), err)
 }
 
 type statusClient struct {
@@ -204,5 +205,5 @@ func (c *statusClient) Update(ctx context.Context, obj client.Object) error {
 // WrapError returns the specified error wrapped with extra context specific
 // to this updater.
 func (c *statusClient) WrapError(_ context.Context, obj client.Object, err error) error {
-	return errors.Wrapf(err, "failed to update object status: %s", kinds.ObjectSummary(obj))
+	return fmt.Errorf("failed to update object status: %s: %w", kinds.ObjectSummary(obj), err)
 }

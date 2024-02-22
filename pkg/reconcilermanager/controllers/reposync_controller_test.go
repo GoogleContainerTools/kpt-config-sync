@@ -28,7 +28,6 @@ import (
 	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -4475,11 +4474,11 @@ func validateServiceAccounts(wants map[core.ID]*corev1.ServiceAccount, fakeClien
 		ctx := context.Background()
 		err := fakeClient.Get(ctx, key, got)
 		if err != nil {
-			return errors.Errorf("ServiceAccount[%s] not found", key)
+			return fmt.Errorf("ServiceAccount[%s] not found", key)
 		}
 
 		if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
-			return errors.Errorf("ServiceAccount[%s/%s] diff: %s", got.Namespace, got.Name, diff)
+			return fmt.Errorf("ServiceAccount[%s/%s] diff: %s", got.Namespace, got.Name, diff)
 		}
 	}
 	return nil
@@ -4505,24 +4504,24 @@ func validateClusterRoleBinding(want *rbacv1.ClusterRoleBinding, fakeClient *syn
 	ctx := context.Background()
 	err := fakeClient.Get(ctx, key, got)
 	if err != nil {
-		return errors.Errorf("ClusterRoleBinding[%s] not found", key)
+		return fmt.Errorf("ClusterRoleBinding[%s] not found", key)
 	}
 	if len(want.Subjects) != len(got.Subjects) {
-		return errors.Errorf("ClusterRoleBinding[%s] has unexpected number of subjects, expected %d, got %d",
+		return fmt.Errorf("ClusterRoleBinding[%s] has unexpected number of subjects, expected %d, got %d",
 			key, len(want.Subjects), len(got.Subjects))
 	}
 	for _, ws := range want.Subjects {
 		for _, gs := range got.Subjects {
 			if ws.Namespace == gs.Namespace && ws.Name == gs.Name {
 				if !reflect.DeepEqual(ws, gs) {
-					return errors.Errorf("ClusterRoleBinding[%s] has unexpected subject, expected %v, got %v", key, ws, gs)
+					return fmt.Errorf("ClusterRoleBinding[%s] has unexpected subject, expected %v, got %v", key, ws, gs)
 				}
 			}
 		}
 	}
 	got.Subjects = want.Subjects
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
-		return errors.Errorf("ClusterRoleBinding[%s] diff: %s", key, diff)
+		return fmt.Errorf("ClusterRoleBinding[%s] diff: %s", key, diff)
 	}
 	return nil
 }
@@ -4540,42 +4539,42 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 			Namespace(id.Namespace).
 			Get(ctx, id.Name, metav1.GetOptions{})
 		if err != nil {
-			return errors.Wrapf(err, "Deployment[%s] not found", id.ObjectKey)
+			return fmt.Errorf("Deployment[%s] not found: %w", id.ObjectKey, err)
 		}
 		gotCoreObject, err := kinds.ToTypedObject(uObj, core.Scheme)
 		if err != nil {
-			return errors.Errorf("Deployment[%s] conversion failed", id.ObjectKey)
+			return fmt.Errorf("Deployment[%s] conversion failed", id.ObjectKey)
 		}
 		got := gotCoreObject.(*appsv1.Deployment)
 
 		// Compare Deployment ResourceVersion
 		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
-			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q: Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected Deployment ResourceVersion found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Generation
 		if diff := cmp.Diff(want.Generation, got.Generation); diff != "" {
-			return errors.Errorf("Unexpected Deployment Generation found for %q: Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected Deployment Generation found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Annotations
 		if diff := cmp.Diff(want.Annotations, got.Annotations); diff != "" {
-			return errors.Errorf("Unexpected Deployment Annotations found for %q: Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected Deployment Annotations found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Deployment Template Annotations.
 		if diff := cmp.Diff(want.Spec.Template.Annotations, got.Spec.Template.Annotations); diff != "" {
-			return errors.Errorf("Unexpected Template Annotations found for %q: Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected Template Annotations found for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare ServiceAccountName.
 		if diff := cmp.Diff(want.Spec.Template.Spec.ServiceAccountName, got.Spec.Template.Spec.ServiceAccountName); diff != "" {
-			return errors.Errorf("Unexpected ServiceAccountName for %q: Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected ServiceAccountName for %q: Diff (- want, + got): %v", id, diff)
 		}
 
 		// Compare Replicas
 		if *want.Spec.Replicas != *got.Spec.Replicas {
-			return errors.Errorf("Unexpected Replicas for %q. want %d, got %d", id, *want.Spec.Replicas, *got.Spec.Replicas)
+			return fmt.Errorf("Unexpected Replicas for %q. want %d, got %d", id, *want.Spec.Replicas, *got.Spec.Replicas)
 		}
 
 		// Compare Containers.
@@ -4588,7 +4587,7 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 			gotContainerNames = append(gotContainerNames, j.Name)
 		}
 		if diff := cmp.Diff(wantContainerNames, gotContainerNames, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
-			return errors.Errorf("Unexpected containers for %q, want %s, got %s", id,
+			return fmt.Errorf("Unexpected containers for %q, want %s, got %s", id,
 				wantContainerNames, gotContainerNames)
 		}
 		for _, i := range want.Spec.Template.Spec.Containers {
@@ -4597,28 +4596,28 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 					// Compare EnvFrom fields in the container.
 					if diff := cmp.Diff(i.EnvFrom, j.EnvFrom,
 						cmpopts.SortSlices(func(x, y corev1.EnvFromSource) bool { return x.ConfigMapRef.Name < y.ConfigMapRef.Name })); diff != "" {
-						return errors.Errorf("Unexpected configMapRef found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
+						return fmt.Errorf("Unexpected configMapRef found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 					// Compare VolumeMount fields in the container.
 					if diff := cmp.Diff(i.VolumeMounts, j.VolumeMounts,
 						cmpopts.SortSlices(func(x, y corev1.VolumeMount) bool { return x.Name < y.Name })); diff != "" {
-						return errors.Errorf("Unexpected volumeMount found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
+						return fmt.Errorf("Unexpected volumeMount found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Env fields in the container.
 					if diff := cmp.Diff(i.Env, j.Env,
 						cmpopts.SortSlices(func(x, y corev1.EnvVar) bool { return x.Name < y.Name })); diff != "" {
-						return errors.Errorf("Unexpected EnvVar found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
+						return fmt.Errorf("Unexpected EnvVar found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Resources fields in the container.
 					if diff := cmp.Diff(i.Resources, j.Resources); diff != "" {
-						return errors.Errorf("Unexpected resources found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
+						return fmt.Errorf("Unexpected resources found for the %q container of %q: Diff (- want, + got): %v", i.Name, id, diff)
 					}
 
 					// Compare Args
 					if diff := cmp.Diff(i.Args, j.Args); diff != "" {
-						return errors.Errorf("Unexpected args found for the %q container of %q, diff %s", i.Name, id, diff)
+						return fmt.Errorf("Unexpected args found for the %q container of %q, diff %s", i.Name, id, diff)
 					}
 				}
 			}
@@ -4634,7 +4633,7 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 			gotVolumeNames = append(gotVolumeNames, j.Name)
 		}
 		if diff := cmp.Diff(wantVolumeNames, gotVolumeNames, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
-			return errors.Errorf("Unexpected volumes for %q, want %s, got %s", id,
+			return fmt.Errorf("Unexpected volumes for %q, want %s, got %s", id,
 				wantVolumeNames, gotVolumeNames)
 		}
 		for _, wantVolume := range want.Spec.Template.Spec.Volumes {
@@ -4642,7 +4641,7 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 				if wantVolume.Name == gotVolume.Name {
 					// Compare VolumeSource
 					if diff := cmp.Diff(wantVolume.VolumeSource, gotVolume.VolumeSource); diff != "" {
-						return errors.Errorf("Unexpected volumeSource for the %q volume of %q, diff %s", gotVolume.Name, id, diff)
+						return fmt.Errorf("Unexpected volumeSource for the %q volume of %q, diff %s", gotVolume.Name, id, diff)
 					}
 				}
 			}
@@ -4650,7 +4649,7 @@ func validateDeployments(wants map[core.ID]*appsv1.Deployment, fakeDynamicClient
 
 		// Compare Deployment ResourceVersion
 		if diff := cmp.Diff(want.ResourceVersion, got.ResourceVersion); diff != "" {
-			return errors.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff (- want, + got): %v", id, diff)
+			return fmt.Errorf("Unexpected Deployment ResourceVersion found for %q. Diff (- want, + got): %v", id, diff)
 		}
 
 		for _, v := range validations {
@@ -4678,7 +4677,7 @@ func validateResourceDeleted(id core.ID, fakeClient *syncerFake.Client) error {
 	} else if err != nil {
 		return err
 	}
-	return errors.Errorf("resource %s still exists: %#v", id, got)
+	return fmt.Errorf("resource %s still exists: %#v", id, got)
 }
 
 func validateResourceExists(id core.ID, fakeClient *syncerFake.Client) error {
@@ -4693,7 +4692,7 @@ func validateResourceExists(id core.ID, fakeClient *syncerFake.Client) error {
 	ctx := context.Background()
 	err = fakeClient.Get(ctx, key, got)
 	if apierrors.IsNotFound(err) {
-		return errors.Errorf("resource %s does not exist: %#v", id, got)
+		return fmt.Errorf("resource %s does not exist: %#v", id, got)
 	} else if err != nil {
 		return err
 	}

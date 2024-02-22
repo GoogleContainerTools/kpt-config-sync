@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -155,7 +154,7 @@ func NewRepository(
 func (g *Repository) Create() error {
 	repoName, err := g.GitProvider.CreateRepository(g.Name)
 	if err != nil {
-		return errors.Wrapf(err, "creating repo: %s", g.Name)
+		return fmt.Errorf("creating repo: %s: %w", g.Name, err)
 	}
 	g.RemoteRepoName = repoName
 	return nil
@@ -219,7 +218,7 @@ func (g *Repository) InitialCommit(sourceFormat filesystem.SourceFormat) error {
 		// It is an error for unstructured repos to include the Repo object.
 		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 	default:
-		return errors.Errorf("Unrecognized SourceFormat: %q", sourceFormat)
+		return fmt.Errorf("Unrecognized SourceFormat: %q", sourceFormat)
 	}
 	g.Format = sourceFormat
 	return g.CommitAndPush("initial commit")
@@ -229,13 +228,13 @@ func (g *Repository) InitialCommit(sourceFormat filesystem.SourceFormat) error {
 // under test.
 func (g *Repository) Init() error {
 	if err := os.RemoveAll(g.Root); err != nil {
-		return errors.Wrapf(err, "deleting root directory: %s", g.Root)
+		return fmt.Errorf("deleting root directory: %s: %w", g.Root, err)
 	}
 	g.isEmpty = true
 
 	err := os.MkdirAll(g.Root, fileMode)
 	if err != nil {
-		return errors.Wrapf(err, "creating root directory: %s", g.Root)
+		return fmt.Errorf("creating root directory: %s: %w", g.Root, err)
 	}
 
 	return g.BulkGit(
@@ -293,17 +292,17 @@ func (g *Repository) Get(path string) (client.Object, error) {
 	switch ext {
 	case ".yaml", ".yml", ".json":
 		if err := yaml.Unmarshal(bytes, uObj); err != nil {
-			return nil, errors.Wrap(err, "decoding yaml/json file as object")
+			return nil, fmt.Errorf("decoding yaml/json file as object: %w", err)
 		}
 	default:
 		// If you're seeing this error, use "GetFile" instead to test ignoring
 		// files with extensions we ignore.
-		return nil, errors.Errorf("invalid extension to read object from, %q, use .GetFile() instead", ext)
+		return nil, fmt.Errorf("invalid extension to read object from, %q, use .GetFile() instead", ext)
 	}
 
 	gvk := uObj.GroupVersionKind()
 	if gvk.Empty() {
-		return nil, errors.Errorf("missing GVK in file: %s", path)
+		return nil, fmt.Errorf("missing GVK in file: %s", path)
 	}
 
 	// Lookup type by GVK of those registered with the Scheme
@@ -313,7 +312,7 @@ func (g *Repository) Get(path string) (client.Object, error) {
 		if runtime.IsNotRegisteredError(err) {
 			return uObj, nil
 		}
-		return nil, errors.Wrap(err, "creating typed object from gvk")
+		return nil, fmt.Errorf("creating typed object from gvk: %w", err)
 	}
 
 	obj, ok := tObj.(client.Object)
@@ -328,7 +327,7 @@ func (g *Repository) Get(path string) (client.Object, error) {
 	// Convert the unstructured object to a typed object
 	err = runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.UnstructuredContent(), obj)
 	if err != nil {
-		return nil, errors.Wrap(err, "converting typed object to unstructured")
+		return nil, fmt.Errorf("converting typed object to unstructured: %w", err)
 	}
 	return obj, nil
 }
@@ -350,7 +349,7 @@ func (g *Repository) GetAll(dirPath string, recursive bool) ([]client.Object, er
 
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "reading directory: %s", absPath)
+		return nil, fmt.Errorf("reading directory: %s: %w", absPath, err)
 	}
 
 	var objs []client.Object
@@ -423,7 +422,7 @@ func (g *Repository) GetFile(path string) ([]byte, error) {
 
 	bytes, err := os.ReadFile(absPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "reading file: %s", absPath)
+		return nil, fmt.Errorf("reading file: %s: %w", absPath, err)
 	}
 
 	return bytes, nil
@@ -447,11 +446,11 @@ func (g *Repository) Copy(sourceDir, destDir string) error {
 	parentDir := filepath.Dir(absDestPath)
 	if absDestPath != parentDir {
 		if err := os.MkdirAll(parentDir, os.ModePerm); err != nil {
-			return errors.Errorf("failed to create directory: %s", parentDir)
+			return fmt.Errorf("failed to create directory: %s", parentDir)
 		}
 	}
 	if out, err := exec.Command("cp", "-r", sourceDir, absDestPath).CombinedOutput(); err != nil {
-		return errors.Errorf("failed to copy directory: %s", string(out))
+		return fmt.Errorf("failed to copy directory: %s", string(out))
 	}
 	// Add the directory to Git.
 	_, err := g.Git("add", absDestPath)
@@ -473,7 +472,7 @@ func (g *Repository) Remove(path string) error {
 	absPath := filepath.Join(g.Root, path)
 
 	if err := os.RemoveAll(absPath); err != nil {
-		return errors.Wrapf(err, "deleting path: %s", absPath)
+		return fmt.Errorf("deleting path: %s: %w", absPath, err)
 	}
 
 	_, err := g.Git("add", absPath)
@@ -489,7 +488,7 @@ func (g *Repository) Exists(path string) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, errors.Wrapf(err, "describing file path: %s", absPath)
+		return false, fmt.Errorf("describing file path: %s: %w", absPath, err)
 	}
 	return true, nil
 }
@@ -538,7 +537,7 @@ func (g *Repository) Push(args ...string) error {
 		return g.push(remoteURL, args...)
 	})
 	if err != nil {
-		return errors.Wrapf(err, "failed to push after retrying for %v", took)
+		return fmt.Errorf("failed to push after retrying for %v: %w", took, err)
 	}
 	g.Logger.Infof("took %v to push", took)
 	return nil
@@ -603,7 +602,7 @@ func (g *Repository) CurrentBranch() (string, error) {
 func (g *Repository) Hash() (string, error) {
 	out, err := g.Git("rev-parse", "--verify", "HEAD")
 	if err != nil {
-		return "", errors.Wrap(err, "getting the current local commit hash")
+		return "", fmt.Errorf("getting the current local commit hash: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

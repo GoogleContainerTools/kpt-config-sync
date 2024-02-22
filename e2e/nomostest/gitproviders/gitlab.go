@@ -16,13 +16,13 @@ package gitproviders
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
 )
@@ -70,7 +70,7 @@ func (g *GitlabClient) SyncURL(name string) string {
 func (g *GitlabClient) CreateRepository(name string) (string, error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
-		return "", errors.Wrap(err, "failed to generate a new UUID")
+		return "", fmt.Errorf("failed to generate a new UUID: %w", err)
 	}
 
 	repoName := name + "-" + u.String()
@@ -88,7 +88,7 @@ func (g *GitlabClient) CreateRepository(name string) (string, error) {
 		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 	if err != nil {
-		return "", errors.Wrap(err, string(out))
+		return "", fmt.Errorf("%s: %w", string(out), err)
 	}
 	if !strings.Contains(string(out), fmt.Sprintf("\"name\":\"%s\"", repoName)) {
 		return "", errors.New(string(out))
@@ -105,14 +105,14 @@ func GetProjectID(g *GitlabClient, name string) (string, error) {
 		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 	if err != nil {
-		return "", errors.Wrap(err, fmt.Sprintf("Failure retrieving id for project %s", name))
+		return "", fmt.Errorf("Failure retrieving id for project %s: %w", name, err)
 	}
 
 	var response []interface{}
 
 	err = json.Unmarshal(out, &response)
 	if err != nil {
-		return "", errors.Wrap(err, string(out))
+		return "", fmt.Errorf("%s: %w", string(out), err)
 	}
 
 	var float float64
@@ -120,18 +120,18 @@ func GetProjectID(g *GitlabClient, name string) (string, error) {
 
 	// the assumption is that our project name is unique, so we'll get exactly 1 result
 	if len(response) < 1 {
-		return "", errors.Wrap(err, fmt.Sprintf("Project with name %s wasn't found", name))
+		return "", fmt.Errorf("Project with name %s: %w", name, err)
 	}
 	if len(response) > 1 {
-		return "", errors.Wrap(err, fmt.Sprintf("Project with name %s is not unique", name))
+		return "", fmt.Errorf("Project with name %s is not unique: %w", name, err)
 	}
 	m := response[0].(map[string]interface{})
 	if x, found := m["id"]; found {
 		if float, ok = x.(float64); !ok {
-			return "", errors.Wrap(err, "Project id in the respose isn't a float")
+			return "", fmt.Errorf("Project id in the respose isn't a float: %w", err)
 		}
 	} else {
-		return "", errors.Wrap(err, "Project id wasn't found in the response")
+		return "", fmt.Errorf("Project id wasn't found in the response: %w", err)
 	}
 	id := fmt.Sprintf("%.0f", float)
 
@@ -145,14 +145,14 @@ func (g *GitlabClient) DeleteRepositories(names ...string) error {
 	for _, name := range names {
 		id, err := GetProjectID(g, name)
 		if err != nil {
-			errs = multierr.Append(errs, errors.Wrap(err, "invalid repo name"))
+			errs = multierr.Append(errs, fmt.Errorf("invalid repo name: %w", err))
 		} else {
 			out, err := exec.Command("curl", "-s", "--request", "DELETE",
 				fmt.Sprintf("https://gitlab.com/api/v4/projects/%s", id),
 				"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 			if err != nil {
-				errs = multierr.Append(errs, errors.Wrap(err, string(out)))
+				errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
 			}
 
 			if !strings.Contains(string(out), "\"message\":\"202 Accepted\"") {
@@ -181,11 +181,11 @@ func (g *GitlabClient) DeleteRepoByID(ids ...string) error {
 			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 		if err != nil {
-			errs = multierr.Append(errs, errors.Wrap(err, string(out)))
+			errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
 		}
 
 		if !strings.Contains(string(out), "\"message\":\"202 Accepted\"") {
-			return errors.Errorf("unexpected response in DeleteRepoByID: %s", string(out))
+			return fmt.Errorf("unexpected response in DeleteRepoByID: %s", string(out))
 		}
 	}
 	return errs
@@ -206,7 +206,7 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 		if err != nil {
-			return result, errors.Wrap(err, "Failure retrieving obsolete repos")
+			return result, fmt.Errorf("Failure retrieving obsolete repos: %w", err)
 		}
 
 		if len(out) <= 2 {
@@ -218,7 +218,7 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 
 		err = json.Unmarshal(out, &response)
 		if err != nil {
-			return nil, errors.Wrap(err, string(out))
+			return nil, fmt.Errorf("%s: %w", string(out), err)
 		}
 
 		for i := range response {
@@ -227,12 +227,12 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 				var id float64
 				var ok bool
 				if id, ok = flt.(float64); !ok {
-					return result, errors.Wrap(err, "Project id in the response isn't a float")
+					return result, fmt.Errorf("Project id in the response isn't a float: %w", err)
 				}
 				result = append(result, fmt.Sprintf("%.0f", id))
 
 			} else {
-				return result, errors.Wrap(err, "Project id wasn't found in the response")
+				return result, fmt.Errorf("Project id wasn't found in the response: %w", err)
 			}
 		}
 	}

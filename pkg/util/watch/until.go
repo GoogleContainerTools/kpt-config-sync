@@ -16,8 +16,8 @@ package watch
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -140,22 +140,19 @@ func UntilDeletedWithSync(ctx context.Context, c client.WithWatch, obj client.Ob
 		switch e.Type {
 		case watchapi.Error:
 			// Stop waiting - UntilWithSync uses UntilWithoutRetry
-			return true, errors.Wrapf(apierrors.FromObject(e.Object),
-				"error event while watching: %s", kinds.ObjectSummary(obj))
+			return true, fmt.Errorf("error event while watching: %s: %w", kinds.ObjectSummary(obj), apierrors.FromObject(e.Object))
 		case watchapi.Added, watchapi.Modified, watchapi.Bookmark:
 			// Simulate DeepCopyInto by encoding the new object into the object
 			// passed in by the caller.
 			yamlBytes, err := runtime.Encode(yamlSerializer, e.Object)
 			if err != nil {
 				// Stop waiting - invalid object
-				return true, errors.Wrapf(err, "encoding event object to YAML while watching: %s",
-					kinds.ObjectSummary(obj))
+				return true, fmt.Errorf("encoding event object to YAML while watching: %s: %w", kinds.ObjectSummary(obj), err)
 			}
 			_, _, err = decoder.Decode(yamlBytes, nil, obj)
 			if err != nil {
 				// Stop waiting - invalid object
-				return true, errors.Wrapf(err, "decoding event object YAML to %T while watching: %s",
-					obj, kinds.ObjectSummary(obj))
+				return true, fmt.Errorf("decoding event object YAML to %T while watching: %s: %w", obj, kinds.ObjectSummary(obj), err)
 			}
 			// Keep waiting - object still exists
 			return false, nil
@@ -164,7 +161,7 @@ func UntilDeletedWithSync(ctx context.Context, c client.WithWatch, obj client.Ob
 			return true, nil
 		default:
 			// Stop waiting - invalid event type
-			return true, errors.Errorf("unexpected event type %s while watching: %s: %v",
+			return true, fmt.Errorf("unexpected event type %s while watching: %s: %v",
 				e.Type, kinds.ObjectSummary(obj), e)
 		}
 	})

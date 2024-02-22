@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -210,12 +209,12 @@ func validateRoleRefs(nt *nomostest.NT, syncKind string, rsRef types.NamespacedN
 	}
 	totalBindings := len(roleBindings) + len(clusterRoleBindings)
 	if len(expected) != totalBindings {
-		return errors.Errorf("expected %d bindings but found %d",
+		return fmt.Errorf("expected %d bindings but found %d",
 			len(expected), totalBindings)
 	}
 	for _, roleRef := range expected {
 		if actualRoleRefCount[roleRef] != 1 {
-			return errors.Errorf("expected to find one binding mapping to %s, found %d",
+			return fmt.Errorf("expected to find one binding mapping to %s, found %d",
 				roleRef, actualRoleRefCount[roleRef])
 		}
 	}

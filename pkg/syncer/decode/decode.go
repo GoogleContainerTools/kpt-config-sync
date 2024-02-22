@@ -18,7 +18,6 @@ package decode
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,7 +65,7 @@ func (d *genericResourceDecoder) DecodeResources(genericResources []v1.GenericRe
 					var err error
 					o, _, err = d.decoder.Decode(genericObject.Raw, &gvk, u)
 					if err != nil {
-						return nil, errors.Wrapf(err, "could not decode client.Object from %q RawExtension bytes", gvk)
+						return nil, fmt.Errorf("could not decode client.Object from %q RawExtension bytes: %w", gvk, err)
 					}
 				}
 				au, ok := o.(*unstructured.Unstructured)

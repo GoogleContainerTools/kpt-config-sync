@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -221,7 +220,7 @@ func (c *clientApplier) clientFor(obj *unstructured.Unstructured) (dynamic.Resou
 	gvk := obj.GroupVersionKind()
 	apiResource, rErr := c.resource(gvk)
 	if rErr != nil {
-		return nil, errors.Wrapf(rErr, "unable to get resource client for %q", gvk.String())
+		return nil, fmt.Errorf("unable to get resource client for %q: %w", gvk.String(), rErr)
 	}
 
 	gvr := gvk.GroupVersion().WithResource(apiResource)
@@ -262,7 +261,7 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 	// Serialize the current configuration of the object.
 	current, cErr := runtime.Encode(unstructured.UnstructuredJSONScheme, currentState)
 	if cErr != nil {
-		return nil, errors.Errorf("could not serialize current configuration from %v", currentState)
+		return nil, fmt.Errorf("could not serialize current configuration from %v", currentState)
 	}
 
 	var previous []byte
@@ -270,7 +269,7 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 	// Retrieve the last applied configuration of the object from the annotation.
 	previous, oErr = util.GetOriginalConfiguration(currentState)
 	if oErr != nil {
-		return nil, errors.Errorf("could not retrieve original configuration from %v", currentState)
+		return nil, fmt.Errorf("could not retrieve original configuration from %v", currentState)
 	}
 	if previous == nil {
 		klog.Warningf("3-way merge patch for %s may be incorrect due to missing last-applied-configuration annotation.", resourceDescription)
@@ -281,7 +280,7 @@ func (c *clientApplier) updateAPIService(ctx context.Context, intendedState, cur
 
 	modified, mErr = util.GetModifiedConfiguration(intendedState, true, unstructured.UnstructuredJSONScheme)
 	if mErr != nil {
-		return nil, errors.Errorf("could not serialize intended configuration from %v", intendedState)
+		return nil, fmt.Errorf("could not serialize intended configuration from %v", intendedState)
 	}
 
 	resourceClient, rErr := c.clientFor(intendedState)
@@ -377,7 +376,7 @@ func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name
 
 	if err := ctx.Err(); err != nil {
 		// We've already encountered an error, so do not attempt update.
-		return errors.Wrapf(err, "patch cancelled due to context error")
+		return fmt.Errorf("patch cancelled due to context error: %w", err)
 	}
 
 	start := time.Now()
@@ -392,7 +391,7 @@ func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name
 func (c *clientApplier) resource(gvk schema.GroupVersionKind) (string, error) {
 	apiResources, err := c.discoveryClient.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
 	if err != nil {
-		return "", errors.Wrapf(err, "could not look up %s using discovery API", gvk)
+		return "", fmt.Errorf("could not look up %s using discovery API: %w", gvk, err)
 	}
 
 	for _, r := range apiResources.APIResources {
@@ -401,7 +400,7 @@ func (c *clientApplier) resource(gvk schema.GroupVersionKind) (string, error) {
 		}
 	}
 
-	return "", errors.Errorf("could not find plural resource name for %s", gvk)
+	return "", fmt.Errorf("could not find plural resource name for %s", gvk)
 }
 
 func description(u *unstructured.Unstructured) string {

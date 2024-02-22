@@ -16,13 +16,13 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr/testr"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -304,7 +304,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 			return nil
 		}
 		// keep watching
-		return errors.Errorf("reconciler deployment %s", event.Type)
+		return fmt.Errorf("reconciler deployment %s", event.Type)
 	})
 	require.NoError(t, err)
 	if reconcilerObj == nil {
@@ -385,7 +385,7 @@ func TestRootSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 		newValue := newObj.Spec.Template.Spec.ServiceAccountName
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
+			return fmt.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
 				oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -398,7 +398,7 @@ func TestRootSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -429,7 +429,7 @@ func TestRootSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 		newValue := newObj.Labels[metadata.SyncKindLabel]
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
+			return fmt.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
 				metadata.SyncKindLabel, oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -442,7 +442,7 @@ func TestRootSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -473,7 +473,7 @@ func TestRootSyncReconcilerClusterRoleBindingDriftProtection(t *testing.T) {
 		newValue := newObj.RoleRef.Name
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("roleRef.name expected to be %q, but found %q",
+			return fmt.Errorf("roleRef.name expected to be %q, but found %q",
 				oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -486,7 +486,7 @@ func TestRootSyncReconcilerClusterRoleBindingDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -551,7 +551,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 			return nil
 		}
 		// keep watching
-		return errors.Errorf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
+		return fmt.Errorf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 	})
 	require.NoError(t, err)
 	if obj == nil {
@@ -583,7 +583,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 			return validate(event.Object.(client.Object))
 		}
 		// keep watching
-		return errors.Errorf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
+		return fmt.Errorf("reconciler %s %s", kinds.ObjectSummary(exampleObj), event.Type)
 	})
 	require.NoError(t, err)
 }
@@ -694,17 +694,17 @@ func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch
 	for {
 		select {
 		case <-doneCh:
-			return errors.Wrap(ctx.Err(), "context done before condition was met")
+			return fmt.Errorf("context done before condition was met: %w", ctx.Err())
 		case event, open := <-resultCh:
 			if !open {
 				if conditionErr != nil {
-					return errors.Wrap(conditionErr, "watch stopped before condition was met")
+					return fmt.Errorf("watch stopped before condition was met: %w", conditionErr)
 				}
 				return errors.New("watch stopped before any events were received")
 			}
 			if event.Type == watch.Error {
 				statusErr := apierrors.FromObject(event.Object)
-				return errors.Wrap(statusErr, "watch event error")
+				return fmt.Errorf("watch event error: %w", statusErr)
 			}
 			obj := event.Object.(client.Object)
 			if key != client.ObjectKeyFromObject(obj) {
@@ -732,8 +732,7 @@ func watchObjectUntil(ctx context.Context, scheme *runtime.Scheme, watcher watch
 func parseResourceVersion(obj client.Object) (int, error) {
 	rv, err := strconv.Atoi(obj.GetResourceVersion())
 	if err != nil {
-		return -1, errors.Wrapf(err, "invalid ResourceVersion %q for object %s",
-			obj.GetResourceVersion(), kinds.ObjectSummary(obj))
+		return -1, fmt.Errorf("invalid ResourceVersion %q for object %s: %w", obj.GetResourceVersion(), kinds.ObjectSummary(obj), err)
 	}
 	return rv, nil
 }

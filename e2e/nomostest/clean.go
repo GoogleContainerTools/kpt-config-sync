@@ -20,7 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -182,7 +181,7 @@ func deleteManagedNamespacesAndWait(nt *NT) error {
 	protectedNamespacesWithTestLabel, nsListItems := filterNamespaces(nsList.Items,
 		protectedNamespaces...)
 	if len(protectedNamespacesWithTestLabel) > 0 {
-		return errors.Errorf("protected namespace(s) still have config sync labels and cannot be cleaned: %+v",
+		return fmt.Errorf("protected namespace(s) still have config sync labels and cannot be cleaned: %+v",
 			protectedNamespacesWithTestLabel)
 	}
 	return deleteNamespacesAndWait(nt, nsListItems)
@@ -211,7 +210,7 @@ func deleteImplicitNamespacesAndWait(nt *NT) error {
 	protectedNamespacesWithTestLabel, nsListFiltered := filterNamespaces(nsListFiltered,
 		protectedNamespaces...)
 	if len(protectedNamespacesWithTestLabel) > 0 {
-		return errors.Errorf("protected namespace(s) still have config sync annotations and cannot be cleaned: %+v",
+		return fmt.Errorf("protected namespace(s) still have config sync annotations and cannot be cleaned: %+v",
 			protectedNamespacesWithTestLabel)
 	}
 	return deleteNamespacesAndWait(nt, nsListFiltered)
@@ -398,8 +397,8 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 					// skip waiting
 					continue
 				}
-				return errors.Wrapf(err, "unable to delete %s object %s",
-					gvk.Kind, nn)
+				return fmt.Errorf("unable to delete %s object %s: %w",
+					gvk.Kind, nn, err)
 			}
 		}
 		tg.Go(func() error {

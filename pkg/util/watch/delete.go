@@ -16,9 +16,9 @@ package watch
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,7 +136,7 @@ func DeleteAndWait(ctx context.Context, c client.WithWatch, obj client.Object, r
 		// will be client.Object.
 		cObj, ok := lastKnownObj.(client.Object)
 		if !ok {
-			return false, errors.Errorf("unexpected watch cache object %T for object %s %s: %+v",
+			return false, fmt.Errorf("unexpected watch cache object %T for object %s %s: %+v",
 				lastKnownObj, id.Kind, id.ObjectKey, lastKnownObj)
 		}
 		// Check if the object was already deleted but still terminating
@@ -185,7 +185,7 @@ func DeleteAndWait(ctx context.Context, c client.WithWatch, obj client.Object, r
 		return false, nil
 	})
 	if err != nil {
-		return errors.Wrapf(err, "failed to watch for deletion of %s: %s", id.Kind, id.ObjectKey)
+		return fmt.Errorf("failed to watch for deletion of %s: %s: %w", id.Kind, id.ObjectKey, err)
 	}
 	klog.V(1).Infof("Object delete confirmed %q=%q, %q=%q",
 		logFieldObjectRef, id.ObjectKey.String(),

@@ -16,11 +16,11 @@ package parse
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -95,7 +95,7 @@ func (o *Files) readConfigFiles(state *sourceState) status.Error {
 	var err error
 	fileList, err = listFiles(syncDir, map[string]bool{".git": true})
 	if err != nil {
-		return status.PathWrapError(errors.Wrap(err, "listing files in the configs directory"), syncDir.OSPath())
+		return status.PathWrapError(fmt.Errorf("listing files in the configs directory: %w", err), syncDir.OSPath())
 	}
 
 	newCommit, err := hydrate.ComputeCommit(o.SourceDir)
@@ -208,7 +208,7 @@ func listFiles(dir cmpath.Absolute, ignore map[string]bool) ([]cmpath.Absolute, 
 func hydratedError(errorFile, label string) hydrate.HydrationError {
 	content, err := os.ReadFile(errorFile)
 	if err != nil {
-		return hydrate.NewInternalError(errors.Errorf("Unable to load %s: %v. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
+		return hydrate.NewInternalError(fmt.Errorf("Unable to load %s: %v. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
 			errorFile, err, reconcilermanager.HydrationController, configsync.ControllerNamespace, label, reconcilermanager.HydrationController))
 	}
 	if len(content) == 0 {

@@ -41,7 +41,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/kind/pkg/errors"
 	"sigs.k8s.io/yaml"
 )
 
@@ -424,18 +423,18 @@ func applyAutoPilotKeepAlive(nt *NT) error {
 	yamlPath := "../testdata/autopilot-keepalive/deployment.yaml"
 	yamlBytes, err := os.ReadFile(yamlPath)
 	if err != nil {
-		return errors.Wrapf(err, "failed to read file %q", yamlPath)
+		return fmt.Errorf("failed to read file %q: %w", yamlPath, err)
 	}
 	uObj := &unstructured.Unstructured{}
 	if err := yaml.Unmarshal(yamlBytes, uObj); err != nil {
-		return errors.Wrapf(err, "failed to decode %q as yaml", yamlPath)
+		return fmt.Errorf("failed to decode %q as yaml: %w", yamlPath, err)
 	}
 	// Apply with nt.KubeClient.Client directly, not nt.KubeClient.Apply
 	// to avoid adding the test label, to avoid deletion during cleanup
 	nt.Logger.Infof("applying %s", yamlPath)
 	patchOpts := []client.PatchOption{client.FieldOwner(FieldManager), client.ForceOwnership}
 	if err := nt.KubeClient.Client.Patch(nt.Context, uObj, client.Apply, patchOpts...); err != nil {
-		return errors.Wrapf(err, "failed to apply %s", kinds.ObjectSummary(uObj))
+		return fmt.Errorf("failed to apply %s: %w", kinds.ObjectSummary(uObj), err)
 	}
 	return nil
 }

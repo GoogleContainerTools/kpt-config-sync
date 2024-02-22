@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,7 +104,7 @@ func NewFilteredListWatchFromClient(dynamicClient dynamic.Interface, mapper meta
 		optionsModifier(&options)
 		resourceClient, err := DynamicResourceClient(dynamicClient, mapper, gvk, namespace)
 		if err != nil {
-			return nil, errors.Wrap(err, "building lister")
+			return nil, fmt.Errorf("building lister: %w", err)
 		}
 		return resourceClient.List(ctx, options)
 	}
@@ -114,7 +113,7 @@ func NewFilteredListWatchFromClient(dynamicClient dynamic.Interface, mapper meta
 		optionsModifier(&options)
 		resourceClient, err := DynamicResourceClient(dynamicClient, mapper, gvk, namespace)
 		if err != nil {
-			return nil, errors.Wrap(err, "building watcher")
+			return nil, fmt.Errorf("building watcher: %w", err)
 		}
 		return resourceClient.Watch(ctx, options)
 	}
@@ -212,7 +211,7 @@ func ListAndWatch(ctx context.Context, lw ListerWatcher, opts metav1.ListOptions
 		if err != nil {
 			statusErr, ok := err.(*apierrors.StatusError)
 			if !ok {
-				statusErr = NewClientError(errors.Wrap(err, "failed to start watching"))
+				statusErr = NewClientError(fmt.Errorf("failed to start watching: %w", err))
 			}
 			event := watch.Event{Type: watch.Error, Object: &statusErr.ErrStatus}
 			select {
@@ -307,7 +306,7 @@ func NewClientError(err error) *apierrors.StatusError {
 func DynamicResourceClient(dynamicClient dynamic.Interface, mapper meta.RESTMapper, gvk schema.GroupVersionKind, namespace string) (dynamic.ResourceInterface, error) {
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get REST mapping for %s", gvk.String())
+		return nil, fmt.Errorf("failed to get REST mapping for %s: %w", gvk.String(), err)
 	}
 	switch mapping.Scope.Name() {
 	case meta.RESTScopeNameRoot:

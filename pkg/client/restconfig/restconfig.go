@@ -16,10 +16,10 @@ package restconfig
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -43,13 +43,13 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 		// Build from k8s downward API
 		cfg, err = NewFromInClusterConfig()
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to build rest config: kubeconfig not found: reading in-cluster config")
+			return nil, fmt.Errorf("failed to build rest config: kubeconfig not found: reading in-cluster config: %w", err)
 		}
 	} else {
 		// Build from local config file
 		cfg, err = NewFromConfigFile(path)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to build rest config: reading local kubeconfig")
+			return nil, fmt.Errorf("failed to build rest config: reading local kubeconfig: %w", err)
 		}
 	}
 	// Set timeout, if specified.
@@ -65,7 +65,7 @@ func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
 func NewFromConfigFile(path string) (*rest.Config, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "loading REST config from %q", path)
+		return nil, fmt.Errorf("loading REST config from %q: %w", path, err)
 	}
 	setDefaults(config)
 	return config, nil
@@ -76,7 +76,7 @@ func NewFromConfigFile(path string) (*rest.Config, error) {
 func NewFromInClusterConfig() (*rest.Config, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, errors.Wrapf(err, "loading REST config from K8s downward API")
+		return nil, fmt.Errorf("loading REST config from K8s downward API: %w", err)
 	}
 	setDefaults(config)
 	return config, nil

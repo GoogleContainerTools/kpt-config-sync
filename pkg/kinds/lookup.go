@@ -15,7 +15,8 @@
 package kinds
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -26,7 +27,7 @@ import (
 func Lookup(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
 	gvk, err := apiutil.GVKForObject(obj, scheme)
 	if err != nil {
-		return schema.GroupVersionKind{}, errors.Wrap(err, "failed to lookup object type")
+		return schema.GroupVersionKind{}, fmt.Errorf("failed to lookup object type: %w", err)
 	}
 	return gvk, nil
 }

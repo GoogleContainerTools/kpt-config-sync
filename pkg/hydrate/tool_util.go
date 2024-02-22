@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	"github.com/pkg/errors"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	clientdiscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
@@ -71,7 +70,7 @@ var (
 func needsKustomize(dir string) (bool, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return false, errors.Wrapf(err, "unable to traverse the directory: %s", dir)
+		return false, fmt.Errorf("unable to traverse the directory: %s: %w", dir, err)
 	}
 	for _, f := range files {
 		if HasKustomization(filepath.Base(f.Name())) {
@@ -149,13 +148,13 @@ func kustomizeBuild(input, output string, sendMetrics bool) HydrationError {
 
 	fileMode := os.FileMode(0755)
 	if err := os.MkdirAll(output, fileMode); err != nil {
-		return NewInternalError(errors.Wrapf(err, "unable to make directory: %s", output))
+		return NewInternalError(fmt.Errorf("unable to make directory: %s: %w", output, err))
 	}
 
 	// run kustomize build with the wrapper library
 	out, err := kmetrics.RunKustomizeBuild(context.Background(), sendMetrics, input, args...)
 	if err != nil {
-		kustomizeErr := errors.Wrapf(err, "failed to run kustomize build in %s, stdout: %s", input, out)
+		kustomizeErr := fmt.Errorf("failed to run kustomize build in %s, stdout: %s: %w", input, out, err)
 		mustDeleteOutput(kustomizeErr, output)
 		return NewActionableError(kustomizeErr)
 	}
@@ -180,7 +179,7 @@ func validateTool(tool, version, requiredVersion string) error {
 		return err
 	}
 	if detectedVersion.LessThan(requiredSemVersion) {
-		return errors.Errorf("The current %s version is %q. The recommended version is %s. Please upgrade to the %s+ for compatibility.",
+		return fmt.Errorf("The current %s version is %q. The recommended version is %s. Please upgrade to the %s+ for compatibility.",
 			tool, detectedVersion, requiredVersion, requiredVersion)
 	}
 	return nil
@@ -205,7 +204,7 @@ func getVersion(tool string) (string, error) {
 func validateKustomize() error {
 	version, err := getVersion(Kustomize)
 	if err != nil {
-		return errors.Errorf("Kustomization file is detected, but Kustomize is not installed: %v. Please install Kustomize and re-run the command.", err)
+		return fmt.Errorf("Kustomization file is detected, but Kustomize is not installed: %v. Please install Kustomize and re-run the command.", err)
 	}
 	if err := validateTool(Kustomize, version, KustomizeVersion); err != nil {
 		fmt.Printf("WARNING: %v\n", err)
@@ -247,7 +246,7 @@ func ValidateAndRunKustomize(sourcePath string) (cmpath.Absolute, error) {
 	}
 
 	if err := kustomizeBuild(sourcePath, tmpHydratedDir, false); err != nil {
-		return output, errors.Wrapf(err, "unable to render the source configs in %s", sourcePath)
+		return output, fmt.Errorf("unable to render the source configs in %s: %w", sourcePath, err)
 	}
 
 	fmt.Println("NOTICE: The command will save the remote Helm charts to a local directory defined in the `helmGlobals.chartHome` field if the Kustomization file references remote Helm charts. " +
@@ -279,7 +278,7 @@ func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute
 
 	needsKustomize, err := needsKustomize(abs)
 	if err != nil {
-		return "", false, errors.Wrapf(err, "unable to check if Kustomize is needed for the source directory: %s", abs)
+		return "", false, fmt.Errorf("unable to check if Kustomize is needed for the source directory: %s: %w", abs, err)
 	}
 
 	if needsKustomize && sourceFormat == filesystem.SourceFormatHierarchy {

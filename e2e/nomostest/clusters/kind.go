@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
@@ -126,7 +125,7 @@ func (c *KindCluster) Delete() error {
 	// callbacks such as this are not executed.
 	err := c.provider.Delete(c.Name, c.KubeConfigPath)
 	if err != nil {
-		return errors.Errorf("deleting Kind cluster %q: %v", c.Name, err)
+		return fmt.Errorf("deleting Kind cluster %q: %v", c.Name, err)
 	}
 	return nil
 }
@@ -144,7 +143,7 @@ func asKindVersion(version string) (KindVersion, error) {
 	if ok {
 		return kindVersion, nil
 	}
-	return "", errors.Errorf("Unrecognized Kind version: %q", version)
+	return "", fmt.Errorf("Unrecognized Kind version: %q", version)
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

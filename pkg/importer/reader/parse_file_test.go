@@ -15,11 +15,11 @@
 package reader
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -202,7 +202,7 @@ metadata:
 				}
 				return
 			} else if err != nil {
-				t.Fatal(errors.Wrap(err, "unexpected error"))
+				t.Fatal(fmt.Errorf("unexpected error: %w", err))
 			}
 
 			for _, a := range actual {
@@ -362,7 +362,7 @@ func TestParseJsonFile(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Fatal(errors.Wrap(err, "unexpected error"))
+				t.Fatal(fmt.Errorf("unexpected error: %w", err))
 			}
 
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.EquateEmpty()); diff != "" {
@@ -447,7 +447,7 @@ inventory:
 				}
 				return
 			} else if err != nil {
-				t.Fatal(errors.Wrap(err, "unexpected error"))
+				t.Fatal(fmt.Errorf("unexpected error: %w", err))
 			}
 			for _, a := range actual {
 				if a.GetLabels() == nil {

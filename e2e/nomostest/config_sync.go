@@ -16,6 +16,7 @@ package nomostest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1103,7 +1103,7 @@ func SetDependencies(obj client.Object, dependencies ...client.Object) error {
 		deps = append(deps, applier.ObjMetaFromObject(dep))
 	}
 	if err := setDependsOnAnnotation(obj, deps); err != nil {
-		return errors.Wrapf(err, "failed to set dependencies on %T %s", obj, client.ObjectKeyFromObject(obj))
+		return fmt.Errorf("failed to set dependencies on %T %s: %w", obj, client.ObjectKeyFromObject(obj), err)
 	}
 	return nil
 }

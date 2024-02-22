@@ -15,11 +15,11 @@
 package nomostest
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -125,7 +125,7 @@ func upsertCluster(t testing.NTB, cluster Cluster, opts *ntopts.New) (bool, erro
 		return false, err
 	}
 	if exists && *e2e.CreateClusters != e2e.CreateClustersLazy {
-		return false, errors.Errorf("cluster %s already exists and create-clusters=%s", opts.ClusterName, *e2e.CreateClusters)
+		return false, fmt.Errorf("cluster %s already exists and create-clusters=%s", opts.ClusterName, *e2e.CreateClusters)
 	}
 	if exists && *e2e.CreateClusters == e2e.CreateClustersLazy {
 		t.Logf("cluster %s already exists, adopting (create-clusters=%s)", opts.ClusterName, *e2e.CreateClusters)

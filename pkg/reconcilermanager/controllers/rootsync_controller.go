@@ -788,7 +788,7 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 		return fmt.Errorf("invalid reconciler name %q: %s", reconcilerName, strings.Join(err, ", "))
 	}
 
-	if err := r.validateSourceSpec(ctx, rs, reconcilerName); err != nil {
+	if err := r.validateSourceSpec(ctx, rs); err != nil {
 		return err
 	}
 
@@ -799,10 +799,10 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 	return r.validateValuesFileSourcesRefs(ctx, rs)
 }
 
-func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
+func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RootSync) error {
 	switch v1beta1.SourceType(rs.Spec.SourceType) {
 	case v1beta1.GitSource:
-		return r.validateGitSpec(ctx, rs, reconcilerName)
+		return r.validateGitSpec(ctx, rs)
 	case v1beta1.OciSource:
 		return validate.OciSpec(rs.Spec.Oci, rs)
 	case v1beta1.HelmSource:
@@ -836,26 +836,21 @@ func (r *RootSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, 
 	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
 }
 
-func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
+func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync) error {
 	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
 		return err
 	}
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
-	return r.validateRootSecret(ctx, rs, reconcilerName)
+	return r.validateRootSecret(ctx, rs)
 }
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
-func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync, reconcilerName string) error {
+func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync) error {
 	if SkipForAuth(rootSync.Spec.Auth) {
 		// There is no Secret to check for the Config object.
 		return nil
-	}
-
-	secretName := ReconcilerResourceName(reconcilerName, rootSync.Spec.SecretRef.Name)
-	if errs := validation.IsDNS1123Label(secretName); errs != nil {
-		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}
 
 	secret, err := validateSecretExist(ctx,

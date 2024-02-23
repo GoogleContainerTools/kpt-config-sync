@@ -9,7 +9,13 @@ GOTOPT2_BINARY := docker run -i -u $(UID):$(GID) $(BUILDENV_IMAGE) /bin/gotopt2
 
 GCP_ZONE ?= us-central1-a
 GKE_E2E_TIMEOUT ?= 6h
+# Configurable timeout for running the e2e tests on kind clusters.
+# The fewer clusters being used, the higher the timeout needs to be.
 KIND_E2E_TIMEOUT ?= 60m
+# Configurable number of kind clusters to run the tests against.
+# A higher number will lead to a faster test execution, but may cause stability
+# issues depending on the size of the host machine.
+KIND_NUM_CLUSTERS ?= 15
 
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"
@@ -70,10 +76,10 @@ build-kind-e2e: "$(KIND)" "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)"
 		-t $(KIND_IMAGE) \
 		$(DOCKER_BUILD_ARGS)
 
-# This target runs all the e2e tests with the multi-repo mode.
+# This target runs all the e2e tests on kind clusters.
 # This is the target used by the presubmits.
-.PHONY: test-e2e-kind-multi-repo
-test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
+.PHONY: test-e2e-kind
+test-e2e-kind: config-sync-manifest-local build-kind-e2e
 	kind delete clusters --all
 	docker run \
 		$(DOCKER_INTERACTIVE) \
@@ -88,20 +94,34 @@ test-e2e-kind-multi-repo: config-sync-manifest-local build-kind-e2e
 			--share-test-env \
 			--timeout $(KIND_E2E_TIMEOUT) \
 			--test.v -v \
-			--num-clusters 15 \
+			--num-clusters $(KIND_NUM_CLUSTERS) \
 			$(E2E_ARGS)
 
-# This target runs the first group of e2e tests with the multi-repo mode.
+# This target runs the first group of e2e tests.
+.PHONY: test-e2e-kind-test-group1
+test-e2e-kind-test-group1:
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,selector,lifecycle,nomos-cli" test-e2e-kind
+
+# This target runs the second group of e2e tests.
+.PHONY: test-e2e-kind-test-group2
+test-e2e-kind-test-group2:
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1,drift-control" test-e2e-kind
+
+# This target runs the third group of e2e tests.
+.PHONY: test-e2e-kind-test-group3
+test-e2e-kind-test-group3:
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2,multi-repos,override-api,hydration" test-e2e-kind
+
+# Legacy aliases to support backwards compatibility for CI
+# These can be removed once CI uses the newly named targets
+.PHONY: test-e2e-kind-multi-repo
+test-e2e-kind-multi-repo: test-e2e-kind
+
 .PHONY: test-e2e-kind-multi-repo-test-group1
-test-e2e-kind-multi-repo-test-group1:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,selector,lifecycle,nomos-cli" test-e2e-kind-multi-repo
+test-e2e-kind-multi-repo-test-group1: test-e2e-kind-test-group1
 
-# This target runs the second group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group2
-test-e2e-kind-multi-repo-test-group2:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1,drift-control" test-e2e-kind-multi-repo
+test-e2e-kind-multi-repo-test-group2: test-e2e-kind-test-group2
 
-# This target runs the third group of e2e tests with the multi-repo mode.
 .PHONY: test-e2e-kind-multi-repo-test-group3
-test-e2e-kind-multi-repo-test-group3:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=reconciliation-2,multi-repos,override-api,hydration" test-e2e-kind-multi-repo
+test-e2e-kind-multi-repo-test-group3: test-e2e-kind-test-group3

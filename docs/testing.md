@@ -25,6 +25,8 @@ go test ./e2e/... --usage
 
 Below is a non-exhaustive list of some useful arguments for running the e2e tests.
 These can be provided on the command line with `go test` or with program arguments in your IDE.
+The test output can be very verbose, so running the tests in an IDE can help with
+parsing the output using the IDE frontend.
 
 - `--usage` - If true, print usage and exit.
 - `--e2e` - If true, run end-to-end tests. (required to run the e2e tests).
@@ -56,13 +58,16 @@ make install-kind
 
 #### Running E2E tests on kind
 
-Run all of the tests (this will take a while):
+Build everything and run all e2e tests. This will take a long time, but can be
+tuned using `KIND_E2E_TIMEOUT` and `KIND_NUM_CLUSTERS`.
 ```
-make test-e2e-go-multirepo
+make test-e2e-kind KIND_E2E_TIMEOUT=5h KIND_NUM_CLUSTERS=5
 ```
 
-To execute e2e multi-repo tests locally with kind, build and push the Config Sync
-images to the local kind registry and then execute tests using go test.
+To execute e2e tests locally with kind, build and push the Config Sync
+images to the local kind registry and then execute tests using `go test`.
+Running the tests directly using `go test` gives more flexibility with the
+test parameters and allows running smaller subsets of tests.
 ```shell
 make config-sync-manifest-local
 go test ./e2e/... --e2e --debug --test.v --test.run (test name regexp)

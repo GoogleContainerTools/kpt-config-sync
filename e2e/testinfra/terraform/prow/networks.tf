@@ -118,100 +118,100 @@ resource "google_compute_subnetwork" "e2e-subnetwork-11" {
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-1" {
-  name          = "prow-e2e-subnetwork-usc2-1"
-  ip_cidr_range = "10.1.0.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-1" {
+  name          = "prow-e2e-subnetwork-usw1-1"
+  ip_cidr_range = "10.2.0.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-2" {
-  name          = "prow-e2e-subnetwork-usc2-2"
-  ip_cidr_range = "10.1.16.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-2" {
+  name          = "prow-e2e-subnetwork-usw1-2"
+  ip_cidr_range = "10.2.16.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-3" {
-  name          = "prow-e2e-subnetwork-usc2-3"
-  ip_cidr_range = "10.1.32.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-3" {
+  name          = "prow-e2e-subnetwork-usw1-3"
+  ip_cidr_range = "10.2.32.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-4" {
-  name          = "prow-e2e-subnetwork-usc2-4"
-  ip_cidr_range = "10.1.48.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-4" {
+  name          = "prow-e2e-subnetwork-usw1-4"
+  ip_cidr_range = "10.2.48.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-5" {
-  name          = "prow-e2e-subnetwork-usc2-5"
-  ip_cidr_range = "10.1.64.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-5" {
+  name          = "prow-e2e-subnetwork-usw1-5"
+  ip_cidr_range = "10.2.64.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-6" {
-  name          = "prow-e2e-subnetwork-usc2-6"
-  ip_cidr_range = "10.1.80.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-6" {
+  name          = "prow-e2e-subnetwork-usw1-6"
+  ip_cidr_range = "10.2.80.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-7" {
-  name          = "prow-e2e-subnetwork-usc2-7"
-  ip_cidr_range = "10.1.96.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-7" {
+  name          = "prow-e2e-subnetwork-usw1-7"
+  ip_cidr_range = "10.2.96.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-8" {
-  name          = "prow-e2e-subnetwork-usc2-8"
-  ip_cidr_range = "10.1.112.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-8" {
+  name          = "prow-e2e-subnetwork-usw1-8"
+  ip_cidr_range = "10.2.112.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-9" {
-  name          = "prow-e2e-subnetwork-usc2-9"
-  ip_cidr_range = "10.1.128.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-9" {
+  name          = "prow-e2e-subnetwork-usw1-9"
+  ip_cidr_range = "10.2.128.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-10" {
-  name          = "prow-e2e-subnetwork-usc2-10"
-  ip_cidr_range = "10.1.144.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-10" {
+  name          = "prow-e2e-subnetwork-usw1-10"
+  ip_cidr_range = "10.2.144.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false
 }
 
-resource "google_compute_subnetwork" "e2e-subnetwork-usc2-11" {
-  name          = "prow-e2e-subnetwork-usc2-11"
-  ip_cidr_range = "10.1.160.0/20"
-  region        = "us-central2"
+resource "google_compute_subnetwork" "e2e-subnetwork-usw1-11" {
+  name          = "prow-e2e-subnetwork-usw1-11"
+  ip_cidr_range = "10.2.160.0/20"
+  region        = "us-west1"
   network       = google_compute_network.e2e-network.id
   description = "Subnetwork for use in e2e test clusters"
   private_ip_google_access = false

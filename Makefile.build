@@ -199,7 +199,7 @@ config-sync-manifest-local: docker-registry config-sync-manifest
 # e2e/nomostest/git-server.go to reflect the version change
 GIT_SERVER_DOCKER := $(OUTPUT_DIR)/git-server-docker
 GIT_SERVER_RELEASE := v1.0.0
-GIT_SERVER_IMAGE := $(TEST_INFRA_REGISTRY)/git-server:$(GIT_SERVER_RELEASE)
+GIT_SERVER_IMAGE := $(TEST_INFRA_REGISTRY)/git-server:$(GIT_SERVER_RELEASE)-$(shell git rev-parse --short HEAD)
 # Creates docker image for the test git-server from github source
 .PHONY: build-git-server
 build-git-server:
@@ -208,6 +208,9 @@ build-git-server:
 	@rm -rf $(GIT_SERVER_DOCKER)
 	@git clone https://github.com/jkarlosb/git-server-docker.git $(GIT_SERVER_DOCKER)
 	@cd $(GIT_SERVER_DOCKER) && git checkout $(GIT_SERVER_RELEASE)
+	# Git v2.28.0+ supports using a different initial branch other than `master`.
+	# Use `alpine:3.19` as the base image to get Git with version 2.43.0.
+	@sed -i 's/FROM alpine:3.4/FROM alpine:3.19/g' $(GIT_SERVER_DOCKER)/Dockerfile
 	@docker buildx build $(DOCKER_BUILD_QUIET) \
 			$(GIT_SERVER_DOCKER) \
 			-t $(GIT_SERVER_IMAGE)

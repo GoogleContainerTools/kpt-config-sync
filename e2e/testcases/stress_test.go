@@ -467,7 +467,7 @@ func TestStressMemoryUsageGit(t *testing.T) {
 // 7. IAM for the test runner to write to Artifact Registry repo
 func TestStressMemoryUsageOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest,
+		ntopts.StressTest, ntopts.RequireOCIProvider,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {
@@ -572,7 +572,7 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 // 8. gcloud & helm
 func TestStressMemoryUsageHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest,
+		ntopts.StressTest, ntopts.RequireHelmProvider,
 		ntopts.WithReconcileTimeout(30*time.Second))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {

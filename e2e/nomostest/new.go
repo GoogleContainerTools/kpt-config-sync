@@ -459,6 +459,10 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
 		nt.portForwardRegistryServer()
 	}
+	// Setup registry authentication
+	if err := setupRegistryClient(nt, opts); err != nil {
+		nt.T.Fatalf("configuring registry client: %v", err)
+	}
 	// Images created by the tests should not be persisted after the test finishes.
 	// Cleanup all images before the port forward gets torn down.
 	nt.T.Cleanup(func() {

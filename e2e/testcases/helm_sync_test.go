@@ -402,6 +402,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
 		ntopts.Unstructured,
+		ntopts.RequireHelmProvider,
 	)
 
 	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
@@ -450,6 +451,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.WorkloadIdentity,
 		ntopts.Unstructured,
+		ntopts.RequireHelmProvider,
 	)
 
 	newVersion := "1.0.0"
@@ -526,7 +528,7 @@ func TestHelmVersionRange(t *testing.T) {
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
-	nt := nomostest.New(t, nomostesting.SyncSource,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 
@@ -571,7 +573,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
-	nt := nomostest.New(t, nomostesting.SyncSource,
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
 	cmName := "helm-cm-ns-repo-1"
@@ -671,7 +673,8 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 func TestHelmGCENode(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest, ntopts.RequireHelmArtifactRegistry(t))
+		ntopts.RequireGKE(t), ntopts.GCENodeTest,
+		ntopts.RequireHelmArtifactRegistry(t))
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
@@ -780,6 +783,7 @@ func TestHelmEmptyChart(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
 		ntopts.Unstructured,
+		ntopts.RequireHelmProvider,
 	)
 
 	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName))

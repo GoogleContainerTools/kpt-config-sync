@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -60,10 +61,10 @@ const (
 
 func setupRegistry(nt *NT) error {
 	nt.T.Cleanup(func() {
-		if err := nt.OCIProvider.Teardown(); err != nil {
+		if err := nt.HelmProvider.Teardown(); err != nil {
 			nt.T.Error(err)
 		}
-		if err := nt.HelmProvider.Teardown(); err != nil {
+		if err := nt.OCIProvider.Teardown(); err != nil {
 			nt.T.Error(err)
 		}
 	})
@@ -91,6 +92,35 @@ func setupRegistry(nt *NT) error {
 		if err := installRegistryServer(nt); err != nil {
 			nt.describeNotRunningTestPods(TestRegistryNamespace)
 			return fmt.Errorf("waiting for registry-server Deployment to become available: %w", err)
+		}
+	}
+	return nil
+}
+
+// setupRegistryClient handles registry authentication.
+// This is necessary on each test because gcloud auth tokens expire after 1h and
+// some test suites take longer than 1h.
+func setupRegistryClient(nt *NT, opts *ntopts.New) error {
+	nt.T.Cleanup(func() {
+		if opts.RequireHelmProvider || opts.RequireLocalHelmProvider {
+			if err := nt.HelmProvider.Logout(); err != nil {
+				nt.T.Error(err)
+			}
+		}
+		if opts.RequireOCIProvider || opts.RequireLocalOCIProvider {
+			if err := nt.OCIProvider.Logout(); err != nil {
+				nt.T.Error(err)
+			}
+		}
+	})
+	if opts.RequireOCIProvider || opts.RequireLocalOCIProvider {
+		if err := nt.OCIProvider.Login(); err != nil {
+			return err
+		}
+	}
+	if opts.RequireHelmProvider || opts.RequireLocalHelmProvider {
+		if err := nt.HelmProvider.Login(); err != nil {
+			return err
 		}
 	}
 	return nil

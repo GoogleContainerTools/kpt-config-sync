@@ -112,7 +112,8 @@ func TestPublicOCI(t *testing.T) {
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest, ntopts.RequireOCIArtifactRegistry(t))
+		ntopts.RequireGKE(t), ntopts.GCENodeTest,
+		ntopts.RequireOCIArtifactRegistry(t))
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
@@ -158,6 +159,7 @@ func TestGCENodeOCI(t *testing.T) {
 func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	namespace := testNs
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.RequireOCIProvider,
 		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
@@ -222,7 +224,7 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	namespace := testNs
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.WithDelegatedControl,
+		ntopts.WithDelegatedControl, ntopts.RequireOCIProvider,
 		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount

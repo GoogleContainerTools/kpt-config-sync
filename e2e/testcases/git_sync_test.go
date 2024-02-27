@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -34,15 +33,9 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	initialSyncedCommit := rs.Status.LastSyncedCommit
 
 	nt.T.Log("Create an extra remote tracking branch")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Push("HEAD:refs/remotes/upstream/main"))
-	nt.T.Cleanup(func() {
-		// Delete the remote tracking branch in the end so other subsequent tests
-		// can pull from the latest commit, instead of the HEAD of the remote.
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Push(":refs/remotes/upstream/main"))
-	})
 
 	nt.T.Logf("Update the remote main branch by adding a test namespace")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
@@ -59,16 +52,18 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Apply the mitigation first to validate Config Sync couldn't pull the latest commit.
-	nt.T.Logf("Verify the issue exist with the default branch and revision")
+	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
-	if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(
-		// DefaultRootSha1Fn returns the hash with `git rev-parse HEAD`, which is
-		// different from `git ls-remote ...`
-		// So, overwrite the root hash with the initial lastSyncedCommit.
-		func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
-			return initialSyncedCommit, nil
-		})); err != nil {
+	// WatchForAllSyncs validates RootSync's lastSyncedCommit is updated to the
+	// local HEAD with the DefaultRootSha1Fn function.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Logf("Remove the test namespace to make sure git-sync can fetch newer commit")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/hello/ns.yaml"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Namespace"))
+	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.ValidateNotFound("hello", "", &corev1.Namespace{}); err != nil {

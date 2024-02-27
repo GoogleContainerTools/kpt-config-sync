@@ -1,0 +1,48 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: opentelemetry
+    component: otel-collector
+    configmanagement.gke.io/arch: csmr
+    configmanagement.gke.io/system: "true"
+  name: otel-collector-custom
+  namespace: config-management-monitoring
+data:
+  otel-collector-config.yaml: |-
+    receivers:
+      opencensus:
+    exporters:
+      prometheus:
+        endpoint: :8675
+        namespace: config_sync
+        resource_to_telemetry_conversion:
+          enabled: true
+    processors:
+      batch:
+      # resourcedetection: This processor is needed to correctly mirror resource
+      # labels from OpenCensus to OpenTelemetry. We also want to keep this same
+      # processor in Otel Agent configuration as the resource labels are added from
+      # there
+    extensions:
+      health_check:
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics/prometheus:
+          receivers: [opencensus]
+          processors: [batch]
+          exporters: [prometheus]

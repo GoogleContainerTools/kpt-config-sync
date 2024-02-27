@@ -17,6 +17,8 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,12 +30,14 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/iam"
+	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -209,6 +213,158 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	})
 	if err != nil {
 		nt.T.Fatal(err)
+	}
+}
+
+// TestOtelCollectorSampleConfigurations validates that metrics reporting works for
+// Google Cloud Monitoring using the sample custom configurations.
+//
+// Requirements:
+// - node identity:
+//   - node GSA with roles/monitoring.metricWriter IAM
+//
+// - workload identity:
+//   - e2e-test-metric-writer GSA with roles/monitoring.metricWriter IAM
+//   - roles/iam.workloadIdentityUser on config-management-monitoring/default for e2e-test-metric-writer
+func TestOtelCollectorSampleConfigurations(t *testing.T) {
+	nt := nomostest.New(t,
+		nomostesting.Reconciliation1,
+		ntopts.RequireGKE(t),
+		ntopts.Unstructured,
+	)
+	nt.T.Cleanup(func() {
+		if t.Failed() {
+			nt.PodLogs("config-management-monitoring", ocmetrics.OtelCollectorName, "", false)
+		}
+	})
+	setupMetricsServiceAccount(nt)
+
+	nt.T.Cleanup(func() {
+		nt.MustKubectl("delete", "cm", ocmetrics.OtelCollectorCustomCM, "-n", configmanagement.MonitoringNamespace, "--ignore-not-found")
+		nt.T.Log("Restart otel-collector pod to reset the ConfigMap and log")
+		nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
+		if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
+			nt.T.Errorf("otel-collector pod failed to come up after a restart: %v", err)
+		}
+	})
+
+	nt.T.Log("Restart otel-collector pod to refresh the ConfigMap, log and IAM")
+	nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	startTime := time.Now().UTC()
+	ctx := nt.Context
+	client, err := createGCMClient(ctx)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Add the kustomize components root directory to enable kustomize metrics")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+
+	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
+	}
+	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	directory := "../../examples/otel-collector-sample-configurations"
+	dirEntry, err := os.ReadDir(directory)
+	if err != nil {
+		nt.T.Fatal("Error opening directory:", err)
+	}
+	for _, entry := range dirEntry {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
+			fileName := entry.Name()
+			fullPath := filepath.Join(directory, fileName)
+			nt.T.Log("Apply sample custom otel-collector configuration", fileName)
+			nt.MustKubectl("apply", "-f", fullPath)
+
+			err := nt.Validate(ocmetrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace, &corev1.ConfigMap{})
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+
+			content, err := os.ReadFile(fullPath)
+			if err != nil {
+				nt.T.Fatal("failed to read file: %v", err)
+			}
+
+			var configMap ConfigMap
+			if err := yaml.Unmarshal(content, &configMap); err != nil {
+				nt.T.Fatal("error unmarshalling YAML: %v", err)
+			}
+
+			var otelConfig OtelConfig
+			if err := yaml.Unmarshal([]byte(configMap.Data.OtelCollectorConfig), &otelConfig); err != nil {
+				nt.T.Fatal("error: ", err)
+			}
+
+			// check cloud monitoring
+			_, err = retry.Retry(60*time.Second, func() error {
+				includGCM := pipelinesInclude("metrics/cloudmonitoring", otelConfig)
+				for _, metricType := range GCMMetricTypes {
+					descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
+					it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
+					if includGCM {
+						return validateMetricInGCM(nt, it, descriptor, nt.ClusterName)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+
+			// check prometheus
+			if pipelinesInclude("metrics/prometheus", otelConfig) {
+				summary := testmetrics.Summary{
+					Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+				}
+				if _, found := nt.RootRepos[summary.Sync.Name]; !found {
+					nt.T.Fatal("Rootsync not found", configsync.RootSyncName)
+				}
+				commitHash, err := nt.RootRepos[summary.Sync.Name].Hash()
+				if err != nil {
+					nt.T.Fatal()
+				}
+				syncLabels, err := nomostest.MetricLabelsForRootSync(nt, summary.Sync)
+				if err != nil {
+					nt.T.Fatal(err)
+				}
+				err = nomostest.ValidateMetrics(nt,
+					nomostest.ReconcilerSyncSuccess(nt, syncLabels, commitHash),
+					nomostest.ReconcilerErrorMetrics(nt, syncLabels, commitHash, summary.Errors))
+				if err != nil {
+					nt.T.Fatal(err)
+				}
+			}
+
+			nt.T.Log("Checking the otel-collector log contains no failure...")
+			err = validateDeploymentLogHasNoFailure(nt, ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+
+			nt.T.Log("Remove sample custom otel-collector configuration %v", fileName)
+			nt.MustKubectl("delete", "cm", ocmetrics.OtelCollectorCustomCM, "-n", configmanagement.MonitoringNamespace, "--ignore-not-found")
+			err = nt.ValidateNotFoundOrNoMatch(ocmetrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace, &corev1.ConfigMap{})
+			if err != nil {
+				nt.T.Fatal(err)
+			}
+			nt.T.Log("Restart otel-collector pod to refresh the ConfigMap and log")
+			//nomostest.DeletePodByLabel(nt, "app", ocmetrics.OpenTelemetry, false)
+			if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace); err != nil {
+				nt.T.Fatal(err)
+			}
+		}
 	}
 }
 
@@ -428,4 +584,31 @@ func validateMetricInGCM(nt *nomostest.NT, it *monitoringv2.TimeSeriesIterator, 
 	}
 	return fmt.Errorf("GCM metric %s not found (cluster_name=%s)",
 		metricType, nt.ClusterName)
+}
+
+type ConfigMap struct {
+	Data struct {
+		OtelCollectorConfig string `yaml:"otel-collector-config.yaml"`
+	} `yaml:"data"`
+}
+
+type OtelConfig struct {
+	Service struct {
+		Pipelines map[string]Pipeline `yaml:"pipelines"`
+	} `yaml:"service"`
+}
+
+type Pipeline struct {
+	Receivers  []string `yaml:"receivers"`
+	Processors []string `yaml:"processors"`
+	Exporters  []string `yaml:"exporters"`
+}
+
+func pipelinesInclude(name string, config OtelConfig) bool {
+	for pipelineName := range config.Service.Pipelines {
+		if pipelineName == name {
+			return true
+		}
+	}
+	return false
 }

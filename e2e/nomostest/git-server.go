@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -32,7 +33,8 @@ import (
 
 const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
-const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0"
+
+const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0-68df304c"
 const testGitHTTPServer = "http-git-server"
 const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0-b3b4984cd"
 
@@ -208,13 +210,19 @@ func InitGitRepos(nt *NT, repos ...types.NamespacedName) {
 	podName := pod.Name
 
 	for _, repo := range repos {
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
-			"git", "init", "--bare", "--shared", fmt.Sprintf("/git-server/repos/%s/%s", repo.Namespace, repo.Name))
+		nt.MustKubectl("exec", "-n", testGitNamespace, podName,
+			"-c", testGitServer, "--",
+			"git", "init", "--bare", "--shared",
+			// Use `main` as the initial branch so that `HEAD` can reference refs/heads/main
+			"--initial-branch="+gitproviders.MainBranch,
+			fmt.Sprintf("/git-server/repos/%s/%s", repo.Namespace, repo.Name))
 		// We set receive.denyNonFastforwards to allow force pushes for legacy test support (bats).  In the future we may
 		// need this support for testing GKE clusters since we will likely be re-using the cluster in that case.
 		// Alternatively, we could also run "rm -rf /git-server/repos/*" to clear out the state of the git server and
 		// re-initialize.
-		nt.MustKubectl("exec", "-n", testGitNamespace, podName, "-c", testGitServer, "--",
-			"git", "-C", fmt.Sprintf("/git-server/repos/%s", repo), "config", "receive.denyNonFastforwards", "false")
+		nt.MustKubectl("exec", "-n", testGitNamespace, podName,
+			"-c", testGitServer, "--",
+			"git", "-C", fmt.Sprintf("/git-server/repos/%s", repo),
+			"config", "receive.denyNonFastforwards", "false")
 	}
 }

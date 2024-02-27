@@ -46,6 +46,12 @@ type MultiRepo struct {
 	// Default: 5m.
 	ReconcileTimeout *time.Duration
 
+	// RequireOCIProvider will enable GitProvider Login & Logout.
+	RequireOCIProvider bool
+
+	// RequireHelmProvider will enable HelmProvider Login & Logout.
+	RequireHelmProvider bool
+
 	// RequireLocalGitProvider will skip the test if run with a GitProvider type other than local.
 	RequireLocalGitProvider bool
 
@@ -79,19 +85,33 @@ func RootRepo(name string) func(opt *New) {
 	}
 }
 
+// RequireOCIProvider will enable OCI repo client login and logout
+func RequireOCIProvider(opt *New) {
+	opt.RequireOCIProvider = true
+}
+
+// RequireHelmProvider will enable Helm repo client login and logout
+func RequireHelmProvider(opt *New) {
+	opt.RequireHelmProvider = true
+}
+
 // RequireLocalGitProvider will skip the test with non-local GitProvider types
 func RequireLocalGitProvider(opt *New) {
 	opt.RequireLocalGitProvider = true
 }
 
-// RequireLocalOCIProvider will skip the test with non-local OCIProvider types
+// RequireLocalOCIProvider will skip the test with non-local OCIProvider types.
+// RequireLocalOCIProvider implies RequireOCIProvider.
 func RequireLocalOCIProvider(opt *New) {
 	opt.RequireLocalOCIProvider = true
+	opt.RequireOCIProvider = true
 }
 
-// RequireLocalHelmProvider will skip the test with non-local HelmProvider types
+// RequireLocalHelmProvider will skip the test with non-local HelmProvider types.
+// RequireLocalHelmProvider implies RequireHelmProvider.
 func RequireLocalHelmProvider(opt *New) {
 	opt.RequireLocalHelmProvider = true
+	opt.RequireHelmProvider = true
 }
 
 // WithDelegatedControl will specify the Delegated Control Pattern.

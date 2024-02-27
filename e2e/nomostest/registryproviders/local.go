@@ -56,6 +56,16 @@ func (l *LocalProvider) Teardown() error {
 	return nil
 }
 
+// Login to the local registry (no-op)
+func (l *LocalProvider) Login() error {
+	return nil
+}
+
+// Logout of the local registry (no-op)
+func (l *LocalProvider) Logout() error {
+	return nil
+}
+
 // localAddress returns the local port forwarded address that proxies to the
 // in-cluster git server. For use from the test framework to push to the registry.
 func (l *LocalProvider) localAddress(name string) (string, error) {

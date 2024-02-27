@@ -101,20 +101,26 @@ func RequireKind(t testing.NTB) Opt {
 	return func(opt *New) {}
 }
 
-// RequireHelmArtifactRegistry requires the --helm-provider flag to be set to gar
+// RequireHelmArtifactRegistry requires the --helm-provider flag to be set to `gar`.
+// RequireHelmArtifactRegistry implies RequireHelmProvider.
 func RequireHelmArtifactRegistry(t testing.NTB) Opt {
 	if *e2e.HelmProvider != e2e.ArtifactRegistry {
 		t.Skip("The --helm-provider flag must be set to `gar` to run this test.")
 	}
-	return func(opt *New) {}
+	return func(opts *New) {
+		opts.RequireHelmProvider = true
+	}
 }
 
-// RequireOCIArtifactRegistry requires the --oci-provider flag to be set to gar
+// RequireOCIArtifactRegistry requires the --oci-provider flag to be set to `gar`.
+// RequireOCIArtifactRegistry implies RequireOCIProvider.
 func RequireOCIArtifactRegistry(t testing.NTB) Opt {
 	if *e2e.OCIProvider != e2e.ArtifactRegistry {
 		t.Skip("The --oci-provider flag must be set to `gar` to run this test.")
 	}
-	return func(opt *New) {}
+	return func(opts *New) {
+		opts.RequireOCIProvider = true
+	}
 }
 
 // WithInitialCommit creates the initialCommit before the first sync

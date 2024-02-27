@@ -41,6 +41,10 @@ type RegistryProvider interface {
 	// Teardown is used to perform cleanup of the RegistryProvider after test
 	// completion.
 	Teardown() error
+	// Login to the registry with the client
+	Login() error
+	// Logout of the registry with the client
+	Logout() error
 	// deleteImage is used to delegate image deletion to the RegistryProvider
 	// implementation. This is needed because the delete interface varies by
 	// provider.

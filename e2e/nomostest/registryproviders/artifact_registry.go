@@ -119,7 +119,8 @@ type ArtifactRegistryOCIProvider struct {
 	ArtifactRegistryProvider
 }
 
-func (a *ArtifactRegistryOCIProvider) registryLogin() error {
+// Login to the registry with the crane client
+func (a *ArtifactRegistryOCIProvider) Login() error {
 	var err error
 	authCmd := a.shell.Command("gcloud", "auth", "print-access-token")
 	loginCmd := a.shell.Command("crane", "auth", "login",
@@ -141,11 +142,17 @@ func (a *ArtifactRegistryOCIProvider) registryLogin() error {
 	return nil
 }
 
+// Logout of the registry with the crane client
+func (a *ArtifactRegistryOCIProvider) Logout() error {
+	_, err := a.shell.ExecWithDebug("crane", "auth", "logout", a.registryHost())
+	if err != nil {
+		return fmt.Errorf("running logout command: %w", err)
+	}
+	return nil
+}
+
 // Setup performs setup
 func (a *ArtifactRegistryOCIProvider) Setup() error {
-	if err := a.registryLogin(); err != nil {
-		return err
-	}
 	return a.createRepository()
 }
 
@@ -167,7 +174,8 @@ type ArtifactRegistryHelmProvider struct {
 	ArtifactRegistryProvider
 }
 
-func (a *ArtifactRegistryHelmProvider) registryLogin() error {
+// Login to the registry with the helm client
+func (a *ArtifactRegistryHelmProvider) Login() error {
 	var err error
 	authCmd := a.shell.Command("gcloud", "auth", "print-access-token")
 	loginCmd := a.shell.Command("helm", "registry", "login",
@@ -189,12 +197,18 @@ func (a *ArtifactRegistryHelmProvider) registryLogin() error {
 	return nil
 }
 
+// Logout of the registry with the helm client
+func (a *ArtifactRegistryHelmProvider) Logout() error {
+	_, err := a.shell.ExecWithDebug("helm", "registry", "logout", a.registryHost())
+	if err != nil {
+		return fmt.Errorf("running logout: %w", err)
+	}
+	return nil
+}
+
 // Setup performs required setup for the helm AR provider.
 // This requires setting up authentication for the helm CLI.
 func (a *ArtifactRegistryHelmProvider) Setup() error {
-	if err := a.registryLogin(); err != nil {
-		return err
-	}
 	return a.createRepository()
 }
 

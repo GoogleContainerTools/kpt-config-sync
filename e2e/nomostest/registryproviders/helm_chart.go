@@ -19,12 +19,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
-	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
 	"sigs.k8s.io/yaml"
@@ -67,11 +65,10 @@ func HelmChartObjects(scheme *runtime.Scheme, objs ...client.Object) func(option
 	}
 }
 
-// BuildHelmPackage creates a new OCIImage object and associated tarball using the provided
-// Repository. The contents of the git repository will be bundled into a tarball
-// at the artifactDir. The resulting OCIImage object can be pushed to a remote
-// registry using its Push method.
-func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, provider RegistryProvider, rsRef types.NamespacedName, opts ...HelmOption) (*HelmPackage, error) {
+// BuildHelmPackage creates a new helm chart using the RSync NAMESPACE-NAME as
+// the name of the chart. Chart version defaults to "v1.0.0-latest" if not
+// specified. The resulting HelmPackage will only exist locally.
+func BuildHelmPackage(artifactDir string, provider HelmRegistryProvider, rsRef types.NamespacedName, opts ...HelmOption) (*HelmPackage, error) {
 	options := helmOptions{}
 	for _, opt := range opts {
 		opt(&options)
@@ -126,16 +123,14 @@ func BuildHelmPackage(artifactDir string, shell *testshell.TestShell, provider R
 	}
 	packagePath := tmpDir + string(filepath.Separator)
 	helmIndex++
-	if _, err := shell.Helm("package", tmpDir, "--destination", packagePath); err != nil {
+	if _, err := provider.Client().Helm("package", tmpDir, "--destination", packagePath); err != nil {
 		return nil, fmt.Errorf("packaging helm chart: %w", err)
 	}
 	helmPackage := &HelmPackage{
-		localChartFile: filepath.Join(tmpDir, fmt.Sprintf("%s-%s.tgz", name, version)),
-		Name:           name,
-		Version:        version,
-		syncURL:        provider.SyncURL(name),
-		shell:          shell,
-		provider:       provider,
+		LocalChartTgzPath: filepath.Join(tmpDir, fmt.Sprintf("%s-%s.tgz", name, version)),
+		Name:              name,
+		Version:           version,
+		Provider:          provider,
 	}
 	return helmPackage, nil
 }
@@ -169,32 +164,15 @@ func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) er
 // integration with the git e2e tooling and to mimic how a user might leverage
 // git and helm.
 type HelmPackage struct {
-	localChartFile string
-	syncURL        string
-	Name           string
-	Version        string
-	Digest         string
-	shell          *testshell.TestShell
-	provider       RegistryProvider
+	LocalChartTgzPath string
+	Name              string
+	Version           string
+	Digest            string
+	Provider          HelmRegistryProvider
 }
 
-// Push the image to the remote registry using the provided registry endpoint.
-func (h *HelmPackage) Push(registry string) error {
-	if _, err := h.shell.Helm("push", h.localChartFile, registry); err != nil {
-		return fmt.Errorf("pushing helm chart: %w", err)
-	}
-	// helm doesn't provide a great UX for deleting images, so just use crane
-	imageTag := fmt.Sprintf("%s/%s:%s", strings.TrimPrefix(registry, "oci://"), h.Name, h.Version)
-	out, err := h.shell.ExecWithDebug("crane", "digest", imageTag)
-	if err != nil {
-		return fmt.Errorf("getting digest: %w", err)
-	}
-	h.Digest = strings.TrimSpace(string(out))
-	return nil
-}
-
-// Delete the image from the remote registry using the provided registry endpoint.
+// Delete the image from the remote registry.
 func (h *HelmPackage) Delete() error {
 	// How to delete images varies by provider, so delegate deletion to the provider.
-	return h.provider.deleteImage(h.Name, h.Digest)
+	return h.Provider.DeletePackage(h.Name, h.Digest)
 }

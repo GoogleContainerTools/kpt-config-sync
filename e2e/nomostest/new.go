@@ -221,6 +221,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		GitProvider:             sharedNt.GitProvider,
 		OCIProvider:             sharedNt.OCIProvider,
 		HelmProvider:            sharedNt.HelmProvider,
+		HelmClient:              sharedNt.HelmClient,
+		OCIClient:               sharedNt.OCIClient,
 	}
 
 	if opts.SkipConfigSyncInstall {
@@ -274,11 +276,14 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	scheme := newScheme(t)
 	ctx := context.Background()
 	logger := testlogger.New(t, *e2e.Debug)
+
 	shell := &testshell.TestShell{
-		Context:        ctx,
-		KubeConfigPath: opts.KubeconfigPath,
-		Logger:         logger,
+		Context: ctx,
+		Env:     append(os.Environ(), fmt.Sprintf("KUBECONFIG=%s", opts.KubeconfigPath)),
+		Logger:  logger,
 	}
+	helmClient := testshell.NewHelmClient(opts.TmpDir, shell)
+	ociClient := testshell.NewOCIClient(opts.TmpDir, shell)
 
 	webhookDisabled := false
 	nt := &NT{
@@ -299,8 +304,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
-		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider, opts.ClusterName, shell),
-		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider, opts.ClusterName, shell),
+		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider, opts.ClusterName, shell, ociClient),
+		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider, opts.ClusterName, shell, helmClient),
+		HelmClient:              helmClient,
+		OCIClient:               ociClient,
 	}
 
 	// TODO: Try speeding up the reconciler and hydration polling.
@@ -454,32 +461,10 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	if *e2e.GitProvider == e2e.Local {
 		nt.portForwardGitServer()
 	}
-	// set up port forward if using in-cluster registry server
-	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
-		nt.portForwardRegistryServer()
-	}
-	// Setup registry authentication
+	// Setup registry authentication, port-forwarding, and cleanup
 	if err := setupRegistryClient(nt, opts); err != nil {
 		nt.T.Fatalf("configuring registry client: %v", err)
 	}
-	// Images created by the tests should not be persisted after the test finishes.
-	// Cleanup all images before the port forward gets torn down.
-	nt.T.Cleanup(func() {
-		for _, image := range nt.ociImages {
-			if err := image.Delete(); err != nil {
-				nt.T.Error(err)
-			}
-		}
-		nt.ociImages = nil
-	})
-	nt.T.Cleanup(func() {
-		for _, helmPackage := range nt.helmPackages {
-			if err := helmPackage.Delete(); err != nil {
-				nt.T.Error(err)
-			}
-		}
-		nt.helmPackages = nil
-	})
 	// The following prerequisites have been met, so we can now push commits
 	// - local repo initialized
 	// - remote repo exists

@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -70,7 +69,7 @@ func ImageInputObjects(scheme *runtime.Scheme, objs ...client.Object) func(optio
 // Repository. The contents of the git repository will be bundled into a tarball
 // at the artifactDir. The resulting OCIImage object can be pushed to a remote
 // registry using its Push method.
-func BuildImage(artifactDir string, shell *testshell.TestShell, provider RegistryProvider, rsRef types.NamespacedName, opts ...ImageOption) (*OCIImage, error) {
+func BuildImage(artifactDir string, shell *testshell.TestShell, provider OCIRegistryProvider, rsRef types.NamespacedName, opts ...ImageOption) (*OCIImage, error) {
 	options := imageOptions{}
 	for _, opt := range opts {
 		opt(&options)
@@ -120,13 +119,12 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, provider Registr
 	if _, err := shell.ExecWithDebug("tar", "-cvzf", localSourceTgzPath, "-C", tmpDir, "."); err != nil {
 		return nil, fmt.Errorf("packaging image: %w", err)
 	}
+	imageName := rsRef.String()
 	image := &OCIImage{
-		localSourceTgzPath: localSourceTgzPath,
-		Name:               rsRef.String(),
-		syncURL:            provider.SyncURL(rsRef.String()),
-		version:            version,
-		shell:              shell,
-		provider:           provider,
+		LocalSourceTgzPath: localSourceTgzPath,
+		Name:               imageName,
+		Tag:                version,
+		Provider:           provider,
 	}
 	return image, nil
 }
@@ -136,48 +134,40 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, provider Registr
 // integration with the git e2e tooling and to mimic how a user might leverage
 // git and OCI.
 type OCIImage struct {
-	localSourceTgzPath string
-	syncURL            string
-	version            string
+	LocalSourceTgzPath string
+	Tag                string // aka Version
 	Name               string
 	Digest             string
-	shell              *testshell.TestShell
-	provider           RegistryProvider
+	Provider           OCIRegistryProvider
 }
 
-// FloatingTag returns the floating tag that initially points to this image.
-// This tag is suitable for use on RSync object spec but not for interacting with
-// the image from the test suite.
-func (o *OCIImage) FloatingTag() string {
-	return fmt.Sprintf("%s:%s", o.syncURL, o.version)
-}
-
-// DigestTag returns the image tag formed using the image digest.
-// This tag is suitable for use on RSync object spec but not for interacting with
-// the image from the test suite.
-func (o *OCIImage) DigestTag() string {
-	return fmt.Sprintf("%s@%s", o.syncURL, o.Digest)
-}
-
-// Push the image to the remote registry using the provided registry endpoint.
-func (o *OCIImage) Push(registry string) error {
-	imageTag := fmt.Sprintf("%s:%s", registry, o.version)
-	_, err := o.shell.ExecWithDebug("crane", "append",
-		"-f", o.localSourceTgzPath,
-		"-t", imageTag)
+// RemoteAddressWithTag returns the image address with version tag.
+// For pulling with RSync's `.spec.oci.image`
+func (o *OCIImage) RemoteAddressWithTag() (string, error) {
+	imageAddr, err := o.Provider.ImageRemoteAddress(o.Name)
 	if err != nil {
-		return fmt.Errorf("pushing image: %w", err)
+		return "", fmt.Errorf("OCIProvider.ImageRemoteAddress: %w", err)
 	}
-	out, err := o.shell.ExecWithDebug("crane", "digest", imageTag)
+	return fmt.Sprintf("%s:%s", imageAddr, o.Tag), nil
+}
+
+// RemoteAddressWithDigest returns the image address with digest.
+// For pulling with RSync's `.spec.oci.image`
+func (o *OCIImage) RemoteAddressWithDigest() (string, error) {
+	imageAddr, err := o.Provider.ImageRemoteAddress(o.Name)
 	if err != nil {
-		return fmt.Errorf("getting digest: %w", err)
+		return "", fmt.Errorf("OCIProvider.ImageRemoteAddress: %w", err)
 	}
-	o.Digest = strings.TrimSpace(string(out))
-	return nil
+	return fmt.Sprintf("%s@%s", imageAddr, o.Digest), nil
 }
 
 // Delete the image from the remote registry using the provided registry endpoint.
 func (o *OCIImage) Delete() error {
 	// How to delete images varies by provider, so delegate deletion to the provider.
-	return o.provider.deleteImage(o.Name, o.Digest)
+	return o.Provider.DeleteImage(o.Name, o.Digest)
+}
+
+// ociURL prepends the `oci://` scheme onto the provided address.
+func ociURL(address string) string {
+	return fmt.Sprintf("oci://%s", address)
 }

@@ -97,31 +97,43 @@ func setupRegistry(nt *NT) error {
 	return nil
 }
 
-// setupRegistryClient handles registry authentication.
-// This is necessary on each test because gcloud auth tokens expire after 1h and
-// some test suites take longer than 1h.
+// setupRegistryClient handles registry authentication and port-forwarding.
+//
+// Port-forwarding is configured for local registries so that if the registry
+// pod crashes or is rescheduled the port-forwarding will be restarted after it
+// becomes healthy again. Then the client will re-login and re-push all the
+// images and charts that were previously pushed during the same test.
+//
+// For non-local registries, only login, logout, and cleanup are performed.
+//
+// Helm provider is only configured if RequireHelmProvider is true.
+// OCI provider is only configured if RequireOCIProvider is true.
 func setupRegistryClient(nt *NT, opts *ntopts.New) error {
-	nt.T.Cleanup(func() {
-		if opts.RequireHelmProvider || opts.RequireLocalHelmProvider {
-			if err := nt.HelmProvider.Logout(); err != nil {
-				nt.T.Error(err)
-			}
-		}
-		if opts.RequireOCIProvider || opts.RequireLocalOCIProvider {
-			if err := nt.OCIProvider.Logout(); err != nil {
-				nt.T.Error(err)
-			}
-		}
-	})
-	if opts.RequireOCIProvider || opts.RequireLocalOCIProvider {
+	// For local registries, set up port-forwarding to the in-cluster registry server.
+	// portForwardRegistryServer handles login and logout too.
+	if opts.RequireOCIProvider && *e2e.OCIProvider == e2e.Local || opts.RequireHelmProvider && *e2e.HelmProvider == e2e.Local {
+		nt.portForwardRegistryServer(opts.RequireHelmProvider, opts.RequireOCIProvider)
+	}
+	// For non-local registries, just login before each test and logout after.
+	if opts.RequireOCIProvider && *e2e.OCIProvider != e2e.Local {
 		if err := nt.OCIProvider.Login(); err != nil {
 			return err
 		}
+		nt.T.Cleanup(func() {
+			if err := nt.OCIProvider.Logout(); err != nil {
+				nt.T.Error(err)
+			}
+		})
 	}
-	if opts.RequireHelmProvider || opts.RequireLocalHelmProvider {
+	if opts.RequireHelmProvider && *e2e.HelmProvider != e2e.Local {
 		if err := nt.HelmProvider.Login(); err != nil {
 			return err
 		}
+		nt.T.Cleanup(func() {
+			if err := nt.HelmProvider.Logout(); err != nil {
+				nt.T.Error(err)
+			}
+		})
 	}
 	return nil
 }
@@ -155,18 +167,10 @@ func (nt *NT) BuildAndPushOCIImage(rsRef types.NamespacedName, options ...regist
 	if err != nil {
 		return nil, err
 	}
-	// Track image for cleanup and for recovering from a LocalProvider crash.
-	nt.ociImages = append(nt.ociImages, image)
-
-	address, err := nt.OCIProvider.PushURL(rsRef.String())
+	image, err = nt.OCIProvider.PushImage(image.Name, image.Tag, image.LocalSourceTgzPath)
 	if err != nil {
-		return nil, fmt.Errorf("getting OCIPushURL: %w", err)
-	}
-
-	if err := image.Push(address); err != nil {
 		return nil, err
 	}
-
 	return image, nil
 }
 
@@ -180,23 +184,15 @@ func (nt *NT) BuildAndPushHelmPackage(rsRef types.NamespacedName, options ...reg
 	if err := os.MkdirAll(artifactDir, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("creating artifact dir: %w", err)
 	}
-	helmPackage, err := registryproviders.BuildHelmPackage(artifactDir, nt.Shell, nt.HelmProvider, rsRef, options...)
+	pkg, err := registryproviders.BuildHelmPackage(artifactDir, nt.HelmProvider, rsRef, options...)
 	if err != nil {
 		return nil, err
 	}
-	// Track image for cleanup and for recovering from a LocalProvider crash.
-	nt.helmPackages = append(nt.helmPackages, helmPackage)
-
-	address, err := nt.HelmProvider.PushURL(helmPackage.Name)
+	pkg, err = nt.HelmProvider.PushPackage(pkg.LocalChartTgzPath)
 	if err != nil {
-		return nil, fmt.Errorf("getting OCIPushURL: %w", err)
-	}
-
-	if err := helmPackage.Push(address); err != nil {
 		return nil, err
 	}
-
-	return helmPackage, nil
+	return pkg, nil
 }
 
 func testRegistryServerSelector() map[string]string {

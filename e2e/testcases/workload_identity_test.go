@@ -265,8 +265,12 @@ func TestWorkloadIdentity(t *testing.T) {
 				if err != nil {
 					nt.T.Fatalf("failed to push helm chart: %v", err)
 				}
+				chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+				if err != nil {
+					nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+				}
 
-				tc.sourceRepo = nt.HelmProvider.SyncURL(chart.Name)
+				tc.sourceRepo = chartRepoURL
 				tc.sourceChart = chart.Name
 				tc.sourceVersion = chart.Version
 				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
@@ -280,8 +284,12 @@ func TestWorkloadIdentity(t *testing.T) {
 				if err != nil {
 					nt.T.Fatalf("failed to push oci image: %v", err)
 				}
+				imageURL, err := image.RemoteAddressWithTag()
+				if err != nil {
+					nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+				}
 
-				tc.sourceRepo = image.FloatingTag()
+				tc.sourceRepo = imageURL
 				tc.rootCommitFn = imageDigestFuncByDigest(image.Digest)
 			}
 
@@ -363,6 +371,11 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 		if err != nil {
 			nt.T.Fatalf("failed to push helm chart: %v", err)
 		}
+		chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+		if err != nil {
+			nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+		}
+
 		nt.MustMergePatch(rs, fmt.Sprintf(`{
 			"spec": {
 				"helm": {
@@ -373,7 +386,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.Na
 				}
 			}
 		}`,
-			nt.HelmProvider.SyncURL(chart.Name),
+			chartRepoURL,
 			chart.Name,
 			chart.Version))
 		rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)

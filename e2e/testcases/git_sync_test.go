@@ -35,7 +35,7 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	}
 
 	nt.T.Log("Create an extra remote tracking branch")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Push("HEAD:refs/remotes/upstream/main"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Push("HEAD:upstream/main"))
 
 	nt.T.Logf("Update the remote main branch by adding a test namespace")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))

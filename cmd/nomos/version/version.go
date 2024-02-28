@@ -284,19 +284,15 @@ func tabulate(es []entry, out io.Writer) {
 	w := util.NewWriter(out)
 	defer func() {
 		if err := w.Flush(); err != nil {
-			// nolint:errcheck
 			fmt.Fprintf(os.Stderr, "error on Flush(): %v", err)
 		}
 	}()
-	// nolint:errcheck
 	fmt.Fprintf(w, format, "CURRENT", "CLUSTER_CONTEXT_NAME", "COMPONENT", "VERSION")
 	for _, e := range es {
 		if e.err != nil {
-			// nolint:errcheck
 			fmt.Fprintf(w, format, e.current, e.name, e.component, fmt.Sprintf("<error: %v>", e.err))
 			continue
 		}
-		// nolint:errcheck
 		fmt.Fprintf(w, format, e.current, e.name, e.component, e.version)
 	}
 }

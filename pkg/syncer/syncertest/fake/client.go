@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -135,7 +134,7 @@ func (c *Client) DeleteAllOf(ctx context.Context, obj client.Object, opts ...cli
 	options.ApplyOptions(opts)
 	listObj, ok := obj.(client.ObjectList)
 	if !ok {
-		return errors.Errorf("failed to convert %T to client.ObjectList", obj)
+		return fmt.Errorf("failed to convert %T to client.ObjectList", obj)
 	}
 	return c.storage.DeleteAllOf(ctx, listObj, options)
 }

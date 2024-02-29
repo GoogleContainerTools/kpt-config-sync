@@ -16,6 +16,7 @@ package migrate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -86,7 +86,7 @@ var Cmd = &cobra.Command{
 		if len(flags.Contexts) == 0 {
 			currentContext, err := restconfig.CurrentContextName()
 			if err != nil {
-				return fmt.Errorf("failed to get current context name with err: %v", errors.Cause(err))
+				return fmt.Errorf("failed to get current context name with err: %w", err)
 			}
 			contexts = append(contexts, currentContext)
 		} else if len(flags.Contexts) != 1 || flags.Contexts[0] != "all" {
@@ -287,13 +287,13 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 	if proxyConfig != "" {
 		parsedURL, err := url.Parse(proxyConfig)
 		if err != nil {
-			return nil, errors.Wrapf(err, "malformed proxy config %s", proxyConfig)
+			return nil, fmt.Errorf("malformed proxy config %s: %w", proxyConfig, err)
 		}
 		if parsedURL.Hostname() == "" {
-			return nil, errors.Errorf("malformed proxy config %s missing hostname", proxyConfig)
+			return nil, fmt.Errorf("malformed proxy config %s missing hostname", proxyConfig)
 		}
 		if parsedURL.Scheme != desiredScheme {
-			return nil, errors.Errorf("scheme for %s proxy %s needs to be %s", desiredScheme, proxyConfig, desiredScheme)
+			return nil, fmt.Errorf("scheme for %s proxy %s needs to be %s", desiredScheme, proxyConfig, desiredScheme)
 		}
 	}
 
@@ -307,7 +307,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 		return nil, err
 	}
 	if syncRepo == "" {
-		return nil, errors.Errorf("Git sync repo is empty")
+		return nil, fmt.Errorf("Git sync repo is empty")
 	}
 
 	var secretRefName string
@@ -329,12 +329,12 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 			return nil, err
 		}
 		if gcpServiceAccountEmail == "" {
-			return nil, errors.Errorf("gcpServiceAccountEmail not present, but is required when secretType is %s", secretType)
+			return nil, fmt.Errorf("gcpServiceAccountEmail not present, but is required when secretType is %s", secretType)
 		}
 	case "none":
 		// no secretRef is used when secretType is "none".
 	default:
-		return nil, errors.Errorf("%v is an unknown secret type", secretType)
+		return nil, fmt.Errorf("%v is an unknown secret type", secretType)
 	}
 
 	syncRev, err := cm.NestedString(ctx, "spec", "git", "syncRev")

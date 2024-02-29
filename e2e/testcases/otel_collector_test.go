@@ -24,7 +24,6 @@ import (
 	monitoringv2 "cloud.google.com/go/monitoring/apiv3/v2"
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
@@ -391,7 +390,7 @@ func metricDoesNotHaveLabel(label string) metricValidatorFunc {
 	return func(m *metric.Metric, r *monitoredres.MonitoredResource) error {
 		labels := r.GetLabels()
 		if value, found := labels[label]; found {
-			return errors.Errorf("expected metric to not have label, but found %s=%s", label, value)
+			return fmt.Errorf("expected metric to not have label, but found %s=%s", label, value)
 		}
 		return nil
 	}
@@ -417,9 +416,7 @@ func validateMetricInGCM(nt *nomostest.NT, it *monitoringv2.TimeSeriesIterator, 
 			if labels["cluster_name"] == clusterName {
 				for _, valFn := range valFns {
 					if err := valFn(metric, resource); err != nil {
-						return errors.Wrapf(err,
-							"GCM metric %s failed validation (cluster_name=%s)",
-							metricType, nt.ClusterName)
+						return fmt.Errorf("GCM metric %s failed validation (cluster_name=%s): %w", metricType, nt.ClusterName, err)
 					}
 				}
 				return nil

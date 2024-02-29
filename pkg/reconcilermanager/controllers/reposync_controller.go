@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -141,7 +141,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 				// Return an error to trigger retry.
 				metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
 				// requeue for retry
-				return controllerruntime.Result{}, errors.Wrap(err, "failed to delete managed objects")
+				return controllerruntime.Result{}, fmt.Errorf("failed to delete managed objects: %w", err)
 			}
 			// cleanup successful
 			metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(nil), start)
@@ -213,18 +213,18 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// existing secret in the reposync.namespace.
 	authSecret, err := r.upsertAuthSecret(ctx, rs, reconcilerRef, labelMap)
 	if err != nil {
-		return errors.Wrap(err, "upserting auth secret")
+		return fmt.Errorf("upserting auth secret: %w", err)
 	}
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
 	caSecret, err := r.upsertCACertSecret(ctx, rs, reconcilerRef, labelMap)
 	if err != nil {
-		return errors.Wrap(err, "upserting CA cert secret")
+		return fmt.Errorf("upserting CA cert secret: %w", err)
 	}
 
 	if err := r.deleteSecrets(ctx, reconcilerRef, authSecret.Name, caSecret.Name); err != nil {
-		return errors.Wrap(err, "garbage collecting secrets")
+		return fmt.Errorf("garbage collecting secrets: %w", err)
 	}
 
 	// Overwrite reconciler pod ServiceAccount.
@@ -242,19 +242,19 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		gcpSAEmail = rs.Spec.Helm.GCPServiceAccountEmail
 	default:
 		// Should have been caught by validation
-		return errors.Errorf("invalid source type: %s", rs.Spec.SourceType)
+		return fmt.Errorf("invalid source type: %s", rs.Spec.SourceType)
 	}
 	if _, err := r.upsertServiceAccount(ctx, reconcilerRef, auth, gcpSAEmail, labelMap); err != nil {
-		return errors.Wrap(err, "upserting service account")
+		return fmt.Errorf("upserting service account: %w", err)
 	}
 
 	// Overwrite reconciler rolebinding.
 	if _, err := r.upsertSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
-		return errors.Wrap(err, "upserting role binding")
+		return fmt.Errorf("upserting role binding: %w", err)
 	}
 
 	if err := r.upsertHelmConfigMaps(ctx, rs, labelMap); err != nil {
-		return errors.Wrap(err, "upserting helm config maps")
+		return fmt.Errorf("upserting helm config maps: %w", err)
 	}
 
 	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
@@ -263,7 +263,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// Upsert Namespace reconciler deployment.
 	deployObj, op, err := r.upsertDeployment(ctx, reconcilerRef, labelMap, mut)
 	if err != nil {
-		return errors.Wrap(err, "upserting reconciler deployment")
+		return fmt.Errorf("upserting reconciler deployment: %w", err)
 	}
 	rs.Status.Reconciler = reconcilerRef.Name
 
@@ -272,7 +272,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	if op == controllerutil.OperationResultNone {
 		deployObj, err = r.deployment(ctx, reconcilerRef)
 		if err != nil {
-			return errors.Wrap(err, "getting reconciler deployment")
+			return fmt.Errorf("getting reconciler deployment: %w", err)
 		}
 	}
 
@@ -287,7 +287,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 
 	result, err := kstatus.Compute(deployObj)
 	if err != nil {
-		return errors.Wrap(err, "computing reconciler deployment status")
+		return fmt.Errorf("computing reconciler deployment status: %w", err)
 	}
 
 	r.logger(ctx).V(3).Info("Reconciler status",
@@ -413,7 +413,7 @@ func (r *RepoSyncReconciler) handleReconcileError(ctx context.Context, err error
 	}
 
 	if err != nil {
-		err = errors.Wrap(err, stage)
+		err = fmt.Errorf("%s: %w", stage, err)
 	}
 	return err // retry
 }
@@ -424,7 +424,7 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	r.logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting reconciler deployment")
+		return fmt.Errorf("deleting reconciler deployment: %w", err)
 	}
 
 	// Note: ConfigMaps have been replaced by Deployment env vars.
@@ -432,23 +432,23 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 	// This deletion remains to clean up after users upgrade.
 
 	if err := r.deleteConfigMaps(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting config maps")
+		return fmt.Errorf("deleting config maps: %w", err)
 	}
 
 	if err := r.deleteSecrets(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting secrets")
+		return fmt.Errorf("deleting secrets: %w", err)
 	}
 
 	if err := r.deleteSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
-		return errors.Wrap(err, "deleting role binding")
+		return fmt.Errorf("deleting role binding: %w", err)
 	}
 
 	if err := r.deleteHelmConfigMapCopies(ctx, rsRef, nil); err != nil {
-		return errors.Wrap(err, "deleting helm config maps")
+		return fmt.Errorf("deleting helm config maps: %w", err)
 	}
 
 	if err := r.deleteServiceAccount(ctx, reconcilerRef); err != nil {
-		return errors.Wrap(err, "deleting service account")
+		return fmt.Errorf("deleting service account: %w", err)
 	}
 
 	return nil
@@ -1009,7 +1009,7 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 
 	secretName := ReconcilerResourceName(reconcilerName, namespaceSecretName)
 	if errs := validation.IsDNS1123Subdomain(secretName); errs != nil {
-		return errors.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
+		return fmt.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
 	}
 
 	secret, err := validateSecretExist(ctx,
@@ -1018,9 +1018,9 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 		r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return errors.Errorf("Secret %s not found: create one to allow client authentication", namespaceSecretName)
+			return fmt.Errorf("Secret %s not found: create one to allow client authentication", namespaceSecretName)
 		}
-		return errors.Wrapf(err, "Secret %s get failed", namespaceSecretName)
+		return fmt.Errorf("Secret %s get failed: %w", namespaceSecretName, err)
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]
@@ -1092,7 +1092,7 @@ func (r *RepoSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 		return nil
 	})
 	if err != nil {
-		return updated, errors.Wrapf(err, "Sync status update failed")
+		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}
 	if updated {
 		r.logger(ctx).Info("Sync status update successful")
@@ -1106,7 +1106,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 	return func(obj client.Object) error {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
-			return errors.Errorf("expected appsv1 Deployment, got: %T", obj)
+			return fmt.Errorf("expected appsv1 Deployment, got: %T", obj)
 		}
 		reconcilerName := core.NsReconcilerName(rs.Namespace, rs.Name)
 
@@ -1246,7 +1246,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			case metrics.OtelAgentName:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			default:
-				return errors.Errorf("unknown container in reconciler deployment template: %q", container.Name)
+				return fmt.Errorf("unknown container in reconciler deployment template: %q", container.Name)
 			}
 			if addContainer {
 				// Common mutations for all added containers

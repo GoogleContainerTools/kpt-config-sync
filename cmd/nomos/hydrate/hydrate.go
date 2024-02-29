@@ -15,9 +15,9 @@
 package hydrate
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
@@ -142,7 +142,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 				if clusterName == "" {
 					clusterName = nomosparse.UnregisteredCluster
 				}
-				util.PrintErrOrDie(errors.Wrapf(err, "errors for Cluster %q", clusterName))
+				util.PrintErrOrDie(fmt.Errorf("errors for Cluster %q: %w", clusterName, err))
 
 				encounteredError = true
 

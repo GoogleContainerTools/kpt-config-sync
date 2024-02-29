@@ -15,12 +15,12 @@
 package status
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 var undocumentedErrFoo = UndocumentedError("foo")

@@ -16,9 +16,9 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"testing"
 
-	"github.com/pkg/errors"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

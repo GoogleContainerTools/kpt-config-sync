@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -199,13 +198,13 @@ func convertObjects(req admission.Request) (client.Object, client.Object, error)
 		var err error
 		oldObj, err = kinds.ObjectAsClientObject(req.OldObject.Object)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to convert old object")
+			return nil, nil, fmt.Errorf("failed to convert old object: %w", err)
 		}
 	case req.OldObject.Raw != nil:
 		// We got raw JSON bytes instead of an object.
 		oldU := &unstructured.Unstructured{}
 		if err := oldU.UnmarshalJSON(req.OldObject.Raw); err != nil {
-			return nil, nil, errors.Wrap(err, "failed to decode old object from JSON")
+			return nil, nil, fmt.Errorf("failed to decode old object from JSON: %w", err)
 		}
 		oldObj = oldU
 	}
@@ -217,13 +216,13 @@ func convertObjects(req admission.Request) (client.Object, client.Object, error)
 		var err error
 		newObj, err = kinds.ObjectAsClientObject(req.Object.Object)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to convert new object")
+			return nil, nil, fmt.Errorf("failed to convert new object: %w", err)
 		}
 	case req.Object.Raw != nil:
 		// We got raw JSON bytes instead of an object.
 		newU := &unstructured.Unstructured{}
 		if err := newU.UnmarshalJSON(req.Object.Raw); err != nil {
-			return nil, nil, errors.Wrap(err, "failed to decode new object from JSON")
+			return nil, nil, fmt.Errorf("failed to decode new object from JSON: %w", err)
 		}
 		newObj = newU
 	}

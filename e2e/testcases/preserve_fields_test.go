@@ -15,12 +15,12 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -529,7 +529,7 @@ func hasTargetPort(want int) testpredicates.Predicate {
 		}
 		got := service.Spec.Ports[0].TargetPort.IntValue()
 		if want != got {
-			return errors.Errorf("port %d synced, want %d", got, want)
+			return fmt.Errorf("port %d synced, want %d", got, want)
 		}
 		return nil
 	}

@@ -21,7 +21,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
@@ -555,7 +554,7 @@ func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncin
 	}
 	// Report conflict errors to the remote manager, if it's a RootSync.
 	if err := reportRootSyncConflicts(ctx, p.K8sClient(), conflictErrs); err != nil {
-		return errors.Wrapf(err, "failed to report remote conflicts")
+		return fmt.Errorf("failed to report remote conflicts: %w", err)
 	}
 	return nil
 }
@@ -606,7 +605,7 @@ func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, confl
 			// Report the conflict to the other RootSync to make it easier to detect.
 			klog.Infof("Detected conflict with RootSync manager %q", conflictingManager)
 			if err := prependRootSyncRemediatorStatus(ctx, k8sClient, name, conflictErrors, defaultDenominator); err != nil {
-				return errors.Wrapf(err, "failed to update RootSync %q to prepend remediator conflicts", name)
+				return fmt.Errorf("failed to update RootSync %q to prepend remediator conflicts: %w", name, err)
 			}
 		} else {
 			// RepoSync applier uses PolicyAdoptIfNoInventory.

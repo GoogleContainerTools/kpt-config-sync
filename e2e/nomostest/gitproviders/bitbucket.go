@@ -16,6 +16,7 @@ package gitproviders
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os/exec"
@@ -24,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -91,7 +91,7 @@ func (b *BitbucketClient) SyncURL(name string) string {
 func (b *BitbucketClient) CreateRepository(localName string) (string, error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
-		return "", errors.Wrap(err, "failed to generate a new UUID")
+		return "", fmt.Errorf("failed to generate a new UUID: %w", err)
 	}
 
 	// strip all hyphens from localName and uuid before appending
@@ -121,7 +121,7 @@ func (b *BitbucketClient) CreateRepository(localName string) (string, error) {
 		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", bitbucketWorkspace, repoName)).CombinedOutput()
 
 	if err != nil {
-		return "", errors.Wrap(err, string(out))
+		return "", fmt.Errorf("%s: %w", string(out), err)
 	}
 	if strings.Contains(string(out), "\"type\": \"error\"") {
 		return "", errors.New(string(out))
@@ -149,7 +149,7 @@ func deleteRepos(accessToken string, names ...string) error {
 				bitbucketWorkspace, name)).CombinedOutput()
 
 		if err != nil {
-			errs = multierr.Append(errs, errors.Wrap(err, string(out)))
+			errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
 		}
 		if len(out) != 0 {
 			errs = multierr.Append(errs, errors.New(string(out)))
@@ -183,13 +183,13 @@ func (b *BitbucketClient) refreshAccessToken() (string, error) {
 		"-d", "refresh_token="+b.refreshToken).CombinedOutput()
 
 	if err != nil {
-		return "", errors.Wrap(err, string(out))
+		return "", fmt.Errorf("%s: %w", string(out), err)
 	}
 
 	var output map[string]interface{}
 	err = json.Unmarshal(out, &output)
 	if err != nil {
-		return "", errors.Wrap(err, "unmarshalling refresh token response")
+		return "", fmt.Errorf("unmarshalling refresh token response: %w", err)
 	}
 
 	accessToken, ok := output["access_token"]
@@ -205,7 +205,7 @@ func FetchCloudSecret(name string) (string, error) {
 	out, err := exec.Command("gcloud", "secrets", "versions",
 		"access", "latest", "--project", *e2e.GCPProject, "--secret", name).CombinedOutput()
 	if err != nil {
-		return "", errors.Wrap(err, string(out))
+		return "", fmt.Errorf("%s: %w", string(out), err)
 	}
 	return string(out), nil
 }
@@ -216,7 +216,7 @@ func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int
 		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
 			bitbucketWorkspace, bitbucketProject, page)).CombinedOutput()
 	if err != nil {
-		return -1, errors.Wrap(err, string(out))
+		return -1, fmt.Errorf("%s: %w", string(out), err)
 	}
 	repos, page, err := b.filterObsoleteRepos(out)
 	if err != nil {

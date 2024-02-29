@@ -15,7 +15,8 @@
 package discovery
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
@@ -67,7 +68,7 @@ func toGVKs(lists ...*metav1.APIResourceList) ([]schema.GroupVersionKind, status
 	for _, list := range lists {
 		groupVersion, err := schema.ParseGroupVersion(list.GroupVersion)
 		if err != nil {
-			errs = status.Append(errs, errors.Wrapf(err, "discovery client returned invalid GroupVersion: %q", list.GroupVersion))
+			errs = status.Append(errs, fmt.Errorf("discovery client returned invalid GroupVersion: %q: %w", list.GroupVersion, err))
 			continue
 		}
 		for _, resource := range list.APIResources {

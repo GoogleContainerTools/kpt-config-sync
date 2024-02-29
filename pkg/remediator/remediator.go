@@ -16,9 +16,9 @@ package remediator
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -110,7 +110,7 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 
 	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler)
 	if err != nil {
-		return nil, errors.Wrap(err, "creating watch manager")
+		return nil, fmt.Errorf("creating watch manager: %w", err)
 	}
 
 	remediator.watchMgr = watchMgr

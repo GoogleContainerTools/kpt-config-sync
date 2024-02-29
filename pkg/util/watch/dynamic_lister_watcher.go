@@ -16,8 +16,8 @@ package watch
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,15 +57,15 @@ var _ cache.ListerWatcher = &DynamicListerWatcher{}
 func (dlw *DynamicListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
 	mapping, err := dlw.RESTMapper.RESTMapping(dlw.ItemGVK.GroupKind(), dlw.ItemGVK.Version)
 	if err != nil {
-		return nil, errors.Wrap(err, "listing")
+		return nil, fmt.Errorf("listing: %w", err)
 	}
 	cOpts, err := ConvertListOptions(&options)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
+		return nil, fmt.Errorf("failed to convert metav1.ListOptions to client.ListOptions: %w", err)
 	}
 	cOpts, err = MergeListOptions(cOpts, dlw.DefaultListOptions)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
+		return nil, fmt.Errorf("failed to merge list options: %w", err)
 	}
 	mOpts := cOpts.AsListOptions()
 	klog.V(5).Infof("Listing %s: %+v", dlw.ItemGVK.GroupKind(), cOpts)
@@ -79,15 +79,15 @@ func (dlw *DynamicListerWatcher) List(options metav1.ListOptions) (runtime.Objec
 func (dlw *DynamicListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
 	mapping, err := dlw.RESTMapper.RESTMapping(dlw.ItemGVK.GroupKind(), dlw.ItemGVK.Version)
 	if err != nil {
-		return nil, errors.Wrap(err, "watching")
+		return nil, fmt.Errorf("watching: %w", err)
 	}
 	cOpts, err := ConvertListOptions(&options)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert metav1.ListOptions to client.ListOptions")
+		return nil, fmt.Errorf("failed to convert metav1.ListOptions to client.ListOptions: %w", err)
 	}
 	cOpts, err = MergeListOptions(cOpts, dlw.DefaultListOptions)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to merge list options")
+		return nil, fmt.Errorf("failed to merge list options: %w", err)
 	}
 	mOpts := cOpts.AsListOptions()
 	klog.V(5).Infof("Watching %s: %+v", dlw.ItemGVK.GroupKind(), cOpts)

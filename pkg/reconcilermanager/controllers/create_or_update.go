@@ -16,8 +16,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,7 +70,7 @@ func mutateWrapper(f controllerutil.MutateFn, key client.ObjectKey, obj client.O
 		return err
 	}
 	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
-		return errors.Errorf("MutateFn cannot mutate object name or namespace (before: %q, after: %q)",
+		return fmt.Errorf("MutateFn cannot mutate object name or namespace (before: %q, after: %q)",
 			key, newKey)
 	}
 	return nil

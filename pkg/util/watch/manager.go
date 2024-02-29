@@ -17,8 +17,8 @@ package watch
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -82,13 +82,13 @@ func NewManager(mgr manager.Manager, builder ControllerBuilder) (RestartableMana
 		Reconciler: r,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not create %q", restartControllerName)
+		return nil, fmt.Errorf("could not create %q: %w", restartControllerName, err)
 	}
 
 	// Create a watch for errors when starting the subManager and force it to retry.
 	managerRestartSource := &source.Channel{Source: errCh}
 	if err := c.Watch(managerRestartSource, &handler.EnqueueRequestForObject{}); err != nil {
-		return nil, errors.Wrapf(err, "could not watch manager initialization errors in the %q controller", restartControllerName)
+		return nil, fmt.Errorf("could not watch manager initialization errors in the %q controller: %w", restartControllerName, err)
 	}
 
 	return r, nil
@@ -102,7 +102,7 @@ func newManager(cfg *rest.Config) (manager.Manager, error) {
 	opts := manager.Options{MetricsBindAddress: "0"}
 	mgr, err := manager.New(rest.CopyConfig(cfg), opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create the manager for RestartableManager")
+		return nil, fmt.Errorf("could not create the manager for RestartableManager: %w", err)
 	}
 	return mgr, nil
 }
@@ -136,7 +136,7 @@ func (m *subManager) Restart(gvks map[schema.GroupVersionKind]bool, force bool) 
 	m.mgr = sm
 
 	if err := m.builder.StartControllers(m.mgr, gvks, m.initTime); err != nil {
-		return true, errors.Wrap(err, "could not start controllers")
+		return true, fmt.Errorf("could not start controllers: %w", err)
 	}
 
 	klog.Info("Starting subManager")

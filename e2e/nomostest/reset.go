@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -118,7 +117,7 @@ func Reset(nt *NT) error {
 	protectedNamespacesWithTestLabel, nsListItems := filterNamespaces(nsList.Items,
 		protectedNamespaces...)
 	if len(protectedNamespacesWithTestLabel) > 0 {
-		return errors.Errorf("protected namespace(s) modified by test: %+v",
+		return fmt.Errorf("protected namespace(s) modified by test: %+v",
 			protectedNamespacesWithTestLabel)
 	}
 	if err := ResetNamespaces(nt, nsListItems); err != nil {
@@ -163,7 +162,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 			if !IsDeletionPropagationEnabled(rs) {
 				// If you go this error, make sure your test cleanup ensures
 				// that the managed RootSync has deletion propagation enabled.
-				return errors.Errorf("RootSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
+				return fmt.Errorf("RootSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
 			}
 			continue
 		}
@@ -235,7 +234,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 			if !IsDeletionPropagationEnabled(rs) {
 				// If you go this error, make sure your test cleanup ensures
 				// that the managed RepoSync has deletion propagation enabled.
-				return errors.Errorf("RepoSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
+				return fmt.Errorf("RepoSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
 			}
 			continue
 		}

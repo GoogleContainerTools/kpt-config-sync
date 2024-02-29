@@ -17,7 +17,6 @@ package bugreport
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -48,20 +47,20 @@ var Cmd = &cobra.Command{
 
 		cfg, err := restconfig.NewRestConfig(flags.ClientTimeout)
 		if err != nil {
-			return errors.Wrapf(err, "failed to create rest config")
+			return fmt.Errorf("failed to create rest config: %w", err)
 		}
 		cs, err := kubernetes.NewForConfig(cfg)
 		if err != nil {
-			return errors.Wrapf(err, "failed to create kubernetes client set")
+			return fmt.Errorf("failed to create kubernetes client set: %w", err)
 		}
 		c, err := client.New(cfg, client.Options{})
 		if err != nil {
-			return errors.Wrapf(err, "failed to create kubernetes client")
+			return fmt.Errorf("failed to create kubernetes client: %w", err)
 		}
 
 		report, err := bugreport.New(cmd.Context(), c, cs)
 		if err != nil {
-			return errors.Wrap(err, "failed to initialize bug reporter")
+			return fmt.Errorf("failed to initialize bug reporter: %w", err)
 		}
 
 		if err = report.Open(); err != nil {

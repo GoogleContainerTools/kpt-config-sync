@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -129,12 +128,12 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		// Object being deleted.
 		if controllerutil.ContainsFinalizer(rs, metadata.ReconcilerFinalizer) {
 			if err := c.Finalizer.Finalize(ctx, rs); err != nil {
-				return result, errors.Wrapf(err, "finalizing")
+				return result, fmt.Errorf("finalizing: %w", err)
 			}
 		}
 	} else {
 		if err := c.reconcileFinalizer(ctx, rs); err != nil {
-			return result, errors.Wrapf(err, "reconciling finalizer")
+			return result, fmt.Errorf("reconciling finalizer: %w", err)
 		}
 	}
 	return result, nil

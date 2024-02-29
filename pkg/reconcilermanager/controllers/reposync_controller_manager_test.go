@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -292,7 +291,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 			return nil
 		}
 		// keep watching
-		return errors.Errorf("reconciler deployment %s", event.Type)
+		return fmt.Errorf("reconciler deployment %s", event.Type)
 	})
 	require.NoError(t, err)
 	if reconcilerObj == nil {
@@ -375,7 +374,7 @@ func TestRepoSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 		newValue := newObj.Spec.Template.Spec.ServiceAccountName
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
+			return fmt.Errorf("spec.template.spec.serviceAccountName expected to be %q, but found %q",
 				oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -388,7 +387,7 @@ func TestRepoSyncReconcilerDeploymentDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -419,7 +418,7 @@ func TestRepoSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 		newValue := newObj.Labels[metadata.SyncKindLabel]
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
+			return fmt.Errorf("spec.metadata.labels[%q] expected to be %q, but found %q",
 				metadata.SyncKindLabel, oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -432,7 +431,7 @@ func TestRepoSyncReconcilerServiceAccountDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -466,7 +465,7 @@ func TestRepoSyncReconcilerRoleBindingDriftProtection(t *testing.T) {
 		newValue := newObj.RoleRef.Name
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("roleRef.name expected to be %q, but found %q",
+			return fmt.Errorf("roleRef.name expected to be %q, but found %q",
 				oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -479,7 +478,7 @@ func TestRepoSyncReconcilerRoleBindingDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted
@@ -514,7 +513,7 @@ func TestRepoSyncReconcilerAuthSecretDriftProtection(t *testing.T) {
 		newValue := string(newObj.Data[string(configsync.AuthSSH)])
 		if newValue != oldValue {
 			// keep watching
-			return errors.Errorf("data[%q] expected to be %q, but found %q",
+			return fmt.Errorf("data[%q] expected to be %q, but found %q",
 				configsync.AuthSSH, oldValue, newValue)
 		}
 		newRV, err := parseResourceVersion(newObj)
@@ -527,7 +526,7 @@ func TestRepoSyncReconcilerAuthSecretDriftProtection(t *testing.T) {
 			return err
 		}
 		if newRV <= oldRV {
-			return errors.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
+			return fmt.Errorf("watch event with resourceVersion %d predates expected update with resourceVersion %d",
 				newRV, oldRV)
 		}
 		// success - change reverted

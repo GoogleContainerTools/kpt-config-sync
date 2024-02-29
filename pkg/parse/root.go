@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -506,7 +505,7 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 		existingNs := &corev1.Namespace{}
 		err := p.Client.Get(context.Background(), types.NamespacedName{Name: ns}, existingNs)
 		if err != nil && !apierrors.IsNotFound(err) {
-			errs = status.Append(errs, errors.Wrapf(err, "unable to check the existence of the implicit namespace %q", ns))
+			errs = status.Append(errs, fmt.Errorf("unable to check the existence of the implicit namespace %q: %w", ns, err))
 			continue
 		}
 

@@ -15,7 +15,8 @@
 package kinds
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,7 +26,7 @@ import (
 func ObjectAsClientObject(rObj runtime.Object) (client.Object, error) {
 	cObj, ok := rObj.(client.Object)
 	if !ok {
-		return nil, errors.Errorf("unsupported resource type (%s): failed to cast to client.Object",
+		return nil, fmt.Errorf("unsupported resource type (%s): failed to cast to client.Object",
 			ObjectSummary(rObj))
 	}
 	return cObj, nil
@@ -36,7 +37,7 @@ func ObjectAsClientObject(rObj runtime.Object) (client.Object, error) {
 func ObjectAsClientObjectList(rObj runtime.Object) (client.ObjectList, error) {
 	cObj, ok := rObj.(client.ObjectList)
 	if !ok {
-		return nil, errors.Errorf("unsupported resource type (%s): failed to cast to client.ObjectList",
+		return nil, fmt.Errorf("unsupported resource type (%s): failed to cast to client.ObjectList",
 			ObjectSummary(rObj))
 	}
 	return cObj, nil

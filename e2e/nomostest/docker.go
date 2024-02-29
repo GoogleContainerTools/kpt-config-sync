@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -90,14 +89,14 @@ func VersionFromManifest(t testing.NTB) string {
 func imageTagFromManifest(name string) (string, error) {
 	bytes, err := os.ReadFile(configSyncManifest)
 	if err != nil {
-		return "", errors.Errorf("failed to read %s: %s", configSyncManifest, err)
+		return "", fmt.Errorf("failed to read %s: %s", configSyncManifest, err)
 	}
 	re := regexp.MustCompile(
 		fmt.Sprintf(`(image: )(.*\/%s:.*)`, name),
 	)
 	match := re.FindStringSubmatch(string(bytes))
 	if match == nil || len(match) != 3 {
-		return "", errors.Errorf("failed to find image %s in %s", name, configSyncManifest)
+		return "", fmt.Errorf("failed to find image %s in %s", name, configSyncManifest)
 	}
 	return match[2], nil
 }
@@ -106,7 +105,7 @@ func checkImage(image string) error {
 	url := fmt.Sprintf("http://%s", image)
 	resp, err := http.Get(url)
 	if err != nil {
-		return errors.Errorf("Failed to check for image %s in registry: %s", image, err)
+		return fmt.Errorf("Failed to check for image %s in registry: %s", image, err)
 	}
 
 	defer func() {
@@ -114,7 +113,7 @@ func checkImage(image string) error {
 	}()
 	_, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return errors.Errorf("Failed to read response for image %s in registry: %s", image, err)
+		return fmt.Errorf("Failed to read response for image %s in registry: %s", image, err)
 	}
 	return nil
 }

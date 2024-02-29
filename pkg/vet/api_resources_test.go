@@ -15,9 +15,9 @@
 package vet
 
 import (
+	"errors"
 	"testing"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/discovery"

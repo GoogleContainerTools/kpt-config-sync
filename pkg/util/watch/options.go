@@ -15,7 +15,8 @@
 package watch
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -92,7 +93,7 @@ func MergeListOptions(a, b *client.ListOptions) (*client.ListOptions, error) {
 	switch {
 	case a.Namespace != "" && b.Namespace != "":
 		if a.Namespace != b.Namespace {
-			return nil, errors.Errorf("cannot merge two different namespaces: %s & %s",
+			return nil, fmt.Errorf("cannot merge two different namespaces: %s & %s",
 				a.Namespace, b.Namespace)
 		}
 		c.Namespace = a.Namespace
@@ -105,7 +106,7 @@ func MergeListOptions(a, b *client.ListOptions) (*client.ListOptions, error) {
 	switch {
 	case a.Limit > 0 && b.Limit > 0:
 		if a.Limit != b.Limit {
-			return nil, errors.Errorf("cannot merge two different limits: %d & %d",
+			return nil, fmt.Errorf("cannot merge two different limits: %d & %d",
 				a.Limit, b.Limit)
 		}
 		c.Limit = a.Limit
@@ -118,7 +119,7 @@ func MergeListOptions(a, b *client.ListOptions) (*client.ListOptions, error) {
 	switch {
 	case a.Continue != "" && b.Continue != "":
 		if a.Continue != b.Continue {
-			return nil, errors.Errorf("cannot merge two different continue tokens: %s & %s",
+			return nil, fmt.Errorf("cannot merge two different continue tokens: %s & %s",
 				a.Continue, b.Continue)
 		}
 		c.Continue = a.Continue
@@ -136,7 +137,7 @@ func MergeListOptions(a, b *client.ListOptions) (*client.ListOptions, error) {
 		// with UntilDeletedWithSync, which merges client.ListOptions from
 		// the ClientListerWatcher with metav1.ListOptions from the Reflector
 		// used by the Informer built by UntilWithoutRetry.
-		return nil, errors.Errorf("not yet implemented: merging two different raw ListOptions: %+v & %+v",
+		return nil, fmt.Errorf("not yet implemented: merging two different raw ListOptions: %+v & %+v",
 			a.Raw, b.Raw)
 	case a.Raw != nil:
 		c.Raw = a.Raw
@@ -159,14 +160,14 @@ func ConvertListOptions(mOpts *metav1.ListOptions) (*client.ListOptions, error) 
 	if mOpts.LabelSelector != "" {
 		ls, err := labels.Parse(mOpts.LabelSelector)
 		if err != nil {
-			return &cOpts, errors.Wrap(err, "failed to parse LabelSelector")
+			return &cOpts, fmt.Errorf("failed to parse LabelSelector: %w", err)
 		}
 		cOpts.LabelSelector = ls
 	}
 	if mOpts.FieldSelector != "" {
 		fs, err := fields.ParseSelector(mOpts.FieldSelector)
 		if err != nil {
-			return &cOpts, errors.Wrap(err, "failed to parse FieldSelector")
+			return &cOpts, fmt.Errorf("failed to parse FieldSelector: %w", err)
 		}
 		cOpts.FieldSelector = fs
 	}

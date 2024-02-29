@@ -16,6 +16,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
@@ -77,12 +77,12 @@ func SaveToTempFile(ctx context.Context, contexts []string) (*os.File, error) {
 	printStatus(ctx, writer, clientMap, names)
 	err = tmpFile.Close()
 	if err != nil {
-		return tmpFile, errors.Wrap(err, "failed to close status file writer with error")
+		return tmpFile, fmt.Errorf("failed to close status file writer with error: %w", err)
 	}
 
 	f, err := os.Open(tmpFile.Name())
 	if err != nil {
-		return tmpFile, errors.Wrap(err, "failed to open the file for reading")
+		return tmpFile, fmt.Errorf("failed to open the file for reading: %w", err)
 	}
 
 	return f, nil
@@ -102,9 +102,8 @@ var Cmd = &cobra.Command{
 
 		clientMap, err := ClusterClients(cmd.Context(), flags.Contexts)
 		if err != nil {
-			// If "no such file or directory" error, unwrap and display before exiting
-			if unWrapped := errors.Cause(err); os.IsNotExist(unWrapped) {
-				return errors.Wrapf(err, "failed to create client configs")
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("failed to create client configs: %w", err)
 			}
 
 			klog.Fatalf("Failed to get clients: %v", err)
@@ -171,7 +170,7 @@ func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[st
 
 	currentContext, err := restconfig.CurrentContextName()
 	if err != nil {
-		fmt.Printf("Failed to get current context name with err: %v\n", errors.Cause(err))
+		fmt.Printf("Failed to get current context name with err: %v\n", err)
 	}
 
 	// Now we write everything at once. Processing and then printing helps avoid screen strobe.

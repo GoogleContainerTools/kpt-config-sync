@@ -17,7 +17,6 @@ package nomostest
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,8 +37,6 @@ func (nt *NT) Validate(name, namespace string, o client.Object, predicates ...te
 	for i, p := range predicates {
 		err := p(o)
 		if err != nil {
-			// Use fmt.Errorf instead of errors.Errorf/Wrapf so that the YAML
-			// can be appended after the error message.
 			return fmt.Errorf("Validate failed: %s failed predicate %d: %w:\n%s",
 				kinds.ObjectSummary(o), i, err, log.AsYAML(o))
 		}
@@ -59,7 +56,7 @@ func (nt *NT) ValidateNotFound(name, namespace string, o client.Object) error {
 		}
 		return err
 	}
-	return errors.Errorf("ValidateNotFound failed: %s still exists:\n%s",
+	return fmt.Errorf("ValidateNotFound failed: %s still exists:\n%s",
 		kinds.ObjectSummary(o), log.AsYAML(o))
 }
 
@@ -75,7 +72,7 @@ func (nt *NT) ValidateNotFoundOrNoMatch(name, namespace string, o client.Object)
 		}
 		return err
 	}
-	return errors.Errorf("ValidateNotFoundOrNoMatch failed: %s still exists:\n%s",
+	return fmt.Errorf("ValidateNotFoundOrNoMatch failed: %s still exists:\n%s",
 		kinds.ObjectSummary(o), log.AsYAML(o))
 }
 
@@ -98,8 +95,7 @@ func (nt *NT) ValidateSyncObject(gvk schema.GroupVersionKind, name, namespace st
 		// This means the GVK corresponded to a type registered in the Scheme
 		// which is not a valid Kubernetes object. We expect the only way this
 		// can happen is if gvk is for a List type, like NamespaceList.
-		return errors.Wrapf(testpredicates.WrongTypeErr(rObj, client.Object(nil)),
-			"trying to wait for List type to sync: %T", cObj)
+		return fmt.Errorf("trying to wait for List type to sync: %T: %w", cObj, testpredicates.WrongTypeErr(rObj, client.Object(nil)))
 	}
 	return nt.Validate(name, namespace, cObj, predicates...)
 }

@@ -25,7 +25,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,7 +52,7 @@ func fmtObj(obj client.Object) string {
 func (tc *KubeClient) ObjectTypeMustExist(o client.Object) error {
 	gvks, _, _ := tc.Client.Scheme().ObjectKinds(o)
 	if len(gvks) == 0 {
-		return errors.Errorf("unknown type %T %v. Add it to nomostest.newScheme().", o, o.GetObjectKind().GroupVersionKind())
+		return fmt.Errorf("unknown type %T %v. Add it to nomostest.newScheme().", o, o.GetObjectKind().GroupVersionKind())
 	}
 	return nil
 }
@@ -74,7 +73,7 @@ func (tc *KubeClient) Get(name, namespace string, obj client.Object) error {
 		//
 		// If this is due to a retry loop, remember to create a new instance to
 		// populate for each loop.
-		return errors.Errorf("called .Get on already-populated object %v: %v", obj.GetObjectKind().GroupVersionKind(), obj)
+		return fmt.Errorf("called .Get on already-populated object %v: %v", obj.GetObjectKind().GroupVersionKind(), obj)
 	}
 	return tc.Client.Get(tc.Context, client.ObjectKey{Name: name, Namespace: namespace}, obj)
 }
@@ -166,11 +165,11 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 		// AvailableReplicas too, which respects MinReadySeconds.
 		// We're choosing to use ReadyReplicas here instead because it's faster.
 		if deployment.Status.UpdatedReplicas != 1 {
-			return errors.Errorf("deployment has %d updated pods, expected 1: %s",
+			return fmt.Errorf("deployment has %d updated pods, expected 1: %s",
 				deployment.Status.UpdatedReplicas, deploymentNN)
 		}
 		if deployment.Status.ReadyReplicas != 1 {
-			return errors.Errorf("deployment has %d ready pods, expected 1: %s",
+			return fmt.Errorf("deployment has %d ready pods, expected 1: %s",
 				deployment.Status.ReadyReplicas, deploymentNN)
 		}
 		selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
@@ -178,7 +177,7 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 			return err
 		}
 		if selector.Empty() {
-			return errors.Errorf("deployment has no label selectors: %s", deploymentNN)
+			return fmt.Errorf("deployment has no label selectors: %s", deploymentNN)
 		}
 		pods := &corev1.PodList{}
 		err = tc.List(pods, client.InNamespace(deploymentNN.Namespace),
@@ -187,12 +186,12 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 			return err
 		}
 		if len(pods.Items) != 1 {
-			return errors.Errorf("deployment has %d pods, expected 1: %s",
+			return fmt.Errorf("deployment has %d pods, expected 1: %s",
 				len(pods.Items), deploymentNN)
 		}
 		pod = pods.Items[0].DeepCopy()
 		if pod.Status.Phase != corev1.PodRunning {
-			return errors.Errorf("pod has status %q, want %q: %s",
+			return fmt.Errorf("pod has status %q, want %q: %s",
 				pod.Status.Phase, corev1.PodRunning, client.ObjectKeyFromObject(pod))
 		}
 		return nil

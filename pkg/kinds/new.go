@@ -15,7 +15,8 @@
 package kinds
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,8 +28,7 @@ import (
 func NewObjectForGVK(gvk schema.GroupVersionKind, scheme *runtime.Scheme) (runtime.Object, error) {
 	rObj, err := scheme.New(gvk)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unsupported resource type (%s)",
-			GVKToString(gvk))
+		return nil, fmt.Errorf("unsupported resource type (%s): %w", GVKToString(gvk), err)
 	}
 	return rObj, nil
 }

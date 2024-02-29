@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -234,7 +233,7 @@ func (nt *NT) WatchForSync(
 	}
 	sha1, err := sha1Func(nt, nn)
 	if err != nil {
-		return errors.Wrap(err, "failed to retrieve sha1")
+		return fmt.Errorf("failed to retrieve sha1: %w", err)
 	}
 
 	predicates := []testpredicates.Predicate{
@@ -251,7 +250,7 @@ func (nt *NT) WatchForSync(
 
 	err = nt.Watcher.WatchObject(gvk, name, namespace, predicates, opts...)
 	if err != nil {
-		return errors.Wrap(err, "waiting for sync")
+		return fmt.Errorf("waiting for sync: %w", err)
 	}
 	nt.T.Logf("%s %s/%s is synced", gvk.Kind, namespace, name)
 	return nil
@@ -367,7 +366,7 @@ func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
 			}
 			errs := obj.Status.Source.Errors
 			if len(errs) == 0 {
-				return errors.Errorf("no errors present")
+				return fmt.Errorf("no errors present")
 			}
 			var codes []string
 			for _, e := range errs {
@@ -376,7 +375,7 @@ func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
 				}
 				codes = append(codes, e.Code)
 			}
-			return errors.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
+			return fmt.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
 		},
 		opts...,
 	)
@@ -399,7 +398,7 @@ func (nt *NT) WaitForRepoSourceErrorClear(opts ...WaitOption) {
 			for _, e := range errs {
 				messages = append(messages, e.ErrorMessage)
 			}
-			return errors.Errorf("got errors %s", strings.Join(messages, ", "))
+			return fmt.Errorf("got errors %s", strings.Join(messages, ", "))
 		},
 		opts...,
 	)
@@ -416,7 +415,7 @@ func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 			}
 			errs := obj.Status.Import.Errors
 			if len(errs) == 0 {
-				return errors.Errorf("no errors present")
+				return fmt.Errorf("no errors present")
 			}
 			var codes []string
 			for _, e := range errs {
@@ -425,7 +424,7 @@ func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 				}
 				codes = append(codes, e.Code)
 			}
-			return errors.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
+			return fmt.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
 		},
 		opts...,
 	)

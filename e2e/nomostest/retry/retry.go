@@ -16,9 +16,9 @@ package retry
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -56,7 +56,7 @@ func Retry(timeout time.Duration, fn func() error) (time.Duration, error) {
 func WithContext(ctx context.Context, fn func() error) (time.Duration, error) {
 	start := time.Now()
 	err := func() error {
-		lastError := errors.Errorf("retry.WithContext function never ran")
+		lastError := fmt.Errorf("retry.WithContext function never ran")
 		for {
 			select {
 			case <-ctx.Done():

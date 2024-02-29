@@ -16,6 +16,7 @@ package nomostest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -45,7 +46,6 @@ import (
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -347,7 +347,7 @@ func InitSharedEnvironments() error {
 		tg.Go(func() (err error) {
 			defer func() {
 				if recoverErr := recover(); recoverErr != nil {
-					err = errors.Errorf("recovered from panic in InitSharedEnvironments (%s): %v", clusterName, recoverErr)
+					err = fmt.Errorf("recovered from panic in InitSharedEnvironments (%s): %v", clusterName, recoverErr)
 				}
 			}()
 			return newSharedNT(clusterName)
@@ -360,7 +360,7 @@ func InitSharedEnvironments() error {
 func newSharedNT(name string) error {
 	tmpDir := filepath.Join(os.TempDir(), NomosE2E, name)
 	if err := os.RemoveAll(tmpDir); err != nil {
-		return errors.Wrap(err, "failed to remove the shared test directory")
+		return fmt.Errorf("failed to remove the shared test directory: %w", err)
 	}
 	fakeNTB := testing.NewFakeNTB(name)
 	// Register a new SharedNT immediately with the fakeNTB. This way in the case
@@ -870,7 +870,7 @@ func (nt *NT) emptyPrometheusCache() error {
 		return nil
 	})
 	if err != nil {
-		return errors.Wrap(err, "timed out waiting for deleting Prometheus cache")
+		return fmt.Errorf("timed out waiting for deleting Prometheus cache: %w", err)
 	}
 	nt.T.Logf("waited %v for Prometheus cache to be cleared", duration)
 	return nil
@@ -895,11 +895,11 @@ func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
 	dc, err := discovery.NewDiscoveryClientForConfig(nt.Config)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to create discoveryclient")
+		return false, fmt.Errorf("failed to create discoveryclient: %w", err)
 	}
 	serverVersion, err := dc.ServerVersion()
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get server version")
+		return false, fmt.Errorf("failed to get server version: %w", err)
 	}
 	// Use only major version and minor version in case other parts
 	// may affect the comparison.
@@ -923,7 +923,7 @@ func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	}
 	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to lookup git commit for RootSync")
+		return "", fmt.Errorf("failed to lookup git commit for RootSync: %w", err)
 	}
 	return commit, nil
 }
@@ -943,7 +943,7 @@ func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	}
 	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to lookup git commit for RepoSync")
+		return "", fmt.Errorf("failed to lookup git commit for RepoSync: %w", err)
 	}
 	return commit, nil
 }
@@ -1030,7 +1030,7 @@ func (nt *NT) ListReconcilerRoleBindings(syncKind string, rsRef types.Namespaced
 	}
 	rbList := rbacv1.RoleBindingList{}
 	if err := nt.KubeClient.List(&rbList, opts); err != nil {
-		return nil, errors.Wrap(err, "listing RoleBindings")
+		return nil, fmt.Errorf("listing RoleBindings: %w", err)
 	}
 	return rbList.Items, nil
 }
@@ -1044,7 +1044,7 @@ func (nt *NT) ListReconcilerClusterRoleBindings(syncKind string, rsRef types.Nam
 	}
 	crbList := rbacv1.ClusterRoleBindingList{}
 	if err := nt.KubeClient.List(&crbList, opts); err != nil {
-		return nil, errors.Wrap(err, "listing ClusterRoleBindings")
+		return nil, fmt.Errorf("listing ClusterRoleBindings: %w", err)
 	}
 	return crbList.Items, nil
 }

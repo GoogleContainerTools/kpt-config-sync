@@ -16,12 +16,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -151,7 +151,7 @@ type mutateFn func(client.Object) error
 func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef types.NamespacedName, labelMap map[string]string, mutateObject mutateFn) (*unstructured.Unstructured, controllerutil.OperationResult, error) {
 	reconcilerDeployment := &appsv1.Deployment{}
 	if err := parseDeployment(reconcilerDeployment); err != nil {
-		return nil, controllerutil.OperationResultNone, errors.Wrap(err, "failed to parse reconciler Deployment manifest from ConfigMap")
+		return nil, controllerutil.OperationResultNone, fmt.Errorf("failed to parse reconciler Deployment manifest from ConfigMap: %w", err)
 	}
 
 	reconcilerDeployment.Name = reconcilerRef.Name
@@ -504,7 +504,7 @@ func BuildFWICredsContent(workloadIdentityPool, identityProvider, gsaEmail strin
 	}
 	bytes, err := json.Marshal(content)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal the Fleet Workload Identity credentials")
+		return "", fmt.Errorf("failed to marshal the Fleet Workload Identity credentials: %w", err)
 	}
 	return string(bytes), nil
 }
@@ -546,12 +546,12 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 			r.client)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return errors.Errorf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
+				return fmt.Errorf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
 			}
-			return errors.Wrapf(err, "Secret %s get failed", caCertSecretRefName)
+			return fmt.Errorf("Secret %s get failed: %w", caCertSecretRefName, err)
 		}
 		if _, ok := secret.Data[CACertSecretKey]; !ok {
-			return errors.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
+			return fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
 		}
 	}
 	return nil
@@ -561,7 +561,7 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
 	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
-		return errors.Wrap(err, "missing apiVersion or kind and cannot assign it")
+		return fmt.Errorf("missing apiVersion or kind and cannot assign it: %w", err)
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 	return nil
@@ -606,7 +606,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 				// Return nil to avoid triggering immediate retry.
 				return nil
 			}
-			return errors.Wrap(err, "setup failed")
+			return fmt.Errorf("setup failed: %w", err)
 		}
 
 		return nil
@@ -629,7 +629,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 				// Return nil to avoid triggering immediate retry.
 				return nil
 			}
-			return errors.Wrap(err, "teardown failed")
+			return fmt.Errorf("teardown failed: %w", err)
 		}
 
 		// Remove our finalizer and update the object.

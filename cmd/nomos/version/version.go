@@ -16,6 +16,7 @@ package version
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -58,7 +58,7 @@ func GetVersionReadCloser(ctx context.Context, contexts []string) (io.ReadCloser
 	versionInternal(ctx, allCfgs, writer, contexts)
 	err = w.Close()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to close version file writer with error: %v")
+		return nil, fmt.Errorf("failed to close version file writer with error: %w", err)
 	}
 
 	return io.NopCloser(r), nil
@@ -85,7 +85,7 @@ of the "nomos" client binary for debugging purposes.`,
 			versionInternal(cmd.Context(), allCfgs, os.Stdout, flags.Contexts)
 
 			if err != nil {
-				return errors.Wrap(err, "unable to parse kubectl config")
+				return fmt.Errorf("unable to parse kubectl config: %w", err)
 			}
 			return nil
 		},
@@ -96,12 +96,11 @@ of the "nomos" client binary for debugging purposes.`,
 func allKubectlConfigs() (map[string]*rest.Config, error) {
 	allCfgs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout)
 	if err != nil {
-		// Unwrap the "no such file or directory" error for better readability
-		if unWrapped := errors.Cause(err); os.IsNotExist(unWrapped) {
-			err = unWrapped
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			err = pathErr
 		}
 
-		// nolint:errcheck
 		fmt.Printf("failed to create client configs: %v\n", err)
 	}
 
@@ -257,7 +256,7 @@ type entry struct {
 func entries(vs map[string]vErr) []entry {
 	currentContext, err := restconfig.CurrentContextName()
 	if err != nil {
-		fmt.Printf("Failed to get current context name with err: %v\n", errors.Cause(err))
+		fmt.Printf("Failed to get current context name with err: %v\n", err)
 	}
 
 	var es []entry
@@ -285,19 +284,15 @@ func tabulate(es []entry, out io.Writer) {
 	w := util.NewWriter(out)
 	defer func() {
 		if err := w.Flush(); err != nil {
-			// nolint:errcheck
 			fmt.Fprintf(os.Stderr, "error on Flush(): %v", err)
 		}
 	}()
-	// nolint:errcheck
 	fmt.Fprintf(w, format, "CURRENT", "CLUSTER_CONTEXT_NAME", "COMPONENT", "VERSION")
 	for _, e := range es {
 		if e.err != nil {
-			// nolint:errcheck
 			fmt.Fprintf(w, format, e.current, e.name, e.component, fmt.Sprintf("<error: %v>", e.err))
 			continue
 		}
-		// nolint:errcheck
 		fmt.Fprintf(w, format, e.current, e.name, e.component, e.version)
 	}
 }

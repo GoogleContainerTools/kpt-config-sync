@@ -15,11 +15,11 @@
 package cmpath
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/importer/id"
 )
 
@@ -34,7 +34,7 @@ var _ id.Path = Absolute("")
 // It is an error to pass a non-absolute path.
 func AbsoluteSlash(p string) (Absolute, error) {
 	if !filepath.IsAbs(p) {
-		return "", errors.Errorf("not an absolute path")
+		return "", fmt.Errorf("not an absolute path")
 	}
 	return Absolute(path.Clean(p)), nil
 }

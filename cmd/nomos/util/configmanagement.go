@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,7 +78,7 @@ func (c *ConfigManagementClient) NestedInt(ctx context.Context, fields ...string
 
 	val, _, err := unstructured.NestedInt64(unstr.UnstructuredContent(), fields...)
 	if err != nil {
-		return 0, errors.Wrap(err, "internal error parsing ConfigManagement")
+		return 0, fmt.Errorf("internal error parsing ConfigManagement: %w", err)
 	}
 
 	return int(val), nil
@@ -116,7 +115,7 @@ func (c *ConfigManagementClient) NestedBool(ctx context.Context, fields ...strin
 
 	val, _, err := unstructured.NestedBool(unstr.UnstructuredContent(), fields...)
 	if err != nil {
-		return false, errors.Wrap(err, "internal error parsing ConfigManagement")
+		return false, fmt.Errorf("internal error parsing ConfigManagement: %w", err)
 	}
 
 	return val, nil
@@ -132,7 +131,7 @@ func (c *ConfigManagementClient) NestedString(ctx context.Context, fields ...str
 
 	val, _, err := unstructured.NestedString(unstr.UnstructuredContent(), fields...)
 	if err != nil {
-		return "", errors.Wrap(err, "internal error parsing ConfigManagement")
+		return "", fmt.Errorf("internal error parsing ConfigManagement: %w", err)
 	}
 
 	return val, nil
@@ -148,7 +147,7 @@ func (c *ConfigManagementClient) NestedStringSlice(ctx context.Context, fields .
 
 	vals, _, err := unstructured.NestedStringSlice(unstr.UnstructuredContent(), fields...)
 	if err != nil {
-		return nil, errors.Wrap(err, "internal error parsing ConfigManagement")
+		return nil, fmt.Errorf("internal error parsing ConfigManagement: %w", err)
 	}
 
 	return vals, nil

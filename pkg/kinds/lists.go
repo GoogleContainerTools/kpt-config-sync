@@ -15,9 +15,9 @@
 package kinds
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -71,14 +71,14 @@ func NewUnstructuredListForItemGVK(itemGVK schema.GroupVersionKind) *unstructure
 func ExtractClientObjectList(objList client.ObjectList) ([]client.Object, error) {
 	items, err := meta.ExtractList(objList)
 	if err != nil {
-		return nil, errors.Errorf("unsupported resource list type (%s)",
+		return nil, fmt.Errorf("unsupported resource list type (%s)",
 			ObjectSummary(objList))
 	}
 	cObjList := make([]client.Object, len(items))
 	for i := range items {
 		cObj, err := ObjectAsClientObject(items[i])
 		if err != nil {
-			return nil, errors.Wrapf(err, "invalid resource list item[%d]", i)
+			return nil, fmt.Errorf("invalid resource list item[%d]: %w", i, err)
 		}
 		cObjList[i] = cObj
 	}

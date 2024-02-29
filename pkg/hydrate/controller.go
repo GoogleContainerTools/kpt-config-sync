@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -93,9 +92,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 			// pull the source commit and directory with retries within 5 minutes.
 			srcCommit, syncDir, err = SourceCommitAndDirWithRetry(util.SourceRetryBackoff, h.SourceType, absSourceDir, h.SyncDir, h.ReconcilerName)
 			if err != nil {
-				hydrateErr = NewInternalError(errors.Wrapf(err,
-					"failed to get the commit hash and sync directory from the source directory %s",
-					absSourceDir.OSPath()))
+				hydrateErr = NewInternalError(fmt.Errorf("failed to get the commit hash and sync directory from the source directory %s: %w", absSourceDir.OSPath(), err))
 				if err := h.complete(srcCommit, hydrateErr); err != nil {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
 						srcCommit, err)
@@ -131,7 +128,7 @@ func (h *Hydrator) runHydrate(sourceCommit string, syncDir cmpath.Absolute) Hydr
 	}
 
 	if err := updateSymlink(h.HydratedRoot.OSPath(), h.HydratedLink, newHydratedDir.OSPath()); err != nil {
-		return NewInternalError(errors.Wrapf(err, "unable to update the symbolic link to %s", newHydratedDir.OSPath()))
+		return NewInternalError(fmt.Errorf("unable to update the symbolic link to %s: %w", newHydratedDir.OSPath(), err))
 	}
 	klog.Infof("Successfully rendered %s for commit %s", syncDir.OSPath(), sourceCommit)
 	return nil
@@ -142,7 +139,7 @@ func (h *Hydrator) runHydrate(sourceCommit string, syncDir cmpath.Absolute) Hydr
 func ComputeCommit(sourceDir cmpath.Absolute) (string, error) {
 	dir, err := sourceDir.EvalSymlinks()
 	if err != nil {
-		return "", errors.Wrapf(err, "unable to evaluate the symbolic link of sourceDir %s", dir)
+		return "", fmt.Errorf("unable to evaluate the symbolic link of sourceDir %s: %w", dir, err)
 	}
 	newCommit := filepath.Base(dir.OSPath())
 	return newCommit, nil
@@ -159,7 +156,7 @@ func (h *Hydrator) hydrate(sourceCommit string, syncDirPath cmpath.Absolute) Hyd
 	syncDir := syncDirPath.OSPath()
 	hydrate, err := needsKustomize(syncDir)
 	if err != nil {
-		return NewInternalError(errors.Wrapf(err, "unable to check if rendering is needed for the source directory: %s", syncDir))
+		return NewInternalError(fmt.Errorf("unable to check if rendering is needed for the source directory: %s: %w", syncDir, err))
 	}
 	if !hydrate {
 		found, err := hasKustomizeSubdir(syncDir)
@@ -167,7 +164,7 @@ func (h *Hydrator) hydrate(sourceCommit string, syncDirPath cmpath.Absolute) Hyd
 			return NewInternalError(err)
 		}
 		if found {
-			return NewActionableError(errors.Errorf("Kustomization config file is missing from the sync directory %s. "+
+			return NewActionableError(fmt.Errorf("Kustomization config file is missing from the sync directory %s. "+
 				"To fix, either add kustomization.yaml in the sync directory to trigger the rendering process, "+
 				"or remove kustomizaiton.yaml from all sub directories to skip rendering.", syncDir))
 		}
@@ -180,7 +177,7 @@ func (h *Hydrator) hydrate(sourceCommit string, syncDirPath cmpath.Absolute) Hyd
 
 	// Remove the done file because a new hydration is in progress.
 	if err := os.RemoveAll(h.DonePath.OSPath()); err != nil {
-		return NewInternalError(errors.Wrapf(err, "unable to remove the done file: %s", h.DonePath.OSPath()))
+		return NewInternalError(fmt.Errorf("unable to remove the done file: %s: %w", h.DonePath.OSPath(), err))
 	}
 	return h.runHydrate(sourceCommit, syncDirPath)
 }
@@ -217,17 +214,17 @@ func updateSymlink(hydratedRoot, link, newDir string) error {
 	deleteOldDir := true
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return errors.Wrapf(err, "unable to access the current hydrated directory: %s", linkPath)
+			return fmt.Errorf("unable to access the current hydrated directory: %s: %w", linkPath, err)
 		}
 		deleteOldDir = false
 	}
 
 	if err := os.Symlink(newDir, tmpLinkPath); err != nil {
-		return errors.Wrap(err, "unable to create symlink")
+		return fmt.Errorf("unable to create symlink: %w", err)
 	}
 
 	if err := os.Rename(tmpLinkPath, linkPath); err != nil {
-		return errors.Wrap(err, "unable to replace symlink")
+		return fmt.Errorf("unable to replace symlink: %w", err)
 	}
 
 	if deleteOldDir {
@@ -253,10 +250,10 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 	}
 	done, err := os.Create(h.DonePath.OSPath())
 	if err != nil {
-		return errors.Wrapf(err, "unable to create done file: %s", h.DonePath.OSPath())
+		return fmt.Errorf("unable to create done file: %s: %w", h.DonePath.OSPath(), err)
 	}
 	if _, err = done.WriteString(commit); err != nil {
-		return errors.Wrapf(err, "unable to write to commit hash to the done file: %s", h.DonePath)
+		return fmt.Errorf("unable to write to commit hash to the done file: %s: %w", h.DonePath, err)
 	}
 	if err := done.Close(); err != nil {
 		klog.Warningf("unable to close the done file %s: %v", h.DonePath.OSPath(), err)
@@ -288,13 +285,13 @@ func exportError(commit, root, errorFile string, hydrationError HydrationError) 
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		fileMode := os.FileMode(0755)
 		if err := os.Mkdir(root, fileMode); err != nil {
-			return errors.Wrapf(err, "unable to create the root directory: %s", root)
+			return fmt.Errorf("unable to create the root directory: %s: %w", root, err)
 		}
 	}
 
 	tmpFile, err := os.CreateTemp(root, "tmp-err-")
 	if err != nil {
-		return errors.Wrapf(err, "unable to create temporary error-file under directory %s", root)
+		return fmt.Errorf("unable to create temporary error-file under directory %s: %w", root, err)
 	}
 	defer func() {
 		if err := tmpFile.Close(); err != nil {
@@ -314,13 +311,13 @@ func exportError(commit, root, errorFile string, hydrationError HydrationError) 
 	}
 
 	if _, err = tmpFile.Write(jb); err != nil {
-		return errors.Wrapf(err, "unable to write to temporary error-file: %s", tmpFile.Name())
+		return fmt.Errorf("unable to write to temporary error-file: %s: %w", tmpFile.Name(), err)
 	}
 	if err := os.Rename(tmpFile.Name(), errorFile); err != nil {
-		return errors.Wrapf(err, "unable to rename %s to %s", tmpFile.Name(), errorFile)
+		return fmt.Errorf("unable to rename %s to %s: %w", tmpFile.Name(), errorFile, err)
 	}
 	if err := os.Chmod(errorFile, 0644); err != nil {
-		return errors.Wrapf(err, "unable to change permissions on the error-file: %s", errorFile)
+		return fmt.Errorf("unable to change permissions on the error-file: %s: %w", errorFile, err)
 	}
 	klog.Infof("Saved the rendering error in file: %s", errorFile)
 	return nil
@@ -329,7 +326,7 @@ func exportError(commit, root, errorFile string, hydrationError HydrationError) 
 // deleteErrorFile deletes the error file.
 func deleteErrorFile(file string) error {
 	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "unable to delete error file: %s", file)
+		return fmt.Errorf("unable to delete error file: %s: %w", file, err)
 	}
 	return nil
 }

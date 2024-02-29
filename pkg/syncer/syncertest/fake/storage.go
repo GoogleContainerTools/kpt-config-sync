@@ -17,13 +17,14 @@ package fake
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -117,8 +118,7 @@ func (ms *MemoryStorage) TestPut(obj client.Object) error {
 	}
 	_, _, err = ms.putWithoutLock(id, obj)
 	if err != nil {
-		return errors.Wrapf(err, "failed to put object into storage: %s %s",
-			id.Kind, id.ObjectKey)
+		return fmt.Errorf("failed to put object into storage: %s %s: %w", id.Kind, id.ObjectKey, err)
 	}
 	return nil
 }
@@ -137,8 +137,7 @@ func (ms *MemoryStorage) TestPutAll(objs ...client.Object) error {
 		}
 		_, _, err = ms.putWithoutLock(id, obj)
 		if err != nil {
-			return errors.Wrapf(err, "failed to put object into storage: %s %s",
-				id.Kind, id.ObjectKey)
+			return fmt.Errorf("failed to put object into storage: %s %s: %w", id.Kind, id.ObjectKey, err)
 		}
 	}
 	return nil
@@ -180,7 +179,7 @@ func (ms *MemoryStorage) prepareObject(obj client.Object) (*unstructured.Unstruc
 	// Convert to typed with the scheme-preferred version
 	tObj, err := kinds.ToTypedWithVersion(obj, storageGVK, ms.scheme)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert to scheme-preferred version")
+		return nil, fmt.Errorf("failed to convert to scheme-preferred version: %w", err)
 	}
 	cObj, err := kinds.ObjectAsClientObject(tObj)
 	if err != nil {
@@ -225,7 +224,7 @@ func (ms *MemoryStorage) storageGVK(obj client.Object) (schema.GroupVersionKind,
 // sendPutEvent sends added/modified events and triggers (foreground) garbage collection.
 func (ms *MemoryStorage) sendPutEvent(ctx context.Context, id core.ID, eventType watch.EventType) error {
 	if eventType != watch.Added && eventType != watch.Modified {
-		return errors.Errorf("sendPutEvent: invalid EventType: %v", eventType)
+		return fmt.Errorf("sendPutEvent: invalid EventType: %v", eventType)
 	}
 
 	uObj := ms.objects[id]
@@ -311,7 +310,7 @@ func (ms *MemoryStorage) validateGetOptions(opts *client.GetOptions) error {
 		return nil
 	}
 	if opts.Raw != nil && opts.Raw.ResourceVersion != "" {
-		return errors.Errorf("fake.MemoryStorage.List: opts.Raw.ResourceVersion=%q: not yet implemented", opts.Raw.ResourceVersion)
+		return fmt.Errorf("fake.MemoryStorage.List: opts.Raw.ResourceVersion=%q: not yet implemented", opts.Raw.ResourceVersion)
 	}
 	return nil
 }
@@ -328,7 +327,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 
 	_, isList := list.(meta.List)
 	if !isList {
-		return errors.Errorf("called fake.MemoryStorage.List on non-List %s",
+		return fmt.Errorf("called fake.MemoryStorage.List on non-List %s",
 			kinds.ObjectSummary(list))
 	}
 
@@ -340,7 +339,7 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 	}
 	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
-		return errors.Errorf("fake.MemoryStorage.List called with non-List GVK %q", listGVK.String())
+		return fmt.Errorf("fake.MemoryStorage.List called with non-List GVK %q", listGVK.String())
 	}
 	list.GetObjectKind().SetGroupVersionKind(listGVK)
 
@@ -393,7 +392,7 @@ func (ms *MemoryStorage) validateListOptions(opts *client.ListOptions) error {
 		return nil
 	}
 	if opts.Continue != "" {
-		return errors.Errorf("fake.MemoryStorage.List: opts.Continue=%q: not yet implemented", opts.Continue)
+		return fmt.Errorf("fake.MemoryStorage.List: opts.Continue=%q: not yet implemented", opts.Continue)
 	}
 	if opts.Limit != 0 {
 		// TODO: Implement limit for List & Watch calls.
@@ -452,7 +451,7 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 	}
 	// Copy everything back to input object, even if no diff
 	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return errors.Wrap(err, "failed to update input object")
+		return fmt.Errorf("failed to update input object: %w", err)
 	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
@@ -468,11 +467,11 @@ func (ms *MemoryStorage) validateCreateOptions(opts *client.CreateOptions) error
 	}
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
-			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
 	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	return nil
 }
@@ -570,7 +569,7 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 			return err
 		}
 	default:
-		return errors.Errorf("fake.MemoryStorage.Delete: DeleteOptions.PropagationPolicy=%q: not yet implemented", *opts.PropagationPolicy)
+		return fmt.Errorf("fake.MemoryStorage.Delete: DeleteOptions.PropagationPolicy=%q: not yet implemented", *opts.PropagationPolicy)
 	}
 	return nil
 }
@@ -580,15 +579,15 @@ func (ms *MemoryStorage) validateDeleteOptions(opts *client.DeleteOptions) error
 		return nil
 	}
 	if opts.DryRun != nil {
-		return errors.Errorf("fake.MemoryStorage.Delete: DeleteOptions.DryRun=%+v: not yet implemented",
+		return fmt.Errorf("fake.MemoryStorage.Delete: DeleteOptions.DryRun=%+v: not yet implemented",
 			opts.DryRun)
 	}
 	if opts.GracePeriodSeconds != nil {
-		return errors.Errorf("fake.MemoryStorage.Delete: DeleteOptions.GracePeriodSeconds=%d: not yet implemented",
+		return fmt.Errorf("fake.MemoryStorage.Delete: DeleteOptions.GracePeriodSeconds=%d: not yet implemented",
 			*opts.GracePeriodSeconds)
 	}
 	if opts.Preconditions != nil {
-		return errors.Errorf("fake.MemoryStorage.Delete: DeleteOptions.Preconditions=%+v: not yet implemented",
+		return fmt.Errorf("fake.MemoryStorage.Delete: DeleteOptions.Preconditions=%+v: not yet implemented",
 			opts.Preconditions)
 	}
 	if opts.PropagationPolicy != nil {
@@ -596,7 +595,7 @@ func (ms *MemoryStorage) validateDeleteOptions(opts *client.DeleteOptions) error
 		case metav1.DeletePropagationForeground:
 		case metav1.DeletePropagationBackground:
 		default:
-			return errors.Errorf("fake.MemoryStorage.Delete: DeleteOptions.PropagationPolicy=%q: not yet implemented",
+			return fmt.Errorf("fake.MemoryStorage.Delete: DeleteOptions.PropagationPolicy=%q: not yet implemented",
 				*opts.PropagationPolicy)
 		}
 	}
@@ -650,8 +649,8 @@ func (ms *MemoryStorage) deleteManagedObjectsWithoutLock(ctx context.Context, pa
 				// Already deleted (unlikely due to lock)
 				break
 			}
-			return errors.Wrapf(err, "failed to garbage collect object %s owned by deleted object %v",
-				kinds.ObjectSummary(obj), parentID)
+			return fmt.Errorf("failed to garbage collect object %s owned by deleted object %v: %w",
+				kinds.ObjectSummary(obj), parentID, err)
 		}
 	}
 	return nil
@@ -710,10 +709,10 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 	}
 
 	if err = incrementResourceVersion(tObj); err != nil {
-		return errors.Wrap(err, "failed to increment resourceVersion")
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
 	if err = ms.updateGeneration(cachedObj, tObj); err != nil {
-		return errors.Wrap(err, "failed to update generation")
+		return fmt.Errorf("failed to update generation: %w", err)
 	}
 
 	if hasStatus {
@@ -733,7 +732,7 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 	}
 	// Copy everything back to input object, even if no diff
 	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return errors.Wrap(err, "failed to update input object")
+		return fmt.Errorf("failed to update input object: %w", err)
 	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
@@ -749,11 +748,11 @@ func (ms *MemoryStorage) validateUpdateOptions(opts *client.UpdateOptions) error
 	}
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
-			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
 	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	return nil
 }
@@ -789,12 +788,12 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 
 	gvk, err := kinds.Lookup(obj, ms.scheme)
 	if err != nil {
-		return errors.Wrap(err, "failed to lookup GVK from scheme")
+		return fmt.Errorf("failed to lookup GVK from scheme: %w", err)
 	}
 
 	patchData, err := patch.Data(obj)
 	if err != nil {
-		return errors.Wrap(err, "failed to build patch")
+		return fmt.Errorf("failed to build patch: %w", err)
 	}
 
 	id, err := lookupObjectID(obj, ms.scheme)
@@ -864,13 +863,13 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 			return err
 		}
 	default:
-		return errors.Errorf("fake.MemoryStorage.Patch: Patch.Type=%q: not yet implemented", patch.Type())
+		return fmt.Errorf("fake.MemoryStorage.Patch: Patch.Type=%q: not yet implemented", patch.Type())
 	}
 	// Use a new object, instead of updating the cached object,
 	// because unmarshal doesn't always delete unspecified fields.
 	uObj := &unstructured.Unstructured{}
 	if err = uObj.UnmarshalJSON(mergedData); err != nil {
-		return errors.Wrap(err, "failed to unmarshal patch data")
+		return fmt.Errorf("failed to unmarshal patch data: %w", err)
 	}
 	if found {
 		uObj.SetResourceVersion(cachedObj.GetResourceVersion())
@@ -878,7 +877,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		uObj.SetResourceVersion("0") // init to allow incrementing
 	}
 	if err := incrementResourceVersion(uObj); err != nil {
-		return errors.Wrap(err, "failed to increment resourceVersion")
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
 	if found {
 		// Copy status from cache
@@ -896,7 +895,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 
 		// Update generation if spec changed
 		if err = ms.updateGeneration(cachedObj, uObj); err != nil {
-			return errors.Wrap(err, "failed to update generation")
+			return fmt.Errorf("failed to update generation: %w", err)
 		}
 	} else {
 		uObj.SetGeneration(1)
@@ -911,7 +910,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 	}
 	// Copy everything back to input object, even if no diff
 	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return errors.Wrap(err, "failed to update input object")
+		return fmt.Errorf("failed to update input object:: %w", err)
 	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
@@ -927,14 +926,14 @@ func (ms *MemoryStorage) validatePatchOptions(opts *client.PatchOptions, patch c
 	}
 	if len(opts.DryRun) > 0 {
 		if len(opts.DryRun) > 1 || opts.DryRun[0] != metav1.DryRunAll {
-			return errors.Errorf("invalid dry run option: %+v", opts.DryRun)
+			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
 	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return errors.Errorf("invalid field manager option: %v", opts.FieldManager)
+		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	if patch != client.Apply && opts.Force != nil {
-		return errors.Errorf("invalid force option: Forbidden: may not be specified for non-apply patch")
+		return fmt.Errorf("invalid force option: Forbidden: may not be specified for non-apply patch")
 	}
 	return nil
 }
@@ -982,11 +981,11 @@ func (ms *MemoryStorage) Watch(_ context.Context, exampleList client.ObjectList,
 	}
 	listGVK, err := kinds.Lookup(exampleList, ms.scheme)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to lookup GVK from scheme")
+		return nil, fmt.Errorf("failed to lookup GVK from scheme: %w", err)
 	}
 	gvk := kinds.ItemGVKForListGVK(listGVK)
 	if gvk.Kind == listGVK.Kind {
-		return nil, errors.Errorf("fake.MemoryStorage.Watch called with non-List GVK: %v", listGVK)
+		return nil, fmt.Errorf("fake.MemoryStorage.Watch called with non-List GVK: %v", listGVK)
 	}
 	klog.V(6).Infof("Watching %s (Options: %+v)",
 		kinds.ObjectSummary(exampleList), opts)
@@ -1020,7 +1019,7 @@ func incrementResourceVersion(obj client.Object) error {
 	rv := obj.GetResourceVersion()
 	rvInt, err := strconv.Atoi(rv)
 	if err != nil {
-		return errors.Wrap(err, "failed to parse resourceVersion")
+		return fmt.Errorf("failed to parse resourceVersion: %w", err)
 	}
 	obj.SetResourceVersion(strconv.Itoa(rvInt + 1))
 	return nil

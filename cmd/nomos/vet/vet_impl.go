@@ -16,12 +16,12 @@ package vet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
 	"kpt.dev/configsync/cmd/nomos/util"
@@ -95,7 +95,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 		if namespace != "" {
 			// The user could technically provide --source-format=unstructured.
 			// This nuance isn't necessary to communicate nor confusing to omit.
-			return errors.Errorf("if --namespace is provided, --%s must be omitted or set to %s",
+			return fmt.Errorf("if --namespace is provided, --%s must be omitted or set to %s",
 				reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured)
 		}
 

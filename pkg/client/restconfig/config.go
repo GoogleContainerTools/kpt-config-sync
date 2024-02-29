@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -51,7 +50,7 @@ func KubeConfigPath() (string, error) {
 	}
 	curentUser, err := userCurrentTestHook()
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to get current user")
+		return "", fmt.Errorf("failed to get current user: %w", err)
 	}
 	path := filepath.Join(curentUser.HomeDir, kubectlConfigPath)
 	return path, nil
@@ -62,14 +61,14 @@ func KubeConfigPath() (string, error) {
 func newRawConfigWithRules() (*clientcmdapi.Config, *clientcmd.ClientConfigLoadingRules, error) {
 	configPath, err := KubeConfigPath()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "while getting config path")
+		return nil, nil, fmt.Errorf("while getting config path: %w", err)
 	}
 
 	rules := &clientcmd.ClientConfigLoadingRules{Precedence: filepath.SplitList(configPath)}
 	clientCfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
 	apiCfg, err := clientCfg.RawConfig()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "while building client config")
+		return nil, nil, fmt.Errorf("while building client config: %w", err)
 	}
 
 	return &apiCfg, rules, nil

@@ -16,8 +16,9 @@ package fake
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -86,7 +87,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 
 	// TODO: Figure out how to check if the resource in the scheme has this sub-resource.
 	if !hasSubresource {
-		return errors.Errorf("the %s object %s does not have a %q sub-resource field",
+		return fmt.Errorf("the %s object %s does not have a %q sub-resource field",
 			id.GroupKind, id.ObjectKey, ss.Field)
 	}
 
@@ -107,7 +108,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 
 	err = incrementResourceVersion(updatedObj)
 	if err != nil {
-		return errors.Wrap(err, "failed to increment resourceVersion")
+		return fmt.Errorf("failed to increment resourceVersion: %w", err)
 	}
 
 	// Assume status doesn't affect generation (don't increment).
@@ -131,7 +132,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 	}
 	// Copy everything back to input object, even if no diff
 	if err := ss.Storage.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return errors.Wrap(err, "failed to update input object")
+		return fmt.Errorf("failed to update input object: %w", err)
 	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())

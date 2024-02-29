@@ -16,6 +16,7 @@ package portforwarder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -35,10 +35,6 @@ var errTerminal = errors.New("terminal PortForwarder error")
 
 func isTerminalError(err error) bool {
 	return errors.Is(err, errTerminal)
-}
-
-func newTerminalError(format string, args ...interface{}) error {
-	return errors.Wrapf(errTerminal, format, args...)
 }
 
 // EventType is a type of event sent by PortForwarder
@@ -223,17 +219,17 @@ func (pf *PortForwarder) portForwardToDeployment() error {
 	select {
 	case <-pf.ctx.Done():
 		// Don't bother, subprocess already terminated/terminating
-		return errors.Wrap(pf.ctx.Err(), "failed to start port forward process")
+		return fmt.Errorf("failed to start port forward process: %w", pf.ctx.Err())
 	default:
 	}
 	pf.logger.Infof("starting port-forward process for %s/%s", pf.ns, pf.deployment)
 	pod, err := pf.kubeClient.GetDeploymentPod(pf.deployment, pf.ns, pf.retryTimeout)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to get deployment pod for %s/%s", pf.ns, pf.deployment))
+		return fmt.Errorf("failed to get deployment pod for %s/%s: %w", pf.ns, pf.deployment, err)
 	}
 	err = pf.portForwardToPod(pod.Name)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to start port forward for %s/%s", pf.ns, pf.deployment))
+		return fmt.Errorf("failed to start port forward for %s/%s: %w", pf.ns, pf.deployment, err)
 	}
 	return nil
 }
@@ -263,7 +259,7 @@ func (pf *PortForwarder) Start(ctx context.Context) chan Event {
 				eventChan <- Event{Type: DoneEvent, Message: err.Error()}
 				return
 			} else if err != nil && isTerminalError(err) {
-				err = errors.Wrapf(err, "PortForwarder for Pod %s/%s encountered a fatal error", pf.ns, pf.pod)
+				err = fmt.Errorf("PortForwarder for Pod %s/%s encountered a fatal error: %w", pf.ns, pf.pod, err)
 				pf.logger.Info(err)
 				eventChan <- Event{Type: ErrorEvent, Message: err.Error()}
 				return
@@ -345,7 +341,7 @@ func (pf *PortForwarder) waitForCmdFailure(ctx context.Context) error {
 	pf.logger.Infof("killing port-forward process for %s/%s", pf.ns, pf.pod)
 	// kill the subprocess. This should force the cmd.Wait goroutine to return, if it hasn't already.
 	if err := pf.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return newTerminalError("failed to kill port-forward process: %v", err)
+		return fmt.Errorf("failed to kill port-forward process: %w", err)
 	}
 	// wait for cmdWaitChan to close, i.e. cmd.Wait returns
 	<-cmdWaitChan

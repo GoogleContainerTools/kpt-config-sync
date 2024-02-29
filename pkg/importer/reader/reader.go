@@ -15,11 +15,11 @@
 package reader
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -221,7 +221,7 @@ func validateMetadata(u runtime.Unstructured, oid *unstructured.Unstructured) st
 	if annotations, hasAnnotations := metadata["annotations"]; hasAnnotations {
 		invalidAnnotations, err := getInvalidKeys(annotations)
 		if err != nil {
-			err = errors.Wrap(err, "validating annotations")
+			err = fmt.Errorf("validating annotations: %w", err)
 			return status.ResourceErrorBuilder.Wrap(err).BuildWithResources(oid)
 		}
 		if len(invalidAnnotations) > 0 {
@@ -232,7 +232,7 @@ func validateMetadata(u runtime.Unstructured, oid *unstructured.Unstructured) st
 	if labels, hasLabels := metadata["labels"]; hasLabels {
 		invalidLabels, err := getInvalidKeys(labels)
 		if err != nil {
-			err = errors.Wrap(err, "validating labels")
+			err = fmt.Errorf("validating labels: %w", err)
 			return status.ResourceErrorBuilder.Wrap(err).BuildWithResources(oid)
 		}
 		if len(invalidLabels) > 0 {
@@ -322,7 +322,7 @@ func parseString(content map[string]interface{}, fields ...string) (string, erro
 		return "", e
 	}
 	if !hasField || value == "" {
-		return "", errors.Errorf("missing field %q", strings.Join(fields, "."))
+		return "", fmt.Errorf("missing field %q", strings.Join(fields, "."))
 	}
 	return value, nil
 }

@@ -16,11 +16,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -78,7 +79,7 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 			}
 			result, computeErr := kstatus.Compute(uObj)
 			if computeErr != nil {
-				return errors.Wrapf(computeErr, "computing %s (%s) status failed", id.Kind, id.ObjectKey)
+				return fmt.Errorf("computing %s (%s) status failed: %w", id.Kind, id.ObjectKey, computeErr)
 			}
 			// Since DeletionTimestamp is set, this will be either Terminating or Failed
 			return NewObjectReconcileErrorWithID(err, id, result.Status)
@@ -183,7 +184,7 @@ func (r *RepoSyncReconciler) deleteHelmConfigMapCopies(ctx context.Context, rsRe
 	// We can't remove the annotations until v1.16.0 is no longer supported.
 	var cmList corev1.ConfigMapList
 	if err := r.client.List(ctx, &cmList, &client.ListOptions{Namespace: configsync.ControllerNamespace}); err != nil {
-		return errors.Wrapf(err, "config map list failed in namespace: %s", configsync.ControllerNamespace)
+		return fmt.Errorf("config map list failed in namespace: %s: %w", configsync.ControllerNamespace, err)
 	}
 	for _, cm := range cmList.Items {
 		if !strings.HasPrefix(cm.Name, core.NsReconcilerPrefix) {

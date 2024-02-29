@@ -26,7 +26,6 @@ import (
 	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	semverrange "github.com/Masterminds/semver/v3"
-	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -164,7 +163,7 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	}
 	out, err := h.helm(ctx, args...)
 	if err != nil {
-		return errors.Wrapf(err, "getting helm chart version")
+		return fmt.Errorf("getting helm chart version: %w", err)
 	}
 	var parsedOut map[string]interface{}
 	if err := yaml.Unmarshal(out, &parsedOut); err != nil {
@@ -256,7 +255,7 @@ func (h *Hydrator) helm(ctx context.Context, args ...string) ([]byte, error) {
 	}
 	out, err := exec.CommandContext(ctx, "helm", allArgs...).CombinedOutput()
 	if err != nil {
-		return out, errors.Wrapf(err, "invoking helm: %s", string(out))
+		return out, fmt.Errorf("invoking helm: %s: %w", string(out), err)
 	}
 	return out, nil
 }
@@ -268,7 +267,7 @@ func (h *Hydrator) registryLogin(ctx context.Context) error {
 			return err
 		}
 		if _, err := h.helm(ctx, args...); err != nil {
-			return errors.Wrapf(err, "failed to authenticate to helm registry")
+			return fmt.Errorf("failed to authenticate to helm registry: %w", err)
 		}
 	}
 	return nil
@@ -315,7 +314,7 @@ func (h *Hydrator) HelmTemplate(ctx context.Context) error {
 	}
 	out, err := h.helm(ctx, args...)
 	if err != nil {
-		return errors.Wrapf(err, "rendering helm chart")
+		return fmt.Errorf("rendering helm chart: %w", err)
 	}
 
 	// Create the repo/chart directory, in case the chart is empty.

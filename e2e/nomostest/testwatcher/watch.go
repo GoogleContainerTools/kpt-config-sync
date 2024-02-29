@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -146,7 +145,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 
 	lw, err := w.newListWatchForObject(ctx, gvk, name, namespace, spec.timeout, spec.unstructured)
 	if err != nil {
-		return errors.Wrap(err, errPrefix)
+		return fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	// Cache the last known object state for diffing with the new state.
@@ -163,11 +162,11 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	} else {
 		rObj, err := kinds.NewObjectForGVK(gvk, w.scheme)
 		if err != nil {
-			return errors.Wrap(err, errPrefix)
+			return fmt.Errorf("%s: %w", errPrefix, err)
 		}
 		exampleObj, err = kinds.ObjectAsClientObject(rObj)
 		if err != nil {
-			return errors.Wrap(err, errPrefix)
+			return fmt.Errorf("%s: %w", errPrefix, err)
 		}
 	}
 	exampleObj.SetName(name)
@@ -178,7 +177,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	// future (e.g. from string to struct).
 	objKey, err := cache.MetaNamespaceKeyFunc(exampleObj)
 	if err != nil {
-		return errors.Wrap(err, errPrefix)
+		return fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	// precondition runs after the informer is synced.
@@ -199,7 +198,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 			var ok bool
 			cObj, ok = iObj.(client.Object)
 			if !ok {
-				return false, errors.Errorf("invalid cache object: unsupported resource type (%T): failed to cast to client.Object",
+				return false, fmt.Errorf("invalid cache object: unsupported resource type (%T): failed to cast to client.Object",
 					iObj)
 			}
 			// Log the initial/current state as a diff to make it easy to compare with update diffs.
@@ -231,9 +230,8 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 			// Error events are not handled by watch.Util. So catch them here.
 			// For error events, the object is usually *metav1.Status,
 			// indicating a server-side error. So stop watching.
-			return false, errors.Wrap(
-				apierrors.FromObject(event.Object),
-				"received error event")
+			return false, fmt.Errorf(
+				"received error event: %w", apierrors.FromObject(event.Object))
 		case watch.Added, watch.Modified, watch.Deleted:
 			eType := event.Type
 			if eType == watch.Added && prevObj != nil {
@@ -282,7 +280,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 			return false, nil
 		default:
 			// Stop watching.
-			return false, errors.Errorf("received unexpected event: %#v", event)
+			return false, fmt.Errorf("received unexpected event: %#v", event)
 		}
 	}
 	_, err = watchtools.UntilWithSync(ctx, lw, exampleObj, precondition, condition)
@@ -306,13 +304,13 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 			// predicate errors into a string.
 			// If we ever need to test for a specific predicate failure, this
 			// may need to change. But for now we don't.
-			err = errors.Wrapf(err, "predicates not satisfied: %v", multierr.Combine(evalErrs...))
+			err = fmt.Errorf("predicates not satisfied: %v: %w", multierr.Combine(evalErrs...), err)
 		} else {
 			// If we got no errors, it probably means the context was cancelled
 			// before the ConditionFunc was called.
-			err = errors.Wrap(err, "no watch events were received")
+			err = fmt.Errorf("no watch events were received: %w", err)
 		}
-		return errors.Wrap(err, errPrefix)
+		return fmt.Errorf("%s: %w", errPrefix, err)
 	}
 	// Success! Condition returned true.
 	return nil
@@ -341,7 +339,7 @@ func (w *Watcher) newListWatchForObject(ctx context.Context, itemGVK schema.Grou
 	}
 	// Validate namespace is empty for cluster-scoped resources
 	if mapping.Scope.Name() == meta.RESTScopeNameRoot && namespace != "" {
-		return nil, errors.Errorf("cannot watch cluster-scoped resource %q in namespace %q", mapping.Resource.Resource, namespace)
+		return nil, fmt.Errorf("cannot watch cluster-scoped resource %q in namespace %q", mapping.Resource.Resource, namespace)
 	}
 	// Filter by name and namespace
 	opts := &client.ListOptions{

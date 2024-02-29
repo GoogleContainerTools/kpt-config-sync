@@ -16,6 +16,7 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
@@ -29,7 +30,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/kind/pkg/errors"
 )
 
 type eventWithKind struct {
@@ -257,8 +257,7 @@ func (fw *Watcher) handleEvents(ctx context.Context) {
 				// parse ResourceVersion as int
 				newRV, err := strconv.Atoi(obj.GetResourceVersion())
 				if err != nil {
-					err = errors.Wrapf(err, "invalid ResourceVersion %q for object %s",
-						obj.GetResourceVersion(), kinds.ObjectSummary(obj))
+					err = fmt.Errorf("invalid ResourceVersion %q for object %s: %w", obj.GetResourceVersion(), kinds.ObjectSummary(obj), err)
 					fw.sendEvent(ctx, watch.Event{
 						Type:   watch.Error,
 						Object: &apierrors.NewInternalError(err).ErrStatus,

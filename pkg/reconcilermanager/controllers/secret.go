@@ -16,8 +16,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -84,7 +84,7 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Git.SecretRef))
 		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for git client authentication")
+			return cmsSecretRef, fmt.Errorf("user secret required for git client authentication: %w", err)
 		}
 		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
@@ -92,7 +92,7 @@ func (r *reconcilerBase) upsertAuthSecret(ctx context.Context, rs *v1beta1.RepoS
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, v1beta1.GetSecretName(rs.Spec.Helm.SecretRef))
 		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for helm client authentication")
+			return cmsSecretRef, fmt.Errorf("user secret required for helm client authentication: %w", err)
 		}
 		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
@@ -111,7 +111,7 @@ func (r *reconcilerBase) upsertCACertSecret(ctx context.Context, rs *v1beta1.Rep
 		nsSecretRef, cmsSecretRef := getSecretRefs(rsRef, reconcilerRef, secretName)
 		userSecret, err := getUserSecret(ctx, r.client, nsSecretRef)
 		if err != nil {
-			return cmsSecretRef, errors.Wrap(err, "user secret required for CA cert validation")
+			return cmsSecretRef, fmt.Errorf("user secret required for CA cert validation: %w", err)
 		}
 		_, err = r.upsertSecret(ctx, cmsSecretRef, userSecret, labelMap)
 		return cmsSecretRef, err
@@ -139,11 +139,10 @@ func getUserSecret(ctx context.Context, c client.Client, nsSecretRef client.Obje
 	nsSecret := &corev1.Secret{}
 	if err := getSecret(ctx, c, nsSecretRef, nsSecret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nsSecret, errors.Errorf(
+			return nsSecret, fmt.Errorf(
 				"secret %s not found", nsSecretRef)
 		}
-		return nsSecret, errors.Wrapf(err,
-			"secret %s get failed", nsSecretRef)
+		return nsSecret, fmt.Errorf("secret %s get failed: %w", nsSecretRef, err)
 	}
 	return nsSecret, nil
 }

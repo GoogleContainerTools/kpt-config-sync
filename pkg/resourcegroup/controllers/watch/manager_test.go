@@ -16,11 +16,11 @@ package watch
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -37,7 +37,7 @@ func fakeRunnable(ctx context.Context) Runnable {
 }
 
 func fakeError(gvk schema.GroupVersionKind) error {
-	return errors.Errorf("failed error for %q", gvk)
+	return fmt.Errorf("failed error for %q", gvk)
 }
 
 func testRunnables(_ context.Context, errOnType map[schema.GroupVersionKind]bool) func(context.Context, watcherConfig) (Runnable, error) {

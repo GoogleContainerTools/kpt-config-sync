@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -124,9 +123,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 				return obj
 			}(),
 			destroyErrs: status.APIServerError(fmt.Errorf("destroy error"), "example message"),
-			expectedError: errors.Wrap(
-				status.APIServerError(fmt.Errorf("destroy error"), "example message"),
-				"deleting managed objects"),
+			expectedError: fmt.Errorf(
+				"deleting managed objects: %w",
+				status.APIServerError(fmt.Errorf("destroy error"), "example message")),
 			expectedStopped: true,
 			expectedRsyncAfterFinalize: func() client.Object {
 				obj := repoSync1.DeepCopy()
@@ -250,18 +249,22 @@ func TestRepoSyncFinalize(t *testing.T) {
 				// delete RepoSync to cause update error
 				return fakeClient.Delete(ctx, rs)
 			},
-			expectedError: errors.Wrapf(
-				errors.Wrapf(
+			expectedError: fmt.Errorf(
+				"setting Finalizing condition: %w",
+				fmt.Errorf(
+					"failed to set ReconcilerFinalizing condition: %w",
 					status.APIServerErrorWrap(
-						errors.Wrapf(
+						fmt.Errorf(
+							"failed to update object status: %s: %w",
+							kinds.ObjectSummary(repoSync1),
 							apierrors.NewNotFound(
 								schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
 								"example/repo-sync-1"),
-							"failed to update object status: %s",
-							kinds.ObjectSummary(repoSync1)),
-						repoSync1.DeepCopy()),
-					"failed to set ReconcilerFinalizing condition"),
-				"setting Finalizing condition"),
+						),
+						repoSync1.DeepCopy(),
+					),
+				),
+			),
 			expectedStopped:            true,
 			expectedRsyncAfterFinalize: nil,
 		},
@@ -408,16 +411,17 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 				// delete RepoSync to cause update error
 				return fakeClient.Delete(ctx, rs)
 			},
-			expectedError: errors.Wrapf(
+			expectedError: fmt.Errorf(
+				"failed to add finalizer: %w",
 				status.APIServerErrorWrap(
-					errors.Wrapf(
+					fmt.Errorf(
+						"failed to update object: %s: %w",
+						kinds.ObjectSummary(repoSync1),
 						apierrors.NewNotFound(
 							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
-							"example/repo-sync-1"),
-						"failed to update object: %s",
-						kinds.ObjectSummary(repoSync1)),
+							"example/repo-sync-1")),
 					repoSync1.DeepCopy()),
-				"failed to add finalizer"),
+			),
 			expectedUpdated: false,
 			expectedRsync:   nil,
 		},
@@ -552,16 +556,17 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 				// delete RepoSync to cause update error
 				return fakeClient.Delete(ctx, rs)
 			},
-			expectedError: errors.Wrapf(
+			expectedError: fmt.Errorf(
+				"failed to remove finalizer: %w",
 				status.APIServerErrorWrap(
-					errors.Wrapf(
+					fmt.Errorf(
+						"failed to update object: %s: %w",
+						kinds.ObjectSummary(repoSync1),
 						apierrors.NewNotFound(
 							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
-							"example/repo-sync-1"),
-						"failed to update object: %s",
-						kinds.ObjectSummary(repoSync1)),
+							"example/repo-sync-1")),
 					repoSync1.DeepCopy()),
-				"failed to remove finalizer"),
+			),
 			expectedUpdated: false,
 			expectedRsync:   nil,
 		},

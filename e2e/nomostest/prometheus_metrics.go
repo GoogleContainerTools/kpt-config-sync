@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	prometheusapi "github.com/prometheus/client_golang/api"
 	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prometheusmodel "github.com/prometheus/common/model"
@@ -66,7 +65,7 @@ func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 			return predicate(ctx, v1api)
 		})
 		if err != nil {
-			return errors.Wrapf(err, "timed out waiting for metrics predicate[%d]", i)
+			return fmt.Errorf("timed out waiting for metrics predicate[%d]: %w", i, err)
 		}
 		nt.T.Logf("[METRICS] waited %v for metrics to be valid", duration)
 	}
@@ -109,7 +108,7 @@ func MetricLabelsForRootSync(nt *NT, syncNN types.NamespacedName) (prometheusmod
 	syncObj := &unstructured.Unstructured{}
 	syncObj.SetGroupVersionKind(kinds.RootSyncV1Beta1())
 	if err := nt.KubeClient.Get(syncNN.Name, syncNN.Namespace, syncObj); err != nil {
-		return nil, errors.Wrapf(err, "getting RootSync: %s", syncNN)
+		return nil, fmt.Errorf("getting RootSync: %s: %w", syncNN, err)
 	}
 	return prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncKind.Name()):       prometheusmodel.LabelValue(configsync.RootSyncKind),
@@ -125,7 +124,7 @@ func MetricLabelsForRepoSync(nt *NT, syncNN types.NamespacedName) (prometheusmod
 	syncObj := &unstructured.Unstructured{}
 	syncObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
 	if err := nt.KubeClient.Get(syncNN.Name, syncNN.Namespace, syncObj); err != nil {
-		return nil, errors.Wrapf(err, "getting RepoSync: %s", syncNN)
+		return nil, fmt.Errorf("getting RepoSync: %s: %w", syncNN, err)
 	}
 	return prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.ResourceKeySyncKind.Name()):       prometheusmodel.LabelValue(configsync.RepoSyncKind),
@@ -139,15 +138,15 @@ func MetricLabelsForRepoSync(nt *NT, syncNN types.NamespacedName) (prometheusmod
 // the specified RootSync.
 func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) error {
 	if _, found := nt.RootRepos[summary.Sync.Name]; !found {
-		return errors.Errorf("RootRepo %q not found", summary.Sync)
+		return fmt.Errorf("RootRepo %q not found", summary.Sync)
 	}
 	commitHash, err := nt.RootRepos[summary.Sync.Name].Hash()
 	if err != nil {
-		return errors.Wrapf(err, "hashing RootRepo for RootSync: %s", summary.Sync)
+		return fmt.Errorf("hashing RootRepo for RootSync: %s: %w", summary.Sync, err)
 	}
 	syncLabels, err := MetricLabelsForRootSync(nt, summary.Sync)
 	if err != nil {
-		return errors.Wrap(err, "reading sync metric labels")
+		return fmt.Errorf("reading sync metric labels: %w", err)
 	}
 	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, syncLabels, commitHash, summary)
 }
@@ -156,15 +155,15 @@ func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) err
 // the specified RootSync.
 func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) error {
 	if _, found := nt.NonRootRepos[summary.Sync]; !found {
-		return errors.Errorf("NonRootRepo %q not found", summary.Sync)
+		return fmt.Errorf("NonRootRepo %q not found", summary.Sync)
 	}
 	commitHash, err := nt.NonRootRepos[summary.Sync].Hash()
 	if err != nil {
-		return errors.Wrapf(err, "hashing NonRootRepo for RepoSync: %s", summary.Sync)
+		return fmt.Errorf("hashing NonRootRepo for RepoSync: %s", summary.Sync)
 	}
 	syncLabels, err := MetricLabelsForRepoSync(nt, summary.Sync)
 	if err != nil {
-		return errors.Wrap(err, "reading sync metric labels")
+		return fmt.Errorf("reading sync metric labels: %w", err)
 	}
 	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, syncLabels, commitHash, summary)
 }
@@ -513,18 +512,18 @@ func metricResultMustExist(nt *NT, query string, response prometheusmodel.Value)
 	switch result := response.(type) {
 	case prometheusmodel.Vector:
 		if len(result) == 0 {
-			return errors.Errorf("no results from prometheus query: %s", query)
+			return fmt.Errorf("no results from prometheus query: %s", query)
 		}
 		nt.Logger.Debugf("prometheus vector response:\n%s", result)
 		return nil
 	case prometheusmodel.Matrix:
 		if len(result) == 0 {
-			return errors.Errorf("no results from prometheus query: %s", query)
+			return fmt.Errorf("no results from prometheus query: %s", query)
 		}
 		nt.Logger.Debugf("prometheus matrix response:\n%s", result)
 		return nil
 	default:
-		return errors.Errorf("unsupported prometheus response: %T", response)
+		return fmt.Errorf("unsupported prometheus response: %T", response)
 	}
 }
 
@@ -553,7 +552,7 @@ func metricExistsWithValue(ctx context.Context, nt *NT, v1api prometheusv1.API, 
 			}
 			values = append(values, sample.Value)
 		}
-		return errors.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
 	case prometheusmodel.Matrix:
 		var values []prometheusmodel.SampleValue
 		for _, samples := range result {
@@ -564,9 +563,9 @@ func metricExistsWithValue(ctx context.Context, nt *NT, v1api prometheusv1.API, 
 				values = append(values, sample.Value)
 			}
 		}
-		return errors.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
 	default:
-		return errors.Errorf("unsupported prometheus response: %T", response)
+		return fmt.Errorf("unsupported prometheus response: %T", response)
 	}
 }
 
@@ -587,7 +586,7 @@ func metricExistsWithValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv
 			}
 			values = append(values, sample.Value)
 		}
-		return errors.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
 	case prometheusmodel.Matrix:
 		var values []prometheusmodel.SampleValue
 		for _, samples := range result {
@@ -598,9 +597,9 @@ func metricExistsWithValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv
 				values = append(values, sample.Value)
 			}
 		}
-		return errors.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
 	default:
-		return errors.Errorf("unsupported prometheus response: %T", response)
+		return fmt.Errorf("unsupported prometheus response: %T", response)
 	}
 }
 
@@ -622,7 +621,7 @@ func metricExistsWithValueOrDoesNotExist(ctx context.Context, nt *NT, v1api prom
 			}
 			values = append(values, sample.Value)
 		}
-		return errors.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in vector response %v for query: %s", value, values, query)
 	case prometheusmodel.Matrix:
 		if len(result) == 0 {
 			return nil // no results
@@ -637,8 +636,8 @@ func metricExistsWithValueOrDoesNotExist(ctx context.Context, nt *NT, v1api prom
 				values = append(values, sample.Value)
 			}
 		}
-		return errors.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
+		return fmt.Errorf("value %v not found in matrix response %v for query: %s", value, values, query)
 	default:
-		return errors.Errorf("unsupported prometheus response: %T", response)
+		return fmt.Errorf("unsupported prometheus response: %T", response)
 	}
 }

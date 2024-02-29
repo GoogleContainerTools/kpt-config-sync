@@ -15,9 +15,9 @@
 package validate
 
 import (
+	"errors"
 	"testing"
 
-	"github.com/pkg/errors"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"

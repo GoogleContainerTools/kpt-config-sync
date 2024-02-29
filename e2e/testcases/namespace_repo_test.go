@@ -20,10 +20,14 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -31,8 +35,10 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -101,6 +107,156 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	validateRepoSyncRBAC(nt, bsNamespace, repo, configureRBACInCentralizedMode)
+}
+
+func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repository, configureRBAC configureRBACFunc) {
+	nt.T.Log("Add a deployment to the namespace repo without RBAC")
+	nt.Must(nsRepo.Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/deployment.yaml"))
+	nt.Must(nsRepo.CommitAndPush("Add a deployment to the namespace repo"))
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`polling for status failed: failed to list apps/v1, Kind=Deployment: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot list resource "deployments" in API group "apps" in the namespace "bookstore"`)
+
+	nt.T.Log("Add 'list' permission")
+	configureRBAC(nt, ns, []string{"list"})
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`polling for status failed: unknown`)
+
+	// The unknown error is caused by missing `watch` permission and should be fixed upstream with more details.
+	nt.T.Log("Add 'watch' permission")
+	configureRBAC(nt, ns, []string{"list", "watch"})
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`failed to apply Deployment.apps, bookstore/hello-world: failed to get current object from cluster: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot get resource "deployments" in API group "apps" in the namespace "bookstore"`)
+
+	nt.T.Log("Add 'get' permission")
+	configureRBAC(nt, ns, []string{"list", "watch", "get"})
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot patch resource "deployments" in API group "apps" in the namespace "bookstore"`)
+
+	nt.T.Log("Add 'patch' permission")
+	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch"})
+	nt.T.Log("Restart the namespace reconciler Pod to force resync instead of waiting for the retry backoff")
+	// Prior updates don't need a restart because the retry backoff is within 1 minute
+	// A Pod restart on Autopilot may take longer than 1 minute
+	nomostest.DeletePodByLabel(nt, "configsync.gke.io/deployment-name", core.NsReconcilerName(ns, configsync.RepoSyncName), false)
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden`)
+	nt.T.Log("Add 'create' permission")
+	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create"})
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "hello-world", ns,
+		testwatcher.WatchTimeout(30*time.Second)); err != nil {
+		nt.T.Fatalf("deployment hello-word not current: %v", err)
+	}
+
+	nt.Must(nsRepo.Remove("acme/deployment.yaml"))
+	nt.Must(nsRepo.CommitAndPush("Removing Deployment"))
+	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`failed to prune Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot delete resource "deployments" in API group "apps" in the namespace "bookstore"`)
+	nt.T.Log("Add 'delete' permission")
+	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create", "delete"})
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+	if err := nt.ValidateNotFound("hello-world", ns, &appsv1.Deployment{}); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+type configureRBACFunc func(nt *nomostest.NT, ns string, verbs []string)
+
+func configureRBACInCentralizedMode(nt *nomostest.NT, ns string, verbs []string) {
+	rules := []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{appsv1.GroupName},
+			Resources: []string{"deployments"},
+			Verbs:     verbs,
+		},
+	}
+	rsRole := fake.RoleObject(
+		core.Name("deployment-admin"),
+		core.Namespace(ns),
+	)
+	rsRole.Rules = rules
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(ns, fmt.Sprintf("role-%s", rsRole.Name)), rsRole))
+	rsRoleRef := rbacv1.RoleRef{
+		APIGroup: rsRole.GroupVersionKind().Group,
+		Kind:     rsRole.Kind,
+		Name:     rsRole.Name,
+	}
+	rb := fake.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
+	sb := []rbacv1.Subject{
+		{
+			Kind:      "ServiceAccount",
+			Name:      core.NsReconcilerName(ns, configsync.RepoSyncName),
+			Namespace: configmanagement.ControllerNamespace,
+		},
+	}
+	rb.Subjects = sb
+	rb.RoleRef = rsRoleRef
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(ns, fmt.Sprintf("rb-%s", rb.Name)), rb))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding restricted role and rolebinding for RepoSync"))
+}
+
+func configureRBACInDelegatedMode(nt *nomostest.NT, ns string, verbs []string) {
+	rules := []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{appsv1.GroupName},
+			Resources: []string{"deployments"},
+			Verbs:     verbs,
+		},
+	}
+	rsRole := fake.RoleObject(
+		core.Name("deployment-admin"),
+		core.Namespace(ns),
+	)
+	rsRole.Rules = rules
+	if err := nt.KubeClient.Apply(rsRole); err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Get(rsRole.Name, rsRole.Namespace, &rbacv1.Role{}); err == nil {
+			if err := nt.KubeClient.Delete(rsRole); err != nil {
+				nt.T.Error(err)
+			}
+		} else if !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+
+	})
+
+	rsRoleRef := rbacv1.RoleRef{
+		APIGroup: rsRole.GroupVersionKind().Group,
+		Kind:     rsRole.Kind,
+		Name:     rsRole.Name,
+	}
+	rb := fake.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
+	sb := []rbacv1.Subject{
+		{
+			Kind:      "ServiceAccount",
+			Name:      core.NsReconcilerName(ns, configsync.RepoSyncName),
+			Namespace: configmanagement.ControllerNamespace,
+		},
+	}
+	rb.Subjects = sb
+	rb.RoleRef = rsRoleRef
+
+	if err := nt.KubeClient.Apply(rb); err != nil {
+		nt.T.Fatal(err)
+
+	}
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Get(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err == nil {
+			if err = nt.KubeClient.Delete(rb); err != nil {
+				nt.T.Error(err)
+			}
+		} else if !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+	})
 }
 
 func hasReconcilingStatus(r metav1.ConditionStatus) testpredicates.Predicate {
@@ -173,6 +329,8 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	validateRepoSyncRBAC(nt, bsNamespaceRepo, nt.NonRootRepos[repoSyncNN], configureRBACInDelegatedMode)
 }
 
 func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {

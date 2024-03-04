@@ -999,7 +999,7 @@ func TestNomosImage(t *testing.T) {
 
 	version := nomostest.VersionFromManifest(t)
 
-	out, err := nt.Shell.Docker("run", "-i", "--rm",
+	out, err := nt.Shell.ExecWithDebug("docker", "run", "-i", "--rm",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -1009,7 +1009,7 @@ func TestNomosImage(t *testing.T) {
 		nt.T.Fatalf("expected to find version string in output:\n%s\n", string(out))
 	}
 
-	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "kustomize",
+	out, err = nt.Shell.ExecWithDebug("docker", "run", "--rm", "--entrypoint", "kustomize",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version), "version")
 	if err != nil {
 		nt.T.Fatal(err)
@@ -1019,7 +1019,7 @@ func TestNomosImage(t *testing.T) {
 			hydrate.KustomizeVersion, string(out))
 	}
 
-	out, err = nt.Shell.Docker("run", "--rm", "--entrypoint", "helm",
+	out, err = nt.Shell.ExecWithDebug("docker", "run", "--rm", "--entrypoint", "helm",
 		fmt.Sprintf("%s/nomos:%s", e2e.DefaultImagePrefix, version), "version")
 	if err != nil {
 		nt.T.Fatal(err)

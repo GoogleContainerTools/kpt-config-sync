@@ -27,8 +27,6 @@ type LocalProvider struct {
 	// PortForwarder is a port forwarder to the in-cluster registry server.
 	// This is used to communicate from the tests to the in-cluster registry server.
 	PortForwarder *portforwarder.PortForwarder
-	// shell is used for invoking command line utilities
-	shell *testshell.TestShell
 	// repositoryName is the name of the repository. For LocalProvider,
 	// this doesn't require explicit repository creation but is just part of the
 	// path.
@@ -48,121 +46,282 @@ func (l *LocalProvider) Type() string {
 
 // Setup performs setup for LocalProvider (no-op)
 func (l *LocalProvider) Setup() error {
+	// Local registry is created with the test environment.
+	// So no setup is necessary.
 	return nil
 }
 
 // Teardown performs teardown for LocalProvider (no-op)
 func (l *LocalProvider) Teardown() error {
+	// Local registry is deleted with the test environment.
+	// So no cleanup is necessary.
 	return nil
 }
 
 // Login to the local registry (no-op)
 func (l *LocalProvider) Login() error {
+	// Local registry does not require authentication
 	return nil
 }
 
 // Logout of the local registry (no-op)
 func (l *LocalProvider) Logout() error {
+	// Local registry does not require authentication
 	return nil
 }
 
-// localAddress returns the local port forwarded address that proxies to the
-// in-cluster git server. For use from the test framework to push to the registry.
-func (l *LocalProvider) localAddress(name string) (string, error) {
+// repositoryLocalAddress returns the address of the repository in the
+// registry for use by local clients, like the helm or crane clients.
+func (l *LocalProvider) repositoryLocalAddress() (string, error) {
 	if l.PortForwarder == nil {
-		return "", fmt.Errorf("PortForwarder must be set for LocalProvider.localAddress()")
+		return "", fmt.Errorf("PortForwarder must be set for LocalProvider.repositoryLocalAddress()")
 	}
-	port, err := l.PortForwarder.LocalPort()
+	localPort, err := l.PortForwarder.LocalPort()
 	if err != nil {
 		return "", err
 	}
-	return l.localAddressWithPort(port, name), nil
+	return l.repositoryLocalAddressWithProxy(l.ProxyAddress(localPort)), nil
 }
 
-// localAddressWithPort returns the local port forwarded address that proxies to the
-// in-cluster git server. For use from the test framework to push to the registry.
-// Accepts a port parameter for use from the on ready callback.
-func (l *LocalProvider) localAddressWithPort(localPort int, name string) string {
-	address := fmt.Sprintf("localhost:%d/%s/%s", localPort, l.repositoryName, l.repositorySuffix)
-	if name != "" {
-		address = fmt.Sprintf("%s/%s", address, name)
+// repositoryLocalAddressWithProxy returns address of the repository using the
+// specified proxy address.
+func (l *LocalProvider) repositoryLocalAddressWithProxy(proxyAddress string) string {
+	return fmt.Sprintf("%s/%s/%s", proxyAddress, l.repositoryName, l.repositorySuffix)
+}
+
+// repositoryRemoteAddress returns the address of the repository in the
+// registry for use by remote clients, like Kubernetes or Config Sync.
+func (l *LocalProvider) repositoryRemoteAddress() (string, error) {
+	return fmt.Sprintf("test-registry-server.test-registry-system/%s/%s", l.repositoryName, l.repositorySuffix), nil
+}
+
+// ImageLocalAddress returns the local port forwarded address that proxies to
+// the in-cluster git server. For use from the test framework to push to the
+// registry.
+func (l *LocalProvider) ImageLocalAddress(imageName string) (string, error) {
+	if l.PortForwarder == nil {
+		return "", fmt.Errorf("PortForwarder must be set for LocalProvider.ImageLocalAddress()")
 	}
-	return address
-}
-
-// inClusterAddress returns the address of the registry service from within the
-// cluster. Fit for use from the *-sync containers inside the cluster.
-func (l *LocalProvider) inClusterAddress(name string) string {
-	address := fmt.Sprintf("test-registry-server.test-registry-system/%s/%s", l.repositoryName, l.repositorySuffix)
-	if name != "" {
-		address = fmt.Sprintf("%s/%s", address, name)
-	}
-	return address
-}
-
-// deleteImage the package from the remote registry, including all versions and tags.
-func (l *LocalProvider) deleteImage(name, digest string) error {
-	localAddress, err := l.localAddress(name)
+	localPort, err := l.PortForwarder.LocalPort()
 	if err != nil {
-		return err
+		return "", err
 	}
-	imageTag := fmt.Sprintf("%s@%s", localAddress, digest)
-	if _, err := l.shell.ExecWithDebug("crane", "delete", imageTag); err != nil {
-		return fmt.Errorf("deleting image: %w", err)
+	return l.imageLocalAddressWithProxy(l.ProxyAddress(localPort), imageName), nil
+}
+
+// imageLocalAddressWithProxy returns address of the image using the specified
+// proxy address.
+func (l *LocalProvider) imageLocalAddressWithProxy(proxyAddress, imageName string) string {
+	return fmt.Sprintf("%s/%s", l.repositoryLocalAddressWithProxy(proxyAddress), imageName)
+}
+
+// ProxyAddress returns the localhost address of the proxy with the specified port.
+func (l *LocalProvider) ProxyAddress(localPort int) string {
+	return fmt.Sprintf("localhost:%d", localPort)
+}
+
+// ImageRemoteAddress returns the address of the registry service from within
+// the cluster. Fit for use from the *-sync containers inside the cluster.
+func (l *LocalProvider) ImageRemoteAddress(imageName string) (string, error) {
+	address, err := l.repositoryRemoteAddress()
+	if err != nil {
+		return "", err
 	}
-	return nil
+	if imageName != "" {
+		address = fmt.Sprintf("%s/%s", address, imageName)
+	}
+	return address, nil
 }
 
 // LocalOCIProvider provides methods for interacting with the test registry-server
 // using the oci-sync interface.
 type LocalOCIProvider struct {
 	LocalProvider
+
+	OCIClient *testshell.OCIClient
+
+	pushedImages map[string]*OCIImage // key = NAME@DIGEST
 }
 
-// PushURL returns a URL for pushing images to the remote registry.
-// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (l *LocalOCIProvider) PushURL(name string) (string, error) {
-	return l.localAddress(name)
+// Client for executing helm and crane commands.
+func (l *LocalOCIProvider) Client() CraneClient {
+	return l.OCIClient
 }
 
-// PushURLWithPort returns a URL for pushing images to the remote registry.
-// localPort refers to the local port the PortForwarder is listening on.
-// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (l *LocalOCIProvider) PushURLWithPort(localPort int, name string) string {
-	return l.localAddressWithPort(localPort, name)
+// Restore the proxy and re-push any previously pushed images.
+func (l *LocalOCIProvider) Restore(proxyAddress string) error {
+	// Logout to configure the local client credentials.
+	if err := l.Login(); err != nil {
+		return err
+	}
+	for _, image := range l.pushedImages {
+		// Build image address with provided proxy to avoid deadlock waiting for PortForwarder.LocalPort.
+		imageLocalAddress := l.imageLocalAddressWithProxy(proxyAddress, image.Name)
+		_, err := l.pushImageToAddress(imageLocalAddress, image.Name, image.Tag, image.LocalSourceTgzPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// SyncURL returns a URL for Config Sync to sync from using OCI.
-// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (l *LocalOCIProvider) SyncURL(name string) string {
-	return l.inClusterAddress(name)
+// Reset the proxy and flush the cache of pushed images.
+func (l *LocalOCIProvider) Reset() error {
+	// Delete all charts & images pushed during the test.
+	for _, image := range l.pushedImages {
+		if err := image.Delete(); err != nil {
+			return err
+		}
+	}
+	l.pushedImages = nil
+	// Logout to reset the local client credentials.
+	return l.Logout()
+}
+
+// PushImage pushes the local tarball as an OCI image to the remote registry.
+func (l *LocalOCIProvider) PushImage(imageName, tag, localSourceTgzPath string) (*OCIImage, error) {
+	imageLocalAddress, err := l.ImageLocalAddress(imageName)
+	if err != nil {
+		return nil, err
+	}
+	return l.pushImageToAddress(imageLocalAddress, imageName, tag, localSourceTgzPath)
+}
+
+// pushImageToAddress pushes the local tarball as an OCI image to the specified
+// address and record that it was pushed. This allows pushing to the proxy
+// without blocking on PortForwarder.LocalPort.
+func (l *LocalOCIProvider) pushImageToAddress(imageLocalAddress, imageName, tag, localSourceTgzPath string) (*OCIImage, error) {
+	img, err := pushOCIImage(l, imageLocalAddress, imageName, tag, localSourceTgzPath)
+	if err != nil {
+		return nil, err
+	}
+	if l.pushedImages == nil {
+		l.pushedImages = make(map[string]*OCIImage)
+	}
+	imageID := fmt.Sprintf("%s@%s", img.Name, img.Digest)
+	l.pushedImages[imageID] = img
+	return img, nil
+}
+
+// DeleteImage deletes the OCI image from the remote registry, including all
+// versions and tags.
+func (l *LocalOCIProvider) DeleteImage(imageName, digest string) error {
+	imageLocalAddress, err := l.ImageLocalAddress(imageName)
+	if err != nil {
+		return err
+	}
+	return deleteOCIImage(l.OCIClient, imageLocalAddress, digest)
 }
 
 // LocalHelmProvider provides methods for interacting with the test registry-server
 // using the oci-sync interface.
 type LocalHelmProvider struct {
 	LocalProvider
+
+	HelmClient *testshell.HelmClient
+
+	pushedPackages map[string]*HelmPackage // key = NAME@DIGEST
 }
 
-// PushURL returns a URL for pushing images to the remote registry.
-// The name parameter is ignored because helm CLI appends the chart name to the image.
-func (l *LocalHelmProvider) PushURL(_ string) (string, error) {
-	localAddress, err := l.localAddress("")
-	if err != nil {
-		return localAddress, err
-	}
-	return fmt.Sprintf("oci://%s", localAddress), nil
+// Client for executing helm and crane commands.
+func (l *LocalHelmProvider) Client() HelmClient {
+	return l.HelmClient
 }
 
-// PushURLWithPort returns a URL for pushing images to the remote registry.
+// RepositoryLocalURLWithPort returns a URL for pushing images to the remote registry.
 // localPort refers to the local port the PortForwarder is listening on.
 // The name parameter is ignored because helm CLI appends the chart name to the image.
-func (l *LocalHelmProvider) PushURLWithPort(localPort int, _ string) string {
-	return fmt.Sprintf("oci://%s", l.localAddressWithPort(localPort, ""))
+func (l *LocalHelmProvider) RepositoryLocalURLWithPort(localPort int) string {
+	return ociURL(l.repositoryLocalAddressWithProxy(l.ProxyAddress(localPort)))
 }
 
-// SyncURL returns a URL for Config Sync to sync from using helm.
-// The name parameter is ignored because helm CLI appends the chart name to the image.
-func (l *LocalHelmProvider) SyncURL(_ string) string {
-	return fmt.Sprintf("oci://%s", l.inClusterAddress(""))
+// RepositoryLocalURL is the repositoryLocalAddress prepended with oci://
+// For pushing with the local helm client.
+func (l *LocalHelmProvider) RepositoryLocalURL() (string, error) {
+	repoAddr, err := l.repositoryLocalAddress()
+	if err != nil {
+		return repoAddr, err
+	}
+	return ociURL(repoAddr), nil
+}
+
+// RepositoryRemoteURL is the repositoryRemoteAddress prepended with oci://
+// For pulling with RSync's `.spec.helm.repo`
+func (l *LocalHelmProvider) RepositoryRemoteURL() (string, error) {
+	repoAddr, err := l.repositoryRemoteAddress()
+	if err != nil {
+		return repoAddr, err
+	}
+	return ociURL(repoAddr), nil
+}
+
+// Restore the proxy and re-push any previously pushed images.
+func (l *LocalHelmProvider) Restore(proxyAddress string) error {
+	// Logout to configure the local client credentials.
+	if err := l.Login(); err != nil {
+		return err
+	}
+	for _, pkg := range l.pushedPackages {
+		// Build image address with provided proxy.
+		// Calling LocalPort would lead to deadlock.
+		repoLocalURL := l.repositoryLocalAddressWithProxy(proxyAddress)
+		_, err := l.pushPackageToAddress(repoLocalURL, pkg.LocalChartTgzPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Reset the proxy and flush the cache of pushed images.
+func (l *LocalHelmProvider) Reset() error {
+	// Delete all charts & images pushed during the test.
+	for _, image := range l.pushedPackages {
+		if err := image.Delete(); err != nil {
+			return err
+		}
+	}
+	l.pushedPackages = nil
+	// Logout to reset the local client credentials.
+	return l.Logout()
+}
+
+// PushPackage pushes the local helm chart as an OCI image to the remote registry.
+func (l *LocalHelmProvider) PushPackage(localChartTgzPath string) (*HelmPackage, error) {
+	repoLocalURL, err := l.RepositoryLocalURL()
+	if err != nil {
+		return nil, err
+	}
+	return l.pushPackageToAddress(repoLocalURL, localChartTgzPath)
+}
+
+// pushPackageToAddress pushes the local helm chart as an OCI image to the
+// specified repository URL and records that it was pushed. This allows pushing
+// to the proxy without blocking on PortForwarder.LocalPort.
+func (l *LocalHelmProvider) pushPackageToAddress(repoLocalURL, localChartTgzPath string) (*HelmPackage, error) {
+	pkg, err := pushHelmPackage(l, repoLocalURL, localChartTgzPath)
+	if err != nil {
+		return nil, err
+	}
+	if l.pushedPackages == nil {
+		l.pushedPackages = make(map[string]*HelmPackage)
+	}
+	packageID := fmt.Sprintf("%s@%s", pkg.Name, pkg.Digest)
+	l.pushedPackages[packageID] = pkg
+	return pkg, nil
+}
+
+// DeletePackage deletes the helm chart OCI image from the remote registry,
+// including all versions and tags.
+func (l *LocalHelmProvider) DeletePackage(chartName, digest string) error {
+	imageLocalAddress, err := l.ImageLocalAddress(chartName)
+	if err != nil {
+		return err
+	}
+	if err := deleteOCIImage(l.HelmClient, imageLocalAddress, digest); err != nil {
+		return err
+	}
+	packageID := fmt.Sprintf("%s@%s", chartName, digest)
+	delete(l.pushedPackages, packageID)
+	return nil
 }

@@ -824,10 +824,15 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 
 // RootSyncObjectOCI returns a RootSync object that syncs the provided OCIImage.
 func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) *v1beta1.RootSync {
+	imageURL, err := image.RemoteAddressWithTag()
+	if err != nil {
+		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	}
+
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingTag(),
+		Image: imageURL,
 		Auth:  configsync.AuthNone,
 	}
 	switch *e2e.OCIProvider {
@@ -848,10 +853,15 @@ func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) 
 
 // RepoSyncObjectOCI returns a RepoSync object that syncs the provided OCIImage.
 func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryproviders.OCIImage) *v1beta1.RepoSync {
+	imageURL, err := image.RemoteAddressWithTag()
+	if err != nil {
+		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	}
+
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingTag(),
+		Image: imageURL,
 		Auth:  configsync.AuthNone,
 	}
 	switch *e2e.OCIProvider {
@@ -872,11 +882,15 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 
 // RootSyncObjectHelm returns a RootSync object that syncs the provided HelmPackage
 func (nt *NT) RootSyncObjectHelm(name string, chart *registryproviders.HelmPackage) *v1beta1.RootSync {
+	chartRepoURL, err := nt.HelmProvider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+	}
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{
 		HelmBase: v1beta1.HelmBase{
-			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Repo:    chartRepoURL,
 			Chart:   chart.Name,
 			Version: chart.Version,
 			Auth:    configsync.AuthNone,
@@ -901,12 +915,16 @@ func (nt *NT) RootSyncObjectHelm(name string, chart *registryproviders.HelmPacka
 
 // RepoSyncObjectHelm returns a RepoSync object that syncs the provided HelmPackage
 func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chart *registryproviders.HelmPackage) *v1beta1.RepoSync {
+	chartRepoURL, err := nt.HelmProvider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+	}
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Git = nil
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{
 		HelmBase: v1beta1.HelmBase{
-			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Repo:    chartRepoURL,
 			Chart:   chart.Name,
 			Version: chart.Version,
 			Auth:    configsync.AuthNone,

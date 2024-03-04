@@ -128,10 +128,14 @@ func TestGCENodeOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	imageURL, err := image.RemoteAddressWithTag()
+	if err != nil {
+		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	}
 
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, image.FloatingTag()))
+		v1beta1.OciSource, tenant, imageURL))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{

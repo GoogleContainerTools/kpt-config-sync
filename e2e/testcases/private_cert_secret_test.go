@@ -402,10 +402,14 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	imageURL, err := image.RemoteAddressWithTag()
+	if err != nil {
+		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	}
 
 	nt.T.Log("Set the RootSync to sync the OCI image without providing a CA cert")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, image.FloatingTag()))
+		v1beta1.OciSource, imageURL))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
@@ -440,11 +444,15 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	imageURL, err := image.RemoteAddressWithTag()
+	if err != nil {
+		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	}
 
 	nt.T.Log("Set the RepoSync to sync the OCI image without providing a CA cert")
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: image.FloatingTag(),
+		Image: imageURL,
 		Auth:  "none",
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
@@ -508,10 +516,14 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+	}
 
 	nt.T.Log("Set the RootSync to sync the Helm package without providing a CA cert")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "version": "%s", "auth": "none", "period": "15s"}, "git": null}}`,
-		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
+		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
@@ -550,12 +562,16 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+	}
 
 	nt.T.Log("Set the RepoSync to sync the Helm package without providing a CA cert")
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{
 		HelmBase: v1beta1.HelmBase{
-			Repo:    nt.HelmProvider.SyncURL(chart.Name),
+			Repo:    chartRepoURL,
 			Chart:   chart.Name,
 			Version: chart.Version,
 			Auth:    "none",

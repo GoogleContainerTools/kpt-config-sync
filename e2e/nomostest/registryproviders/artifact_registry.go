@@ -51,8 +51,8 @@ type ArtifactRegistryProvider struct {
 	// provides a guardrail to help prevent gotchas when mixing usage of helm-sync
 	// and oci-sync.
 	repositorySuffix string
-	// shell used for invoking CLI tools
-	shell *testshell.TestShell
+	// gcloudClient used for executing gcloud commands
+	gcloudClient GcloudClient
 }
 
 // Type returns the provider type.
@@ -72,14 +72,41 @@ func (a *ArtifactRegistryProvider) registryHost() string {
 	return fmt.Sprintf("%s-docker.pkg.dev", a.location)
 }
 
-// repositoryAddress returns the domain and path to the chart repository
-func (a *ArtifactRegistryProvider) repositoryAddress() string {
-	return fmt.Sprintf("%s/%s/%s/%s", a.registryHost(), a.project, a.repositoryName, a.repositorySuffix)
+// repositoryLocalAddress returns the address of the repository in the
+// registry for use by local clients, like the helm or crane clients.
+func (a *ArtifactRegistryProvider) repositoryLocalAddress() (string, error) {
+	return a.repositoryRemoteAddress()
+}
+
+// repositoryRemoteAddress returns the address of the repository in the
+// registry for use by remote clients, like Kubernetes or Config Sync.
+func (a *ArtifactRegistryProvider) repositoryRemoteAddress() (string, error) {
+	return fmt.Sprintf("%s/%s/%s/%s", a.registryHost(), a.project, a.repositoryName, a.repositorySuffix), nil
+}
+
+// ImageLocalAddress returns the address of the image in the registry for
+// use by local clients, like the helm or crane clients.
+func (a *ArtifactRegistryProvider) ImageLocalAddress(imageName string) (string, error) {
+	repoAddr, err := a.repositoryLocalAddress()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s", repoAddr, imageName), nil
+}
+
+// ImageRemoteAddress returns the address of the image in the registry for
+// use by remote clients, like Kubernetes or Config Sync.
+func (a *ArtifactRegistryProvider) ImageRemoteAddress(imageName string) (string, error) {
+	repoAddr, err := a.repositoryRemoteAddress()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s", repoAddr, imageName), nil
 }
 
 // createRepository uses gcloud to create the repository, if it doesn't exist.
 func (a *ArtifactRegistryProvider) createRepository() error {
-	out, err := a.shell.ExecWithDebug("gcloud", "artifacts", "repositories",
+	out, err := a.gcloudClient.Gcloud("artifacts", "repositories",
 		"describe", a.repositoryName,
 		"--location", a.location,
 		"--project", a.project)
@@ -93,7 +120,7 @@ func (a *ArtifactRegistryProvider) createRepository() error {
 		return nil
 	}
 
-	_, err = a.shell.ExecWithDebug("gcloud", "artifacts", "repositories",
+	_, err = a.gcloudClient.Gcloud("artifacts", "repositories",
 		"create", a.repositoryName,
 		"--repository-format", "docker",
 		"--location", a.location,
@@ -104,11 +131,19 @@ func (a *ArtifactRegistryProvider) createRepository() error {
 	return nil
 }
 
-// deleteImage the package from the remote registry, including all versions and tags.
-func (a *ArtifactRegistryProvider) deleteImage(name, digest string) error {
-	imageURL := fmt.Sprintf("%s/%s@%s", a.repositoryAddress(), name, digest)
-	if _, err := a.shell.ExecWithDebug("gcloud", "artifacts", "docker", "images", "delete", imageURL, "--delete-tags", "--project", a.project); err != nil {
-		return fmt.Errorf("deleting image from registry: %w", err)
+// deleteImage deletes the OCI image from Artifact Registry, including all
+// versions and tags.
+//
+// Helm doesn't provide a way to delete remote package images, so we're using
+// gcloud instead. For helm charts, the image name is the chart name.
+func (a *ArtifactRegistryProvider) deleteImage(imageName, digest string) error {
+	imageAddress, err := a.ImageRemoteAddress(imageName)
+	if err != nil {
+		return err
+	}
+	imageAddress = fmt.Sprintf("%s@%s", imageAddress, digest)
+	if _, err := a.gcloudClient.Gcloud("artifacts", "docker", "images", "delete", imageAddress, "--delete-tags", "--project", a.project); err != nil {
+		return fmt.Errorf("deleting image from registry %s: %w", imageAddress, err)
 	}
 	return nil
 }
@@ -117,36 +152,29 @@ func (a *ArtifactRegistryProvider) deleteImage(name, digest string) error {
 // using the oci-sync interface.
 type ArtifactRegistryOCIProvider struct {
 	ArtifactRegistryProvider
+
+	OCIClient *testshell.OCIClient
+}
+
+// Client for executing crane commands.
+func (a *ArtifactRegistryOCIProvider) Client() CraneClient {
+	return a.OCIClient
 }
 
 // Login to the registry with the crane client
 func (a *ArtifactRegistryOCIProvider) Login() error {
-	var err error
-	authCmd := a.shell.Command("gcloud", "auth", "print-access-token")
-	loginCmd := a.shell.Command("crane", "auth", "login",
-		"-u", "oauth2accesstoken", "--password-stdin",
-		a.registryHost())
-	loginCmd.Stdin, err = authCmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("creating STDOUT pipe: %w", err)
-	}
-	if err := loginCmd.Start(); err != nil {
-		return fmt.Errorf("starting login command: %w", err)
-	}
-	if err := authCmd.Run(); err != nil {
-		return fmt.Errorf("running print-access-token command: %w", err)
-	}
-	if err := loginCmd.Wait(); err != nil {
-		return fmt.Errorf("waiting for login command: %w", err)
+	registryHost := a.registryHost()
+	if err := a.OCIClient.Login(registryHost); err != nil {
+		return fmt.Errorf("OCIClient.Login(%q): %w", registryHost, err)
 	}
 	return nil
 }
 
 // Logout of the registry with the crane client
 func (a *ArtifactRegistryOCIProvider) Logout() error {
-	_, err := a.shell.ExecWithDebug("crane", "auth", "logout", a.registryHost())
-	if err != nil {
-		return fmt.Errorf("running logout command: %w", err)
+	registryHost := a.registryHost()
+	if err := a.OCIClient.Logout(registryHost); err != nil {
+		return fmt.Errorf("OCIClient.Logout(%q): %w", registryHost, err)
 	}
 	return nil
 }
@@ -156,52 +184,48 @@ func (a *ArtifactRegistryOCIProvider) Setup() error {
 	return a.createRepository()
 }
 
-// PushURL returns a URL for pushing images to the remote registry.
-// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (a *ArtifactRegistryOCIProvider) PushURL(name string) (string, error) {
-	return fmt.Sprintf("%s/%s", a.repositoryAddress(), name), nil
+// PushImage pushes the local tarball as an OCI image to the remote registry.
+func (a *ArtifactRegistryOCIProvider) PushImage(imageName, tag, localSourceTgzPath string) (*OCIImage, error) {
+	imageLocalAddress, err := a.ImageLocalAddress(imageName)
+	if err != nil {
+		return nil, err
+	}
+	return pushOCIImage(a, imageLocalAddress, imageName, tag, localSourceTgzPath)
 }
 
-// SyncURL returns a URL for Config Sync to sync from using OCI.
-// name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (a *ArtifactRegistryOCIProvider) SyncURL(name string) string {
-	return fmt.Sprintf("%s/%s", a.repositoryAddress(), name)
+// DeleteImage deletes the OCI image from the remote registry, including all
+// versions and tags.
+func (a *ArtifactRegistryOCIProvider) DeleteImage(imageName, digest string) error {
+	return a.deleteImage(imageName, digest)
 }
 
 // ArtifactRegistryHelmProvider provides methods for interacting with the test registry-server
 // using the helm-sync interface.
 type ArtifactRegistryHelmProvider struct {
 	ArtifactRegistryProvider
+
+	HelmClient *testshell.HelmClient
 }
 
-// Login to the registry with the helm client
+// Client for executing helm and crane commands.
+func (a *ArtifactRegistryHelmProvider) Client() HelmClient {
+	return a.HelmClient
+}
+
+// Login to the registry with the HelmClient
 func (a *ArtifactRegistryHelmProvider) Login() error {
-	var err error
-	authCmd := a.shell.Command("gcloud", "auth", "print-access-token")
-	loginCmd := a.shell.Command("helm", "registry", "login",
-		"-u", "oauth2accesstoken", "--password-stdin",
-		a.registryHost())
-	loginCmd.Stdin, err = authCmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("creating STDOUT pipe: %w", err)
-	}
-	if err := loginCmd.Start(); err != nil {
-		return fmt.Errorf("starting login command: %w", err)
-	}
-	if err := authCmd.Run(); err != nil {
-		return fmt.Errorf("running print-access-token command: %w", err)
-	}
-	if err := loginCmd.Wait(); err != nil {
-		return fmt.Errorf("waiting for login command: %w", err)
+	registryHost := a.registryHost()
+	if err := a.HelmClient.Login(registryHost); err != nil {
+		return fmt.Errorf("HelmClient.Login(%q): %w", registryHost, err)
 	}
 	return nil
 }
 
-// Logout of the registry with the helm client
+// Logout of the registry with the HelmClient
 func (a *ArtifactRegistryHelmProvider) Logout() error {
-	_, err := a.shell.ExecWithDebug("helm", "registry", "logout", a.registryHost())
-	if err != nil {
-		return fmt.Errorf("running logout: %w", err)
+	registryHost := a.registryHost()
+	if err := a.HelmClient.Logout(registryHost); err != nil {
+		return fmt.Errorf("HelmClient.Logout(%q): %w", registryHost, err)
 	}
 	return nil
 }
@@ -212,14 +236,41 @@ func (a *ArtifactRegistryHelmProvider) Setup() error {
 	return a.createRepository()
 }
 
-// PushURL returns a URL for pushing images to the remote registry.
-// The name parameter is ignored because helm CLI appends the chart name to the image.
-func (a *ArtifactRegistryHelmProvider) PushURL(_ string) (string, error) {
-	return a.SyncURL(""), nil
+// RepositoryLocalURL is the repositoryLocalAddress prepended with oci://
+// For pushing with the local helm client.
+func (a *ArtifactRegistryHelmProvider) RepositoryLocalURL() (string, error) {
+	repoAddr, err := a.repositoryLocalAddress()
+	if err != nil {
+		return "", err
+	}
+	return ociURL(repoAddr), nil
 }
 
-// SyncURL returns a URL for Config Sync to sync from using OCI.
-// The name parameter is ignored because helm CLI appends the chart name to the image.
-func (a *ArtifactRegistryHelmProvider) SyncURL(_ string) string {
-	return fmt.Sprintf("oci://%s", a.repositoryAddress())
+// RepositoryRemoteURL is the repositoryRemoteAddress prepended with oci://
+// For pulling with RSync's `.spec.helm.repo`
+func (a *ArtifactRegistryHelmProvider) RepositoryRemoteURL() (string, error) {
+	repoAddr, err := a.repositoryRemoteAddress()
+	if err != nil {
+		return "", err
+	}
+	return ociURL(repoAddr), nil
+}
+
+// PushPackage pushes the local helm chart as an OCI image to the remote registry.
+func (a *ArtifactRegistryHelmProvider) PushPackage(localChartTgzPath string) (*HelmPackage, error) {
+	repoLocalURL, err := a.RepositoryLocalURL()
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := pushHelmPackage(a, repoLocalURL, localChartTgzPath)
+	if err != nil {
+		return nil, err
+	}
+	return pkg, nil
+}
+
+// DeletePackage deletes the helm chart OCI image from the remote registry,
+// including all versions and tags.
+func (a *ArtifactRegistryHelmProvider) DeletePackage(chartName, digest string) error {
+	return a.deleteImage(chartName, digest)
 }

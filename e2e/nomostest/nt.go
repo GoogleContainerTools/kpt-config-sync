@@ -129,16 +129,6 @@ type NT struct {
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*gitproviders.Repository
 
-	// ociImages tracks the images which have been pushed to the registry for the
-	// current test. This is used to re-push images if the in-cluster registry
-	// crashes, and to tear down images at the end of the test execution.
-	ociImages []*registryproviders.OCIImage
-
-	// helmPackages tracks the images which have been pushed to the registry for the
-	// current test. This is used to re-push images if the in-cluster registry
-	// crashes, and to tear down images at the end of the test execution.
-	helmPackages []*registryproviders.HelmPackage
-
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
 	// RootSyncs and RepoSyncs managed by this test.
@@ -177,10 +167,18 @@ type NT struct {
 	GitProvider gitproviders.GitProvider
 
 	// OCIProvider is the provider that hosts the OCI repositories.
-	OCIProvider registryproviders.RegistryProvider
+	OCIProvider registryproviders.OCIRegistryProvider
 
 	// HelmProvider is the provider that hosts the helm packages.
-	HelmProvider registryproviders.RegistryProvider
+	HelmProvider registryproviders.HelmRegistryProvider
+
+	// HelmClient provides helm and crane clients to connect to
+	// the environment-specific Helm repository.
+	HelmClient *testshell.HelmClient
+
+	// OCIClient provides a crane client to connect to the
+	// environment-specific OCI repository.
+	OCIClient *testshell.OCIClient
 
 	// RemoteRepositories maintains a map between the repo local name and the remote repository.
 	// It includes both root repo and namespace repos and can be shared among test cases.
@@ -756,33 +754,26 @@ func (nt *NT) portForwardGitServer() {
 }
 
 // portForwardRegistryServer forwards the registry-server deployment to a port.
-func (nt *NT) portForwardRegistryServer() {
-	// The local registry uses ephemeral storage. So re-push all the oci images
-	// and helm charts after the registry recovers from a crash.
+func (nt *NT) portForwardRegistryServer(helmTest, ociTest bool) {
+	// The local registry uses ephemeral storage. So login and re-push all
+	// the oci images and helm charts after the registry recovers from a crash.
+	// Before the test, nt.ociImages & nt.helmPackages will be empty.
 	var onReadyCallbacks []func(int, string)
-	if *e2e.OCIProvider == e2e.Local {
-		provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
-		resetImages := func(newPort int, podName string) {
-			for _, image := range nt.ociImages {
-				// construct push URL with provided port. Calling LocalPort would lead to deadlock
-				if err := image.Push(provider.PushURLWithPort(newPort, image.Name)); err != nil {
-					nt.T.Fatalf("pushing image: %w", err)
-				}
+	if provider, ok := nt.OCIProvider.(registryproviders.ProxiedRegistryProvider); ok && ociTest {
+		setupFn := func(newPort int, podName string) {
+			if err := provider.Restore(provider.ProxyAddress(newPort)); err != nil {
+				nt.T.Fatalf("restoring proxy provider: %v", err)
 			}
 		}
-		onReadyCallbacks = append(onReadyCallbacks, resetImages)
+		onReadyCallbacks = append(onReadyCallbacks, setupFn)
 	}
-	if *e2e.HelmProvider == e2e.Local {
-		provider := nt.HelmProvider.(*registryproviders.LocalHelmProvider)
-		resetPackages := func(newPort int, podName string) {
-			for _, pkg := range nt.helmPackages {
-				// construct push URL with provided port. Calling LocalPort would lead to deadlock
-				if err := pkg.Push(provider.PushURLWithPort(newPort, pkg.Name)); err != nil {
-					nt.T.Fatalf("pushing image: %w", err)
-				}
+	if provider, ok := nt.HelmProvider.(registryproviders.ProxiedRegistryProvider); ok && helmTest {
+		setupFn := func(newPort int, podName string) {
+			if err := provider.Restore(provider.ProxyAddress(newPort)); err != nil {
+				nt.T.Fatalf("restoring proxy provider: %v", err)
 			}
 		}
-		onReadyCallbacks = append(onReadyCallbacks, resetPackages)
+		onReadyCallbacks = append(onReadyCallbacks, setupFn)
 	}
 	portForwarder := nt.newPortForwarder(
 		TestRegistryNamespace,
@@ -794,8 +785,9 @@ func (nt *NT) portForwardRegistryServer() {
 			}
 		}),
 	)
-	if *e2e.OCIProvider == e2e.Local {
-		provider := nt.OCIProvider.(*registryproviders.LocalOCIProvider)
+	// Register Cleanup to clear the PortForwarder BEFORE startPortForwarder, so
+	// it runs AFTER the Cleanup in startPortForwarder which stops the PortForwarder.
+	if provider, ok := nt.OCIProvider.(*registryproviders.LocalOCIProvider); ok && ociTest {
 		nt.T.Cleanup(func() {
 			// clear PortForwarder after each test. at this point it has been stopped
 			// a new PortForwarder is created for each test.
@@ -803,8 +795,7 @@ func (nt *NT) portForwardRegistryServer() {
 		})
 		provider.PortForwarder = portForwarder
 	}
-	if *e2e.HelmProvider == e2e.Local {
-		provider := nt.HelmProvider.(*registryproviders.LocalHelmProvider)
+	if provider, ok := nt.HelmProvider.(*registryproviders.LocalHelmProvider); ok && helmTest {
 		nt.T.Cleanup(func() {
 			// clear PortForwarder after each test. at this point it has been stopped
 			// a new PortForwarder is created for each test.
@@ -812,11 +803,28 @@ func (nt *NT) portForwardRegistryServer() {
 		})
 		provider.PortForwarder = portForwarder
 	}
+	// Start the PortForwarder and register Cleanup to stop it when the test ends.
 	nt.startPortForwarder(
 		TestRegistryNamespace,
 		TestRegistryServer,
 		portForwarder,
 	)
+	// Register Cleanup to Reset the providers AFTER startPortForwarder, so that
+	// it runs BEFORE the Cleanup in startPortForwarder which stops the PortForwarder.
+	if provider, ok := nt.OCIProvider.(registryproviders.ProxiedRegistryProvider); ok && ociTest {
+		nt.T.Cleanup(func() {
+			if err := provider.Reset(); err != nil {
+				nt.T.Errorf("resetting proxy provider: %v", err)
+			}
+		})
+	}
+	if provider, ok := nt.HelmProvider.(registryproviders.ProxiedRegistryProvider); ok && helmTest {
+		nt.T.Cleanup(func() {
+			if err := provider.Reset(); err != nil {
+				nt.T.Errorf("resetting proxy provider: %v", err)
+			}
+		})
+	}
 }
 
 // portForwardGitServer forwards the prometheus deployment to a port.
@@ -982,7 +990,7 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 	// List remote references (branches and tags).
 	// Expected Output: GIT_COMMIT\tREF_NAME
 	args = append(args, "ls-remote", gitSpec.Repo, pattern)
-	out, err := nt.Shell.Git(args...)
+	out, err := nt.Shell.ExecWithDebug("git", args...)
 	if err != nil {
 		return "", err
 	}

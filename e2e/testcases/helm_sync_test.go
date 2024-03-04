@@ -685,11 +685,15 @@ func TestHelmGCENode(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
+	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteAddress: %v", err)
+	}
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
+		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
@@ -736,8 +740,6 @@ func TestHelmARTokenAuth(t *testing.T) {
 		ntopts.RequireHelmArtifactRegistry(t),
 	)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-
 	gsaKeySecretID := "config-sync-ci-ar-key"
 	gsaEmail := registryproviders.ArtifactRegistryReaderEmail()
 	gsaName := registryproviders.ArtifactRegistryReaderName
@@ -763,10 +765,15 @@ func TestHelmARTokenAuth(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
+	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+	if err != nil {
+		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, nt.HelmProvider.SyncURL(chart.Name), chart.Name, chart.Version))
+		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))

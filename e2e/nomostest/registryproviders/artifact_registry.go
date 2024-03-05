@@ -154,6 +154,8 @@ type ArtifactRegistryOCIProvider struct {
 	ArtifactRegistryProvider
 
 	OCIClient *testshell.OCIClient
+
+	pushedImages map[string]*OCIImage // key = NAME@DIGEST
 }
 
 // Client for executing crane commands.
@@ -190,13 +192,39 @@ func (a *ArtifactRegistryOCIProvider) PushImage(imageName, tag, localSourceTgzPa
 	if err != nil {
 		return nil, err
 	}
-	return pushOCIImage(a, imageLocalAddress, imageName, tag, localSourceTgzPath)
+	image, err := pushOCIImage(a, imageLocalAddress, imageName, tag, localSourceTgzPath)
+	if err != nil {
+		return image, err
+	}
+	if a.pushedImages == nil {
+		a.pushedImages = make(map[string]*OCIImage)
+	}
+	imageID := fmt.Sprintf("%s@%s", image.Name, image.Digest)
+	a.pushedImages[imageID] = image
+	return image, nil
 }
 
 // DeleteImage deletes the OCI image from the remote registry, including all
 // versions and tags.
 func (a *ArtifactRegistryOCIProvider) DeleteImage(imageName, digest string) error {
-	return a.deleteImage(imageName, digest)
+	if err := a.deleteImage(imageName, digest); err != nil {
+		return err
+	}
+	imageID := fmt.Sprintf("%s@%s", imageName, digest)
+	delete(a.pushedImages, imageID)
+	return nil
+}
+
+// Reset the state of the registry by deleting images pushed during the test.
+func (a *ArtifactRegistryOCIProvider) Reset() error {
+	// Delete all images pushed during the test.
+	for _, image := range a.pushedImages {
+		if err := image.Delete(); err != nil {
+			return err
+		}
+	}
+	a.pushedImages = nil
+	return nil
 }
 
 // ArtifactRegistryHelmProvider provides methods for interacting with the test registry-server
@@ -205,6 +233,8 @@ type ArtifactRegistryHelmProvider struct {
 	ArtifactRegistryProvider
 
 	HelmClient *testshell.HelmClient
+
+	pushedPackages map[string]*HelmPackage // key = NAME@DIGEST
 }
 
 // Client for executing helm and crane commands.
@@ -266,11 +296,33 @@ func (a *ArtifactRegistryHelmProvider) PushPackage(localChartTgzPath string) (*H
 	if err != nil {
 		return nil, err
 	}
+	if a.pushedPackages == nil {
+		a.pushedPackages = make(map[string]*HelmPackage)
+	}
+	packageID := fmt.Sprintf("%s@%s", pkg.Name, pkg.Digest)
+	a.pushedPackages[packageID] = pkg
 	return pkg, nil
 }
 
 // DeletePackage deletes the helm chart OCI image from the remote registry,
 // including all versions and tags.
 func (a *ArtifactRegistryHelmProvider) DeletePackage(chartName, digest string) error {
-	return a.deleteImage(chartName, digest)
+	if err := a.deleteImage(chartName, digest); err != nil {
+		return err
+	}
+	packageID := fmt.Sprintf("%s@%s", chartName, digest)
+	delete(a.pushedPackages, packageID)
+	return nil
+}
+
+// Reset the state of the registry by deleting images pushed during the test.
+func (a *ArtifactRegistryHelmProvider) Reset() error {
+	// Delete all charts pushed during the test.
+	for _, chart := range a.pushedPackages {
+		if err := chart.Delete(); err != nil {
+			return err
+		}
+	}
+	a.pushedPackages = nil
+	return nil
 }

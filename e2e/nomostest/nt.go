@@ -809,22 +809,6 @@ func (nt *NT) portForwardRegistryServer(helmTest, ociTest bool) {
 		TestRegistryServer,
 		portForwarder,
 	)
-	// Register Cleanup to Reset the providers AFTER startPortForwarder, so that
-	// it runs BEFORE the Cleanup in startPortForwarder which stops the PortForwarder.
-	if provider, ok := nt.OCIProvider.(registryproviders.ProxiedRegistryProvider); ok && ociTest {
-		nt.T.Cleanup(func() {
-			if err := provider.Reset(); err != nil {
-				nt.T.Errorf("resetting proxy provider: %v", err)
-			}
-		})
-	}
-	if provider, ok := nt.HelmProvider.(registryproviders.ProxiedRegistryProvider); ok && helmTest {
-		nt.T.Cleanup(func() {
-			if err := provider.Reset(); err != nil {
-				nt.T.Errorf("resetting proxy provider: %v", err)
-			}
-		})
-	}
 }
 
 // portForwardGitServer forwards the prometheus deployment to a port.

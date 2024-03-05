@@ -114,22 +114,28 @@ func setupRegistryClient(nt *NT, opts *ntopts.New) error {
 	if opts.RequireOCIProvider && *e2e.OCIProvider == e2e.Local || opts.RequireHelmProvider && *e2e.HelmProvider == e2e.Local {
 		nt.portForwardRegistryServer(opts.RequireHelmProvider, opts.RequireOCIProvider)
 	}
-	// For non-local registries, just login before each test and logout after.
-	if opts.RequireOCIProvider && *e2e.OCIProvider != e2e.Local {
+	// Login before each test, then reset the registry and logout after the test.
+	if opts.RequireOCIProvider {
 		if err := nt.OCIProvider.Login(); err != nil {
 			return err
 		}
 		nt.T.Cleanup(func() {
+			if err := nt.OCIProvider.Reset(); err != nil {
+				nt.T.Error(err)
+			}
 			if err := nt.OCIProvider.Logout(); err != nil {
 				nt.T.Error(err)
 			}
 		})
 	}
-	if opts.RequireHelmProvider && *e2e.HelmProvider != e2e.Local {
+	if opts.RequireHelmProvider {
 		if err := nt.HelmProvider.Login(); err != nil {
 			return err
 		}
 		nt.T.Cleanup(func() {
+			if err := nt.HelmProvider.Reset(); err != nil {
+				nt.T.Error(err)
+			}
 			if err := nt.HelmProvider.Logout(); err != nil {
 				nt.T.Error(err)
 			}

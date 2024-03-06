@@ -165,7 +165,7 @@ func (l *LocalOCIProvider) Restore(proxyAddress string) error {
 	return nil
 }
 
-// Reset the proxy and flush the cache of pushed images.
+// Reset the state of the registry by deleting images pushed during the test.
 func (l *LocalOCIProvider) Reset() error {
 	// Delete all charts & images pushed during the test.
 	for _, image := range l.pushedImages {
@@ -174,8 +174,7 @@ func (l *LocalOCIProvider) Reset() error {
 		}
 	}
 	l.pushedImages = nil
-	// Logout to reset the local client credentials.
-	return l.Logout()
+	return nil
 }
 
 // PushImage pushes the local tarball as an OCI image to the remote registry.
@@ -210,7 +209,12 @@ func (l *LocalOCIProvider) DeleteImage(imageName, digest string) error {
 	if err != nil {
 		return err
 	}
-	return deleteOCIImage(l.OCIClient, imageLocalAddress, digest)
+	if err := deleteOCIImage(l.OCIClient, imageLocalAddress, digest); err != nil {
+		return err
+	}
+	imageID := fmt.Sprintf("%s@%s", imageName, digest)
+	delete(l.pushedImages, imageID)
+	return nil
 }
 
 // LocalHelmProvider provides methods for interacting with the test registry-server
@@ -273,7 +277,7 @@ func (l *LocalHelmProvider) Restore(proxyAddress string) error {
 	return nil
 }
 
-// Reset the proxy and flush the cache of pushed images.
+// Reset the state of the registry by deleting images pushed during the test.
 func (l *LocalHelmProvider) Reset() error {
 	// Delete all charts & images pushed during the test.
 	for _, image := range l.pushedPackages {
@@ -282,8 +286,7 @@ func (l *LocalHelmProvider) Reset() error {
 		}
 	}
 	l.pushedPackages = nil
-	// Logout to reset the local client credentials.
-	return l.Logout()
+	return nil
 }
 
 // PushPackage pushes the local helm chart as an OCI image to the remote registry.

@@ -37,6 +37,9 @@ type RegistryProvider interface {
 	Login() error
 	// Logout of the registry with the client
 	Logout() error
+
+	// Reset the state of the registry by deleting images pushed during the test.
+	Reset() error
 }
 
 // ProxiedRegistryProvider is a registry provider with a proxy that needs to
@@ -52,8 +55,6 @@ type ProxiedRegistryProvider interface {
 	// Restore takes the new proxy address to avoid deadlocks trying to ask
 	// PortForwarder.LocalPort(), which blocks until after restore is done.
 	Restore(proxyAddress string) error
-	// Reset the proxy and flush the cache of pushed images.
-	Reset() error
 }
 
 // OCIRegistryProvider abstracts remote OCI registry providers for use by OCI clients.
@@ -82,7 +83,7 @@ type HelmRegistryProvider interface {
 	// For pulling with RSync's `.spec.helm.repo`
 	RepositoryRemoteURL() (string, error)
 
-	// PushImage pushes a local helm chart as an OCI image to the remote registry.
+	// PushPackage pushes a local helm chart as an OCI image to the remote registry.
 	PushPackage(localChartTgzPath string) (*HelmPackage, error)
 	// DeletePackage deletes the helm chart OCI image from the remote registry,
 	// including all versions and tags.

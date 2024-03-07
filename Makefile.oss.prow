@@ -58,19 +58,13 @@ push-test-oci-images-public: "$(CRANE)"
 # The following targets are used to provision test resources in a prow environment
 
 # kustomize-components private images (per dev/prow env registry)
-KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE := $(LOCATION)-docker.pkg.dev/$(GCP_PROJECT)/config-sync-test-private/${KUSTOMIZE_COMPONENTS_PACKAGE_NAME}:v1
 KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME):v1
 
 .PHONY: push-test-oci-images-private
-# push-test-oci-images-private pushes the test images to the Artifact Registry and Container Registry repositories.
+# push-test-oci-images-private pushes the test images to the Container Registry repository.
 push-test-oci-images-private: "$(CRANE)"
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
-	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_AR_IMAGE)
-
-.PHONY: push-to-test-csr-repos
-push-to-test-csr-repos:
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/push-to-test-csr-repos.sh
 
 .PHONY: set-up-kcc-configs
 KCC_MANAGED_PROJECT ?= cs-dev-hub
@@ -85,7 +79,3 @@ set-up-workload-identity-test:
 	GCP_PROJECT=$(GCP_PROJECT) FLEET_HOST_PROJECT=$(FLEET_HOST_PROJECT) \
 	PROW_PROJECT=$(PROW_PROJECT) \
 	./scripts/set-up-workload-identity-configs.sh
-
-.PHONY: push-test-helm-charts-to-ar
-push-test-helm-charts-to-ar: "$(HELM)"
-	GCP_PROJECT=$(GCP_PROJECT) ./scripts/push-test-helm-charts-to-ar.sh

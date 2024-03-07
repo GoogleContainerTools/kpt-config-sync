@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -48,6 +50,7 @@ import (
 // 2. The provided Google service account exists.
 // 3. The cluster is registered to a fleet if testing Fleet WI.
 // 4. IAM permission and IAM policy binding are created.
+// 5. The source of truth is hosted on a GCP service, e.g. CSR, GAR, GCR.
 func TestWorkloadIdentity(t *testing.T) {
 	testCases := []struct {
 		name                        string
@@ -63,39 +66,43 @@ func TestWorkloadIdentity(t *testing.T) {
 		testKSAMigration            bool
 		requireHelmArtifactRegistry bool
 		requireOCIArtifactRegistry  bool
+		requireCSR                  bool
 	}{
 		{
-			name:         "Authenticate to Git repo on CSR with GKE WI",
-			fleetWITest:  false,
-			crossProject: false,
-			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
-			gsaEmail:     gsaCSRReaderEmail(),
-			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
+			name:          "Authenticate to Git repo on CSR with GKE WI",
+			fleetWITest:   false,
+			crossProject:  false,
+			sourcePackage: "hydration/kustomize-components",
+			sourceType:    v1beta1.GitSource,
+			gsaEmail:      gitproviders.CSRReaderEmail(),
+			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
+			requireCSR:    true,
 		},
 		{
-			name:         "Authenticate to Git repo on CSR with Fleet WI in the same project",
-			fleetWITest:  true,
-			crossProject: false,
-			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
-			gsaEmail:     gsaCSRReaderEmail(),
-			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
+			name:          "Authenticate to Git repo on CSR with Fleet WI in the same project",
+			fleetWITest:   true,
+			crossProject:  false,
+			sourcePackage: "hydration/kustomize-components",
+			sourceType:    v1beta1.GitSource,
+			gsaEmail:      gitproviders.CSRReaderEmail(),
+			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
+			requireCSR:    true,
 		},
 		{
-			name:         "Authenticate to Git repo on CSR with Fleet WI across project",
-			fleetWITest:  true,
-			crossProject: true,
-			sourceRepo:   csrRepo(),
-			sourceType:   v1beta1.GitSource,
-			gsaEmail:     gsaCSRReaderEmail(),
-			rootCommitFn: nomostest.RemoteRootRepoSha1Fn,
+			name:          "Authenticate to Git repo on CSR with Fleet WI across project",
+			fleetWITest:   true,
+			crossProject:  true,
+			sourcePackage: "hydration/kustomize-components",
+			sourceType:    v1beta1.GitSource,
+			gsaEmail:      gitproviders.CSRReaderEmail(),
+			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
+			requireCSR:    true,
 		},
 		{
 			name:                       "Authenticate to OCI image on AR with GKE WI",
 			fleetWITest:                false,
 			crossProject:               false,
-			sourcePackage:              "kustomize-components",
+			sourcePackage:              "hydration/kustomize-components",
 			sourceVersion:              "v1",
 			sourceType:                 v1beta1.OciSource,
 			gsaEmail:                   gsaARReaderEmail(),
@@ -115,7 +122,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			name:                       "Authenticate to OCI image on AR with Fleet WI in the same project",
 			fleetWITest:                true,
 			crossProject:               false,
-			sourcePackage:              "kustomize-components",
+			sourcePackage:              "hydration/kustomize-components",
 			sourceVersion:              "v1",
 			sourceType:                 v1beta1.OciSource,
 			gsaEmail:                   gsaARReaderEmail(),
@@ -135,7 +142,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			name:                       "Authenticate to OCI image on AR with Fleet WI across project",
 			fleetWITest:                true,
 			crossProject:               true,
-			sourcePackage:              "kustomize-components",
+			sourcePackage:              "hydration/kustomize-components",
 			sourceVersion:              "v1",
 			sourceType:                 v1beta1.OciSource,
 			gsaEmail:                   gsaARReaderEmail(),
@@ -199,6 +206,9 @@ func TestWorkloadIdentity(t *testing.T) {
 			if tc.requireOCIArtifactRegistry {
 				opts = append(opts, ntopts.RequireOCIArtifactRegistry(t))
 			}
+			if tc.requireCSR {
+				opts = append(opts, ntopts.RequireCloudSourceRepository(t))
+			}
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err := workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)
@@ -257,8 +267,21 @@ func TestWorkloadIdentity(t *testing.T) {
 				nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
 			}
 
-			// For helm charts, we need to push the chart to the AR before configuring the RootSync
-			if tc.sourceType == v1beta1.HelmSource {
+			nt.T.Logf("Update RootSync to sync %s package", tc.sourceType)
+			var syncDir string
+			switch tc.sourceType {
+			case v1beta1.GitSource:
+				syncDir = filepath.Join(filepath.Base(tc.sourcePackage), tenant)
+				nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/"+tc.sourcePackage, "."))
+				nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+				nt.MustMergePatch(rs, fmt.Sprintf(`{
+					"spec": {
+						"git": {
+							"dir": "%s"
+						}
+					}
+				}`, syncDir))
+			case v1beta1.HelmSource:
 				chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(rs.Name),
 					registryproviders.HelmSourceChart(tc.sourceChart),
 					registryproviders.HelmChartVersion(tc.sourceVersion))
@@ -274,37 +297,30 @@ func TestWorkloadIdentity(t *testing.T) {
 				tc.sourceChart = chart.Name
 				tc.sourceVersion = chart.Version
 				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
-			} else if tc.sourceType == v1beta1.OciSource && tc.requireOCIArtifactRegistry {
-				// It only builds and pushes OCI image when the source type is `oci` and
-				// when the registryprovider is GAR.
-				// TODO: remove the requireOCIArtifactRegistry check when GCR is end of life.
-				image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(rs.Name),
-					registryproviders.ImageSourcePackage(tc.sourcePackage),
-					registryproviders.ImageVersion(tc.sourceVersion))
-				if err != nil {
-					nt.T.Fatalf("failed to push oci image: %v", err)
-				}
-				imageURL, err := image.RemoteAddressWithTag()
-				if err != nil {
-					nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
-				}
-
-				tc.sourceRepo = imageURL
-				tc.rootCommitFn = imageDigestFuncByDigest(image.Digest)
-			}
-
-			// Reuse the RootSync instead of creating a new one so that testing resources can be cleaned up after the test.
-			nt.T.Logf("Update RootSync to sync %s from repo %s", tenant, tc.sourceRepo)
-			switch tc.sourceType {
-			case v1beta1.GitSource:
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "%s", "branch": "main", "repo": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "secretRef": {"name": ""}}}}`,
-					tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.OciSource:
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-					v1beta1.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
-			case v1beta1.HelmSource:
 				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
 					v1beta1.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
+			case v1beta1.OciSource:
+				if tc.requireOCIArtifactRegistry {
+					// It only builds and pushes OCI image when the source type is `oci` and
+					// when the registryprovider is GAR.
+					// TODO: remove the requireOCIArtifactRegistry check when GCR is end of life.
+					image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(rs.Name),
+						registryproviders.ImageSourcePackage(tc.sourcePackage),
+						registryproviders.ImageVersion(tc.sourceVersion))
+					if err != nil {
+						nt.T.Fatalf("failed to push oci image: %v", err)
+					}
+					imageURL, err := image.RemoteAddressWithTag()
+					if err != nil {
+						nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+					}
+
+					tc.sourceRepo = imageURL
+					tc.rootCommitFn = imageDigestFuncByDigest(image.Digest)
+				}
+				syncDir = tenant
+				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
+					v1beta1.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
 			}
 
 			ksaRef := types.NamespacedName{
@@ -333,7 +349,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				}
 			} else {
 				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
-					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tenant}))
+					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: syncDir}))
 				if err != nil {
 					nt.T.Fatal(err)
 				}

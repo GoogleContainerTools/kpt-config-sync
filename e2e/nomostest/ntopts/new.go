@@ -101,6 +101,14 @@ func RequireKind(t testing.NTB) Opt {
 	return func(_ *New) {}
 }
 
+// RequireCloudSourceRepository requires the --git-provider flag to be set to csr
+func RequireCloudSourceRepository(t testing.NTB) Opt {
+	if *e2e.GitProvider != e2e.CSR {
+		t.Skip("The --git-provider flag must be set to `csr` to run this test.")
+	}
+	return func(_ *New) {}
+}
+
 // RequireHelmArtifactRegistry requires the --helm-provider flag to be set to `gar`.
 // RequireHelmArtifactRegistry implies RequireHelmProvider.
 func RequireHelmArtifactRegistry(t testing.NTB) Opt {

@@ -237,25 +237,35 @@ func (g *Repository) Init() error {
 		return fmt.Errorf("creating root directory: %s: %w", g.Root, err)
 	}
 
-	return g.BulkGit(
-		[]string{"init"},
-		[]string{"checkout", "-b", MainBranch},
+	cmds := [][]string{
+		{"init"},
+		{"checkout", "-b", MainBranch},
 		// We have to configure username/email or else committing to the repository
 		// produces errors.
-		[]string{"config", "user.name", "E2E Testing"},
-		[]string{"config", "user.email", "team@example.com"},
-
-		// Use ssh rather than the default that git uses, as the default does not know
-		// how to use private key files.
-		[]string{"config", "ssh.variant", "ssh"},
-		// Overwrite the ssh command to:
-		// 1) Not perform host key checking for git-server, since this isn't set up
-		//   properly and we don't care.
-		// 2) Use the private key file we generated.
-		[]string{"config", "core.sshCommand",
-			fmt.Sprintf("ssh -q -o StrictHostKeyChecking=no -i %s",
-				g.PrivateKeyPath)},
-	)
+		{"config", "user.name", "E2E Testing"},
+		{"config", "user.email", "team@example.com"},
+	}
+	if g.PrivateKeyPath != "" {
+		cmds = append(cmds,
+			// Use ssh rather than the default that git uses, as the default does not know
+			// how to use private key files.
+			[]string{"config", "ssh.variant", "ssh"},
+			// Overwrite the ssh command to:
+			// 1) Not perform host key checking for git-server, since this isn't set up
+			//   properly and we don't care.
+			// 2) Use the private key file we generated.
+			[]string{"config", "core.sshCommand",
+				fmt.Sprintf("ssh -q -o StrictHostKeyChecking=no -i %s",
+					g.PrivateKeyPath)},
+		)
+	}
+	if g.GitProvider.Type() == e2e.CSR {
+		cmds = append(cmds,
+			// Use credential helper script to provide information that Git needs to
+			// connect securely to CSR using Google Account credentials.
+			[]string{"config", fmt.Sprintf("credential.%s.helper", testing.CSRHost), "gcloud.sh"})
+	}
+	return g.BulkGit(cmds...)
 }
 
 // Add writes a YAML or JSON representation of obj to `path` in the git

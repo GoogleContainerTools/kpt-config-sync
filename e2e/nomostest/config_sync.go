@@ -643,8 +643,12 @@ func setupDelegatedControl(nt *NT) {
 			nt.T.Fatal(err)
 		}
 
-		// create secret for the namespace reconciler.
-		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
+		// create secret for the namespace reconciler when the git provider isn't CSR.
+		// The e2e test uses `gcenode` or `gcpserviceaccount` auth type to
+		// authenticate with CSR, which doesn't need a Secret.
+		if *e2e.GitProvider != e2e.CSR {
+			nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
+		}
 
 		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
 			nt.T.Fatal(err)
@@ -666,10 +670,21 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.Source
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
-		Auth:   "ssh",
-		SecretRef: &v1alpha1.SecretReference{
+	}
+	switch *e2e.GitProvider {
+	case e2e.CSR:
+		// CSR provider requires auth because the repository is private
+		if *e2e.GceNode {
+			rs.Spec.Git.Auth = configsync.AuthGCENode
+		} else {
+			rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
+			rs.Spec.Git.GCPServiceAccountEmail = gitproviders.CSRReaderEmail()
+		}
+	default:
+		rs.Spec.Git.Auth = configsync.AuthSSH
+		rs.Spec.Git.SecretRef = &v1alpha1.SecretReference{
 			Name: controllers.GitCredentialVolume,
-		},
+		}
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
@@ -704,10 +719,21 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceF
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
-		Auth:   "ssh",
-		SecretRef: &v1beta1.SecretReference{
+	}
+	switch *e2e.GitProvider {
+	case e2e.CSR:
+		// CSR provider requires auth because the repository is private
+		if *e2e.GceNode {
+			rs.Spec.Git.Auth = configsync.AuthGCENode
+		} else {
+			rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
+			rs.Spec.Git.GCPServiceAccountEmail = gitproviders.CSRReaderEmail()
+		}
+	default:
+		rs.Spec.Git.Auth = configsync.AuthSSH
+		rs.Spec.Git.SecretRef = &v1beta1.SecretReference{
 			Name: controllers.GitCredentialVolume,
-		},
+		}
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
@@ -765,10 +791,21 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
-		Auth:   "ssh",
-		SecretRef: &v1alpha1.SecretReference{
+	}
+	switch *e2e.GitProvider {
+	case e2e.CSR:
+		// CSR provider requires auth because the repository is private
+		if *e2e.GceNode {
+			rs.Spec.Git.Auth = configsync.AuthGCENode
+		} else {
+			rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
+			rs.Spec.Git.GCPServiceAccountEmail = gitproviders.CSRReaderEmail()
+		}
+	default:
+		rs.Spec.Git.Auth = configsync.AuthSSH
+		rs.Spec.Git.SecretRef = &v1alpha1.SecretReference{
 			Name: "ssh-key",
-		},
+		}
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
@@ -811,10 +848,21 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
-		Auth:   "ssh",
-		SecretRef: &v1beta1.SecretReference{
+	}
+	switch *e2e.GitProvider {
+	case e2e.CSR:
+		// CSR provider requires auth because the repository is private
+		if *e2e.GceNode {
+			rs.Spec.Git.Auth = configsync.AuthGCENode
+		} else {
+			rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
+			rs.Spec.Git.GCPServiceAccountEmail = gitproviders.CSRReaderEmail()
+		}
+	default:
+		rs.Spec.Git.Auth = configsync.AuthSSH
+		rs.Spec.Git.SecretRef = &v1beta1.SecretReference{
 			Name: "ssh-key",
-		},
+		}
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.

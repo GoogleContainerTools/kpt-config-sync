@@ -47,7 +47,8 @@ func testGitServerSelector() map[string]string {
 }
 
 func setupGit(nt *NT) error {
-	if *e2e.GitProvider == e2e.Local {
+	switch *e2e.GitProvider {
+	case e2e.Local:
 		if err := nt.KubeClient.Create(gitNamespace()); err != nil {
 			return err
 		}
@@ -71,7 +72,7 @@ func setupGit(nt *NT) error {
 			nt.describeNotRunningTestPods(testGitNamespace)
 			return fmt.Errorf("waiting for git-server Deployment to become available: %w", err)
 		}
-	} else {
+	case e2e.Bitbucket, e2e.GitLab:
 		gitPrivateKeyPath, err := downloadSSHKey(nt)
 		if err != nil {
 			return err

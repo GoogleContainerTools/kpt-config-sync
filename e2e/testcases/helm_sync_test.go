@@ -40,7 +40,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -53,12 +52,8 @@ const (
 	privateCoreDNSHelmChartVersion = "1.13.3"
 	privateCoreDNSHelmChart        = "coredns"
 	privateNSHelmChart             = "ns-chart"
-	privateNSHelmChartVersion      = "0.1.0"
 	privateSimpleHelmChartVersion  = "1.0.0"
 	privateSimpleHelmChart         = "simple"
-	publicHelmRepo                 = "https://kubernetes-sigs.github.io/metrics-server"
-	publicHelmChart                = "metrics-server"
-	publicHelmChartVersion         = "3.8.3"
 )
 
 // TestPublicHelm can run on both Kind and GKE clusters.
@@ -663,46 +658,6 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.Validate(rs.Spec.Helm.ReleaseName+"-"+chart.Name, testNs, &appsv1.Deployment{},
 		testpredicates.HasLabel("labelsTest", "foo")); err != nil {
 		nt.T.Fatal(err)
-	}
-}
-
-// TestHelmGCENode tests the `gcenode` auth type for the Helm repository.
-// The test will run on a GKE cluster only with following pre-requisites:
-// 1. Workload Identity is NOT enabled
-// 2. The Compute Engine default service account `PROJECT_ID-compute@developer.gserviceaccount.com` needs to have the following role:
-//   - `roles/artifactregistry.reader` for access image in Artifact Registry.
-func TestHelmGCENode(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest,
-		ntopts.RequireHelmArtifactRegistry(t))
-
-	if err := workloadidentity.ValidateDisabled(nt); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
-		registryproviders.HelmSourceChart(privateCoreDNSHelmChart))
-	if err != nil {
-		nt.T.Fatalf("failed to push helm chart: %v", err)
-	}
-	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
-	if err != nil {
-		nt.T.Fatalf("HelmProvider.RepositoryRemoteAddress: %v", err)
-	}
-
-	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Name), "coredns", &appsv1.Deployment{},
-		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent")); err != nil {
-		nt.T.Error(err)
 	}
 }
 

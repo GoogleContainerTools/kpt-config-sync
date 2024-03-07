@@ -78,29 +78,28 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 		opt(optsStruct)
 	}
 
-	e2eTest := !optsStruct.LoadTest && !optsStruct.StressTest
-	if !*e2e.E2E && e2eTest {
-		t.Skip("Test skipped since it is an e2e test")
-	}
-
-	if !*e2e.Load && optsStruct.LoadTest {
-		t.Skip("Test skipped since it is a load test")
-	}
-
+	// Stress tests should run if and only if the --stress flag is specified.
 	if !*e2e.Stress && optsStruct.StressTest {
-		t.Skip("Test skipped since it is a stress test")
+		t.Skip("Test skipped since the stress test requires the '--stress' flag")
+	}
+	if *e2e.Stress && !optsStruct.StressTest {
+		t.Skip("Test skipped since the '--stress' flag should only select stress tests")
 	}
 
+	// KCC tests should run if and only if the --kcc flag is specified.
 	if !*e2e.KCC && optsStruct.KCCTest {
-		t.Skip("Test skipped since it is a KCC test")
+		t.Skip("Test skipped since the KCC test requires the '--kcc' flag")
+	}
+	if *e2e.KCC && !optsStruct.KCCTest {
+		t.Skip("Test skipped since the '--kcc' flag should only select KCC tests")
 	}
 
+	// GCENode tests should run if and only if the --gcenode flag is specified.
 	if !*e2e.GceNode && optsStruct.GCENodeTest {
-		t.Skip("Test skipped since it is a test for GCENode auth type, which requires a GKE cluster without workload identity")
+		t.Skip("Test skipped since the GCENode test requires the '--gcenode' flag")
 	}
-
 	if *e2e.GceNode && !optsStruct.GCENodeTest {
-		t.Skip("Test skipped for non-gcenode auth types")
+		t.Skip("Test skipped since the '--gcenode' flag should only select GCENode tests")
 	}
 
 	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
@@ -303,7 +302,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Scheme:                  scheme,
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
 		WebhookDisabled:         &webhookDisabled,
-		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, logger),
+		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, opts.ClusterName, logger, shell),
 		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider, opts.ClusterName, shell, ociClient),
 		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider, opts.ClusterName, shell, helmClient),
 		HelmClient:              helmClient,

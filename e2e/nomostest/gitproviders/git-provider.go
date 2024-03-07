@@ -18,6 +18,7 @@ import (
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/e2e/nomostest/testshell"
 )
 
 const (
@@ -45,7 +46,7 @@ type GitProvider interface {
 }
 
 // NewGitProvider creates a GitProvider for the specific provider type.
-func NewGitProvider(t testing.NTB, provider string, logger *testlogger.TestLogger) GitProvider {
+func NewGitProvider(t testing.NTB, provider, clusterName string, logger *testlogger.TestLogger, shell *testshell.TestShell) GitProvider {
 	switch provider {
 	case e2e.Bitbucket:
 		client, err := newBitbucketClient(logger)
@@ -56,9 +57,11 @@ func NewGitProvider(t testing.NTB, provider string, logger *testlogger.TestLogge
 	case e2e.GitLab:
 		client, err := newGitlabClient()
 		if err != nil {
-			t.Fatal((err))
+			t.Fatal(err)
 		}
 		return client
+	case e2e.CSR:
+		return newCSRClient(clusterName, shell)
 	default:
 		return &LocalProvider{}
 	}

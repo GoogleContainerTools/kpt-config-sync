@@ -16,10 +16,8 @@ package e2e
 
 import (
 	"fmt"
-	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,7 +27,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -42,7 +43,17 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type sourceConfig struct {
+	repo     string
+	pkg      string
+	chart    string
+	version  string
+	dir      string
+	commitFn nomostest.Sha1Func
+}
 
 // TestWorkloadIdentity tests both GKE WI and Fleet WI for all source types.
 // It has the following requirements:
@@ -53,168 +64,234 @@ import (
 // 5. The source of truth is hosted on a GCP service, e.g. CSR, GAR, GCR.
 func TestWorkloadIdentity(t *testing.T) {
 	testCases := []struct {
-		name                        string
-		fleetWITest                 bool
-		crossProject                bool
-		sourceRepo                  string
-		sourcePackage               string
-		sourceChart                 string
-		sourceVersion               string
-		sourceType                  v1beta1.SourceType
-		gsaEmail                    string
-		rootCommitFn                nomostest.Sha1Func
-		testKSAMigration            bool
-		requireHelmArtifactRegistry bool
-		requireOCIArtifactRegistry  bool
-		requireCSR                  bool
+		name             string
+		fleetWITest      bool
+		crossProject     bool
+		rootSrcCfg       sourceConfig
+		nsSrcCfg         sourceConfig
+		sourceType       v1beta1.SourceType
+		gsaEmail         string
+		requireHelmGAR   bool
+		requireOCIGAR    bool
+		requireCSR       bool
+		testKSAMigration bool
+		newRootSrcCfg    sourceConfig
+		newNSSrcCfg      sourceConfig
 	}{
 		{
-			name:          "Authenticate to Git repo on CSR with GKE WI",
-			fleetWITest:   false,
-			crossProject:  false,
-			sourcePackage: "hydration/kustomize-components",
-			sourceType:    v1beta1.GitSource,
-			gsaEmail:      gitproviders.CSRReaderEmail(),
-			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
-			requireCSR:    true,
+			name:         "Authenticate to Git repo on CSR with GKE WI",
+			fleetWITest:  false,
+			crossProject: false,
+			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
+			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
+			sourceType:   v1beta1.GitSource,
+			gsaEmail:     gitproviders.CSRReaderEmail(),
+			requireCSR:   true,
 		},
 		{
-			name:          "Authenticate to Git repo on CSR with Fleet WI in the same project",
-			fleetWITest:   true,
-			crossProject:  false,
-			sourcePackage: "hydration/kustomize-components",
-			sourceType:    v1beta1.GitSource,
-			gsaEmail:      gitproviders.CSRReaderEmail(),
-			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
-			requireCSR:    true,
+			name:         "Authenticate to Git repo on CSR with Fleet WI in the same project",
+			fleetWITest:  true,
+			crossProject: false,
+			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
+			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
+			sourceType:   v1beta1.GitSource,
+			gsaEmail:     gitproviders.CSRReaderEmail(),
+			requireCSR:   true,
 		},
 		{
-			name:          "Authenticate to Git repo on CSR with Fleet WI across project",
-			fleetWITest:   true,
-			crossProject:  true,
-			sourcePackage: "hydration/kustomize-components",
-			sourceType:    v1beta1.GitSource,
-			gsaEmail:      gitproviders.CSRReaderEmail(),
-			rootCommitFn:  nomostest.RemoteRootRepoSha1Fn,
-			requireCSR:    true,
+			name:         "Authenticate to Git repo on CSR with Fleet WI across project",
+			fleetWITest:  true,
+			crossProject: true,
+			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
+			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
+			sourceType:   v1beta1.GitSource,
+			gsaEmail:     gitproviders.CSRReaderEmail(),
+			requireCSR:   true,
 		},
 		{
-			name:                       "Authenticate to OCI image on AR with GKE WI",
-			fleetWITest:                false,
-			crossProject:               false,
-			sourcePackage:              "hydration/kustomize-components",
-			sourceVersion:              "v1",
-			sourceType:                 v1beta1.OciSource,
-			gsaEmail:                   gsaARReaderEmail(),
-			testKSAMigration:           true,
-			requireOCIArtifactRegistry: true,
+			name:             "Authenticate to OCI image on AR with GKE WI",
+			fleetWITest:      false,
+			crossProject:     false,
+			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
+			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
+			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
+			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireOCIGAR:    true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with GKE WI",
 			fleetWITest:  false,
 			crossProject: false,
-			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
+			rootSrcCfg: sourceConfig{
+				repo:     privateGCRImage("kustomize-components"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("kustomize-components"))},
+			nsSrcCfg: sourceConfig{
+				repo:     privateGCRImage("namespace-repo"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
+			sourceType: v1beta1.OciSource,
+			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
-			name:                       "Authenticate to OCI image on AR with Fleet WI in the same project",
-			fleetWITest:                true,
-			crossProject:               false,
-			sourcePackage:              "hydration/kustomize-components",
-			sourceVersion:              "v1",
-			sourceType:                 v1beta1.OciSource,
-			gsaEmail:                   gsaARReaderEmail(),
-			testKSAMigration:           true,
-			requireOCIArtifactRegistry: true,
+			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
+			fleetWITest:      true,
+			crossProject:     false,
+			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
+			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
+			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
+			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireOCIGAR:    true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI in the same project",
 			fleetWITest:  true,
 			crossProject: false,
-			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
+			rootSrcCfg: sourceConfig{
+				repo:     privateGCRImage("kustomize-components"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("kustomize-components"))},
+			nsSrcCfg: sourceConfig{
+				repo:     privateGCRImage("namespace-repo"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
+			sourceType: v1beta1.OciSource,
+			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
-			name:                       "Authenticate to OCI image on AR with Fleet WI across project",
-			fleetWITest:                true,
-			crossProject:               true,
-			sourcePackage:              "hydration/kustomize-components",
-			sourceVersion:              "v1",
-			sourceType:                 v1beta1.OciSource,
-			gsaEmail:                   gsaARReaderEmail(),
-			testKSAMigration:           true,
-			requireOCIArtifactRegistry: true,
+			name:             "Authenticate to OCI image on AR with Fleet WI across project",
+			fleetWITest:      true,
+			crossProject:     true,
+			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
+			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
+			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
+			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
+			sourceType:       v1beta1.OciSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireOCIGAR:    true,
 		},
 		{
 			name:         "Authenticate to OCI image on GCR with Fleet WI across project",
 			fleetWITest:  true,
 			crossProject: true,
-			sourceRepo:   privateGCRImage(),
-			sourceType:   v1beta1.OciSource,
-			gsaEmail:     gsaGCRReaderEmail(),
-			rootCommitFn: imageDigestFuncByName(privateGCRImage()),
+			rootSrcCfg: sourceConfig{
+				repo:     privateGCRImage("kustomize-components"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("kustomize-components"))},
+			nsSrcCfg: sourceConfig{
+				repo:     privateGCRImage("namespace-repo"),
+				dir:      ".",
+				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
+			sourceType: v1beta1.OciSource,
+			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
-			name:                        "Authenticate to Helm chart on AR with GKE WI",
-			fleetWITest:                 false,
-			crossProject:                false,
-			sourceVersion:               privateCoreDNSHelmChartVersion,
-			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
-			gsaEmail:                    gsaARReaderEmail(),
-			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration:            true,
-			requireHelmArtifactRegistry: true,
+			name:         "Authenticate to Helm chart on AR with GKE WI",
+			fleetWITest:  false,
+			crossProject: false,
+			rootSrcCfg: sourceConfig{
+				chart:    privateCoreDNSHelmChart,
+				version:  privateCoreDNSHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion)},
+			nsSrcCfg: sourceConfig{
+				chart:    privateNSHelmChart,
+				version:  "0.1.0",
+				commitFn: nomostest.HelmChartVersionShaFn("0.1.0")},
+			newRootSrcCfg: sourceConfig{
+				chart:    privateSimpleHelmChart,
+				version:  privateSimpleHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateSimpleHelmChartVersion)},
+			newNSSrcCfg: sourceConfig{
+				chart:    "simple-ns-chart",
+				version:  "1.0.0",
+				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireHelmGAR:   true,
 		},
 		{
-			name:                        "Authenticate to Helm chart on AR with Fleet WI in the same project",
-			fleetWITest:                 true,
-			crossProject:                false,
-			sourceVersion:               privateCoreDNSHelmChartVersion,
-			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
-			gsaEmail:                    gsaARReaderEmail(),
-			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration:            true,
-			requireHelmArtifactRegistry: true,
+			name:         "Authenticate to Helm chart on AR with Fleet WI in the same project",
+			fleetWITest:  true,
+			crossProject: false,
+			rootSrcCfg: sourceConfig{
+				chart:    privateCoreDNSHelmChart,
+				version:  privateCoreDNSHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion)},
+			nsSrcCfg: sourceConfig{
+				chart:    privateNSHelmChart,
+				version:  "0.1.0",
+				commitFn: nomostest.HelmChartVersionShaFn("0.1.0")},
+			newRootSrcCfg: sourceConfig{
+				chart:    privateSimpleHelmChart,
+				version:  privateSimpleHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateSimpleHelmChartVersion)},
+			newNSSrcCfg: sourceConfig{
+				chart:    "simple-ns-chart",
+				version:  "1.0.0",
+				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireHelmGAR:   true,
 		},
 		{
-			name:                        "Authenticate to Helm chart on AR with Fleet WI across project",
-			fleetWITest:                 true,
-			crossProject:                true,
-			sourceVersion:               privateCoreDNSHelmChartVersion,
-			sourceChart:                 privateCoreDNSHelmChart,
-			sourceType:                  v1beta1.HelmSource,
-			gsaEmail:                    gsaARReaderEmail(),
-			rootCommitFn:                nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion),
-			testKSAMigration:            true,
-			requireHelmArtifactRegistry: true,
+			name:         "Authenticate to Helm chart on AR with Fleet WI across project",
+			fleetWITest:  true,
+			crossProject: true,
+			rootSrcCfg: sourceConfig{
+				chart:    privateCoreDNSHelmChart,
+				version:  privateCoreDNSHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateCoreDNSHelmChartVersion)},
+			nsSrcCfg: sourceConfig{
+				chart:    privateNSHelmChart,
+				version:  "0.1.0",
+				commitFn: nomostest.HelmChartVersionShaFn("0.1.0")},
+			newRootSrcCfg: sourceConfig{
+				chart:    privateSimpleHelmChart,
+				version:  privateSimpleHelmChartVersion,
+				commitFn: nomostest.HelmChartVersionShaFn(privateSimpleHelmChartVersion)},
+			newNSSrcCfg: sourceConfig{
+				chart:    "simple-ns-chart",
+				version:  "1.0.0",
+				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
+			sourceType:       v1beta1.HelmSource,
+			gsaEmail:         gsaARReaderEmail(),
+			testKSAMigration: true,
+			requireHelmGAR:   true,
 		},
 	}
 
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t)}
-			if tc.requireHelmArtifactRegistry {
+			var err error
+			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t),
+				ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+				ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
+				ntopts.WithDelegatedControl}
+			if tc.requireHelmGAR {
 				opts = append(opts, ntopts.RequireHelmArtifactRegistry(t))
 			}
-			if tc.requireOCIArtifactRegistry {
+			if tc.requireOCIGAR {
 				opts = append(opts, ntopts.RequireOCIArtifactRegistry(t))
 			}
 			if tc.requireCSR {
 				opts = append(opts, ntopts.RequireCloudSourceRepository(t))
 			}
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
-			if err := workloadidentity.ValidateEnabled(nt); err != nil {
+			if err = workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)
 			}
 
-			if err := iam.ValidateServiceAccountExists(nt, tc.gsaEmail); err != nil {
+			if err = iam.ValidateServiceAccountExists(nt, tc.gsaEmail); err != nil {
 				nt.T.Fatal(err)
 			}
 
@@ -230,13 +307,14 @@ func TestWorkloadIdentity(t *testing.T) {
 			testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 			testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 
-			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+			rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+			repoSync := fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
+			rsRef := nomostest.RootSyncNN(rootSync.Name)
+			nsRef := nomostest.RepoSyncNN(repoSync.Namespace, repoSync.Name)
 			nt.T.Cleanup(func() {
 				testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 				testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 			})
-
-			tenant := "tenant-a"
 
 			// Register the cluster for fleet workload identity test
 			if tc.fleetWITest {
@@ -245,7 +323,7 @@ func TestWorkloadIdentity(t *testing.T) {
 					fleetProject = testutils.TestCrossProjectFleetProjectID
 				}
 				nt.T.Logf("Register the cluster to a fleet in project %q", fleetProject)
-				if err := testutils.RegisterCluster(nt, fleetMembership, fleetProject, gkeURI); err != nil {
+				if err = testutils.RegisterCluster(nt, fleetMembership, fleetProject, gkeURI); err != nil {
 					nt.T.Fatalf("Failed to register the cluster to project %q: %v", fleetProject, err)
 					exists, err := testutils.FleetHasMembership(nt, fleetMembership, fleetProject)
 					if err != nil {
@@ -267,103 +345,254 @@ func TestWorkloadIdentity(t *testing.T) {
 				nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
 			}
 
-			nt.T.Logf("Update RootSync to sync %s package", tc.sourceType)
-			var syncDir string
+			var rootMeta, nsMeta rsyncValidateMeta
+			var rootChart, nsChart *registryproviders.HelmPackage
+			nt.T.Logf("Update RootSync and RepoSync to sync from %s", tc.sourceType)
 			switch tc.sourceType {
 			case v1beta1.GitSource:
-				syncDir = filepath.Join(filepath.Base(tc.sourcePackage), tenant)
-				nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/"+tc.sourcePackage, "."))
-				nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
-				nt.MustMergePatch(rs, fmt.Sprintf(`{
-					"spec": {
-						"git": {
-							"dir": "%s"
-						}
-					}
-				}`, syncDir))
+				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, nt.RootRepos[configsync.RootSyncName], tc.rootSrcCfg)
+				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, nt.NonRootRepos[nsRef], tc.nsSrcCfg)
 			case v1beta1.HelmSource:
-				chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(rs.Name),
-					registryproviders.HelmSourceChart(tc.sourceChart),
-					registryproviders.HelmChartVersion(tc.sourceVersion))
+				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, tc.rootSrcCfg)
 				if err != nil {
-					nt.T.Fatalf("failed to push helm chart: %v", err)
+					nt.T.Fatal(err)
 				}
-				chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+				nsChart, err = updateRepoSyncWithHelmSourceConfig(nt, nsRef, tc.nsSrcCfg)
 				if err != nil {
-					nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+					nt.T.Fatal(err)
 				}
 
-				tc.sourceRepo = chartRepoURL
-				tc.sourceChart = chart.Name
-				tc.sourceVersion = chart.Version
-				tc.rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"chart": "%s", "repo": "%s", "version": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-					v1beta1.HelmSource, tc.sourceChart, tc.sourceRepo, tc.sourceVersion, tc.gsaEmail))
 			case v1beta1.OciSource:
-				if tc.requireOCIArtifactRegistry {
-					// It only builds and pushes OCI image when the source type is `oci` and
-					// when the registryprovider is GAR.
-					// TODO: remove the requireOCIArtifactRegistry check when GCR is end of life.
-					image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(rs.Name),
-						registryproviders.ImageSourcePackage(tc.sourcePackage),
-						registryproviders.ImageVersion(tc.sourceVersion))
+				if tc.requireOCIGAR { // OCI provider is AR
+					rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rsRef, tc.rootSrcCfg)
 					if err != nil {
-						nt.T.Fatalf("failed to push oci image: %v", err)
+						nt.T.Fatal(err)
 					}
-					imageURL, err := image.RemoteAddressWithTag()
+					nsMeta, err = updateRepoSyncWithOCISourceConfig(nt, nsRef, tc.nsSrcCfg)
 					if err != nil {
-						nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+						nt.T.Fatal(err)
 					}
-
-					tc.sourceRepo = imageURL
-					tc.rootCommitFn = imageDigestFuncByDigest(image.Digest)
+				} else { // OCI provider is GCR
+					nt.MustMergePatch(rootSync, fmt.Sprintf(`{
+						"spec": {
+							"sourceType": "%s",
+							"oci": {
+								"image": "%s",
+								"dir": "%s",
+								"auth": "gcpserviceaccount",
+								"gcpServiceAccountEmail": "%s"
+							}
+						}
+					}`, v1beta1.OciSource, tc.rootSrcCfg.repo, tc.rootSrcCfg.dir, tc.gsaEmail))
+					rootMeta = rsyncValidateMeta{
+						rsRef:    rsRef,
+						sha1Func: tc.rootSrcCfg.commitFn,
+						syncDir:  tc.rootSrcCfg.dir,
+					}
+					nt.MustMergePatch(repoSync, fmt.Sprintf(`{
+						"spec": {
+							"sourceType": "%s",
+							"oci": {
+								"image": "%s",
+								"dir": "%s",
+								"auth": "gcpserviceaccount",
+								"gcpServiceAccountEmail": "%s"
+							}
+						}
+					}`, v1beta1.OciSource, tc.nsSrcCfg.repo, tc.nsSrcCfg.dir, tc.gsaEmail))
+					nsMeta = rsyncValidateMeta{
+						rsRef:    nsRef,
+						sha1Func: tc.nsSrcCfg.commitFn,
+						syncDir:  tc.nsSrcCfg.dir,
+					}
 				}
-				syncDir = tenant
-				nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcpserviceaccount", "gcpServiceAccountEmail": "%s"}, "git": null}}`,
-					v1beta1.OciSource, tenant, tc.sourceRepo, tc.gsaEmail))
 			}
 
-			ksaRef := types.NamespacedName{
-				Namespace: configsync.ControllerNamespace,
-				Name:      core.RootReconcilerName(rs.Name),
-			}
-			nt.T.Log("Validate the GSA annotation is added to the RootSync's service account")
-			require.NoError(nt.T,
-				nt.Watcher.WatchObject(kinds.ServiceAccount(), ksaRef.Name, ksaRef.Namespace, []testpredicates.Predicate{
+			rootReconcilerName := core.RootReconcilerName(rootSync.Name)
+			nsReconcilerName := core.NsReconcilerName(repoSync.Namespace, repoSync.Name)
+			nt.T.Log("Validate the GSA annotation is added to the RSync's service accounts")
+			tg := taskgroup.New()
+			tg.Go(func() error {
+				return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
 					testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
-				}))
+				})
+			})
+			tg.Go(func() error {
+				return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
+					testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
+				})
+			})
 			if tc.fleetWITest {
-				nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
-					return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, tc.gsaEmail, configsync.AuthGCPServiceAccount)
+				tg.Go(func() error {
+					took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+						return testutils.ReconcilerPodHasFWICredsAnnotation(nt, rootReconcilerName, tc.gsaEmail, configsync.AuthGCPServiceAccount)
+					})
+					if err != nil {
+						return fmt.Errorf("failed after %v to wait for FWI credentials to be injected into the new root reconciler Pod: %w", took, err)
+					}
+					t.Logf("took %v to wait for FWI credentials to be injected into the new root reconciler Pod", took)
+					return nil
+				})
+				tg.Go(func() error {
+					took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+						return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nsReconcilerName, tc.gsaEmail, configsync.AuthGCPServiceAccount)
+					})
+					if err != nil {
+						return fmt.Errorf("failed after %v to wait for FWI credentials to be injected into the new namespace reconciler Pod: %w", took, err)
+					}
+					t.Logf("took %v to wait for FWI credentials to be injected into the new namespace reconciler Pod", took)
+					return nil
 				})
 			}
+			if err = tg.Wait(); err != nil {
+				nt.T.Fatal(err)
+			}
 
-			if tc.sourceType == v1beta1.HelmSource {
-				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
-					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: tc.sourceChart}))
-				if err != nil {
+			switch tc.sourceType {
+			case v1beta1.GitSource, v1beta1.OciSource:
+				if err = nt.WatchForAllSyncs(
+					nomostest.WithRootSha1Func(rootMeta.sha1Func),
+					nomostest.WithRepoSha1Func(nsMeta.sha1Func),
+					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+						rootMeta.rsRef: rootMeta.syncDir,
+						nsMeta.rsRef:   nsMeta.syncDir})); err != nil {
 					nt.T.Fatal(err)
 				}
-				if err := nt.Validate(fmt.Sprintf("my-coredns-%s", tc.sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
-					nt.T.Error(err)
-				}
-			} else {
-				err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(tc.rootCommitFn),
-					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: syncDir}))
-				if err != nil {
+				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+				kustomizecomponents.ValidateTenant(nt, nsMeta.rsRef.Namespace, "test-ns", "base")
+
+			case v1beta1.HelmSource:
+				if err = nt.WatchForAllSyncs(
+					nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
+					nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
+					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+						rsRef: rootChart.Name,
+						nsRef: nsChart.Name})); err != nil {
 					nt.T.Fatal(err)
 				}
-				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+				if err = nt.Validate(truncateStringByLength(fmt.Sprintf("%s-%s", rootChart.Name, rootChart.Name), 63),
+					"default", &appsv1.Deployment{},
+					testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+					nt.T.Fatal(err)
+				}
+				if err = nt.Validate(truncateStringByLength(nsChart.Name, 63),
+					nsRef.Namespace, &appsv1.Deployment{},
+					testpredicates.IsManagedBy(nt.Scheme, declared.Scope(nsRef.Namespace), nsRef.Name)); err != nil {
+					nt.T.Fatal(err)
+				}
 			}
 
 			// Migrate from gcpserviceaccount to k8sserviceaccount
 			if tc.testKSAMigration {
-				if err := migrateFromGSAtoKSA(nt, rs, ksaRef, tc.fleetWITest, tc.rootCommitFn); err != nil {
+				if err := migrateFromGSAtoKSA(nt, tc.fleetWITest, tc.sourceType, rsRef, nsRef, tc.newRootSrcCfg, tc.newNSSrcCfg); err != nil {
 					nt.T.Fatal(err)
 				}
 			}
 		})
 	}
+}
+
+type rootSyncMutator func(rs *v1beta1.RootSync)
+type repoSyncMutator func(rs *v1beta1.RepoSync)
+
+func updateRootSyncWithHelmSourceConfig(nt *nomostest.NT, rsRef types.NamespacedName, sc sourceConfig, mutators ...rootSyncMutator) (*registryproviders.HelmPackage, error) {
+	chart, err := nt.BuildAndPushHelmPackage(rsRef,
+		registryproviders.HelmSourceChart(sc.chart),
+		registryproviders.HelmChartVersion(sc.version))
+	if err != nil {
+		return nil, fmt.Errorf("pushing helm chart: %w", err)
+	}
+	nt.T.Log("Update RootSync to sync from a helm chart")
+	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	rootSyncHelm.Spec.Helm.ReleaseName = chart.Name
+	for _, mutator := range mutators {
+		mutator(rootSyncHelm)
+	}
+	if err = nt.KubeClient.Apply(rootSyncHelm); err != nil {
+		return nil, err
+	}
+	return chart, nil
+}
+
+func updateRepoSyncWithHelmSourceConfig(nt *nomostest.NT, rsRef types.NamespacedName, sc sourceConfig, mutators ...repoSyncMutator) (*registryproviders.HelmPackage, error) {
+	chart, err := nt.BuildAndPushHelmPackage(rsRef,
+		registryproviders.HelmSourceChart(sc.chart),
+		registryproviders.HelmChartVersion(sc.version))
+	if err != nil {
+		return nil, fmt.Errorf("pushing helm chart: %w", err)
+	}
+	nt.T.Log("Update RepoSync to sync from a helm chart")
+	repoSyncHelm := nt.RepoSyncObjectHelm(rsRef, chart)
+	repoSyncHelm.Spec.Helm.ReleaseName = chart.Name
+	for _, mutator := range mutators {
+		mutator(repoSyncHelm)
+	}
+	if err = nt.KubeClient.Apply(repoSyncHelm); err != nil {
+		return nil, err
+	}
+	return chart, nil
+}
+
+func updateRootSyncWithOCISourceConfig(nt *nomostest.NT, rsRef types.NamespacedName, sc sourceConfig, mutators ...rootSyncMutator) (rsyncValidateMeta, error) {
+	meta := rsyncValidateMeta{rsRef: rsRef, syncDir: sc.dir}
+	image, err := nt.BuildAndPushOCIImage(rsRef,
+		registryproviders.ImageSourcePackage(sc.pkg),
+		registryproviders.ImageVersion(sc.version))
+	if err != nil {
+		return meta, fmt.Errorf("pushing oci image: %w", err)
+	}
+	nt.T.Log("Update RootSync to sync from an OCI image")
+	rootSyncOCI := nt.RootSyncObjectOCI(configsync.RootSyncName, image)
+	rootSyncOCI.Spec.Oci.Dir = sc.dir
+	for _, mutator := range mutators {
+		mutator(rootSyncOCI)
+	}
+	if err = nt.KubeClient.Apply(rootSyncOCI); err != nil {
+		return meta, err
+	}
+	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
+	return meta, nil
+}
+
+func updateRepoSyncWithOCISourceConfig(nt *nomostest.NT, rsRef types.NamespacedName, sc sourceConfig, mutators ...repoSyncMutator) (rsyncValidateMeta, error) {
+	meta := rsyncValidateMeta{rsRef: rsRef, syncDir: sc.dir}
+	image, err := nt.BuildAndPushOCIImage(rsRef,
+		registryproviders.ImageSourcePackage(sc.pkg),
+		registryproviders.ImageVersion(sc.version))
+	if err != nil {
+		return meta, fmt.Errorf("pushing oci image: %w", err)
+	}
+	nt.T.Log("Update RepoSync to sync from an OCI image")
+	repoSyncOCI := nt.RepoSyncObjectOCI(rsRef, image)
+	repoSyncOCI.Spec.Oci.Dir = sc.dir
+	for _, mutator := range mutators {
+		mutator(repoSyncOCI)
+	}
+	if err = nt.KubeClient.Apply(repoSyncOCI); err != nil {
+		return meta, err
+	}
+	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
+	return meta, nil
+}
+
+type rsyncValidateMeta struct {
+	rsRef    types.NamespacedName
+	sha1Func nomostest.Sha1Func
+	syncDir  string
+}
+
+func updateRSyncWithGitSourceConfig(nt *nomostest.NT, rs client.Object, repo *gitproviders.Repository, sc sourceConfig) rsyncValidateMeta {
+	nt.Must(repo.Copy("../testdata/"+sc.pkg, "."))
+	nt.Must(repo.CommitAndPush("add DRY configs to the repository"))
+	nt.MustMergePatch(rs, fmt.Sprintf(`{
+					"spec": {
+						"git": {
+							"dir": "%s"
+						}
+					}
+				}`, sc.dir))
+	rsRef := client.ObjectKey{Name: rs.GetName(), Namespace: rs.GetNamespace()}
+	return rsyncValidateMeta{rsRef: rsRef, sha1Func: sc.commitFn, syncDir: sc.dir}
 }
 
 func truncateStringByLength(s string, l int) string {
@@ -375,97 +604,123 @@ func truncateStringByLength(s string, l int) string {
 
 // migrateFromGSAtoKSA tests the scenario of migrating from impersonating a GSA
 // to leveraging KSA+WI (a.k.a, BYOID/Ubermint).
-func migrateFromGSAtoKSA(nt *nomostest.NT, rs *v1beta1.RootSync, ksaRef types.NamespacedName, fleetWITest bool, rootCommitFn nomostest.Sha1Func) error {
+func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.SourceType, rsRef, nsRef types.NamespacedName, rootSC, nsSC sourceConfig) error {
 	nt.T.Log("Update RootSync auth type from gcpserviceaccount to k8sserviceaccount")
-	sourceChart := ""
-	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
-		// Change the source repo to guarantee new resources can be reconciled with k8sserviceaccount
-		chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(rs.Name),
-			registryproviders.HelmSourceChart(privateSimpleHelmChart),
-			registryproviders.HelmChartVersion(privateSimpleHelmChartVersion))
-
+	var err error
+	var rootMeta, nsMeta rsyncValidateMeta
+	var rootChart, nsChart *registryproviders.HelmPackage
+	// Change the source config to guarantee new resources can be reconciled with k8sserviceaccount
+	switch sourceType {
+	case v1beta1.HelmSource:
+		rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, rootSC, func(rs *v1beta1.RootSync) {
+			rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
+		})
 		if err != nil {
-			nt.T.Fatalf("failed to push helm chart: %v", err)
+			nt.T.Fatal(err)
 		}
-		chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
+		nsChart, err = updateRepoSyncWithHelmSourceConfig(nt, nsRef, nsSC, func(rs *v1beta1.RepoSync) {
+			rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
+		})
 		if err != nil {
-			nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
+			nt.T.Fatal(err)
 		}
+	case v1beta1.OciSource:
+		rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rsRef, rootSC, func(rs *v1beta1.RootSync) {
+			rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
+		})
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+		nsMeta, err = updateRepoSyncWithOCISourceConfig(nt, nsRef, nsSC, func(rs *v1beta1.RepoSync) {
+			rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
+		})
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	}
 
-		nt.MustMergePatch(rs, fmt.Sprintf(`{
-			"spec": {
-				"helm": {
-					"repo": %q,
-					"chart": %q,
-					"version": %q,
-					"auth": "k8sserviceaccount"
-				}
+	// Validations
+	rootReconcilerName := core.RootReconcilerName(rsRef.Name)
+	nsReconcilerName := core.NsReconcilerName(nsRef.Namespace, nsRef.Name)
+	nt.T.Log("Validate the GSA annotation is removed from the RSync's service accounts")
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
+			testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
+		})
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
+			testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
+		})
+	})
+	if fleetWITest {
+		nt.T.Log("Validate the serviceaccount_impersonation_url is absent from the injected FWI credentials")
+		tg.Go(func() error {
+			took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+				return testutils.ReconcilerPodHasFWICredsAnnotation(nt, rootReconcilerName, "", configsync.AuthK8sServiceAccount)
+			})
+			if err != nil {
+				return fmt.Errorf("failed after %v to wait for FWI credentials to be injected into the new root reconciler Pod: %w", took, err)
 			}
-		}`,
-			chartRepoURL,
-			chart.Name,
-			chart.Version))
-		rootCommitFn = nomostest.HelmChartVersionShaFn(chart.Version)
-		sourceChart = chart.Name
-	} else {
-		// The OCI image contains 3 tenants. The RootSync is only configured to sync
-		// with the `tenant-a` directory. The migration flow changes the sync
-		// directory to the root directory, which also includes tenant-b and tenant-c.
-		// This is to guarantee new resources can be reconciled with k8sserviceaccount.
-		// Validate previously reconciled object is pruned
+			nt.T.Logf("took %v to wait for FWI credentials to be injected into the new root reconciler Pod", took)
+			return nil
+		})
+		tg.Go(func() error {
+			took, err := retry.Retry(nt.DefaultWaitTimeout, func() error {
+				return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nsReconcilerName, "", configsync.AuthK8sServiceAccount)
+			})
+			if err != nil {
+				return fmt.Errorf("failed after %v to wait for FWI credentials to be injected into the new root reconciler Pod: %w", took, err)
+			}
+			nt.T.Logf("took %v to wait for FWI credentials to be injected into the new root reconciler Pod", took)
+			return nil
+		})
+	}
+	if err = tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	switch sourceType {
+	case v1beta1.GitSource, v1beta1.OciSource:
+		if err = nt.WatchForAllSyncs(
+			nomostest.WithRootSha1Func(rootMeta.sha1Func),
+			nomostest.WithRepoSha1Func(nsMeta.sha1Func),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+				rootMeta.rsRef: rootMeta.syncDir,
+				nsMeta.rsRef:   nsMeta.syncDir})); err != nil {
+			nt.T.Fatal(err)
+		}
+		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", "tenant-a")
 		if err := nt.ValidateNotFound("tenant-b", "", &corev1.Namespace{}); err != nil {
 			return err
 		}
 		if err := nt.ValidateNotFound("tenant-c", "", &corev1.Namespace{}); err != nil {
 			return err
 		}
-		nt.MustMergePatch(rs, `{
-			"spec": {
-				"oci": {
-          "auth": "k8sserviceaccount",
-					"dir": "."
-    		}
-			}
-		}`)
-	}
+		kustomizecomponents.ValidateTenant(nt, nsMeta.rsRef.Namespace, "test-ns", "../base")
 
-	// Validations
-	nt.T.Log("Validate the GSA annotation is removed from the RootSync's service account")
-	if err := nt.Watcher.WatchObject(kinds.ServiceAccount(), ksaRef.Name, ksaRef.Namespace, []testpredicates.Predicate{
-		testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
-	}); err != nil {
-		return err
-	}
-	if fleetWITest {
-		nt.T.Log("Validate the serviceaccount_impersonation_url is absent from the injected FWI credentials")
-		nomostest.Wait(nt.T, "wait for FWI credentials to exist", nt.DefaultWaitTimeout, func() error {
-			return testutils.ReconcilerPodHasFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName, "", configsync.AuthK8sServiceAccount)
-		})
-	}
-
-	if v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource {
-		if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(rootCommitFn),
-			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: sourceChart})); err != nil {
-			return err
+	case v1beta1.HelmSource:
+		if err = nt.WatchForAllSyncs(
+			nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
+			nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
+			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+				rsRef: rootChart.Name,
+				nsRef: nsChart.Name})); err != nil {
+			nt.T.Fatal(err)
 		}
-		// Validate previously reconciled object is pruned
-		if err := nt.ValidateNotFound(fmt.Sprintf("my-coredns-%s", sourceChart), "coredns", &appsv1.Deployment{}); err != nil {
-			return err
+		if err = nt.Validate("deploy-ns", "ns", &appsv1.Deployment{},
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+			nt.T.Fatal(err)
 		}
-		// Validate objects in the new helm chart are reconciled
-		if err := nt.Validate("deploy-default", "default", &appsv1.Deployment{}); err != nil {
-			return err
+		if err = nt.Validate("deploy-default", "default", &appsv1.Deployment{},
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+			nt.T.Fatal(err)
 		}
-		if err := nt.Validate("deploy-ns", "ns", &appsv1.Deployment{}); err != nil {
-			return err
+		if err = nt.Validate("repo-sync-deployment", testNs, &appsv1.Deployment{},
+			testpredicates.IsManagedBy(nt.Scheme, declared.Scope(nsRef.Namespace), nsRef.Name)); err != nil {
+			nt.T.Fatal(err)
 		}
-	} else {
-		if err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(rootCommitFn),
-			nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."})); err != nil {
-			return err
-		}
-		// Validate all tenants are reconciled
-		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
 	}
 	return nil
 }

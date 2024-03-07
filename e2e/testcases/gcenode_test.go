@@ -23,13 +23,13 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
@@ -53,7 +53,9 @@ func TestGCENodeCSR(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireCloudSourceRepository(t),
-	)
+		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
+		ntopts.WithDelegatedControl)
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
@@ -71,9 +73,23 @@ func TestGCENodeCSR(t *testing.T) {
 		}
 	}`)
 
-	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
+	nt.T.Log("Add the namespace-repo directory to RepoSync's repo")
+	repoSync := fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
+	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	nt.Must(nt.NonRootRepos[repoSyncRef].Copy("../testdata/hydration/namespace-repo", "."))
+	nt.Must(nt.NonRootRepos[repoSyncRef].CommitAndPush("add DRY configs to the repository"))
+	nt.MustMergePatch(repoSync, `{
+		"spec": {
+			"git": {
+				"dir": "namespace-repo"
+			}
+		}
+	}`)
+
+	err := nt.WatchForAllSyncs(
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
+			repoSyncRef:                             "namespace-repo",
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -82,6 +98,7 @@ func TestGCENodeCSR(t *testing.T) {
 	if err := testutils.ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName); err != nil {
 		nt.T.Fatal(err)
 	}
+	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
 }
 
 // TestGCENodeOCI tests the `gcenode` auth type for the OCI image.
@@ -93,46 +110,66 @@ func TestGCENodeCSR(t *testing.T) {
 func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
-		ntopts.RequireOCIArtifactRegistry(t))
+		ntopts.RequireOCIArtifactRegistry(t),
+		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
+		ntopts.WithDelegatedControl)
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	tenant := "tenant-a"
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	image, err := nt.BuildAndPushOCIImage(
-		nomostest.RootSyncNN(configsync.RootSyncName),
-		registryproviders.ImageSourcePackage("hydration/kustomize-components"),
+	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSyncRef := nomostest.RootSyncNN(rootSync.Name)
+	rootImage, err := nt.BuildAndPushOCIImage(
+		rootSyncRef,
+		registryproviders.ImageSourcePackage("kustomize-components"),
 		registryproviders.ImageVersion("v1"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	imageURL, err := image.RemoteAddressWithTag()
-	if err != nil {
-		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
+	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
+	rootSyncOCI := nt.RootSyncObjectOCI(configsync.RootSyncName, rootImage)
+	if err = nt.KubeClient.Apply(rootSyncOCI); err != nil {
+		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, imageURL))
+	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	nsImage, err := nt.BuildAndPushOCIImage(
+		repoSyncRef,
+		registryproviders.ImageSourcePackage("namespace-repo"),
+		registryproviders.ImageVersion("v1"))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Update RepoSync to sync from an OCI image in Artifact Registry")
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncRef, nsImage)
+	if err = nt.KubeClient.Apply(repoSyncOCI); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(rootImage.Digest)),
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: tenant,
+			nomostest.DefaultRootRepoNamespacedName: ".",
+			repoSyncRef:                             ".",
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
 
-	tenant = "tenant-b"
+	tenant := "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage(), tenant))
+	nt.MustMergePatch(rootSync, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage("kustomize-components"), tenant))
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage())),
+		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage("kustomize-components"))),
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: tenant,
+			repoSyncRef:                             ".",
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -148,34 +185,63 @@ func TestGCENodeOCI(t *testing.T) {
 func TestGCENodeHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
-		ntopts.RequireHelmArtifactRegistry(t))
+		ntopts.RequireHelmArtifactRegistry(t),
+		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
+		ntopts.WithDelegatedControl)
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	rootSyncRef := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootChart, err := nt.BuildAndPushHelmPackage(
+		rootSyncRef,
 		registryproviders.HelmSourceChart(privateCoreDNSHelmChart))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
-	chartRepoURL, err := chart.Provider.RepositoryRemoteURL()
-	if err != nil {
-		nt.T.Fatalf("HelmProvider.RepositoryRemoteAddress: %v", err)
-	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "helm": {"repo": "%s", "chart": "%s", "auth": "gcenode", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns"}, "git": null}}`,
-		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
+	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, rootChart)
+	rootSyncHelm.Spec.Helm.ReleaseName = "my-coredns"
+	if err = nt.KubeClient.Apply(rootSyncHelm); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	nsChart, err := nt.BuildAndPushHelmPackage(repoSyncRef,
+		registryproviders.HelmSourceChart("ns-chart"))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
+	}
+	nt.T.Log("Update RepoSync to sync from a helm chart")
+	repoSyncHelm := nt.RepoSyncObjectHelm(repoSyncRef, nsChart)
+	repoSyncHelm.Spec.Helm.ReleaseName = "my-ns-chart"
+	if err = nt.KubeClient.Apply(repoSyncHelm); err != nil {
+		nt.T.Fatal(err)
+	}
+
 	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))
+		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
+		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			rootSyncRef: rootChart.Name,
+			repoSyncRef: nsChart.Name}))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(fmt.Sprintf("my-coredns-%s", chart.Name), "coredns", &appsv1.Deployment{},
-		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent")); err != nil {
-		nt.T.Error(err)
+
+	err = nt.Validate(fmt.Sprintf("%s-%s", rootSyncHelm.Spec.Helm.ReleaseName, rootChart.Name),
+		"default", &appsv1.Deployment{},
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rootSyncRef.Name))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	err = nt.Validate(fmt.Sprintf("%s-%s", repoSyncHelm.Spec.Helm.ReleaseName, nsChart.Name),
+		repoSyncRef.Namespace, &appsv1.Deployment{},
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncRef.Namespace), repoSyncRef.Name))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 }

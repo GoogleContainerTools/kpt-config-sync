@@ -112,6 +112,10 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 }
 
 func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repository, configureRBAC configureRBACFunc) {
+	nt.T.Cleanup(func() {
+		// Grant full permission to manage the Deployment in case the test fails early
+		configureRBAC(nt, ns, []string{"*"})
+	})
 	nt.T.Log("Add a deployment to the namespace repo without RBAC")
 	nt.Must(nsRepo.Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/deployment.yaml"))
 	nt.Must(nsRepo.CommitAndPush("Add a deployment to the namespace repo"))
@@ -147,9 +151,8 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repo
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "hello-world", ns,
-		testwatcher.WatchTimeout(30*time.Second)); err != nil {
-		nt.T.Fatalf("deployment hello-word not current: %v", err)
+	if err := nt.Validate("hello-world", ns, &appsv1.Deployment{}); err != nil {
+		nt.T.Fatalf("deployment hello-world not found: %v", err)
 	}
 
 	nt.Must(nsRepo.Remove("acme/deployment.yaml"))

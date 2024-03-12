@@ -8,11 +8,18 @@
 test-e2e-gke-ci: pull-postsubmit-retry test-e2e-gke-nobuild
 
 POSTSUBMIT_GCS_PREFIX ?= gs://kpt-config-sync-ci-postsubmit
-POSTSUBMIT_REGISTRY ?= us-docker.pkg.dev/kpt-config-sync-ci-artifacts/postsubmit
+POSTSUBMIT_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/postsubmit
 
 .PHONY: postsubmit
-postsubmit: build-cli
+postsubmit:
 	$(MAKE) config-sync-manifest REGISTRY=$(POSTSUBMIT_REGISTRY)
+	$(MAKE) retag-images \
+		REGISTRY=$(POSTSUBMIT_REGISTRY) \
+		OLD_IMAGE_TAG=$(IMAGE_TAG) \
+		IMAGE_TAG=$(INFRA_IMAGE_PREFIX)-$(IMAGE_TAG)
+	$(MAKE) push-images \
+		REGISTRY=$(POSTSUBMIT_REGISTRY) \
+		IMAGE_TAG=$(INFRA_IMAGE_PREFIX)-$(IMAGE_TAG)
 	$(MAKE) publish-gcs GCS_PREFIX=$(POSTSUBMIT_GCS_PREFIX)
 	$(MAKE) publish-buildenv
 

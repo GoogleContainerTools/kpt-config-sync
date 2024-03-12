@@ -11,7 +11,7 @@ POSTSUBMIT_GCS_PREFIX ?= gs://kpt-config-sync-ci-postsubmit
 POSTSUBMIT_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/postsubmit
 
 .PHONY: postsubmit
-postsubmit:
+postsubmit: build-cli
 	$(MAKE) config-sync-manifest REGISTRY=$(POSTSUBMIT_REGISTRY)
 	$(MAKE) retag-images \
 		REGISTRY=$(POSTSUBMIT_REGISTRY) \

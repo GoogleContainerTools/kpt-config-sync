@@ -21,7 +21,7 @@
 # clusters rather than kind, so we don't need docker in docker.
 # Note: nothing builds this, if you update the version, you will need to rebuild manually.
 # TODO: setup postsubmit job to build this image
-GKE_E2E_TAG := v1.0.0-$(shell git rev-parse --short HEAD)
+GKE_E2E_TAG := $(INFRA_IMAGE_PREFIX)-v1.0.0-$(shell git rev-parse --short HEAD)
 GKE_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(GKE_E2E_TAG)
 .PHONY: build-gke-e2e
 build-gke-e2e:

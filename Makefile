@@ -124,12 +124,13 @@ OLD_REGISTRY ?= $(REGISTRY)
 # Registry which hosts images related to test infrastructure
 TEST_INFRA_PROJECT ?= kpt-config-sync-ci-artifacts
 TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-infra
+INFRA_IMAGE_PREFIX := infrastructure-public-image
 
 # Docker image used for build and test. This image does not support CGO.
 # When upgrading this tag, the image will be rebuilt locally during presubmits.
 # After the change is submitted, a postsubmit job will publish the new tag.
 # There is no need to manually publish this image.
-BUILDENV_IMAGE ?= $(TEST_INFRA_REGISTRY)/buildenv:v0.3.2
+BUILDENV_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_IMAGE_PREFIX)-v0.3.2
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler

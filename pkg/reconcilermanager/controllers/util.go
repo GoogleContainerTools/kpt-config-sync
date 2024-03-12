@@ -108,6 +108,7 @@ type reconcilerOptions struct {
 	apiServerTimeout         string
 	requiresRendering        bool
 	dynamicNSSelectorEnabled bool
+	webhookEnabled           bool
 }
 
 // reconcilerEnvs returns environment variables for namespace reconciler.
@@ -207,6 +208,15 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 			Value: strconv.FormatBool(opts.requiresRendering),
 		},
 	)
+
+	if opts.webhookEnabled {
+		result = append(result,
+			corev1.EnvVar{
+				Name:  reconcilermanager.WebhookEnabled,
+				Value: strconv.FormatBool(opts.webhookEnabled),
+			},
+		)
+	}
 
 	if opts.dynamicNSSelectorEnabled {
 		result = append(result,

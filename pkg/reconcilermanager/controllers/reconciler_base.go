@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -44,6 +45,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -95,6 +97,7 @@ type reconcilerBase struct {
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
 	knownHostExist          bool
+	webhookEnabled          bool
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string
@@ -694,4 +697,12 @@ func (r *reconcilerBase) isKnownHostsEnabled(auth configsync.AuthType) bool {
 		return true
 	}
 	return false
+}
+
+func (r *reconcilerBase) isWebhookEnabled(ctx context.Context) (bool, error) {
+	err := r.client.Get(ctx, client.ObjectKey{Name: webhookconfiguration.Name}, &admissionv1.ValidatingWebhookConfiguration{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
 }

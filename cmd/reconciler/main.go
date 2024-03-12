@@ -102,6 +102,8 @@ var (
 			configsync.NamespaceStrategyImplicit, configsync.NamespaceStrategyExplicit, configsync.NamespaceStrategyImplicit))
 
 	dynamicNSSelectorEnabled = flag.Bool("dynamic-ns-selector-enabled", util.EnvBool(reconcilermanager.DynamicNSSelectorEnabled, false), "")
+
+	webhookEnabled = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
 )
 
 var flags = struct {
@@ -196,6 +198,7 @@ func main() {
 		APIServerTimeout:         *apiServerTimeout,
 		RenderingEnabled:         *renderingEnabled,
 		DynamicNSSelectorEnabled: *dynamicNSSelectorEnabled,
+		WebhookEnabled:           *webhookEnabled,
 	}
 
 	if declared.Scope(*scope) == declared.RootReconciler {

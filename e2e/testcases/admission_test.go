@@ -19,11 +19,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
 // This file includes tests for drift correction and drift prevention.
@@ -140,56 +149,143 @@ metadata:
 	}
 }
 
-func TestDisableWebhookConfigurationUpdate(t *testing.T) {
-	webhook := []byte(`
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingWebhookConfiguration
-metadata:
-  annotations:
-    configsync.gke.io/webhook-configuration-update: disabled
-  name: admission-webhook.configsync.gke.io
-  labels:
-    configmanagement.gke.io/system: "true"
-    configmanagement.gke.io/arch: "csmr"
-`)
-
+func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
+	// Test starts with Admission Webhook already installed
+	nomostest.WaitForWebhookReadiness(nt)
+
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add test namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "webhook.yaml"), webhook, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	err := nt.Validate("hello", "", &corev1.Namespace{}, testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey))
+	if err != nil {
+		nt.T.Fatal(err)
 	}
 
-	// Recreate the admission webhook
-	if _, err := nt.Shell.Kubectl("replace", "-f", filepath.Join(nt.TmpDir, "webhook.yaml")); err != nil {
-		nt.T.Fatalf("failed to replace the admission webhook %v", err)
+	nomostest.StopWebhook(nt)
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Namespace(), "hello", "",
+			[]testpredicates.Predicate{
+				testpredicates.MissingAnnotation(metadata.DeclaredFieldsKey),
+			})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
 	}
 
-	// Verify that the webhook is disabled.
-	if _, err := nt.Shell.Kubectl("delete", "ns", "hello"); err != nil {
+	// The object should be deleted and restored by Remediator
+	nt.T.Log("Verify that the webhook is disabled")
+	if err := nt.KubeClient.Delete(fake.Namespace("hello")); err != nil {
 		nt.T.Fatalf("failed to run `kubectl delete ns hello` %v", err)
 	}
 
-	// Remove the annotation for disabling webhook
-	if _, err := nt.Shell.Kubectl("annotate", "ValidatingWebhookConfiguration", "admission-webhook.configsync.gke.io", "configsync.gke.io/webhook-configuration-update-"); err != nil {
-		nt.T.Fatalf("failed to remove the annotation in the admission webhook %v", err)
+	if err := nomostest.InstallWebhook(nt); err != nil {
+		nt.T.Fatal(err)
 	}
+	nomostest.WaitForWebhookReadiness(nt)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/test/ns.yaml", fake.NamespaceObject("test")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add another Namespace"))
+	nt.T.Logf("Check declared-fields annotation is re-populated")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Namespace(), "hello", "",
+			[]testpredicates.Predicate{
+				testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey),
+			})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName), ntopts.RepoSyncPermissions(policy.CoreAdmin()))
+	repoSyncNN := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
+	sa := fake.ServiceAccountObject("store", core.Namespace(namespaceRepo))
+	nt.Must(nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa))
+	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding test service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
+	// Test starts with Admission Webhook already installed
 	nomostest.WaitForWebhookReadiness(nt)
 
-	// Verify that the webhook is now enabled
-	if _, err := nt.Shell.Kubectl("delete", "ns", "test"); err == nil {
-		nt.T.Fatal("got `kubectl delete ns hello` success, want return err")
+	err := nt.Validate("store", namespaceRepo, &corev1.ServiceAccount{}, testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nomostest.StopWebhook(nt)
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), "store", namespaceRepo,
+			[]testpredicates.Predicate{
+				testpredicates.MissingAnnotation(metadata.DeclaredFieldsKey),
+			})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// The object should be deleted and restored by Remediator
+	nt.T.Log("Verify that the webhook is disabled")
+	if err := nt.KubeClient.Delete(sa); err != nil {
+		nt.T.Fatalf("failed to remove objects from reposync %v", err)
+	}
+
+	if err := nomostest.InstallWebhook(nt); err != nil {
+		nt.T.Fatal(err)
+	}
+	nomostest.WaitForWebhookReadiness(nt)
+
+	nt.T.Logf("Check declared-fields annotation is re-populated")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), "store", namespaceRepo,
+			[]testpredicates.Predicate{
+				testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey),
+			})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
 	}
 }

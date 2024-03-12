@@ -97,6 +97,10 @@ const (
 	// mode is enabled in NamespaceSelectors, which requires a Namespace controller
 	// to be running.
 	DynamicNSSelectorEnabled = "DYNAMIC_NS_SELECTOR_ENABLED"
+
+	// WebhookEnabled tells the reconciler container whether the Admission Webhook
+	// is installed and running on the cluster.
+	WebhookEnabled = "WEBHOOK_ENABLED"
 )
 
 const (

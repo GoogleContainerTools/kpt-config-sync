@@ -48,6 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	discoveryutil "kpt.dev/configsync/pkg/util/discovery"
+	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -140,7 +141,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -162,7 +162,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -205,7 +204,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -236,7 +234,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -259,7 +256,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -282,7 +278,6 @@ func TestRoot_Parse(t *testing.T) {
 					fake.WithRootSyncSourceType(v1beta1.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{".":{},"f:git":{".":{},"f:auth":{},"f:period":{},"f:repo":{}},"f:sourceType":{}},"f:status":{".":{},"f:observedGeneration":{},"f:rendering":{".":{},"f:lastUpdate":{}},"f:source":{".":{},"f:lastUpdate":{}},"f:sync":{".":{},"f:lastUpdate":{}}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -317,7 +312,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -329,7 +323,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -368,7 +361,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -392,7 +384,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -404,7 +395,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -428,7 +418,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -440,7 +429,6 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -482,6 +470,185 @@ func TestRoot_Parse(t *testing.T) {
 				},
 			}
 			for _, o := range tc.existingObjects {
+				if err := parser.Client.Create(context.Background(), o); err != nil {
+					t.Fatal(err)
+				}
+			}
+			state := reconcilerState{}
+			if err := parseAndUpdate(context.Background(), parser, triggerReimport, &state); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.want, state.cache.objsToApply, cmpopts.EquateEmpty(), ast.CompareFileObject, cmpopts.SortSlices(sortObjects)); diff != "" {
+				t.Error(diff)
+			}
+		})
+	}
+}
+
+func TestRoot_DeclaredFields(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		expectedWebhookEnabled bool
+		existingObjects        []client.Object
+		parsed                 []ast.FileObject
+		want                   []ast.FileObject
+	}{
+		{
+			name:                   "has declared-fields annotation, admission webhook is disabled",
+			expectedWebhookEnabled: false,
+			existingObjects: []client.Object{fake.NamespaceObject("foo",
+				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
+				core.Annotation(metadata.GitContextKey, nilGitContext),
+				core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+				difftest.ManagedBy(declared.RootReconciler, "other-root-sync"))},
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+		{
+			name:                   "has declared-fields annotation, admission webhook enabled",
+			expectedWebhookEnabled: true,
+			existingObjects: []client.Object{fake.NamespaceObject("foo",
+				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
+				core.Annotation(metadata.GitContextKey, nilGitContext),
+				core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+				difftest.ManagedBy(declared.RootReconciler, "other-root-sync")),
+			},
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+		{
+			name:                   "has no declared-fields annotation, admission webhook is enabled",
+			expectedWebhookEnabled: true,
+			existingObjects: []client.Object{
+				fake.NamespaceObject("foo",
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootReconciler, "other-root-sync")),
+				fake.AdmissionWebhookObject(webhookconfiguration.Name),
+			},
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+		{
+			name:                   "has no declared-fields annotation, admission webhook disabled",
+			expectedWebhookEnabled: false,
+			existingObjects: []client.Object{
+				fake.NamespaceObject("foo",
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootReconciler, "other-root-sync")),
+			},
+			parsed: []ast.FileObject{
+				fake.Role(core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				fake.Role(core.Namespace("foo"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, nilGitContext),
+					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
+					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
+					difftest.ManagedBy(declared.RootReconciler, rootSyncName),
+				),
+			},
+		},
+	}
+
+	converter, err := openapitest.ValueConverterForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := &root{
+				Options: &Options{
+					Parser:             &fakeParser{parse: tc.parsed},
+					SyncName:           rootSyncName,
+					ReconcilerName:     rootReconcilerName,
+					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+					Converter:          converter,
+					WebhookEnabled:     tc.expectedWebhookEnabled,
+					Updater: Updater{
+						Scope:      declared.RootReconciler,
+						Resources:  &declared.Resources{},
+						Remediator: &noOpRemediator{},
+						Applier:    &fakeApplier{},
+					},
+					mux: &sync.Mutex{},
+				},
+				RootOptions: &RootOptions{
+					SourceFormat:      filesystem.SourceFormatUnstructured,
+					NamespaceStrategy: configsync.NamespaceStrategyExplicit,
+				},
+			}
+			for _, o := range tc.existingObjects {
+				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
 				if err := parser.Client.Create(context.Background(), o); err != nil {
 					t.Fatal(err)
 				}
@@ -626,7 +793,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -663,7 +829,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -675,7 +840,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fakeCRD(core.Name("anvils.acme.com"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:spec":{"f:group":{},"f:names":{"f:kind":{},"f:plural":{},"f:singular":{}},"f:scope":{},"f:versions":{}},"f:status":{"f:acceptedNames":{"f:kind":{},"f:plural":{}},"f:conditions":{},"f:storedVersions":{}}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "cluster/crd.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -688,7 +852,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
-					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}}}`),
 					core.Annotation(metadata.ResourceManagerKey, ":root_my-rs"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),

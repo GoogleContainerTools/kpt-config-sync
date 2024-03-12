@@ -71,7 +71,6 @@ func Hierarchical(objs *objects.Raw) status.MultiError {
 	// selection so that we can filter out irrelevant objects before trying to
 	// modify them.
 	hydrators := []objects.RawVisitor{
-		hydrate.DeclaredFields,
 		hydrate.DeclaredVersion,
 		hydrate.ObjectNamespaces,
 		hydrate.ClusterSelectors,
@@ -79,6 +78,9 @@ func Hierarchical(objs *objects.Raw) status.MultiError {
 		hydrate.Filepath,
 		hydrate.HNCDepth,
 		hydrate.PreventDeletion,
+	}
+	if objs.WebhookEnabled {
+		hydrators = append(hydrators, hydrate.DeclaredFields)
 	}
 	for _, hydrator := range hydrators {
 		errs = status.Append(errs, hydrator(objs))
@@ -121,12 +123,14 @@ func Unstructured(objs *objects.Raw) status.MultiError {
 	// object exactly as it is declared in Git. Then we perform cluster selection
 	// so that we can filter out irrelevant objects before trying to modify them.
 	hydrators := []objects.RawVisitor{
-		hydrate.DeclaredFields,
 		hydrate.DeclaredVersion,
 		hydrate.ClusterSelectors,
 		hydrate.ClusterName,
 		hydrate.Filepath,
 		hydrate.PreventDeletion,
+	}
+	if objs.WebhookEnabled {
+		hydrators = append(hydrators, hydrate.DeclaredFields)
 	}
 	for _, hydrator := range hydrators {
 		errs = status.Append(errs, hydrator(objs))

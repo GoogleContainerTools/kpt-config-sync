@@ -23,6 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -456,11 +457,20 @@ func parseSource(ctx context.Context, p Parser, trigger string, state *reconcile
 	}
 
 	start := time.Now()
-	objs, sourceErrs := p.parseSource(ctx, state.cache.source)
+	var sourceErrs status.MultiError
+
+	objs, errs := p.parseSource(ctx, state.cache.source)
+	if !p.options().WebhookEnabled {
+		klog.V(3).Infof("Removing %s annotation as Admission Webhook is disabled", metadata.DeclaredFieldsKey)
+		for _, obj := range objs {
+			core.RemoveAnnotations(obj, metadata.DeclaredFieldsKey)
+		}
+	}
+	sourceErrs = status.Append(sourceErrs, errs)
 	metrics.RecordParserDuration(ctx, trigger, "parse", metrics.StatusTagKey(sourceErrs), start)
 	state.cache.setParserResult(objs, sourceErrs)
 
-	if !status.HasBlockingErrors(sourceErrs) {
+	if !status.HasBlockingErrors(sourceErrs) && p.options().WebhookEnabled {
 		err := webhookconfiguration.Update(ctx, p.options().k8sClient(), p.options().discoveryClient(), objs)
 		if err != nil {
 			// Don't block if updating the admission webhook fails.

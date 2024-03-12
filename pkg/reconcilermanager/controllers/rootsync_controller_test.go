@@ -50,6 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1086,6 +1087,55 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("Deployment validation failed. err: %v", err)
 	}
 	t.Log("Deployment successfully updated")
+}
+
+func TestRootSyncReconcileAdmissionWebhook(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		rootSync               *v1beta1.RootSync
+		existingObjects        []client.Object
+		expectedWebhookEnabled bool
+	}{
+		{
+			name:                   "flag false, admission webhook disabled",
+			expectedWebhookEnabled: false,
+		},
+		{
+			name: "flag false, admission webhook enabled",
+			existingObjects: []client.Object{
+				fake.AdmissionWebhookObject(webhookconfiguration.Name),
+			},
+			expectedWebhookEnabled: true,
+		},
+	}
+	parseDeployment = parsedDeployment
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootSync := rootSyncWithGit(
+				rootsyncName,
+				rootsyncRef(gitRevision),
+				rootsyncBranch(branch),
+				rootsyncSecretType(GitSecretConfigKeySSH),
+				rootsyncSecretRef(rootsyncSSHKey),
+			)
+			reqNamespacedName := namespacedName(rootSync.Name, rootSync.Namespace)
+			fakeClient, _, testReconciler := setupRootReconciler(t, rootSync, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, v1beta1.GitSource, core.Namespace(rootSync.Namespace)))
+
+			for _, o := range tc.existingObjects {
+				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
+				if err := fakeClient.Create(context.Background(), o); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx := context.Background()
+			if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+				t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+			}
+
+			testutil.AssertEqual(t, tc.expectedWebhookEnabled, testReconciler.webhookEnabled)
+		})
+	}
 }
 
 func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {

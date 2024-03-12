@@ -26,6 +26,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/exp/slices"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -51,6 +52,7 @@ import (
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/util/mutate"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -157,6 +159,13 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	} else {
 		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
+
+	enabled, err := r.isWebhookEnabled(ctx)
+	if err != nil {
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, fmt.Errorf("failed to get the admission webhook configuration: %w", err)
+	}
+	r.webhookEnabled = enabled
 
 	setupFn := func(ctx context.Context) error {
 		return r.setup(ctx, reconcilerRef, rs)
@@ -427,6 +436,9 @@ func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		// TODO: is it possible to watch with a label filter?
 		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(&source.Kind{Type: &admissionv1.ValidatingWebhookConfiguration{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapAdmissionWebhookToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
@@ -452,7 +464,7 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 			if apierrors.IsNotFound(err) {
 				klog.Info("Fleet Membership not found, clearing membership cache")
 				r.membership = nil
-				return r.requeueAllRootSyncs()
+				return r.requeueAllRootSyncs(fleetMembershipName)
 			}
 			klog.Errorf("Fleet Membership get failed: %v", err)
 			return nil
@@ -468,7 +480,7 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []re
 			return nil
 		}
 		r.membership = m
-		return r.requeueAllRootSyncs()
+		return r.requeueAllRootSyncs(fleetMembershipName)
 	}
 }
 
@@ -608,7 +620,7 @@ func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile
 	}
 }
 
-func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
+func (r *RootSyncReconciler) requeueAllRootSyncs(name string) []reconcile.Request {
 	//TODO: pass through context (reqs updating controller-runtime)
 	ctx := context.Background()
 	allRootSyncs := &v1beta1.RootSyncList{}
@@ -624,9 +636,16 @@ func (r *RootSyncReconciler) requeueAllRootSyncs() []reconcile.Request {
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to membership trigger reconciliations for %d RootSync objects.", len(allRootSyncs.Items))
+		klog.Infof("Changes to %s trigger reconciliations for %d RootSync objects.", name, len(allRootSyncs.Items))
 	}
 	return requests
+}
+
+func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(admissionWebhook client.Object) []reconcile.Request {
+	if admissionWebhook.GetName() == webhookconfiguration.Name {
+		return r.requeueAllRootSyncs(admissionWebhook.GetName())
+	}
+	return nil
 }
 
 // mapSecretToRootSyncs define a mapping from the Secret object to its attached
@@ -769,6 +788,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 				apiServerTimeout:         v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
 				requiresRendering:        annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
 				dynamicNSSelectorEnabled: annotationEnabled(metadata.DynamicNSSelectorEnabledAnnotationKey, rs.GetAnnotations()),
+				webhookEnabled:           r.webhookEnabled,
 			}),
 			sourceFormatEnv(rs.Spec.SourceFormat),
 			namespaceStrategyEnv(rs.Spec.SafeOverride().NamespaceStrategy),

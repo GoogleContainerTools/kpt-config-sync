@@ -18,10 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/helm"
@@ -108,6 +110,14 @@ func main() {
 
 	initialSync := true
 	failCount := 0
+
+	backoff := wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Steps:    math.MaxInt,
+		Jitter:   0.1,
+	}
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 
@@ -141,11 +151,15 @@ func main() {
 				os.Exit(1)
 			}
 
+			step := backoff.Step()
+
 			failCount++
 			log.Error(err, "unexpected error rendering chart, will retry")
-			log.Info("waiting before retrying", "waitTime", util.WaitTime(*flWait))
+			log.Info("waiting before retrying", "waitTime", step)
 			cancel()
-			time.Sleep(util.WaitTime(*flWait))
+
+			time.Sleep(step)
+
 			continue
 		}
 

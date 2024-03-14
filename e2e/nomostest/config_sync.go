@@ -70,11 +70,6 @@ const (
 
 	// clusterRoleName imitates a user-created (Cluster)Role for NS reconcilers.
 	clusterRoleName = "cs-e2e"
-
-	// helmPeriodOverride overrides the default helm-sync period for responsiveness,
-	// particularly during errors. The current default period is 1 hour even during
-	// a sync error. TODO: revisit after b/321790360
-	helmPeriodOverride = 15 * time.Second
 )
 
 var (
@@ -942,7 +937,6 @@ func (nt *NT) RootSyncObjectHelm(name string, chart *registryproviders.HelmPacka
 			Chart:   chart.Name,
 			Version: chart.Version,
 			Auth:    configsync.AuthNone,
-			Period:  metav1.Duration{Duration: helmPeriodOverride},
 		},
 	}
 	switch *e2e.HelmProvider {
@@ -976,8 +970,6 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chart *registryprovide
 			Chart:   chart.Name,
 			Version: chart.Version,
 			Auth:    configsync.AuthNone,
-			// Override the default period of 1 hour for responsiveness
-			Period: metav1.Duration{Duration: helmPeriodOverride},
 		},
 	}
 	switch *e2e.HelmProvider {

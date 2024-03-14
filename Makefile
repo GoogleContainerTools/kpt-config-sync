@@ -56,11 +56,11 @@ ADDLICENSE := $(BIN_DIR)/addlicense
 GOLANGCI_LINT_VERSION := v1.52.0
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
-KUSTOMIZE_VERSION := v5.3.0-gke.0
+KUSTOMIZE_VERSION := v5.3.0-gke.1
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.13.3-gke.2
+HELM_VERSION := v3.13.3-gke.3
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 

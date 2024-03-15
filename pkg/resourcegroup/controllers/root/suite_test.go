@@ -25,6 +25,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -87,7 +88,7 @@ func NewReconciler(mgr manager.Manager) (*Reconciler, error) {
 	r := &Reconciler{
 		Client:  mgr.GetClient(),
 		cfg:     mgr.GetConfig(),
-		log:     ctrl.Log.WithName("controllers").WithName("Root"),
+		log:     klogr.New().WithName("controllers").WithName("Root"),
 		resMap:  resmap,
 		watches: watches,
 	}

@@ -144,7 +144,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// error will block the finalizer.
 		if err := r.validateRootSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.logger(ctx).Error(err, "RootSync spec invalid")
-			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RootSync) error {
 				rootsync.SetStalled(rs, "Validation", err)
 				return nil
 			})

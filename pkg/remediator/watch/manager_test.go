@@ -33,7 +33,7 @@ import (
 func fakeRunnable() Runnable {
 	cfg := watcherConfig{
 		scope: "test",
-		startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
+		startWatch: func(_ context.Context, _ metav1.ListOptions) (watch.Interface, error) {
 			return watch.NewFake(), nil
 		},
 		conflictHandler: fake.NewConflictHandler(),

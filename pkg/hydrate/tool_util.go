@@ -95,7 +95,7 @@ func HasKustomization(filename string) bool {
 func hasKustomizeSubdir(dir string) (bool, error) {
 	found := false
 	err := filepath.Walk(dir,
-		func(path string, fi os.FileInfo, err error) error {
+		func(_ string, fi os.FileInfo, err error) error {
 			if found {
 				return nil
 			}

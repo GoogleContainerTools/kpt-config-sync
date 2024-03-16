@@ -80,7 +80,7 @@ func TestOtelReconciler(t *testing.T) {
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
-	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
 		return nil, errors.New("could not find default credentials")
 	}
 
@@ -124,7 +124,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
-	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
 		return &google.Credentials{
 			ProjectID:   "test",
 			TokenSource: nil,
@@ -192,7 +192,7 @@ func TestOtelReconcilerCustom(t *testing.T) {
 	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
-	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
 		return nil, nil
 	}
 
@@ -244,7 +244,7 @@ func TestOtelReconcilerDeleteCustom(t *testing.T) {
 	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
 	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, fake.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
-	getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
+	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
 		return nil, nil
 	}
 

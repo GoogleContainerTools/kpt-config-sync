@@ -760,7 +760,7 @@ func (nt *NT) portForwardRegistryServer(helmTest, ociTest bool) {
 	// Before the test, nt.ociImages & nt.helmPackages will be empty.
 	var onReadyCallbacks []func(int, string)
 	if provider, ok := nt.OCIProvider.(registryproviders.ProxiedRegistryProvider); ok && ociTest {
-		setupFn := func(newPort int, podName string) {
+		setupFn := func(newPort int, _ string) {
 			if err := provider.Restore(provider.ProxyAddress(newPort)); err != nil {
 				nt.T.Fatalf("restoring proxy provider: %v", err)
 			}
@@ -768,7 +768,7 @@ func (nt *NT) portForwardRegistryServer(helmTest, ociTest bool) {
 		onReadyCallbacks = append(onReadyCallbacks, setupFn)
 	}
 	if provider, ok := nt.HelmProvider.(registryproviders.ProxiedRegistryProvider); ok && helmTest {
-		setupFn := func(newPort int, podName string) {
+		setupFn := func(newPort int, _ string) {
 			if err := provider.Restore(provider.ProxyAddress(newPort)); err != nil {
 				nt.T.Fatalf("restoring proxy provider: %v", err)
 			}

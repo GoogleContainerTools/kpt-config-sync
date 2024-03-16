@@ -876,7 +876,7 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(_ *testing.T) {
 			args := []string{"vet", "--no-api-server-check", "--namespace", "tenant-a"}
 			if tc.sourceFormat != "" {
 				args = append(args, "--source-format", tc.sourceFormat)
@@ -1099,7 +1099,7 @@ func unzip(dir, zipName string) error {
 // glob find and return all files matching given pattern
 func glob(dir string, fn func(string) bool) []string {
 	var files []string
-	_ = filepath.WalkDir(dir, func(s string, d fs.DirEntry, e error) error {
+	_ = filepath.WalkDir(dir, func(s string, _ fs.DirEntry, _ error) error {
 		if fn(s) {
 			files = append(files, s)
 		}

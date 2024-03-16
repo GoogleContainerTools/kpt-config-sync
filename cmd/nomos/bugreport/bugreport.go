@@ -36,7 +36,7 @@ var Cmd = &cobra.Command{
 	Use:   "bugreport",
 	Short: fmt.Sprintf("Generates a zip file of relevant %v debug information.", configmanagement.CLIName),
 	Long:  "Generates a zip file in your current directory containing an aggregate of the logs and cluster state for debugging purposes.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 

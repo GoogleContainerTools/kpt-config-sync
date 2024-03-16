@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 	Use:   "nomoserrors",
 	Short: "List all error codes and example errors",
 	Args:  cobra.ExactArgs(0),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		e := examples.Generate()
 
 		if idFlag == "" {

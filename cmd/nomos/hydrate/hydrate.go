@@ -68,7 +68,7 @@ The output directory consists of one directory per declared Cluster, and default
 clusters without declarations. Each directory holds the full set of configs for a single cluster,
 which you could kubectl apply -fR to the cluster, or have Config Sync sync to the cluster.`,
 	Args: cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 

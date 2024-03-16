@@ -770,10 +770,10 @@ func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient 
 				}
 				// Simulation complete - stop watching
 				return nil
-			} else {
-				// shouldn't happen - keep watching - wait for timeout
-				return fmt.Errorf("startup complete - expected watch to have terminated")
 			}
+
+			// shouldn't happen - keep watching - wait for timeout
+			return fmt.Errorf("startup complete - expected watch to have terminated")
 		}
 		// keep watching
 		return fmt.Errorf("reconciler deployment %s", event.Type)

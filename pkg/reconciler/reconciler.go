@@ -273,7 +273,7 @@ func Run(opts Options) {
 	ctrl.SetLogger(klogr.New())
 	mgrOptions := ctrl.Options{
 		Scheme: core.Scheme,
-		MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
 			return mapper, nil
 		},
 		BaseContext: func() context.Context {

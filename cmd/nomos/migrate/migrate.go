@@ -78,7 +78,7 @@ var Cmd = &cobra.Command{
 	Short: "Migrates to the new Config Sync architecture by enabling the multi-repo mode.",
 	Long:  "Migrates to the new Config Sync architecture by enabling the multi-repo mode. It provides you with additional features and gives you the flexibility to sync to a single repository, or multiple repositories.",
 	Args:  cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 

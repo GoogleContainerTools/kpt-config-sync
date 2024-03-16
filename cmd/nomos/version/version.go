@@ -77,7 +77,7 @@ var (
 		Long: `Prints the version of Configuration Management installed on each cluster and the version
 of the "nomos" client binary for debugging purposes.`,
 		Example: `  nomos version`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Don't show usage on error, as argument validation passed.
 			cmd.SilenceUsage = true
 

@@ -60,7 +60,7 @@ returns a non-zero error code if any issues are found.
   nomos vet --path=my/directory
   nomos vet --path=/path/to/my/directory`,
 	Args: cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 

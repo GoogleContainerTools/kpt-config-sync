@@ -38,7 +38,7 @@ var Cmd = &cobra.Command{
 	Long:    `Add an empty Failure entry to the junit report`,
 	Example: `junit-report reset-failure --path /logs/artifacts/junit_report.xml`,
 	Args:    cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		cmd.SilenceUsage = true
 		return ResetFailure(reportFile)
 	},

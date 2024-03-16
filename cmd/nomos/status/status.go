@@ -94,7 +94,7 @@ var Cmd = &cobra.Command{
 	Use: "status",
 	// TODO: make Configuration Management a constant (for product renaming)
 	Short: `Prints the status of all clusters with Configuration Management installed.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 

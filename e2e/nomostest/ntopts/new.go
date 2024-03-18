@@ -77,7 +77,7 @@ func RequireManual(t testing.NTB) Opt {
 	if !*e2e.Manual {
 		t.Skip("Must pass --manual so this isn't accidentally run against a test cluster automatically.")
 	}
-	return func(opt *New) {}
+	return func(_ *New) {}
 }
 
 // SkipAutopilotCluster will skip the test on the autopilot cluster.
@@ -90,7 +90,7 @@ func RequireGKE(t testing.NTB) Opt {
 	if *e2e.TestCluster != e2e.GKE {
 		t.Skip("The --test-cluster flag must be set to `gke` to run this test.")
 	}
-	return func(opt *New) {}
+	return func(_ *New) {}
 }
 
 // RequireKind requires the --test-cluster flag to be `kind` so that the test only runs on kind clusters.
@@ -98,7 +98,7 @@ func RequireKind(t testing.NTB) Opt {
 	if *e2e.TestCluster != e2e.Kind {
 		t.Skip("The --test-cluster flag must be set to `kind` to run this test.")
 	}
-	return func(opt *New) {}
+	return func(_ *New) {}
 }
 
 // RequireHelmArtifactRegistry requires the --helm-provider flag to be set to `gar`.

@@ -43,8 +43,8 @@ func reportMisuse(message string) {
 		// We're in debug mode, so halt execution so the runner is likely to get
 		// a signal that something is wrong.
 		panic(message)
-	} else {
-		// Show it in the logs, but don't kill the application in production.
-		klog.Errorf("internal error: %s", message)
 	}
+
+	// Show it in the logs, but don't kill the application in production.
+	klog.Errorf("internal error: %s", message)
 }

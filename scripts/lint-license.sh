@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # TODO: Don't directly install things in scripts - do it in the image.
-go install github.com/google/go-licenses@v1.2.0
+go install github.com/google/go-licenses@v1.6.0
 
 chmod -R +rwx .output
 

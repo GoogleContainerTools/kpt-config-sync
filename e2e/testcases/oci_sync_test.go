@@ -407,7 +407,7 @@ func imageDigestFuncByName(imageName string) nomostest.Sha1Func {
 
 // imageDigestFuncByDigest uses the provided digest to return a valid Sha1Func
 func imageDigestFuncByDigest(digest string) func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
-	return func(nt *nomostest.NT, nn types.NamespacedName) (string, error) {
+	return func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
 		// The RSync status does not include the sha256: prefix
 		return strings.TrimPrefix(digest, "sha256:"), nil
 	}

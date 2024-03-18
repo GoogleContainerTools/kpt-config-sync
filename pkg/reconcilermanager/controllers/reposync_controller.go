@@ -156,7 +156,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// error will block the finalizer.
 		if err := r.watchConfigMaps(rs); err != nil {
 			r.logger(ctx).Error(err, "Error watching ConfigMaps")
-			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RepoSync) error {
 				reposync.SetStalled(rs, "ConfigMapWatch", err)
 				return nil
 			})
@@ -173,7 +173,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// ConfigMaps can be validated.
 		if err := r.validateRepoSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.logger(ctx).Error(err, "Invalid RepoSync Spec")
-			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
+			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RepoSync) error {
 				reposync.SetStalled(rs, "Validation", err)
 				return nil
 			})

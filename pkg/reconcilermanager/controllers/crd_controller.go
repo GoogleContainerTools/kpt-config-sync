@@ -115,7 +115,7 @@ func (r *CRDReconciler) Register(mgr controllerruntime.Manager) error {
 // GENERIC events, but not DELETE events.
 func ignoreDeletesPredicate() predicate.Predicate {
 	return predicate.Funcs{
-		DeleteFunc: func(e event.DeleteEvent) bool {
+		DeleteFunc: func(_ event.DeleteEvent) bool {
 			return false
 		},
 	}

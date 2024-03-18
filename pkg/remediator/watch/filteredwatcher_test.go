@@ -342,7 +342,7 @@ func TestFilteredWatcher(t *testing.T) {
 				syncName:  syncName,
 				resources: dr,
 				queue:     q,
-				startWatch: func(_ context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				startWatch: func(_ context.Context, _ metav1.ListOptions) (watch.Interface, error) {
 					return <-watches, nil
 				},
 				conflictHandler: testfake.NewConflictHandler(),

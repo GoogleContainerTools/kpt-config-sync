@@ -29,7 +29,7 @@ import (
 
 func fakeRunnable(ctx context.Context) Runnable {
 	cfg := watcherConfig{
-		startWatch: func(options metav1.ListOptions) (watch.Interface, error) {
+		startWatch: func(_ metav1.ListOptions) (watch.Interface, error) {
 			return watch.NewFake(), nil
 		},
 	}

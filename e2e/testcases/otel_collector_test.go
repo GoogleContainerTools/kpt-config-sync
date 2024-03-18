@@ -387,7 +387,7 @@ func listMetricInGCM(ctx context.Context, nt *nomostest.NT, client *monitoringv2
 type metricValidatorFunc func(*metric.Metric, *monitoredres.MonitoredResource) error
 
 func metricDoesNotHaveLabel(label string) metricValidatorFunc {
-	return func(m *metric.Metric, r *monitoredres.MonitoredResource) error {
+	return func(_ *metric.Metric, r *monitoredres.MonitoredResource) error {
 		labels := r.GetLabels()
 		if value, found := labels[label]; found {
 			return fmt.Errorf("expected metric to not have label, but found %s=%s", label, value)

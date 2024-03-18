@@ -115,7 +115,7 @@ func TestVersion(t *testing.T) {
 			clientVersion = func() string {
 				return test.version
 			}
-			util.DynamicClient = func(c *rest.Config) (dynamic.Interface, error) {
+			util.DynamicClient = func(_ *rest.Config) (dynamic.Interface, error) {
 				return fake.NewSimpleDynamicClient(core.Scheme, test.objects...), nil
 			}
 			restconfig.CurrentContextName = func() (string, error) {

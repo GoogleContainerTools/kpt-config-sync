@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // register gcp auth provider plugin
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/log"
 	ocmetrics "kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
@@ -37,14 +39,13 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme = runtime.NewScheme()
 )
 
 // Run starts all controllers and returns an integer exit code.
 func Run() int {
 	if err := run(); err != nil {
-		setupLog.Error(err, "exiting")
+		klog.Error(err, "exiting")
 		return 1
 	}
 	return 0
@@ -83,7 +84,7 @@ func run() error {
 
 	defer func() {
 		if err := oce.Stop(); err != nil {
-			setupLog.Error(err, "Unable to stop the OC Agent exporter")
+			klog.Error(err, "Unable to stop the OC Agent exporter")
 		}
 	}()
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -97,7 +98,7 @@ func run() error {
 		return fmt.Errorf("failed to build manager: %w", err)
 	}
 
-	logger := ctrl.Log.WithName("controllers")
+	logger := klogr.New().WithName("controllers")
 
 	for _, group := range []string{root.KptGroup} {
 		if err := registerControllersForGroup(mgr, logger, group); err != nil {
@@ -107,7 +108,7 @@ func run() error {
 
 	// +kubebuilder:scaffold:builder
 
-	setupLog.Info("starting manager")
+	klog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("failed to start controller-manager: %w", err)
 	}
@@ -120,20 +121,20 @@ func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group str
 	// the ResourceGroup controller consumes events.
 	channel := make(chan event.GenericEvent)
 
-	setupLog.Info("adding the type resolver")
+	klog.Info("adding the type resolver")
 	resolver, err := typeresolver.NewTypeResolver(mgr, logger.WithName("TypeResolver"))
 	if err != nil {
 		return fmt.Errorf("unable to set up the type resolver: %w", err)
 	}
 	resolver.Refresh()
 
-	setupLog.Info("adding the Root controller for group " + group)
+	klog.Info("adding the Root controller for group " + group)
 	resMap := resourcemap.NewResourceMap()
 	if err := root.NewController(mgr, channel, logger.WithName("Root"), resolver, group, resMap); err != nil {
 		return fmt.Errorf("unable to create the root controller for group %s: %w", group, err)
 	}
 
-	setupLog.Info("adding the ResourceGroup controller for group " + group)
+	klog.Info("adding the ResourceGroup controller for group " + group)
 	if err := resourcegroup.NewRGController(mgr, channel, logger.WithName(v1alpha1.ResourceGroupKind), resolver, resMap, resourcegroup.DefaultDuration); err != nil {
 		return fmt.Errorf("unable to create the ResourceGroup controller %s: %w", group, err)
 	}

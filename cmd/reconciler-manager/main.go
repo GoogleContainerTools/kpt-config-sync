@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,8 +50,6 @@ var (
 	hydrationPollingPeriod = flag.Duration("hydration-polling-period",
 		controllers.PollingPeriod(reconcilermanager.HydrationPollingPeriod, configsync.DefaultHydrationPollingPeriod),
 		"Period of time between checking the filesystem for source updates to render.")
-
-	setupLog = ctrl.Log.WithName("setup")
 )
 
 func main() {
@@ -62,6 +61,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 
 	log.Setup()
+	setupLog := klogr.New().WithName("setup")
+
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())
 
@@ -92,10 +93,10 @@ func main() {
 		setupLog.Error(err, "failed to build dynamic client")
 		os.Exit(1)
 	}
-	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper())
+	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper(), &setupLog)
 
 	crdController := controllers.NewCRDReconciler(
-		ctrl.Log.WithName("controllers").WithName("CRD"))
+		klogr.New().WithName("controllers").WithName("CRD"))
 	if err := crdController.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "CRD")
 		os.Exit(1)
@@ -105,7 +106,7 @@ func main() {
 	repoSyncController := controllers.NewRepoSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		ctrl.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
+		klogr.New().WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
 	crdController.SetCRDHandler(configsync.RepoSyncCRDName, func() error {
 		if err := repoSyncController.Register(mgr, watchFleetMembership); err != nil {
@@ -119,7 +120,7 @@ func main() {
 	rootSyncController := controllers.NewRootSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		ctrl.Log.WithName("controllers").WithName(configsync.RootSyncKind),
+		klogr.New().WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
 	crdController.SetCRDHandler(configsync.RootSyncCRDName, func() error {
 		if err := rootSyncController.Register(mgr, watchFleetMembership); err != nil {
@@ -131,7 +132,7 @@ func main() {
 	setupLog.Info("RootSync controller registration scheduled")
 
 	otel := controllers.NewOtelReconciler(*clusterName, mgr.GetClient(),
-		ctrl.Log.WithName("controllers").WithName("Otel"),
+		klogr.New().WithName("controllers").WithName("Otel"),
 		mgr.GetScheme())
 	if err := otel.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "Otel")
@@ -140,7 +141,7 @@ func main() {
 	setupLog.Info("Otel controller registration successful")
 
 	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
-		ctrl.Log.WithName("controllers").WithName(controllers.OtelSALoggerName),
+		klogr.New().WithName("controllers").WithName(controllers.OtelSALoggerName),
 		mgr.GetScheme())
 	if err := otelSA.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "OtelSA")
@@ -180,20 +181,22 @@ func main() {
 }
 
 // fleetMembershipCRDExists checks if the fleet membership CRD exists.
-// It checks the CRD first so that the controller can watch the Membership resource in the startup time.
-func fleetMembershipCRDExists(dc dynamic.Interface, mapper meta.RESTMapper) bool {
+// It checks the CRD first so that the controller can watch the Membership
+// resource in the startup time.
+func fleetMembershipCRDExists(dc dynamic.Interface, mapper meta.RESTMapper,
+	logger *logr.Logger) bool {
 
 	crdRESTMapping, err := mapper.RESTMapping(kinds.CustomResourceDefinition())
 	if err != nil {
-		setupLog.Error(err, "failed to get mapping of CRD type")
+		logger.Error(err, "failed to get mapping of CRD type")
 		os.Exit(1)
 	}
 	_, err = dc.Resource(crdRESTMapping.Resource).Get(context.TODO(), "memberships.hub.gke.io", metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			setupLog.Info("The memberships CRD doesn't exist")
+			logger.Info("The memberships CRD doesn't exist")
 		} else {
-			setupLog.Error(err, "failed to GET the CRD for the memberships resource from the cluster")
+			logger.Error(err, "failed to GET the CRD for the memberships resource from the cluster")
 		}
 		return false
 	}

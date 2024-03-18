@@ -32,8 +32,6 @@ import (
 )
 
 var (
-	setupLog = ctrl.Log.WithName("setup")
-
 	restartOnSecretRefresh  bool
 	healthProbeBindAddress  string
 	gracefulShutdownTimeout time.Duration
@@ -48,6 +46,7 @@ func main() {
 	flag.DurationVar(&cacheSyncTimeout, "cache-sync-timeout", configuration.CacheSyncTimeout, "The duration of time to wait while informers synchronize.")
 
 	log.Setup()
+	setupLog := klogr.New().WithName("setup")
 
 	profiler.Service()
 	ctrl.SetLogger(klogr.New())

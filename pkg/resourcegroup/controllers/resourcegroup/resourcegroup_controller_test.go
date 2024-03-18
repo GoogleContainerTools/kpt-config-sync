@@ -25,11 +25,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"sigs.k8s.io/cli-utils/pkg/common"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -49,7 +50,9 @@ func TestReconcile(t *testing.T) {
 	assert.NoError(t, err)
 	c = mgr.GetClient()
 
-	logger := ctrl.Log.WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
+	klog.InitFlags(nil)
+	logger := klogr.New().WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
+
 	ctx = context.WithValue(context.TODO(), contextResourceGroupControllerKey, logger)
 
 	// Setup the controller

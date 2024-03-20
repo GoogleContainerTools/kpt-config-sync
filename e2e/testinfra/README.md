@@ -3,9 +3,7 @@
 Config Sync CI jobs run the end-to-end tests against GKE clusters periodically.
 Most GCP resources are managed by [Terraform](./terraform/README.md), but the
 following resources need to be configured separately:
-- Test OCI images
-- Test Helm charts
-- Test CSR repositories
+- Test OCI images on Google Container Registry
 - KCC configurations
 - Workload identity configurations.
 
@@ -28,21 +26,9 @@ value is `cs-dev-hub`.
 
 ## Usage
 
-
-1. Push test OCI images to private registry, for example,
+1. Push private OCI images to Google Container Registry, for example,
     ```bash
     GCP_PROJECT=your-gcp-project-name make push-test-oci-images-private
-    ```
-
-1. Push test Helm charts, for example,
-    ```bash
-    GCP_PROJECT=your-gcp-project-name make push-test-helm-charts-to-ar
-    ```
-
-1. Push test CSR repositories, for example,
-    ```bash
-    GCP_PROJECT=your-gcp-project-name make push-to-test-csr-repos
-    ```
 
 1. Set up KCC configurations, for example,
     ```bash

@@ -79,10 +79,6 @@ func newStringEnum(name string, defaultVal string, usage string, allowed []strin
 var E2E = flag.Bool("e2e", false,
 	"If true, run end-to-end tests.")
 
-// Load enables running of load tests.
-var Load = flag.Bool("load", false,
-	"If true, run load tests.")
-
 // Stress enables running of stress tests.
 var Stress = flag.Bool("stress", false,
 	"If true, run stress tests.")

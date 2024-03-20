@@ -32,7 +32,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -97,62 +96,6 @@ func TestPublicOCI(t *testing.T) {
 		nomostest.WithRootSha1Func(imageDigestFuncByName(publicGCRImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: "tenant-a",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-}
-
-// TestOCIGCENode tests the `gcenode` auth type for the OCI image.
-// The test will run on a GKE cluster only with following pre-requisites:
-// 1. Workload Identity is NOT enabled
-// 2. The Compute Engine default service account `PROJECT_ID-compute@developer.gserviceaccount.com` needs to have the following roles:
-//   - `roles/artifactregistry.reader` for access image in Artifact Registry.
-//   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
-func TestGCENodeOCI(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
-		ntopts.RequireGKE(t), ntopts.GCENodeTest,
-		ntopts.RequireOCIArtifactRegistry(t))
-
-	if err := workloadidentity.ValidateDisabled(nt); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	tenant := "tenant-a"
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	image, err := nt.BuildAndPushOCIImage(
-		nomostest.RootSyncNN(configsync.RootSyncName),
-		registryproviders.ImageSourcePackage("kustomize-components"),
-		registryproviders.ImageVersion("v1"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	imageURL, err := image.RemoteAddressWithTag()
-	if err != nil {
-		nt.T.Fatalf("OCIImage.RemoteAddressWithTag: %v", err)
-	}
-
-	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"dir": "%s", "image": "%s", "auth": "gcenode"}, "git": null}}`,
-		v1beta1.OciSource, tenant, imageURL))
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: tenant,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
-
-	tenant = "tenant-b"
-	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage(), tenant))
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage())),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: tenant,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)

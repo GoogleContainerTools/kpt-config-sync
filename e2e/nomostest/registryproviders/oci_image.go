@@ -49,7 +49,7 @@ func ImageVersion(version string) func(options *imageOptions) {
 }
 
 // ImageSourcePackage builds the image with the specified package name.
-// It should be a subfolder under '../testdata/hydration'.
+// It should be a subfolder under '../testdata/'.
 func ImageSourcePackage(sourcePackage string) func(options *imageOptions) {
 	return func(options *imageOptions) {
 		options.sourcePackage = sourcePackage
@@ -90,7 +90,7 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, provider OCIRegi
 	// a dirty repo state.
 	tmpDir := filepath.Join(artifactDir, packageName, version, strconv.Itoa(imageIndex))
 	if options.sourcePackage != "" {
-		inputDir := "../testdata/hydration/" + options.sourcePackage
+		inputDir := "../testdata/" + options.sourcePackage
 		if err := copyutil.CopyDir(inputDir, tmpDir); err != nil {
 			return nil, fmt.Errorf("copying package directory: %v", err)
 		}

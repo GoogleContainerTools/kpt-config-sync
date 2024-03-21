@@ -64,6 +64,7 @@ echo "$(cat "${HELM_CHECKSUM}")  ${HELM_TARBALL}" | sha256sum -c
 echo "Installing helm"
 mkdir -p "${STAGING_DIR}"
 tar -zxvf "${HELM_TARBALL}" -C "${STAGING_DIR}"
+chmod a+x "${STAGING_DIR}/helm"
 cp "${STAGING_DIR}/helm" "${INSTALL_DIR}/helm"
 
 echo "helm version: $(helm_version_installed)"

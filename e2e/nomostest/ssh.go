@@ -121,14 +121,21 @@ func createSSHKeyPair(nt *NT) error {
 	if err := os.MkdirAll(sshDir(nt), fileMode); err != nil {
 		return fmt.Errorf("creating ssh directory: %w", err)
 	}
+	filePath := privateKeyPath(nt)
 	// ssh-keygen -t rsa -b 4096 -N "" \
 	//   -f /opt/testing/nomos/id_rsa.nomos
 	//   -C "key generated for use in e2e tests"
-	_, err := nt.Shell.ExecWithDebug("ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "",
-		"-f", privateKeyPath(nt),
+	out, err := nt.Shell.ExecWithDebug("ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "",
+		"-f", filePath,
 		"-C", "key generated for use in e2e tests")
 	if err != nil {
 		return fmt.Errorf("generating rsa key for ssh: %w", err)
+	}
+	// Verify the key file was created
+	if _, err := os.Stat(filePath); err != nil {
+		// Log the ssh-keygen output. Maybe it says why it failed.
+		nt.Logger.Infof("ERROR: failed to generate rsa key pair:\n%s", string(out))
+		return fmt.Errorf("reading rsa key file: %s: %w", filePath, err)
 	}
 	return nil
 }

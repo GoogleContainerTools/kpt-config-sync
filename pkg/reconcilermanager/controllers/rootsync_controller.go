@@ -1290,6 +1290,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: secretName}
 					keys := GetSecretKeys(ctx, r.client, sRef)
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
+
 				}
 			case reconcilermanager.GCENodeAskpassSidecar:
 				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
@@ -1309,6 +1310,11 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 				mutateContainerResource(&container, containerResources)
 				if err := mutateContainerLogLevel(&container, containerLogLevels); err != nil {
 					return err
+				}
+				if container.Name == reconcilermanager.GitSync {
+					if err := mutateGitsyncTimeout(&container, overrides.GitSyncOverride.GitSyncTimeout); err != nil {
+						return err
+					}
 				}
 				updatedContainers = append(updatedContainers, container)
 			}

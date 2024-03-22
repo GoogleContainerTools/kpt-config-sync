@@ -643,12 +643,7 @@ func setupDelegatedControl(nt *NT) {
 			nt.T.Fatal(err)
 		}
 
-		// create secret for the namespace reconciler when the git provider isn't CSR.
-		// The e2e test uses `gcenode` or `gcpserviceaccount` auth type to
-		// authenticate with CSR, which doesn't need a Secret.
-		if *e2e.GitProvider != e2e.CSR {
-			nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
-		}
+		nt.Must(CreateNamespaceSecretForNonCSR(nt, nn.Namespace))
 
 		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
 			nt.T.Fatal(err)
@@ -1112,7 +1107,7 @@ func setupCentralizedControl(nt *NT) {
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
 	for nn := range nt.NonRootRepos {
-		nt.Must(CreateNamespaceSecret(nt, nn.Namespace))
+		nt.Must(CreateNamespaceSecretForNonCSR(nt, nn.Namespace))
 	}
 }
 
@@ -1273,20 +1268,49 @@ func SetGitBranch(nt *NT, syncName, branch string) {
 	}
 }
 
-// SetGitRepo updates the root-sync object with the provided source repo URL
-func SetGitRepo(nt *NT, syncName, repoURL string) {
-	nt.T.Logf("Change source repo to %q", repoURL)
-	rs := fake.RootSyncObjectV1Beta1(syncName)
-	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	if rs.Spec.Git.Repo != repoURL {
-		nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"repo": "%s"}}}`, repoURL))
-	}
-}
-
 func toMetav1Duration(t time.Duration) *metav1.Duration {
 	return &metav1.Duration{
 		Duration: t,
 	}
+}
+
+// SetupFakeSSHCreds sets up the RSync Secret when needed.
+// The Secret may or may not exist depending on the test settings.
+//   - If the Git provider is local, bitbucket, or gitlab, the test scaffolding
+//     uses 'ssh' as the auth type. The Secret should already exist in this case.
+//   - If the Git provider is CSR, it uses 'gcpserviceaccount' as the auth type.
+//     The Secret won't be created. Hence, this function creates a fake one to
+//     bypass the validation in the reconciler-manager.
+func SetupFakeSSHCreds(nt *NT, rsKind string, rsRef types.NamespacedName, auth configsync.AuthType, secretName string) error {
+	if controllers.SkipForAuth(auth) {
+		nt.T.Logf("The auth type %s doesn't need a Secret", auth)
+		return nil
+	}
+	secret := fake.SecretObject(secretName, core.Namespace(rsRef.Namespace))
+	err := nt.KubeClient.Get(secret.Name, secret.Namespace, secret)
+	if err == nil {
+		// The Secret is already created by the test scaffolding.
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	nt.T.Logf("The %s/%s Secret doesn't exist with auth %q, so creating a fake one", rsRef.Namespace, secretName, auth)
+	msg := fmt.Sprintf("Secret %s not found: create one to allow client authentication", secretName)
+	if rsKind == kinds.RootSyncV1Beta1().Kind {
+		nt.WaitForRootSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg)
+	} else {
+		nt.WaitForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg)
+	}
+	secret.Data = map[string][]byte{"ssh": {}}
+	if err = nt.KubeClient.Create(secret); err != nil {
+		return err
+	}
+	nt.T.Cleanup(func() {
+		if err = nt.KubeClient.Delete(secret); err != nil {
+			nt.T.Error(err)
+		}
+	})
+	return nil
 }

@@ -236,9 +236,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 
 	// Reconciler-manager doesn't copy the secret of RootSync's secretRef.
 	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: configsync.ControllerNamespace}, 0)
-	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
-	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs2}, 1)
-	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNameLabel: nr1}, 2)
+	// CSR auth type doesn't need to copy the secret
+	if nt.GitProvider.Type() != e2e.CSR {
+		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
+		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs2}, 1)
+		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNameLabel: nr1}, 2)
+	}
 
 	// TODO: validate sync-generation label
 }
@@ -782,6 +785,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		}
 	})
 
+	nt.T.Logf("Validate RootSync can only exist in the config-management-system namespace")
 	rootSync := &v1beta1.RootSync{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rs-test",
@@ -803,6 +807,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		}
 	})
 
+	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
 	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", filesystem.SourceFormatUnstructured)
 	if err := nt.KubeClient.Create(rs); err != nil {
@@ -813,6 +818,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.T.Logf("Validate an invalid config with a long RepoSync name")
 	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
 	for i := range longBytes {
 		longBytes[i] = 'a'
@@ -832,8 +838,10 @@ func TestControllerValidationErrors(t *testing.T) {
 		}
 	})
 
+	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
 	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
+	rsInvalidSecretRef.Spec.Auth = configsync.AuthSSH
 	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
 	if err := nt.KubeClient.Create(rsInvalidSecretRef); err != nil {
 		nt.T.Fatal(err)

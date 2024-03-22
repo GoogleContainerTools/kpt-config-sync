@@ -15,21 +15,39 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestInvalidAuth(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
 
-	// Update RootSync to sync from a github repo.
-	// The ssh key only works for test-git-server, not github, so it will get a permission error.
-	nomostest.SetGitRepo(nt, configsync.RootSyncName, "git@github.com:test/not-exist")
+	// Update RootSync to sync from a GitHub repo with an ssh key.
+	// The ssh key only works for test-git-server, not GitHub, so it will get a permission error.
+	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{
+		"spec": {
+			"git": {
+				"repo": "%s",
+				"auth": "%s",
+				"secretRef": {
+					"name": "%s"
+				}
+			}
+		}
+	}`, "git@github.com:config-sync-examples/not-exist", configsync.AuthSSH, controllers.GitCredentialVolume))
+
+	if err := nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthSSH, controllers.GitCredentialVolume); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "Permission denied")
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)

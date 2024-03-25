@@ -93,7 +93,7 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: gcr.io/config-management-release/otelcontribcol:v0.91.0-gke.8
+        image: gcr.io/config-management-release/otelcontribcol:v0.91.0-gke.9
         command:
         - /otelcontribcol
         args:

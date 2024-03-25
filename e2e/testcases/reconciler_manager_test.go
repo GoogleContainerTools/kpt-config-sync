@@ -128,8 +128,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RootSync")
-	rootSync := &v1beta1.RootSync{}
-	setNN(rootSync, client.ObjectKey{Name: configsync.RootSyncName, Namespace: configsync.ControllerNamespace})
+	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -149,13 +148,15 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 			nt.MustMergePatch(rootSync, fmt.Sprintf(`{"spec":{"git":{"auth": "%s"}}}`, rootSync.Spec.Auth))
 		}
 	})
-	nt.MustMergePatch(rootSync, `{"spec":{"git":{"auth": "token"}}}`)
+	nt.MustMergePatch(rootSync, `{"spec":{"git":{"auth": "token", "secretRef": {"name": "git-creds"}}}}`)
+	if err = nomostest.SetupFakeSSHCreds(nt, rootSync.Kind, nomostest.RootSyncNN(rootSync.Name), configsync.AuthToken, controllers.GitCredentialVolume); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRootSyncStalledError(rootSync.Namespace, rootSync.Name,
 		"Validation", `git secretType was set as "token" but token key is not present in git-creds secret`)
 
 	t.Log("Validate the RepoSync")
-	repoSync := &v1beta1.RepoSync{}
-	setNN(repoSync, client.ObjectKey{Name: configsync.RepoSyncName, Namespace: testNamespace})
+	repoSync := fake.RepoSyncObjectV1Beta1(testNamespace, configsync.RepoSyncName)
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -175,7 +176,10 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 			nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec":{"git":{"auth": "%s"}}}`, repoSync.Spec.Auth))
 		}
 	})
-	nt.MustMergePatch(repoSync, `{"spec":{"git":{"auth": "token"}}}`)
+	nt.MustMergePatch(repoSync, `{"spec":{"git":{"auth": "token", "secretRef": {"name": "ssh-key"}}}}`)
+	if err = nomostest.SetupFakeSSHCreds(nt, repoSync.Kind, nomostest.RepoSyncNN(repoSync.Namespace, repoSync.Name), configsync.AuthToken, "ssh-key"); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRepoSyncStalledError(repoSync.Namespace, repoSync.Name,
 		"Validation", `git secretType was set as "token" but token key is not present in ssh-key secret`)
 
@@ -398,16 +402,17 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 	setNN(repoSyncSA, client.ObjectKeyFromObject(repoSyncReconciler))
 	repoSyncDependencies = append(repoSyncDependencies, repoSyncSA)
 
-	// See nomostest.CreateNamespaceSecret for creation of user secrets.
-	// This is a managed secret with a derivative name.
-	repoSyncAuthSecret := &corev1.Secret{}
-	setNN(repoSyncAuthSecret, client.ObjectKey{
-		Name:      controllers.ReconcilerResourceName(repoSyncReconciler.Name, nomostest.NamespaceAuthSecretName),
-		Namespace: repoSyncReconciler.Namespace,
-	})
-	repoSyncDependencies = append(repoSyncDependencies, repoSyncAuthSecret)
-
-	// See nomostest.CreateNamespaceSecret for creation of user secrets.
+	// See nomostest.CreateNamespaceSecretForNonCSR for creation of user secrets.
+	// The Secret is neither needed nor created when using CSR as the Git provider.
+	if nt.GitProvider.Type() != e2e.CSR {
+		repoSyncAuthSecret := &corev1.Secret{}
+		setNN(repoSyncAuthSecret, client.ObjectKey{
+			Name:      controllers.ReconcilerResourceName(repoSyncReconciler.Name, nomostest.NamespaceAuthSecretName),
+			Namespace: repoSyncReconciler.Namespace,
+		})
+		repoSyncDependencies = append(repoSyncDependencies, repoSyncAuthSecret)
+	}
+	// See nomostest.CreateNamespaceSecretForNonCSR for creation of user secrets.
 	// This is a managed secret with a derivative name.
 	// For local kind clusters, the CA Certs are provided to authenticate the git server.
 	if nt.GitProvider.Type() == e2e.Local {
@@ -563,25 +568,15 @@ func TestManagingReconciler(t *testing.T) {
 	}
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
-	// test case 5: the reconciler-manager should delete the git-creds volume if not needed
-	currentVolumesCount := len(reconcilerDeployment.Spec.Template.Spec.Volumes)
+	// test case 5: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Switch the auth type from ssh to none")
-	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
-	nt.T.Log("Verify the git-creds volume is gone")
-	generation++ // generation bumped by 1 to delete the git-creds volume
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), gitCredsVolumeDeleted(currentVolumesCount)})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
-
-	// test case 6: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
-	nt.T.Log("Switch the auth type from none to gcpserviceaccount")
+	nt.T.Log("Force to use the 'gcpserviceaccount' auth type with an invalid GSA email address")
+	// The initial spec.git.auth is `ssh` when using the test-git-server, bitbucket or gitlab as the Git provider.
+	// It is `gcpserviceaccount` when using CSR as the Git provider.
+	// It also updates the GSA email address to force an update of the reconciler Deployment.
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"gcpserviceaccount","secretRef":{"name":""},"gcpServiceAccountEmail":"test-gcp-sa-email@test-project.iam.gserviceaccount.com"}}}`)
-	nt.T.Log("Verify the gcenode-askpass-sidecar container should be added")
-	generation++ // generation bumped by 1 to apply the new sidecar container
+	nt.T.Log("Verify the gcenode-askpass-sidecar container should exist")
+	generation++ // generation bumped by 1 to apply the new sidecar container and/or the GSA email address.
 	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForGcpServiceAccountAuthType()})
 	if err != nil {
@@ -589,13 +584,28 @@ func TestManagingReconciler(t *testing.T) {
 	}
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
-	// test case 7: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
-	nt.T.Log("Switch the auth type gcpserviceaccount to ssh")
+	// test case 6: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
+	nt.T.Log("Switch the auth type from gcpserviceaccount to ssh")
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"ssh","secretRef":{"name":"git-creds"}}}}`)
 	nt.T.Log("Verify the git-creds volume exists and the gcenode-askpass-sidecar container is gone")
 	generation++ // generation bumped by 1 to add the git-cred volume again
+	if err = nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthSSH, controllers.GitCredentialVolume); err != nil {
+		nt.T.Fatal(err)
+	}
 	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForSSHAuthType()})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
+
+	// test case 7: the reconciler-manager should delete the git-creds volume if not needed
+	nt.T.Log("Switch the auth type from ssh to none")
+	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
+	nt.T.Log("Verify the git-creds volume is gone")
+	generation++ // generation bumped by 1 to delete the git-creds volume
+	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), noGitCredsVolume()})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -755,7 +765,7 @@ func hasReplicas(replicas int32) testpredicates.Predicate {
 	}
 }
 
-func gitCredsVolumeDeleted(volumesCount int) testpredicates.Predicate {
+func noGitCredsVolume() testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -763,10 +773,6 @@ func gitCredsVolumeDeleted(volumesCount int) testpredicates.Predicate {
 		d, ok := o.(*appsv1.Deployment)
 		if !ok {
 			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
-		}
-		if len(d.Spec.Template.Spec.Volumes) != volumesCount-1 {
-			return fmt.Errorf("expected volumes count: %d, got: %d",
-				volumesCount-1, len(d.Spec.Template.Spec.Volumes))
 		}
 		for _, volume := range d.Spec.Template.Spec.Volumes {
 			if volume.Name == controllers.GitCredentialVolume {
@@ -896,10 +902,11 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 		expectedResources = controllers.ReconcilerContainerResourceDefaults()
 	}
 	// Filter container map down to just expected containers
-	expectedResources = filterResourceMap(expectedResources,
-		reconcilermanager.Reconciler,
-		reconcilermanager.GitSync,
-		metrics.OtelAgentName)
+	filteredContainers := []string{reconcilermanager.Reconciler, reconcilermanager.GitSync, metrics.OtelAgentName}
+	if nt.GitProvider.Type() == e2e.CSR {
+		filteredContainers = append(filteredContainers, reconcilermanager.GCENodeAskpassSidecar)
+	}
+	expectedResources = filterResourceMap(expectedResources, filteredContainers...)
 	nt.T.Logf("expectedResources: %s", log.AsJSON(expectedResources))
 
 	if _, found := expectedResources[firstContainerName]; !found {

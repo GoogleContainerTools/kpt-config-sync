@@ -19,7 +19,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -41,22 +40,13 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 
-	nt.T.Logf("Mitigation: set spec.git.branch to HEAD to pull the latest commit")
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, "HEAD")
+	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")
 	// WatchForAllSyncs validates RootSync's lastSyncedCommit is updated to the
 	// local HEAD with the DefaultRootSha1Fn function.
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate("hello", "", &corev1.Namespace{}); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
-	// WatchForAllSyncs validates RootSync's lastSyncedCommit is updated to the
-	// local HEAD with the DefaultRootSha1Fn function.
-	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 

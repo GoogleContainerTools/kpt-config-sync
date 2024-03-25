@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -55,6 +56,9 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)
 	nt.T.Log("Verify the secretRef error")
+	if err = nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthCookieFile, controllers.GitCredentialVolume); err != nil {
+		nt.T.Fatal(err)
+	}
 	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
 
 	nt.T.Log("Set auth type to token")

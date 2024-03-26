@@ -70,8 +70,8 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
     # RootSync and RepoSync used in TestComposition
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-level-1]",
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-1-7]",
-    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-test-ns-level-2-7]",
-    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-test-ns-level-3-7]",
+    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-2-7]",
+    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-3-7]",
   ])
   service_account_id = google_service_account.gcp_sa.name
   role               = "roles/iam.workloadIdentityUser"

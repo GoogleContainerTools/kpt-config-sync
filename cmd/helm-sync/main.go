@@ -120,7 +120,6 @@ func main() {
 
 	initialSync := true
 	failCount := 0
-	step := time.Duration(0)
 	backoff := errorBackoff()
 
 	for {
@@ -156,7 +155,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			step = backoff.Step()
+			step := backoff.Step()
 
 			failCount++
 			log.Error(err, "unexpected error rendering chart, will retry")

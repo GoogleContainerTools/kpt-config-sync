@@ -18,10 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/klogr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/helm"
@@ -74,6 +76,16 @@ var (
 		"the password or personal access token to use for helm authantication")
 )
 
+func errorBackoff() wait.Backoff {
+	return wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Steps:    math.MaxInt,
+		Jitter:   0.1,
+		Cap:      util.WaitTime(*flWait),
+	}
+}
+
 func main() {
 	utillog.Setup()
 	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
@@ -108,6 +120,8 @@ func main() {
 
 	initialSync := true
 	failCount := 0
+	backoff := errorBackoff()
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
 
@@ -141,11 +155,15 @@ func main() {
 				os.Exit(1)
 			}
 
+			step := backoff.Step()
+
 			failCount++
 			log.Error(err, "unexpected error rendering chart, will retry")
-			log.Info("waiting before retrying", "waitTime", util.WaitTime(*flWait))
+			log.Info("waiting before retrying", "waitTime", step)
 			cancel()
-			time.Sleep(util.WaitTime(*flWait))
+
+			time.Sleep(step)
+
 			continue
 		}
 
@@ -157,6 +175,7 @@ func main() {
 			initialSync = false
 		}
 
+		backoff = errorBackoff()
 		failCount = 0
 		log.DeleteErrorFile()
 		log.Info("next sync", "wait_time", util.WaitTime(*flWait))

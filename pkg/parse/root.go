@@ -130,6 +130,7 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 		AllowAPICall:             true,
 		DynamicNSSelectorEnabled: p.DynamicNSSelectorEnabled,
 		NSControllerState:        p.NSControllerState,
+		WebhookEnabled:           p.WebhookEnabled,
 	}
 	options = OptionsForScope(options, p.Scope)
 

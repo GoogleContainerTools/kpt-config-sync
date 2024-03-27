@@ -210,9 +210,9 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.T.Fatalf("[RESET] Failed to reset test environment: %v", err)
 		// No need to print test logs here because the cleanup block will print them.
 	}
-	// a previous e2e test may stop the Config Sync webhook, so always call `installWebhook` here to make sure the test starts
+	// a previous e2e test may stop the Config Sync webhook, so always call `InstallWebhook` here to make sure the test starts
 	// with the webhook enabled.
-	if err := installWebhook(nt); err != nil {
+	if err := InstallWebhook(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 	return nt

@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -49,6 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/util/mutate"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -186,6 +188,13 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	} else {
 		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
+
+	enabled, err := r.isWebhookEnabled(ctx)
+	if err != nil {
+		metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
+		return controllerruntime.Result{}, fmt.Errorf("failed to get the admission webhook configuration: %w", err)
+	}
+	r.webhookEnabled = enabled
 
 	setupFn := func(ctx context.Context) error {
 		return r.setup(ctx, reconcilerRef, rs)
@@ -475,6 +484,9 @@ func (r *RepoSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		// in the namespace of the RepoSync. Only maps to existing RepoSyncs.
 		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(&source.Kind{Type: &admissionv1.ValidatingWebhookConfiguration{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapAdmissionWebhookToRepoSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
@@ -527,7 +539,7 @@ func (r *RepoSyncReconciler) mapMembershipToRepoSyncs() func(client.Object) []re
 			if apierrors.IsNotFound(err) {
 				klog.Info("Fleet Membership not found, clearing membership cache")
 				r.membership = nil
-				return r.requeueAllRepoSyncs()
+				return r.requeueAllRepoSyncs(fleetMembershipName)
 			}
 			klog.Errorf("Fleet Membership get failed: %v", err)
 			return nil
@@ -543,11 +555,11 @@ func (r *RepoSyncReconciler) mapMembershipToRepoSyncs() func(client.Object) []re
 			return nil
 		}
 		r.membership = m
-		return r.requeueAllRepoSyncs()
+		return r.requeueAllRepoSyncs(fleetMembershipName)
 	}
 }
 
-func (r *RepoSyncReconciler) requeueAllRepoSyncs() []reconcile.Request {
+func (r *RepoSyncReconciler) requeueAllRepoSyncs(name string) []reconcile.Request {
 	//TODO: pass through context (reqs updating controller-runtime)
 	ctx := context.Background()
 	allRepoSyncs := &v1beta1.RepoSyncList{}
@@ -563,7 +575,7 @@ func (r *RepoSyncReconciler) requeueAllRepoSyncs() []reconcile.Request {
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to membership trigger reconciliations for %d RepoSync objects.", len(allRepoSyncs.Items))
+		klog.Infof("Changes to %s trigger reconciliations for %d RepoSync objects.", name, len(allRepoSyncs.Items))
 	}
 	return requests
 }
@@ -649,6 +661,13 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 			sRef, strings.Join(attachedRSNames, ", "))
 	}
 	return requests
+}
+
+func (r *RepoSyncReconciler) mapAdmissionWebhookToRepoSyncs(admissionWebhook client.Object) []reconcile.Request {
+	if admissionWebhook.GetName() == webhookconfiguration.Name {
+		return r.requeueAllRepoSyncs(admissionWebhook.GetName())
+	}
+	return nil
 }
 
 func repoSyncGitSecretName(rs *v1beta1.RepoSync) string {
@@ -891,6 +910,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			requiresRendering: annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
 			// Namespace reconciler doesn't support NamespaceSelector at all.
 			dynamicNSSelectorEnabled: false,
+			webhookEnabled:           r.webhookEnabled,
 		}),
 	}
 	switch v1beta1.SourceType(rs.Spec.SourceType) {

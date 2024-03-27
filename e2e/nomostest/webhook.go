@@ -15,15 +15,14 @@
 package nomostest
 
 import (
-	"fmt"
 	"time"
 
-	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 )
 
@@ -44,39 +43,25 @@ func StopWebhook(nt *NT) {
 		return
 	}
 	webhookName := configuration.Name
-	webhookGK := "validatingwebhookconfigurations.admissionregistration.k8s.io"
-
-	out, err := nt.Shell.Kubectl("annotate", webhookGK, webhookName, fmt.Sprintf("%s=%s", metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled))
+	err := nt.KubeClient.Delete(fake.AdmissionWebhookObject(webhookName))
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate %s %s %s=%s` error %v %s, want return nil",
-			webhookGK, webhookName, metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled, err, out)
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		nt.T.Fatalf("got `kubectl delete %s` error %v, want return nil", webhookName, err)
 	}
-
-	err = nt.Watcher.WatchObject(kinds.ValidatingWebhookConfiguration(),
-		webhookName, "",
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation(metadata.WebhookconfigurationKey, metadata.WebhookConfigurationUpdateDisabled),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	out, err = nt.Shell.Kubectl("delete", webhookGK, webhookName)
-	if err != nil {
-		nt.T.Fatalf("got `kubectl delete %s %s` error %v %s, want return nil", webhookGK, webhookName, err, out)
-	}
-
 	err = nt.Watcher.WatchForNotFound(kinds.ValidatingWebhookConfiguration(),
 		webhookName, "",
 		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
 	*nt.WebhookDisabled = true
 }
 
-func installWebhook(nt *NT) error {
+// InstallWebhook installs the Config Sync ValidatingWebhookConfiguration object.
+func InstallWebhook(nt *NT) error {
 	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
 		return err
@@ -86,7 +71,7 @@ func installWebhook(nt *NT) error {
 		if labels == nil || labels["app"] != "admission-webhook" {
 			continue
 		}
-		nt.T.Logf("installWebhook obj: %v", core.GKNN(o))
+		nt.T.Logf("InstallWebhook obj: %v", core.GKNN(o))
 		if err := nt.KubeClient.Apply(o); err != nil {
 			return err
 		}

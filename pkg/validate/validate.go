@@ -81,6 +81,8 @@ type Options struct {
 	// NSControllerState caches the NamespaceSelectors and selected Namespaces
 	// in the namespace controller.
 	NSControllerState *namespacecontroller.State
+	// WebhookEnabled indicates whether the admission webhook configuration is enabled
+	WebhookEnabled bool
 }
 
 // Hierarchical validates and hydrates the given FileObjects from a structured,
@@ -103,6 +105,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 		BuildScoper:       opts.BuildScoper,
 		Converter:         opts.Converter,
 		AllowUnknownKinds: opts.AllowUnknownKinds,
+		WebhookEnabled:    opts.WebhookEnabled,
 	}
 
 	// nonBlockingErrs tracks the errors which do not block the apply stage
@@ -187,6 +190,7 @@ func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, o
 		AllowAPICall:             opts.AllowAPICall,
 		DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
 		NSControllerState:        opts.NSControllerState,
+		WebhookEnabled:           opts.WebhookEnabled,
 	}
 
 	// nonBlockingErrs tracks the errors which do not block the apply stage

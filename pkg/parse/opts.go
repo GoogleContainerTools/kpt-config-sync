@@ -77,6 +77,9 @@ type Options struct {
 	// running for this reconciler.
 	RenderingEnabled bool
 
+	// WebhookEnabled indicates whether the Webhook is currently enabled
+	WebhookEnabled bool
+
 	// Files lists Files in the source of truth.
 	Files
 	// Updater mutates the most-recently-seen versions of objects stored in memory.

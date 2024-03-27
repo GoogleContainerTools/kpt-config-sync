@@ -119,6 +119,9 @@ type Options struct {
 	// NamespaceSelector using the dynamic mode, which requires Namespace
 	// controller running to watch Namespace events.
 	DynamicNSSelectorEnabled bool
+	// WebhookEnabled is indicates whether the Admission Webhook is currently
+	// installed and running
+	WebhookEnabled bool
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -243,6 +246,7 @@ func Run(opts Options) {
 		Converter:          converter,
 		RenderingEnabled:   opts.RenderingEnabled,
 		Files:              parse.Files{FileSource: fs},
+		WebhookEnabled:     opts.WebhookEnabled,
 		Updater: parse.Updater{
 			Scope:      opts.ReconcilerScope,
 			Resources:  decls,

@@ -88,6 +88,7 @@ func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.F
 		// So disable the API call and dynamic mode of NamespaceSelector.
 		AllowAPICall:             false,
 		DynamicNSSelectorEnabled: false,
+		WebhookEnabled:           p.WebhookEnabled,
 	}
 	options = OptionsForScope(options, p.Scope)
 

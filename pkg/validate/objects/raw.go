@@ -54,6 +54,8 @@ type Raw struct {
 	// NSControllerState caches the NamespaceSelectors and selected Namespaces
 	// in the namespace controller.
 	NSControllerState *namespacecontroller.State
+	// WebhookEnabled indicates whether Webhook configuration is enabled
+	WebhookEnabled bool
 }
 
 // Scoped builds a Scoped collection of objects from the Raw objects.

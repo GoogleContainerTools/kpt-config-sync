@@ -24,7 +24,7 @@ set +e
 
 echo "Starting e2e tests"
 start_time=$(date +%s)
-go test ./e2e/... --p 1 --e2e --test.v "$@" | tee test_results.txt
+go test ./e2e/testcases/... --p 1 --e2e --test.v "$@" | tee test_results.txt
 exit_code=$?
 end_time=$(date +%s)
 echo "Tests took $(( end_time - start_time )) seconds"

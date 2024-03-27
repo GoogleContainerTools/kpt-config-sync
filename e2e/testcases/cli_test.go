@@ -64,8 +64,8 @@ func TestNomosInitVet(t *testing.T) {
 	// 1) git init
 	// 2) nomos init
 	// 3) nomos vet --no-api-server-check
-	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t, nomostesting.NomosCLI)
+	tw, opts := nomostest.NewTestWrapper(t, nomostesting.NomosCLI)
+	tmpDir := opts.TmpDir
 
 	out, err := exec.Command("git", "init", tmpDir).CombinedOutput()
 	if err != nil {
@@ -94,8 +94,8 @@ func TestNomosInitHydrate(t *testing.T) {
 	// 3) nomos vet --no-api-server-check
 	// 4) nomos hydrate --no-api-server-check
 	// 5) nomos vet --no-api-server-check --path=<hydrated-dir>
-	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t, nomostesting.NomosCLI)
+	tw, opts := nomostest.NewTestWrapper(t, nomostesting.NomosCLI)
+	tmpDir := opts.TmpDir
 
 	out, err := exec.Command("git", "init", tmpDir).CombinedOutput()
 	if err != nil {
@@ -479,9 +479,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 	}
 }
 
-func testSyncFromNomosHydrateOutput(t *testing.T, config string) {
-	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
-
+func testSyncFromNomosHydrateOutput(nt *nomostest.NT, config string) {
 	if err := nt.ValidateNotFound("bookstore1", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -538,19 +536,20 @@ func testSyncFromNomosHydrateOutput(t *testing.T, config string) {
 }
 
 func TestSyncFromNomosHydrateOutputYAMLDir(t *testing.T) {
-	testSyncFromNomosHydrateOutput(t, "../../examples/repo-with-cluster-selectors-compiled/cluster-dev/.")
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
+	testSyncFromNomosHydrateOutput(nt, "../../examples/repo-with-cluster-selectors-compiled/cluster-dev/.")
 }
 
 func TestSyncFromNomosHydrateOutputJSONDir(t *testing.T) {
-	testSyncFromNomosHydrateOutput(t, "../../examples/repo-with-cluster-selectors-compiled-json/cluster-dev/.")
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
+	testSyncFromNomosHydrateOutput(nt, "../../examples/repo-with-cluster-selectors-compiled-json/cluster-dev/.")
 }
 
 func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.SourceFormat, outputFormat string) {
-	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t, nomostesting.NomosCLI)
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
 
 	configPath := fmt.Sprintf("../../examples/%s-repo-with-cluster-selectors", sourceFormat)
-	compiledConfigFile := fmt.Sprintf("%s/compiled.%s", tmpDir, outputFormat)
+	compiledConfigFile := fmt.Sprintf("%s/compiled.%s", nt.TmpDir, outputFormat)
 
 	args := []string{
 		"hydrate",
@@ -568,11 +567,11 @@ func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.So
 
 	out, err := exec.Command("nomos", args...).CombinedOutput()
 	if err != nil {
-		tw.Log(string(out))
-		tw.Error(err)
+		nt.T.Log(string(out))
+		nt.T.Error(err)
 	}
 
-	testSyncFromNomosHydrateOutput(t, compiledConfigFile)
+	testSyncFromNomosHydrateOutput(nt, compiledConfigFile)
 }
 
 func TestSyncFromNomosHydrateHierarchicalOutputWithClusterSelectorJSONFlat(t *testing.T) {
@@ -668,9 +667,6 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 }
 
 func TestNomosHydrateAndVetDryRepos(t *testing.T) {
-	tmpDir := nomostest.TestDir(t)
-	tw := nomostesting.New(t, nomostesting.NomosCLI)
-
 	testCases := []struct {
 		name            string
 		path            string
@@ -755,6 +751,8 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			tw, opts := nomostest.NewTestWrapper(t, nomostesting.NomosCLI)
+			tmpDir := opts.TmpDir
 			outputPath := filepath.Join(tmpDir, flags.DefaultHydrationOutput)
 			args := []string{"--no-api-server-check"}
 			if len(tc.sourceFormat) > 0 {
@@ -847,8 +845,6 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 }
 
 func TestNomosVetNamespaceRepo(t *testing.T) {
-	tw := nomostesting.New(t, nomostesting.NomosCLI)
-
 	testCases := []struct {
 		name           string
 		namespace      string
@@ -881,7 +877,8 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(_ *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
+			tw, _ := nomostest.NewTestWrapper(t, nomostesting.NomosCLI)
 			args := []string{"vet", "--no-api-server-check", "--namespace", tc.namespace}
 			if tc.sourceFormat != "" {
 				args = append(args, "--source-format", tc.sourceFormat)

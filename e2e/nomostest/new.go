@@ -57,7 +57,7 @@ const fileMode = os.ModePerm
 const NomosE2E = "nomos-e2e"
 
 // newOptStruct initializes the nomostest options.
-func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntopts.Opt) *ntopts.New {
+func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New {
 	// TODO: we should probably put ntopts.New members inside of NT use the go-convention of mutating NT with option functions.
 	optsStruct := &ntopts.New{
 		Name:   testName,
@@ -76,50 +76,6 @@ func newOptStruct(testName, tmpDir string, t nomostesting.NTB, ntOptions ...ntop
 	}
 	for _, opt := range ntOptions {
 		opt(optsStruct)
-	}
-
-	// Stress tests should run if and only if the --stress flag is specified.
-	if !*e2e.Stress && optsStruct.StressTest {
-		t.Skip("Test skipped since the stress test requires the '--stress' flag")
-	}
-	if *e2e.Stress && !optsStruct.StressTest {
-		t.Skip("Test skipped since the '--stress' flag should only select stress tests")
-	}
-
-	// KCC tests should run if and only if the --kcc flag is specified.
-	if !*e2e.KCC && optsStruct.KCCTest {
-		t.Skip("Test skipped since the KCC test requires the '--kcc' flag")
-	}
-	if *e2e.KCC && !optsStruct.KCCTest {
-		t.Skip("Test skipped since the '--kcc' flag should only select KCC tests")
-	}
-
-	// GCENode tests should run if and only if the --gcenode flag is specified.
-	if !*e2e.GceNode && optsStruct.GCENodeTest {
-		t.Skip("Test skipped since the GCENode test requires the '--gcenode' flag")
-	}
-	if *e2e.GceNode && !optsStruct.GCENodeTest {
-		t.Skip("Test skipped since the '--gcenode' flag should only select GCENode tests")
-	}
-
-	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
-		t.Skip("Test skipped for non-local GitProvider types")
-	}
-
-	if *e2e.OCIProvider != e2e.Local && optsStruct.RequireLocalOCIProvider {
-		t.Skip("Test skipped for non-local OCIProvider types")
-	}
-
-	if *e2e.HelmProvider != e2e.Local && optsStruct.RequireLocalHelmProvider {
-		t.Skip("Test skipped for non-local HelmProvider types")
-	}
-
-	if optsStruct.RESTConfig == nil {
-		RestConfig(t, optsStruct)
-		// Increase the QPS for the clients used by the e2e tests.
-		// This does not affect the client used by Config Sync itself.
-		optsStruct.RESTConfig.QPS = 50
-		optsStruct.RESTConfig.Burst = 75
 	}
 
 	return optsStruct
@@ -143,31 +99,19 @@ func PrintFeatureDurations() {
 	}
 }
 
-// New establishes a connection to a test cluster and prepares it for testing.
-func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) *NT {
-	t.Helper()
+// NewTestWrapper creates a test wrapper for use by the tests. This applies a common
+// set of rules across tests, such as test features for selecting sets of tests
+// or rules for skipping certain tests (e.g. StressTest).
+// Usually tests should use nomostest.New but this is surfaced as a public
+// method for test cases which do not need all the features of NT, such
+// as access to a k8s cluster.
+func NewTestWrapper(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) (*nomostesting.Wrapper, *ntopts.New) {
 	e2e.EnableParallel(t)
 	tw := nomostesting.New(t, testFeature)
-
-	if *e2e.ShareTestEnv {
-		sharedNt := SharedNT(tw)
-		t.Logf("using shared test env %s", sharedNt.ClusterName)
-		ntOptions = append(ntOptions, ntopts.WithRestConfig(sharedNt.Config))
-	}
-
-	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), tw, ntOptions...)
-
-	var nt *NT
-	if *e2e.ShareTestEnv {
-		nt = SharedTestEnv(tw, optsStruct)
-	} else {
-		nt = FreshTestEnv(tw, optsStruct)
-	}
-	if !optsStruct.SkipConfigSyncInstall {
-		setupTestCase(nt, optsStruct)
-	}
+	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), ntOptions...)
+	optsStruct.EvaluateSkipOptions(tw)
 	start := time.Now()
-	nt.T.Cleanup(func() {
+	tw.Cleanup(func() {
 		duration := time.Since(start)
 		featureDurationMux.Lock()
 		defer featureDurationMux.Unlock()
@@ -179,6 +123,23 @@ func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt
 		}
 		featureDurations[testFeature] = duration
 	})
+	return tw, optsStruct
+}
+
+// New establishes a connection to a test cluster and prepares it for testing.
+func New(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) *NT {
+	t.Helper()
+	tw, optsStruct := NewTestWrapper(t, testFeature, ntOptions...)
+
+	var nt *NT
+	if *e2e.ShareTestEnv {
+		nt = SharedTestEnv(tw, optsStruct)
+	} else {
+		nt = FreshTestEnv(tw, optsStruct)
+	}
+	if !optsStruct.SkipConfigSyncInstall {
+		setupTestCase(nt, optsStruct)
+	}
 	return nt
 }
 
@@ -189,6 +150,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	sharedNt := SharedNT(t)
 	// Set t on the logger to ensure proper interleaving of logs
 	sharedNt.Logger.SetNTBForTest(t)
+	t.Logf("using shared test env %s", sharedNt.ClusterName)
 
 	nt := &NT{
 		Context:                 sharedNt.Context,
@@ -197,7 +159,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Shell:                   sharedNt.Shell,
 		ClusterName:             sharedNt.ClusterName,
 		TmpDir:                  opts.TmpDir,
-		Config:                  opts.RESTConfig,
+		Config:                  sharedNt.Config,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		KubeClient:              sharedNt.KubeClient,
 		Watcher:                 sharedNt.Watcher,
@@ -271,6 +233,12 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 // 3) A fresh ACM installation.
 func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	t.Helper()
+
+	RestConfig(t, opts)
+	// Increase the QPS for the clients used by the e2e tests.
+	// This does not affect the client used by Config Sync itself.
+	opts.RESTConfig.QPS = 50
+	opts.RESTConfig.Burst = 75
 
 	scheme := newScheme(t)
 	ctx := context.Background()

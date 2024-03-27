@@ -71,13 +71,45 @@ type New struct {
 	TestType
 }
 
-// RequireManual requires the --manual flag is set. Otherwise it will skip the test.
-// This avoids running tests (e.g stress tests) that aren't safe to run against a remote cluster automatically.
-func RequireManual(t testing.NTB) Opt {
-	if !*e2e.Manual {
-		t.Skip("Must pass --manual so this isn't accidentally run against a test cluster automatically.")
+// EvaluateSkipOptions compares the flags for this specific test case against
+// the runtime options that were provided to the test suite. The test may be
+// skipped based on the below set of rules.
+func (optsStruct *New) EvaluateSkipOptions(t testing.NTB) {
+	// Stress tests should run if and only if the --stress flag is specified.
+	if !*e2e.Stress && optsStruct.StressTest {
+		t.Skip("Test skipped since the stress test requires the '--stress' flag")
 	}
-	return func(_ *New) {}
+	if *e2e.Stress && !optsStruct.StressTest {
+		t.Skip("Test skipped since the '--stress' flag should only select stress tests")
+	}
+
+	// KCC tests should run if and only if the --kcc flag is specified.
+	if !*e2e.KCC && optsStruct.KCCTest {
+		t.Skip("Test skipped since the KCC test requires the '--kcc' flag")
+	}
+	if *e2e.KCC && !optsStruct.KCCTest {
+		t.Skip("Test skipped since the '--kcc' flag should only select KCC tests")
+	}
+
+	// GCENode tests should run if and only if the --gcenode flag is specified.
+	if !*e2e.GceNode && optsStruct.GCENodeTest {
+		t.Skip("Test skipped since the GCENode test requires the '--gcenode' flag")
+	}
+	if *e2e.GceNode && !optsStruct.GCENodeTest {
+		t.Skip("Test skipped since the '--gcenode' flag should only select GCENode tests")
+	}
+
+	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
+		t.Skip("Test skipped for non-local GitProvider types")
+	}
+
+	if *e2e.OCIProvider != e2e.Local && optsStruct.RequireLocalOCIProvider {
+		t.Skip("Test skipped for non-local OCIProvider types")
+	}
+
+	if *e2e.HelmProvider != e2e.Local && optsStruct.RequireLocalHelmProvider {
+		t.Skip("Test skipped for non-local HelmProvider types")
+	}
 }
 
 // SkipAutopilotCluster will skip the test on the autopilot cluster.
@@ -135,13 +167,6 @@ func RequireOCIArtifactRegistry(t testing.NTB) Opt {
 func WithInitialCommit(initialCommit Commit) func(opt *New) {
 	return func(opt *New) {
 		opt.InitialCommit = &initialCommit
-	}
-}
-
-// WithRestConfig uses the provided rest.Config
-func WithRestConfig(restConfig *rest.Config) Opt {
-	return func(opt *New) {
-		opt.RESTConfig = restConfig
 	}
 }
 

@@ -366,7 +366,7 @@ func newSharedNT(name string) error {
 	newSNT := mySharedNTs.newNT(fakeNTB)
 	// Create the actual test environment that will be reused by tests.
 	wrapper := testing.NewShared(fakeNTB)
-	opts := newOptStruct(name, tmpDir, wrapper)
+	opts := newOptStruct(name, tmpDir)
 	newSNT.sharedNT = FreshTestEnv(wrapper, opts)
 	return nil
 }

@@ -60,11 +60,17 @@ push-test-oci-images-public: "$(CRANE)"
 # kustomize-components private images (per dev/prow env registry)
 KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test/$(KUSTOMIZE_COMPONENTS_PACKAGE_NAME):v1
 
+# namespace-repo private image (per dev/prow env registry)
+NAMESPACE_REPO_PACKAGE_NAME := namespace-repo
+NAMESPACE_REPO_DIR := e2e/testdata/hydration/$(NAMESPACE_REPO_PACKAGE_NAME)
+NAMESPACE_REPO_PRIVATE_GCR_IMAGE := gcr.io/$(GCP_PROJECT)/config-sync-test/$(NAMESPACE_REPO_PACKAGE_NAME):v1
+
 .PHONY: push-test-oci-images-private
 # push-test-oci-images-private pushes the test images to the Container Registry repository.
 push-test-oci-images-private: "$(CRANE)"
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(LOCATION)-docker.pkg.dev,gcr.io
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PRIVATE_GCR_IMAGE)
+	cd $(NAMESPACE_REPO_DIR) && crane append -f <(tar -f - -c .) -t $(NAMESPACE_REPO_PRIVATE_GCR_IMAGE)
 
 .PHONY: set-up-kcc-configs
 KCC_MANAGED_PROJECT ?= cs-dev-hub

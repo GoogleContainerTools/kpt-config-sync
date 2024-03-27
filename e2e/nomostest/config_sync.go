@@ -988,7 +988,7 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chart *registryprovide
 func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1beta1.RepoSync {
 	repo, found := nt.NonRootRepos[nn]
 	if !found {
-		nt.T.Fatal("nonexistent non-root repo: %s", nn)
+		nt.T.Fatalf("nonexistent non-root repo: %s", nn)
 	}
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	sourceFormat := repo.Format

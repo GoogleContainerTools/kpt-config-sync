@@ -851,33 +851,38 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 
 	testCases := []struct {
 		name           string
+		namespace      string
 		path           string
 		sourceFormat   string
 		expectedErrMsg string
 	}{
 		{
 			name:           "nomos vet a namespace repo should fail when source-format is set to hierarchy",
+			namespace:      "tenant-a",
 			sourceFormat:   string(filesystem.SourceFormatHierarchy),
 			expectedErrMsg: "Error: if --namespace is provided, --source-format must be omitted or set to unstructured",
 		},
 		{
-			name: "nomos vet should automatically validate a namespace repo with the unstructured mode if source-format is not set",
-			path: "../testdata/hydration/compiled/remote-base/tenant-a",
+			name:      "nomos vet should automatically validate a namespace repo with the unstructured mode if source-format is not set",
+			namespace: "tenant-a",
+			path:      "../testdata/hydration/compiled/remote-base/tenant-a",
 		},
 		{
 			name:         "nomos vet should automatically validate a namespace repo with the unstructured mode if source-format is set to unstructured",
+			namespace:    "tenant-a",
 			path:         "../testdata/hydration/compiled/remote-base/tenant-a",
 			sourceFormat: string(filesystem.SourceFormatUnstructured),
 		},
 		{
-			name: "nomos vet should validate a DRY namespace repo",
-			path: "../testdata/hydration/namespace-repo",
+			name:      "nomos vet should validate a DRY namespace repo",
+			namespace: "test-ns",
+			path:      "../testdata/hydration/namespace-repo",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(_ *testing.T) {
-			args := []string{"vet", "--no-api-server-check", "--namespace", "tenant-a"}
+			args := []string{"vet", "--no-api-server-check", "--namespace", tc.namespace}
 			if tc.sourceFormat != "" {
 				args = append(args, "--source-format", tc.sourceFormat)
 			}

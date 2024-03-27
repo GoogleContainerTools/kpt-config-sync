@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-namespace: tenant-a
+namespace: test-ns
 
 resources:
 - ../base
@@ -24,4 +24,4 @@ patches:
   patch: |-
     - op: replace
       path: /subjects/0/name
-      value: tenant-a-admin@mydomain.com
+      value: test-ns-admin@mydomain.com

@@ -46,6 +46,18 @@ resource "google_project_iam_member" "root-reconciler-fwi-sa-iam" {
     "roles/storage.objectViewer",
   ])
   role    = each.value
-  member             = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]"
+  member  = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]"
+  project = data.google_project.project.id
+}
+
+# Grant source reader permissions to the RepoSync's KSA with Fleet workload identity.
+resource "google_project_iam_member" "ns-reconciler-fwi-sa-iam" {
+  for_each = toset([
+    "roles/source.reader",
+    "roles/artifactregistry.reader",
+    "roles/storage.objectViewer",
+  ])
+  role    = each.value
+  member  = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
   project = data.google_project.project.id
 }

@@ -58,8 +58,8 @@ const (
 
 // privateGCRImage pulls the private OCI image by tag
 // The test environment GCR is assumed to be private.
-func privateGCRImage() string {
-	return fmt.Sprintf("%s/%s/config-sync-test/kustomize-components:v1", nomostesting.GCRHost, *e2e.GCPProject)
+func privateGCRImage(sourcePackage string) string {
+	return fmt.Sprintf("%s/%s/config-sync-test/%s:v1", nomostesting.GCRHost, *e2e.GCPProject, sourcePackage)
 }
 
 func gsaARReaderEmail() string {

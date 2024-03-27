@@ -1,0 +1,21 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: foo
+    version: {{ .Chart.Version }}
+  name: repo-sync-deployment
+spec:
+  selector:
+    matchLabels:
+      app: foo
+  template:
+    metadata:
+      labels:
+        app: foo
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
